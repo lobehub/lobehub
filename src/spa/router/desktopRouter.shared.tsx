@@ -2,15 +2,20 @@
 
 import {
   BrainCircuit,
-  Download,
   FilePenIcon,
+  FilesIcon,
+  FileText,
+  HomeIcon,
   Image,
+  ImageIcon,
+  LayoutPanelTopIcon,
   LibraryBigIcon,
-  MessageSquarePlus,
+  Mic2,
   Settings,
   ShapesIcon,
+  SquarePlay,
 } from 'lucide-react';
-import { cloneElement, isValidElement, type ReactElement, Suspense } from 'react';
+import { createElement, isValidElement, type ReactElement, type ReactNode, Suspense } from 'react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -18,12 +23,22 @@ import {
   BusinessDesktopRoutesWithoutMainLayout,
   BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
-import ContentLoading from '@/components/Loading/ContentLoading';
+import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import GoalSkeleton from '@/components/Skeleton/Goal';
+import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
+import GroupLayoutSkeleton from '@/components/Skeleton/GroupLayout';
+import MemorySkeleton from '@/components/Skeleton/Memory';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
+import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
+import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
+import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
@@ -31,10 +46,15 @@ import {
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentRouteMeta,
+  agentSelfLearningRouteMeta,
   agentStatisticsRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
-import { groupProfileRouteMeta, groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
+import {
+  groupPermissionRouteMeta,
+  groupProfileRouteMeta,
+  groupRouteMeta,
+} from '@/routes/(main)/group/features/routeMeta';
 import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -44,14 +64,31 @@ import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@
 const agentChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/agent')),
   'Desktop > Chat',
-  { preloadId: 'agent' },
+  { fallback: <ConversationSegmentSkeleton />, preloadId: 'agent' },
 );
 
 const groupChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/group')),
   'Desktop > Agent Group',
-  { preloadId: 'group' },
+  { fallback: <ConversationLayoutSkeleton />, preloadId: 'group' },
 );
+
+const resourceCategoryRoutes: RouteObject[] = [
+  { icon: LayoutPanelTopIcon, path: 'all', titleKey: 'navigation.resourceAll' },
+  { icon: FileText, path: 'documents', titleKey: 'navigation.resourceDocuments' },
+  { icon: ImageIcon, path: 'images', titleKey: 'navigation.resourceImages' },
+  { icon: SquarePlay, path: 'videos', titleKey: 'navigation.resourceVideos' },
+  { icon: Mic2, path: 'audios', titleKey: 'navigation.resourceAudios' },
+  { icon: FilesIcon, path: 'files', titleKey: 'navigation.resourceFiles' },
+].map(({ icon, path, titleKey }) => ({
+  element: dynamicElement(
+    () => import('@/routes/(main)/resource/(home)'),
+    `Desktop > Resource > Home > ${path}`,
+    { preloadId: 'resource' },
+  ),
+  handle: { meta: routeMeta({ icon, titleKey }) },
+  path,
+}));
 
 export interface MainAreaRouteOptions {
   /** Electron renders Home inside each tab router; Web renders it beside the router outlet. */
@@ -59,6 +96,9 @@ export interface MainAreaRouteOptions {
   /** Electron keeps the workspace settings redirect behind its own lazy route module. */
   createWorkspaceSettingsIndexElement?: () => ReactElement;
 }
+
+const deferPlatformElement = (factory?: () => ReactElement) =>
+  factory ? createElement(factory) : undefined;
 
 /**
  * Children shared between the root tree (`/`) and the workspace tree
@@ -94,7 +134,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/(chat)/_layout'),
               'Desktop > Chat > ChatLayout',
-              { preloadId: 'agent' },
+              { fallback: <ConversationLayoutSkeleton />, preloadId: 'agent' },
             ),
           },
           {
@@ -125,6 +165,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goals'),
               'Desktop > Chat > Goals',
+              { fallback: <GoalSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goals',
@@ -133,6 +174,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goal/[goalId]'),
               'Desktop > Chat > Goal Detail',
+              { fallback: <GoalDetailSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goal/:goalId',
@@ -141,6 +183,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/profile'),
               'Desktop > Chat > Profile',
+              { fallback: <ProfileSkeleton /> },
             ),
             handle: { meta: agentProfileRouteMeta },
             path: 'profile',
@@ -181,6 +224,58 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             element: redirectElement('../statistics'),
             path: 'stats',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning'),
+              'Desktop > Chat > Self Learning',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-learning',
+          },
+          // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
+          {
+            children: [
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]'),
+                  'Desktop > Chat > Self Learning > Domain',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                index: true,
+              },
+              // 一个方向的全部经验（不折叠的完整清单）和单条经验详情。
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/experience'),
+                  'Desktop > Chat > Self Learning > Domain > Experience',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience',
+              },
+              {
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/agent/self-learning/[domainId]/experience/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Lesson',
+                ),
+                handle: { meta: agentSelfLearningRouteMeta },
+                path: 'experience/:lessonId',
+              },
+              // Legacy `/rules` deep-links — kept so old links keep opening.
+              {
+                element: redirectElement('../experience'),
+                path: 'rules',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/self-learning/[domainId]/rules/[lessonId]'),
+                  'Desktop > Chat > Self Learning > Domain > Legacy Rule',
+                ),
+                path: 'rules/:lessonId',
+              },
+            ],
+            path: 'self-learning/:domainId',
           },
           {
             element: dynamicElement(
@@ -237,9 +332,18 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/group/profile'),
               'Desktop > Agent Group > Profile',
+              { fallback: <ProfileSkeleton variant={'group'} /> },
             ),
             handle: { meta: groupProfileRouteMeta },
             path: 'profile',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/group/permission'),
+              'Desktop > Agent Group > Permission',
+            ),
+            handle: { meta: groupPermissionRouteMeta },
+            path: 'permission',
           },
           {
             element: groupChatElement,
@@ -250,7 +354,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(main)/group/_layout'),
           'Desktop > Group > Layout',
-          { preloadId: 'group' },
+          { fallback: <GroupLayoutSkeleton />, preloadId: 'group' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':gid',
@@ -479,6 +583,33 @@ export const sharedMainAreaChildren: RouteObject[] = [
             index: true,
           },
           ...BusinessResourceRoutes,
+          ...resourceCategoryRoutes,
+          // /resource/page needs a static segment: the dynamic `:category`
+          // ties with the workspace mirror `/:workspaceSlug/page` on route
+          // score, and the workspace tree would swallow it into a slug 404.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Pages',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: FilePenIcon, titleKey: 'navigation.resourcePages' }),
+            },
+            path: 'page',
+          },
+          // Category views share the home page: /resource/documents, /resource/images, …
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/(home)'),
+              'Desktop > Resource > Home > Category',
+              { preloadId: 'resource' },
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            path: ':category',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/resource/(home)/_layout'),
@@ -498,6 +629,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
               meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
             },
             index: true,
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/resource/library/permission'),
+              'Desktop > Resource > Library > Permission',
+            ),
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+            },
+            path: 'permission',
           },
           {
             element: dynamicElement(
@@ -533,7 +674,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(
           () => import('@/routes/(main)/memory/(home)'),
           'Desktop > Memory > Home',
-          { preloadId: 'memory' },
+          { fallback: <MemorySkeleton />, preloadId: 'memory' },
         ),
         handle: {
           meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
@@ -740,7 +881,54 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'agents',
   },
 
+  // Projects view-all route
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/projects'), 'Desktop > Projects', {
+          preloadId: 'projects',
+        }),
+        handle: { meta: projectsRouteMeta },
+        index: true,
+      },
+    ],
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'projects',
+  },
+
   // Task workspace routes (cross-agent)
+  {
+    children: [
+      {
+        element: redirectElement('tasks'),
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/tasks'),
+          'Desktop > Project Tasks',
+        ),
+        handle: { meta: tasksRouteMeta },
+        path: 'tasks',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/goals'),
+          'Desktop > Project Goals',
+        ),
+        handle: { meta: goalsRouteMeta },
+        path: 'goals',
+      },
+    ],
+    element: dynamicLayout(
+      () => import('@/routes/(main)/project/_layout'),
+      'Desktop > Project Workspace > Layout',
+      { preloadId: 'project' },
+    ),
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'project/:projectId',
+  },
+
   {
     children: [
       {
@@ -798,6 +986,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: pageRouteMeta },
         path: ':id',
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/page/[id]/permission'),
+          'Desktop > Page > Permission',
+        ),
+        handle: { meta: pageRouteMeta },
+        path: ':id/permission',
+      },
     ],
     element: dynamicLayout(
       () => import('@/routes/(main)/page/_layout'),
@@ -811,14 +1007,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
 const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): RouteObject[] => [
   ...sharedMainAreaChildren,
-
-  // Downloads page (personal-only — never mirrored under /:workspaceSlug)
-  {
-    element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Desktop > Downloads'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.downloads' }) },
-    path: 'downloads',
-  },
 
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {
@@ -858,6 +1046,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Memory',
+          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { settingsTab: SettingsTabs.Memory },
         path: 'memory',
@@ -871,6 +1060,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Tab',
+          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { meta: settingsRouteMeta },
         path: ':tab',
@@ -881,6 +1071,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Tab > Sub',
+          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { meta: settingsRouteMeta },
         path: ':tab/:sub',
@@ -889,6 +1080,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     element: dynamicElement(
       () => import('@/routes/(main)/settings/_layout'),
       'Desktop > Settings > Layout',
+      { fallback: <SettingsPageSkeleton /> },
     ),
     errorElement: <ErrorBoundary />,
     path: 'settings',
@@ -901,7 +1093,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       // Web renders Home beside the router outlet; Electron injects a per-tab
       // Home element because each tab owns an independent memory router.
       {
-        element: options.createHomeElement?.(),
+        element: deferPlatformElement(options.createHomeElement),
         handle: { meta: workspaceHomeRouteMeta },
         index: true,
       },
@@ -912,7 +1104,9 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       {
         children: [
           {
-            element: options.createWorkspaceSettingsIndexElement?.() ?? redirectElement('general'),
+            element:
+              deferPlatformElement(options.createWorkspaceSettingsIndexElement) ??
+              redirectElement('general'),
             index: true,
           },
           // Full-bleed tabs render directly inside the workspace settings
@@ -1126,11 +1320,11 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
 
   // Web leaves this element empty; Electron injects the per-tab Home route.
   {
-    element: options.createHomeElement?.(),
+    element: deferPlatformElement(options.createHomeElement),
     handle: {
       meta: routeMeta({
-        icon: MessageSquarePlus,
-        tabTitleKey: 'navigation.newChat',
+        icon: HomeIcon,
+        tabTitleKey: 'navigation.home',
         titleKey: 'navigation.home',
       }),
     },
@@ -1166,27 +1360,34 @@ export interface SharedDesktopRouteOptions {
  * supply only the root children, runtime-only routes, and onboarding route.
  */
 /**
- * Swap the brand-loading fallback for a content one across a route subtree.
+ * Swap the default brand-loading fallback for a structural segment skeleton.
  *
  * `dynamicElement` / `dynamicLayout` wrap every route element in their own
  * `Suspense`, and that boundary is always nearer the suspending component than
  * any outlet-level one — so a fallback set on the main layout's outlet never
  * fires for route content, and the 100+ call sites would otherwise each need
- * the option. Rewriting the elements once here keeps the main area consistent
- * without touching routes outside it (mobile still wants the full-page brand
- * loading, since its nav bar is inside the same boundary as its outlet).
+ * the option. Explicit route fallbacks are preserved so a route can render the
+ * nearest segment skeleton instead. Rewriting only defaults here keeps the main
+ * area consistent without touching routes outside it (mobile still wants the
+ * full-page brand loading, since its nav bar is inside the same boundary as its
+ * outlet).
  */
-export const withContentFallback = (routes: RouteObject[]): RouteObject[] =>
+export const withSegmentFallback = (routes: RouteObject[]): RouteObject[] =>
   routes.map((route) => {
-    const element =
+    const suspenseElement =
       isValidElement(route.element) && route.element.type === Suspense
-        ? // right that this couples to `dynamicElement` returning a bare Suspense.
-          // The alternative is the option on all 104 call sites; the coupling is
-          // guarded instead — `desktopRouter.sync.test.tsx` asserts every
-          // main-area fallback is `ContentLoading`, so if that shape ever changes
-          // the rewrite fails loudly rather than silently restoring the logo.
-          cloneElement(route.element as ReactElement<{ fallback: ReactElement }>, {
-            fallback: <ContentLoading />,
+        ? (route.element as ReactElement<{ fallback: ReactNode }>)
+        : undefined;
+    const fallback = suspenseElement?.props.fallback;
+    const element =
+      suspenseElement && isValidElement(fallback) && fallback.type === BrandTextLoading
+        ? // This intentionally couples to `dynamicElement` / `dynamicLayout`
+          // returning a bare Suspense with BrandTextLoading as their default.
+          // Explicit segment fallbacks must pass through unchanged.
+          createElement(Suspense, {
+            ...suspenseElement.props,
+            fallback: <RouteSegmentSkeleton />,
+            key: suspenseElement.key,
           })
         : route.element;
 
@@ -1194,7 +1395,7 @@ export const withContentFallback = (routes: RouteObject[]): RouteObject[] =>
     // spreading loses the discriminant — the copy keeps the original's shape.
     return {
       ...route,
-      ...(route.children && { children: withContentFallback(route.children) }),
+      ...(route.children && { children: withSegmentFallback(route.children) }),
       element,
     } as RouteObject;
   });
@@ -1205,7 +1406,7 @@ export const createSharedDesktopRoutes = ({
   platformRoutes = [],
 }: SharedDesktopRouteOptions): RouteObject[] => [
   {
-    children: withContentFallback(mainAreaChildren),
+    children: withSegmentFallback(mainAreaChildren),
     // `BootShell` unmounts the moment the cache gate releases, which is often
     // before this chunk resolves. Falling back to the same skeleton keeps the
     // handoff invisible instead of flashing the brand logo a second time.

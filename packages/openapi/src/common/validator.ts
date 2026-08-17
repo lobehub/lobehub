@@ -5,20 +5,18 @@ import { validator } from 'hono-openapi';
  * `hono-openapi`'s validator so every request schema is registered into the
  * generated OpenAPI spec (see `scripts/generate-openapi.ts`).
  *
- * The failure hook reproduces `@hono/zod-validator`'s default 400 response
- * shape (`{ success: false, error: { name: 'ZodError', message } }`) so the
- * swap is invisible to API consumers.
+ * Validation failures use the same public error envelope as controller errors.
+ * Keeping `error` a string and including `timestamp` makes runtime responses
+ * conform to the shared `ApiError` schema advertised by the generated spec.
  */
 export const zValidator = ((target: never, schema: never) =>
   validator(target, schema, (result, c) => {
     if (!result.success) {
       return c.json(
         {
-          error: {
-            message: JSON.stringify(result.error, null, 2),
-            name: 'ZodError',
-          },
+          error: JSON.stringify(result.error, null, 2),
           success: false,
+          timestamp: new Date().toISOString(),
         },
         400,
       );

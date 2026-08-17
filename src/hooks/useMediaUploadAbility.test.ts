@@ -18,6 +18,8 @@ vi.mock('@/hooks/useModelSupportVision');
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
+    getAgencyConfigById: (_id: string) => (s: { heterogeneousType?: string }) =>
+      s.heterogeneousType ? { heterogeneousProvider: { type: s.heterogeneousType } } : undefined,
     getAgentEnableModeById: (_id: string) => (s: { enableMode?: boolean }) => !!s.enableMode,
     isAgentHeterogeneousById: (_id: string) => (s: { heterogeneous?: boolean }) =>
       !!s.heterogeneous,
@@ -196,13 +198,25 @@ describe('useMediaUploadAbility', () => {
 
   it('should bypass the media gate for heterogeneous agents', () => {
     mockedUseAgentStore.mockImplementation((selector: any) =>
-      selector({ enableMode: false, heterogeneous: true } as any),
+      selector({ enableMode: false, heterogeneous: true, heterogeneousType: 'claude-code' } as any),
     );
 
     const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
 
     expect(result.current.canUploadAudio).toBe(true);
     expect(result.current.canUploadImage).toBe(true);
+    expect(result.current.canUploadVideo).toBe(true);
+  });
+
+  it('should reject image uploads for Kimi Code agents', () => {
+    mockedUseAgentStore.mockImplementation((selector: any) =>
+      selector({ enableMode: false, heterogeneous: true, heterogeneousType: 'kimi-code' } as any),
+    );
+
+    const { result } = renderHook(() => useMediaUploadAbility('model', 'provider', 'agent-1'));
+
+    expect(result.current.canUploadAudio).toBe(true);
+    expect(result.current.canUploadImage).toBe(false);
     expect(result.current.canUploadVideo).toBe(true);
   });
 

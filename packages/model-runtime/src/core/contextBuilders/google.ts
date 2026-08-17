@@ -78,15 +78,21 @@ const supportsFunctionCallId = (model?: string) => {
 const buildExternalUrlFileDataPart = async (
   url: string,
   options?: GoogleMessageBuildOptions,
+  fallbackMimeType?: string,
 ): Promise<Part | undefined> => {
   if (!supportsExternalUrlFileData(options?.model) || !isPublicExternalUrl(url)) return undefined;
 
   const validation = await validateExternalUrl(url);
   if (validation.isValid) {
+    const mimeType =
+      validation.contentType && validation.contentType !== 'application/octet-stream'
+        ? validation.contentType
+        : fallbackMimeType || validation.contentType;
+
     return {
       fileData: {
         fileUri: url,
-        mimeType: validation.contentType,
+        mimeType,
       },
       thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
     };
@@ -198,6 +204,7 @@ export const buildGooglePart = async (
 
     case 'audio_url': {
       const { mimeType, base64, type } = parseDataUri(content.audio_url.url);
+      const recordedMimeType = content.audio_url.mimeType?.split(';')[0].trim();
 
       if (type === 'base64') {
         if (!base64) {
@@ -205,7 +212,7 @@ export const buildGooglePart = async (
         }
 
         return {
-          inlineData: { data: base64, mimeType: mimeType || 'audio/mp3' },
+          inlineData: { data: base64, mimeType: mimeType || recordedMimeType || 'audio/mp3' },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -213,16 +220,20 @@ export const buildGooglePart = async (
       if (type === 'url') {
         const url = content.audio_url.url;
 
-        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options, recordedMimeType);
         if (externalUrlPart) return externalUrlPart;
 
         // Fallback: convert URL to base64 (for private/local URLs or earlier model
         // generations that don't support external fileData URIs).
         // imageUrlToBase64 provides SSRF protection and works for any binary data.
         const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+        const resolvedMimeType =
+          urlMimeType && urlMimeType !== 'application/octet-stream'
+            ? urlMimeType
+            : recordedMimeType || urlMimeType || 'audio/mp3';
 
         return {
-          inlineData: { data: urlBase64, mimeType: urlMimeType || 'audio/mp3' },
+          inlineData: { data: urlBase64, mimeType: resolvedMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }

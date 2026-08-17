@@ -1,26 +1,24 @@
 'use client';
 
-import { type DropdownItem } from '@lobehub/ui';
-import {
-  ActionIcon,
-  Block,
-  Center,
-  DropdownMenu,
-  Skeleton,
-  stopPropagation,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Block, Center, Skeleton, stopPropagation, Text } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui/base-ui';
+import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { type DragEvent } from 'react';
+import type { DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import BusinessKnowledgeBaseImportAction from '@/business/client/BusinessKnowledgeBaseImportAction';
-import RepoIcon from '@/components/LibIcon';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import { useDragActive } from '@/features/ResourceManager/DndContextWrapper';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
+
+import type { LibraryMenuEntry } from './libraryMenuItems';
+import { buildLibraryMenuItems } from './libraryMenuItems';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   dropZoneActive: css`
@@ -40,7 +38,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * Quickly switch between libraries
  */
 const Head = memo<{ id: string }>(({ id }) => {
+  const { t } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceId = useActiveWorkspaceId();
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));
   const [setMode, setLibraryId] = useResourceManagerStore((s) => [s.setMode, s.setLibraryId]);
   const isDragActive = useDragActive();
@@ -48,6 +48,8 @@ const Head = memo<{ id: string }>(({ id }) => {
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
   const { data: libraries } = useFetchKnowledgeBaseList();
+  const activeLibrary = libraries?.find((library) => library.id === id) as
+    (NonNullable<typeof libraries>[number] & { memberRestricted?: boolean }) | undefined;
 
   const handleClick = useCallback(() => {
     navigate(`/resource/library/${id}`);
@@ -88,18 +90,32 @@ const Head = memo<{ id: string }>(({ id }) => {
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!libraries) return [];
 
-    return libraries.map((library) => ({
-      icon: (
-        <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
-          <RepoIcon size={14} />
-        </Center>
-      ),
-      key: library.id,
-      label: library.name,
-      onClick: () => handleLibrarySwitch(library.id),
-      style: library.id === id ? { backgroundColor: 'var(--ant-control-item-bg-active)' } : {},
+    const entries = libraries.map((library): LibraryMenuEntry => ({
+      item: {
+        icon: (
+          <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
+            <LibraryStatusIcon
+              size={14}
+              visibility={library.visibility}
+              memberRestricted={
+                (library as typeof library & { memberRestricted?: boolean }).memberRestricted
+              }
+            />
+          </Center>
+        ),
+        key: library.id,
+        label: library.name,
+        onClick: () => handleLibrarySwitch(library.id),
+        style: library.id === id ? { backgroundColor: 'var(--ant-control-item-bg-active)' } : {},
+      },
+      visibility: library.visibility,
     }));
-  }, [libraries, handleLibrarySwitch, id, styles.menuIcon]);
+
+    return buildLibraryMenuItems(entries, Boolean(activeWorkspaceId), {
+      private: t('navPanel.privateAgents'),
+      workspace: t('navPanel.publicAgents'),
+    });
+  }, [activeWorkspaceId, libraries, handleLibrarySwitch, id, t]);
 
   return (
     <Block
@@ -120,7 +136,11 @@ const Head = memo<{ id: string }>(({ id }) => {
       onDrop={handleDrop}
     >
       <Center style={{ minWidth: 32 }} width={32}>
-        <RepoIcon size={18} />
+        <LibraryStatusIcon
+          memberRestricted={activeLibrary?.memberRestricted}
+          size={18}
+          visibility={activeLibrary?.visibility}
+        />
       </Center>
       {!name ? (
         <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />

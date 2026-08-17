@@ -37,6 +37,7 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
@@ -225,25 +226,14 @@ const buildLocalHeterogeneousSystemContext = ({
   agentSystemContext,
   contextSelections,
   pageSelections,
-  workingDirectory,
 }: {
   agentSystemContext?: string;
   contextSelections?: ContextSelection[];
   pageSelections?: PageSelection[];
-  workingDirectory?: string;
 }): string | undefined => {
   const parts: string[] = [];
 
   if (agentSystemContext?.trim()) parts.push(agentSystemContext.trim());
-
-  if (workingDirectory?.trim()) {
-    parts.push(
-      [
-        '## Workspace',
-        `You are running on the user's own machine. Your working directory is \`${workingDirectory.trim()}\`.`,
-      ].join('\n'),
-    );
-  }
 
   const selectionContext =
     contextSelections && contextSelections.length > 0
@@ -588,7 +578,7 @@ export const executeHeterogeneousAgent = async (
     );
   };
 
-  let agentSessionId: string | undefined;
+  let ipcRunSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
   let completed = false;
   let fallbackPromise: Promise<void> | undefined;
@@ -1830,6 +1820,12 @@ export const executeHeterogeneousAgent = async (
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
+      initialModel:
+        adapterType === 'trae' &&
+        heterogeneousProvider.model &&
+        heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+          ? heterogeneousProvider.model
+          : undefined,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
       useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
@@ -1848,15 +1844,15 @@ export const executeHeterogeneousAgent = async (
           runExternalAccountId = quotaAccountPlan.externalAccountId;
         });
     }
-    agentSessionId = result.sessionId;
-    if (!agentSessionId) throw new Error('Agent session returned no sessionId');
+    ipcRunSessionId = result.sessionId;
+    if (!ipcRunSessionId) throw new Error('Agent session returned no sessionId');
 
     writeTopicStatus('running');
 
     // Register cancel hook on the operation — when the user hits Stop, the op
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
-    const sidForCancel = agentSessionId;
+    const sidForCancel = ipcRunSessionId;
     get().onOperationCancel?.(operationId, () => {
       heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
     });
@@ -2091,7 +2087,7 @@ export const executeHeterogeneousAgent = async (
       }
     };
 
-    unsubscribe = subscribeBroadcasts(agentSessionId, {
+    unsubscribe = subscribeBroadcasts(ipcRunSessionId, {
       onStreamEvent: handleStreamEvent,
 
       onComplete: () => {
@@ -2305,9 +2301,6 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: heterogeneousProvider.systemContext,
       contextSelections,
       pageSelections,
-      // The native CLI session already retains its workspace context. Reinjecting this note on
-      // every resumed turn makes it accumulate in persistent Codex/Claude conversations.
-      workingDirectory: resumeSessionId ? undefined : workingDirectory,
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code
@@ -2330,7 +2323,7 @@ export const executeHeterogeneousAgent = async (
       operationId,
       prompt: message,
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
-      sessionId: agentSessionId,
+      sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
     });
@@ -2348,7 +2341,7 @@ export const executeHeterogeneousAgent = async (
     // IPC, which already returns the freshest `agentSessionId` main has
     // mirrored from `pipeline.sessionId`.
     const sessionInfo = await heterogeneousAgentService
-      .getSessionInfo(agentSessionId)
+      .getSessionInfo(ipcRunSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
       // Best-effort: a rejected metadata save must NOT throw past the queue
@@ -2446,8 +2439,18 @@ export const executeHeterogeneousAgent = async (
   } finally {
     await waitForCompletionCallback();
     unsubscribe?.();
-    // Don't stopSession here — keep it alive for multi-turn resume.
-    // Session cleanup happens on topic deletion or Electron quit.
+    // The desktop IPC session only owns this run's config and process handles.
+    // Multi-turn resume uses the native agentSessionId persisted above, so the
+    // IPC session must be released after every run instead of accumulating in
+    // the Electron main-process session map until quit.
+    if (ipcRunSessionId) {
+      try {
+        await heterogeneousAgentService.stopSession(ipcRunSessionId);
+      } catch (err) {
+        // Cleanup is best-effort and must not replace the run's real outcome.
+        console.error('[HeterogeneousAgent] IPC run session cleanup failed:', err);
+      }
+    }
 
     // Backstop: if neither onComplete nor onError ever ran (e.g. the
     // heteroAgentSessionComplete IPC was missed, or its listener was torn down

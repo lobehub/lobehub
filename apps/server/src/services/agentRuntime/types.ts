@@ -7,7 +7,11 @@ import type {
   ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
-import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  ExpertiseContextSnapshot,
+  UserInterventionConfig,
+} from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
@@ -407,6 +411,8 @@ export interface OperationCreationParams {
   deviceSystemInfo?: Record<string, string>;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
+  /** Whether ContextEngine may inject the operation expertise snapshot. */
+  enableExpertise?: boolean;
   evalContext?: any;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
@@ -415,6 +421,8 @@ export interface OperationCreationParams {
    * device capability from raw config.
    */
   executionPlan?: ExecutionPlan;
+  /** Immutable expertise resolved once before the operation is persisted. */
+  expertise?: ExpertiseContextSnapshot;
   /**
    * External lifecycle hooks
    * Registered once, auto-adapt to local (in-memory) or production (webhook) mode

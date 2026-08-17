@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { AGENT_DOCUMENT_FILE_TYPE } from '@lobechat/const';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentAccess, AgentDocumentModel } from '@/database/models/agentDocuments';
 import type { LobeChatDatabase } from '@/database/type';
 
+import * as headlessEditor from '../agentDocuments/headlessEditor';
 import { AgentDocumentVfsService } from './index';
 import { createSkillMount } from './mounts/skills/createSkillMount';
 
@@ -63,6 +64,10 @@ describe('AgentDocumentVfsService', () => {
       const result = await mockAgentDocumentModel.findByParentAndFilename(...args);
       return result ? [result] : [];
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('lists ordinary root nodes plus the synthetic lobe directory', async () => {
@@ -287,6 +292,81 @@ describe('AgentDocumentVfsService', () => {
         type: 'file',
       }),
     );
+  });
+
+  it('stores raw ordinary file content without Markdown serialization', async () => {
+    const content = `<knowledge_base_files totalCount="1">
+<file id="file-1" name="raw.txt">
+${'lossless tool result\n'.repeat(100)}
+</file>
+</knowledge_base_files>`;
+    mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue(undefined);
+    mockAgentDocumentModel.listByParentAndFilename.mockResolvedValue([]);
+    mockAgentDocumentModel.create.mockResolvedValue({
+      accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
+      content,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      documentId: 'documents-raw',
+      fileType: 'text/plain',
+      filename: 'archive.txt',
+      id: 'agent-doc-raw',
+      metadata: null,
+      updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+    });
+    const createSnapshotSpy = vi.spyOn(headlessEditor, 'createMarkdownEditorSnapshot');
+    const service = new AgentDocumentVfsService(db, userId);
+    const node = await service.write(
+      './archive.txt',
+      content,
+      { agentId: 'agent-1' },
+      {
+        contentFormat: 'raw',
+      },
+    );
+
+    expect(createSnapshotSpy).not.toHaveBeenCalled();
+    expect(node.contentType).toBe('text/plain');
+    expect(mockAgentDocumentModel.create).toHaveBeenCalledWith('agent-1', 'archive.txt', content, {
+      fileType: 'text/plain',
+      parentId: null,
+      title: 'archive.txt',
+    });
+  });
+
+  it('overwrites raw ordinary file content without Markdown serialization', async () => {
+    const existing = {
+      accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
+      content: 'old content',
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      documentId: 'documents-raw',
+      fileType: 'text/plain',
+      filename: 'archive.txt',
+      id: 'agent-doc-raw',
+      metadata: null,
+      updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+    };
+    mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue(existing);
+    mockAgentDocumentModel.update.mockImplementation(async (_id, params) => {
+      Object.assign(existing, params);
+    });
+    const createSnapshotSpy = vi.spyOn(headlessEditor, 'createMarkdownEditorSnapshot');
+    const service = new AgentDocumentVfsService(db, userId);
+
+    await service.write(
+      './archive.txt',
+      'new raw content',
+      { agentId: 'agent-1' },
+      {
+        contentFormat: 'raw',
+      },
+    );
+
+    expect(createSnapshotSpy).not.toHaveBeenCalled();
+    expect(mockAgentDocumentModel.update).toHaveBeenCalledWith('agent-doc-raw', {
+      content: 'new raw content',
+      editorData: null,
+      fileType: 'text/plain',
+    });
   });
 
   it('resolves duplicate ordinary path segments to the oldest sibling', async () => {

@@ -21,6 +21,14 @@ export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success'
 
 export const UPLOAD_STATUS_SET = new Set(['uploading', 'pending', 'processing']);
 
+export interface VoiceMessageRecording {
+  codec?: string;
+  durationMs: number;
+  file: File;
+  mimeType: string;
+  waveform: number[];
+}
+
 // the file that is upload at chat page
 export interface UploadFileItem {
   /**
@@ -29,6 +37,16 @@ export interface UploadFileItem {
   abortController?: AbortController;
   /** Agent that owns the draft upload, used to retry in the same conversation context. */
   agentId?: string;
+  /**
+   * Metadata captured by the voice-message recorder. Kept on the upload item so
+   * optimistic and queued messages can render duration/codec before the
+   * persisted file relation is fetched.
+   */
+  audioMetadata?: {
+    codec?: string;
+    durationMs: number;
+    mimeType: string;
+  };
   /**
    * base64 data, it will use in other data
    */

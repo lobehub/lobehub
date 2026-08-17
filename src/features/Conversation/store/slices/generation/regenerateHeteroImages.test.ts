@@ -35,6 +35,7 @@ vi.mock('@/store/chat/slices/operation/selectors', () => ({
   operationSelectors: {
     getOperationById: () => () => undefined,
     isMessageProcessing: () => () => false,
+    isMessageRegenerating: () => () => false,
   },
 }));
 

@@ -544,3 +544,41 @@ describe('LocalSystemExecutionRuntime.executeToolCall — dispatch', () => {
     expect(await runtime.executeToolCall('runHeteroTask', {})).toBeNull();
   });
 });
+
+describe('LocalSystemExecutionRuntime.runCommand', () => {
+  it('surfaces a pre-spawn failure reason instead of UNKNOWN_EXEC_ERROR', async () => {
+    // A command that never starts has no process, so no stderr and no exit
+    // code — the exact shape every Local Sandbox refusal takes. The reason used
+    // to be dropped, leaving the user (and the model) with a generic failure
+    // and nothing to act on.
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({
+        error:
+          'Local Sandbox requires a working directory. Set one for this agent (or topic) and run the command again.',
+        success: false,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.runCommand({ command: 'whoami' } as never);
+
+    expect(output.content).toContain('Local Sandbox requires a working directory');
+    expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
+  });
+
+  it('reports whether the command was actually sandboxed', async () => {
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({
+        exit_code: 0,
+        sandboxed: true,
+        stdout: 'srt-sandbox',
+        success: true,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.runCommand({ command: 'whoami' } as never);
+
+    expect((output.state as { sandboxed?: boolean }).sandboxed).toBe(true);
+  });
+});

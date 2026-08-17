@@ -13,15 +13,22 @@ import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
+// Direct module import, not the feature barrel: home must not pull the whole
+// acceptance workspace into its chunk for one hook.
+import { useAcceptanceStatuses } from '@/features/Verify/hooks';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import GoalsRailCard from './GoalsRailCard';
 import { filterHiddenWidgetSections } from './hiddenWidgets';
+import { buildHomeGoalEntries, indexAcceptanceStatuses } from './homeGoals';
 import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
@@ -54,11 +61,14 @@ interface InboxSection {
   actionAlwaysVisible?: boolean;
   /** Trailing marker on the heading, e.g. the team-view "only mine" chip. */
   badge?: ReactNode;
+  /** Section folded to its heading. Needs `onCollapsedChange` to be operable. */
+  collapsed?: boolean;
   count?: number;
   key: string;
   /** Omitted when the section labels itself (the running card names its own count). */
   label?: string;
   node: ReactNode;
+  onCollapsedChange?: (collapsed: boolean) => void;
   /** Section carries its own card shell — the rail renders it verbatim. */
   selfShelled?: boolean;
   subtitle?: string;
@@ -68,6 +78,9 @@ interface InboxSection {
  * The home inbox: everything the agents did while you were away, sorted by
  * whether it needs you.
  *
+ * - **Goals** — the standing exception to "while you were away": goals run for
+ *   days, so the ones still open (waiting on you, or working) are listed here
+ *   rather than left to the agent page nobody visits mid-flight.
  * - **Needs you** — briefs blocking an agent (decide / fix). Errors sink to the
  *   bottom: a stuck decision blocks work right now, a failed run has already
  *   stopped.
@@ -90,9 +103,11 @@ interface InboxSection {
  */
 interface HomeInboxProps {
   hideNeedsYou?: boolean;
+  /** Running activity belongs in the main column above recent topics. */
+  hideRunning?: boolean;
   hideUnread?: boolean;
   /**
-   * Main column only: the rail is collapsed, so the sections it owns (running,
+   * Main column only: the rail is collapsed, so the sections it owns (goals,
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
@@ -105,6 +120,7 @@ interface HomeInboxProps {
 const HomeInbox = memo<HomeInboxProps>((props) => {
   const {
     hideNeedsYou,
+    hideRunning,
     hideUnread,
     inlineRail,
     onScopeChange,
@@ -148,6 +164,36 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // today's items. Clicks navigate relative to the shown day for the same
   // reason: WYSIWYG paging self-heals any offset/data divergence.
   const shownNewsOffset = newsSWR.data ? resolveShownNewsOffset(newsSWR.data.day) : 0;
+
+  // Goals are the one home feed that is not about today: they run for days, so
+  // the dashboard is where you check on them. Behind the same lab toggle as the
+  // goal pages themselves — without it a row would navigate to a redirect.
+  const goalsEnabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const showGoals = isLogin === true && goalsEnabled && showRailSections;
+  const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
+  const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
+  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
+  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
+  const goalIds = useMemo(() => goals.map(({ id }) => id), [goals]);
+  // One read for every goal's acceptance, instead of two per row — and asked
+  // about these goals specifically, since the recency-capped acceptance feed
+  // would drop an older accepted goal and resurrect it as "pending acceptance".
+  const acceptanceStatuses = useAcceptanceStatuses('task', goalIds, showGoals);
+  // Which pile a goal lands in depends on that read, so wait for it rather than
+  // flash an already-accepted goal into "pending acceptance" for a beat. A
+  // failed read still shows the card, on task status alone.
+  const goalsResolved =
+    goalIds.length === 0 || Boolean(acceptanceStatuses.data || acceptanceStatuses.error);
+  const goalEntries = useMemo(
+    () =>
+      showGoals && goalsResolved
+        ? buildHomeGoalEntries(goals, indexAcceptanceStatuses(acceptanceStatuses.data))
+        : [],
+    [acceptanceStatuses.data, goals, goalsResolved, showGoals],
+  );
+
+  const goalsCollapsed = useGlobalStore(systemStatusSelectors.homeGoalsCollapsed);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const topics = useHomeInboxTopics(isLogin);
   const recommendationsVisible = useRecommendationsVisible();
@@ -245,6 +291,35 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   const sections: InboxSection[] = [];
 
+  // A goal feed failure must not be silent: without this the card just vanishes,
+  // which is indistinguishable from having no open goals — the one reading a
+  // long-running goal surface can least afford.
+  if (showGoals && goalsSWR.error && !isGoalsInit)
+    sections.push({
+      key: 'goals-error',
+      label: t('inbox.goals.title'),
+      node: (
+        <AsyncError
+          error={goalsSWR.error}
+          variant={'inline'}
+          onRetry={() => void goalsSWR.mutate()}
+        />
+      ),
+    });
+
+  // First: a goal is the longest-lived thing on the page, and the only one whose
+  // absence from the rail leaves it with no home at all.
+  if (goalEntries.length > 0)
+    sections.push({
+      collapsed: goalsCollapsed,
+      count: goalEntries.length,
+      key: 'goals',
+      label: t('inbox.goals.title'),
+      node: <GoalsRailCard bare={isRail} entries={goalEntries} />,
+      onCollapsedChange: (next) =>
+        updateSystemStatus({ homeGoalsCollapsed: next }, 'toggleHomeGoals'),
+    });
+
   if (!isMain && !hideNeedsYou && needsYou.length > 0)
     sections.push(
       // The rail paginates instead of stacking and owns its header. Keep the
@@ -327,8 +402,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     }
   }
 
-  // No title: the card already says "3 tasks running" on its own head.
-  if (showRailSections && runningTopics.length > 0)
+  // No title: the card already says "3 tasks running" on its own head. Keep
+  // this in the main flow immediately before Recent topics; the rail is for
+  // glanceable reports, not live work the user may want to open.
+  if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
       node: (
@@ -460,10 +537,12 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           action,
           actionAlwaysVisible,
           badge,
+          collapsed,
           count,
           key,
           label,
           node,
+          onCollapsedChange,
           selfShelled,
           subtitle,
         }) => {
@@ -473,6 +552,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             return (
               <RailCard
                 action={action}
+                collapsed={collapsed}
                 count={count}
                 key={key}
                 title={
@@ -483,6 +563,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                     </>
                   )
                 }
+                onCollapsedChange={onCollapsedChange}
               >
                 {node}
               </RailCard>
@@ -494,6 +575,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             <GroupBlock
               action={action}
               actionAlwaysVisible={actionAlwaysVisible || key === toggleSectionKey}
+              collapsed={collapsed}
               count={count}
               key={key}
               title={
@@ -505,6 +587,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                   {badge}
                 </>
               }
+              onCollapsedChange={onCollapsedChange}
             >
               {node}
             </GroupBlock>

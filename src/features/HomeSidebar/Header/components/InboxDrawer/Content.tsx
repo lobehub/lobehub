@@ -10,6 +10,7 @@ import { VList, type VListHandle } from 'virtua';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { PendingTransfersSection } from '@/features/ResourceTransferRequest';
 import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
 
@@ -84,38 +85,46 @@ const Content = memo<ContentProps>(({ open, unreadOnly, onMarkAsRead, onArchive 
 
   if (notifications.length === 0) {
     return (
-      <Flexbox align="center" gap={12} justify="center" paddingBlock={48}>
-        <Icon color={cssVar.colorTextQuaternary} icon={BellOffIcon} size={40} />
-        <Text type="secondary">{t(unreadOnly ? 'inbox.emptyUnread' : 'inbox.empty')}</Text>
+      <Flexbox height="100%">
+        <PendingTransfersSection open={open} />
+        <Flexbox align="center" gap={12} justify="center" paddingBlock={48}>
+          <Icon color={cssVar.colorTextQuaternary} icon={BellOffIcon} size={40} />
+          <Text type="secondary">{t(unreadOnly ? 'inbox.emptyUnread' : 'inbox.empty')}</Text>
+        </Flexbox>
       </Flexbox>
     );
   }
 
   return (
-    <VList ref={virtuaRef} style={{ height: '100%' }} onScroll={handleScroll}>
-      {notifications.map((item) => (
-        <Flexbox key={item.id} padding="4px 8px">
-          <NotificationItem
-            actionUrl={item.actionUrl}
-            category={item.category}
-            content={item.content}
-            context={item.context}
-            createdAt={item.createdAt}
-            id={item.id}
-            isRead={item.isRead}
-            title={item.title}
-            type={item.type}
-            onArchive={onArchive}
-            onMarkAsRead={onMarkAsRead}
-          />
-        </Flexbox>
-      ))}
-      {isValidating && (
-        <Flexbox padding="4px 8px">
-          <SkeletonList rows={2} />
-        </Flexbox>
-      )}
-    </VList>
+    <Flexbox height="100%">
+      {/* Cross-resource transfer inbox: live pending requests, above the
+          immutable notification stream. */}
+      <PendingTransfersSection open={open} />
+      <VList ref={virtuaRef} style={{ flex: 1 }} onScroll={handleScroll}>
+        {notifications.map((item) => (
+          <Flexbox key={item.id} padding="4px 8px">
+            <NotificationItem
+              actionUrl={item.actionUrl}
+              category={item.category}
+              content={item.content}
+              context={item.context}
+              createdAt={item.createdAt}
+              id={item.id}
+              isRead={item.isRead}
+              title={item.title}
+              type={item.type}
+              onArchive={onArchive}
+              onMarkAsRead={onMarkAsRead}
+            />
+          </Flexbox>
+        ))}
+        {isValidating && (
+          <Flexbox padding="4px 8px">
+            <SkeletonList rows={2} />
+          </Flexbox>
+        )}
+      </VList>
+    </Flexbox>
   );
 });
 

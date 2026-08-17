@@ -26,6 +26,7 @@ import {
   isHeteroStatusGuideErrorData,
   spawnAgent,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
@@ -35,6 +36,9 @@ import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
+const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
+  ({ defaultCommand }) => `\`${defaultCommand}\``,
+).join(', ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
@@ -72,6 +76,13 @@ const RESUME_RETRY_PATTERNS = [
 const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
   RESUME_RETRY_PATTERNS.some((p) => p.test(text));
 
+const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): boolean => {
+  if (data?.agentType !== 'grok-build' || !isRecord(data.details)) return false;
+  const { details } = data;
+  const rpcData = details.data;
+  return details.method === 'session/load' && isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
+};
+
 interface ExecOptions {
   agentArg?: string[];
   command?: string;
@@ -79,6 +90,8 @@ interface ExecOptions {
   effort?: string;
   image?: string[];
   inputJson?: string;
+  /** Amp agent mode, forwarded as the native `--mode` flag. */
+  mode?: string;
   model?: string;
   operationId?: string;
   prompt?: string;
@@ -116,30 +129,38 @@ const collectImage = (value: string, previous: string[] = []): string[] => [...p
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 const buildExtraArgs = (
-  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
+  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
     options.type === 'amp'
-      ? []
-      : options.type === 'codex'
-        ? [
-            ...(options.model ? ['--model', options.model] : []),
-            ...(options.effort
-              ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
-              : []),
-            ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
-          ]
-        : options.type === 'claude-code'
+      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      : options.type === 'trae'
+        ? []
+        : options.type === 'codex'
           ? [
               ...(options.model ? ['--model', options.model] : []),
-              ...(options.effort ? ['--effort', options.effort] : []),
+              ...(options.effort
+                ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+                : []),
+              ...(options.speed
+                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
+                : []),
             ]
-          : options.type === 'opencode'
-            ? [...(options.model ? ['--model', options.model] : [])]
-            : options.type === 'pi'
+          : options.type === 'claude-code' || options.type === 'codebuddy'
+            ? [
+                ...(options.model ? ['--model', options.model] : []),
+                ...(options.effort ? ['--effort', options.effort] : []),
+              ]
+            : options.type === 'cursor' ||
+                options.type === 'kimi-code' ||
+                options.type === 'opencode' ||
+                options.type === 'pi'
               ? [...(options.model ? ['--model', options.model] : [])]
               : options.type === 'qoder'
-                ? [...(options.model ? ['--model', options.model] : [])]
+                ? [
+                    ...(options.model ? ['--model', options.model] : []),
+                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                  ]
                 : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
@@ -598,12 +619,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
     } catch (err) {
       await dumpAttempt?.close();
       const message = err instanceof Error ? err.message : String(err);
+      const errnoCode =
+        typeof err === 'object' && err && 'code' in err && typeof err.code === 'string'
+          ? err.code
+          : undefined;
       log.error('Failed to start agent:', message);
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
           await sink.finish({
-            error: buildFinishError(message, 'AgentRuntimeError'),
+            error: buildFinishError(message, 'AgentRuntimeError', errnoCode),
             result: 'error',
           });
         } catch {
@@ -667,7 +692,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');
-          if (looksLikeNeedsRetryWithoutResume(msg)) {
+          if (looksLikeNeedsRetryWithoutResume(msg) || isMissingGrokResumeSession(data)) {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
@@ -776,6 +801,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
       cwd: options.cwd || process.cwd(),
       env: commandEnv,
       extraArgs,
+      // Device and sandbox executions are observed through the same gateway
+      // stream as native server agents. Ask Claude Code for content-block
+      // deltas so the current conversation receives text while the process is
+      // running instead of seeing only the terminal assistant snapshot.
+      includePartialMessages: options.type === 'claude-code',
+      initialModel: options.type === 'trae' ? options.model : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -808,6 +839,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
         cwd: options.cwd || process.cwd(),
         env: commandEnv,
         extraArgs,
+        includePartialMessages: options.type === 'claude-code',
+        initialModel: options.type === 'trae' ? options.model : undefined,
         operationId,
         prompt: resolved.prompt,
         uploadImage,
@@ -889,7 +922,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
-  if (code !== null) process.exit(result.ingestError ? 1 : code);
+  if (code !== null) {
+    const hasRunError = result.ingestError || (!result.cancelled && result.sawTerminalError);
+    process.exit(hasRunError ? 1 : code);
+  }
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);
@@ -921,6 +957,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')
     .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(
@@ -934,7 +971,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `amp`, `claude`, `codex`, `opencode`, `pi`, or `qodercli`)',
+      `Override the agent CLI binary name (defaults: ${SUPPORTED_AGENT_COMMANDS})`,
     )
     .option(
       '--operation-id <id>',

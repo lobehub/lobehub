@@ -1,6 +1,7 @@
 import {
   ChartColumnBigIcon,
   FileUserIcon,
+  GraduationCapIcon,
   MessageSquare,
   MessagesSquareIcon,
   RadioTowerIcon,
@@ -29,6 +30,11 @@ const ChannelDynamicMeta = lazy(() =>
 const StatisticsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.StatisticsDynamicMeta,
+  })),
+);
+const SelfLearningDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.SelfLearningDynamicMeta,
   })),
 );
 const PermissionDynamicMeta = lazy(() =>
@@ -65,6 +71,12 @@ export const agentStatisticsRouteMeta = routeMeta({
   DynamicMeta: StatisticsDynamicMeta,
   icon: ChartColumnBigIcon,
   titleKey: 'navigation.stats',
+});
+
+export const agentSelfLearningRouteMeta = routeMeta({
+  DynamicMeta: SelfLearningDynamicMeta,
+  icon: GraduationCapIcon,
+  titleKey: 'navigation.selfLearning',
 });
 
 export const agentPermissionRouteMeta = routeMeta({

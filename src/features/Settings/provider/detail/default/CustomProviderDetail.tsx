@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useClientDataSWR } from '@/libs/swr';
 import { providerKeys } from '@/libs/swr/keys';
 import { aiProviderService } from '@/services/aiProvider';
@@ -20,7 +20,7 @@ const CustomProviderDetail = memo<{ id: string }>(({ id }) => {
     aiProviderService.getAiProviderById(id),
   );
 
-  if (isLoading || !data || !data.id) return <Loading debugId="Provider > CustomProviderDetail" />;
+  if (isLoading || !data || !data.id) return <SurfaceSkeleton header={false} variant={'form'} />;
 
   return (
     // No block padding of its own — SettingContainer already insets the page.

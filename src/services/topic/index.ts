@@ -84,6 +84,8 @@ export class TopicService {
     return lambdaClient.topic.getTopics.query({
       agentId: params.agentId,
       current: params.current,
+      editingAgentId: params.editingAgentId,
+      editingGroupId: params.editingGroupId,
       excludeStatuses: params.excludeStatuses,
       excludeTriggers: params.excludeTriggers,
       groupId: params.groupId,

@@ -5,8 +5,8 @@ import { type ChatMessageError } from '@lobechat/types';
 import { TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
 import { ModelIcon } from '@lobehub/icons';
-import { Alert, Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
+import { Alert, Button, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -66,7 +66,7 @@ interface ConnectionCheckerProps {
   checkErrorRender?: CheckErrorRender;
   model: string;
   onAfterCheck: () => Promise<void>;
-  onBeforeCheck: () => Promise<void>;
+  onBeforeCheck: () => Promise<boolean>;
   provider: string;
 }
 
@@ -236,8 +236,10 @@ const Checker = memo<ConnectionCheckerProps>(
             onClick={async () => {
               if (!canManageProvider) return;
 
-              await onBeforeCheck();
               try {
+                const shouldCheck = await onBeforeCheck();
+                if (!shouldCheck) return;
+
                 await checkConnection();
               } finally {
                 await onAfterCheck();

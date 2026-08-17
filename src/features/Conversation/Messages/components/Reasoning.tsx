@@ -12,8 +12,8 @@ import { RichContentRenderer } from './RichContentRenderer';
 /**
  * Whether a persisted reasoning object holds renderable thinking. A
  * signature-only reasoning ({ signature } without content) is protocol state
- * kept for multi-turn replay and must not render an empty "deep thought" card
- * (LOBE-12829). Multimodal reasoning streams image parts via tempDisplayContent
+ * kept for multi-turn replay and must not render an empty "deep thought" card.
+ * Multimodal reasoning streams image parts via tempDisplayContent
  * without content, so those count as renderable.
  */
 export const hasRenderableReasoning = (reasoning?: ModelReasoning | null): boolean =>

@@ -39,6 +39,7 @@ import {
   ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
+  ExpertiseContextInjector,
   ForceFinishSummaryInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
@@ -52,6 +53,7 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   PlanInjector,
+  RuntimeAdditionalContextProvider,
   selectActivatedSkills,
   SelectedSkillInjector,
   selectToolPromptManifests,
@@ -171,6 +173,7 @@ export class MessagesEngine {
       onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
+      additionalContexts,
       agentGroup,
       agentDocuments,
       planTodo,
@@ -229,7 +232,7 @@ export class MessagesEngine {
     // (enable flags + FC support + the shared select predicates) so
     // ActivationResultTrimProcessor only trims activation tool results whose full
     // documentation is confirmed to be injected into the system prompt for this
-    // request — see LOBE-5684.
+    // request.
     const canUseFC = capabilities?.isCanUseFC || (() => true);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
@@ -324,6 +327,11 @@ export class MessagesEngine {
 
       // User memory
       new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
+      // Operation-scoped learned expertise (captured once and reused verbatim across steps)
+      new ExpertiseContextInjector({
+        enabled: this.params.enableExpertise,
+        expertise: this.params.expertise,
+      }),
       // Group context (agent identity and group info for multi-agent chat)
       new GroupContextInjector({
         currentAgentId: agentGroup?.currentAgentId,
@@ -439,6 +447,7 @@ export class MessagesEngine {
         enabled: !!onboardingContext?.phaseGuidance,
         onboardingContext,
       }),
+      new RuntimeAdditionalContextProvider({ additionalContexts }),
 
       // =============================================
       // Phase 5: Message Transformation

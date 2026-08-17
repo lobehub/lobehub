@@ -59,6 +59,7 @@ export const HotkeyEnum = {
   SwitchTab: 'switchTab',
   ToggleLeftPanel: 'toggleLeftPanel',
   ToggleRightPanel: 'toggleRightPanel',
+  ToggleTerminalPanel: 'toggleTerminalPanel',
 } as const satisfies Record<string, HotkeyId>;
 
 export const HotkeyGroupEnum = {
@@ -119,7 +120,7 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.NavigateToChat,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Backquote]),
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.Backquote]),
     scopes: [HotkeyScopeEnum.Global],
   },
   {
@@ -141,6 +142,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     scopes: [HotkeyScopeEnum.Global],
   },
   // Chat
+  {
+    group: HotkeyGroupEnum.Conversation,
+    id: HotkeyEnum.ToggleTerminalPanel,
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Backquote]),
+    scopes: [HotkeyScopeEnum.Chat],
+  },
   {
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.OpenChatSettings,

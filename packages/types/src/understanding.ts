@@ -5,7 +5,6 @@ import type { StrictOnly } from './zodStrict';
 export const MAX_COLLECTION_COUNT = 1_000_000;
 export const MAX_COLLECTION_ERRORS = 16;
 export const MAX_DIAGNOSTIC_CODE_LENGTH = 64;
-export const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 160;
 export const MAX_DIAGNOSTIC_OPERATION_LENGTH = 64;
 export const MAX_PROVIDER_ID_LENGTH = 64;
 export const MAX_ANALYSIS_DESCRIPTION_LENGTH = 2000;
@@ -228,6 +227,39 @@ export interface OnboardingUnderstandingPollingResult {
   writing?: UnderstandingWritingState;
 }
 
+/** A durable-workflow stage exposed as a progress-only SSE signal. */
+export type OnboardingGenerationProgressPhase =
+  | 'collecting-sources'
+  | 'generating-understanding'
+  | 'generating-detailed-persona'
+  | 'recommending-tasks'
+  | 'completed'
+  | 'partial'
+  | 'failed';
+
+/** Progress state for one durable onboarding generation step. */
+export type OnboardingGenerationProgressStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+/**
+ * Progress-only event emitted by the onboarding generation SSE subscription.
+ *
+ * The event intentionally carries no generated content. Clients must refresh the polling
+ * endpoints after receiving it because persisted polling state remains authoritative.
+ */
+export interface OnboardingGenerationProgressEvent {
+  /** Coarse workflow phase for lightweight progress feedback. */
+  phase: OnboardingGenerationProgressPhase;
+  /** Current session that owns the persisted Understanding state. */
+  sessionId: string;
+  /** Per-step states; phases may overlap while independent durable work is running. */
+  steps: {
+    collectSources: OnboardingGenerationProgressStepStatus;
+    detailedPersona: OnboardingGenerationProgressStepStatus;
+    taskRecommendations: OnboardingGenerationProgressStepStatus;
+    understanding: OnboardingGenerationProgressStepStatus;
+  };
+}
+
 export interface OnboardingUnderstandingTopicInput {
   topicId: string;
 }
@@ -246,8 +278,8 @@ export interface StartOnboardingUnderstandingInput extends OnboardingUnderstandi
  * Adds direct feedback and newly selected providers to an active Understanding session.
  */
 export interface ReviseOnboardingUnderstandingInput extends OnboardingUnderstandingTopicInput {
-  /** Feedback revision observed by the caller; prevents duplicate or stale appends. */
-  expectedFeedbackRevision: number;
+  /** Feedback revision observed by the caller; required when `feedback` is provided. */
+  expectedFeedbackRevision?: number;
   /** Optional direct guidance appended to the cumulative writer prompt. */
   feedback?: string;
   /** Additive provider identifiers; existing sources are never removed. */
@@ -280,7 +312,7 @@ export interface ConfirmOnboardingUnderstandingResult {
 export const CollectionErrorSchema = z
   .object({
     code: z.string().max(MAX_DIAGNOSTIC_CODE_LENGTH),
-    message: z.string().max(MAX_DIAGNOSTIC_MESSAGE_LENGTH),
+    message: z.string(),
     operation: z.string().max(MAX_DIAGNOSTIC_OPERATION_LENGTH),
     provider: z.string().max(MAX_PROVIDER_ID_LENGTH),
     retryable: z.boolean(),

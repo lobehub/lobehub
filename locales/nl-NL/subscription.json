@@ -480,6 +480,8 @@
   "plansModal.default.title": "Upgrade je abonnement",
   "plansModal.fileStorageLimit.desc": "Je opslagruimte is vol. Upgrade om bestanden te blijven uploaden en beheren.",
   "plansModal.fileStorageLimit.title": "Opslaglimiet bereikt",
+  "plansModal.messengerWechat.desc": "De WeChat-systeembot is beschikbaar op betaalde persoonlijke abonnementen. Upgrade om verbinding te maken en het te gebruiken.",
+  "plansModal.messengerWechat.title": "Verbind WeChat na een upgrade",
   "plansModal.modelAccess.desc": "Dit model is beschikbaar in betaalde abonnementen. Upgrade om toegang te krijgen tot de volledige modelreeks.",
   "plansModal.modelAccess.title": "Ontgrendel alle modellen",
   "qa.desc": "Staat je vraag er niet bij? Bekijk de <1>Productdocumentatie</1> voor meer antwoorden of neem contact met ons op.",

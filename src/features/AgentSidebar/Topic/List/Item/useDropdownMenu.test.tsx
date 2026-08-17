@@ -127,6 +127,7 @@ describe('useTopicItemDropdownMenu', () => {
       'diagnose',
       'divider',
       'openInNewTab',
+      'openOnRight',
       'openInNewWindow',
       'divider',
       'copySessionId',

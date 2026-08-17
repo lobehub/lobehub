@@ -1,18 +1,18 @@
 'use client';
 
 import type { TaskDetailSubtask, TaskStatus } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BadgeCheckIcon, BotIcon, CircleDashedIcon, RotateCcwIcon } from 'lucide-react';
+import { BotIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
-import Loading from '@/components/Loading/BrandTextLoading';
+import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useActiveTaskDetail } from '@/features/AgentTasks/AgentTaskDetail';
 import TaskDetailTitleInput from '@/features/AgentTasks/AgentTaskDetail/TaskDetailTitleInput';
@@ -21,6 +21,12 @@ import TopicCard from '@/features/AgentTasks/AgentTaskDetail/TopicCard';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavHeader from '@/features/NavHeader';
+import {
+  checkHeadMeta,
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+} from '@/features/Verify';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
@@ -29,28 +35,16 @@ import { useVerifyStore, verifySelectors } from '@/store/verify';
 
 import GoalDetailActions from './GoalDetailActions';
 import { getGoalPresentation } from './goalPresentation';
+import GoalStatusGlyph from './GoalStatusGlyph';
 import {
   formatGoalCost,
   formatGoalDuration,
   getGoalRunMetrics,
   getGoalRuns,
   getRecentGoalRuns,
-  goalStatusToTaskStatus,
 } from './goalViewModel';
 
 const styles = createStaticStyles(({ css }) => ({
-  acceptanceList: css`
-    overflow: hidden;
-    padding: 0;
-  `,
-  acceptanceRow: css`
-    padding-block: 11px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
   executionSection: css`
     padding-block: 18px;
   `,
@@ -146,7 +140,7 @@ const TaskTreeRows = memo<{ depth?: number; tasks: TaskDetailSubtask[] }>(({ tas
 TaskTreeRows.displayName = 'GoalTaskTreeRows';
 
 const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'verify']);
   const navigateToTaskDetail = useNavigateToTaskDetail();
   const { error, isInitialLoading, isNotFound, onRetry } = useActiveTaskDetail(goalId);
   const task = useTaskStore(taskDetailSelectors.taskDetailById(goalId));
@@ -156,7 +150,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const bundle = useVerifyStore(verifySelectors.acceptanceBundle(acceptance?.id));
   const acceptanceQuery = useFetchAcceptanceBySubject('task', task?.id);
   const bundleQuery = useFetchAcceptanceBundle(acceptance?.id);
-  const config = task?.config as { goal?: { maxIterations?: number | null } } | undefined;
   const runs = useMemo(() => getGoalRuns(task?.activities), [task?.activities]);
   const recentRuns = useMemo(() => getRecentGoalRuns(task?.activities), [task?.activities]);
   const runMetrics = useMemo(() => getGoalRunMetrics(task?.activities), [task?.activities]);
@@ -164,11 +157,11 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const presentation = getGoalPresentation({
     acceptanceStatus: bundle?.acceptance.status,
     checks: bundle?.checks,
-    maxRounds: config?.goal?.maxIterations,
+    goalStatus: task?.goal?.status,
+    maxRounds: task?.goal?.maxRounds,
     rounds: task?.topicCount ?? 0,
     taskStatus: task?.status ?? 'backlog',
   });
-  const visual = statusVisual(goalStatusToTaskStatus(presentation.statusKey));
   const title = task?.name?.trim() || task?.instruction.trim() || goalId;
 
   if (error) return <AsyncError error={error} variant={'page'} onRetry={onRetry} />;
@@ -190,7 +183,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <WideScreenContainer gap={20} paddingBlock={16}>
           {isInitialLoading || !task ? (
-            <Loading debugId={'GoalDetail'} />
+            <GoalDetailSkeleton showHeader={false} />
           ) : (
             <>
               <Flexbox className={styles.header} gap={8}>
@@ -296,43 +289,36 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                       ) : presentation.total === 0 ? (
                         <Text type={'secondary'}>{t('goalDetail.noChecks')}</Text>
                       ) : (
-                        <Block className={styles.acceptanceList} variant={'outlined'}>
+                        <CriterionList>
                           {bundle?.checks.map((check, index) => {
-                            const passed = check.state === 'passed';
-                            const failed = check.state === 'failed';
+                            const meta = checkHeadMeta(check);
+                            const verifierType = check.planItem?.verifierType;
                             return (
-                              <Flexbox
-                                horizontal
-                                align={'center'}
-                                className={styles.acceptanceRow}
-                                gap={10}
+                              <CriterionRow
                                 key={check.id}
+                                seq={index + 1}
+                                title={check.title}
+                                icon={
+                                  <Icon
+                                    color={meta.color}
+                                    icon={meta.icon}
+                                    size={16}
+                                    style={{ flex: 'none' }}
+                                  />
+                                }
                               >
-                                <Icon
-                                  size={16}
-                                  color={
-                                    passed
-                                      ? cssVar.colorSuccess
-                                      : failed
-                                        ? cssVar.colorError
-                                        : cssVar.colorTextQuaternary
-                                  }
-                                  icon={
-                                    passed
-                                      ? BadgeCheckIcon
-                                      : failed
-                                        ? RotateCcwIcon
-                                        : CircleDashedIcon
-                                  }
-                                />
-                                <Text fontSize={12} type={'secondary'}>
-                                  C{index + 1}
-                                </Text>
-                                <Text style={{ flex: 1 }}>{check.title}</Text>
-                              </Flexbox>
+                                {verifierType ? (
+                                  <Tag>
+                                    {t(`criterion.verifierType.${verifierType}` as const, {
+                                      ns: 'verify',
+                                    })}
+                                  </Tag>
+                                ) : null}
+                                <CriterionRequiredChip required={check.required !== false} />
+                              </CriterionRow>
                             );
                           })}
-                        </Block>
+                        </CriterionList>
                       )}
                     </Flexbox>
                   </AccordionItem>
@@ -355,7 +341,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   </Flexbox>
                   <Flexbox gap={4}>
                     <Flexbox horizontal align={'center'} className={styles.treeRow} gap={8}>
-                      <Icon color={visual.color} icon={visual.icon} size={14} />
+                      <GoalStatusGlyph size={14} statusKey={presentation.statusKey} />
                       <Text fontSize={12} type={'secondary'}>
                         {task.identifier}
                       </Text>

@@ -7,6 +7,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -32,6 +33,7 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId, wsId),
       editLockService: new EditLockService(ctx.userId),
+      goalModel: new GoalModel(ctx.serverDB, ctx.userId, wsId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
@@ -62,6 +64,16 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
+  // Bind a goal entity (`goals` row) to the created task; the task becomes the
+  // goal's execution carrier and the outer verify-driven round loop applies.
+  goal: z
+    .object({
+      maxRounds: z.number().int().nullish(),
+      maxTotalCost: z.number().nullish(),
+      requirement: z.string().nullish(),
+      title: z.string().optional(),
+    })
+    .optional(),
   identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
@@ -105,12 +117,19 @@ const updateSchema = z.object({
 
 const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
+  // true → only tasks whose schedule or heartbeat can still fire (a terminal or
+  // misconfigured one cannot), false → its exact complement. Omitted leaves the
+  // set unnarrowed.
+  automated: z.boolean().optional(),
   hasGoal: z.boolean().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
+  // Which timestamp orders the page, newest first. Defaults to creation time.
+  orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
   parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+  projectId: z.string().optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
   // UI-side narrowing of the result set. Omitted means "All" (the chip's
   // default 'private' is enforced client-side; the server stays permissive
@@ -133,6 +152,7 @@ const groupListSchema = z.object({
     .max(10),
   hasGoal: z.boolean().optional(),
   parentTaskId: z.string().nullish(),
+  projectId: z.string().optional(),
   visibility: z.enum(['private', 'public']).optional(),
 });
 
@@ -462,7 +482,8 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
-      if (!(task.config as { goal?: unknown } | null)?.goal) {
+      const goal = await ctx.goalModel.findBySubject('task', task.id);
+      if (!goal) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a goal root' });
       }
       assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');

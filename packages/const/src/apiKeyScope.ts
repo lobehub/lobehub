@@ -24,7 +24,7 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
  * - `rbac:*`, member/role management — privilege escalation surface
- * - billing (spend / subscription / top-up / credits)
+ * - billing administration (spend / subscription / top-up / credits)
  */
 export const API_KEY_SCOPES = [
   API_KEY_FULL_ACCESS_SCOPE,
@@ -39,6 +39,9 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  'mcp:read',
+  'mcp:write',
+  'usage:read',
   'workspace:read',
   'workspace:write',
   'user:read',
@@ -197,6 +200,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   connector: 'blocked',
   device: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
+  expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
   file: rw('file:read', 'file:write'),
@@ -233,6 +237,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   recent: rw('chat:read', null),
   referral: 'blocked',
   resourcePermission: 'blocked',
+  // Member-to-member ownership handover: accepting/declining is an interactive
+  // human decision, not something a restricted key should automate.
+  resourceTransferRequest: 'blocked',
   search: rw('chat:read', null),
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),
@@ -247,7 +254,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   topic: rw('chat:read', 'chat:write'),
   topicComment: rw('chat:read', 'chat:write'),
   upload: rw('file:read', 'file:write'),
-  usage: 'blocked',
+  usage: rw('usage:read', null),
   user: rw('user:read', 'user:write'),
   userMemories: rw('user:read', 'user:write'),
   userMemory: rw('user:read', 'user:write'),
@@ -279,7 +286,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * retrieval/indexing infrastructure owned by their domain scope, their
  * per-call cost is marginal, and file-upload pipelines trigger the same
  * embedding work outside this guard anyway. Whether embeddings deserve their
- * own scope (e.g. `model:embed`) is tracked in LOBE-12910.
+ * own scope (e.g. `model:embed`) is still an open product decision.
  */
 const AGENT_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
 

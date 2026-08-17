@@ -198,14 +198,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const ActivityGlyph = memo(() => (
+const ActivityGlyph = () => (
   <svg aria-hidden className={styles.activityGlyph} viewBox="0 0 16 16">
     <circle className={styles.glyphOrbit} cx="8" cy="8" r="6.1" />
     <circle className={styles.glyphCore} cx="8" cy="8" r="2.7" />
   </svg>
-));
-
-ActivityGlyph.displayName = 'ActivityGlyph';
+);
 
 const formatTokens = (n: number) => {
   if (n < 1000) return String(n);

@@ -76,10 +76,11 @@ interface AgentItemProps {
   className?: string;
   item: SidebarAgentItem;
   onNavigate?: () => void;
+  secondaryLabel?: string | null;
   style?: CSSProperties;
 }
 
-const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
+const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, secondaryLabel }) => {
   const { id, avatar, backgroundColor, pinned, slug, userId, visibility } = item;
   // Unread count is server-computed (topics.status === 'unread') and carried on
   // the sidebar list item, so it stays accurate across agents whose topics
@@ -100,7 +101,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
   const displayTitle = agentDisplayName(item, t('untitledAgent'));
   // The role shown beside the name — same rule for every agent, heterogeneous
   // ones included (see agentSecondaryDisplayName).
-  const roleTag = agentSecondaryDisplayName(item);
+  const roleTag = secondaryLabel || agentSecondaryDisplayName(item);
 
   const agentUrl = usePreservedAgentUrl(id);
 

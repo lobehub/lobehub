@@ -1,5 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { OFFICIAL_URL } from '@lobechat/const';
+import { OFFICIAL_SITE, OFFICIAL_URL } from '@lobechat/const';
 
 import { getIdFromIdentifier } from '@/utils/identifier';
 
@@ -10,7 +10,6 @@ const SPA_ROUTE_ROOTS = new Set([
   'agent',
   'acceptance',
   'community',
-  'downloads',
   'eval',
   'group',
   'image',
@@ -56,16 +55,19 @@ const getRouteSegments = (pathname: string, workspaceSlugs: ReadonlySet<string>)
 };
 
 const isInternalHost = (url: URL, currentOrigin?: string) => {
-  const officialHost = new URL(OFFICIAL_URL).host;
-  if (!currentOrigin) return url.host === officialHost;
+  const officialHosts = new Set([new URL(OFFICIAL_SITE).host, new URL(OFFICIAL_URL).host]);
+  if (!currentOrigin) return officialHosts.has(url.host);
 
   try {
     const originUrl = new URL(currentOrigin);
     if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
-      return url.host === officialHost;
+      return officialHosts.has(url.host);
     }
 
-    return url.host === originUrl.host;
+    return (
+      url.host === originUrl.host ||
+      (officialHosts.has(originUrl.host) && officialHosts.has(url.host))
+    );
   } catch {
     return false;
   }

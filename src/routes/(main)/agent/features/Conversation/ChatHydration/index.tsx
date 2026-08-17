@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { type FC, memo } from 'react';
 import { useParams } from 'react-router';
 
 import { useClearActiveTopicUnread } from '@/features/Conversation/hooks';
@@ -11,7 +11,12 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useChatRouteSync } from './useChatRouteSync';
 
 // sync outside state to useChatStore
-const ChatHydration = memo(() => {
+interface ChatHydrationProps {
+  getConversationPath?: (agentId: string) => string;
+  getTopicPath?: (agentId: string, topicId: string) => string;
+}
+
+const ChatHydration: FC<ChatHydrationProps> = memo(({ getConversationPath, getTopicPath }) => {
   const params = useParams<{ aid?: string; topicId?: string }>();
   const routeTopicId = params.topicId;
   const activeAgentId = useChatStore((s) => s.activeAgentId);
@@ -23,7 +28,7 @@ const ChatHydration = memo(() => {
   useClearActiveTopicUnread();
   useFetchTopicLinkedPullRequest(activeAgentId ? routeTopicId : undefined, topicMetadata);
   useTopicCommentDeepLink(routeTopicId);
-  useChatRouteSync();
+  useChatRouteSync({ getConversationPath, getTopicPath });
 
   return null;
 });

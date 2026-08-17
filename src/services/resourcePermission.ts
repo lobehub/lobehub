@@ -1,6 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
-export type PermissionResourceType = 'agent' | 'agentGroup' | 'document';
+export type PermissionResourceType = 'agent' | 'agentGroup' | 'document' | 'knowledgeBase';
 export type ResourceAccessLevel = 'edit' | 'use' | 'view';
 
 export interface ResourceGeneralAccess {

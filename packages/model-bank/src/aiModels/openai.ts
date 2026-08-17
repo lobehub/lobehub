@@ -1140,6 +1140,7 @@ export const openaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
     },
     contextWindowTokens: 128_000,

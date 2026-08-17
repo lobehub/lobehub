@@ -27,11 +27,11 @@ import { messages } from '../schemas';
  * key, COALESCE to `''` → kept.
  *
  * The COALESCE is NOT cosmetic. Null-testing a jsonb arrow expression in a
- * WHERE clause (`metadata ->> 'copied' IS DISTINCT FROM 'true'`) crashes the
- * non-stock engine backing production outright — SQLSTATE XX000
- * `rt_fetch used out-of-bounds`, thrown before any row is read, so no test on
- * real Postgres can catch it. See the block comment above `TopicModel` for the
- * two incidents that established this rule.
+ * WHERE clause crashes `pg_search`'s planner hook on any table carrying a bm25
+ * index — SQLSTATE XX000 `rt_fetch used out-of-bounds`, thrown at plan time
+ * before any row is read, so no test can catch it. `messages` carries one.
+ * See the block comment above `TopicModel` for the mechanism and the incidents
+ * that established this rule.
  */
 export const notCopiedTranscript = () =>
   sql`coalesce(${messages.metadata} ->> 'copied', '') <> 'true'`;

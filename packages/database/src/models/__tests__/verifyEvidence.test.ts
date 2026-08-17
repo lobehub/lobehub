@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { FileSource } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -111,6 +112,59 @@ describe('VerifyEvidenceModel', () => {
     const rows = await model.listByCheckResult(checkResultId);
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.type).sort()).toEqual(['dom_snapshot', 'screenshot']);
+  });
+
+  it('stamps the backing file as acceptance-sourced so the library hides it', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    await model.create({ checkResultId, fileId, type: 'screenshot' });
+
+    const file = await serverDB.query.files.findFirst({ where: (f, { eq }) => eq(f.id, fileId) });
+    expect(file?.source).toBe('acceptance');
+  });
+
+  it('stamps every backing file of a batch, leaving inline rows alone', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    const [second] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'payload-execution.txt',
+        size: 64,
+        url: 's3://evidence/payload-execution.txt',
+        userId,
+      })
+      .returning();
+
+    await model.createMany([
+      { checkResultId, fileId, type: 'screenshot' },
+      { checkResultId, fileId: second.id, type: 'text' },
+      { checkResultId, content: 'dom snapshot', type: 'dom_snapshot' },
+    ]);
+
+    const rows = await serverDB.query.files.findMany();
+    expect(rows.every((f) => f.source === 'acceptance')).toBe(true);
+  });
+
+  it('keeps an existing file source instead of overwriting it', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    const [generated] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'image/png',
+        name: 'generated.png',
+        size: 128,
+        source: FileSource.ImageGeneration,
+        url: 's3://generations/generated.png',
+        userId,
+      })
+      .returning();
+
+    await model.create({ checkResultId, fileId: generated.id, type: 'screenshot' });
+
+    const file = await serverDB.query.files.findFirst({
+      where: (f, { eq }) => eq(f.id, generated.id),
+    });
+    expect(file?.source).toBe('image_generation');
   });
 
   it('deletes an evidence row by id', async () => {

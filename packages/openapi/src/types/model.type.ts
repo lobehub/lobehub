@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { AiModelSelectItem } from '@/database/schemas';
-
+import type { PublicModel } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -45,12 +44,12 @@ export const ModelsListQuerySchema = PaginationQuerySchema.extend({
 // ==================== Model Response Types ====================
 
 export type GetModelsResponse = PaginationQueryResponse<{
-  models?: AiModelSelectItem[];
+  models?: PublicModel[];
 }>;
 
 // ==================== Model Detail / Mutation Types ====================
 
-export type ModelDetailResponse = AiModelSelectItem;
+export type ModelDetailResponse = PublicModel;
 
 const ModelPayloadBaseSchema = z.object({
   abilities: z.record(z.string(), z.unknown()).nullish(),

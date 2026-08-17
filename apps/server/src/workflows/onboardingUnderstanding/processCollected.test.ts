@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeStepResult } from '@/server/workflows/testing/stepContext';
+
 import { failRunningUnderstandingWriting, processCollectedUnderstanding } from './processCollected';
 
 const errors = vi.hoisted(() => {
@@ -34,7 +36,7 @@ const createContext = () => {
       requestPayload: payload,
       run: async <T>(stepName: string, action: () => Promise<T>) => {
         steps.push(stepName);
-        return action();
+        return serializeStepResult(await action());
       },
     },
     steps,

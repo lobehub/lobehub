@@ -11,19 +11,25 @@ const db: LobeChatDatabase = await getTestDB();
 const model = new TopicSummaryModel(db);
 const userId = 'topic-summary-user';
 const otherUserId = 'topic-summary-other';
+// Never touched the setting — the feature is opt-in, so this user stays out.
+const unsetUserId = 'topic-summary-unset';
 const now = new Date('2026-07-31T12:00:00.000Z');
 
 describe('TopicSummaryModel', () => {
   beforeEach(async () => {
     await db.delete(users);
-    await db.insert(users).values([{ id: userId }, { id: otherUserId }]);
+    await db.insert(users).values([{ id: userId }, { id: otherUserId }, { id: unsetUserId }]);
+    await db.insert(userSettings).values({
+      id: userId,
+      systemAgent: { topicAutoSummary: { enabled: true } },
+    });
   });
 
   afterEach(async () => {
     await db.delete(users);
   });
 
-  it('lists only enabled, stale candidates inside the rolling lookback window', async () => {
+  it('lists only opted-in, stale candidates inside the rolling lookback window', async () => {
     await db.insert(userSettings).values({
       id: otherUserId,
       systemAgent: { topicAutoSummary: { enabled: false } },
@@ -32,6 +38,7 @@ describe('TopicSummaryModel', () => {
       { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'eligible', userId },
       { createdAt: new Date('2026-07-29T00:00:00Z'), id: 'too-old', userId },
       { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'disabled', userId: otherUserId },
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'unset', userId: unsetUserId },
       { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'active', status: 'running', userId },
     ]);
     await db.insert(messages).values([
@@ -58,6 +65,14 @@ describe('TopicSummaryModel', () => {
         topicId: 'disabled',
         updatedAt: new Date('2026-07-31T10:00:00Z'),
         userId: otherUserId,
+      },
+      {
+        content: 'c2',
+        id: 'm-unset',
+        role: 'user',
+        topicId: 'unset',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId: unsetUserId,
       },
       {
         content: 'd',

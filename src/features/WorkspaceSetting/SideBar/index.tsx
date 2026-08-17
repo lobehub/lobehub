@@ -1,17 +1,15 @@
 'use client';
 
-import { memo } from 'react';
-
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
 import WorkspaceSettingsSideBarContent from './Content';
 
-const SideBar = memo(() => {
+const SideBar = () => {
   return (
     <NavPanelPortal navKey={'workspace-settings'}>
       <WorkspaceSettingsSideBarContent />
     </NavPanelPortal>
   );
-});
+};
 
 export default SideBar;

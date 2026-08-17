@@ -114,6 +114,23 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
           const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
+
+          // The sandbox decision belongs to the run's owner, not to the model:
+          // it is set here from the resolved execution context, overriding
+          // anything that arrived in the LLM args (the manifest doesn't expose
+          // the field, but a model that guessed it must not be able to switch
+          // its own fence off — or on).
+          if (context.localSandbox !== undefined) {
+            finalArgs = {
+              ...finalArgs,
+              sandbox: context.localSandbox,
+              // Only meaningful for a fenced run, so don't add noise to the
+              // args of an unfenced one.
+              ...(context.localSandbox
+                ? { sandboxNetwork: context.localSandboxNetwork === true }
+                : {}),
+            };
+          }
         }
 
         return deviceGateway.executeToolCall(

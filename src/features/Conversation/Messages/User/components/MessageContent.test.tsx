@@ -27,7 +27,11 @@ vi.mock('./VideoFileListViewer', () => ({
   default: () => null,
 }));
 vi.mock('./AudioFileListViewer', () => ({
-  default: ({ items }: any) => <div data-testid="audio-viewer">{items.length}</div>,
+  default: ({ items, messageId }: any) => (
+    <div data-message-id={messageId} data-testid="audio-viewer">
+      {items.length}
+    </div>
+  ),
 }));
 
 describe('User MessageContent', () => {
@@ -75,6 +79,7 @@ describe('User MessageContent', () => {
     );
 
     expect(screen.getByTestId('audio-viewer')).toHaveTextContent('1');
+    expect(screen.getByTestId('audio-viewer')).toHaveAttribute('data-message-id', 'msg-3');
   });
 
   it('should render code context selections in the user message body', () => {

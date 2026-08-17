@@ -78,6 +78,8 @@ export interface ExecAgentTaskParams {
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
+  /** Existing gateway operation this fresh turn atomically supersedes. */
+  replacesOperationId?: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
   /**
@@ -134,6 +136,11 @@ export interface InterruptTaskParams {
  */
 export interface CreateClientTaskThreadParams {
   agentId: string;
+  /**
+   * Seed an assistant placeholder for transports that stream into an existing
+   * message (for example a local heterogeneous CLI).
+   */
+  assistantMessage?: { provider: string };
   groupId?: string;
   /** Initial user message content (task instruction) */
   instruction: string;

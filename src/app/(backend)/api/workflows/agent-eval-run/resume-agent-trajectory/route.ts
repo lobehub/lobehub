@@ -7,6 +7,7 @@ import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import type { ResumeAgentTrajectoryPayload } from '@/server/workflows/agentEvalRun';
 import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
+import { runStep } from '@/server/workflows/step';
 
 const log = debug('lobe-server:workflows:resume-agent-trajectory');
 
@@ -32,7 +33,7 @@ export const { POST } = serve<ResumeAgentTrajectoryPayload>(
     const wsId = await resolveAgentEvalRunWorkspace(db, runId);
     const service = new AgentEvalRunService(db, userId, wsId);
 
-    await context.run('resume-agent-trajectory:exec-agent', () =>
+    await runStep(context, 'resume-agent-trajectory:exec-agent', () =>
       service.executeResumedTrajectory(payload),
     );
 

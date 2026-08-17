@@ -1,3 +1,4 @@
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
@@ -10,7 +11,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
+import TaskTriggerTag from '@/features/AgentTasks/features/TaskTriggerTag';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import HomeInbox from '@/features/HomeInbox';
@@ -31,13 +34,16 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
+import RunningGlyph from './components/RunningGlyph';
 import Time from './components/Time';
+import { isHomeWidgetHidden } from './CustomizeModal/config';
 import EmptySuggestions from './EmptySuggestions';
 import { resolveHomeChatContentState } from './homeChatContentState';
 import type { HomeMode } from './types';
@@ -51,6 +57,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   empty: css`
     padding-block: 16px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  blockAction: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-decoration: none;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+  identifier: css`
+    flex: none;
   `,
   row: css`
     border-radius: ${cssVar.borderRadiusLG};
@@ -85,9 +103,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface HomeModeContentProps {
   /**
-   * The rail is folded away, so this column carries the sections it owns: what
-   * is in flight and what happened stay above the recent topics, and the
-   * suggestions — nothing that happened, only what you could do — land after.
+   * The rail is folded away, so this column carries the sections it owns: goals
+   * and reports stay visible, while suggestions — nothing that happened, only
+   * what you could do — land after the recent topics.
    */
   inlineRail?: boolean;
   mode: HomeMode;
@@ -99,36 +117,77 @@ interface RowProps {
   href: string;
   icon: ReactNode;
   title: ReactNode;
+  /** Sits on the title's own line, after it — an identifier, a badge. */
+  titleExtra?: ReactNode;
   trailing?: ReactNode;
 }
 
-const TASK_STATUSES = new Set<TaskStatus>([
-  'backlog',
-  'canceled',
-  'completed',
-  'failed',
-  'paused',
-  'running',
-  'scheduled',
-]);
+const TASK_STATUS_SET = new Set<TaskStatus>(TASK_STATUSES);
+
+/**
+ * What the recent block lists: everything that is not finished work. Derived
+ * from the canonical status set (not hand-listed) so a status added later shows
+ * up here by default instead of silently vanishing from Home.
+ */
+export const RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
+  (status) => status !== 'completed',
+);
+
 export const HOME_TOPIC_RECENT_LIMIT = 15;
+
+const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
 
 export const resolveRecentsBadgeCount = (fetched: number, shown: number): number | undefined =>
   Math.min(fetched, shown) || undefined;
 
-const normalizeTaskStatus = (status: string): TaskStatus =>
-  TASK_STATUSES.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+/**
+ * The one line a task row shows under its name. `instruction` is what the task
+ * was actually asked to do, so it is the line worth reading; `description` is
+ * the summary that only some tasks carry. Both are markdown, and a row is one
+ * line — its syntax markers are just noise here.
+ *
+ * A task created straight from the composer takes its name from its
+ * instruction, so the two would print the same sentence twice. When they agree,
+ * the row keeps the name alone rather than repeating it in a quieter colour.
+ */
+export const resolveTaskSummaryLine = (
+  { description, instruction }: { description?: string | null; instruction?: string | null },
+  title: string,
+): string | undefined => {
+  const raw = instruction?.trim() || description?.trim();
+  if (!raw) return undefined;
 
-const Row = memo<RowProps>(({ description, href, icon, title, trailing }) => (
+  const line = markdownToTxt(raw).replaceAll(/\s+/g, ' ').trim();
+
+  return !line || line === title.trim() ? undefined : line;
+};
+
+const normalizeTaskStatus = (status: string): TaskStatus =>
+  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+
+/**
+ * Reserved width for the trailing timestamp. Relative and absolute forms differ
+ * in width ("4 分钟前" vs "8月13日"), and without a shared column each row's
+ * avatar drifts to wherever its own time happens to start — the right side of
+ * the list reads as ragged instead of as a column.
+ */
+const TIME_COLUMN_WIDTH = 56;
+
+const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
   <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
     <Flexbox horizontal align={'flex-start'} gap={12}>
       <Flexbox flex={'none'} paddingBlock={3}>
         {icon}
       </Flexbox>
       <Flexbox className={styles.rowText} gap={3}>
-        <Text ellipsis className={homeType.itemTitle}>
-          {title}
-        </Text>
+        {/* The name takes the space and truncates; anything after it keeps its
+            full width, so an identifier stays readable however long the name is. */}
+        <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
+          <Text ellipsis className={homeType.itemTitle}>
+            {title}
+          </Text>
+          {titleExtra}
+        </Flexbox>
         {description && (
           <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
         )}
@@ -171,7 +230,7 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         trailing={
           <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
             {showAuthor && <AuthorChip userId={topic.userId} />}
-            <Time date={topic.updatedAt} />
+            <Time date={topic.updatedAt} minWidth={TIME_COLUMN_WIDTH} />
           </Flexbox>
         }
       />
@@ -238,37 +297,169 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
   ),
 );
 
+/**
+ * A task in the home list carries the same right-hand read as the Tasks page:
+ * who runs it, when it last moved — plus how it is triggered, but only in the
+ * scheduled block, where the trigger is the point. The recent block hides it:
+ * the runnable schedules are filtered out of that list anyway, and the ones
+ * that slip through are terminal leftovers whose schedule no longer fires, so
+ * printing it would claim an automation that is not there.
+ */
+const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
+  ({ showTrigger = true, task }) => {
+    const title = task.name?.trim() || task.identifier;
+    const description = useMemo(() => resolveTaskSummaryLine(task, title), [task, title]);
+    const status = normalizeTaskStatus(task.status);
+
+    return (
+      <Row
+        description={description}
+        href={taskDetailPath(task.identifier)}
+        title={title}
+        // A row that is executing right now wears the shared animated running
+        // mark instead of the static glyph — the same liveness signal running
+        // topics and the home rail cards already use.
+        icon={
+          status === 'running' ? (
+            <RunningGlyph size={16} />
+          ) : (
+            <TaskStatusIcon size={16} status={status} />
+          )
+        }
+        // The identifier is how the task is referred to everywhere else, so it
+        // belongs beside the name rather than in the sentence slot below it.
+        titleExtra={
+          title === task.identifier ? undefined : (
+            <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
+          )
+        }
+        trailing={
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            {showTrigger && (
+              <TaskTriggerTag
+                automationMode={task.automationMode}
+                heartbeatInterval={task.heartbeatInterval}
+                schedulePattern={task.schedulePattern}
+                scheduleTimezone={task.scheduleTimezone}
+              />
+            )}
+            <AssigneeAvatar agentId={task.assigneeAgentId} size={20} />
+            <Time date={task.updatedAt || task.createdAt} minWidth={TIME_COLUMN_WIDTH} />
+          </Flexbox>
+        }
+      />
+    );
+  },
+);
+
 const TaskContent = memo(() => {
   const { t } = useTranslation('home');
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Home is an overview, not a continuation of the Task page's last-used
-  // filter. It must always show the complete task set.
-  const tasksSWR = useFetchTaskList({ allAgents: true, visibility: 'all' });
+  // filter. It must always show the ongoing task set — ordered by activity,
+  // because this block calls itself "recent" and prints the same timestamp —
+  // minus live schedules and heartbeats (`automated: false`), which belong to
+  // the scheduled block below and would otherwise print twice on one page,
+  // and minus completed tasks: finished work is history for the Tasks page,
+  // not part of "what is going on".
+  const tasksSWR = useFetchTaskList({
+    allAgents: true,
+    automated: false,
+    orderBy: 'updatedAt',
+    statuses: RECENT_TASK_STATUSES,
+    visibility: 'all',
+  });
   const tasks = useTaskStore(taskListSelectors.taskList);
   const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
   const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
+  const shown = tasks.slice(0, taskCount);
 
   return (
-    <GroupBlock count={tasksTotal || undefined} title={t('dashboard.task.title')}>
+    <GroupBlock
+      actionAlwaysVisible
+      count={resolveRecentsBadgeCount(tasks.length, taskCount)}
+      title={t('dashboard.task.title')}
+      // The block shows the most recent slice, so the rest needs somewhere to
+      // be: the badge counts what is on screen and this carries the remainder
+      // to the full list, instead of a badge claiming a total you cannot reach.
+      action={
+        tasksTotal > shown.length ? (
+          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+            {t('dashboard.task.viewAll')}
+          </WorkspaceLink>
+        ) : undefined
+      }
+    >
       {tasksSWR.error && !tasksInit ? (
         <AsyncError error={tasksSWR.error} variant={'inline'} onRetry={tasksSWR.mutate} />
       ) : !tasksInit ? (
-        <LoadingRows avatarSize={16} />
+        <LoadingRows withTime avatarSize={16} />
       ) : tasks.length === 0 ? (
         <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
-          {tasks.slice(0, taskCount).map((task) => (
-            <Row
-              description={task.description || task.identifier}
-              href={taskDetailPath(task.identifier)}
-              icon={<TaskStatusIcon size={16} status={normalizeTaskStatus(task.status)} />}
-              key={task.identifier}
-              title={task.name || task.identifier}
-            />
+          {shown.map((task) => (
+            <TaskRow key={task.identifier} showTrigger={false} task={task} />
           ))}
         </Flexbox>
+      )}
+    </GroupBlock>
+  );
+});
+
+/**
+ * The tasks that run without anyone pressing anything. They are the part of the
+ * task set that keeps moving while you are away, so they get their own block
+ * under the recent ones instead of being scattered through a list ordered by
+ * when they last happened to tick.
+ */
+const ScheduledTaskContent = memo(() => {
+  const { t } = useTranslation('home');
+  const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
+  const scheduledSWR = useFetchScheduledTaskList();
+  const scheduled = useTaskStore(taskListSelectors.scheduledTaskList);
+  const scheduledTotal = useTaskStore(taskListSelectors.scheduledTaskListTotal);
+  const scheduledInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
+  const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
+
+  // Automation is opt-in and most accounts have none. An empty block would be a
+  // permanent reminder of a feature you did not ask for, so the section only
+  // exists once something is actually scheduled — the loading skeleton aside,
+  // which has to hold its place until the answer arrives.
+  //
+  // A failed first fetch is NOT that case: hiding it would make an unreachable
+  // list look exactly like an account with no schedules, and someone whose
+  // automations are running would read a confidently incomplete page. The block
+  // stays and says so, with a retry.
+  const failedFirstLoad = Boolean(scheduledSWR.error) && !scheduledInit;
+  if (scheduledInit && scheduled.length === 0) return null;
+
+  const shown = scheduled.slice(0, taskCount);
+
+  return (
+    <GroupBlock
+      actionAlwaysVisible
+      count={failedFirstLoad ? undefined : resolveRecentsBadgeCount(scheduled.length, taskCount)}
+      title={t('dashboard.scheduledTask.title')}
+      action={
+        !failedFirstLoad && scheduledTotal > shown.length ? (
+          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+            {t('dashboard.task.viewAll')}
+          </WorkspaceLink>
+        ) : undefined
+      }
+    >
+      {failedFirstLoad ? (
+        <AsyncError error={scheduledSWR.error} variant={'inline'} onRetry={scheduledSWR.mutate} />
+      ) : scheduledInit ? (
+        <Flexbox gap={4}>
+          {shown.map((task) => (
+            <TaskRow key={task.identifier} task={task} />
+          ))}
+        </Flexbox>
+      ) : (
+        <LoadingRows withTime avatarSize={16} />
       )}
     </GroupBlock>
   );
@@ -283,6 +474,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
   const recentsHidden = hiddenWidgets.includes('recents');
   const tasksHidden = hiddenWidgets.includes('tasks');
+  const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
   const cacheScope = useCacheScope();
 
   // One page-level mine/team scope, shared by the inbox sections and Recent
@@ -406,16 +598,30 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   if (!isLogin) return null;
 
   if (mode === 'task') {
-    if (!inlineRail) return tasksHidden ? null : <TaskContent />;
+    // Recent tasks answer "what is going on"; the scheduled block answers "what
+    // will happen without me" — the second question only makes sense after the
+    // first, so it always sits underneath.
+    //
+    // No inline inset: section headers sit flush with the composer edge and the
+    // folded-in inbox sections above, exactly like chat mode — row hover pills
+    // overhang by design (see `rowBox`).
+    const taskBlocks = (
+      <Flexbox gap={32}>
+        {!tasksHidden && <TaskContent />}
+        {!scheduledTasksHidden && <ScheduledTaskContent />}
+      </Flexbox>
+    );
+
+    if (!inlineRail) return taskBlocks;
 
     // The rail's sections sit beside task mode while it is open, so a folded
-    // rail must not take them away here either: in flight and what happened
-    // above the task list, suggestions after it. Unread and needs-you stay
+    // rail must not take them away here either: goals and reports above the
+    // task list, suggestions after it. Unread and needs-you stay
     // hidden — task mode never surfaces them, folded or not.
     return (
       <Flexbox gap={32}>
         <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
-        {!tasksHidden && <TaskContent />}
+        {taskBlocks}
         <Recommendations variant={'main'} />
       </Flexbox>
     );

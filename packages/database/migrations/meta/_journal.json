@@ -966,6 +966,48 @@
       "when": 1786151567302,
       "tag": "0137_agent_history_jobs_payload",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1786166809665,
+      "tag": "0138_agent_history_job_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1786316226126,
+      "tag": "0139_projects_add_coordinator_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1786545606298,
+      "tag": "0140_productive_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1786766455568,
+      "tag": "0141_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786791246437,
+      "tag": "0142_expertise_domain_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786847279485,
+      "tag": "0143_resource_transfer_requests",
+      "breakpoints": true
     }
   ],
   "version": "6"

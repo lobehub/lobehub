@@ -23,7 +23,7 @@ import {
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
@@ -33,7 +33,6 @@ import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -45,15 +44,15 @@ import {
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
-import { useGoalArmStore } from '../../../Conversation/ChatInput/VerifyTray/goalArmStore';
-import { openTopicGoalModal } from '../../../Conversation/ChatInput/VerifyTray/useTopicChecklist';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
+import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
@@ -202,52 +201,51 @@ type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
   popoverContent?: unknown;
 };
 
-const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
-
 interface PopoverLabelProps {
+  disabled?: boolean;
   label: ReactNode;
   popoverContent: ReactNode;
-  // Distance from the label cell's right edge. Switch-type rows reserve a
-  // trailing toggle, so bump this to push the popover clear of the toggle and
-  // out to the right of the whole menu instead of overlapping it.
-  sideOffset?: number;
 }
 
-const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent, sideOffset = 10 }) => {
-  const [open, setOpen] = useState(false);
-  const suppressUntilRef = useRef(0);
-
-  useEffect(() => {
-    const close = () => {
-      suppressUntilRef.current = Date.now() + 600;
-      setOpen(false);
-    };
-    window.addEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
-
-    return () => window.removeEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
-  }, []);
-
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen && Date.now() < suppressUntilRef.current) return;
-
-    setOpen(nextOpen);
-  }, []);
+/**
+ * The detail card must anchor past the whole menu row, not the label cell:
+ * anchored to the label, it opens exactly over the item's trailing `extra`
+ * slot ("..." menu, re-authorize link, switches), and a press landing on the
+ * portal'd card is read by base-ui as an outside press that dismisses the
+ * whole submenu. The card is also rendered inert (pointer-events: none) — it
+ * is a hover information surface, so it must never swallow a press meant for
+ * the controls beneath it.
+ */
+const PopoverLabel = memo<PopoverLabelProps>(({ disabled, label, popoverContent }) => {
+  const { close, onOpenChange, open } = useDetailPopoverState(disabled);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+  const rowAnchorRef = useMemo(
+    () => ({
+      get current() {
+        const wrapper = wrapperRef.current;
+        return (wrapper?.closest('[role="menuitem"]') as HTMLElement | null) ?? wrapper;
+      },
+    }),
+    [],
+  );
 
   return (
     <Popover
       arrow={false}
       content={popoverContent}
+      disabled={disabled}
       mouseEnterDelay={0.25}
       open={open}
       placement={'rightTop'}
-      positionerProps={{ sideOffset }}
-      styles={{ content: { padding: 0 } }}
-      onOpenChange={handleOpenChange}
+      positionerProps={{ anchor: rowAnchorRef, sideOffset: 8 }}
+      styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
+      onOpenChange={onOpenChange}
     >
       <span
+        ref={wrapperRef}
         style={{ display: 'block', width: '100%' }}
-        onClickCapture={() => setOpen(false)}
-        onContextMenuCapture={() => setOpen(false)}
+        onClickCapture={close}
+        onContextMenuCapture={close}
       >
         {label}
       </span>
@@ -257,13 +255,18 @@ const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent, sideOffse
 
 PopoverLabel.displayName = 'PopoverLabel';
 
-const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown) => {
+const wrapPopoverLabel = (label: ReactNode, popoverContent?: unknown, disabled?: boolean) => {
   if (!popoverContent) return label;
 
-  return <PopoverLabel label={label} popoverContent={popoverContent as ReactNode} />;
+  return (
+    <PopoverLabel disabled={disabled} label={label} popoverContent={popoverContent as ReactNode} />
+  );
 };
 
-const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMenuItems =>
+const stripPopoverContent = (
+  items?: ActionDropdownMenuItems,
+  detailPopoverDisabled?: boolean,
+): ActionDropdownMenuItems =>
   items?.map((item) => {
     if (!item) return item;
     if ('type' in item && item.type === 'divider') return item;
@@ -275,12 +278,12 @@ const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMen
     if ('children' in nextItem && nextItem.children) {
       return {
         ...nextItem,
-        children: stripPopoverContent(nextItem.children),
+        children: stripPopoverContent(nextItem.children, detailPopoverDisabled),
       } as ActionDropdownMenuItems[number];
     }
 
     if ('label' in nextItem) {
-      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent);
+      nextItem.label = wrapPopoverLabel(nextItem.label, popoverContent, detailPopoverDisabled);
     }
 
     return nextItem;
@@ -290,18 +293,13 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
-  const { t: tVerify } = useTranslation('verify');
   const isDark = useIsDark();
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
 
-  // Topic acceptance (lab): a "new acceptance item" entry in the "+" menu, so a
-  // topic's checklist starts from here instead of an always-on strip above the
-  // composer. Global stores only — Plus renders on surfaces without conversation
-  // context.
+  // Goal creation is lab-gated while the product surface is being rolled out.
   const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -351,6 +349,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const closeDropdown = useCallback(() => close(), [close]);
   const {
     autoCount: skillAutoCount,
+    isPolicyMenuOpen: isSkillPolicyMenuOpen,
     marketFooter: skillMarketFooter,
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
@@ -464,7 +463,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         <img
           alt=""
           className="cover"
-          src={isDark ? '/images/agent_gateway_dark.webp' : '/images/agent_gateway_light.webp'}
+          src={
+            isDark ? '/app-images/agent_gateway_dark.webp' : '/app-images/agent_gateway_light.webp'
+          }
         />
         <div className="body">
           <div className="title">{t('gatewayMode.cardTitle')}</div>
@@ -473,7 +474,13 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       </div>
     );
 
-    const skillMenuItems = stripPopoverContent(skillItems as ActionDropdownMenuItems);
+    // The row detail card and the "..." policy menu anchor to the same right edge,
+    // so leaving hover live lets a neighbouring row's card open on top of the menu
+    // and swallow the click meant for it.
+    const skillMenuItems = stripPopoverContent(
+      skillItems as ActionDropdownMenuItems,
+      isSkillPolicyMenuOpen,
+    );
 
     const uploadItems: ActionDropdownMenuItems = [
       {
@@ -551,12 +558,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               icon: Cloud,
               key: 'gateway-mode',
               label: (
-                <PopoverLabel
-                  label={renderGatewayModeLabel()}
-                  popoverContent={gatewayModeInfo}
-                  // Clear the trailing toggle so the card sits to the right of the whole menu.
-                  sideOffset={64}
-                />
+                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
               ),
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
@@ -711,23 +713,19 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         ]
       : uploadItems;
 
-    // Before a topic exists there is nothing to persist a goal onto, so the
-    // entry *arms* the goal (the next message becomes it); once a topic exists
-    // it opens the editor directly.
+    // Goal creation has one canonical entry: drop the goal chip at the head of
+    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // regardless of whether this conversation already has a topic.
     const acceptanceItems: ActionDropdownMenuItems = enableTopicAcceptance
       ? [
           {
             icon: TargetIcon,
             key: 'set-topic-goal',
-            label: tVerify('acceptance.tray.menuSetGoal'),
+            // Same string as the chip it inserts: one label for the affordance,
+            // so the menu row and the chip can never drift apart.
+            label: tEditor('slash.goal'),
             onClick: () => {
-              if (activeTopicId) {
-                void openTopicGoalModal(activeTopicId);
-              } else if (agentId) {
-                // Arm only — the persistent "armed" chip above the composer is the
-                // feedback now (the next message becomes the goal), not a toast.
-                useGoalArmStore.getState().arm(agentId);
-              }
+              insertGoalTag(editor, tEditor('slash.goal'));
             },
           },
         ]
@@ -747,11 +745,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   }, [
     agentId,
     activeSearchOption,
-    activeTopicId,
     canConfigureResource,
     effortItem,
     enableTopicAcceptance,
-    tVerify,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
@@ -768,6 +764,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     isGatewayModeEnabled,
     isMemoryEnabled,
     isParamsPanelActive,
+    isSkillPolicyMenuOpen,
     knowledgeEnabledCount,
     setShowTypoBar,
     showProviderSearch,
@@ -815,7 +812,7 @@ const PlusAction = memo(() => {
 
 PlusAction.displayName = 'PlusAction';
 
-const Plus = memo(() => (
+const Plus = () => (
   <Suspense
     fallback={
       <ChatInputAction
@@ -828,8 +825,6 @@ const Plus = memo(() => (
   >
     <PlusAction />
   </Suspense>
-));
-
-Plus.displayName = 'Plus';
+);
 
 export default Plus;

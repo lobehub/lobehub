@@ -43,6 +43,7 @@ import type { ClientRuntimeCompleteHydrationDiagnostic } from '@/server/services
 import { resolveClientRuntimeCompleteFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeComplete';
 import type { ClientRuntimeStartHydrationDiagnostic } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
 import { resolveClientRuntimeStartFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
+import { runStep } from '@/server/workflows/step';
 
 import type { AgentSignalWorkflowRunPayload } from './types';
 
@@ -470,7 +471,7 @@ export const runAgentSignalWorkflow = async (
   // opening the top-level workflow span, otherwise each workflow run starts a fresh trace.
   // Source/context:
   // - `src/app/(backend)/middleware/auth/index.ts` performs extract/inject for normal backend APIs
-  // - `apps/server/src/workflows-hono/agent-signal/index.ts` wires `serve(...)` directly to
+  // - `apps/server/src/router-hono/workflows/agent-signal/index.ts` wires `serve(...)` directly to
   //   `runAgentSignalWorkflow(...)`
   // Removal condition:
   // - Safe to remove only if the workflow entry stack gains a shared request middleware that
@@ -609,7 +610,8 @@ export const runAgentSignalWorkflow = async (
                       workspaceId: payload.workspaceId,
                     })
                   : undefined;
-                const executionResult = await context.run(
+                const executionResult = await runStep(
+                  context,
                   `agent-signal:execute:${normalizedSourceEvent.sourceType}:${normalizedSourceEvent.sourceId}`,
                   () =>
                     executeSourceEvent(

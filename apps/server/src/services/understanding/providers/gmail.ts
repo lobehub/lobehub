@@ -1,6 +1,10 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
+import {
+  ConnectorDataError,
+  getConnectorErrorMessage,
+  isConnectorErrorRetryable,
+} from '@lobechat/connector-data';
 import type { GmailMessage } from '@lobechat/connector-data/gmail';
-import { toGmailMessagesXml } from '@lobechat/connector-data/gmail';
+import { hasGmailReadPermission, toGmailMessagesXml } from '@lobechat/connector-data/gmail';
 
 import type { UnderstandingProvider } from '../types';
 
@@ -17,6 +21,9 @@ const GMAIL_PROFILE_SEARCHES = [
 
 const MAX_CONTEXT_MESSAGES = 32;
 const MAX_CONTEXT_MESSAGES_PER_SENDER_DOMAIN = 6;
+
+const getGmailCollectionErrorCode = (reason: unknown) =>
+  reason instanceof ConnectorDataError ? reason.code : 'GMAIL_SEARCH_FAILED';
 
 const evidencePriority = ({ labels }: GmailMessage) => {
   const normalized = new Set(labels.map((label) => label.toUpperCase()));
@@ -74,25 +81,50 @@ const selectContextMessages = (messages: GmailMessage[]) => {
 export const GMAIL_PROFILE_QUERIES = GMAIL_PROFILE_SEARCHES.map(({ query }) => query);
 
 export const gmailUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'gmail',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGmailClient();
+    const account = await client.getAccount();
+    if (!hasGmailReadPermission(account.scopes)) {
+      console.warn('[understanding:gmail] skipped because Gmail read permission is missing');
+      return {
+        context: '',
+        diagnostics: {
+          errors: [
+            {
+              code: 'GMAIL_READ_PERMISSION_REQUIRED',
+              message: 'Gmail read permission is required to collect Understanding evidence',
+              operation: 'permission',
+              provider: 'gmail',
+              retryable: false,
+            },
+          ],
+          evidenceCount: 0,
+          failedCount: 1,
+          succeededCount: 0,
+        },
+        sourceCount: 0,
+      };
+    }
     const settled = await Promise.allSettled(
       GMAIL_PROFILE_SEARCHES.map(({ query }) => client.searchMessages({ query })),
     );
     const fulfilled = settled.filter(
       (result): result is PromiseFulfilledResult<GmailMessage[]> => result.status === 'fulfilled',
     );
+    const rejectedReasons = settled.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : [],
+    );
     const errors = settled.flatMap((result, index) =>
       result.status === 'rejected'
         ? [
             {
-              code: 'GMAIL_SEARCH_FAILED',
-              message: 'Gmail search category failed',
+              code: getGmailCollectionErrorCode(result.reason),
+              message: getConnectorErrorMessage(result.reason) ?? 'Gmail search category failed',
               operation: GMAIL_PROFILE_SEARCHES[index].operation,
               provider: 'gmail',
-              retryable:
-                result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+              retryable: isConnectorErrorRetryable(result.reason),
             },
           ]
         : [],
@@ -107,6 +139,7 @@ export const gmailUnderstandingProvider: UnderstandingProvider = {
     if (selected.length === 0) {
       if (errors.some(({ retryable }) => retryable)) {
         throw new ConnectorDataError({
+          cause: rejectedReasons.length === 1 ? rejectedReasons[0] : rejectedReasons,
           code: 'gmail_evidence_unavailable',
           operation: 'collect',
           provider: 'gmail',

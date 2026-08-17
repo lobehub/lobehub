@@ -344,10 +344,12 @@ export class UserModel {
   };
 
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
-    // A pending agent-transfer backfill means message rows moved to (or from)
+    // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
-    // delete now would destroy history the transfer already re-homed. The job
-    // window is minutes — the delete can simply be retried after it drains.
+    // delete now would destroy history the transfer already re-homed. Transfer
+    // is admin-initiated and drains in minutes — the delete can simply be
+    // retried afterwards. Pending `copy` jobs do not block: they duplicate
+    // rather than move, and both sides self-heal (see `isPendingTransfer`).
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }

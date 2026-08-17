@@ -87,6 +87,17 @@ export interface CreateAgentOnlyResult {
   agentId: string;
 }
 
+interface AgentGroupMembershipImpactRef {
+  agentId: string;
+  groupAvatar: string | null;
+  groupBackgroundColor: string | null;
+  /** `null` when the caller may not see the group; identity is withheld. */
+  groupId: string | null;
+  groupTitle: string | null;
+  /** `false` when the caller may not see the group; its identity is withheld. */
+  groupVisible: boolean;
+}
+
 class AgentService {
   /**
    * Check if an agent with the given marketIdentifier already exists
@@ -339,16 +350,47 @@ class AgentService {
     return lambdaClient.agent.prioritizeTransferTopic.mutate({ topicId });
   };
 
+  /**
+   * Chat groups a move would affect: `blocked` refuses the move outright,
+   * `leaving` is the silent side effect worth confirming first.
+   */
+  getGroupMembershipImpact = async (
+    agentIds: string[],
+  ): Promise<{
+    blocked: AgentGroupMembershipImpactRef[];
+    leaving: AgentGroupMembershipImpactRef[];
+  }> => {
+    return lambdaClient.agent.getGroupMembershipImpact.query({ agentIds });
+  };
+
   transferAgent = async (
     agentId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
-    return lambdaClient.agent.transferAgent.mutate({
+    const result = await lambdaClient.agent.transferAgent.mutate({
       agentId,
       targetVisibility,
       targetWorkspaceId,
     });
+    // Without `targetMemberId` the endpoint always takes the scope-move path.
+    return result as { agentId: string; slug: string | null; transferJobId: string | null };
+  };
+
+  /**
+   * Hand ownership to another member of the current workspace. Creates a
+   * pending transfer request the recipient must accept — nothing moves yet.
+   */
+  requestAgentTransferToMember = async (params: {
+    agentId: string;
+    targetMemberId: string;
+  }): Promise<{ requestId: string; status: 'pending' }> => {
+    const result = await lambdaClient.agent.transferAgent.mutate({
+      agentId: params.agentId,
+      targetMemberId: params.targetMemberId,
+      targetWorkspaceId: null,
+    });
+    return result as { requestId: string; status: 'pending' };
   };
 
   /**

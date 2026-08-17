@@ -9,9 +9,14 @@ import {
   GeneralChatAgent,
   GraphAgent,
 } from '@lobechat/agent-runtime';
-import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
+import {
+  BUILTIN_AGENT_SLUGS,
+  getAgentRuntimeConfig,
+  isCollaborativeBuiltinAgentRow,
+} from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { getShellSyntaxGuidance, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
@@ -33,6 +38,7 @@ import {
   type AgentGroupConfig,
   type AgentManagementContext,
   type BotPlatformContext,
+  buildExpertiseContextSnapshot,
   type LobeToolManifest,
   SkillEngine,
   type ToolExecutor,
@@ -41,7 +47,11 @@ import {
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  getHeterogeneousAgentConfig,
+  isLocalHeterogeneousType,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
   AgentModelOverride,
@@ -68,12 +78,12 @@ import type {
   WorkspaceInitResult,
 } from '@lobechat/types';
 import {
+  AgentGraphSchema,
   buildHeteroExecArgs,
   ChatErrorType,
   getActivePluginIds,
   getDisabledPluginIds,
   getWorkingDirEffectivePath,
-  ReasoningGraphSchema,
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
@@ -94,6 +104,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
+import { ExpertiseModel } from '@/database/models/expertise';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -150,6 +161,7 @@ import {
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { platformRegistry } from '@/server/services/bot/platforms';
 import { ComposioService } from '@/server/services/composio';
 import {
   buildLastSyncedAtMap,
@@ -186,9 +198,16 @@ import {
   resolveDeviceWorkingDirectoryConfig,
 } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
+import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
+
+const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
+  type === 'claude-code' || type === 'codex';
+
+const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
+  getHeterogeneousAgentConfig(type)?.title ?? type;
 
 /**
  * Content written onto a tool row that the user stopped before it ran. Mirrors
@@ -207,9 +226,17 @@ const createGraphAwareAgentFactory =
     }
 
     const runtimeAgentConfig = config.agentConfig as LobeAgentConfig | undefined;
-    const graph = runtimeAgentConfig?.chatConfig?.graph;
-    if (runtimeAgentConfig?.chatConfig?.enableGraphMode && graph) {
-      const graphResult = ReasoningGraphSchema.safeParse(graph);
+    // Graph Agent is an agency-level behavior: read from `agencyConfig`.
+    // Legacy rows stored the graph on `chatConfig` — fall back so existing
+    // agents keep running until their next write migrates them.
+    const agencyConfig = runtimeAgentConfig?.agencyConfig;
+    const legacyChatConfig = runtimeAgentConfig?.chatConfig as
+      (LobeAgentChatConfig & { enableGraphMode?: boolean; graph?: unknown }) | undefined;
+    const graph = agencyConfig?.graph ?? legacyChatConfig?.graph;
+    const graphEnabled =
+      (agencyConfig?.enableGraphMode ?? legacyChatConfig?.enableGraphMode) === true;
+    if (graphEnabled && graph) {
+      const graphResult = AgentGraphSchema.safeParse(graph);
 
       if (graphResult.success) {
         return new GraphAgent({ ...config, graph: graphResult.data });
@@ -495,6 +522,18 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * When undefined, falls back to prompt.slice(0, 50).
    */
   title?: string;
+  /**
+   * Force the effective `chatConfig.toolMode` for this run. Set by IM bot
+   * conversations where the user explicitly switched mode via `/mode` —
+   * an explicit per-conversation choice, so it wins over the agent's own
+   * chatConfig AND workspace member-mode overrides.
+   */
+  toolModeOverride?: 'agent' | 'chat';
+  /**
+   * Re-enter a topic-start reservation already acquired by an upstream caller,
+   * such as TaskResultBridgeService.
+   */
+  topicStartReservationId?: string;
   /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
   trigger?: string;
   /**
@@ -1227,6 +1266,35 @@ export class AiAgentService {
    *   → AgentRuntimeService.createOperation(...)
    */
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
+    const topicId = params.appContext?.topicId;
+    // Thread runs are isolated under an explicit parent message and do not
+    // advance the topic's main spine. They may start while their parent
+    // operation owns `runningOperation` (for example callAgent/callSubAgent),
+    // so making them wait for the topic-start claim deadlocks the child start.
+    if (!topicId || params.appContext?.threadId) return this.execAgentWithReservation(params);
+
+    const reservationId = params.topicStartReservationId ?? `agent-start-${nanoid()}`;
+    const reserved = await acquireTopicStartReservation({
+      replacesOperationId: params.replacesOperationId,
+      reservationId,
+      topicId,
+      topicModel: this.topicModel,
+    });
+
+    if (!reserved) {
+      throw new Error(`Topic not found: ${topicId}`);
+    }
+
+    try {
+      return await this.execAgentWithReservation(params);
+    } finally {
+      await this.topicModel.releaseTaskCallbackReservation(topicId, reservationId);
+    }
+  }
+
+  private async execAgentWithReservation(
+    params: InternalExecAgentParams,
+  ): Promise<ExecAgentResult> {
     const {
       additionalPluginIds,
       agentId,
@@ -1248,6 +1316,7 @@ export class AiAgentService {
       hooks,
       instructions,
       chatConfigOverride,
+      toolModeOverride,
       model: modelOverride,
       provider: providerOverride,
       stream,
@@ -1419,6 +1488,27 @@ export class AiAgentService {
       agentConfig.subAgentChatConfigOverride = chatConfigOverride;
     }
 
+    // Explicit per-conversation mode switch (IM `/mode` command). Applied last
+    // so it wins over the agent's own chatConfig, workspace member-mode
+    // overrides, and sub-agent chatConfig patches alike. `enableAgentMode` is
+    // kept in sync because the context engine gates agentic-only injectors
+    // (skill discovery, agent documents, agent-management context) on it, not
+    // on `toolMode` — otherwise `/mode chat` would keep agentic context while
+    // `/mode agent` on a chat-default agent would run tools without it.
+    if (toolModeOverride) {
+      // `custom` is agent-side (the `/mode` picker reports it as Agent Mode)
+      // but means "exactly the agent's declared plugins". Returning to Agent
+      // Mode must restore that hand-picked set, not widen it to the full
+      // default toolset by overwriting `custom` with `agent`.
+      const storedToolMode = agentConfig.chatConfig?.toolMode;
+      agentConfig.chatConfig = {
+        ...agentConfig.chatConfig,
+        enableAgentMode: toolModeOverride === 'agent',
+        toolMode:
+          toolModeOverride === 'agent' && storedToolMode === 'custom' ? 'custom' : toolModeOverride,
+      };
+    }
+
     // Persistence-attribution agent id. Background Agent Signal runs (memory /
     // skill / self-reflection) execute under a builtin slug, so `resolvedAgentId`
     // is the builtin agent — but the run's persisted messages, like its operation
@@ -1427,13 +1517,27 @@ export class AiAgentService {
     // fall back to the executing agent. Tools / systemRole / skills / agent
     // documents stay keyed on `resolvedAgentId`.
     const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+    const conversationAgentId = appContext?.conversationAgentId ?? persistAgentId;
+    const assistantAgentId = appContext?.conversationAgentId ? resolvedAgentId : persistAgentId;
 
     // Resolve the final model once, keeping per-call task / sub-agent overrides
     // above the caller's personal workspace choice and the shared Agent default.
     // The callSubAgent spawn site resolves the sub-agent default and passes it
     // explicitly, so this path never has to special-case sub-agents.
     const effectiveModel = resolveAgentModelConfig(
-      { ...agentConfig, canManage: canManageAgent, workspaceId: agentWorkspaceId },
+      {
+        ...agentConfig,
+        canManage: canManageAgent,
+        // A collaborative builtin is Workspace infrastructure with no author and
+        // no config page, so its model is personal for every caller — being its
+        // creator or an admin must not pin the whole Workspace to one model.
+        // Device / mode overrides keep the ordinary author rule above.
+        personalModelSelection: isCollaborativeBuiltinAgentRow({
+          ...agentConfig,
+          workspaceId: agentWorkspaceId,
+        }),
+        workspaceId: agentWorkspaceId,
+      },
       memberModelOverride,
       {
         ...(modelOverride ? { model: modelOverride } : {}),
@@ -1861,12 +1965,27 @@ export class AiAgentService {
       // Prepare metadata with cronJobId, taskId, botContext, bound device, and any
       // client-supplied initial metadata (e.g. repos selected before first message).
       const initialTopicMeta = appContext?.initialTopicMetadata;
+      // Builder conversations are owned by a builtin builder agent and get no
+      // `groupId` / `sessionId` (those columns mark the target's own chat), so
+      // without this the row keeps no trace of what it was configuring. The
+      // association exists only at run time: a topic written without it can
+      // never be attributed afterwards, which is why it is stamped even though
+      // nothing filters on it yet.
+      const { editingAgentId, editingGroupId } = appContext ?? {};
       const metadata =
-        cronJobId || operationTaskId || botContext || topicBoundDeviceId || initialTopicMeta
+        cronJobId ||
+        operationTaskId ||
+        botContext ||
+        topicBoundDeviceId ||
+        initialTopicMeta ||
+        editingGroupId ||
+        editingAgentId
           ? {
               bot: botContext,
               boundDeviceId: topicBoundDeviceId,
               cronJobId: cronJobId || undefined,
+              ...(editingAgentId && { editingAgentId }),
+              ...(editingGroupId && { editingGroupId }),
               taskId: operationTaskId,
               ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
               ...(initialTopicMeta?.workingDirectory && {
@@ -1879,6 +1998,16 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
+      // A heterogeneous agent has no chat model to snapshot: the external CLI
+      // owns model selection, so `model` here is a stale agent default and
+      // `provider` is NULL (defaulted to the platform chat provider) on every
+      // agent created before the runtime type was stamped on the agent row.
+      // Pin the runtime type and leave the model to the per-run backfill — the
+      // same rule the assistant placeholder below and the client's
+      // `snapshotAgentModel` follow. Detection mirrors the hetero early exit.
+      const heteroSnapshotType =
+        agentConfig.agencyConfig?.heterogeneousProvider?.type ??
+        (isHeterogeneousAgentModelId(model) ? model : undefined);
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
       const newTopic = await this.topicModel.create(
@@ -1894,8 +2023,8 @@ export class AiAgentService {
           groupId: appContext?.groupId,
           metadata,
           // Snapshot the effective model as the topic's pinned model (config).
-          model,
-          provider,
+          model: heteroSnapshotType ? undefined : model,
+          provider: heteroSnapshotType ?? provider,
           title:
             title !== undefined
               ? title
@@ -1956,7 +2085,8 @@ export class AiAgentService {
     // 3.5. Hetero-agent early exit — local CLI and remote platform agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
-    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codex / opencode / pi / qoder) or
+    // back via `heteroIngest` / `heteroFinish` (amp / claude-code / codebuddy /
+    // codex / cursor / kimi-code / opencode / pi / qoder) or
     // `agentNotify.notify` (openclaw / hermes).
     //
     // Detection: prefer agencyConfig.heterogeneousProvider.type (set by the UI),
@@ -1972,10 +2102,14 @@ export class AiAgentService {
     // consume the same records. Keeping it in one place is what guarantees the
     // hetero path can't drift from the standard path again (the bot-image bug
     // came from the hetero branch re-implementing — and skipping — this step).
-    const requestTriggerMetadata =
-      trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
+    const requestTriggerMetadata = {
+      ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
         ? { trigger: trigger as RequestTrigger }
-        : undefined;
+        : undefined),
+      ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
+        ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
+        : undefined),
+    };
 
     // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
     // `attachedFileIds` → signed URLs + classification.
@@ -2023,7 +2157,7 @@ export class AiAgentService {
       ? undefined
       : await this.messageModel.create(
           {
-            agentId: persistAgentId,
+            agentId: conversationAgentId,
             content: prompt,
             files: runAttachments.fileIds,
             // Group reads filter on messages.groupId (MessageModel.query group
@@ -2064,7 +2198,7 @@ export class AiAgentService {
     // run seeds model + provider as usual.
     const assistantMessageRecord = await this.messageModel.create(
       {
-        agentId: persistAgentId,
+        agentId: assistantAgentId,
         content: LOADING_FLAT,
         // Stamp groupId so the assistant turn is visible in the group read path
         // (MessageModel.query filters group chats by messages.groupId).
@@ -2255,19 +2389,13 @@ export class AiAgentService {
         runAttachments.imageList && runAttachments.imageList.length > 0
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
-      const heteroExecArgs =
-        heteroType === 'amp' ||
-        heteroType === 'claude-code' ||
-        heteroType === 'codex' ||
-        heteroType === 'opencode' ||
-        heteroType === 'pi' ||
-        heteroType === 'qoder'
-          ? buildHeteroExecArgs(
-              agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
-                ? agentConfig.agencyConfig.heterogeneousProvider
-                : { type: heteroType },
-            )
-          : undefined;
+      const heteroExecArgs = isLocalHeterogeneousType(heteroType)
+        ? buildHeteroExecArgs(
+            agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
+              ? agentConfig.agencyConfig.heterogeneousProvider
+              : { type: heteroType },
+          )
+        : undefined;
 
       const heteroParams = {
         agentType: heteroType,
@@ -2480,8 +2608,9 @@ export class AiAgentService {
           };
         }
       } else {
-        // Local CLI hetero (Amp / Claude Code / Codex / OpenCode / Pi) — fork between device dispatch
-        // and cloud sandbox via the shared execution plan:
+        // Local CLI hetero (Amp / Claude Code / Codex / Kimi Code / OpenCode /
+        // Pi / Qoder) — fork between device dispatch and cloud sandbox via the
+        // shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
         //   - executionTarget 'local' + boundDeviceId (desktop sync opened on web)
@@ -2529,7 +2658,7 @@ export class AiAgentService {
           isHetero: true,
           clientExecutionAvailable: false,
           requestedDeviceId,
-          sandboxExecutionAvailable: heteroType === 'claude-code' || heteroType === 'codex',
+          sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
           trigger: requestTriggerMetadata?.trigger,
         });
 
@@ -2540,13 +2669,9 @@ export class AiAgentService {
             await this.finalizeHeteroDispatchError({
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
-              detail:
-                heteroType === 'amp' ||
-                heteroType === 'opencode' ||
-                heteroType === 'pi' ||
-                heteroType === 'qoder'
-                  ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
-                  : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
+              detail: !supportsCloudHeterogeneousSandbox(heteroType)
+                ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
+                : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
               message: 'No bound device for hetero agent',
               operationId,
               topicId,
@@ -2601,16 +2726,12 @@ export class AiAgentService {
             });
           }
 
-          // A device is the user's own persistent machine — build a
-          // device-specific context instead of reusing the cloud-sandbox one
-          // (which describes an ephemeral /workspace + pre-cloned repos and
-          // would mislead the agent).
+          // Build only device-relevant context instead of reusing the cloud-sandbox one
+          // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
+          // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
           const deviceSystemContext = buildRemoteDeviceHeteroContext({
             agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
             conversationHistory,
-            // The native CLI session already knows its cwd. Keep the explanatory workspace note
-            // on the first turn only so persistent resumed sessions do not accumulate duplicates.
-            cwd: resumeSessionId ? undefined : deviceCwd,
           });
 
           const result = await deviceGateway.dispatchAgentRun({
@@ -2650,8 +2771,8 @@ export class AiAgentService {
             };
           }
         } else {
-          if (heteroType === 'amp' || heteroType === 'opencode') {
-            const message = `${heteroType === 'amp' ? 'Amp' : 'OpenCode'} requires a local or connected device; cloud sandbox execution is not supported.`;
+          if (!supportsCloudHeterogeneousSandbox(heteroType)) {
+            const message = `${getHeterogeneousAgentTitle(heteroType)} requires a local or connected device; cloud sandbox execution is not supported.`;
             await this.finalizeHeteroDispatchError({
               agentId: resolvedAgentId,
               assistantMessageId: assistantMessageRecord.id,
@@ -2749,6 +2870,7 @@ export class AiAgentService {
     // Agent-level memory config takes priority; fallback to user-level setting
     const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
     let globalMemoryEnabled = agentMemoryEnabled ?? false;
+    let enableExpertise = false;
     let userTimezone: string | undefined;
     // Resolved once below (alongside the group-tool authorization fetch) and
     // forwarded into op metadata for the per-step context engine.
@@ -2764,6 +2886,12 @@ export class AiAgentService {
       userTimezone = generalSettings?.timezone;
     } catch (error) {
       log('execAgent: failed to fetch user settings: %O', error);
+    }
+    try {
+      const preference = await new UserModel(this.db, this.userId).getUserPreference();
+      enableExpertise = preference?.lab?.enableSelfLearning === true;
+    } catch (error) {
+      console.error('Failed to resolve expertise injection Lab preference:', error);
     }
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
@@ -2810,14 +2938,17 @@ export class AiAgentService {
     // (deduped) alongside the agent's pinned plugins and any internal
     // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
     // connector) is both queried for manifests and enabled by the tools engine.
-    let agentPlugins: string[] = [
-      ...new Set([
-        ...getActivePluginIds(agentConfig?.plugins),
-        ...(additionalPluginIds || []),
-        ...(selectedToolIds || []),
-        ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
-      ]),
-    ];
+    const isGoalTurn = isGoalPrompt(prompt);
+    let agentPlugins: string[] = isGoalTurn
+      ? [GoalIdentifier]
+      : [
+          ...new Set([
+            ...getActivePluginIds(agentConfig?.plugins),
+            ...(additionalPluginIds || []),
+            ...(selectedToolIds || []),
+            ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+          ]),
+        ];
 
     // Model metadata is needed both for tool support checks and agent-management context.
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
@@ -3401,7 +3532,9 @@ export class AiAgentService {
           ...activeConnectorManifests,
         ],
         agentConfig: {
-          chatConfig: agentConfig.chatConfig ?? undefined,
+          chatConfig: isGoalTurn
+            ? { ...agentConfig.chatConfig, toolMode: 'custom' }
+            : (agentConfig.chatConfig ?? undefined),
           plugins: agentPlugins,
         },
         canUseDevice,
@@ -3429,7 +3562,17 @@ export class AiAgentService {
         // (lobe-skills) can state where their commands actually run — most
         // importantly the `device-unrouted` degradation, where the user picked
         // a local device that is offline and exec silently lands in the sandbox.
+        // For bot conversations we also pass the IM platform so `lobe-message`
+        // can drop APIs the platform can't fulfil (e.g. WeChat has no
+        // `readMessages`).
         manifestContext: {
+          ...(botContext?.platform && {
+            botPlatform: {
+              id: botContext.platform,
+              unsupportedMessageApis: platformRegistry.getPlatform(botContext.platform)
+                ?.unsupportedMessageApis,
+            },
+          }),
           executionEnv: executionPlan.kind,
           executionEnvUnroutedReason:
             executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
@@ -4374,6 +4517,17 @@ export class AiAgentService {
       log('execAgent: failed to build operationSkillSet: %O', error);
     }
 
+    // Resolve learned expertise once so every step in this operation uses the exact same snapshot.
+    // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
+    const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
+    let expertise;
+    try {
+      const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
+    } catch (error) {
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+    }
+
     // 19. Create operation using AgentRuntimeService
     log(
       'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
@@ -4417,6 +4571,13 @@ export class AiAgentService {
           ...(appContext?.scope === 'agent_builder' && appContext?.editingAgentId
             ? { editingAgentId: appContext.editingAgentId }
             : {}),
+          // Mirror of the above for the Group Agent Builder panel: the run is
+          // owned by the builtin builder agent, so the edited group only rides
+          // here. Read by the group-agent-builder server runtime and by the
+          // `<current_group_context>` injector.
+          ...(appContext?.scope === 'group_agent_builder' && appContext?.editingGroupId
+            ? { editingGroupId: appContext.editingGroupId }
+            : {}),
           // Run-scoped Agent Signal marker for background self-iteration / memory
           // runs — lands in state.metadata.agentSignal so the completion path can
           // project receipts/briefs. Undefined for ordinary chat runs.
@@ -4446,6 +4607,8 @@ export class AiAgentService {
         deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
         discordContext,
         evalContext,
+        enableExpertise,
+        expertise,
         initialContext,
         initialMessages: allMessages,
         initialStepCount,
@@ -4475,15 +4638,26 @@ export class AiAgentService {
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 
-      // Persist running operation to topic metadata for reconnect after page reload
-      await this.topicModel.updateMetadata(topicId, {
-        runningOperation: {
-          assistantMessageId: assistantMessageRecord.id,
-          operationId,
-          scope: appContext?.scope ?? undefined,
-          threadId: appContext?.threadId ?? undefined,
-        },
-      });
+      // Persist running operation to topic metadata for reconnect after page reload.
+      //
+      // Skipped for isolation-thread children (callAgent / callSubAgent / group
+      // members): they run on the SPAWNER's topic and finish long before it does,
+      // so claiming the mark would first point every client reconnect at the
+      // child's thread stream, and then — once the child finished and cleared it —
+      // leave the still-running parent with no mark at all, i.e. no gateway
+      // WebSocket for the rest of the run. The parent's mark stays authoritative;
+      // a child's live progress already rides down the parent channel via
+      // `appContext.subAgentProgress`.
+      if (!appContext?.isolationThread) {
+        await this.topicModel.updateMetadata(topicId, {
+          runningOperation: {
+            assistantMessageId: assistantMessageRecord.id,
+            operationId,
+            scope: appContext?.scope ?? undefined,
+            threadId: appContext?.threadId ?? undefined,
+          },
+        });
+      }
 
       // Generate a short-lived JWT for Gateway WebSocket authentication
       let gatewayToken: string | undefined;
@@ -4981,6 +5155,10 @@ export class AiAgentService {
 
     const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
       groupId,
+      // Every run spawned here executes in an isolation thread on the SPAWNER's
+      // topic, so it must not touch that topic's `runningOperation` mark — that
+      // mark is the main run's reconnect anchor (see execAgent).
+      isolationThread: true,
       isSubAgent: options.isSubAgent,
       orchestrationRole: options.orchestrationRole,
       subAgentProgress,

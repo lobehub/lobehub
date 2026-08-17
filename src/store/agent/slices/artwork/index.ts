@@ -4,4 +4,3 @@ export {
   type AgentArtworkSliceState,
   initialAgentArtworkSliceState,
 } from './initialState';
-export { selectAgentArtworkModel } from './utils';

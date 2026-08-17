@@ -28,6 +28,15 @@ export interface RuntimeOperationContext {
  * (interruption guard) joins here when call_tool / call_llm migrate.
  */
 export interface OperationStore {
+  /**
+   * Drop the topic's running mark — but ONLY when this operation owns it.
+   * Several operations share one topic (a `callAgent` / `callSubAgent` / group
+   * member run executes in an isolation thread on its parent's topic), and the
+   * mark is the *main* run's reconnect anchor. An unconditional clear here lets
+   * a short-lived child strand its still-running parent: no mark means no
+   * gateway reconnect, so the conversation goes silent for the rest of the run.
+   * Implementations must compare before clearing.
+   */
   clearRunningMark: () => Promise<void>;
   loadState?: (operationId: string) => Promise<AgentState | null>;
 }

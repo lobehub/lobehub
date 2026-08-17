@@ -1,7 +1,6 @@
 import type {
   CheckpointConfig,
   NewTask,
-  TaskGoalConfig,
   TaskItem,
   TaskVerifyConfig,
   WorkspaceData,
@@ -12,6 +11,7 @@ import {
   and,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -27,12 +27,13 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
+import { goals } from '../schemas/goal';
 import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -58,6 +59,42 @@ import { buildWorkspaceWhere } from '../utils/workspace';
  * workspace_id IS NULL` for all four helpers — visibility is inert because
  * everything personal is implicitly owner-only.
  */
+/**
+ * A task the automation runtime would still act on.
+ *
+ * `automation_mode` alone does not mean "this fires". The tick services refuse
+ * to run on exactly these grounds — `scheduleTick` skips a schedule with no
+ * cron pattern, `heartbeatTick` skips a heartbeat with no positive interval,
+ * and both skip a task that has reached a terminal status. A row that keeps its
+ * mode after being completed, canceled or stripped of its pattern is a
+ * leftover, not a schedule, and listing it as one lets dead entries crowd real
+ * ones out of a bounded roll-up.
+ *
+ * Kept as one expression so the `automated` filter's two sides stay exact
+ * complements and no row falls into neither bucket.
+ */
+const RUNNABLE_AUTOMATION = and(
+  notInArray(tasks.status, ['canceled', 'completed', 'failed']),
+  or(
+    and(
+      eq(tasks.automationMode, 'schedule'),
+      isNotNull(tasks.schedulePattern),
+      ne(tasks.schedulePattern, ''),
+    ),
+    and(eq(tasks.automationMode, 'heartbeat'), gt(tasks.heartbeatInterval, 0)),
+  ),
+)!;
+
+/**
+ * A goal task is one carrying a `goals` row as its execution subject. Ownership
+ * is not re-checked inside the EXISTS — the outer query already scopes `tasks`,
+ * and a goal always belongs to its carrier's owner.
+ */
+const HAS_GOAL = sql`EXISTS (
+  SELECT 1 FROM ${goals}
+  WHERE ${goals.subjectType} = 'task' AND ${goals.subjectId} = ${tasks.id}
+)`;
+
 export class TaskModel {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
@@ -258,12 +295,39 @@ export class TaskModel {
    * to render as "resource deleted" from its version snapshot. See.
    */
   async delete(id: string): Promise<boolean> {
-    const deleted = await this.db
-      .delete(tasks)
-      .where(and(eq(tasks.id, id), this.ownership()))
-      .returning({ id: tasks.id });
+    // The goal carried by this task has no FK on the polymorphic subject link,
+    // so its row must be swept explicitly — in the same transaction, or a
+    // failure between the two statements would orphan it.
+    return this.db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .returning({ id: tasks.id });
 
-    return deleted.length > 0;
+      if (deleted.length > 0) await this.deleteGoalsOfTasks([id], tx);
+
+      return deleted.length > 0;
+    });
+  }
+
+  /** Sweep the goals bound to the given (already deleted) tasks. */
+  private async deleteGoalsOfTasks(
+    taskIds: string[],
+    tx: LobeChatDatabase | Transaction = this.db,
+  ) {
+    if (taskIds.length === 0) return;
+    await tx
+      .delete(goals)
+      .where(
+        and(
+          eq(goals.subjectType, 'task'),
+          inArray(goals.subjectId, taskIds),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { userId: goals.userId, workspaceId: goals.workspaceId },
+          ),
+        ),
+      );
   }
 
   /**
@@ -430,9 +494,17 @@ export class TaskModel {
     const where = options?.restrictToCreator
       ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
       : this.ownership();
-    const result = await this.db.delete(tasks).where(where).returning();
 
-    return result.length;
+    // One transaction so the FK-less goals rows can never outlive their
+    // swept carriers (see deleteGoalsOfTasks).
+    return this.db.transaction(async (tx) => {
+      const result = await tx.delete(tasks).where(where).returning({ id: tasks.id });
+      await this.deleteGoalsOfTasks(
+        result.map(({ id }) => id),
+        tx,
+      );
+      return result.length;
+    });
   }
 
   /** Delete a task and every descendant in one transaction. */
@@ -453,6 +525,7 @@ export class TaskModel {
             ),
           ),
         );
+      await this.deleteGoalsOfTasks(taskIds, tx);
       const result = await tx
         .delete(tasks)
         .where(and(inArray(tasks.id, taskIds), this.ownership()))
@@ -473,8 +546,9 @@ export class TaskModel {
       statuses: string[];
     }>;
     parentTaskId?: string | null;
-    /** Only return tasks carrying the goal-controller marker in `config.goal`. */
+    /** Only return tasks carrying a bound goal entity (`goals` row). */
     hasGoal?: boolean;
+    projectId?: string;
     /** Same semantics as `list({ visibility })` — UI narrowing on top of the
      *  already ownership-filtered set. */
     visibility?: 'private' | 'public';
@@ -488,12 +562,13 @@ export class TaskModel {
       total: number;
     }>
   > {
-    const { groups, assigneeAgentId, hasGoal, parentTaskId, visibility } = options;
+    const { groups, assigneeAgentId, hasGoal, parentTaskId, projectId, visibility } = options;
 
     const baseConditions = [this.ownership()];
     if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (hasGoal === true) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
-    if (hasGoal === false) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
+    if (hasGoal === true) baseConditions.push(HAS_GOAL);
+    if (hasGoal === false) baseConditions.push(sql`NOT ${HAS_GOAL}`);
+    if (projectId) baseConditions.push(eq(tasks.projectId, projectId));
     if (visibility) baseConditions.push(eq(tasks.visibility, visibility));
     if (parentTaskId === null) {
       baseConditions.push(isNull(tasks.parentTaskId));
@@ -587,23 +662,51 @@ export class TaskModel {
       ]),
     );
 
+    const goalByTaskId = await this.goalsByTaskIds(taskIds);
+
     return results.map((group) => ({
       ...group,
       tasks: group.tasks.map((task) => ({
         ...task,
+        goal: goalByTaskId.get(task.id) ?? null,
         totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
         totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
       })),
     }));
   }
 
+  /** The goal entities carried by the given tasks, keyed by task id. */
+  private async goalsByTaskIds(taskIds: string[]) {
+    if (taskIds.length === 0) return new Map<string, typeof goals.$inferSelect>();
+
+    const rows = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, taskIds)));
+
+    return new Map(rows.map((row) => [row.subjectId!, row]));
+  }
+
   async list(options?: {
     assigneeAgentId?: string;
+    /**
+     * Narrow to tasks that still run on their own — see {@link RUNNABLE_AUTOMATION}
+     * for what "still" rules out. `false` is its exact complement.
+     */
+    automated?: boolean;
     hasGoal?: boolean;
     limit?: number;
     offset?: number;
+    /**
+     * Which timestamp the (bounded) result is ordered by, newest first.
+     * `createdAt` is the default because most callers want a stable list;
+     * a surface that calls itself "recent" wants `updatedAt`, or its page
+     * would omit the task that just moved in favour of a newer, idle one.
+     */
+    orderBy?: 'createdAt' | 'updatedAt';
     parentTaskId?: string | null;
     priorities?: number[];
+    projectId?: string;
     statuses?: string[];
     /**
      * UI-side narrowing of the (already ownership-filtered) result set.
@@ -617,10 +720,13 @@ export class TaskModel {
       priorities,
       parentTaskId,
       assigneeAgentId,
+      automated,
       hasGoal,
+      projectId,
       visibility,
       limit = 50,
       offset = 0,
+      orderBy = 'createdAt',
     } = options || {};
 
     const conditions = [this.ownership()];
@@ -628,8 +734,15 @@ export class TaskModel {
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (hasGoal === true) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
-    if (hasGoal === false) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
+    if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
+    // `IS NOT TRUE`, not `NOT (…)`: a manual task has a NULL `automation_mode`,
+    // so the predicate evaluates to NULL rather than false, and `NOT NULL` is
+    // still NULL — which WHERE drops. That would make `automated: false` return
+    // nothing at all for exactly the rows it is meant to return.
+    if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
+    if (hasGoal === true) conditions.push(HAS_GOAL);
+    if (hasGoal === false) conditions.push(sql`NOT ${HAS_GOAL}`);
+    if (projectId) conditions.push(eq(tasks.projectId, projectId));
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
     if (parentTaskId === null) {
@@ -649,7 +762,7 @@ export class TaskModel {
       .select()
       .from(tasks)
       .where(where)
-      .orderBy(desc(tasks.createdAt))
+      .orderBy(desc(orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt))
       .limit(limit)
       .offset(offset);
 
@@ -844,19 +957,6 @@ export class TaskModel {
 
   async updateReviewConfig(id: string, review: Record<string, any>): Promise<TaskItem | null> {
     return this.updateTaskConfig(id, { review });
-  }
-
-  // ========== Goal Config ==========
-
-  /**
-   * Read this task's goal-loop config from `config.goal`. Presence marks a
-   * goal-driven task (created via the `createGoal` builtin tool) and enables
-   * the outer verify-driven round loop. No inheritance — a goal belongs to the
-   * exact task it was created on.
-   */
-  getGoalConfig(task: TaskItem): TaskGoalConfig | undefined {
-    const config = task.config as Record<string, any> | undefined;
-    return config?.goal ? (config.goal as TaskGoalConfig) : undefined;
   }
 
   // ========== Verify Config ==========

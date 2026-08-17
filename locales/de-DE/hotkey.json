@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Linkes Panel ein- oder ausblenden",
   "toggleLeftPanel.title": "Linkes Panel umschalten",
   "toggleRightPanel.desc": "Rechtes Panel ein- oder ausblenden",
-  "toggleRightPanel.title": "Rechtes Panel umschalten"
+  "toggleRightPanel.title": "Rechtes Panel umschalten",
+  "toggleTerminalPanel.desc": "Das untere Terminal-Panel anzeigen oder ausblenden",
+  "toggleTerminalPanel.title": "Terminal-Panel umschalten"
 }

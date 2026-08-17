@@ -1,5 +1,5 @@
-import { Alert, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
-import { Button, RadioGroup } from '@lobehub/ui/base-ui';
+import { Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
+import { Alert, Button, RadioGroup } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
 import { Divider, Form } from 'antd';
 import isEqual from 'fast-deep-equal';

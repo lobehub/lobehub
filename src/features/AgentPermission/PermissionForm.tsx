@@ -2,27 +2,19 @@
 
 import type { AgentModelSelectionPolicy } from '@lobechat/types';
 import type { FormGroupItemType } from '@lobehub/ui';
-import { Alert, Empty, Form, Icon } from '@lobehub/ui';
+import { Empty, Form, Icon } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import {
-  Bot,
-  EyeIcon,
-  InfoIcon,
-  LockIcon,
-  MonitorSmartphone,
-  PencilIcon,
-  PlayIcon,
-  UsersIcon,
-} from 'lucide-react';
+import { Bot, InfoIcon, LockIcon, MonitorSmartphone, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
-import type { ResourceAccessLevel } from '@/services/resourcePermission';
+import PolicySelect, { type PolicyOption } from '@/features/ResourcePermission/PolicySelect';
+import { getSelectionPolicyLabelKeys } from '@/features/ResourcePermission/selectionPolicyLabels';
+import { useAccessLevelOptions } from '@/features/ResourcePermission/useAccessLevelOptions';
 
-import PolicySelect, { type PolicyOption } from './PolicySelect';
-import { getSelectionPolicyLabelKeys } from './selectionPolicyLabels';
 import { useAgentPermission } from './useAgentPermission';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -82,42 +74,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     [labelKeys, t],
   );
 
-  const accessOptions = useMemo((): PolicyOption<ResourceAccessLevel>[] => {
-    // A private agent has no members yet, so the level names carry the same
-    // "once shared" tense the switch policies already use; the descriptions
-    // explain what the level itself means and stay as they are.
-    const options: PolicyOption<ResourceAccessLevel>[] = [
-      {
-        desc: t('permission.generalAccess.editableDesc'),
-        icon: PencilIcon,
-        label: t(
-          isPrivate ? 'permission.page.editableWhenShared' : 'permission.generalAccess.editable',
-        ),
-        value: 'edit',
-      },
-      {
-        desc: t('permission.generalAccess.usableDesc'),
-        icon: PlayIcon,
-        label: t(
-          isPrivate ? 'permission.page.usableWhenShared' : 'permission.generalAccess.usable',
-        ),
-        value: 'use',
-      },
-    ];
-
-    // `view` is a document-only level, but a legacy row can still carry it —
-    // list it so the control shows the real current value instead of blank.
-    if (accessLevel === 'view') {
-      options.push({
-        desc: t('permission.generalAccess.viewableDesc'),
-        icon: EyeIcon,
-        label: t('permission.generalAccess.viewable'),
-        value: 'view',
-      });
-    }
-
-    return options;
-  }, [accessLevel, isPrivate, t]);
+  const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
 
   const executionPolicyOptions = useMemo(
     (): PolicyOption<AgentModelSelectionPolicy>[] => [

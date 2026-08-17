@@ -6,6 +6,7 @@ import {
 import debug from 'debug';
 
 import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
+import { resolveClientLocalSandbox } from '@/helpers/localSandbox';
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
@@ -201,6 +202,10 @@ export class PluginTypesActionImpl {
           groupId,
           groupOrchestration,
           isSubAgent,
+          // Only the in-process desktop path reaches here; gateway-routed runs
+          // get the same decision from the server device-proxy. Both funnel
+          // through `isLocalSandboxEnabled`, so they cannot disagree.
+          ...resolveClientLocalSandbox(agentId),
           messageId: id,
           operationId,
           registerAfterCompletion,

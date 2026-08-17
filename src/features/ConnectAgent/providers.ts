@@ -8,7 +8,21 @@ import {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '@lobechat/heterogeneous-agents';
 import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
-import { Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode, Pi, Qoder } from '@lobehub/icons';
+import {
+  Amp,
+  ClaudeCode,
+  CodeBuddy,
+  Codex,
+  Cursor,
+  Grok,
+  HermesAgent,
+  Kimi,
+  OpenClaw,
+  OpenCode,
+  Pi,
+  Qoder,
+  Trae,
+} from '@lobehub/icons';
 
 /**
  * One row in the connect wizard's agent inventory. `kind` mirrors the domain
@@ -22,12 +36,17 @@ export interface ConnectableProvider {
   brand:
     | typeof Amp
     | typeof ClaudeCode
+    | typeof CodeBuddy
     | typeof Codex
+    | typeof Cursor
+    | typeof Grok
     | typeof HermesAgent
+    | typeof Kimi
     | typeof OpenClaw
     | typeof OpenCode
     | typeof Pi
-    | typeof Qoder;
+    | typeof Qoder
+    | typeof Trae;
   /** Spawn command — cli providers only. */
   command?: string;
   kind: 'cli' | 'platform';
@@ -51,10 +70,15 @@ interface BuildConnectAgentConfigOptions {
 const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand']> = {
   'amp': Amp,
   'claude-code': ClaudeCode,
+  'codebuddy': CodeBuddy,
   'codex': Codex,
+  'cursor': Cursor,
+  'grok-build': Grok,
+  'kimi-code': Kimi,
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
+  'trae': Trae,
 };
 
 const PLATFORM_BRANDS: Record<RemoteHeterogeneousAgentType, ConnectableProvider['brand']> = {
@@ -106,6 +130,10 @@ export const buildConnectAgentConfig = ({
       avatar: profile?.avatar || undefined,
       description: (overrides?.description ?? profile?.description)?.trim() || undefined,
       name,
+      // Same stamp as the CLI branch below: readers that attribute a run by the
+      // agent's provider (topic model snapshot, agent list, message tags) must
+      // see `openclaw`/`hermes`, not the inherited default chat provider.
+      provider: provider.type,
       title: profile?.title || provider.title,
     };
   }

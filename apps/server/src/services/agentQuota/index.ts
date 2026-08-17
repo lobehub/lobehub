@@ -39,6 +39,16 @@ export interface AccountLoadView extends AccountLoad {
   label?: string | null;
 }
 
+/** One assistant turn's spend, as the usage calendar consumes it. */
+export interface QuotaUsageTurn {
+  /** USD, or null when the model bank has no price for the model. */
+  cost: number | null;
+  model: string | null;
+  occurredAt: number;
+  /** All token classes summed — what "tokens burned" means to the user. */
+  tokens: number;
+}
+
 /**
  * Server-side orchestration for the quota data layer: turns the append-only
  * snapshot + ledger facts into windows and calibrated capacity, and resolves
@@ -265,6 +275,46 @@ export class AgentQuotaService {
       scopeKey: row.scopeKey,
       severity: row.severity ?? undefined,
       utilization: row.utilization,
+    }));
+  };
+
+  /**
+   * The full reading series since `since`, oldest first — the burn-down /
+   * usage-calendar read model. Same plain-number mapping as
+   * `listLatestReadings`.
+   */
+  listSnapshotSeries = async (accountId: string, since: Date): Promise<QuotaLimitReading[]> => {
+    const rows = await this.snapshots.listRange(accountId, since);
+
+    return rows.map((row) => ({
+      capturedAt: row.capturedAt.getTime(),
+      isActive: row.isActive ?? undefined,
+      limitType: row.limitType,
+      resetsAt: row.resetsAt?.getTime() ?? null,
+      scopeKey: row.scopeKey,
+      severity: row.severity ?? undefined,
+      utilization: row.utilization,
+    }));
+  };
+
+  /**
+   * Per-turn spend since `since`, oldest first — the token/cost half of the
+   * usage calendar. Returned as flat turns rather than pre-bucketed days: the
+   * calendar groups by the *viewer's* local day, which the server cannot know.
+   */
+  listUsageTurns = async (accountId: string, since: Date): Promise<QuotaUsageTurn[]> => {
+    const rows = await this.ledger.listSince(accountId, since);
+
+    return rows.map((row) => ({
+      cost: row.costUsd == null ? null : Number(row.costUsd),
+      model: row.model,
+      occurredAt: row.occurredAt.getTime(),
+      tokens:
+        (row.inputTokens ?? 0) +
+        (row.outputTokens ?? 0) +
+        (row.cacheReadTokens ?? 0) +
+        (row.cacheWriteTokens ?? 0) +
+        (row.reasoningTokens ?? 0),
     }));
   };
 

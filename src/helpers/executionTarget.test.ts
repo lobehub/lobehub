@@ -7,6 +7,7 @@ import {
   executionTargetToRuntimeMode,
   isDeviceLockedPlan,
   isHeterogeneousSandboxExecutionAvailable,
+  isLocalSandboxEnabled,
   resolveExecutionPlan,
   resolveExecutionTarget,
   resolveRuntimeMode,
@@ -16,6 +17,18 @@ import {
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
 const ampCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
   heterogeneousProvider: { command: 'amp', type: 'amp' },
+  ...over,
+});
+const codeBuddyCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'codebuddy', type: 'codebuddy' },
+  ...over,
+});
+const cursorCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'agent', type: 'cursor' },
+  ...over,
+});
+const kimiCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
+  heterogeneousProvider: { command: 'kimi', type: 'kimi-code' },
   ...over,
 });
 const openCodeCfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({
@@ -41,8 +54,13 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('hermes')).toBe(false);
   });
 
-  it('keeps Qoder on local or connected devices', () => {
+  it('keeps local-only CLIs on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
+  });
+
+  it('keeps Cursor on local or connected devices', () => {
+    expect(isHeterogeneousSandboxExecutionAvailable('cursor')).toBe(false);
   });
 });
 
@@ -182,6 +200,9 @@ describe('resolveExecutionTarget', () => {
   describe('hetero providers without sandbox execution', () => {
     it.each([
       ['Amp', ampCfg],
+      ['CodeBuddy', codeBuddyCfg],
+      ['Cursor', cursorCfg],
+      ['Kimi Code', kimiCodeCfg],
       ['OpenCode', openCodeCfg],
       ['Pi', piCfg],
       ['Qoder', qoderCfg],
@@ -206,6 +227,17 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['sandbox', 'local'] as const) {
         expect(
           resolveExecutionTarget(ampCfg({ executionTarget }), {
+            clientExecutionAvailable: false,
+            isHetero: true,
+          }),
+        ).toBe('none');
+      }
+    });
+
+    it('normalizes unsupported Kimi Code sandbox and unbound web-local targets to pending', () => {
+      for (const executionTarget of ['sandbox', 'local'] as const) {
+        expect(
+          resolveExecutionTarget(kimiCodeCfg({ executionTarget }), {
             clientExecutionAvailable: false,
             isHetero: true,
           }),
@@ -1062,6 +1094,7 @@ describe('resolveExecutionPlan', () => {
 
     it.each([
       ['Amp', ampCfg],
+      ['Cursor', cursorCfg],
       ['OpenCode', openCodeCfg],
     ] as const)(
       'keeps %s non-device targets pending instead of constructing a sandbox plan',
@@ -1121,5 +1154,38 @@ describe('isDeviceLockedPlan', () => {
     ).toBe(false);
     expect(isDeviceLockedPlan({ kind: 'none', target: 'none' })).toBe(false);
     expect(isDeviceLockedPlan({ kind: 'sandbox', target: 'sandbox' })).toBe(false);
+  });
+});
+
+describe('isLocalSandboxEnabled', () => {
+  it('fences a local run that opted in', () => {
+    expect(
+      isLocalSandboxEnabled(cfg({ executionTarget: 'local', localSandbox: true }), 'local'),
+    ).toBe(true);
+  });
+
+  it('leaves an opted-out local run alone', () => {
+    expect(isLocalSandboxEnabled(cfg({ executionTarget: 'local' }), 'local')).toBe(false);
+    expect(
+      isLocalSandboxEnabled(cfg({ executionTarget: 'local', localSandbox: false }), 'local'),
+    ).toBe(false);
+  });
+
+  it('ignores the flag once the run resolved somewhere other than local', () => {
+    // A stored `localSandbox` survives a switch to Cloud Sandbox (so switching
+    // back restores it), and web/bot coercions move a `local` target to
+    // `sandbox` / `device` / `auto`. None of those runs touch the desktop
+    // sandbox, so claiming they are fenced would be a lie about a security
+    // guarantee.
+    const config = cfg({ executionTarget: 'local', localSandbox: true });
+
+    expect(isLocalSandboxEnabled(config, 'sandbox')).toBe(false);
+    expect(isLocalSandboxEnabled(config, 'device')).toBe(false);
+    expect(isLocalSandboxEnabled(config, 'auto')).toBe(false);
+    expect(isLocalSandboxEnabled(config, 'none')).toBe(false);
+  });
+
+  it('treats a missing config as unfenced', () => {
+    expect(isLocalSandboxEnabled(undefined, 'local')).toBe(false);
   });
 });

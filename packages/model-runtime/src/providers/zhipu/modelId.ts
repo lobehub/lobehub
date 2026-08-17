@@ -38,3 +38,18 @@ export const isToolStreamSupportedGLMModel = (model: string): boolean => {
 
   return parsed.majorVersion === 4 && parsed.minorVersion !== undefined && parsed.minorVersion >= 6;
 };
+
+/**
+ * GLM-5.3+ rejects `thinking.type: "disabled"`. Thinking is always on;
+ * callers can only vary `reasoning_effort` (`low` | `high` | `max`).
+ *
+ * @see https://z.ai/blog/glm-5.3
+ */
+export const isAlwaysOnThinkingGLMModel = (model: string): boolean => {
+  const parsed = parseGLMModelId(model);
+  if (!parsed) return false;
+
+  if (parsed.majorVersion > 5) return true;
+
+  return parsed.majorVersion === 5 && parsed.minorVersion !== undefined && parsed.minorVersion >= 3;
+};

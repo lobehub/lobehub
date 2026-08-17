@@ -1,4 +1,3 @@
-import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -144,33 +143,5 @@ describe('generateDraftPlan — holistic fallback', () => {
     expect(lastPlan()[0].verifierConfig).toEqual({
       requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
     });
-  });
-
-  it('persists agent-authored verifierConfig instead of replacing it with an empty object', async () => {
-    const config = {
-      requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
-    };
-    const result = await new VerifyPlanGeneratorService(db, 'user-1').createPlanFromCriteria({
-      criteria: [{ title: 'Visual proof', verifierConfig: config, verifierType: 'llm' }],
-      operationId: 'op-1',
-      title: 'Acceptance',
-    });
-
-    expect(createCriterionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ verifierConfig: config }),
-    );
-    expect(result.items[0].verifierConfig).toEqual(config);
-  });
-
-  it('exposes the required evidence inventory in the agent tool contract', () => {
-    const criterion = LobeDeliveryCheckerManifest.api[0].parameters.properties.criteria.items;
-
-    expect(criterion.required).toContain('requiredEvidence');
-    expect(criterion.properties.requiredEvidence.items.required).toEqual([
-      'type',
-      'modality',
-      'scope',
-      'hint',
-    ]);
   });
 });

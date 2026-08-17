@@ -23,6 +23,7 @@ export class TrpcIngestSink implements IngestSink {
   async finish(params: Parameters<IngestSink['finish']>[0]): Promise<void> {
     await this.client.aiAgent.heteroFinish.mutate({
       agentType: this.agentType,
+      assistantMessageId: this.assistantMessageId,
       operationId: this.operationId,
       topicId: this.topicId,
       ...params,

@@ -10,6 +10,10 @@ import type {
   ToolStateChunkData,
   UsageData,
 } from '../types';
+import {
+  CODEX_COMMAND_OUTPUT_MAX_LENGTH,
+  truncateCodexCommandOutput,
+} from '../utils/codexCommandOutput';
 import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -20,7 +24,6 @@ const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
 const CODEX_WEB_SEARCH_API = 'web_search';
 const CODEX_USAGE_SETTINGS_URL = 'https://chatgpt.com/codex/settings/usage';
-const CODEX_COMMAND_OUTPUT_MAX_LENGTH = 25_000;
 
 const CODEX_USER_RATE_LIMIT_PATTERNS = [
   /you'?ve hit your usage limit/i,
@@ -467,31 +470,6 @@ const isSuccessfulToolCompletion = (item: CodexToolItem): boolean => {
   if (isMcpToolCallItem(item) && hasMcpResultError(item)) return false;
 
   return item.status !== 'cancelled' && item.status !== 'error' && item.status !== 'failed';
-};
-
-const truncateCodexCommandOutput = (content: string) => {
-  if (!content || content.length <= CODEX_COMMAND_OUTPUT_MAX_LENGTH) {
-    return {
-      output: content,
-      truncated: false,
-    };
-  }
-
-  let cutoff = CODEX_COMMAND_OUTPUT_MAX_LENGTH;
-  const lastCharCode = content.charCodeAt(cutoff - 1);
-  if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) {
-    cutoff -= 1;
-  }
-
-  const omittedCharacters = content.length - cutoff;
-  const notice = `\n\n[Output truncated: ${omittedCharacters} characters omitted. Original length: ${content.length} characters]`;
-
-  return {
-    omittedCharacters,
-    originalLength: content.length,
-    output: content.slice(0, cutoff) + notice,
-    truncated: true,
-  };
 };
 
 const getToolResultData = (item: CodexToolItem): ToolResultData => {

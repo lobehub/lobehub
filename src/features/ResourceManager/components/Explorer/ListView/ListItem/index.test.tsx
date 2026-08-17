@@ -153,6 +153,6 @@ describe('FileListItem', () => {
   it('disables selection for rows the workspace member did not upload', () => {
     render(<FileListItem {...baseProps} selectable={false} />);
 
-    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-disabled', 'true');
   });
 });

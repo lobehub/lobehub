@@ -120,35 +120,53 @@ const rectStyle = (rect: Rect) => ({
 });
 
 interface AnnotatedImageProps {
-  annotations: { comment?: string; rect: Rect }[];
+  /**
+   * `label` overrides the badge number. Regions belonging to one review may be
+   * spread across several images, and per-image numbering would restart at 1 on
+   * each — so a list that references "区域 2" elsewhere could point at two
+   * different boxes. Pass an explicit label to keep one sequence across images.
+   */
+  annotations: { comment?: string; label?: number; rect: Rect }[];
   imageStyle?: React.CSSProperties;
+  /** Render the per-region notes under the image. Off when a caller already lists them. */
+  showComments?: boolean;
   src: string;
 }
 
 /** An evidence image with its circled regions (read-only display). */
-export const AnnotatedImage = memo<AnnotatedImageProps>(({ annotations, imageStyle, src }) => (
-  <Flexbox gap={6} style={{ maxWidth: '100%', width: 'fit-content' }}>
-    <div className={styles.frame}>
-      <img alt={''} className={styles.image} src={src} style={imageStyle} />
-      {annotations.map((annotation, index) => (
-        <div className={styles.rect} key={index} style={rectStyle(annotation.rect)}>
-          {annotations.length > 1 && <span className={styles.badge}>{index + 1}</span>}
+export const AnnotatedImage = memo<AnnotatedImageProps>(
+  ({ annotations, imageStyle, showComments = true, src }) => {
+    // A badge is noise on a single unnumbered region, but required as soon as
+    // anything refers to a region by number.
+    const numbered = annotations.length > 1 || annotations.some((item) => item.label !== undefined);
+
+    return (
+      <Flexbox gap={6} style={{ maxWidth: '100%', width: 'fit-content' }}>
+        <div className={styles.frame}>
+          <img alt={''} className={styles.image} src={src} style={imageStyle} />
+          {annotations.map((annotation, index) => (
+            <div className={styles.rect} key={index} style={rectStyle(annotation.rect)}>
+              {numbered && <span className={styles.badge}>{annotation.label ?? index + 1}</span>}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
-    <Flexbox gap={2}>
-      {annotations.map(
-        (annotation, index) =>
-          annotation.comment && (
-            <Text fontSize={12} key={index} type={'secondary'}>
-              {annotations.length > 1 ? `${index + 1}. ` : ''}
-              {annotation.comment}
-            </Text>
-          ),
-      )}
-    </Flexbox>
-  </Flexbox>
-));
+        {showComments && (
+          <Flexbox gap={2}>
+            {annotations.map(
+              (annotation, index) =>
+                annotation.comment && (
+                  <Text fontSize={12} key={index} type={'secondary'}>
+                    {numbered ? `${annotation.label ?? index + 1}. ` : ''}
+                    {annotation.comment}
+                  </Text>
+                ),
+            )}
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+  },
+);
 
 AnnotatedImage.displayName = 'AcceptanceAnnotatedImage';
 

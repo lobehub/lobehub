@@ -434,6 +434,30 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('should use persisted recorder metadata when base64 audio omits its MIME type', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: null,
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: {
+          mimeType: 'audio/wav;codecs=pcm',
+          url: 'data:;base64,mockAudioBase64Data',
+        },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content)).resolves.toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/wav',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
     it('should use fileData for external URL audio on gemini-3+', async () => {
       const audioUrl = 'https://example.com/audio.mp3';
 
@@ -472,6 +496,35 @@ describe('google contextBuilders', () => {
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       });
       expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
+    it('should use persisted recorder metadata when an external URL is octet-stream', async () => {
+      const audioUrl = 'https://example.com/voice';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'application/octet-stream',
+        isValid: true,
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { mimeType: 'audio/wav', url: audioUrl },
+        type: 'audio_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3-flash-preview' })).resolves.toEqual({
+        fileData: {
+          fileUri: audioUrl,
+          mimeType: 'audio/wav',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
     });
 
     it('should return undefined for unsupported SVG image (base64)', async () => {

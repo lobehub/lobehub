@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   ExternalLink,
   RotateCcw,
+  Trash,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,11 +18,15 @@ import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
   checkHeadMeta,
+  CriterionList,
+  CriterionRow,
   groupChecks,
   shouldGroupChecks,
   useAcceptanceBundle,
   useAcceptanceBySubject,
 } from '@/features/Verify';
+import { usePermission } from '@/hooks/usePermission';
+import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
@@ -51,28 +56,6 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
     padding-block: 9px;
     padding-inline: 12px;
-  `,
-  list: css`
-    overflow: hidden;
-    padding: 0;
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 10px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  seq: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -106,25 +89,13 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
   const meta = checkHeadMeta(check);
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={styles.row}
+    <CriterionRow
       data-task-acceptance-check={check.id}
-      gap={10}
-      role={'button'}
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onOpen();
-      }}
-    >
-      <Icon color={meta.color} icon={meta.icon} size={16} style={{ flex: 'none' }} />
-      <span className={styles.seq}>C{check.seq}</span>
-      <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-        {check.title}
-      </Text>
-    </Flexbox>
+      icon={<Icon color={meta.color} icon={meta.icon} size={16} style={{ flex: 'none' }} />}
+      seq={check.seq}
+      title={check.title}
+      onOpen={onOpen}
+    />
   );
 });
 
@@ -135,6 +106,8 @@ const TaskAcceptance = memo(() => {
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
   const showTaskAgentPanel = useGlobalStore((state) => state.toggleTaskAgentPanel);
+  const { allowed: canEditTask } = usePermission('create_content');
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
@@ -188,6 +161,36 @@ const TaskAcceptance = memo(() => {
   // replace the definitions with their live/result projection below.
   if (!acceptanceSubject && !subjectError) return <TaskVerifyConfig />;
 
+  // Removing the acceptance drops the aggregate (round reports detach) AND
+  // clears the task's verify config — otherwise the section would fall back to
+  // the configured-criteria view and the next run would recreate the aggregate.
+  // Ordering makes the two writes safe without a server transaction: the config
+  // is cleared FIRST (a failure aborts before anything is destroyed), and only
+  // then is the aggregate deleted (a failure there leaves it intact for retry).
+  // The inverse order could delete the record while the stale config survives
+  // to recreate it on the next run.
+  const handleRemoveAcceptance = () => {
+    if (!acceptanceSubject || !taskId) return;
+    confirmModal({
+      content: t('taskDetail.acceptance.removeConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.acceptance.removeConfirm.ok'),
+      onOk: async () => {
+        await useTaskStore.getState().updateVerifyConfig(taskId, {
+          enabled: false,
+          requirement: null,
+          verifyCriteriaIds: null,
+        });
+        await verifyService.deleteAcceptance(acceptanceSubject.id);
+        await mutateSubject();
+      },
+      title: t('taskDetail.acceptance.removeConfirm.title'),
+    });
+  };
+
+  // `acceptance.remove` only authorizes the acceptance creator (or a workspace
+  // owner, cloud-side), not everyone who can edit the task — so the affordance
+  // follows the bundle's isOwner rather than dead-ending in FORBIDDEN.
   const header = (
     <TaskAcceptanceHeader
       count={checks.length}
@@ -197,14 +200,24 @@ const TaskAcceptance = memo(() => {
       isOpen={sectionExpanded}
       extra={
         acceptanceSubject && (
-          <Button
-            icon={<Icon icon={ExternalLink} />}
-            size={'small'}
-            type={'text'}
-            onClick={() => openReport(acceptanceSubject.id)}
-          >
-            {t('taskDetail.acceptance.openReport')}
-          </Button>
+          <Flexbox horizontal align={'center'} gap={4}>
+            <Button
+              icon={<Icon icon={ExternalLink} />}
+              size={'small'}
+              type={'text'}
+              onClick={() => openReport(acceptanceSubject.id)}
+            >
+              {t('taskDetail.acceptance.openReport')}
+            </Button>
+            {canEditTask && bundle?.isOwner && (
+              <ActionIcon
+                icon={Trash}
+                size={'small'}
+                title={t('taskDetail.acceptance.remove')}
+                onClick={handleRemoveAcceptance}
+              />
+            )}
+          </Flexbox>
         )
       }
       onToggle={() => setSectionExpanded((expanded) => !expanded)}
@@ -261,7 +274,7 @@ const TaskAcceptance = memo(() => {
                     />
                   )}
                 </Flexbox>
-                <Block className={styles.list} variant={'outlined'}>
+                <CriterionList>
                   {grouped
                     ? groups.map((group) => {
                         const collapsed = collapsedGroups.has(group.key);
@@ -315,7 +328,7 @@ const TaskAcceptance = memo(() => {
                           onOpen={() => openCheck(bundle.acceptance.id, check.id)}
                         />
                       ))}
-                </Block>
+                </CriterionList>
               </Flexbox>
             </>
           )}

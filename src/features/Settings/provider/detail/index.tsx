@@ -1,52 +1,52 @@
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import dynamic from '@/libs/next/dynamic';
 
 const NewAPI = dynamic(() => import('./newapi'), {
-  loading: () => <Loading debugId="Provider > NewAPI" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const OpenAI = dynamic(() => import('./openai'), {
-  loading: () => <Loading debugId="Provider > OpenAI" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const VertexAI = dynamic(() => import('./vertexai'), {
-  loading: () => <Loading debugId="Provider > VertexAI" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const GitHub = dynamic(() => import('./github'), {
-  loading: () => <Loading debugId="Provider > GitHub" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const Ollama = dynamic(() => import('./ollama'), {
-  loading: () => <Loading debugId="Provider > Ollama" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const ComfyUI = dynamic(() => import('./comfyui'), {
-  loading: () => <Loading debugId="Provider > ComfyUI" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const Cloudflare = dynamic(() => import('./cloudflare'), {
-  loading: () => <Loading debugId="Provider > Cloudflare" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const Bedrock = dynamic(() => import('./bedrock'), {
-  loading: () => <Loading debugId="Provider > Bedrock" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const AzureAI = dynamic(() => import('./azureai'), {
-  loading: () => <Loading debugId="Provider > AzureAI" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const Azure = dynamic(() => import('./azure'), {
-  loading: () => <Loading debugId="Provider > Azure" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 const ProviderGrid = dynamic(() => import('../(list)/ProviderGrid'), {
-  loading: () => <Loading debugId="Provider > Grid" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'grid'} />,
   ssr: false,
 });
 const DefaultPage = dynamic(() => import('./default/ProviderDetialPage'), {
-  loading: () => <Loading debugId="Provider > Default" />,
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
 

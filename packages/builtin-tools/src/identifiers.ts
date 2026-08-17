@@ -12,12 +12,12 @@ import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
+import { GoalManifest } from '@lobechat/builtin-tool-goal';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
@@ -40,6 +40,7 @@ export const builtinToolIdentifiers: string[] = [
   CredsManifest.identifier,
   GroupAgentBuilderManifest.identifier,
   GroupManagementManifest.identifier,
+  GoalManifest.identifier,
   ImageGenerationManifest.identifier,
   KnowledgeBaseManifest.identifier,
   BrowserManifest.identifier,
@@ -61,5 +62,4 @@ export const builtinToolIdentifiers: string[] = [
   LobeAgentManifest.identifier,
   WebOnboardingManifest.identifier,
   VerifyToolManifest.identifier,
-  LobeDeliveryCheckerManifest.identifier,
 ];

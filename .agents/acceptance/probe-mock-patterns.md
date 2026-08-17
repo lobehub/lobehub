@@ -64,6 +64,21 @@ HttpOnly, so an empty `document.cookie` does not establish signed-out state.
 
 ## Project-specific recipes
 
+### Structured generation through the local OpenAI-compatible stub
+
+**Situation:** a real product path uses non-streaming `chat/completions` for
+`generateObject`, while ordinary agent turns use streaming completions against the
+same local provider stub.
+
+**Doesn't work:** returning SSE chunks for every `chat/completions` request. The
+model runtime expects a normal `choices[0].message.content` response when
+`stream: false`, so the request reaches the stub but structured generation crashes
+before schema parsing.
+
+**Works:** branch on the request's `stream` field. Keep SSE for streaming turns and
+return a standard JSON chat completion for `stream: false`; set `STUB_TEXT` to the
+schema-valid JSON required by the check.
+
 ### Task CLI polling with seeded API-key auth
 
 **Situation:** A local acceptance run is driven through `lh task run` with the
@@ -79,6 +94,13 @@ identifier to its internal subject id.
 query the aggregate with `lh acceptance view task:<internal-task-id>`. The start
 response and task activity expose the operation and topic ids; the Acceptance
 bundle exposes the repair round and final rollup.
+
+The same identifier/internal-id gap exists on the WRITE path: a local
+`acceptance run ingest --subject task:T-N` stores the literal `T-N` as
+`acceptance_subjects.subject_id`, while task/goal detail pages resolve the
+acceptance by the task's INTERNAL id — the page then renders an empty state even
+though ingest succeeded. Use the internal id in `--subject` (or fix the
+`subject_id` row afterwards) when the evidence must render in the local app UI.
 
 ### Message-attached heterogeneous-agent errors
 
@@ -284,6 +306,36 @@ snapshot; the local Vite entry (`http://localhost:9876/`) loads modules correctl
 no session, so it ends in the same error for a different reason. See also the two
 neighbouring entries on this proxy (loading-shell in an isolated context; no seeded
 agent-browser session).
+
+### The composer's slash menu needs real key events — `keyboard type` never opens it
+
+**Situation:** driving the chat composer's `/` slash menu (or anything else gated on
+a Lexical `KEY_DOWN_COMMAND`) through agent-browser.
+
+**Doesn't work:** `agent-browser keyboard type "/"`. It inserts through CDP
+`Input.insertText`, which produces no `keydown` at all — verified by installing a
+capturing `document.addEventListener("keydown", …)` and watching it stay empty while
+the character lands in the composer. The editor's SlashPlugin keeps `suppressOpen`
+true until a keydown with `key.length === 1` resets it, so the text appears and the
+menu never does. Reads exactly like "the slash menu is broken", which is worse than
+a visible failure because the composer clearly received the input.
+
+**Works:** use `agent-browser press '/'` for the trigger (and `press Backspace` to
+clear). `press` goes through `Input.dispatchKeyEvent`, so the keydown reaches
+Lexical. `keyboard type` remains fine for bulk text that no plugin is gated on —
+type the prose with it, but fire any menu trigger with `press`.
+
+```bash
+agent-browser --session "$RS" click '[data-probe=composer]'
+agent-browser --session "$RS" press '/'   # menu opens
+agent-browser --session "$RS" press Enter # selects the highlighted item
+```
+
+Confirm the mechanism rather than assuming a menu is missing:
+
+```bash
+agent-browser --session "$RS" eval '(() => { window.__KD=[]; document.addEventListener("keydown", e => window.__KD.push(e.key), true); return "installed"; })()'
+```
 
 ### Reading a transitioned CSS property immediately after focus/hover
 
@@ -566,6 +618,31 @@ agent-browser --session "$RUN_SESSION" \
 Then assert `get url` and `app-probe.sh auth` on that exact session before
 capturing evidence.
 
+A cross-wired session can also look perfectly healthy while running STALE code:
+if the other instance's Vite has since died, the browser keeps serving its last
+bundle from disk cache — every probe answers, `innerText` is full, and only the
+rendered copy (an old i18n string, a pre-change label) betrays it. Before any
+assertion about working-tree code, read `location.origin` AND the page's script
+`src` origins, and require both to match the ports this run's `test-env.sh` /
+`.records/runtime` resolved. A dead script origin that still renders = disk
+cache, not your build.
+
+### Agent-browser navigation hangs after an orphaned Next child keeps the port
+
+**Situation:** an isolated full-stack dev launcher exits, but its Next child
+continues listening without returning HTTP responses. `agent-browser open`,
+`get url`, and even session close can then appear to hang because navigation
+never settles.
+
+**Doesn't work:** repeatedly recreating browser sessions or assuming the
+browser daemon is the root cause while `curl --max-time` to the target route
+also receives zero bytes.
+
+**Works:** inspect the exact listener with `lsof`, confirm its command and
+working tree, terminate only that run-owned process tree, then restart through
+`init-dev-env.sh dev` and reseed the isolated browser auth. A successful HTTP
+probe must precede browser assertions.
+
 ### Leftover React Scan instrumentation poisons every screenshot
 
 **Situation:** capturing UI evidence in a dev instance the user (or an earlier
@@ -680,6 +757,36 @@ Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
 
+### `acceptance run ingest` is creative — re-running it to re-read its output mints a duplicate round
+
+**Situation:** after a successful ingest, wanting to re-check a field from its JSON
+output (evidence count, acceptanceId).
+
+**Doesn't work:** running the same `ingest` command again "just to see the output".
+Every invocation creates a new immutable round on the acceptance — the re-run
+publishes a byte-identical duplicate round that reviewers then see twice.
+
+**Works:** re-read state with the read-only commands — `acceptance run list`,
+`acceptance run get <runId>`, `acceptance view <id> --json`. If a duplicate was
+minted by mistake, `acceptance run delete <runId> --yes` (newest timestamp = the
+accident) restores the round history; this is data correction of an operator
+error, distinct from the forbidden overwrite-a-real-round.
+
+### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
+
+**Situation:** starting the dev server from a harness-managed background command in a
+worktree, then waiting for readiness.
+
+**Doesn't work:** trusting the background task's captured output (it can stay 0 bytes
+while the detached process tree lives on), or polling the default port. Worktrees
+allocate dynamic ports, so probing `localhost:3010` waits forever while the server is
+already up elsewhere; a retry then fails with "an owned dev server is already running".
+
+**Works:** treat `.records/runtime/` as the source of truth — it records `PID`,
+`SERVER_PORT` and `SPA_PORT` for the owned instance. Read the port from there and poll
+that. For a long-lived start prefer a detached `screen -dmS <name> … >> .records/logs/x.log`
+so the log lands in a stable file; `stop-dev` still stops the recorded PID tree either way.
+
 ### Cold SWR cache: clearing then reloading is undone by the outgoing page
 
 **Situation:** forcing a first-load / skeleton state for anything backed by the
@@ -710,7 +817,17 @@ Page.addScriptToEvaluateOnNewDocument({
 ```
 
 Assert the clear actually ran in the new document (set a flag in that script and
-read it back) rather than trusting the removal. Pair it with a warm control run: if
+read it back) rather than trusting the removal.
+
+**The same cache tier inverts _request-gating_ assertions, not just rendered values.**
+When a component decides whether to fire a secondary query from data it reads out of
+the portrait/list query (`useX(shouldFetch ? id : undefined)`), the hydrated cache is
+what the gate sees on the mount frame. Change the underlying state with raw SQL and
+the gate still fires off the stale cached copy, so a correct gate measures as broken —
+and the reverse can hide a broken one. Drive the state change through the product
+write path (whose success handler revalidates), or re-measure after the list query has
+resolved once and the cache is reconciled; report the steady state, and record the
+stale frame separately if you observed it. Pair it with a warm control run: if
 the warm run renders data while the request is held paused and the cold run shows
 the skeleton, the cache tier is proven to be what the render reads.
 
@@ -1065,6 +1182,67 @@ every `[startAt, endAt)` from that. When a day view comes back empty, diff the
 client's real request window (fetch wrapper on the batch URL) against the seeded
 timestamps before suspecting the query.
 
+### An `ActionIcon` is not a `<button>` — select it by its lucide class, click through agent-browser
+
+**Situation:** driving an icon-only affordance inside a popover or panel (`ActionIcon`
+from `@lobehub/ui`: refresh, calendar, more, …).
+
+**Doesn't work:** three separate near-misses, each of which reads as "the affordance
+does not exist" rather than as a driving error:
+
+- `pop.querySelectorAll('button')` misses it. `ActionIcon` renders a `div`/`span`
+  wrapper (`class="lobe-flex …"` around `span.anticon`), so a button-only sweep of a
+  popover reports zero controls and invites the wrong conclusion that the entry was
+  never rendered.
+- `el.click()` on that wrapper `div` resolves and returns, but no handler runs — the
+  React `onClick` sits on an inner node, so the tab-clicking recipe above does not
+  transfer to icon buttons.
+- `agent-browser click --x <n> --y <n>` is not a thing; `click` only takes a CSS
+  selector, XPath, or an `@eN` snapshot ref, and coordinates fail with the generic
+  `Element not found`, which reads as a missing element rather than a bad invocation.
+
+**Works:** find the icon by its lucide class, tag it, and let agent-browser do the
+real click:
+
+```bash
+agent-browser --cdp 9222 eval '(() => {
+  const pop = [...document.querySelectorAll("[role=dialog]")].pop();
+  pop.querySelector("svg.lucide-calendar-days").setAttribute("data-qc", "entry");
+  return "tagged";
+})()'
+agent-browser --cdp 9222 click "[data-qc=entry]"
+```
+
+Enumerate candidates with `pop.querySelectorAll("button,[role=button],span[role]")`
+and read each node's `svg` class when the icon's identity is unknown. **The class is
+the icon's _rendered_ lucide name, not the React symbol you imported** — a component
+imported as `MoreHorizontalIcon` renders `svg.lucide-ellipsis`, so a selector guessed
+from the import name matches nothing and reads as "the affordance was never rendered".
+Enumerate the classes present, then disambiguate duplicates by geometry (a header
+control is the top-most, right-most non-zero rect) rather than by DOM order. Two follow-ons
+worth knowing: a stray click on a tagged text node can dismiss the popover (re-open
+and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped cell
+needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
+dispatched `pointerover`+`mouseover` pair) before its content mounts.
+
+### A pool instance seeded from the login snapshot can boot signed out — `safeStorage` cannot decrypt the copied token
+
+**Situation:** `electron-dev.sh start <id>` in a worktree; the helper reports the
+renderer ready and the seeded login is present on disk.
+
+**Doesn't work:** trusting `login-status`'s "refresh token PRESENT" as proof the
+instance will come up authenticated. The pool's copied userData can fail to decrypt
+its access token — `/tmp/lobe-electron-pool/instance-<id>.log` repeats
+`Failed to decrypt access token: Error while decrypting the ciphertext provided to
+safeStorage.decryptString` — and the app boots signed out (`app-probe.sh auth` →
+`isSignedIn: false`) with a near-blank shell that reads like a broken route tree.
+Cause not established; re-seeding and restarting the same pool id does not help.
+
+**Works:** fall back to the legacy single instance (`electron-dev.sh start`, no id),
+which runs on the golden profile in place and decrypts normally. It boots on the
+loading shell once, so reload once before probing (see L-S8). Gate on
+`app-probe.sh auth` AND `server-auth`, never on the helper's "Ready" line.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical
@@ -1085,3 +1263,120 @@ timestamps before suspecting the query.
   work / Works and evidence for every mechanism claim.
 - Promote product-independent findings to the generic skill layer rather than
   duplicating them here.
+
+### Switching web-session theme for dark-mode evidence needs no UI — next-themes reads `localStorage.theme`
+
+**Situation:** capturing light- and dark-mode evidence in the seeded `agent-browser`
+web session (settings UI navigation is slow and the theme control moved between
+releases; an earlier round wrongly concluded the web session "cannot switch to
+dark").
+
+**Doesn't work:** driving the settings UI to flip appearance, or editing user
+settings server-side (the provider is `next-themes` with `defaultTheme="system"` —
+the server does not own it).
+
+**Works:** set the next-themes key directly, then reload the target route in the
+same session:
+
+```bash
+agent-browser --session lobehub-dev eval "localStorage.setItem('theme','dark')"
+agent-browser --session lobehub-dev open "$SERVER_URL/<route>" # re-render applies html[data-theme]
+```
+
+`'light'` / removal (`localStorage.removeItem('theme')` → back to system) work the
+same way. Restore BEFORE stopping the dev server — once the server is down the
+document becomes sourceless and `localStorage` access throws SecurityError, so the
+override stays behind for the next run. Assert the applied theme via
+`document.documentElement.dataset.theme`, not the storage value.
+
+### A reset shell cwd silently retargets git commits at the main repo's checked-out branch
+
+**Situation:** a long worktree-based session where the harness occasionally resets the
+shell cwd back to the main repo root (e.g. after a `cd /tmp` in a compound command).
+
+**Doesn't work:** running `git add -A && git commit` (or `bun run check`) without an
+explicit `cd` into the worktree. The commands succeed against the MAIN repo — the
+commit lands on whatever branch the user has checked out there, staging their
+unrelated dirty files, while the intended worktree change stays uncommitted. The
+only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
+"Everything up-to-date" because the worktree branch ref never moved.
+
+**Works:** in any worktree session, prefix every git/check command with an explicit
+`cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
+before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
+restores the user's branch and leaves their working tree as it was (verify against
+the session-start `gitStatus` snapshot); nothing needs force-pushing because the
+wrong-branch push was a no-op.
+
+### Electron dev 的 BackendProxy 指向登录快照里持久化的 server 端口 — 铸会话 + CDP 注入 cookie
+
+**Situation:** worktree 里起 Electron surface 验证纯前端改动，renderer 一切正常但
+`app-probe.sh server-auth` 返回 502，用户状态 `isUserStateInit` 一直 false（受它门控的
+UI—— 如 Labs 分栏 —— 静默不渲染，store 状态看起来 "设置了但没生效"）。
+
+**Doesn't work:** 把 dev server 起在 3010 或 test-env.sh 解析出的动态端口。桌面主进程的
+BackendProxy 目标端口持久化在登录快照的 userData 里（`/tmp/electron-dev.log` 里
+`BackendProxy upstream fetch failed ... http://localhost:<port>` 是唯一真相），与当前
+ports-file 无关。端口对上后若见 401，是快照 cookie 对本地库已失效 —— 重启 Electron 重种快照
+也救不回来。
+
+**Works:** 三步：① 从日志读出 BackendProxy 的目标端口，`PORT=<该端口>` 起 dev server；
+② 用 web-seed 同款 curl 铸 better-auth 会话（`POST /api/auth/sign-in/email`，seeded 用户；
+从 renderer 内 fetch 会因 app\://origin 被 403，必须 curl）；③ 把 `better-auth.session_data`
+/ `better-auth.session_token` 两个 cookie 经 raw CDP `Network.setCookie`（url 填
+`http://localhost:<端口>/`）写进 Electron 的 cookie store，`location.reload()` 后
+server-auth 200、`isUserStateInit` true。
+
+### 技能菜单交互 bug 依赖用户数据形态 — 前台化 MCP 窗口 + 零写入点击在生产环境复现
+
+**Situation:** 复现「+」菜单 / 技能子菜单里的行级交互缺陷 (hover 详情卡、「...」策略菜单、
+卸载确认)。本地 seeded 全栈环境跑遍手势矩阵 (连续策略切换、popover 切换、禁用、卸载弹窗、
+注入 700ms 服务端延迟) 全部存活，而用户环境一触即发。
+
+**Doesn't work:** 在本地环境穷举手势排列。触发缺陷的行形态只存在于真实账号数据 —— 例如
+过期授权的 Composio 行 (Gmail 重新授权) 走的是与 SkillRow 不同的 `PopoverLabel` 渲染路径；
+本地 seeded 账号只有 builtin 行，detail card 甚至从不挂载。也不要在后台 MCP 标签页下结论
+(L-S10):popover 冻结在 data-starting-style、坐标点击失效、计时器被钳到 1s。
+
+**Works:** 三件套。① 让用户把扩展新建的 Chrome 窗口切到前台，`document.visibilityState === 'visible'` 且 DevDock 显示 60 FPS 后再驱动 —— 前台化后的 MCP 标签页是完全可信的交互
+表面；② 生产账号上的零写入复现：策略菜单只点击**当前已勾选项**(`updateSkillPolicy` 对
+currentMode === mode 提前返回，不发请求), 确认弹窗一律 Cancel, 菜单开合本身无写入；
+③ 机制归因用页面内事件取证 (document 捕获层记录 pointer/focus 事件的目标画像:closest
+role、inDialog、isConnected, 写入 `window.__AGENT_LOGS` 环形缓冲), 关闭原因用
+`onOpenChange(details.reason)` 直接记录 —— 单靠截图无法区分 outside-press /focus-out/
+hover-out。
+
+### 服务端读取本地 S3 证据会被 SSRF 拦下 — 需显式放行私有 IP
+
+**Situation:** 验证任何「服务端把已上传的证据 / 文件再读回来」的能力时（多模态判图、
+缩略图处理、把截图喂给模型），本地环境下服务端读文件必然走 `s3rver`
+（`http://127.0.0.1:29000/...` 的预签名 URL）。表现是功能整体静默失败：接口正常返回、
+业务计数是 0，日志里既没有模型报错也没有鉴权报错，很像模型判定为「无需处理」。
+
+**Doesn't work:** 排查模型侧、检查 provider key、确认证据行和 fileId 都在。这些都会正常，
+因为请求根本没发出去 —— 失败点在服务端 fetch 图片那一步。
+
+**Works:** 在 dev server 环境里加 `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`。判据是日志里的
+`SSRF protection blocked request: ... DNS lookup 127.0.0.1 ... is not allowed. Because,
+It is private IP address.` 与紧随其后的 `Error converting image to base64`。
+生产用真实对象存储域名，不受影响，所以这纯粹是本地验证环境的门槛，不是产品缺陷 ——
+不要把它当 bug 报上去，也不要为了绕开它改用 inline base64 从而验证了一条产品不会走的路径。
+
+### Goals 页面入口与 Labs 开关
+
+**Situation:** 验收 goal (目标) 相关功能需要进入 Goals 页面。
+
+**Doesn't work:** 直接打开 `/agent/goals` —— goals 路由嵌套在 `/agent/:aid/goals`
+下，`goals` 会被当成 agentId 解析成「助理不可用」; 页面还门控在 Labs 开关
+`enableTopicAcceptance` 后面，关闭时路由静默 replace 回 `/agent/:aid`。
+
+**Works:** 先查 seeded 用户的 agentId (`select id from agents where user_id=...`),
+用公开 store action 打开 Labs 开关 (持久化到用户偏好，全会话生效):
+
+```js
+window.__LOBE_STORES.user().updateLab({ enableTopicAcceptance: true });
+```
+
+再开 `/agent/<agentId>/goals`。创建 Goal 弹窗中「从空白开始」可跳过 AI 生成验收
+标准 (本地无 LLM key 时必用); 标准编辑、预算输入均为普通 input, 目标描述为
+contenteditable (用 `fill`,`type` 不支持 contenteditable)。

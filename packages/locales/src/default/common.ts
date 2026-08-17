@@ -59,6 +59,7 @@ export default {
     'The "Sub-topic" feature is unavailable in the current mode. To use this feature, please switch to Postgres/Pglite DB mode or use LobeHub Cloud.',
   'branchingRequiresSavedTopic':
     'Current topic is not saved, please save it first to use subtopic feature',
+  'viewExecutionDetails': 'View execution details',
   'cancel': 'Cancel',
   'changelog': 'Changelog',
   'alreadyUpToDate': 'Already Up to Date',
@@ -304,6 +305,22 @@ export default {
 
   'cmdk.video': 'AI Video',
 
+  'betaFeedback.collapse': 'Collapse',
+  'betaFeedback.desc':
+    'Workspace is in beta. Report issues, request features, or compare notes with other beta users.',
+  'betaFeedback.discord.action': 'Open Discord',
+  'betaFeedback.discord.desc': 'Scan with your phone camera to join.',
+  'betaFeedback.discord.title': 'Discord',
+  'betaFeedback.dismiss': "Don't show again",
+  'betaFeedback.promoBanner':
+    'Join the group chat and share issues or suggestions for a chance to earn free trial credits.',
+  'betaFeedback.promoTooltip': 'Join the group chat for a chance to earn free credits',
+  'betaFeedback.title': 'Workspace beta feedback',
+  'betaFeedback.waitlistPromo': 'Join the Workspace beta and get $5 in credits',
+  'betaFeedback.waitlistTitle': 'Workspace beta application',
+  'betaFeedback.wechat.desc': 'Scan with WeChat to join the group.',
+  'betaFeedback.wechat.title': 'WeChat group',
+
   'confirm': 'Confirm',
   'continue': 'Continue',
   'contact': 'Contact Us',
@@ -460,9 +477,13 @@ export default {
   'loading': 'Loading...',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
+  'deleteHistoryMigrating':
+    'Chat history is still migrating. It can be deleted once the migration finishes — please try again in a few minutes.',
   'deleteSharedOwnerOnly':
     "Only a workspace owner can delete this — it carries other members' conversations",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
+  'openOnRight': 'Open on the right',
+  'openOnRightHint': 'Release to open side-by-side on the right',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',
@@ -483,9 +504,12 @@ export default {
   'navPanel.show': 'Show',
   'navPanel.visible': 'Visible',
   'navPanel.searchAgent': 'Search Agent...',
+  'navPanel.searchProject': 'Search projects...',
   'navPanel.viewAllAgents': 'View all',
   'navPanel.searchRecent': 'Search Recent...',
   'navPanel.searchResultEmpty': 'No search results found',
+  'navPanel.switcherAll': 'All',
+  'navPanel.switcherRecent': 'Recent',
   'new': 'New',
   'pro': 'Pro',
   'noContent': 'No content',
@@ -498,9 +522,6 @@ export default {
   'pin': 'Pin',
   'pinOff': 'Unpin',
   'privacy': 'Privacy Policy',
-  'productHunt.actionLabel': 'Support us',
-  'productHunt.description': 'Support us on Product Hunt. Your support means a lot to us!',
-  'productHunt.title': "We're on Product Hunt!",
   'regenerate': 'Regenerate',
   'releaseNotes': 'Version Details',
   'rename': 'Rename',

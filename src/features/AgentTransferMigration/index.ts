@@ -4,4 +4,4 @@ export {
   useTopicMigrationPending,
 } from './MigrationBanner';
 export { default as TopicMigrationIndicator } from './TopicMigrationIndicator';
-export { useAgentTransferJob } from './useAgentTransferJob';
+export { type MigrationTarget, useAgentTransferJob } from './useAgentTransferJob';

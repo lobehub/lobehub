@@ -1,8 +1,8 @@
-// The sections the inbox owns, which is also what the rail can host. Kept apart
-// from the full key list because the main column's own blocks (recents, tasks)
-// never appear in the rail — folding them in would keep the rail alive on the
-// strength of a section it cannot show.
+// The sections HomeInbox owns. Kept apart from the full key list because the
+// main column's standalone blocks (recents, tasks) are rendered by
+// HomeModeContent rather than HomeInbox.
 export const HOME_INBOX_WIDGET_KEYS = [
+  'goals',
   'needsYou',
   'unread',
   'running',
@@ -10,10 +10,39 @@ export const HOME_INBOX_WIDGET_KEYS = [
   'suggestions',
 ] as const;
 
-export const HOME_WIDGET_KEYS = [...HOME_INBOX_WIDGET_KEYS, 'recents', 'tasks'] as const;
+export const HOME_WIDGET_KEYS = [
+  ...HOME_INBOX_WIDGET_KEYS,
+  'recents',
+  'tasks',
+  'scheduledTasks',
+] as const;
 
 export type HomeInboxWidgetKey = (typeof HOME_INBOX_WIDGET_KEYS)[number];
 export type HomeWidgetKey = (typeof HOME_WIDGET_KEYS)[number];
+
+/**
+ * A flat list of nine switches makes the reader hold the whole page in their
+ * head to find one section. The grouping that lets you find one without
+ * reading them all is **where the section sits on Home** — you already know
+ * which part of the page you want less of, so the panel is read by pointing at
+ * it rather than by recalling a category name.
+ *
+ * That makes membership a fact about the page, not a taste call: the main
+ * column carries the agent feeds and the two task blocks, and the rail carries
+ * goals, news and suggestions (`RAIL_INBOX_PROPS` hides needs-you, running and
+ * unread from the rail; `ownsRailSections` decides the rest). A widget that
+ * moves columns must move groups with it.
+ *
+ * The order inside each group follows the page top-down, so scanning the panel
+ * and scanning Home walk the same path.
+ */
+export const HOME_WIDGET_GROUPS = [
+  { key: 'agent', widgets: ['unread', 'needsYou', 'running', 'recents'] },
+  { key: 'task', widgets: ['tasks', 'scheduledTasks'] },
+  { key: 'rail', widgets: ['goals', 'news', 'suggestions'] },
+] as const satisfies ReadonlyArray<{ key: string; widgets: readonly HomeWidgetKey[] }>;
+
+export type HomeWidgetGroupKey = (typeof HOME_WIDGET_GROUPS)[number]['key'];
 
 export const HOME_CUSTOMIZE_DEFAULTS = {
   hiddenHomeWidgets: [] as string[],
@@ -53,8 +82,19 @@ interface HomeVisibilityState {
   showPortrait: boolean;
 }
 
+/**
+ * `scheduledTasks` rides on `tasks`: the two are one task overview split in
+ * half, so switching the main list off must not leave the other half standing
+ * under a different heading. It also keeps settings saved before this key
+ * existed meaningful — a stored "minimal" selection lists every widget that
+ * existed then, and without this fallback those pages would silently grow a
+ * section back and drop out of their preset.
+ */
+export const isHomeWidgetHidden = (key: HomeWidgetKey, hiddenWidgets: string[]): boolean =>
+  hiddenWidgets.includes(key) || (key === 'scheduledTasks' && hiddenWidgets.includes('tasks'));
+
 const hiddenKeySet = ({ hiddenWidgets }: HomeVisibilityState): Set<string> =>
-  new Set(HOME_WIDGET_KEYS.filter((key) => hiddenWidgets.includes(key)));
+  new Set(HOME_WIDGET_KEYS.filter((key) => isHomeWidgetHidden(key, hiddenWidgets)));
 
 export const resolveHomePreset = (state: HomeVisibilityState): HomePresetKey | undefined => {
   const hidden = hiddenKeySet(state);
@@ -74,13 +114,16 @@ export const resolveHomePreset = (state: HomeVisibilityState): HomePresetKey | u
 // dashboard: the greeting and the composer become one centered block. Derived
 // from the switches rather than stored, so it can never disagree with them.
 export const isHomeMinimalLayout = (state: HomeVisibilityState): boolean =>
-  !state.showPortrait && HOME_WIDGET_KEYS.every((key) => state.hiddenWidgets.includes(key));
+  !state.showPortrait &&
+  HOME_WIDGET_KEYS.every((key) => isHomeWidgetHidden(key, state.hiddenWidgets));
 
 // An error banner covers every widget whose content it reports on, not just the
 // one it is named after: the topic feed powers unread AND running, and the briefs
 // fetch powers needsYou AND news. Narrowing either pair back to one key lets a
 // hidden widget silence a failure that explains the other's absence.
 const HOME_SECTION_WIDGET_COVERAGE: Record<string, HomeWidgetKey[]> = {
+  'goals': ['goals'],
+  'goals-error': ['goals'],
   'needsYou': ['needsYou'],
   'needsYou-error': ['needsYou', 'news'],
   'needsYou-loading': ['needsYou'],

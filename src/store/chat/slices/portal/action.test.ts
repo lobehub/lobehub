@@ -1177,4 +1177,50 @@ describe('chatDockSlice', () => {
       expect(result.current.showPortal).toBe(true);
     });
   });
+
+  describe('openTopicInPortal', () => {
+    it('opens a topic as a side-by-side portal view and exposes its id', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicInPortal('tpc-1');
+      });
+
+      expect(result.current.portalStack.at(-1)).toEqual({
+        type: PortalViewType.Topic,
+        topicId: 'tpc-1',
+      });
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.portalTopicId(result.current)).toBe('tpc-1');
+      expect(chatPortalSelectors.showTopicChat(result.current)).toBe(true);
+    });
+
+    it('replaces the topic view when a different topic is dragged in', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicInPortal('tpc-1');
+      });
+      act(() => {
+        result.current.openTopicInPortal('tpc-2');
+      });
+
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(chatPortalSelectors.portalTopicId(result.current)).toBe('tpc-2');
+    });
+
+    it('closeTopicPortal pops only when a topic view is on top', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTopicInPortal('tpc-1');
+      });
+      act(() => {
+        result.current.closeTopicPortal();
+      });
+
+      expect(result.current.showPortal).toBe(false);
+      expect(chatPortalSelectors.portalTopicId(result.current)).toBeUndefined();
+    });
+  });
 });

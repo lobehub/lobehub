@@ -160,6 +160,113 @@ disclosure is not expressible in that field.
 **Correct approach:** set `"verifier": "llm"` and carry the multimodal disclosure in
 the plan item's `method` prose alongside `"requiredEvidence": ["screenshot"]`.
 
+### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
+
+**Wrong approach:** verify working-tree changes that have no PR of their own, then
+ingest without stating that, assuming the round carries no PR because `result.json`
+omits `pullRequest` (or sets it to `null`).
+
+**Why it fails:** the ingest resolves the PR from `branch` whenever the field is
+absent OR null, so a long-lived branch that already owns a PR stamps every round
+with it. The page then presents an unrelated PR as the provenance of this
+verification, and deleting the run and re-ingesting reproduces the same stamp.
+Two rounds later nobody can tell which delivery the evidence belongs to.
+
+**Correct approach:** before publishing a round for uncommitted work, decide the
+provenance explicitly — commit and open the real PR first, or state in `report.md`
+that this round has no PR and that any PR shown belongs to other work on the same
+branch. Also re-read `branch` / `commit` at publish time rather than trusting the
+scaffold: a session that spans a branch switch fills them from whatever is checked
+out when `report-init.sh` ran.
+
+### L-E14 — Verifying an insertion affordance without continuing the user's next action
+
+**Wrong approach:** check that a composer affordance (an action-tag chip, a mention,
+a file token) inserted the right node, screenshot it, and move on — then verify the
+sent payload through a _different_ entry point that happens to be easier to drive.
+
+**Why it fails:** insertion is half the affordance; the caret it leaves behind is
+the other half. A caret parked in front of the inserted node sends the user's very
+next keystroke to the wrong side of it. For any chip that serializes into the prompt
+with position semantics — the `/goal` marker must lead the message for `isGoalPrompt`
+to match — that silently rewrites the payload into something the runtime no longer
+recognizes, while every screenshot of the insertion itself still looks correct.
+Verifying the payload through a different entry point hides it completely: the path
+with the defect is never the path that gets sent.
+
+**Correct approach:** for every insertion affordance, continue the user's action in
+the same case — type after inserting — and assert the resulting node order, not just
+the node's presence. Drive the payload check through the _same_ entry point the case
+under test uses; if an affordance has several entries (slash menu, `+` menu), the one
+you send from must be the one you are claiming works. Assert order in the persisted
+`editor_data`, since that is what both the prompt serializer and the bubble read.
+
+### L-E15 — Treating historical branch rendering as proof that conversation can continue
+
+**Wrong approach:** render a recovered historical `taskCallback` card beside the
+active tool continuation, then call the message-loss regression verified without
+sending another user message.
+
+**Why it fails:** read-path recovery proves only that existing rows are visible.
+The next user turn exercises a separate write/parent-selection path and can still
+attach to the wrong branch, disappear after reconciliation, or vanish after reload.
+
+**Correct approach:** for every conversation-branch regression, continue from the
+fixture through the real composer. Assert the new user row in the database, its
+parent on the active spine, its rendered presence before and after a cold reload,
+and the resulting assistant continuation when the environment supports it.
+
+### L-E16 — Treating a terminal reply as evidence of live streaming
+
+**Wrong approach:** ask a device-executed Claude Code agent for a one-token fixed
+marker, record until the process exits, and treat the eventual assistant text or
+a refreshed screenshot as proof that the reply streamed into the open Topic.
+
+**Why it fails:** `lh hetero exec` can run Claude Code without
+`--include-partial-messages`. In that mode the adapter receives only the final
+assistant snapshot, so the UI may show an empty target-Agent shell for the whole
+run and acquire the text only during terminal reconciliation. A short fixed
+marker also has no observable intermediate state even when partial framing works.
+
+The acceptance proves persistence and refresh recovery but
+does not prove the user sees the answer arrive live; a GIF of an empty shell is
+mistaken for streaming evidence.
+
+**Correct approach:** enable Claude Code partial messages on the device/sandbox
+CLI spawn path. Verify with a multi-part response and timestamped DOM/store
+samples before any reload, then attach a GIF whose frames visibly progress and
+whose final frame contains the complete answer. Check persistence separately by
+refreshing only after the live-stream assertion has passed.
+
+### L-E17 — Proving direct-mention routing with a text-only response
+
+**Wrong approach:** verify a leading single-Agent mention only with a plain-text
+response, then conclude that the direct-routing message tree is correct for all
+target-Agent runs.
+
+**Why it fails:** tool-capable runs add assistant tool-call chunks and
+tool-result messages. Those nodes can accidentally inherit the owner Agent,
+create a synthetic target-user envelope, or resume the owner after the tool
+result even when the initial text response looked correct.
+
+The simple happy path passes while real coding Agents either
+lose their tool output, render it under the wrong Agent, or invoke Lobe AI for
+the final answer.
+
+**Correct approach:** exercise a deterministic real tool call through the same
+gateway/device route, then assert the complete persisted tree: original owner
+user, target assistant/tool call, tool result, and target final response. Also
+assert there is no owner assistant, `callAgent`, or synthetic target-user row.
+
+### L-E18 — 从「没有默认导入」推断某个 composer 表面是死代码
+
+**Wrong approach:** 改动技能行这类被 ActionBar 复用的组件后，grep `ActionBar/Tools` 的默认导入没有命中，就断定该表面未挂载，只验证 `+` 菜单一条路径。
+
+**Why it fails:** ActionBar 的表面不是靠直接 import 挂载的，而是靠 action key 注册表 + 各路由自己的 `leftActions` 数组启用。`ActionBar/config` 里 `tools: Tools` 一直注册着，真正决定它是否渲染的是
+`src/routes/(main)/**/MainChatInput` 里的 `leftActions`—— 群聊 composer 就启用了 `'tools'`，走的是 `PopoverContent → ToolsList` 这条与 `+` 菜单不同的组合路径。漏掉它会让一次绿色的验证只覆盖一半用户可见面。
+
+**Correct approach:** 改动任何被 ActionBar 复用的组件后，先枚举 action key 的真实启用点（grep 各路由的 `leftActions` 数组，而不是组件的 import），对每个启用该 key 的表面分别取证；确实不打算验的表面要显式标记未测。
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -250,6 +357,26 @@ one. Where that link would otherwise duplicate the segment's own label, render i
 deeper routes and let the segment name the section on the index route. Verify the deepest
 route of every section, not just the index: an index-only pass cannot see this failure.
 
+### L-D8 — Rendering a cross-agent dispatch envelope as a visible user turn
+
+**Wrong approach:** treat every persisted `role: user` row as a user-authored
+message when building the visible conversation list.
+
+**Why it fails:** `callAgent` persists a synthetic user envelope beneath the
+caller assistant so the target Agent has an isolated execution context. When
+that envelope is rendered, the original prompt appears twice even though the
+target Agent produced only one reply.
+
+Users see a duplicate prompt bubble and cannot tell whether
+the delegation ran once or twice; acceptance screenshots become misleading.
+
+**Correct approach:** stamp synthetic envelopes with explicit dispatch metadata
+when they are persisted, keep them in the context tree, and let the presentation
+layer hide only rows declared `visibility: internal`. Continue traversal through
+the envelope so the target assistant reply remains independently visible.
+Never infer authorship from agent-id differences or a parent tool call: a real
+cross-Agent user follow-up can have the same tree shape.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -288,17 +415,27 @@ database may contain the user's synchronized profile.
 distinguishes environments. For production publishing without changing a local
 login, use an isolated `LOBEHUB_CLI_HOME` for login and ingest.
 
-### L-S2 — Trusting a successful renderer build as proof Electron boots
+### L-S2 — Trusting green gates as proof the app boots
 
-**Wrong approach:** use green Vite and Vitest results as blank-screen insurance for
-a desktop routing or module-graph change.
+**Wrong approach:** use green Vite, Vitest, lint, and type-check results as
+blank-screen insurance for a routing or module-graph change, on Electron or Web.
 
 **Why it fails:** browser ESM initialization cycles and nested-router invariants can
-fail only when the real renderer starts.
+fail only when the real renderer starts. Vitest resolves a module graph in its own
+order, so a cycle that is harmless under test can still put a module-level binding in
+the temporal dead zone in the bundler's order — the app then dies at the
+`ErrorBoundary` with `Cannot access '<X>' before initialization` while every gate
+stays green. Adding a shared constant next to the logic that uses it is the common
+way to close such a cycle in a folder where a node/component pair already import each
+other.
 
-**Correct approach:** boot the real Electron instance, require the project readiness
-probe to report a non-error UI, and inspect a screenshot. Router-host component tests
-must also cover the real outer-router composition.
+**Correct approach:** boot the real surface, require the project readiness probe to
+report a non-error UI, and inspect a screenshot before claiming a UI change is
+delivered. On a boot failure read `agent-browser console` (the ErrorBoundary page
+itself shows no stack) and attribute before diagnosing. Keep cross-module constants
+in the folder's leaf module — the one that imports nothing from its siblings — rather
+than beside their primary consumer. Router-host component tests must also cover the
+real outer-router composition.
 
 ### L-S3 — Verifying Acceptance UI against an unfetched canary ref
 
@@ -375,6 +512,107 @@ process restart is trustworthy.
 the served bundle carries it — fetch the relevant `/node_modules/.vite/deps/*` chunk
 from the dev server and grep for a marker of the fix — or restart the dev server
 process outright and re-verify.
+
+**Same failure, second shape — a dev server that was already running when the run
+started.** A leftover server can be listening on a port that no longer matches what
+`test-env.sh` resolves, serving a dep graph optimized against a different config. The
+SPA then dies at the ErrorBoundary with `TypeError: Failed to fetch dynamically
+imported module: …/_layout/index.tsx`, which reads exactly like a broken route tree in
+the branch under test — while every module in that graph still returns 200 to `curl`,
+because the served copy and the requested copy disagree, not the source. Before
+attributing any module-load failure to the change under test, compare the running
+server's port with `test-env.sh`'s resolved `PORT`; on a mismatch, `stop-dev` and
+restart before diagnosing anything. The restarted server is then yours to stop at
+teardown even though you did not start the original.
+
+**Same failure, third shape — files removed from the working tree still being served.**
+After a `git stash` used to capture a "before" frame, the dev server can keep serving the
+pre-stash transform: a file deleted from disk still answers **200** and the module body still
+contains the new code. Reloading the page does not help. Restart the process (and clear
+`node_modules/.vite`) before capturing, and gate the capture on a marker that cannot collide
+with unrelated identifiers — a component name like `SkillRow` also matches a CSS class such as
+`addSkillRow`, so a substring count "confirms" the wrong state.
+
+---
+
+### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
+
+**Wrong approach:** treat the Electron dev instance's first renderer boot as
+representative, and diagnose a `ReferenceError: Cannot access '<X>' before
+initialization` thrown from the desktop router config as a bug in the branch.
+
+**Why it fails:** the desktop Vite renderer can serve a partially initialized
+module graph on the very first boot after a cold start (dependency optimization
+runs concurrently with the first evaluation). The app stays on the HTML loading
+shell with `rootChildren: 0` while the stores are already exposed, which reads
+exactly like a broken route tree. A single `location.reload()` boots it cleanly
+with no code change.
+
+**Correct approach:** on a first-boot renderer error, reload once and re-probe
+before drawing any conclusion. Only if the error survives a reload does it belong
+to the code. Never attribute it to the change under test without that A/B — and
+note that `electron-dev.sh start` reports "Ready" even when the renderer never
+became interactive, so its own readiness line is not the gate.
+
+### L-P1 — A Project conversation must preserve Project identity across routing and history
+
+**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
+ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
+history.
+
+**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
+the visible owner and navigation contract, so users reasonably read the conversation as belonging
+to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
+
+**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
+route and Project sidebar. The coordinator may still execute the conversation internally, but the
+visible URL, active list, empty state, and navigation must consistently identify the Project.
+
+### L-S9 — Trusting "migration pass" on the shared acceptance Postgres
+
+**Wrong approach:** run `init-dev-env.sh migrate` in a worktree whose branch adds a
+migration, read `✅ database migration pass`, and start seeding fixtures against the
+new tables.
+
+**Why it fails:** the managed `lobehub-agent-testing-postgres` container is shared by
+every worktree, and drizzle decides what to apply by comparing each journal entry's
+`when` timestamp against the newest `created_at` in `drizzle.__drizzle_migrations` —
+not by hash or by index. A sibling worktree that applied its own same-numbered
+migration a few minutes later leaves a newer row, after which your migration is
+skipped in silence and the command still reports success in \~40ms. Every later probe
+then fails as `relation ... does not exist`, which reads like a broken schema import
+rather than a migration that never ran.
+
+**Correct approach:** after any migrate, assert the tables/columns your fixtures need
+actually exist (`select tablename from pg_tables where tablename like '<prefix>%'`)
+rather than trusting the pass line. When it was skipped, apply the branch's SQL
+directly — strip `--> statement-breakpoint` and run it with `psql -v ON_ERROR_STOP=1`
+— and treat the collision as a local multi-worktree artifact, never as a defect of
+the branch or of canary (the numbers get rebased on merge).
+
+### L-S10 — Judging popover/menu behaviour from a Chrome MCP tab (it is hidden)
+
+**Wrong approach:** drive the debug-proxy page through the Chrome MCP tools, click a
+popover trigger, read the DOM \~500ms later, see no popup, and conclude the trigger is
+broken — then bisect, revert a refactor, and write up a root cause from those readings.
+
+**Why it fails:** the MCP tab is not the foreground tab. Measured inside it:
+`document.visibilityState === 'hidden'`, `requestAnimationFrame` delivers **0 frames**,
+and `setInterval(16ms)` fires **once per second** (Chrome's background throttling). A
+base-ui popup still opens in its store and mounts in the DOM, but its entry transition
+never advances, so it sits at `data-starting-style` with `visibility: hidden` and zero
+size — indistinguishable from "the click did nothing". Anything else timed from that
+tab (perceived latency, "it landed 7 seconds later") is an artifact of the same
+throttling, not of the code under test.
+
+**Correct approach:** in an MCP tab, assert on **state**, not on visibility — the
+component's own store/props (`handle.store.state.open`, a probed React state), or DOM
+presence with `data-open`, never `visibility`/painted pixels or a rAF-timed measurement.
+Confirm the tab's own health first (`visibilityState`, a rAF frame count) before
+trusting any negative UI observation, and get behaviour that depends on animation or
+input timing confirmed in a foreground tab — the user's window, or a screenshot-based
+check that tolerates a frozen transition. A negative result from a hidden tab is not
+evidence of a defect.
 
 ## Historical source
 

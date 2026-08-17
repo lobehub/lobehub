@@ -1,11 +1,12 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, FormGroup, Skeleton } from '@lobehub/ui';
+import { Flexbox, FormGroup } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SettingsProfileRowSkeleton } from '@/components/Skeleton/Settings/Profile';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -23,15 +24,6 @@ import PasswordRow from './features/PasswordRow';
 import ProfileRow from './features/ProfileRow';
 import SSOProvidersList from './features/SSOProvidersList';
 import UsernameRow from './features/UsernameRow';
-
-const SkeletonRow = () => (
-  <ProfileRow
-    action={<Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />}
-    labelSlot={<Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />}
-  >
-    <Skeleton.Button active size="small" style={{ height: 22, width: 160 }} />
-  </ProfileRow>
-);
 
 interface ProfileSettingProps {
   showSettingHeader?: boolean;
@@ -76,13 +68,13 @@ const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
       {showSettingHeader && <SettingHeader title={t('profile.title')} />}
       <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
         <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
-          <SkeletonRow />
+          <SettingsProfileRowSkeleton />
           <Divider style={{ margin: 0 }} />
-          <SkeletonRow />
+          <SettingsProfileRowSkeleton />
           <Divider style={{ margin: 0 }} />
-          <SkeletonRow />
+          <SettingsProfileRowSkeleton />
           <Divider style={{ margin: 0 }} />
-          <SkeletonRow />
+          <SettingsProfileRowSkeleton />
         </Flexbox>
         <Flexbox style={{ display: isLoading ? 'none' : 'flex' }}>
           <AvatarRow />

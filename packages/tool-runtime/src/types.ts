@@ -261,6 +261,16 @@ export interface RunCommandState {
     stderr: { path: string; size: number; truncated: boolean };
     stdout: { path: string; size: number; truncated: boolean };
   };
+  /**
+   * Whether the device sandbox actually confined this command.
+   *
+   * The execution-environment chip states the user's *intent*; this states the
+   * outcome. They can differ — a run routed somewhere the sandbox flag never
+   * reached executes unfenced while the chip still reads "Local sandbox" — and
+   * a security property nobody can observe is one nobody should trust.
+   * Undefined when no sandbox was requested.
+   */
+  sandboxed?: boolean;
   stderr?: string;
   stdout?: string;
   success: boolean;

@@ -1,3 +1,5 @@
+import VoiceDictation from '../Dictation';
+import VoiceMessage from '../VoiceMessage';
 import AgentMode from './AgentMode';
 import Clear from './Clear';
 import Effort from './Effort';
@@ -33,6 +35,8 @@ export const actionMap = {
   temperature: Params,
   tools: Tools,
   typo: Typo,
+  voiceDictation: VoiceDictation,
+  voiceMessage: VoiceMessage,
 } as const;
 
 export type ActionKey = keyof typeof actionMap;

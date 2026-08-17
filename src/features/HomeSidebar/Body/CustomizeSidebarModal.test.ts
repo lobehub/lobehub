@@ -11,6 +11,11 @@ describe('CustomizeSidebarModal', () => {
     expect(items.some((item) => item.id === 'memory')).toBe(true);
   });
 
+  it('allows Projects to be reordered and hidden', () => {
+    expect(getAvailableSidebarItems(false).some((item) => item.id === 'project')).toBe(true);
+    expect(getSortableSidebarItemIds(false).has('project')).toBe(true);
+  });
+
   it('removes Memory from workspace mode customization', () => {
     const items = getAvailableSidebarItems(true);
 

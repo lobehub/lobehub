@@ -28,6 +28,7 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
   hideGitHub: boolean | undefined;
@@ -136,6 +137,12 @@ export interface GlobalBillboardItemLocaleFields {
 }
 
 export interface GlobalBillboardItem {
+  /**
+   * In-app action enum as delivered by the platform (unvalidated string).
+   * The client narrows it at runtime against the registry in
+   * `src/features/Billboard/actions.ts`; unrecognized values fall back to `linkUrl`.
+   */
+  action?: string | null;
   cover?: string | null;
   description: string;
   /**

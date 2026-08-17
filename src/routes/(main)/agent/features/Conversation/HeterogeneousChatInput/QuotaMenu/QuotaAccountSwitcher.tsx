@@ -1,12 +1,14 @@
 'use client';
 
 import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
-import { Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openQuotaCalendarModal } from '@/features/AgentQuotaCalendar';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 
 import { openQuotaAccountManagerModal } from './QuotaAccountManagerModal';
@@ -59,6 +61,13 @@ const QuotaAccountSwitcher = memo<{
             {identity.planTier}
           </Text>
         )}
+        <ActionIcon
+          icon={CalendarDaysIcon}
+          size={'small'}
+          style={{ flex: 'none' }}
+          title={t('heteroAgent.claudeQuota.calendar.entry')}
+          onClick={() => openQuotaCalendarModal({ externalAccountId: identity?.externalAccountId })}
+        />
       </Flexbox>
       <Button size={'small'} style={{ flex: 'none' }} onClick={openManager}>
         {t('heteroAgent.claudeQuota.manage.entry')}

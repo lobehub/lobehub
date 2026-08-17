@@ -107,12 +107,14 @@ The one-screen scan. Each line links back to a module above for the full rule + 
 - [ ] Pickers show all valid targets (default/inbox included); empty = truly none.
 - [ ] Large numbers roll the unit at each 1000× (K→M→B→T), never a coefficient ≥ 1000; use the shared `formatUsageValue` / `formatShortenNumber`.
 - [ ] Multi-tab/view surface lands on the tab the entry intent implies (and falls back to a populated view, decided from resolved state); a manual pick sticks.
+- [ ] A data-aware shortcut never makes the collection hub or its collection-level actions unreachable.
 - [ ] Live/polling feed signals new items + offers manual refresh, doesn't reorder under the user, and shows a failed refresh distinctly (not as empty). A bulk/destructive control derived from the live-status map (close-idle / clear-inactive) gates on the query's loaded/error state — "unknown/errored" is ineligible, never treated as the inactive value. Conditional polling starts from **reactive state** (`shouldPoll` → `refreshInterval`), not a function-form `refreshInterval` that never schedules a first timer when its initial value is `0`.
 - [ ] A surface with many navigable entries (a big settings area, a long list) offers search / filter / jump, not browse-only — named as a class norm so an absent box is caught.
 - [ ] Marketplace / registry browse cards carry owned/installed state on the tile (not only on the detail) and trust/verified badges via one card contract, consistent across sibling registries; contribute leads to an in-app submit, not an external repo.
 - [ ] A sidebar / nav / master-detail **list row** composes the canonical `NavItem` (+ `Accordion` / `GroupedAccordion` for groups, `Block variant='filled'` for active), not a hand-rolled `<div>`/`<button>`/`<input>` + bespoke CSS — else the hover/active highlight misaligns from the content box, content bleeds to the panel edge, the search/rename/action-reveal drift from every sibling panel, and the list stays a flat ungrouped dump. Grep `NavItem` before building.
 - [ ] A persistent create/compose affordance above a list is the hero only while the list is **empty**; once populated it doesn't bury the records — cap the editor height (max-height + internal scroll) and/or default it to collapsed when the list has data, so the records keep Center Stage.
 - [ ] A status group/label is true for **every** member — don't fold a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts another (running/in-progress); give it its own group or a neutral label.
+- [ ] An embedded/quoted document (evidence, log, attached report) folds to a **titled row** (first meaningful line as the label) expanding to full text — not a first-N-px cropped preview with a fade; expanded, it stays in a quiet container with a capped heading scale so it never masquerades as page structure.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 

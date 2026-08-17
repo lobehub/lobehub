@@ -17,6 +17,7 @@ import { useElectronStore } from '@/store/electron';
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
+import TerminalPanelToggle from './TerminalPanelToggle';
 import WorkingPanelToggle from './WorkingPanelToggle';
 
 // Below this column width the header is a solid in-flow bar with a bottom
@@ -143,7 +144,7 @@ const Header = memo(() => {
 
   // History-backfill chip in the center slot; the hook shares one SWR key with
   // the rest of the migration UI, so this adds no extra polling.
-  const { data: transferJob } = useAgentTransferJob(agentId);
+  const { data: transferJob } = useAgentTransferJob({ agentId });
 
   return (
     <div className={headerStyles.container}>
@@ -181,6 +182,7 @@ const Header = memo(() => {
             {isLocalSystemEnabled && workingDirectory && (
               <OpenInAppButton workingDirectory={workingDirectory} />
             )}
+            <TerminalPanelToggle />
             <TopicCommentButton />
             <ShareButton />
             <WorkingPanelToggle />

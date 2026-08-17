@@ -4,7 +4,7 @@ import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ContextMenuTrigger } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -12,6 +12,7 @@ import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
 import { createNotificationDetailModal } from './NotificationDetailModal';
+import { toNotificationPreview } from './toNotificationPreview';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -26,7 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-start: 7px;
     border-radius: 50%;
 
-    background: ${cssVar.colorPrimary};
+    background: ${cssVar.colorInfo};
   `,
 }));
 
@@ -68,6 +69,7 @@ const NotificationItem = memo<NotificationItemProps>(
     const navigate = useWorkspaceAwareNavigate();
     const TypeIcon = TYPE_ICON_MAP[type] || BellIcon;
     const dateLocale = i18n.resolvedLanguage || i18n.language;
+    const preview = useMemo(() => toNotificationPreview(content), [content]);
 
     const handleClick = useCallback(() => {
       if (!isRead) onMarkAsRead(id);
@@ -125,23 +127,24 @@ const NotificationItem = memo<NotificationItemProps>(
           variant="borderless"
           onClick={handleClick}
         >
-          <Flexbox horizontal align="flex-start" gap={8}>
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={TypeIcon}
-              size={18}
-              style={{ flexShrink: 0, marginTop: 2 }}
-            />
-            <Flexbox horizontal align="flex-start" flex={1} gap={6} style={{ overflow: 'hidden' }}>
-              {!isRead && <span className={styles.unreadDot} />}
-              <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
-                <Text style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</Text>
+          <Flexbox horizontal align="flex-start" gap={6}>
+            {!isRead && <span className={styles.unreadDot} />}
+            <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
+              <Text ellipsis={{ rows: 3 }} title={preview} wordBreak="break-word">
+                {preview}
+              </Text>
+              <Flexbox horizontal align="center" gap={4}>
+                <Icon color={cssVar.colorTextDescription} icon={TypeIcon} size={12} />
                 {context && (
                   <Text ellipsis fontSize={12} title={context} type="secondary">
                     {context}
                   </Text>
                 )}
-                <Text fontSize={12} type="secondary">
+                <Text
+                  fontSize={12}
+                  style={{ flexShrink: 0, marginInlineStart: 'auto' }}
+                  type="secondary"
+                >
                   {formatNotificationRelativeTime(createdAt, dateLocale)}
                 </Text>
               </Flexbox>

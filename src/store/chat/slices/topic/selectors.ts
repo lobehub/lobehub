@@ -41,7 +41,12 @@ const currentTopicsWithoutCron = (s: ChatStoreState): ChatTopic[] | undefined =>
 };
 
 const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
-  return currentTopics(s)?.find((topic) => topic.id === s.activeTopicId);
+  const inList = currentTopics(s)?.find((topic) => topic.id === s.activeTopicId);
+  if (inList) return inList;
+  // The active topic can be absent from the list bucket — archived (completed)
+  // topics are excluded by the sidebar fetch's `excludeStatuses`. Fall back to
+  // the by-id detail cache so consumers keep real data (title, metadata, …).
+  return s.activeTopicId ? s.topicDetailMap?.[s.activeTopicId] : undefined;
 };
 const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
 
@@ -67,6 +72,27 @@ const getTopicById =
     for (const topicData of Object.values(s.topicDataMap)) {
       const topic = topicData.items.find((item) => item.id === id);
       if (topic) return topic;
+    }
+
+    return s.topicDetailMap?.[id];
+  };
+
+/**
+ * The `topicDataMap` bucket that actually holds this topic, or undefined when
+ * no loaded bucket does.
+ *
+ * Writes must target it rather than the active agent/group bucket: the Agent
+ * Builder panels render a whole conversation for a builtin agent while
+ * `activeAgentId` still points at the agent being edited, so a write keyed on
+ * the active pair silently lands in a bucket without the row — the optimistic
+ * update no-ops and the revalidation refreshes the wrong list, leaving the
+ * panel showing a stale value forever (the server row having changed).
+ */
+const getTopicContainerKeyById =
+  (id: string) =>
+  (s: ChatStoreState): string | undefined => {
+    for (const [key, data] of Object.entries(s.topicDataMap)) {
+      if (data.items.some((item) => item.id === id)) return key;
     }
   };
 
@@ -344,6 +370,7 @@ export const topicSelectors = {
   displayTopics,
   displayTopicsForSidebar,
   getTopicById,
+  getTopicContainerKeyById,
   getTopicModelById,
   getTopicWorkingDirectory,
   getTopicsByAgentId,

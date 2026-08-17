@@ -1,39 +1,16 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleDashed } from 'lucide-react';
 import { memo } from 'react';
 
-import { shouldGroupChecks } from '@/features/Verify';
+import { CriterionList, CriterionRow, shouldGroupChecks } from '@/features/Verify';
 
 const styles = createStaticStyles(({ css }) => ({
   groupHeader: css`
     padding-block: 9px;
     padding-inline: 12px;
-  `,
-  list: css`
-    overflow: hidden;
-    width: 100%;
-    padding: 0;
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 10px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  seq: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -54,7 +31,7 @@ export const PendingAcceptanceCheckList = memo<PendingAcceptanceCheckListProps>(
     const grouped = shouldGroupChecks(items.length);
 
     return (
-      <Block className={styles.list} variant={'outlined'}>
+      <CriterionList>
         {grouped && (
           <Flexbox horizontal align={'center'} className={styles.groupHeader} gap={8}>
             <Text fontSize={12}>{groupLabel}</Text>
@@ -64,33 +41,23 @@ export const PendingAcceptanceCheckList = memo<PendingAcceptanceCheckListProps>(
           </Flexbox>
         )}
         {items.map((item, index) => (
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={styles.row}
+          <CriterionRow
             data-task-acceptance-criterion={item.id}
-            gap={10}
             key={item.id}
-            role={'button'}
-            tabIndex={0}
-            onClick={() => onOpen(item)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') onOpen(item);
-            }}
-          >
-            <Icon
-              color={cssVar.colorTextQuaternary}
-              icon={CircleDashed}
-              size={16}
-              style={{ flex: 'none' }}
-            />
-            <span className={styles.seq}>C{index + 1}</span>
-            <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-              {item.title}
-            </Text>
-          </Flexbox>
+            seq={index + 1}
+            title={item.title}
+            icon={
+              <Icon
+                color={cssVar.colorTextQuaternary}
+                icon={CircleDashed}
+                size={16}
+                style={{ flex: 'none' }}
+              />
+            }
+            onOpen={() => onOpen(item)}
+          />
         ))}
-      </Block>
+      </CriterionList>
     );
   },
 );

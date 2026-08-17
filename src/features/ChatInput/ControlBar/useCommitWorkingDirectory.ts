@@ -20,6 +20,17 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
+export interface CommitWorkingDirectoryOptions {
+  /**
+   * Persist against the `local` execution target on this machine, regardless of
+   * what the agent's config currently says. For callers that select the local
+   * target as part of the same action — the resolved config still describes the
+   * previous target at that point, and selecting first does not re-render in
+   * time to help.
+   */
+  localTarget?: boolean;
+}
+
 const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | undefined => {
   const path = entry.path.trim();
   if (!path) return undefined;
@@ -126,7 +137,19 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     (effectiveAgencyConfig?.executionTarget === 'local' || targetDeviceId === currentDeviceId);
 
   const writeCwd = useCallback(
-    async (entry?: WorkingDirEntry) => {
+    async (entry?: WorkingDirEntry, options?: CommitWorkingDirectoryOptions) => {
+      // A caller that is *about to* select the local target cannot rely on the
+      // resolved config yet: this callback closes over the config as it is now,
+      // and selecting first would not re-render in time either. `localTarget`
+      // lets it state the destination it is creating, so the cwd lands in the
+      // same slot the pending `local` pick will read from.
+      const localTarget = options?.localTarget === true;
+      const writeDeviceId = localTarget ? currentDeviceId : targetDeviceId;
+      // A `local` pick on a workspace agent always means this member's own
+      // machine, which routes to the per-user slot rather than the shared row.
+      const writePersonalSlot = localTarget
+        ? isWorkspaceAgent && !!currentDeviceId
+        : isPersonalDeviceTarget;
       const effectivePath = getWorkingDirEffectivePath(entry);
       // The session cwd anchors to the source repo for hetero (stable across
       // worktree switches) and to the effective/worktree path otherwise.
@@ -153,7 +176,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
         });
       } else {
-        if (targetDeviceId && isPersonalDeviceTarget) {
+        if (writeDeviceId && writePersonalSlot) {
           // Per-user slot (see `isPersonalDeviceTarget`) — never the shared row.
           // The legacy slot stores a plain path, so persist the SESSION cwd
           // (source repo for hetero — anchoring a CLI session to a worktree
@@ -164,14 +187,14 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           await updateAgentRuntimeEnvConfigById(agentId, {
             workingDirectory: sessionCwd || undefined,
           });
-        } else if (targetDeviceId) {
+        } else if (writeDeviceId) {
           const prev = agencyConfig?.workingDirByDevice ?? {};
           // Clearing sends `undefined` rather than dropping the key: deep-merge
           // (client store + server persist) can't remove a key, so the delete is
           // carried as an explicit `undefined` and pruned after each merge.
           const nextMap: Record<string, WorkingDirConfigValue | undefined> = {
             ...prev,
-            [targetDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
+            [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
           };
           const configPatch = {
             agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
@@ -183,7 +206,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
         // level and Clear looks dead. (Only clears the localStorage map; no
         // network round-trip since `workingDirectory` is stripped before send.)
         // The personal-device branch above already wrote that same slot.
-        if (!isPersonalDeviceTarget && !effectivePath && legacyAgentWorkingDirectory) {
+        if (!writePersonalSlot && !effectivePath && legacyAgentWorkingDirectory) {
           await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: undefined });
         }
       }
@@ -257,12 +280,12 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
 
   /** Pick a directory (with the CC-session-reset guard). */
   const commit = useCallback(
-    async (entry: WorkingDirEntry) => {
+    async (entry: WorkingDirEntry, options?: CommitWorkingDirectoryOptions) => {
       const normalizedEntry = normalizeWorkingDirEntry(entry);
       const effectivePath = getWorkingDirEffectivePath(normalizedEntry);
       if (!normalizedEntry || !effectivePath) return;
 
-      const run = () => writeCwd(normalizedEntry);
+      const run = () => writeCwd(normalizedEntry, options);
 
       // Warn about losing the CLI session only when the SESSION cwd changes.
       // For hetero that's the source repo — a worktree switch within the same
