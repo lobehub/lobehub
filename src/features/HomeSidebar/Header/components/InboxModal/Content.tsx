@@ -104,13 +104,17 @@ const Content = memo<ContentProps>(
     });
 
     const handleTransferSettled = useCallback(
-      async (_request: PendingTransferRequest, succeeded: boolean) => {
+      async (request: PendingTransferRequest, succeeded: boolean) => {
         // Re-read first so the resolved item leaves before the row resurfaces.
-        await mutateTransfers();
+        const next = await mutateTransfers();
         // The server settles the linked row (marks it read) as part of the
         // state transition — here only the surrounding chrome refreshes so the
-        // badge and the read list pick the settled state up.
-        if (succeeded) onRefreshInbox();
+        // badge and the read list pick the settled state up. A terminal
+        // FAILURE (expired / resolved by another client) also settles the row
+        // server-side, so refresh whenever the request left the live list,
+        // not only on success — otherwise the cached row resurfaces unread.
+        const stillLive = !!next?.some((item) => item.id === request.id);
+        if (succeeded || !stillLive) onRefreshInbox();
       },
       [mutateTransfers, onRefreshInbox],
     );

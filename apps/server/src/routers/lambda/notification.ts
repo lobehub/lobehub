@@ -37,16 +37,19 @@ export const notificationRouter = router({
   }),
 
   navigationCounts: notificationProcedure.query(async ({ ctx }) => {
-    const counts = await ctx.notificationModel.getNavigationCounts();
-
     // The pending category is action-driven, not read-driven: while a
     // transfer request awaits the user, its count must keep prompting even
     // after the linked inbox row was read. Swap the linked rows out of the
     // unread count and count the live incoming requests themselves instead.
-    if (!ctx.workspaceId) return counts;
+    if (!ctx.workspaceId) return ctx.notificationModel.getNavigationCounts();
 
+    // Resolve live requests BEFORE snapshotting counts: `listPendingForUser`
+    // lazily expires overdue transfers (settling their linked rows as read),
+    // so counting first would preserve a ghost unread row for a request that
+    // this very call just expired.
     const transferModel = new ResourceTransferRequestModel(ctx.serverDB, ctx.workspaceId);
     const live = await transferModel.listPendingForUser(ctx.userId);
+    const counts = await ctx.notificationModel.getNavigationCounts();
     const incoming = live.filter((request) => request.recipientId === ctx.userId);
     if (incoming.length === 0) return counts;
 
