@@ -4,12 +4,11 @@ import { lazy, Suspense, useEffect } from 'react';
 import type { RouteObject } from 'react-router';
 import { Outlet, useRouteError } from 'react-router';
 
-import WorkbenchShell, { WorkbenchNamespace } from '@/features/WorkbenchShell';
-import WorkbenchLoading from '@/features/WorkbenchShell/WorkbenchLoading';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
-// Keep this helper local. Importing the shared SPA router helper would pull the
-// Main SPA provider and global stores into the Workbench entry chunk.
+import WorkbenchShell, { WorkbenchNamespace } from './shell';
+import WorkbenchLoading from './shell/WorkbenchLoading';
+
 const lazyElement = (importFn: () => Promise<{ default: ComponentType }>): ReactElement => {
   const LazyComponent = lazy(importFn);
 
@@ -70,34 +69,50 @@ const ExitWorkbench = () => {
   return <WorkbenchLoading />;
 };
 
+const VerifyNamespace = () => (
+  <WorkbenchNamespace namespace="verify">
+    <Outlet />
+  </WorkbenchNamespace>
+);
+
 export const workbenchRoutes: RouteObject[] = [
   {
     children: [
       {
-        element: lazyElement(() => import('@/routes/(workbench)/agent/docs/[docId]')),
+        element: lazyElement(() => import('./routes/agent/docs/[docId]')),
         path: 'agent/:aid/docs/:docId',
       },
       {
         children: [
           {
-            element: lazyElement(() => import('@/routes/(workbench)/acceptance')),
+            element: lazyElement(() => import('./routes/acceptance')),
             index: true,
           },
           {
-            element: lazyElement(() => import('@/routes/(workbench)/acceptance/[acceptanceId]')),
+            element: lazyElement(() => import('./routes/acceptance/[acceptanceId]')),
             path: ':acceptanceId',
           },
           {
-            element: lazyElement(() => import('@/routes/(workbench)/acceptance/[acceptanceId]')),
+            element: lazyElement(() => import('./routes/acceptance/[acceptanceId]')),
             path: ':acceptanceId/check/:checkId',
           },
         ],
-        element: (
-          <WorkbenchNamespace namespace="verify">
-            <Outlet />
-          </WorkbenchNamespace>
-        ),
+        element: <VerifyNamespace />,
         path: 'acceptance',
+      },
+      {
+        children: [
+          {
+            element: lazyElement(() => import('./routes/verify')),
+            index: true,
+          },
+          {
+            element: lazyElement(() => import('./routes/verify/[runId]')),
+            path: ':runId',
+          },
+        ],
+        element: <VerifyNamespace />,
+        path: 'verify',
       },
       {
         element: <ExitWorkbench />,

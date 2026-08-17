@@ -9,7 +9,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import AcceptanceViewer from '..';
+import { AcceptanceViewer } from '@/features/Verify';
+
 import SWRMutateInitializer from './SWRMutateInitializer';
 
 const styles = createStaticStyles(({ css }) => ({

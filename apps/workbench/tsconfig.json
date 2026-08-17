@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "plugins": [],
+    "types": ["vite/client"]
+  },
+  "exclude": ["node_modules"],
+  "extends": "../../tsconfig.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "../../src/types/global.d.ts"]
+}

@@ -2,11 +2,6 @@
 
 import type { RouteObject } from 'react-router';
 
-import {
-  acceptanceRouteMeta,
-  verifyReportsRouteMeta,
-  verifyRouteMeta,
-} from '@/features/Verify/routeMeta';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
@@ -60,62 +55,6 @@ const webOnlyRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
-  },
-
-  // Verify report workspace — standalone master-detail (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/verify/empty'),
-          'Desktop > Verify Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Desktop > Verify'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: '/verify',
-  },
-
-  // Subject-level delivery acceptance — the verify workspace's twin: a
-  // master-detail with the acceptance list on the left.
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/acceptance/empty'),
-          'Desktop > Acceptance Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/acceptance/[acceptanceId]'),
-          'Desktop > AcceptanceReport',
-        ),
-        handle: { meta: acceptanceRouteMeta },
-        path: ':acceptanceId',
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/acceptance/[acceptanceId]'),
-          'Desktop > AcceptanceCheck',
-        ),
-        handle: { meta: acceptanceRouteMeta },
-        path: ':acceptanceId/check/:checkId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/acceptance'), 'Desktop > Acceptance'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: acceptanceRouteMeta },
-    path: '/acceptance',
   },
 ];
 

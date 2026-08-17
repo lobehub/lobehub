@@ -28,11 +28,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { mutate as globalMutate } from 'swr';
 
+import { getAcceptanceStatusActions } from '@/features/Verify/Acceptance/statusActions';
 import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
-
-import { getAcceptanceStatusActions } from '../statusActions';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`

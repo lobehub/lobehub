@@ -1,12 +1,12 @@
-import '../initialize';
+import '@/spa/initialize';
 
 import { RouterProvider } from 'react-router/dom';
 
 import BootErrorBoundary from '@/components/BootErrorBoundary';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
+import { createSPABrowserRouter, createSPARoot } from '@/spa/runtime';
 
-import { workbenchRoutes } from './router/workbenchRouter.config';
-import { createSPABrowserRouter, createSPARoot } from './runtime';
+import { workbenchRoutes } from './router';
 
 const router = createSPABrowserRouter(workbenchRoutes);
 

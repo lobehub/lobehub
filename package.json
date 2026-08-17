@@ -30,14 +30,14 @@
     "./src/spa/entry.desktop.tsx",
     "./src/spa/entry.mobile.tsx",
     "./src/spa/entry.popup.tsx",
-    "./src/spa/entry.workbench.tsx",
     "./src/spa/entry.web.tsx"
   ],
   "workspaces": [
     "packages/*",
     "packages/business/*",
     "e2e",
-    "apps/desktop/src/main"
+    "apps/desktop/src/main",
+    "apps/workbench"
   ],
   "scripts": {
     "build": "bun run build:spa && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:copy && bun run build:next",
@@ -51,7 +51,7 @@
     "build:spa:copy": "tsx scripts/copySpaBuild.mts && tsx scripts/generateSpaTemplates.mts",
     "build:spa:mobile": "cross-env NODE_OPTIONS=--max-old-space-size=8192 MOBILE=true vite build",
     "build:spa:raw": "rm -rf public/_spa && vite build",
-    "build:spa:workbench": "rm -rf dist/workbench public/_spa-workbench && cross-env NODE_OPTIONS=--max-old-space-size=8192 SPA_TARGET=workbench vite build",
+    "build:spa:workbench": "rm -rf dist/workbench public/_spa-workbench && cross-env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @lobehub/workbench build",
     "build:vercel": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 \"bun run build:raw && bun run db:migrate\"",
     "build-migrate-db": "bun run db:migrate",
     "check": "bun run .agents/scripts/check/cli.ts",
@@ -78,7 +78,7 @@
     "dev:spa": "vite",
     "dev:spa:auth": "cross-env AUTH=true vite",
     "dev:spa:mobile": "cross-env MOBILE=true vite",
-    "dev:spa:workbench": "cross-env SPA_TARGET=workbench vite --port 3014",
+    "dev:spa:workbench": "pnpm --filter @lobehub/workbench dev",
     "docs:cdn": "npm run workflow:docs-cdn && npm run lint:mdx",
     "docs:i18n": "lobe-i18n md && npm run lint:mdx",
     "docs:seo": "lobe-seo && npm run lint:mdx",

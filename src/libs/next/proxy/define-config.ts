@@ -13,7 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
-import { isWorkbenchSpaRoute } from '../workbenchRoutes';
+import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -92,7 +92,7 @@ export function defineConfig() {
 
     // These pages are responsive on their own; always serve the desktop bundle
     // so mobile UA does not land on mobile-specific routes.
-    const desktopOnlyPaths = ['/share', '/verify', '/acceptance'];
+    const desktopOnlyPaths = ['/share'];
     const isDesktopOnlyPath = desktopOnlyPaths.some(
       (path) => url.pathname === path || url.pathname.startsWith(`${path}/`),
     );
@@ -146,7 +146,10 @@ export function defineConfig() {
       return response;
     }
 
-    if (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname)) {
+    if (
+      isAlwaysWorkbenchSpaRoute(url.pathname) ||
+      (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname))
+    ) {
       const workbenchPath = `/spa-workbench/${safeLocale}${url.pathname}`;
       logDefault('Workbench SPA route, rewriting to: %s', workbenchPath);
       url.pathname = workbenchPath;

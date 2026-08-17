@@ -103,7 +103,9 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       event.preventDefault();
 
       if (
-        (reference.type === 'acceptance' || reference.type === 'document') &&
+        (reference.type === 'acceptance' ||
+          reference.type === 'document' ||
+          reference.type === 'verify') &&
         shouldHardNavigateToWorkbench(reference.pathname)
       ) {
         navigate(reference.pathname, { escape: true });

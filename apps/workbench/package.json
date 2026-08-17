@@ -1,0 +1,11 @@
+{
+  "name": "@lobehub/workbench",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --port 3014",
+    "type-check": "tsc --noEmit"
+  }
+}

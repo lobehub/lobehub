@@ -96,17 +96,6 @@ describe('desktop router shared definition', () => {
     );
   });
 
-  it('matches the nested acceptance check route on Web only', () => {
-    const matches = matchRoutes(webDesktopRoutes, '/acceptance/acceptance-1/check/check-1');
-
-    expect(matches?.at(-1)?.route.path).toBe(':acceptanceId/check/:checkId');
-    expect(matches?.at(-1)?.params).toMatchObject({
-      acceptanceId: 'acceptance-1',
-      checkId: 'check-1',
-    });
-    expect(electronDesktopRoutes.some((route) => route.path === '/acceptance')).toBe(false);
-  });
-
   it.each(mainAreaVariants)(
     '%s agent sub-pages declare route meta so tab titles are not bare branding',
     (_, createMainAreaChildren) => {
@@ -262,8 +251,8 @@ describe('desktop router shared definition', () => {
     expect(webPaths).toContain('/verify-im');
     expect(webPaths).toContain('/share/t');
     expect(webPaths).toContain('/share/page');
-    expect(webPaths).toContain('/verify');
-    expect(webPaths).toContain('/acceptance');
+    expect(webPaths).not.toContain('/verify');
+    expect(webPaths).not.toContain('/acceptance');
     expect(webPaths).toContain('/onboarding');
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');

@@ -1,35 +1,20 @@
 'use client';
 
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
 import ActionIcon from '@lobehub/ui/es/ActionIcon/index';
 import Empty from '@lobehub/ui/es/Empty/index';
 import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Icon from '@lobehub/ui/es/Icon/index';
 import Text from '@lobehub/ui/es/Text/index';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft, Check, ListFilter, ScrollText, Search, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Search, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
-import {
-  type AcceptanceListFilter,
-  DEFAULT_ACCEPTANCE_LIST_FILTER,
-  filterAcceptanceList,
-  normalizeAcceptanceListFilter,
-} from '../Workspace/acceptanceListFilter';
-import AcceptanceRow from './AcceptanceRow';
-
-const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
-const EMPTY_FILTER_KEYS = {
-  active: 'acceptance.workspace.filters.empty.active',
-  completed: 'acceptance.workspace.filters.empty.completed',
-} as const satisfies Record<Exclude<AcceptanceListFilter, 'all'>, string>;
+import VerifyRow from './VerifyRow';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -112,38 +97,24 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const WorkbenchAcceptanceList = memo(() => {
+const WorkbenchVerifyList = memo(() => {
   const { t } = useTranslation(['verify', 'common']);
+  const [query, setQuery] = useState('');
+  const trimmedQuery = query.trim();
   const { data, error, isLoading, mutate } = useSWR(
-    verifyKeys.acceptances(),
-    () => verifyService.listAcceptances(),
+    verifyKeys.reportSummaries(undefined, trimmedQuery),
+    () =>
+      verifyService.listReportSummaries({
+        limit: 50,
+        q: trimmedQuery || undefined,
+      }),
     {
       revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
     },
   );
-  const [query, setQuery] = useState('');
-  const [storedFilter, setStoredFilter] = useLocalStorageState<AcceptanceListFilter>(
-    ACCEPTANCE_LIST_FILTER_STORAGE_KEY,
-    DEFAULT_ACCEPTANCE_LIST_FILTER,
-  );
-  const filter = normalizeAcceptanceListFilter(storedFilter);
-  const filtered = filterAcceptanceList(data ?? [], filter, query);
-  const trimmedQuery = query.trim();
-
-  const filterItems: DropdownItem[] = (
-    [
-      ['active', t('acceptance.workspace.filters.active')],
-      ['all', t('acceptance.workspace.filters.all')],
-      ['completed', t('acceptance.workspace.filters.completed')],
-    ] as const
-  ).map(([key, label]) => ({
-    icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
-    key,
-    label,
-    onClick: () => setStoredFilter(key),
-  }));
+  const items = data?.items ?? [];
 
   return (
     <Flexbox className={styles.page}>
@@ -155,15 +126,8 @@ const WorkbenchAcceptanceList = memo(() => {
             onClick={() => window.location.assign('/')}
           />
           <Text strong style={{ flex: 1, fontSize: 17 }}>
-            {t('acceptance.workspace.title')}
+            {t('workspace.title')}
           </Text>
-          <DropdownMenu items={filterItems} placement={'bottomRight'}>
-            <ActionIcon
-              active={filter !== 'all'}
-              icon={ListFilter}
-              title={t('acceptance.workspace.filters.title')}
-            />
-          </DropdownMenu>
         </Flexbox>
         <label className={styles.search}>
           <Icon color={cssVar.colorTextQuaternary} icon={Search} size={15} />
@@ -194,40 +158,31 @@ const WorkbenchAcceptanceList = memo(() => {
               <div className={styles.skeleton} key={index} />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
-          trimmedQuery || filter !== 'all' ? (
+        ) : items.length === 0 ? (
+          trimmedQuery ? (
             <Flexbox className={styles.searchEmpty} gap={12}>
               <span>
-                {trimmedQuery
-                  ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
-                  : filter === 'all'
-                    ? null
-                    : t(EMPTY_FILTER_KEYS[filter])}
+                {t('workspace.searchEmptyPrefix')}
+                {trimmedQuery}
+                {t('workspace.searchEmptySuffix')}
               </span>
-              <button
-                className={styles.retry}
-                type={'button'}
-                onClick={() => {
-                  setQuery('');
-                  setStoredFilter('all');
-                }}
-              >
-                {t('acceptance.workspace.filters.showAll')}
+              <button className={styles.retry} type={'button'} onClick={() => setQuery('')}>
+                {t('workspace.clearSearch')}
               </button>
             </Flexbox>
           ) : (
             <Center className={styles.emptyState}>
               <Empty
-                description={t('acceptance.workspace.listEmpty')}
-                icon={ScrollText}
-                title={t('acceptance.workspace.listEmptyTitle')}
+                description={t('workspace.listEmpty')}
+                icon={ClipboardCheck}
+                title={t('workspace.listEmptyTitle')}
               />
             </Center>
           )
         ) : (
           <div className={styles.list}>
-            {filtered.map((item) => (
-              <AcceptanceRow item={item} key={item.id} onChanged={mutate} />
+            {items.map((item) => (
+              <VerifyRow item={item} key={item.run.id} />
             ))}
           </div>
         )}
@@ -236,6 +191,6 @@ const WorkbenchAcceptanceList = memo(() => {
   );
 });
 
-WorkbenchAcceptanceList.displayName = 'WorkbenchAcceptanceList';
+WorkbenchVerifyList.displayName = 'WorkbenchVerifyList';
 
-export default WorkbenchAcceptanceList;
+export default WorkbenchVerifyList;
