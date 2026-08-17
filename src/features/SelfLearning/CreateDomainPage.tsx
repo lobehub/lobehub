@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
+import { Button, Popover, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
@@ -56,7 +56,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   head: css`
     padding-block-end: 24px;
@@ -133,6 +133,16 @@ const styles = createStaticStyles(({ css }) => ({
     &:first-child {
       padding-block: 0 4px;
     }
+  `,
+  rationale: css`
+    margin: 0;
+    padding-block: 2px;
+    padding-inline-start: 14px;
+    border-inline-start: 2px solid ${cssVar.colorBorder};
+
+    font-size: 16px;
+    line-height: 1.75;
+    color: ${cssVar.colorTextSecondary};
   `,
   seq: css`
     padding-block-start: 8px;
@@ -298,31 +308,11 @@ const CreateDomainPage = memo(() => {
     [refine],
   );
 
-  const renderAdjustmentButton = (target: AdjustmentTarget) => {
-    const isOpen = openAdjustment === target;
+  const renderAdjustmentContent = (target: AdjustmentTarget) => {
     const isRefining = refiningTarget === target;
 
     return (
-      <Button
-        disabled={!!refiningTarget && !isRefining}
-        icon={SparklesIcon}
-        size={'small'}
-        type={'text'}
-        onClick={() => setOpenAdjustment(isOpen ? undefined : target)}
-      >
-        {t('create.adjust.blockAction')}
-      </Button>
-    );
-  };
-
-  const renderAdjustmentPanel = (target: AdjustmentTarget) => {
-    const isOpen = openAdjustment === target;
-    const isRefining = refiningTarget === target;
-
-    if (!isOpen) return null;
-
-    return (
-      <Block padding={10} variant={'outlined'} onKeyDown={(e) => onAdjustmentKeyDown(target, e)}>
+      <Flexbox gap={8} onKeyDown={(e) => onAdjustmentKeyDown(target, e)}>
         <Flexbox horizontal align={'end'} gap={8}>
           <TextArea
             autoFocus
@@ -354,7 +344,34 @@ const CreateDomainPage = memo(() => {
               : t('create.generatingAlmostDone')}
           </Text>
         )}
-      </Block>
+      </Flexbox>
+    );
+  };
+
+  const renderAdjustmentButton = (target: AdjustmentTarget) => {
+    const isOpen = openAdjustment === target;
+    const isRefining = refiningTarget === target;
+
+    return (
+      <Popover
+        content={renderAdjustmentContent(target)}
+        open={isOpen}
+        placement={'bottomRight'}
+        styles={{ content: { padding: 12, width: 'min(520px, calc(100vw - 32px))' } }}
+        trigger={'click'}
+        onOpenChange={(open) => setOpenAdjustment(open ? target : undefined)}
+      >
+        <Button
+          aria-expanded={isOpen}
+          aria-haspopup={'dialog'}
+          disabled={!!refiningTarget && !isRefining}
+          icon={SparklesIcon}
+          size={'small'}
+          type={'text'}
+        >
+          {t('create.adjust.blockAction')}
+        </Button>
+      </Popover>
     );
   };
 
@@ -484,14 +501,12 @@ const CreateDomainPage = memo(() => {
                     onChange={(e) => setBrief(e.target.value)}
                   />
                 </Flexbox>
-                <Flexbox className={styles.reviewSection} gap={6}>
-                  <Text fontSize={12} type={'secondary'}>
+                <Flexbox className={styles.reviewSection} gap={12}>
+                  <Text fontSize={14} type={'secondary'}>
                     {t('create.reviewHelp')}
                   </Text>
                   {draft.rationale && (
-                    <Text fontSize={13} type={'secondary'}>
-                      {draft.rationale}
-                    </Text>
+                    <blockquote className={styles.rationale}>{draft.rationale}</blockquote>
                   )}
                 </Flexbox>
 
@@ -508,7 +523,6 @@ const CreateDomainPage = memo(() => {
                     variant={'filled'}
                     onChange={(e) => patch({ domainFilter: e.target.value })}
                   />
-                  {renderAdjustmentPanel('domainFilter')}
                 </Flexbox>
                 <Flexbox className={styles.reviewSection} gap={10}>
                   <Flexbox horizontal align={'center'} justify={'space-between'}>
@@ -524,7 +538,6 @@ const CreateDomainPage = memo(() => {
                     variant={'filled'}
                     onChange={(e) => patch({ outOfScope: e.target.value })}
                   />
-                  {renderAdjustmentPanel('outOfScope')}
                 </Flexbox>
 
                 <Flexbox className={styles.reviewSection} gap={10}>
@@ -628,7 +641,6 @@ const CreateDomainPage = memo(() => {
                       />
                     </div>
                   ))}
-                  {renderAdjustmentPanel('canonEntries')}
                 </Flexbox>
                 <Flexbox className={styles.reviewSection} gap={10}>
                   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
@@ -713,7 +725,6 @@ const CreateDomainPage = memo(() => {
                       />
                     </div>
                   ))}
-                  {renderAdjustmentPanel('layers')}
                 </Flexbox>
               </Flexbox>
             )}
@@ -724,8 +735,6 @@ const CreateDomainPage = memo(() => {
                   <Button
                     disabled={!!refiningTarget || !canCreate}
                     loading={creating}
-                    shape={'round'}
-                    size={'small'}
                     type={'primary'}
                     onClick={() => void primaryRef.current?.()}
                   >
