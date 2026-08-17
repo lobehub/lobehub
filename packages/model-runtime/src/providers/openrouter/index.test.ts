@@ -51,6 +51,8 @@ describe('LobeOpenRouterAI - custom features', () => {
       expect(params).toBeDefined();
       expect(params.provider).toBe('openrouter');
       expect(params.baseURL).toBe('https://openrouter.ai/api/v1');
+      expect(params.createVideo).toBeDefined();
+      expect(params.handlePollVideoStatus).toBeDefined();
     });
 
     it('should have chatCompletion configuration', () => {
@@ -629,6 +631,12 @@ describe('LobeOpenRouterAI - custom features', () => {
       const models = await params.models();
 
       expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models');
+      expect(fetch).toHaveBeenCalledWith(
+        'https://openrouter.ai/api/v1/models?output_modalities=image',
+      );
+      expect(fetch).toHaveBeenCalledWith(
+        'https://openrouter.ai/api/v1/models?output_modalities=video',
+      );
       expect(models.length).toBeGreaterThan(0);
     });
 

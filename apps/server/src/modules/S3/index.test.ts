@@ -96,6 +96,52 @@ describe('S3', () => {
       });
     });
 
+    it('adds loopback hosts to NO_PROXY so local RustFS is not sent through HTTP_PROXY', () => {
+      const previousNoProxy = process.env.NO_PROXY;
+      const previousNoProxyLower = process.env.no_proxy;
+      process.env.NO_PROXY = 'example.com';
+      delete process.env.no_proxy;
+
+      try {
+        new S3('test-access-key', 'test-secret-key', 'http://localhost:9000', {
+          bucket: 'test-bucket',
+          forcePathStyle: true,
+        });
+
+        expect(process.env.NO_PROXY).toContain('example.com');
+        expect(process.env.NO_PROXY).toContain('localhost');
+        expect(process.env.NO_PROXY).toContain('127.0.0.1');
+        expect(S3Client).toHaveBeenCalledWith(
+          expect.objectContaining({
+            endpoint: 'http://localhost:9000',
+          }),
+        );
+      } finally {
+        if (previousNoProxy === undefined) delete process.env.NO_PROXY;
+        else process.env.NO_PROXY = previousNoProxy;
+        if (previousNoProxyLower === undefined) delete process.env.no_proxy;
+        else process.env.no_proxy = previousNoProxyLower;
+      }
+    });
+
+    it('uses a separate signing client when the public S3 endpoint differs from the SDK endpoint', () => {
+      new S3('test-access-key', 'test-secret-key', 'http://rustfs:9000', {
+        bucket: 'test-bucket',
+        forcePathStyle: true,
+        signingEndpoint: 'http://localhost:9000',
+      });
+
+      expect(S3Client).toHaveBeenCalledTimes(2);
+      expect(S3Client).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ endpoint: 'http://rustfs:9000' }),
+      );
+      expect(S3Client).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ endpoint: 'http://localhost:9000' }),
+      );
+    });
+
     it('should use default region when S3_REGION is not set', () => {
       const testEnvWithoutRegion = {
         S3_ACCESS_KEY_ID: 'test-access-key',

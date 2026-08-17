@@ -177,10 +177,19 @@ export class VideoGenerationService {
     const tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${ext}`);
     log('Downloading video to: %s', tempVideoPath);
 
-    const response = await fetch(url, {
-      headers: options?.headers,
-      signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: options?.headers,
+        signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const cause =
+        error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined;
+      throw new Error(cause ? `Failed to download video: ${cause}` : 'Failed to download video', {
+        cause: error,
+      });
+    }
     if (!response.ok) {
       throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
     }

@@ -34,6 +34,7 @@ export const getFileConfig = () => {
       S3_BUCKET: process.env.S3_BUCKET,
       S3_ENABLE_PATH_STYLE: process.env.S3_ENABLE_PATH_STYLE === '1',
       S3_ENDPOINT: process.env.S3_ENDPOINT,
+      S3_INTERNAL_ENDPOINT: process.env.S3_INTERNAL_ENDPOINT,
       S3_PREVIEW_URL_EXPIRE_IN: parseInt(process.env.S3_PREVIEW_URL_EXPIRE_IN || '7200'),
       S3_PUBLIC_DOMAIN,
       S3_REGION: process.env.S3_REGION,
@@ -52,6 +53,7 @@ export const getFileConfig = () => {
       S3_ENABLE_PATH_STYLE: z.boolean(),
 
       S3_ENDPOINT: z.string().url().optional(),
+      S3_INTERNAL_ENDPOINT: z.string().url().optional(),
       S3_PREVIEW_URL_EXPIRE_IN: z.number(),
       S3_PUBLIC_DOMAIN: z.string().optional(),
       S3_REGION: z.string().optional(),

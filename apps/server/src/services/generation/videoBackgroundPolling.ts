@@ -17,6 +17,16 @@ import type { VideoGenerationAsset } from '@/types/generation';
 
 const log = debug('lobe-video:background-polling');
 
+/**
+ * Abort polling only for a provider-reported job failure.
+ * Undici network errors are `TypeError: fetch failed` and must be retried.
+ */
+export const isTerminalVideoPollError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  if (error.message === 'Operation was aborted') return true;
+  return error.message.startsWith('Video generation failed:');
+};
+
 interface BackgroundPollingParams {
   aicoBilling?: AicoBillingContext;
   asyncTaskCreatedAt: Date;
@@ -173,7 +183,7 @@ async function pollUntilCompletion(
       log('Task %s still in progress', inferenceId);
       await sleep(pollingInterval);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('failed')) {
+      if (isTerminalVideoPollError(error)) {
         throw error;
       }
       log('Polling attempt %d failed for task: %s: %O', attempt + 1, inferenceId, error);
