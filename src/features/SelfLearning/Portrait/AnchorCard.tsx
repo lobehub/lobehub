@@ -1,6 +1,6 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AnchorIcon, CircleCheckIcon, CircleXIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -9,6 +9,9 @@ import { useTranslation } from 'react-i18next';
 import type { ExpertiseDomainItem } from '@/services/expertise';
 
 const styles = createStaticStyles(({ css }) => ({
+  anchorCard: css`
+    overflow: hidden;
+  `,
   canonCard: css`
     display: flex;
     flex-direction: column;
@@ -84,96 +87,98 @@ const AnchorCard = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
   );
 
   return (
-    <Accordion defaultExpandedKeys={['anchor']} indicatorPlacement={'end'} variant={'outlined'}>
-      <AccordionItem itemKey={'anchor'} paddingBlock={12} paddingInline={16} title={title}>
-        <Flexbox gap={18} paddingBlock={8}>
-          {(domainFilter || outOfScope) && (
-            <div className={styles.definition}>
-              {domainFilter && (
-                <>
-                  <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
-                    <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={13} />
-                    {t('anchor.filter')}
-                  </Text>
-                  <Text fontSize={13} lineHeight={1.7}>
-                    {domainFilter}
-                  </Text>
-                </>
-              )}
-              {outOfScope && (
-                <>
-                  <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
-                    <Icon color={cssVar.colorTextTertiary} icon={CircleXIcon} size={13} />
-                    {t('anchor.outOfScope')}
-                  </Text>
-                  <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
-                    {outOfScope}
-                  </Text>
-                </>
-              )}
-            </div>
-          )}
-
-          <Flexbox gap={10}>
-            <Flexbox horizontal align={'baseline'} gap={8}>
-              <span className={styles.sectionLabel}>{t('create.anchor.canon')}</span>
-              <Text fontSize={12} type={'secondary'}>
-                {domain.canonEntries.length > 0
-                  ? t('create.anchor.canonHint')
-                  : t('anchor.noCanon')}
-              </Text>
-            </Flexbox>
-            {domain.canonEntries.length > 0 && (
-              <div className={styles.grid}>
-                {domain.canonEntries.map((c) => (
-                  <div className={styles.canonCard} key={c.key}>
-                    <Text fontSize={13.5} weight={600}>
-                      {c.title}
+    <Block className={styles.anchorCard} variant={'outlined'}>
+      <Accordion defaultExpandedKeys={['anchor']} indicatorPlacement={'end'} variant={'borderless'}>
+        <AccordionItem itemKey={'anchor'} paddingBlock={12} paddingInline={16} title={title}>
+          <Flexbox gap={18} paddingBlock={8}>
+            {(domainFilter || outOfScope) && (
+              <div className={styles.definition}>
+                {domainFilter && (
+                  <>
+                    <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
+                      <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={13} />
+                      {t('anchor.filter')}
                     </Text>
-                    <Text fontSize={12.5} lineHeight={1.65} type={'secondary'}>
-                      {c.statement}
+                    <Text fontSize={13} lineHeight={1.7}>
+                      {domainFilter}
                     </Text>
-                    <Text ellipsis fontSize={11.5} style={{ opacity: 0.75 }} type={'secondary'}>
-                      — {c.source}
+                  </>
+                )}
+                {outOfScope && (
+                  <>
+                    <Text className={styles.definitionLabel} fontSize={12.5} type={'secondary'}>
+                      <Icon color={cssVar.colorTextTertiary} icon={CircleXIcon} size={13} />
+                      {t('anchor.outOfScope')}
                     </Text>
-                  </div>
-                ))}
+                    <Text fontSize={13} lineHeight={1.7} type={'secondary'}>
+                      {outOfScope}
+                    </Text>
+                  </>
+                )}
               </div>
             )}
-          </Flexbox>
 
-          <Flexbox gap={10}>
-            <Flexbox horizontal align={'baseline'} gap={8}>
-              <span className={styles.sectionLabel}>{t('create.anchor.layers')}</span>
-              <Text fontSize={12} type={'secondary'}>
-                {domain.layers.length === 0
-                  ? t('anchor.noLayers')
-                  : canonRef
-                    ? t('create.anchor.layersFrom', { ref: canonRef })
-                    : t('create.anchor.layersInvented')}
-              </Text>
-            </Flexbox>
-            {domain.layers.length > 0 && (
-              <div className={styles.grid}>
-                {domain.layers.map((l, i) => (
-                  <div className={styles.layerCell} key={l.key}>
-                    <span className={styles.layerIndex}>L{i + 1}</span>
-                    <Text fontSize={13.5} weight={600}>
-                      {l.title}
-                    </Text>
-                    {l.description && (
-                      <Text fontSize={12.5} lineHeight={1.6} type={'secondary'}>
-                        {l.description}
+            <Flexbox gap={10}>
+              <Flexbox horizontal align={'baseline'} gap={8}>
+                <span className={styles.sectionLabel}>{t('create.anchor.canon')}</span>
+                <Text fontSize={12} type={'secondary'}>
+                  {domain.canonEntries.length > 0
+                    ? t('create.anchor.canonHint')
+                    : t('anchor.noCanon')}
+                </Text>
+              </Flexbox>
+              {domain.canonEntries.length > 0 && (
+                <div className={styles.grid}>
+                  {domain.canonEntries.map((c) => (
+                    <div className={styles.canonCard} key={c.key}>
+                      <Text fontSize={13.5} weight={600}>
+                        {c.title}
                       </Text>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                      <Text fontSize={12.5} lineHeight={1.65} type={'secondary'}>
+                        {c.statement}
+                      </Text>
+                      <Text ellipsis fontSize={11.5} style={{ opacity: 0.75 }} type={'secondary'}>
+                        — {c.source}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Flexbox>
+
+            <Flexbox gap={10}>
+              <Flexbox horizontal align={'baseline'} gap={8}>
+                <span className={styles.sectionLabel}>{t('create.anchor.layers')}</span>
+                <Text fontSize={12} type={'secondary'}>
+                  {domain.layers.length === 0
+                    ? t('anchor.noLayers')
+                    : canonRef
+                      ? t('create.anchor.layersFrom', { ref: canonRef })
+                      : t('create.anchor.layersInvented')}
+                </Text>
+              </Flexbox>
+              {domain.layers.length > 0 && (
+                <div className={styles.grid}>
+                  {domain.layers.map((l, i) => (
+                    <div className={styles.layerCell} key={l.key}>
+                      <span className={styles.layerIndex}>L{i + 1}</span>
+                      <Text fontSize={13.5} weight={600}>
+                        {l.title}
+                      </Text>
+                      {l.description && (
+                        <Text fontSize={12.5} lineHeight={1.6} type={'secondary'}>
+                          {l.description}
+                        </Text>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Flexbox>
           </Flexbox>
-        </Flexbox>
-      </AccordionItem>
-    </Accordion>
+        </AccordionItem>
+      </Accordion>
+    </Block>
   );
 });
 

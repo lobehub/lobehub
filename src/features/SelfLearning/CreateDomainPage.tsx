@@ -25,6 +25,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
+import { shinyTextStyles } from '@/styles';
 
 const GENERATION_ESTIMATE_SECONDS = 120;
 
@@ -36,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     width: 100%;
     max-width: 960px;
-    padding-block: 40px 96px;
+    padding-block: 16px 96px;
   `,
   footer: css`
     position: sticky;
@@ -50,6 +51,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   head: css`
     padding-block-end: 24px;
+  `,
+  briefInput: css`
+    textarea {
+      background: ${cssVar.colorFillSecondary};
+    }
   `,
   generatingStatus: css`
     padding-block: 12px;
@@ -314,9 +320,13 @@ const CreateDomainPage = memo(() => {
                 )}
                 {step !== 'review' && (
                   <>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('create.briefHelp')}
+                    </Text>
                     <TextArea
                       autoFocus
                       autoSize={{ maxRows: 10, minRows: 5 }}
+                      className={styles.briefInput}
                       disabled={step === 'preparing'}
                       placeholder={t('create.briefPlaceholder')}
                       value={brief}
@@ -333,7 +343,9 @@ const CreateDomainPage = memo(() => {
                       >
                         <Flexbox horizontal align={'center'} gap={8}>
                           <NeuralNetworkLoading size={18} />
-                          <Text weight={500}>{t('create.generating')}</Text>
+                          <Text className={shinyTextStyles.shinyText} weight={500}>
+                            {t('create.generating')}
+                          </Text>
                         </Flexbox>
                         <Text fontSize={12} type={'secondary'}>
                           {remainingSeconds > 0
@@ -344,10 +356,7 @@ const CreateDomainPage = memo(() => {
                         </Text>
                       </Flexbox>
                     ) : (
-                      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-                        <Text fontSize={12} type={'secondary'}>
-                          {t('create.briefHelp')}
-                        </Text>
+                      <Flexbox horizontal align={'center'} justify={'end'}>
                         <Button
                           disabled={!brief.trim()}
                           icon={SparklesIcon}
