@@ -290,13 +290,14 @@ describe('VerifyCheckResultModel', () => {
     const model = new VerifyCheckResultModel(serverDB, userId);
     await model.create({ checkItemId: 'a', checkItemIndex: 0, verifierType: 'llm', verifyRunId });
 
-    await model.updateByCheckItem(verifyRunId, 'a', {
+    const updated = await model.updateByCheckItem(verifyRunId, 'a', {
       confidence: 0.9,
       status: 'passed',
       toulmin: { evidence: 'tests passed', reasoning: 'covers the goal' },
       verdict: 'passed',
     });
 
+    expect(updated).toEqual([{ id: expect.any(String) }]);
     const [row] = await model.listByRun(verifyRunId);
     expect(row).toMatchObject({ confidence: 0.9, status: 'passed', verdict: 'passed' });
     expect(row.toulmin).toEqual({ evidence: 'tests passed', reasoning: 'covers the goal' });
