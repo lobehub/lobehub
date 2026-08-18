@@ -36,7 +36,7 @@ export const useAgentDisplayMeta = (
   const meta = useAgentStore((s) =>
     agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
   );
-  const groupSupervisor = useAgentGroupStore((s) =>
+  const groupBySupervisorId = useAgentGroupStore((s) =>
     agentId
       ? Object.values(s.groupMap).find(
           (group) => group.supervisorAgentId === agentId && !!group.avatar,
@@ -51,7 +51,7 @@ export const useAgentDisplayMeta = (
   const sidebarAvatar = typeof sidebarAgent?.avatar === 'string' ? sidebarAgent.avatar : undefined;
   const hasResolvedMeta =
     isInbox ||
-    !!groupSupervisor?.avatar ||
+    !!groupBySupervisorId?.avatar ||
     !!meta?.avatar ||
     !!meta?.backgroundColor ||
     !!agentDisplayName(meta) ||
@@ -61,17 +61,17 @@ export const useAgentDisplayMeta = (
 
   return {
     avatar:
-      groupSupervisor?.avatar ||
+      groupBySupervisorId?.avatar ||
       meta?.avatar ||
       sidebarAvatar ||
       (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
     backgroundColor:
-      groupSupervisor?.backgroundColor ||
+      groupBySupervisorId?.backgroundColor ||
       meta?.backgroundColor ||
       sidebarAgent?.backgroundColor ||
       cssVar.colorBgContainer,
     title:
-      groupSupervisor?.title ||
+      groupBySupervisorId?.title ||
       agentDisplayName(meta) ||
       agentDisplayName(sidebarAgent) ||
       (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' })),
