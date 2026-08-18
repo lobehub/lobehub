@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { API_KEY_PREFIX } from '@lobechat/business-const';
+import { validateApiKeyFormat } from '@lobechat/utils/apiKey';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -45,7 +47,7 @@ describe('ApiKeyModel', () => {
       expect(result.name).toBe(params.name);
       expect(result.enabled).toBe(params.enabled);
       expect(result.key).toBeDefined();
-      expect(result.key).not.toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(validateApiKeyFormat(result.key)).toBe(false);
       expect(result.userId).toBe(userId);
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
@@ -72,7 +74,8 @@ describe('ApiKeyModel', () => {
     it('reveals plaintext only through the explicit one-time create method', async () => {
       const created = await apiKeyModel.createWithPlaintext({ name: 'One-time Key' });
 
-      expect(created.key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(created.key.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(created.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
 
       const stored = await apiKeyModel.findById(created.id);
       expect(stored?.key).not.toBe(created.key);
@@ -155,7 +158,8 @@ describe('ApiKeyModel', () => {
 
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
-      expect(keys[0].key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(keys[0].key.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(keys[0].key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
     });
 
     it('keeps metadata queries free of decrypted plaintext', async () => {
@@ -203,7 +207,8 @@ describe('ApiKeyModel', () => {
       expect(keys).toHaveLength(2);
       expect(staleResult).toMatchObject({ key: '', keyDecryptionFailed: true });
       expect(freshResult).toMatchObject({ keyDecryptionFailed: false });
-      expect(freshResult?.key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(freshResult?.key.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(freshResult?.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
     });
 
     it('lets workspace admins list all keys while members only see their own', async () => {
@@ -259,7 +264,7 @@ describe('ApiKeyModel', () => {
   describe('findByKey', () => {
     it('should find API key by key value without custom hasher', async () => {
       // Use a valid hex format key since validateApiKeyFormat checks for hex pattern
-      const validKey = 'sk-lh-abcdef0123456789';
+      const validKey = `${API_KEY_PREFIX}abcdef0123456789`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         key: validKey,
@@ -282,7 +287,7 @@ describe('ApiKeyModel', () => {
     });
 
     it('should return undefined for non-existent key', async () => {
-      const found = await apiKeyModel.findByKey('sk-lh-0123456789abcdef');
+      const found = await apiKeyModel.findByKey(`${API_KEY_PREFIX}0123456789abcdef`);
 
       expect(found).toBeUndefined();
     });
@@ -294,7 +299,7 @@ describe('ApiKeyModel', () => {
       futureDate.setFullYear(futureDate.getFullYear() + 1);
 
       // Use a valid hex format key
-      const validKey = 'sk-lh-0123456789abcdef';
+      const validKey = `${API_KEY_PREFIX}0123456789abcdef`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         expiresAt: futureDate,
@@ -311,7 +316,7 @@ describe('ApiKeyModel', () => {
 
     it('should validate enabled key without expiration with valid hex format', async () => {
       // Use a valid hex format key
-      const validKey = 'sk-lh-fedcba9876543210';
+      const validKey = `${API_KEY_PREFIX}fedcba9876543210`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         key: validKey,
@@ -326,13 +331,13 @@ describe('ApiKeyModel', () => {
     });
 
     it('should reject non-existent key', async () => {
-      const isValid = await apiKeyModel.validateKey('sk-lh-0123456789abcdef');
+      const isValid = await apiKeyModel.validateKey(`${API_KEY_PREFIX}0123456789abcdef`);
 
       expect(isValid).toBe(false);
     });
 
     it('should reject disabled key', async () => {
-      const validKey = 'sk-lh-1111111111111111';
+      const validKey = `${API_KEY_PREFIX}1111111111111111`;
       await serverDB.insert(apiKeys).values({
         enabled: false,
         key: validKey,
@@ -350,7 +355,7 @@ describe('ApiKeyModel', () => {
       const pastDate = new Date();
       pastDate.setFullYear(pastDate.getFullYear() - 1);
 
-      const validKey = 'sk-lh-2222222222222222';
+      const validKey = `${API_KEY_PREFIX}2222222222222222`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         expiresAt: pastDate,

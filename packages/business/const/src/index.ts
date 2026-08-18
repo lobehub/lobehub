@@ -201,6 +201,24 @@ export const HOME_PORTRAIT_ENABLED = true;
 export const API_SERVICE_ID = 'lobe-chat-api';
 
 /**
+ * Prefix on every issued API key.
+ *
+ * Users see and paste this string, so on a white-label distribution it is the
+ * most directly visible piece of vendor branding there is — it travels in
+ * support tickets, `.env` files and screenshots long after the UI has been
+ * rebranded.
+ *
+ * It is also load-bearing: `validateApiKeyFormat` is what the OpenAPI auth
+ * middleware uses to tell an API key from an OIDC JWT, so generation and
+ * validation must read the SAME constant or every key stops authenticating.
+ *
+ * Changing it does NOT migrate keys already in the database — those stop
+ * matching the format check and are rejected as malformed. A distribution that
+ * has issued keys should accept both spellings for a period instead.
+ */
+export const API_KEY_PREFIX = 'sk-lh-';
+
+/**
  * The infrastructure the cloud sandbox actually runs on, as told to the model.
  *
  * A slot rather than a literal because this is a deployment fact, not a product

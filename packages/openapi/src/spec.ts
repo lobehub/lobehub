@@ -1,4 +1,4 @@
-import { BRANDING_NAME, LOBE_CHAT_CLOUD } from '@lobechat/business-const';
+import { API_KEY_PREFIX, BRANDING_NAME, LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { OFFICIAL_URL } from '@lobechat/const/url';
 import { generateSpecs } from 'hono-openapi';
 
@@ -695,7 +695,7 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         },
         securitySchemes: {
           bearerAuth: {
-            bearerFormat: 'API Key (sk-lh-...) or OIDC JWT',
+            bearerFormat: `API Key (${API_KEY_PREFIX}...) or OIDC JWT`,
             scheme: 'bearer',
             type: 'http',
           },
