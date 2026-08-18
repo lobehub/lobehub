@@ -1,3 +1,4 @@
+import type { WorkingDirGitState } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -19,6 +20,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
+import StaleGitSnapshot from './StaleGitSnapshot';
 import WorktreeSwitcher from './WorktreeSwitcher';
 
 const styles = createStaticStyles(({ css }) => {
@@ -157,306 +159,347 @@ interface GitStatusProps {
    * remote device via RPC. Omit for the local machine (talks over IPC). */
   agentId: string;
   deviceId?: string;
+  /**
+   * Git context persisted on the topic, used only when the live probe finds no
+   * branch at `path` — which happens whenever the recorded worktree directory
+   * has since been deleted. Standing in for the dead probe keeps the branch /
+   * worktree / PR chips visible (read-only) instead of collapsing the whole
+   * cluster, so the bar agrees with the topic's meta hover card, which reads
+   * this same snapshot and never probes.
+   */
+  fallbackGit?: WorkingDirGitState;
   isGithub: boolean;
   path: string;
   sourcePath?: string;
 }
 
-const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, deviceId }) => {
-  const { t } = useTranslation('device');
-  // Transport (Electron IPC vs device RPC) is decided inside the service; the
-  // component just reads, identically for local and remote.
-  // Branch (cheap, refreshes promptly on dir switch) and the linked-PR lookup
-  // (expensive `gh` call, throttled) are deliberately separate cache entries.
-  const { data: branchData, mutate: mutateBranch } = useFetchGitBranch(deviceId, path);
-  const branch = branchData?.branch;
-  const detached = branchData?.detached;
-  const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(deviceId, path, branch, isGithub);
-  const { data: reviewPatches, mutate: mutateReviewPatches } = useReviewPatches(
-    path,
-    'unstaged',
-    undefined,
-    deviceId,
-  );
-  const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(deviceId, path);
-  const { data: worktrees = [], mutate: mutateWorktrees } = useFetchGitWorktrees(deviceId, path);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [pulling, setPulling] = useState(false);
-  const [pushing, setPushing] = useState(false);
-  const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
-  const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
-  const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
-  const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
-
-  const handleOpenPr = useCallback(() => {
-    if (prData?.pullRequest?.url) {
-      void electronSystemService.openExternalLink(prData.pullRequest.url);
-    }
-  }, [prData?.pullRequest?.url]);
-
-  const handleToggleReview = useCallback(() => {
-    if (showRightPanel && workingSidebarTab === 'review') {
-      toggleRightPanel(false);
-      return;
-    }
-    setWorkingSidebarTab('review');
-    toggleRightPanel(true);
-  }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
-
-  const refreshAfterSync = useCallback(async () => {
-    await Promise.all([
-      mutateBranch(),
-      mutatePR(),
-      mutateReviewPatches(),
-      mutateAheadBehind(),
-      mutateWorktrees(),
-    ]);
-  }, [mutateBranch, mutatePR, mutateReviewPatches, mutateAheadBehind, mutateWorktrees]);
-
-  // Flip the displayed branch instantly on checkout. No revalidate here — the
-  // switcher's onAfterCheckout reconciles once the checkout lands. The linked-PR
-  // hook is keyed by branch, so it re-keys to the new branch on its own (its
-  // cache starts empty there, hiding the stale PR until the lookup resolves).
-  const handleOptimisticCheckout = useCallback(
-    (nextBranch: string) => {
-      void mutateBranch({ branch: nextBranch, detached: false }, { revalidate: false });
-    },
-    [mutateBranch],
-  );
-
-  const syncBusy = pulling || pushing;
-
-  const handlePull = useCallback(async () => {
-    if (pulling || pushing) return;
-    setPulling(true);
-    try {
-      const result = await gitService.pullGitBranch({ deviceId, path });
-      if (result.success) {
-        if (result.noop) {
-          toast.info(t('workingDirectory.pullNoop'));
-        } else {
-          toast.success(t('workingDirectory.pullSuccess'));
-        }
-        await refreshAfterSync();
-      } else {
-        toast.error(result.error || t('workingDirectory.pullFailed'));
-      }
-    } finally {
-      setPulling(false);
-    }
-  }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
-
-  const handlePush = useCallback(async () => {
-    if (pulling || pushing) return;
-    setPushing(true);
-    try {
-      const result = await gitService.pushGitBranch({ deviceId, path });
-      if (result.success) {
-        if (result.noop) {
-          toast.info(t('workingDirectory.pushNoop'));
-        } else {
-          toast.success(t('workingDirectory.pushSuccess'));
-        }
-        await refreshAfterSync();
-      } else {
-        toast.error(result.error || t('workingDirectory.pushFailed'));
-      }
-    } finally {
-      setPushing(false);
-    }
-  }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
-
-  const diffStats = useMemo(() => {
-    const patches = [
-      ...(reviewPatches?.patches ?? []),
-      ...(reviewPatches?.submodules ?? []).flatMap((submodule) => submodule.patches),
-    ];
-    return patches.reduce(
-      (acc, patch) => {
-        acc.additions += patch.additions ?? 0;
-        acc.deletions += patch.deletions ?? 0;
-        acc.files += 1;
-        return acc;
-      },
-      { additions: 0, deletions: 0, files: 0 },
+const GitStatus = memo<GitStatusProps>(
+  ({ agentId, path, sourcePath, isGithub, deviceId, fallbackGit }) => {
+    const { t } = useTranslation('device');
+    // Transport (Electron IPC vs device RPC) is decided inside the service; the
+    // component just reads, identically for local and remote.
+    // Branch (cheap, refreshes promptly on dir switch) and the linked-PR lookup
+    // (expensive `gh` call, throttled) are deliberately separate cache entries.
+    const {
+      data: branchData,
+      error: branchError,
+      mutate: mutateBranch,
+    } = useFetchGitBranch(deviceId, path);
+    const branch = branchData?.branch;
+    const detached = branchData?.detached;
+    // The persisted snapshot only stands in once the probe has actually ANSWERED.
+    // `getGitBranch` resolves to `{}` for a path it can't read, so a settled probe
+    // is `data !== undefined` (or an errored one) — keying off `!branch` alone
+    // would flash the snapshot cluster on every mount while loading.
+    const probeSettled = branchData !== undefined || !!branchError;
+    const isStale = !branch && probeSettled && !!fallbackGit?.branch;
+    const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
+      deviceId,
+      path,
+      branch,
+      isGithub,
     );
-  }, [reviewPatches?.patches, reviewPatches?.submodules]);
-  const hasChanges = diffStats.files > 0;
+    const { data: reviewPatches, mutate: mutateReviewPatches } = useReviewPatches(
+      path,
+      'unstaged',
+      undefined,
+      deviceId,
+    );
+    const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(deviceId, path);
+    const { data: worktrees = [], mutate: mutateWorktrees } = useFetchGitWorktrees(deviceId, path);
+    const [switcherOpen, setSwitcherOpen] = useState(false);
+    const [pulling, setPulling] = useState(false);
+    const [pushing, setPushing] = useState(false);
+    const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
+    const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
+    const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
+    const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
 
-  if (!branch) return null;
+    const handleOpenPr = useCallback(() => {
+      if (prData?.pullRequest?.url) {
+        void electronSystemService.openExternalLink(prData.pullRequest.url);
+      }
+    }, [prData?.pullRequest?.url]);
 
-  const branchTooltip = detached ? t('workingDirectory.detachedHead', { sha: branch }) : branch;
+    const handleToggleReview = useCallback(() => {
+      if (showRightPanel && workingSidebarTab === 'review') {
+        toggleRightPanel(false);
+        return;
+      }
+      setWorkingSidebarTab('review');
+      toggleRightPanel(true);
+    }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
 
-  const prTooltip = prData?.pullRequest
-    ? prData.extraCount
-      ? t('workingDirectory.prTooltipWithExtra', {
-          count: prData.extraCount,
-          title: prData.pullRequest.title,
+    const refreshAfterSync = useCallback(async () => {
+      await Promise.all([
+        mutateBranch(),
+        mutatePR(),
+        mutateReviewPatches(),
+        mutateAheadBehind(),
+        mutateWorktrees(),
+      ]);
+    }, [mutateBranch, mutatePR, mutateReviewPatches, mutateAheadBehind, mutateWorktrees]);
+
+    // Flip the displayed branch instantly on checkout. No revalidate here — the
+    // switcher's onAfterCheckout reconciles once the checkout lands. The linked-PR
+    // hook is keyed by branch, so it re-keys to the new branch on its own (its
+    // cache starts empty there, hiding the stale PR until the lookup resolves).
+    const handleOptimisticCheckout = useCallback(
+      (nextBranch: string) => {
+        void mutateBranch({ branch: nextBranch, detached: false }, { revalidate: false });
+      },
+      [mutateBranch],
+    );
+
+    const syncBusy = pulling || pushing;
+
+    const handlePull = useCallback(async () => {
+      if (pulling || pushing) return;
+      setPulling(true);
+      try {
+        const result = await gitService.pullGitBranch({ deviceId, path });
+        if (result.success) {
+          if (result.noop) {
+            toast.info(t('workingDirectory.pullNoop'));
+          } else {
+            toast.success(t('workingDirectory.pullSuccess'));
+          }
+          await refreshAfterSync();
+        } else {
+          toast.error(result.error || t('workingDirectory.pullFailed'));
+        }
+      } finally {
+        setPulling(false);
+      }
+    }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
+
+    const handlePush = useCallback(async () => {
+      if (pulling || pushing) return;
+      setPushing(true);
+      try {
+        const result = await gitService.pushGitBranch({ deviceId, path });
+        if (result.success) {
+          if (result.noop) {
+            toast.info(t('workingDirectory.pushNoop'));
+          } else {
+            toast.success(t('workingDirectory.pushSuccess'));
+          }
+          await refreshAfterSync();
+        } else {
+          toast.error(result.error || t('workingDirectory.pushFailed'));
+        }
+      } finally {
+        setPushing(false);
+      }
+    }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
+
+    const diffStats = useMemo(() => {
+      const patches = [
+        ...(reviewPatches?.patches ?? []),
+        ...(reviewPatches?.submodules ?? []).flatMap((submodule) => submodule.patches),
+      ];
+      return patches.reduce(
+        (acc, patch) => {
+          acc.additions += patch.additions ?? 0;
+          acc.deletions += patch.deletions ?? 0;
+          acc.files += 1;
+          return acc;
+        },
+        { additions: 0, deletions: 0, files: 0 },
+      );
+    }, [reviewPatches?.patches, reviewPatches?.submodules]);
+    const hasChanges = diffStats.files > 0;
+
+    // Dead directory: the whole live cluster is unreachable, so hand off to the
+    // snapshot renderer — it shows what the topic recorded and offers the one
+    // action that can still work (drop the worktree override).
+    if (isStale) {
+      return (
+        <StaleGitSnapshot
+          agentId={agentId}
+          git={fallbackGit!}
+          isGithub={isGithub}
+          path={path}
+          sourcePath={sourcePath}
+        />
+      );
+    }
+
+    if (!branch) return null;
+
+    const branchTooltip = detached ? t('workingDirectory.detachedHead', { sha: branch }) : branch;
+
+    const prTooltip = prData?.pullRequest
+      ? prData.extraCount
+        ? t('workingDirectory.prTooltipWithExtra', {
+            count: prData.extraCount,
+            title: prData.pullRequest.title,
+          })
+        : prData.pullRequest.title
+      : prData?.ghMissing
+        ? t('workingDirectory.ghMissing')
+        : undefined;
+
+    const diffStatTooltip = hasChanges
+      ? t('workingDirectory.diffLineStatTooltip', {
+          added: diffStats.additions,
+          deleted: diffStats.deletions,
+          files: diffStats.files,
         })
-      : prData.pullRequest.title
-    : prData?.ghMissing
-      ? t('workingDirectory.ghMissing')
       : undefined;
 
-  const diffStatTooltip = hasChanges
-    ? t('workingDirectory.diffLineStatTooltip', {
-        added: diffStats.additions,
-        deleted: diffStats.deletions,
-        files: diffStats.files,
-      })
-    : undefined;
+    const showAhead = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.ahead > 0;
+    const showBehind = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.behind > 0;
+    const upstreamName = aheadBehind?.upstream ?? '';
+    const pushTargetName = aheadBehind?.pushTarget ?? '';
+    const pushTargetExists = !!aheadBehind?.pushTargetExists;
 
-  const showAhead = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.ahead > 0;
-  const showBehind = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.behind > 0;
-  const upstreamName = aheadBehind?.upstream ?? '';
-  const pushTargetName = aheadBehind?.pushTarget ?? '';
-  const pushTargetExists = !!aheadBehind?.pushTargetExists;
-
-  const branchTrigger = (
-    <div className={styles.trigger}>
-      <span className={styles.branchLabel}>{branch}</span>
-    </div>
-  );
-
-  const hasWorktreeMenu = worktrees.length > 0;
-
-  const worktreeNode = hasWorktreeMenu ? (
-    <WorktreeSwitcher
-      agentId={agentId}
-      currentBranch={branch}
-      detached={detached}
-      deviceId={deviceId}
-      isGithub={isGithub}
-      path={path}
-      sourcePath={sourcePath ?? path}
-      worktrees={worktrees}
-      onWorktreesChange={mutateWorktrees}
-    />
-  ) : null;
-
-  const branchNode = detached ? (
-    // Detached HEAD → plain branch label (nothing to switch to).
-    <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
-  ) : (
-    // Local switches over IPC; a remote device switches over RPC (deviceId set).
-    <BranchSwitcher
-      agentId={agentId}
-      currentBranch={branch}
-      deviceId={deviceId}
-      isGithub={isGithub}
-      open={switcherOpen}
-      path={path}
-      sourcePath={sourcePath ?? path}
-      worktrees={worktrees}
-      onExternalRefresh={refreshAfterSync}
-      onOpenChange={setSwitcherOpen}
-      onOptimisticCheckout={handleOptimisticCheckout}
-      onAfterCheckout={() => {
-        void mutateBranch();
-        void mutatePR();
-        void mutateReviewPatches();
-        void mutateAheadBehind();
-        void mutateWorktrees();
-      }}
-    >
-      <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
-    </BranchSwitcher>
-  );
-
-  const pullTooltip = pulling
-    ? t('workingDirectory.pullInProgress')
-    : t('workingDirectory.pullAction', {
-        count: aheadBehind?.behind ?? 0,
-        upstream: upstreamName,
-      });
-
-  const pushTooltip = pushing
-    ? t('workingDirectory.pushInProgress')
-    : t(pushTargetExists ? 'workingDirectory.pushAction' : 'workingDirectory.pushActionNew', {
-        count: aheadBehind?.ahead ?? 0,
-        target: pushTargetName || upstreamName,
-      });
-
-  const pullNode = showBehind && (
-    <Tooltip title={pullTooltip}>
-      <div
-        aria-busy={pulling}
-        aria-disabled={syncBusy}
-        className={`${styles.syncTrigger} ${styles.behindStat} ${syncBusy ? styles.syncTriggerDisabled : ''}`}
-        role="button"
-        onClick={syncBusy ? undefined : handlePull}
-      >
-        <span className={styles.aheadBehindStat}>
-          {pulling ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowDownIcon} size={10} />}
-          {aheadBehind!.behind}
-        </span>
-      </div>
-    </Tooltip>
-  );
-
-  const pushNode = showAhead && (
-    <Tooltip title={pushTooltip}>
-      <div
-        aria-busy={pushing}
-        aria-disabled={syncBusy}
-        className={`${styles.syncTrigger} ${styles.aheadStat} ${syncBusy ? styles.syncTriggerDisabled : ''}`}
-        role="button"
-        onClick={syncBusy ? undefined : handlePush}
-      >
-        <span className={styles.aheadBehindStat}>
-          {pushing ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowUpIcon} size={10} />}
-          {aheadBehind!.ahead}
-        </span>
-      </div>
-    </Tooltip>
-  );
-
-  const diffNode = (() => {
-    if (!hasChanges) return null;
-    const diffButton = (
-      <div className={styles.trigger} role="button" onClick={handleToggleReview}>
-        <span className={styles.diffStat}>
-          {diffStats.additions > 0 && (
-            <span className={styles.diffStatAdded}>+{diffStats.additions}</span>
-          )}
-          {diffStats.deletions > 0 && (
-            <span className={styles.diffStatDeleted}>-{diffStats.deletions}</span>
-          )}
-          {diffStats.additions === 0 && diffStats.deletions === 0 && diffStats.files > 0 && (
-            <span className={styles.diffStatModified}>±{diffStats.files}</span>
-          )}
-        </span>
+    const branchTrigger = (
+      <div className={styles.trigger}>
+        <span className={styles.branchLabel}>{branch}</span>
       </div>
     );
-    return <Tooltip title={diffStatTooltip}>{diffButton}</Tooltip>;
-  })();
 
-  return (
-    <>
-      <div className={styles.separator} />
-      {/* The worktree icon and the branch name name one thing — which checkout
-       * you're on — so they sit closer to each other than to their neighbours. */}
-      <div className={styles.branchGroup}>
-        {worktreeNode}
-        {branchNode}
-      </div>
-      {pullNode}
-      {pushNode}
-      {diffNode}
-      {prData?.pullRequest && (
-        <>
-          <div className={styles.separator} />
-          <Tooltip title={prTooltip}>
-            <div className={styles.prTrigger} role="button" onClick={handleOpenPr}>
-              <Icon icon={GitPullRequest} size={12} />
-              <span>#{prData.pullRequest.number}</span>
-            </div>
-          </Tooltip>
-        </>
-      )}
-    </>
-  );
-});
+    const hasWorktreeMenu = worktrees.length > 0;
+
+    const worktreeNode = hasWorktreeMenu ? (
+      <WorktreeSwitcher
+        agentId={agentId}
+        currentBranch={branch}
+        detached={detached}
+        deviceId={deviceId}
+        isGithub={isGithub}
+        path={path}
+        sourcePath={sourcePath ?? path}
+        worktrees={worktrees}
+        onWorktreesChange={mutateWorktrees}
+      />
+    ) : null;
+
+    const branchNode = detached ? (
+      // Detached HEAD → plain branch label (nothing to switch to).
+      <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+    ) : (
+      // Local switches over IPC; a remote device switches over RPC (deviceId set).
+      <BranchSwitcher
+        agentId={agentId}
+        currentBranch={branch}
+        deviceId={deviceId}
+        isGithub={isGithub}
+        open={switcherOpen}
+        path={path}
+        sourcePath={sourcePath ?? path}
+        worktrees={worktrees}
+        onExternalRefresh={refreshAfterSync}
+        onOpenChange={setSwitcherOpen}
+        onOptimisticCheckout={handleOptimisticCheckout}
+        onAfterCheckout={() => {
+          void mutateBranch();
+          void mutatePR();
+          void mutateReviewPatches();
+          void mutateAheadBehind();
+          void mutateWorktrees();
+        }}
+      >
+        <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+      </BranchSwitcher>
+    );
+
+    const pullTooltip = pulling
+      ? t('workingDirectory.pullInProgress')
+      : t('workingDirectory.pullAction', {
+          count: aheadBehind?.behind ?? 0,
+          upstream: upstreamName,
+        });
+
+    const pushTooltip = pushing
+      ? t('workingDirectory.pushInProgress')
+      : t(pushTargetExists ? 'workingDirectory.pushAction' : 'workingDirectory.pushActionNew', {
+          count: aheadBehind?.ahead ?? 0,
+          target: pushTargetName || upstreamName,
+        });
+
+    const pullNode = showBehind && (
+      <Tooltip title={pullTooltip}>
+        <div
+          aria-busy={pulling}
+          aria-disabled={syncBusy}
+          className={`${styles.syncTrigger} ${styles.behindStat} ${syncBusy ? styles.syncTriggerDisabled : ''}`}
+          role="button"
+          onClick={syncBusy ? undefined : handlePull}
+        >
+          <span className={styles.aheadBehindStat}>
+            {pulling ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowDownIcon} size={10} />}
+            {aheadBehind!.behind}
+          </span>
+        </div>
+      </Tooltip>
+    );
+
+    const pushNode = showAhead && (
+      <Tooltip title={pushTooltip}>
+        <div
+          aria-busy={pushing}
+          aria-disabled={syncBusy}
+          className={`${styles.syncTrigger} ${styles.aheadStat} ${syncBusy ? styles.syncTriggerDisabled : ''}`}
+          role="button"
+          onClick={syncBusy ? undefined : handlePush}
+        >
+          <span className={styles.aheadBehindStat}>
+            {pushing ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowUpIcon} size={10} />}
+            {aheadBehind!.ahead}
+          </span>
+        </div>
+      </Tooltip>
+    );
+
+    const diffNode = (() => {
+      if (!hasChanges) return null;
+      const diffButton = (
+        <div className={styles.trigger} role="button" onClick={handleToggleReview}>
+          <span className={styles.diffStat}>
+            {diffStats.additions > 0 && (
+              <span className={styles.diffStatAdded}>+{diffStats.additions}</span>
+            )}
+            {diffStats.deletions > 0 && (
+              <span className={styles.diffStatDeleted}>-{diffStats.deletions}</span>
+            )}
+            {diffStats.additions === 0 && diffStats.deletions === 0 && diffStats.files > 0 && (
+              <span className={styles.diffStatModified}>±{diffStats.files}</span>
+            )}
+          </span>
+        </div>
+      );
+      return <Tooltip title={diffStatTooltip}>{diffButton}</Tooltip>;
+    })();
+
+    return (
+      <>
+        <div className={styles.separator} />
+        {/* The worktree icon and the branch name name one thing — which checkout
+         * you're on — so they sit closer to each other than to their neighbours. */}
+        <div className={styles.branchGroup}>
+          {worktreeNode}
+          {branchNode}
+        </div>
+        {pullNode}
+        {pushNode}
+        {diffNode}
+        {prData?.pullRequest && (
+          <>
+            <div className={styles.separator} />
+            <Tooltip title={prTooltip}>
+              <div className={styles.prTrigger} role="button" onClick={handleOpenPr}>
+                <Icon icon={GitPullRequest} size={12} />
+                <span>#{prData.pullRequest.number}</span>
+              </div>
+            </Tooltip>
+          </>
+        )}
+      </>
+    );
+  },
+);
 
 GitStatus.displayName = 'GitStatus';
 
