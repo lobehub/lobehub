@@ -203,7 +203,11 @@ describe('Footer help menu tracking', () => {
     'shows Get App immediately before GitHub on web',
     async () => {
       const user = userEvent.setup();
-      await renderFooter({ hideGitHub: false });
+      // Empty deny-list on purpose: this asserts the ORDER of two entries, so
+      // it must not also depend on whether this distribution ships the GitHub
+      // one. Without it the real `FOOTER_HIDDEN_MENU_KEYS` applies, and a build
+      // that hides GitHub fails a test about Get App's position.
+      await renderFooter({ hiddenMenuKeys: [], hideGitHub: false });
 
       await user.click(screen.getByRole('button', { name: 'Help' }));
 
