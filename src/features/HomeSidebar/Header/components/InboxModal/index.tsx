@@ -35,10 +35,13 @@ import AsyncError from '@/components/AsyncError';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { PENDING_TRANSFERS_SWR_KEY } from '@/features/ResourceTransferRequest';
 import dynamic from '@/libs/next/dynamic';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
+import type { PendingTransferRequest } from '@/services/resourceTransferRequest';
+import { resourceTransferRequestService } from '@/services/resourceTransferRequest';
 
 import type { NotificationListHandle } from './useNotificationList';
 
@@ -159,6 +162,15 @@ const InboxModalContent = memo(() => {
     () => notificationService.getNavigationCounts(),
     { revalidateOnFocus: false },
   );
+
+  // Same key Content uses, so this reads the shared cache entry. The server
+  // folds one totalCount unit per live card into `pending`, and archive-all
+  // cannot touch live cards — subtracting them yields the archivable rows.
+  const { data: liveTransfers } = useClientDataSWR<PendingTransferRequest[]>(
+    workspaceId ? [PENDING_TRANSFERS_SWR_KEY, workspaceId] : null,
+    () => resourceTransferRequestService.listMine(),
+  );
+  const liveTransferCount = liveTransfers?.length ?? 0;
 
   const categoryCounts = navigationCounts ?? [];
   const categoryCountsMap = new Map(categoryCounts.map((item) => [item.category, item]));
@@ -295,6 +307,9 @@ const InboxModalContent = memo(() => {
     0,
   );
   const allTotalCount = categoryCounts.reduce((total, item) => total + item.totalCount, 0);
+  // Live cards are not archivable; with only live cards left, archive-all
+  // would visibly do nothing — keep it disabled then.
+  const archivableTotalCount = Math.max(0, allTotalCount - liveTransferCount);
   return (
     <Flexbox className={styles.root} height={'100%'}>
       <ModalHeader className={styles.header}>
@@ -342,7 +357,7 @@ const InboxModalContent = memo(() => {
               items={[
                 {
                   disabled:
-                    allTotalCount === 0 ||
+                    archivableTotalCount === 0 ||
                     !!bulkAction ||
                     isNavigationCountsLoading ||
                     !!navigationCountsError,

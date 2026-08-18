@@ -110,7 +110,14 @@ const Content = memo<ContentProps>(
     const handleTransferSettled = useCallback(
       async (request: PendingTransferRequest, succeeded: boolean) => {
         // Re-read first so the resolved item leaves before the row resurfaces.
-        const next = await mutateTransfers();
+        // A failed revalidation must not skip the refresh below — treat it as
+        // "request no longer live" so the conservative path (refresh) runs.
+        let next: PendingTransferRequest[] | undefined;
+        try {
+          next = await mutateTransfers();
+        } catch (error) {
+          console.error('[InboxNotificationList] transfer revalidation failed', error);
+        }
         // The server settles the linked row (marks it read) as part of the
         // state transition — here only the surrounding chrome refreshes so the
         // badge and the read list pick the settled state up. A terminal
