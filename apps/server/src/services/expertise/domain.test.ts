@@ -74,6 +74,8 @@ describe('ExpertiseDomainService', () => {
     expect(createDomain).not.toHaveBeenCalled();
 
     const systemPrompt = generateObject.mock.calls[0][0].messages[0].content;
+    expect(systemPrompt).toContain('Speak as the agent whose expertise will evolve');
+    expect(systemPrompt).toContain('do not refer to "the user"');
     expect(systemPrompt).toContain('generic seniority labels');
     expect(systemPrompt).toContain(
       'what larger or more abstract unit can now be handled coherently?',

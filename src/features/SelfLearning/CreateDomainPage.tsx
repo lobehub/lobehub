@@ -32,7 +32,7 @@ import { shinyTextStyles } from '@/styles';
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
 
-const GENERATION_ESTIMATE_SECONDS = 30;
+const GENERATION_ESTIMATE_SECONDS = 60;
 
 const emptyAdjustments: Record<AdjustmentTarget, string> = {
   canonEntries: '',
