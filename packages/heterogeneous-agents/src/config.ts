@@ -4,10 +4,16 @@ import type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentDescriptor,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from '@lobechat/types';
-import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/types';
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/types';
 
 export type {
   HeterogeneousAgentDescriptor,
@@ -15,10 +21,16 @@ export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentDescriptor,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 };
-export { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS };
+export {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+};
 
 /** @deprecated Use `LocalHeterogeneousAgentDescriptor`. */
 export type HeterogeneousAgentConfig = LocalHeterogeneousAgentDescriptor;
@@ -31,12 +43,19 @@ const LOCAL_HETERO_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 const REMOTE_HETERO_TYPES = new Set<string>(
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
 );
+const LOCAL_RUNTIME_HETERO_TYPES = new Set<string>(
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+);
 
 export const isLocalHeterogeneousType = (type: string): type is LocalHeterogeneousAgentType =>
   LOCAL_HETERO_TYPES.has(type);
 
 export const isRemoteHeterogeneousType = (type: string): type is RemoteHeterogeneousAgentType =>
   REMOTE_HETERO_TYPES.has(type);
+
+export const isLocalRuntimeHeterogeneousType = (
+  type: string,
+): type is LocalRuntimeHeterogeneousAgentType => LOCAL_RUNTIME_HETERO_TYPES.has(type);
 
 export const getHeterogeneousAgentConfig = (type: string) =>
   HETEROGENEOUS_AGENT_CONFIGS.find((config) => config.type === type);

@@ -273,6 +273,17 @@ describe('subagent reducer', () => {
     expect(state.runs.has('task-1')).toBe(false); // deleted
   });
 
+  it('does not duplicate a streamed answer repeated by the parent tool result', () => {
+    const { steps, state } = run([
+      textEvent('task-1', 'm1', 'subagent answer'),
+      { data: { content: 'subagent answer', toolCallId: 'task-1' }, type: 'tool_result' },
+    ]);
+
+    expect(kinds(steps[1])).toEqual(['persistContent', 'finalizeThread']);
+    expect(steps[1][0]).toMatchObject({ content: 'subagent answer', messageId: 'msg_2' });
+    expect(state.runs.has('task-1')).toBe(false);
+  });
+
   it('does NOT re-create the thread when a finalized spawn replays its first event', () => {
     // Finalize via the parent tool_result, then replay the SAME first chunk a
     // cold-replica retry / double IPC delivery would resend. `ensureRun` must

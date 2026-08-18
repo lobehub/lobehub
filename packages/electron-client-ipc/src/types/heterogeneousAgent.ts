@@ -1,6 +1,5 @@
+import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type { HeteroQuotaWindow } from '@lobechat/heterogeneous-agents/quota';
-
-import type { HeterogeneousCliAgentType } from './binary';
 
 export {
   AMP_CLI_INSTALL_COMMANDS,
@@ -109,7 +108,7 @@ export interface CodexRateLimitResetResult {
 }
 
 export interface HeterogeneousAgentSessionError {
-  agentType?: HeterogeneousCliAgentType;
+  agentType?: HeterogeneousAgentType;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
   /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
@@ -143,5 +142,6 @@ export interface HeterogeneousAgentRuntimeStatus {
   sessionId: string;
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
-  transport: 'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'trae-acp';
+  transport:
+    'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'dsh-jsonrpc' | 'trae-acp';
 }

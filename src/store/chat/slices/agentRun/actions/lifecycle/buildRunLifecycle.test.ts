@@ -71,9 +71,11 @@ const lifecycle = (
   runtimeType: AgentRuntimeType,
   get: () => ChatStore,
   runScope: 'sub_agent' | 'top_level' = 'top_level',
+  getProducerTitle?: () => string | undefined,
 ) =>
   buildRunLifecycle(get, {
     context: CONTEXT,
+    getProducerTitle,
     parentMessageId: 'u1',
     parentMessageType: 'user',
     runId: OP,
@@ -395,6 +397,37 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
 
     await lifecycle('gateway', get, 'top_level').afterUserMessagePersisted(
       persistedEvent('gateway', 'top_level', { isCreateNewTopic: true, messages, topicId: 't1' }),
+    );
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('a producer-supplied title replaces the summarization call', async () => {
+    const { get, store } = makeStore();
+    const messages = [{ content: 'explain a monorepo', id: 'm1', role: 'user' } as any];
+
+    await lifecycle(
+      'hetero',
+      get,
+      'top_level',
+      () => 'What is a monorepo?',
+    ).afterUserMessagePersisted(
+      persistedEvent('hetero', 'top_level', { isCreateNewTopic: true, messages, topicId: 't1' }),
+    );
+
+    expect(store.internal_updateTopic).toHaveBeenCalledWith('t1', {
+      title: 'What is a monorepo?',
+    });
+    // The whole point: the producer already paid a model call for this title.
+    expect(store.summaryTopicTitle).not.toHaveBeenCalled();
+  });
+
+  it('falls back to summarization when the producer supplied no title', async () => {
+    const { get, store } = makeStore();
+    const messages = [{ content: 'hello there', id: 'm1', role: 'user' } as any];
+
+    await lifecycle('hetero', get, 'top_level', () => undefined).afterUserMessagePersisted(
+      persistedEvent('hetero', 'top_level', { isCreateNewTopic: true, messages, topicId: 't1' }),
     );
 
     expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);

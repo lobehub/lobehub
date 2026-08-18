@@ -10,9 +10,11 @@ minimumReleaseAgeExclude:
   - '@lobehub/ui@5.20.2'
 
 onlyBuiltDependencies:
+  - '@deepseek-ai/dsh-subprocess-local'
   - '@google/genai'
   - '@lobehub/editor'
   - '@vercel/speed-insights'
+  - node-pty
 
 overrides:
   jose: ^6.1.3

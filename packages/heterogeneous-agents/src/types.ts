@@ -41,6 +41,16 @@ export type HeterogeneousEventType =
    */
   | 'tool_result'
   | 'step_complete'
+  /**
+   * The producer generated a conversation title for this run. Emitted only by
+   * agents that title their own sessions, and only for a model- or
+   * user-supplied title — never a producer's deterministic fallback, which is
+   * worse than LobeHub's own summarization and must not replace it.
+   *
+   * Lets the consumer reuse a title the producer already paid for instead of
+   * spending another model call in `summaryTopicTitle`.
+   */
+  | 'session_title'
   | 'agent_runtime_end'
   | 'error';
 
@@ -183,6 +193,17 @@ export interface SubagentEventContext {
    * already established by the corresponding tool_use.
    */
   subagentMessageId?: string;
+}
+
+/** Data shape for `session_title` events. */
+export interface SessionTitleData {
+  /**
+   * `model` when the producer generated the title from the conversation,
+   * `user` when a person set it explicitly. A user title is pinned — the
+   * consumer must not later overwrite it with its own summarization.
+   */
+  origin: 'model' | 'user';
+  title: string;
 }
 
 /** Data shape for stream_chunk events */

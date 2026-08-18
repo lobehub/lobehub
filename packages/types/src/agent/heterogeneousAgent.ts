@@ -338,6 +338,27 @@ export interface RemoteHeterogeneousAgentDescriptor {
   type: string;
 }
 
+/** A runtime bundled with LobeHub Desktop; no external binary installation is required. */
+export interface LocalRuntimeHeterogeneousAgentDescriptor {
+  defaultModel: string;
+  defaultTopicGroupMode?: TopicGroupMode;
+  iconId: string;
+  kind: 'local-runtime';
+  title: string;
+  type: string;
+}
+
+export const LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS = [
+  {
+    defaultModel: 'deepseek-chat',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'DeepSeek',
+    kind: 'local-runtime',
+    title: 'DeepSeek Harness',
+    type: 'deepseek-harness',
+  },
+] as const satisfies readonly LocalRuntimeHeterogeneousAgentDescriptor[];
+
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
   { kind: 'remote-task', title: 'OpenClaw', type: 'openclaw' },
   { kind: 'remote-task', title: 'Hermes', type: 'hermes' },
@@ -345,11 +366,15 @@ export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
 
 export type HeterogeneousAgentDescriptor =
   | (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]
+  | (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number]
   | (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number];
 
 export type HeterogeneousAgentMenuLabelKey =
   (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['menuLabelKey'];
 export type LocalHeterogeneousAgentType = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
+export type LocalRuntimeHeterogeneousAgentType =
+  (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
 export type RemoteHeterogeneousAgentType =
   (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
-export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterogeneousAgentType;
+export type HeterogeneousAgentType =
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType | RemoteHeterogeneousAgentType;

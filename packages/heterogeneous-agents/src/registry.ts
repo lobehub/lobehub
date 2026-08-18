@@ -12,6 +12,7 @@ import {
   CodeBuddyAdapter,
   CodexAdapter,
   CursorAdapter,
+  DshAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -66,6 +67,14 @@ const localAgentRegistry = {
 const runtimeAdapterRegistry = {
   'claude-code-sdk': {
     createAdapter: () => new ClaudeCodeSdkAdapter(),
+  },
+  /**
+   * DeepSeek Harness SDK runtime. Registered here rather than in
+   * `localAgentRegistry` because it is a JSON-RPC server, not a CLI that prints
+   * a JSONL dialect, so it carries no local CLI install/auth descriptor.
+   */
+  'deepseek-harness': {
+    createAdapter: () => new DshAdapter(),
   },
 } satisfies Record<string, AgentRegistryEntry>;
 

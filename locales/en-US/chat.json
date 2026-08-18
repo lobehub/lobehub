@@ -225,6 +225,7 @@
   "connectAgent.providerDesc.codebuddy": "Tencent coding agent CLI",
   "connectAgent.providerDesc.codex": "OpenAI coding agent CLI",
   "connectAgent.providerDesc.cursor": "Cursor coding agent CLI",
+  "connectAgent.providerDesc.deepseek-harness": "Built-in DeepSeek agent runtime with tools and subagents",
   "connectAgent.providerDesc.grok-build": "xAI coding agent CLI",
   "connectAgent.providerDesc.hermes": "Personal agent platform",
   "connectAgent.providerDesc.kimi-code": "Moonshot AI coding agent CLI",

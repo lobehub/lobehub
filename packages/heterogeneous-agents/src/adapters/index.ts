@@ -4,6 +4,7 @@ export { CodeBuddyAdapter } from './codeBuddy';
 export { CodexAdapter } from './codex';
 export { CodexAppServerAdapter } from './codexAppServer';
 export { CursorAdapter } from './cursor';
+export { DshAdapter } from './dsh';
 export { GrokBuildAdapter } from './grokBuild';
 export { KimiCodeAdapter } from './kimiCode';
 export { OpenCodeAdapter } from './opencode';

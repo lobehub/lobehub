@@ -117,6 +117,12 @@ const findCompletionAssistantMessageId = (
  */
 export interface RunAdapterContext {
   context: ConversationContext;
+  /**
+   * Title the producer generated for this run, when it titles its own sessions.
+   * Read at completion; returning a value replaces the summarization call that
+   * would otherwise run. Transports whose producers do not title omit this.
+   */
+  getProducerTitle?: () => string | undefined;
   parentMessageId: string;
   parentMessageType: 'user' | 'assistant' | 'tool';
   runId: string;
@@ -200,6 +206,17 @@ export const buildRunLifecycle = (
         __DEV__ && process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC === '1';
 
       const applyTopicTitle = async (tid: string, messages: UIChatMessage[]) => {
+        // A producer that titles its own session already paid a model call for
+        // it, so reuse that instead of spending a second one on summarization.
+        // Consumed HERE rather than when the event arrives so it inherits this
+        // path's `isCreateNewTopic` gate — a producer title must never clobber
+        // the title of a topic the user is continuing.
+        const producerTitle = adapter.getProducerTitle?.();
+        if (producerTitle) {
+          await get().internal_updateTopic(tid, { title: producerTitle });
+          return;
+        }
+
         if (!shouldSliceTopicTitle) {
           await get().summaryTopicTitle(tid, messages);
           return;

@@ -13,6 +13,12 @@ export type AgentStreamEventType =
    */
   | 'visible_output_end'
   | 'stream_retry'
+  /**
+   * The producer generated a conversation title for this run. Emitted only by
+   * agents that title their own sessions, so the consumer can reuse a title the
+   * producer already paid a model call for instead of summarizing again.
+   */
+  | 'session_title'
   | 'tool_start'
   | 'tool_end'
   | 'tool_execute'
