@@ -93,17 +93,20 @@ export const renderAvatarToDataUrl = (
     return cached;
   }
 
-  const pending = (async () => {
-    try {
-      return isImageAvatar(avatar)
-        ? await renderImageAvatar(avatar)
-        : renderEmojiAvatar(avatar, backgroundColor);
-    } catch (error) {
-      console.error('Notification avatar render failed:', error);
-      if (avatarCache.get(key) === pending) avatarCache.delete(key);
-      return undefined;
-    }
+  const work = (async () => {
+    return isImageAvatar(avatar)
+      ? await renderImageAvatar(avatar)
+      : renderEmojiAvatar(avatar, backgroundColor);
   })();
+
+  const pending = work.catch((error: unknown) => {
+    console.error('Notification avatar render failed:', error);
+    return undefined;
+  });
+
+  void work.catch(() => {
+    if (avatarCache.get(key) === pending) avatarCache.delete(key);
+  });
 
   rememberAvatar(key, pending);
   return pending;
