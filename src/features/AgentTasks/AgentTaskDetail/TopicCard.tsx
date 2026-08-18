@@ -11,7 +11,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   ChevronDown,
@@ -35,6 +35,7 @@ import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
@@ -168,8 +169,12 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
     });
   }, [activity.id, cancelTopic, t]);
 
+  // The server gates `task.deleteTopic` behind the same edit permission as
+  // every other task mutation — a workspace viewer's confirm would only ever
+  // come back FORBIDDEN. Route that through the shared toast instead of
+  // letting the mutation reject silently into the confirm modal.
   const handleDelete = useCallback(() => {
-    if (!activity.id) return;
+    if (!canEditTask || !activity.id) return;
     const topicId = activity.id;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
@@ -180,11 +185,19 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
       okButtonProps: { danger: true },
       okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
       onOk: async () => {
-        await deleteTopic(topicId);
+        try {
+          await deleteTopic(topicId);
+        } catch (error) {
+          toast.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
       },
       title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
     });
-  }, [activity.id, deleteTopic, t]);
+  }, [activity.id, canEditTask, deleteTopic, t]);
 
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
@@ -232,8 +245,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
       // A running topic is deleted server-side via interrupt-then-remove, but
       // the row already offers an explicit Stop for that case — keep delete
       // scoped to finished runs so this menu doesn't offer two destructive
-      // exits for the same in-flight state.
-      disabled: !activity.id || isRunning,
+      // exits for the same in-flight state. Also gated on edit permission,
+      // matching the server's `task.deleteTopic` authorization.
+      disabled: !activity.id || isRunning || !canEditTask,
       icon: Trash,
       key: 'delete',
       label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),

@@ -4,7 +4,7 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
-import { confirmModal, FloatingPanel } from '@lobehub/ui/base-ui';
+import { confirmModal, FloatingPanel, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Copy, ExternalLink, Maximize2, Minimize2, MoreHorizontal, Share2, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -29,6 +29,7 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import FeedbackInput from './FeedbackInput';
@@ -132,6 +133,7 @@ const TopicChatDrawer = memo(() => {
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
+  const { allowed: canEditTask } = usePermission('create_content');
 
   // Hydrate task detail when the drawer is opened outside of TaskDetailPage
   // (e.g. from a brief on home) so the header has agentId / status / seq.
@@ -159,9 +161,10 @@ const TopicChatDrawer = memo(() => {
     navigate(AGENT_CHAT_TOPIC_URL(agentId, topicId));
   }, [agentId, closeTopicDrawer, navigate, topicId]);
 
-  // Deleting the open run has nowhere to keep showing itself — close the
-  // drawer first so the confirm dialog isn't left pointing at a panel whose
-  // topic no longer exists.
+  // The drawer stays open until `deleteTopic` actually succeeds: closing
+  // first would drop the user back onto whatever was behind the panel with
+  // no feedback if the mutation then fails (permission, network, or a topic
+  // that's already gone). Only a confirmed delete tears the panel down.
   const handleDelete = useCallback(() => {
     if (!topicId) return;
     const targetTopicId = topicId;
@@ -174,8 +177,16 @@ const TopicChatDrawer = memo(() => {
       okButtonProps: { danger: true },
       okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
       onOk: async () => {
-        closeTopicDrawer();
-        await deleteTopic(targetTopicId);
+        try {
+          await deleteTopic(targetTopicId);
+          closeTopicDrawer();
+        } catch (error) {
+          toast.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
       },
       title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
     });
@@ -209,8 +220,13 @@ const TopicChatDrawer = memo(() => {
       {
         danger: true,
         // Mirrors the run row's menu: a running topic already has an explicit
-        // Stop affordance, so delete here stays scoped to finished runs.
-        disabled: !topicId || activity?.status === 'running',
+        // Stop affordance, so delete here stays scoped to finished runs, and
+        // is also gated on edit permission like the server's `task.deleteTopic`.
+        // `activity` can be briefly (or, for a topic without a parent task,
+        // permanently) unresolved while the task detail hydrates — an unknown
+        // status is treated as ineligible (same as running) rather than
+        // defaulting to enabled.
+        disabled: !topicId || !canEditTask || !activity?.status || activity.status === 'running',
         icon: Trash,
         key: 'delete',
         label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
@@ -221,6 +237,7 @@ const TopicChatDrawer = memo(() => {
       activity?.operationId,
       activity?.status,
       agentId,
+      canEditTask,
       handleCopyOperationId,
       handleCopyTopicId,
       handleDelete,
