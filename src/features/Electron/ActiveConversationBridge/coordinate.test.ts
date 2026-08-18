@@ -79,6 +79,16 @@ describe('active conversation coordinate', () => {
     });
   });
 
+  it('does not treat an agent named group as a group route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'group', topicId: 'topic-a' },
+      url: '/agent/group/topic-a',
+    });
+
+    expect(coordinate.groupBasePath).toBeUndefined();
+    expect(buildActiveConversationUrl(coordinate, 'topic-b', null)).toBe('/agent/group/topic-b');
+  });
+
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},

@@ -3,13 +3,12 @@ import { usePrevious, useUnmount } from 'ahooks';
 import { use, useEffect, useLayoutEffect } from 'react';
 import { useParams } from 'react-router';
 
+import { shouldSyncGroupRoute } from '@/features/Electron/groupRouteScope';
 import { TabIdContext } from '@/features/Electron/TabHost/TabIdContext';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
-
-import { shouldSyncGroupRoute } from './groupRouteScope';
 
 const GroupIdSync = () => {
   const tabId = use(TabIdContext);

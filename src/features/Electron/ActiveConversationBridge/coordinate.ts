@@ -26,7 +26,7 @@ export const resolveActiveConversationCoordinate = ({
   const location = new URL(url, 'https://desktop.local');
   const segments = location.pathname.split('/').filter(Boolean);
   const agentSegmentIndex = segments.lastIndexOf('agent');
-  const groupSegmentIndex = segments.lastIndexOf('group');
+  const groupSegmentIndex = params.gid ? segments.lastIndexOf('group') : -1;
   const suffixLength = agentSegmentIndex < 0 ? -1 : segments.length - agentSegmentIndex - 2;
   const agentConversation =
     !!params.aid &&
