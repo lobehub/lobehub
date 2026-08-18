@@ -2759,6 +2759,10 @@ export class AiAgentService {
             // Route to the workspace pool when this is a workspace device; the
             // operation JWT stays member-scoped (the run belongs to the member).
             workspaceId: dispatchWorkspaceId,
+            // Topic scope for device-side heteroIngest/heteroFinish. Distinct
+            // from the routing workspace above: a workspace topic on a personal
+            // device still has to write back under `this.workspaceId`.
+            ingestWorkspaceId: this.workspaceId,
           });
           if (!result.success) {
             log('execAgent: hetero device dispatch failed: %s', result.error);
@@ -2837,6 +2841,7 @@ export class AiAgentService {
             args: heteroExecArgs,
             jwt: sandboxJwt,
             marketService,
+            workspaceId: this.workspaceId,
           }).catch(async (err) => {
             // Fire-and-forget: execAgent has already returned `autoStarted`, and
             // the sandbox never reached the point of calling heteroFinish. Drive

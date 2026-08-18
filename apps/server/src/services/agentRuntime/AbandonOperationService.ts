@@ -169,6 +169,7 @@ export class AbandonOperationService {
             { assistantMessageId?: string; operationId?: string } | undefined;
           if (running?.operationId === operationId) {
             await topicModel.updateMetadata(metadata.topicId, { runningOperation: null });
+            await topicModel.settleRunningStatus(metadata.topicId);
           }
         } catch (e) {
           log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
@@ -333,9 +334,16 @@ export class AbandonOperationService {
 
         if (running?.operationId && running.operationId !== operationId) return undefined;
 
+        // This op owns the topic (or nothing claims it). Clear the pointer and
+        // settle `status: 'running'` — otherwise a no-state watchdog abandon
+        // leaves the topic spinning forever (hetero ingest never called
+        // settleRunningStatus).
         if (running?.operationId === operationId) {
           await topicModel.updateMetadata(op.topicId, { runningOperation: null }).catch(() => {});
-          if (running.assistantMessageId) return running.assistantMessageId;
+        }
+        await topicModel.settleRunningStatus(op.topicId).catch(() => {});
+        if (running?.operationId === operationId && running.assistantMessageId) {
+          return running.assistantMessageId;
         }
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
