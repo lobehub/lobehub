@@ -3,47 +3,45 @@
  *
  * WeChat receives messages by long polling, which a per-bot persistent
  * connection host bills as continuously-active time. This poller instead
- * multiplexes every bot's poll loop inside a small, fixed number of
- * serverless invocations: cost tracks the number of workers, not the number
- * of bots.
+ * multiplexes every bot's poll loop inside a small number of resident
+ * workers: cost tracks the number of workers, not the number of bots.
  *
- * Entirely flag-gated — unless `WECHAT_VERCEL_POLLER_ENABLED=1`, the cron
- * entry point returns immediately and no polling connection is ever opened,
- * leaving WeChat on whatever host managed it before.
+ * Entirely flag-gated — unless `WECHAT_GATEWAY_HOST_ENABLED=1`, the service
+ * loop idles and no polling connection is ever opened, leaving WeChat on
+ * whatever host managed it before.
  */
 
-export type WechatPollerMode = 'gateway' | 'vercel';
+export type WechatPollerMode = 'gateway' | 'host';
 
 /**
  * Read at call time (not module init) so tests and runtime flips both work.
  * Boolean by design, matching the `MESSAGE_GATEWAY_ENABLED` convention: unset
  * or `0` keeps the existing host, an explicit `1` opts into this poller.
  */
-export const isWechatVercelPollerEnabled = (): boolean =>
-  process.env.WECHAT_VERCEL_POLLER_ENABLED === '1';
+export const isWechatGatewayHostEnabled = (): boolean =>
+  process.env.WECHAT_GATEWAY_HOST_ENABLED === '1';
 
 export const getWechatPollerMode = (): WechatPollerMode =>
-  isWechatVercelPollerEnabled() ? 'vercel' : 'gateway';
+  isWechatGatewayHostEnabled() ? 'host' : 'gateway';
 
 /**
- * Number of worker leases. Scaling out is this env var alone — the single
- * poll route's every-minute ticks claim whichever shard lease is free, so new
- * shards come online within N minutes of the change.
- *
- * Capacity: each long poll holds one socket for its whole duration, so bots
- * consume file descriptors without the turnover an ordinary request-response
- * service enjoys. Where several workers land on one instance they share that
- * instance's descriptor budget — revisit the topology past a few hundred bots.
+ * Number of worker leases. A resident service runs one claim loop per shard,
+ * so scaling out is this env var alone (a config change restarts the host and
+ * the new loops claim their shards on boot). One shard multiplexes every bot
+ * comfortably on a dedicated process; shards exist for when a single event
+ * loop or process becomes the bottleneck, not for descriptor budgeting.
  */
 export const getWechatPollShardCount = (): number => {
   const parsed = Number(process.env.WECHAT_POLL_SHARD_COUNT);
-  if (!Number.isInteger(parsed) || parsed < 1) return 2;
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
   return parsed;
 };
 
 /**
- * Worker budget. Defaults below the common 800s serverless ceiling, leaving
- * room for abort grace, lease release, and the successor trigger.
+ * Worker window. A worker re-resolves its shard membership at every window
+ * boundary, so this is the upper bound on how long a disabled or deleted
+ * provider keeps polling. The next window starts immediately after (same
+ * process), so the boundary costs milliseconds, not a handover gap.
  * Env-overridable so staging and verification runs can use short windows.
  */
 const DEFAULT_WORKER_DURATION_MS = 780_000;
@@ -51,6 +49,17 @@ const DEFAULT_WORKER_DURATION_MS = 780_000;
 export const getWechatPollWorkerDurationMs = (): number => {
   const parsed = Number(process.env.WECHAT_POLL_WORKER_DURATION_MS);
   if (!Number.isInteger(parsed) || parsed < 1000) return DEFAULT_WORKER_DURATION_MS;
+  return parsed;
+};
+
+/**
+ * Idle pause between service-loop ticks that did not win a shard (disabled,
+ * lease held elsewhere, transition pending). Doubles as the mode-transition
+ * detection cadence, so a flag flip takes effect within about a minute.
+ */
+export const getWechatPollServiceIdleMs = (): number => {
+  const parsed = Number(process.env.WECHAT_POLL_SERVICE_IDLE_MS);
+  if (!Number.isInteger(parsed) || parsed < 100) return 60_000;
   return parsed;
 };
 

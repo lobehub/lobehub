@@ -36,7 +36,7 @@ import {
   type MessageGatewayConnectionStatus,
 } from './MessageGatewayClient';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
-import { isWechatVercelPollerEnabled } from './wechatPoll/config';
+import { isWechatGatewayHostEnabled } from './wechatPoll/config';
 
 /**
  * Per-user messenger gateway connections live on the gateway as webhook-mode
@@ -166,7 +166,7 @@ const isVercel = !!process.env.VERCEL_ENV;
  * back to the local connection lifecycle instead of the gateway API.
  */
 const resolveUnmanagedPlatforms = (): Set<string> =>
-  isWechatVercelPollerEnabled() ? new Set(['wechat']) : new Set<string>();
+  isWechatGatewayHostEnabled() ? new Set(['wechat']) : new Set<string>();
 
 export class GatewayService {
   /**

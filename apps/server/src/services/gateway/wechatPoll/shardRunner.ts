@@ -23,7 +23,7 @@ import {
   getWechatPollerMode,
   getWechatPollShardCount,
   getWechatPollWorkerDurationMs,
-  isWechatVercelPollerEnabled,
+  isWechatGatewayHostEnabled,
   WECHAT_POLL_ABORT_GRACE_MS,
   WECHAT_POLL_START_CONCURRENCY,
   WECHAT_POLL_TICK_INTERVAL_MS,
@@ -75,8 +75,12 @@ export interface RunWechatPollShardOptions {
   redis?: Redis | null;
   /** Injectable for tests — rollback rebuild (defaults to GatewayService.ensureRunning). */
   runGatewaySync?: () => Promise<void>;
-  /** Fire-and-forget successor trigger; injectable for tests. */
-  triggerSuccessor?: (shard: number) => void;
+  /**
+   * Host shutdown signal (SIGTERM on redeploy). A worker that sees it stops
+   * early and releases its lease, so the replacement instance takes over in
+   * one tick instead of waiting out the lease TTL.
+   */
+  shouldStop?: () => boolean;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -119,24 +123,6 @@ const defaultRunGatewaySync = async (): Promise<void> => {
   await new GatewayService().ensureRunning();
 };
 
-/**
- * Fire the poll route again just before this worker exits, shrinking the
- * handover gap from "up to one cron period" to roughly one request round-trip.
- * The successor tick claims the lease this worker just released. The regular
- * cron remains the safety net if this request is lost.
- */
-const defaultTriggerSuccessor = (shard: number): void => {
-  const appUrl = process.env.APP_URL;
-  const cronSecret = process.env.CRON_SECRET;
-  if (!appUrl || !cronSecret) return;
-
-  void fetch(`${appUrl.replace(/\/+$/, '')}/cron/wechat-poll`, {
-    headers: { Authorization: `Bearer ${cronSecret}` },
-  }).catch((err) => {
-    log('shard=%d successor trigger failed: %s', shard, err?.message);
-  });
-};
-
 const isEligible = async (
   provider: DecryptedBotProvider,
   redis: WechatPollStateRedis,
@@ -173,7 +159,7 @@ const isEligible = async (
  * poll loop ever starts) once the full drain succeeded, so there is no window
  * in which both hosts poll the same bot and deliver its messages twice.
  *
- * Returns true when the record now says 'vercel'.
+ * Returns true when the record now says 'host'.
  */
 const runMigrationTransition = async (
   redis: Redis,
@@ -202,8 +188,8 @@ const runMigrationTransition = async (
       }
     }
 
-    await setActiveMode(redis, 'vercel');
-    log('migration transition complete: active-mode=vercel');
+    await setActiveMode(redis, 'host');
+    log('migration transition complete: active-mode=host');
     return true;
   } finally {
     await releaseTransitionLock(redis, holder).catch(() => {});
@@ -222,7 +208,7 @@ const runRollbackTransition = async (
 ): Promise<WechatPollShardResult> => {
   // A live lease means a worker may still be polling — rebuilding the other
   // host now would double-poll. The worker notices the flag within one tick
-  // and exits; retry on a later cron tick.
+  // and exits; retry on a later service tick.
   const shardCount = getWechatPollShardCount();
   for (let shard = 0; shard < shardCount; shard++) {
     if (await redis.get(shardLeaseKey(shard))) {
@@ -246,8 +232,8 @@ const runRollbackTransition = async (
 };
 
 /**
- * One cron tick: reconcile the mode state machine, then claim the first free
- * shard lease (0..SHARD_COUNT-1) and become that shard's worker.
+ * One service tick: reconcile the mode state machine, then claim the first
+ * free shard lease (0..SHARD_COUNT-1) and become that shard's worker.
  *
  * Shard count is pure config (`WECHAT_POLL_SHARD_COUNT`) — scaling out means
  * changing the env var and nothing else, because later ticks claim the new
@@ -275,8 +261,8 @@ export const runWechatPollTick = async (
  *
  * Reconciles the desired mode (env) against the active mode (Redis) first and
  * performs any pending transition; in steady state it races for the shard's
- * lease, and the winner multiplexes every WeChat bot assigned to that shard,
- * releases the lease, and triggers its successor. Losers return `lease-held`.
+ * lease, and the winner multiplexes every WeChat bot assigned to that shard
+ * before releasing the lease. Losers return `lease-held`.
  */
 export const runWechatPollShard = async (
   shard: number,
@@ -291,7 +277,7 @@ export const runWechatPollShard = async (
   const recorded = await getActiveMode(redis);
 
   if (expected === 'gateway') {
-    if (recorded !== 'vercel') return { role: 'skipped', skippedReason: 'disabled' };
+    if (recorded !== 'host') return { role: 'skipped', skippedReason: 'disabled' };
     return runRollbackTransition(redis, workerId, options.runGatewaySync ?? defaultRunGatewaySync);
   }
 
@@ -302,7 +288,7 @@ export const runWechatPollShard = async (
   const loadProviders = options.loadProviders ?? defaultLoadProviders;
 
   let transition: 'migration' | undefined;
-  if (recorded !== 'vercel') {
+  if (recorded !== 'host') {
     const migrated = await runMigrationTransition(
       redis,
       workerId,
@@ -322,7 +308,7 @@ export const runWechatPollShard = async (
   const deadline = startedAt + durationMs;
   const shardCount = getWechatPollShardCount();
   const createClient = options.createClient ?? defaultCreateClient;
-  const triggerSuccessor = options.triggerSuccessor ?? defaultTriggerSuccessor;
+  const shouldStop = options.shouldStop ?? (() => false);
   const pollStateRedis = redis as unknown as WechatPollStateRedis;
 
   const running = new Map<string, WechatShardClient>();
@@ -378,14 +364,20 @@ export const runWechatPollShard = async (
 
     // Supervision loop: renew the lease and pick up hot-join connect requests
     // every tick until the deadline. Losing the lease means another worker took
-    // over; the flag flipping back means a rollback was requested — both stop
-    // this worker at once so the two hosts never poll the same bot.
+    // over; the flag flipping back means a rollback was requested; a host
+    // shutdown signal means a replacement instance is coming up — each stops
+    // this worker at once so two hosts never poll the same bot.
     while (Date.now() < deadline) {
       const remaining = deadline - Date.now();
       await sleep(Math.min(WECHAT_POLL_TICK_INTERVAL_MS, remaining));
       if (Date.now() >= deadline) break;
 
-      if (!isWechatVercelPollerEnabled()) {
+      if (shouldStop()) {
+        log('shard=%d host shutdown requested, stopping worker', shard);
+        break;
+      }
+
+      if (!isWechatGatewayHostEnabled()) {
         log('shard=%d rollback requested, stopping worker', shard);
         break;
       }
@@ -398,15 +390,13 @@ export const runWechatPollShard = async (
       await consumeConnectQueue(shard, shardCount, pollStateRedis, startBot, loadProviders);
     }
   } finally {
-    // Stop before releasing the lease and triggering the successor, so the
-    // successor can never start polling a bot this worker still holds.
+    // Stop before releasing the lease, so the next claimant (the service's
+    // next tick, or a replacement instance) can never start polling a bot
+    // this worker still holds.
     await Promise.allSettled([...running.values()].map((client) => client.stop()));
-    // A hung poll loop must not pin this invocation past its platform limit.
+    // A hung poll loop must not pin this worker past its window.
     await Promise.race([Promise.allSettled(tasks), sleep(WECHAT_POLL_ABORT_GRACE_MS)]);
     await releaseLease(redis, shard, workerId).catch(() => {});
-    // No successor while a rollback is pending — the chain must die out so the
-    // rollback transition's lease check can pass.
-    if (isWechatVercelPollerEnabled()) triggerSuccessor(shard);
   }
 
   return {

@@ -5,7 +5,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { isWechatVercelPollerEnabled } from '@/server/services/gateway/wechatPoll/config';
+import { isWechatGatewayHostEnabled } from '@/server/services/gateway/wechatPoll/config';
 import { getInstallationStore } from '@/server/services/messenger/installations';
 import type { ChatTopicBotContext } from '@/types/topic';
 
@@ -90,7 +90,7 @@ export const startWechatTypingKeeper = async (
     if (!botContext.applicationId) return NOOP;
     // While the gateway still manages WeChat, its connection object drives
     // typing from the message stream it owns; pulsing here too would double up.
-    if (!isWechatVercelPollerEnabled()) return NOOP;
+    if (!isWechatGatewayHostEnabled()) return NOOP;
 
     // platformThreadId format: wechat:{type}:{userId} (userId may contain colons)
     const wechatUserId = botContext.platformThreadId.split(':').slice(2).join(':');

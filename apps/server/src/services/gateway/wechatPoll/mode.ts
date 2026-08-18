@@ -6,9 +6,9 @@ import { acquireKeyLock, releaseKeyLock } from './lease';
 /**
  * The mode state machine's durable half (LOBE-12811).
  *
- * The env flag (`WECHAT_VERCEL_POLLER_ENABLED`) expresses the DESIRED mode;
- * this Redis key records the mode that is ACTUALLY in effect. Every cron tick
- * compares the two and, on mismatch, performs the transition (drain the CF
+ * The env flag (`WECHAT_GATEWAY_HOST_ENABLED`) expresses the DESIRED mode;
+ * this Redis key records the mode that is ACTUALLY in effect. Every service
+ * tick compares the two and, on mismatch, performs the transition (drain the
  * gateway side, or rebuild it via sync) under the transition lock — which is
  * what makes "flip one env var, wait a minute" a complete migration or
  * rollback with no manual steps and no double-polling window.
@@ -26,7 +26,7 @@ const TRANSITION_LOCK_TTL_MS = 120_000;
 export const getActiveMode = async (redis: Redis): Promise<WechatPollerMode> => {
   const value = await redis.get(ACTIVE_MODE_KEY);
   // Absent = pre-migration deployments — the gateway owns WeChat.
-  return value === 'vercel' ? 'vercel' : 'gateway';
+  return value === 'host' ? 'host' : 'gateway';
 };
 
 export const setActiveMode = async (redis: Redis, mode: WechatPollerMode): Promise<void> => {

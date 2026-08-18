@@ -52,12 +52,12 @@ const credentials = async () => ({ botToken: 'token-1' });
 
 describe('startWechatTypingKeeper', () => {
   beforeEach(() => {
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '1';
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '1';
     vi.useFakeTimers();
   });
 
   afterEach(() => {
-    delete process.env.WECHAT_VERCEL_POLLER_ENABLED;
+    delete process.env.WECHAT_GATEWAY_HOST_ENABLED;
     vi.useRealTimers();
   });
 
@@ -121,7 +121,7 @@ describe('startWechatTypingKeeper', () => {
   });
 
   it('is a no-op while the gateway still manages wechat', async () => {
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '0';
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '0';
     const startTyping = vi.fn(async () => {});
     const redis = makeRedis({
       [wechatWindowKey('app-1', 'wx-user-1')]: { token: 'ctx-9' },

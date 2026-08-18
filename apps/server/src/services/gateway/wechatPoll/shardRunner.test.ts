@@ -107,21 +107,21 @@ describe('wechat poll shard runner', () => {
     vi.clearAllMocks();
     featureAccessMock.isBotFeatureAccessAllowed.mockImplementation(async () => true);
     connectQueueMock.popAll.mockResolvedValue([]);
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '1';
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '1';
     delete process.env.WECHAT_POLL_SHARD_COUNT;
     // Steady state for the worker tests; transition tests clear this.
-    redis.store.set(ACTIVE_MODE_KEY, 'vercel');
+    redis.store.set(ACTIVE_MODE_KEY, 'host');
   });
 
   afterEach(() => {
-    delete process.env.WECHAT_VERCEL_POLLER_ENABLED;
+    delete process.env.WECHAT_GATEWAY_HOST_ENABLED;
     delete process.env.WECHAT_POLL_SHARD_COUNT;
   });
 
   // ─── Gating ───
 
   it('returns disabled without touching redis when the flag is off', async () => {
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '0';
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '0';
     redis.store.delete(ACTIVE_MODE_KEY);
     const result = await runWechatPollShard(0, { redis: redis as never });
     expect(result).toEqual({ role: 'skipped', skippedReason: 'disabled' });
@@ -146,7 +146,6 @@ describe('wechat poll shard runner', () => {
       durationMs: 50,
       loadProviders: async () => [],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     };
     const [a, b] = await Promise.all([
       runWechatPollShard(0, options),
@@ -157,6 +156,7 @@ describe('wechat poll shard runner', () => {
   });
 
   it('starts clients only for providers assigned to this shard', async () => {
+    process.env.WECHAT_POLL_SHARD_COUNT = '2';
     const ids = ['app-a', 'app-b', 'app-c', 'app-d', 'app-e'];
     const shard0 = ids.filter((id) => wechatShardOf(id, 2) === 0);
     expect(shard0.length).toBeGreaterThan(0);
@@ -171,7 +171,6 @@ describe('wechat poll shard runner', () => {
       durationMs: 50,
       loadProviders: async () => ids.map(makeProvider),
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
 
     expect(result.role).toBe('worker');
@@ -202,7 +201,6 @@ describe('wechat poll shard runner', () => {
         makeProvider('ok'),
       ],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
 
     expect(started).toEqual(['ok']);
@@ -210,25 +208,21 @@ describe('wechat poll shard runner', () => {
 
   // ─── Worker lifecycle ───
 
-  it('releases the lease and triggers the successor at deadline', async () => {
-    const triggerSuccessor = vi.fn();
+  it('releases the lease at deadline so the next claim takes over immediately', async () => {
     const result = await runWechatPollShard(0, {
       durationMs: 50,
       loadProviders: async () => [],
       redis: redis as never,
-      triggerSuccessor,
     });
 
     expect(result.role).toBe('worker');
     expect(redis.store.has('wechat:poll:lease:0')).toBe(false);
-    expect(triggerSuccessor).toHaveBeenCalledWith(0);
 
-    // The successor can claim it immediately — that is the handover.
+    // The service loop's next tick can claim it at once — that is the handover.
     const next = await runWechatPollShard(0, {
       durationMs: 10,
       loadProviders: async () => [],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
     expect(next.role).toBe('worker');
   });
@@ -244,8 +238,8 @@ describe('wechat poll shard runner', () => {
         return {
           start: client.start,
           stop: async () => {
-            // The successor must never find a free lease while a predecessor
-            // client is still winding down.
+            // The next claimant must never find a free lease while a
+            // predecessor client is still winding down.
             leaseAtStop = redis.store.has('wechat:poll:lease:0');
             stopped.push(provider.applicationId);
             await client.stop();
@@ -255,7 +249,6 @@ describe('wechat poll shard runner', () => {
       durationMs: 50,
       loadProviders: async () => [makeProvider('a')],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
 
     expect(stopped).toEqual(['a']);
@@ -279,7 +272,6 @@ describe('wechat poll shard runner', () => {
       durationMs: 100,
       loadProviders: async () => [makeProvider('hung')],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
 
     expect(started).toEqual(['hung']);
@@ -303,7 +295,6 @@ describe('wechat poll shard runner', () => {
       durationMs: 50,
       loadProviders: async () => [makeProvider('boom'), makeProvider('fine')],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
 
     expect(result.role).toBe('worker');
@@ -331,7 +322,6 @@ describe('wechat poll shard runner', () => {
         // Parked at load time, so only the queue path can bring it in.
         loadProviders: async () => [makeProvider('late-join')],
         redis: redis as never,
-        triggerSuccessor: vi.fn(),
       });
 
       await vi.advanceTimersByTimeAsync(31_000); // one supervision tick
@@ -351,7 +341,7 @@ describe('wechat poll shard runner', () => {
   // ─── Mode state machine ───
 
   it('migration transition drains every connection before any polling starts', async () => {
-    redis.store.delete(ACTIVE_MODE_KEY); // recorded=gateway, expected=vercel
+    redis.store.delete(ACTIVE_MODE_KEY); // recorded=gateway, expected=host
     process.env.WECHAT_POLL_SHARD_COUNT = '1';
 
     const events: string[] = [];
@@ -371,12 +361,11 @@ describe('wechat poll shard runner', () => {
       gatewayClient,
       loadProviders: async () => [makeProvider('a'), makeProvider('b')],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     });
 
     expect(result.role).toBe('worker');
     expect(result.transition).toBe('migration');
-    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('vercel');
+    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('host');
     expect(gatewayClient.disconnect).toHaveBeenCalledTimes(2);
 
     const firstPoll = events.findIndex((e) => e.startsWith('poll:'));
@@ -406,7 +395,6 @@ describe('wechat poll shard runner', () => {
       gatewayClient,
       loadProviders: async () => providers,
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     };
 
     const first = await runWechatPollShard(0, options);
@@ -415,7 +403,7 @@ describe('wechat poll shard runner', () => {
 
     const second = await runWechatPollShard(0, options);
     expect(second.role).toBe('worker');
-    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('vercel');
+    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('host');
     // The retry re-drains everything, including the id that already succeeded.
     expect(gatewayClient.disconnect).toHaveBeenCalledTimes(4);
   });
@@ -435,7 +423,6 @@ describe('wechat poll shard runner', () => {
       gatewayClient,
       loadProviders: async () => [makeProvider('a')],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     };
 
     const [a, b] = await Promise.all([
@@ -447,7 +434,7 @@ describe('wechat poll shard runner', () => {
   });
 
   it('rollback transition rebuilds via sync and flips the record', async () => {
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '0'; // expected gateway, recorded vercel
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '0'; // expected gateway, recorded host
     const runGatewaySync = vi.fn(async () => {});
 
     const result = await runWechatPollShard(0, { redis: redis as never, runGatewaySync });
@@ -458,7 +445,7 @@ describe('wechat poll shard runner', () => {
   });
 
   it('rollback defers while a shard worker still holds its lease', async () => {
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '0';
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '0';
     redis.store.set('wechat:poll:lease:0', 'live-worker');
     const runGatewaySync = vi.fn(async () => {});
 
@@ -466,37 +453,61 @@ describe('wechat poll shard runner', () => {
 
     expect(result).toEqual({ role: 'skipped', skippedReason: 'transition-pending' });
     expect(runGatewaySync).not.toHaveBeenCalled();
-    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('vercel'); // record NOT advanced
+    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('host'); // record NOT advanced
   });
 
-  it('worker exits within one tick and skips the successor when rollback is requested', async () => {
+  it('worker exits within one tick and releases its lease when rollback is requested', async () => {
     vi.useFakeTimers();
     try {
-      const triggerSuccessor = vi.fn();
       const runPromise = runWechatPollShard(0, {
         durationMs: 120_000,
         loadProviders: async () => [],
         redis: redis as never,
-        triggerSuccessor,
       });
 
       await vi.advanceTimersByTimeAsync(1); // worker up, holding the lease
-      process.env.WECHAT_VERCEL_POLLER_ENABLED = '0';
+      process.env.WECHAT_GATEWAY_HOST_ENABLED = '0';
       await vi.advanceTimersByTimeAsync(31_000); // next tick notices the flip
       await vi.advanceTimersByTimeAsync(6000); // abort grace
       const result = await runPromise;
 
       expect(result.role).toBe('worker');
       expect(result.durationMs).toBeLessThan(40_000); // exited at the tick, not the deadline
+      // The freed lease is what lets the rollback transition's check pass.
       expect(redis.store.has('wechat:poll:lease:0')).toBe(false);
-      // The chain must die out so the rollback's lease check can pass.
-      expect(triggerSuccessor).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // ─── Single-route tick (env-only scaling) ───
+  it('worker exits within one tick and releases its lease on host shutdown', async () => {
+    vi.useFakeTimers();
+    try {
+      let stopping = false;
+      const runPromise = runWechatPollShard(0, {
+        durationMs: 120_000,
+        loadProviders: async () => [],
+        redis: redis as never,
+        shouldStop: () => stopping,
+      });
+
+      await vi.advanceTimersByTimeAsync(1); // worker up, holding the lease
+      stopping = true; // SIGTERM: a replacement instance is coming up
+      await vi.advanceTimersByTimeAsync(31_000); // next tick notices the signal
+      await vi.advanceTimersByTimeAsync(6000); // abort grace
+      const result = await runPromise;
+
+      expect(result.role).toBe('worker');
+      expect(result.durationMs).toBeLessThan(40_000); // exited at the tick, not the deadline
+      // Released lease = the replacement claims the shard in one tick instead
+      // of waiting out the lease TTL.
+      expect(redis.store.has('wechat:poll:lease:0')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ─── Tick shard scan (env-only scaling) ───
 
   it('sequential ticks claim shard 0 then shard 1, a third returns lease-held', async () => {
     process.env.WECHAT_POLL_SHARD_COUNT = '2';
@@ -506,7 +517,6 @@ describe('wechat poll shard runner', () => {
         durationMs: 120_000,
         loadProviders: async () => [],
         redis: redis as never,
-        triggerSuccessor: vi.fn(),
       };
       const tick1 = runWechatPollTick(options);
       await vi.advanceTimersByTimeAsync(1);
@@ -539,7 +549,6 @@ describe('wechat poll shard runner', () => {
       durationMs: 30,
       loadProviders: async () => [],
       redis: redis as never,
-      triggerSuccessor: vi.fn(),
     };
     expect(await runWechatPollTick(options)).toEqual({
       role: 'skipped',
@@ -553,7 +562,7 @@ describe('wechat poll shard runner', () => {
   });
 
   it('tick short-circuits on disabled without probing any lease', async () => {
-    process.env.WECHAT_VERCEL_POLLER_ENABLED = '0';
+    process.env.WECHAT_GATEWAY_HOST_ENABLED = '0';
     redis.store.delete(ACTIVE_MODE_KEY);
     const result = await runWechatPollTick({ redis: redis as never });
     expect(result).toEqual({ role: 'skipped', skippedReason: 'disabled' });
