@@ -11,6 +11,8 @@ export const TRACING_SCENARIOS = {
   AgentWelcome: 'agent_welcome',
   BuilderSuggestion: 'builder_suggestion',
   DocumentToSkillMeta: 'document_to_skill_meta',
+  ExpertiseDomainDraft: 'expertise_domain_draft',
+  ExpertiseTopicIngestion: 'expertise_topic_ingestion',
   FollowUp: 'follow_up',
   HomeBrief: 'home_brief',
   InputCompletion: 'input_completion',

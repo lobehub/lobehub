@@ -1,16 +1,40 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { expertiseHits, expertiseRuns } from '@/database/schemas';
 
 import type { SelfIterationCompletionPayload } from '../agentSignal/services/selfIteration/completion';
 import { ExpertiseIngestionService } from './ingestion';
 
+const getAgentModelConfig = vi.fn();
+const generateObject = vi.fn();
+const listDomainsForAgent = vi.fn();
+const listLessons = vi.fn();
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: class {
+    getAgentModelConfig = getAgentModelConfig;
+  },
+}));
+vi.mock('@/database/models/expertise', () => ({
+  ExpertiseModel: class {
+    listDomainsForAgent = listDomainsForAgent;
+    listLessons = listLessons;
+  },
+}));
+vi.mock('@/server/services/aiGeneration', () => ({
+  AiGenerationService: class {
+    generateObject = generateObject;
+  },
+}));
+
 const completion = (selfIteration: SelfIterationCompletionPayload) => ({
   agentId: 'agent-signal-reflection',
   operationId: 'op_review_1',
   selfIteration,
 });
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('ExpertiseIngestionService.ingestSelfReview', () => {
   it('ingests a topic only after its self-reflection run completes', async () => {
@@ -90,6 +114,42 @@ describe('ExpertiseIngestionService historical ingestion', () => {
       ['agent_1', 'topic_1'],
       ['agent_1', 'topic_2'],
     ]);
+  });
+});
+
+describe('ExpertiseIngestionService.ingestCompletion', () => {
+  it('records expertise ingestion under its own tracing scenario', async () => {
+    listDomainsForAgent.mockResolvedValue([
+      {
+        domain: {
+          canonEntries: [],
+          domainFilter: 'Production incidents',
+          id: 'domain_1',
+          layers: [],
+          outOfScope: 'Unrelated conversations',
+          title: 'Incident response',
+        },
+      },
+    ] as never);
+    listLessons.mockResolvedValue([]);
+    getAgentModelConfig.mockResolvedValue({
+      model: 'test-model',
+      provider: 'test-provider',
+    });
+    generateObject.mockResolvedValue({ domains: [] });
+
+    await new ExpertiseIngestionService({} as never, 'user_1').ingestCompletion({
+      agentId: 'agent_1',
+      serializedContext: '[user] Investigate the incident.',
+      topicId: 'topic_1',
+    });
+
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        tracing: expect.objectContaining({ scenario: 'expertise_topic_ingestion' }),
+      }),
+    );
   });
 });
 

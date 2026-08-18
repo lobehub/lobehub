@@ -61,7 +61,9 @@ describe('ExpertiseDomainService', () => {
       expect.objectContaining({
         schema: expect.objectContaining({ name: 'expertise_domain_draft' }),
       }),
-      expect.any(Object),
+      expect.objectContaining({
+        tracing: expect.objectContaining({ scenario: 'expertise_domain_draft' }),
+      }),
     );
     expect(result.layers).toHaveLength(2);
     expect(result.canonEntries[0].key).toBe('blameless');

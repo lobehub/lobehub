@@ -170,7 +170,7 @@ export class ExpertiseDomainService {
           tracing: {
             agentId: input.agentId,
             promptVersion: 'expertise-domain-draft-v3',
-            scenario: TRACING_SCENARIOS.TopicAutoSummary,
+            scenario: TRACING_SCENARIOS.ExpertiseDomainDraft,
             schemaName: DOMAIN_DRAFT_JSON_SCHEMA.name,
           },
         },

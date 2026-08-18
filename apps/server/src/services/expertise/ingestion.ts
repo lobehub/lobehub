@@ -306,7 +306,7 @@ export class ExpertiseIngestionService {
         tracing: {
           agentId: input.agentId,
           promptVersion: PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.TopicAutoSummary,
+          scenario: TRACING_SCENARIOS.ExpertiseTopicIngestion,
           schemaName: ANALYSIS_JSON_SCHEMA.name,
           topicId: input.topicId,
         },
