@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import type * as PagedMessageListModule from '@/store/chat/utils/pagedMessageList';
 
 import ChatList from './ChatList';
 import { ConversationProvider } from './ConversationProvider';
@@ -97,6 +98,13 @@ vi.mock('@/libs/swr', () => ({
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
   getCacheScope: () => 'user-1:personal',
+}));
+
+// These tests cover the legacy full-fetch read path; the paged gate reads the
+// real agent/user/serverConfig stores, which are minimally mocked here.
+vi.mock('@/store/chat/utils/pagedMessageList', async (importOriginal) => ({
+  ...(await importOriginal<typeof PagedMessageListModule>()),
+  isPagedMessageListContext: () => false,
 }));
 
 vi.mock('@/store/agent', () => ({
