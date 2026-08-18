@@ -11,6 +11,7 @@ import type { ChatTopicMetadata } from '@/types/topic';
 export interface RecentItem {
   agentId?: string | null;
   description?: string | null;
+  groupId?: string | null;
   icon: string;
   id: string;
   lastAssistantMessage?: string | null;
@@ -86,6 +87,7 @@ export const recentRouter = router({
         return {
           agentId: item.routeId,
           description: item.description,
+          groupId: item.groupId,
           icon: item.type,
           id: item.id,
           lastAssistantMessage: item.lastAssistantMessage,

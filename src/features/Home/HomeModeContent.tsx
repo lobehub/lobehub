@@ -32,6 +32,7 @@ import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -200,6 +201,11 @@ const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, traili
 const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
   ({ showAuthor, topic }) => {
     const agent = useAgentDisplayMeta(topic.agentId);
+    const group = useAgentGroupStore((s) =>
+      topic.groupId ? s.groupMap[topic.groupId] : undefined,
+    );
+    const avatar = group?.avatar || agent?.avatar;
+    const backgroundColor = group?.backgroundColor || agent?.backgroundColor;
     const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
     // The snippet is raw markdown (a user note or the last assistant reply);
     // rendered as one plain line, its syntax markers are just noise.
@@ -214,10 +220,10 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         href={topic.routePath}
         title={topic.title}
         icon={
-          agent ? (
+          avatar ? (
             <Avatar
-              avatar={agent.avatar}
-              background={agent.backgroundColor}
+              avatar={avatar}
+              background={backgroundColor}
               className={styles.topicAvatar}
               shape={'circle'}
               size={22}

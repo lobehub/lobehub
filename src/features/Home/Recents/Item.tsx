@@ -1,4 +1,4 @@
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -11,6 +11,7 @@ import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { type RecentItem } from '@/server/routers/lambda/recent';
+import { useAgentGroupStore } from '@/store/agentGroup';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
@@ -21,6 +22,9 @@ const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTe
 
 const RecentListItem = memo<RecentItem>((item) => {
   const { title, type, agentId, id, metadata, status } = item;
+  const group = useAgentGroupStore((s) =>
+    item.groupId ? s.groupMap[item.groupId] : undefined,
+  );
   const IconComponent = TYPE_ICON_MAP[type] || FileTextIcon;
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
@@ -70,6 +74,16 @@ const RecentListItem = memo<RecentItem>((item) => {
             if (ProviderIcon) {
               return <ProviderIcon color={cssVar.colorTextDescription} size={16} />;
             }
+          }
+          if (type === 'topic' && group?.avatar) {
+            return (
+              <Avatar
+                avatar={group.avatar}
+                background={group.backgroundColor || undefined}
+                shape={'circle'}
+                size={20}
+              />
+            );
           }
           return (
             <Icon
