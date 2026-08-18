@@ -48,6 +48,7 @@
   "generation.actions.seedApplyFailed": "应用种子遇到了问题。你可以重试",
   "generation.actions.seedCopied": "种子已复制到剪贴板",
   "generation.actions.seedCopyFailed": "复制遇到了问题。你可以再试一次",
+  "generation.cost": "费用",
   "generation.metadata.by": "由 {{name}}",
   "generation.metadata.count": "{{count}} 张图片",
   "generation.metadata.createdAt": "创建于 {{time}}",

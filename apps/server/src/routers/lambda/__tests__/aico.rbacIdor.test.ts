@@ -36,13 +36,17 @@ vi.mock('@/server/services/sms', () => ({
 
 const {
   disableAllOrgMemberKeysMock,
+  disableUserKeyMock,
   ensureMemberKeyMock,
+  ensureUserKeyMock,
   getUserRemainingMock,
   reclaimMemberKeyMock,
   syncMemberCycleUsageMock,
 } = vi.hoisted(() => ({
   disableAllOrgMemberKeysMock: vi.fn().mockResolvedValue([]),
+  disableUserKeyMock: vi.fn().mockResolvedValue(null),
   ensureMemberKeyMock: vi.fn().mockResolvedValue({ created: false, keyId: null }),
+  ensureUserKeyMock: vi.fn().mockResolvedValue({ created: false, keyId: null }),
   getUserRemainingMock: vi.fn().mockResolvedValue({ remainingMicroUsd: 0, usageMicroUsd: null }),
   reclaimMemberKeyMock: vi.fn().mockResolvedValue(null),
   syncMemberCycleUsageMock: vi.fn().mockResolvedValue(null),
@@ -50,8 +54,9 @@ const {
 
 vi.mock('@/server/services/openrouter/keyService', () => ({
   AicoOpenRouterKeyService: class {
-    ensureUserKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
+    ensureUserKey = ensureUserKeyMock;
     ensureMemberKey = ensureMemberKeyMock;
+    disableUserKey = disableUserKeyMock;
     disableMemberKey = vi.fn().mockResolvedValue(null);
     disableAllOrgMemberKeys = disableAllOrgMemberKeysMock;
     getUserRemaining = getUserRemainingMock;
@@ -109,6 +114,8 @@ const cleanup = async () => {
 
 beforeEach(async () => {
   disableAllOrgMemberKeysMock.mockClear();
+  disableUserKeyMock.mockClear();
+  ensureUserKeyMock.mockClear();
   reclaimMemberKeyMock.mockClear();
   reclaimMemberKeyMock.mockResolvedValue(null);
   testDB = await getTestDB();
@@ -357,6 +364,17 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const wallet = wallets.find((w) => w.userId === strangerId);
     expect(wallet).toBeTruthy();
     expect(Number(wallet!.balanceToman)).toBe(50_000);
+  });
+
+  it('reactivateUser re-enables the managed OpenRouter key', async () => {
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
+
+    await platformCaller.deactivateUser({ reason: 'abuse', userId: strangerId });
+    expect(disableUserKeyMock).toHaveBeenCalledWith(strangerId);
+
+    ensureUserKeyMock.mockClear();
+    await platformCaller.reactivateUser({ userId: strangerId });
+    expect(ensureUserKeyMock).toHaveBeenCalledWith(strangerId);
   });
 
   it('platform admin can suspend; member procedures still reachable on model (enforcement gap covered elsewhere)', async () => {

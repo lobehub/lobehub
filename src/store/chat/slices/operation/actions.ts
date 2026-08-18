@@ -231,6 +231,10 @@ export class OperationActionsImpl {
       false,
       n(`updateOperationMetadata/${operationId}`),
     );
+
+    if (metadata.visibleLoadingDone) {
+      this.completeRunningReasoningChildren(operationId);
+    }
   };
 
   updateOperationStatus = (
@@ -310,6 +314,23 @@ export class OperationActionsImpl {
       false,
       n(`completeOperation/${operationId}`),
     );
+
+    this.completeRunningReasoningChildren(operationId);
+  };
+
+  /**
+   * Reasoning child ops do not inherit `visibleLoadingDone` from the parent runtime.
+   * Complete them when the parent finishes so the Thinking accordion / tray cannot stick.
+   */
+  completeRunningReasoningChildren = (operationId: string): void => {
+    const parent = this.#get().operations[operationId];
+    const childIds = parent?.childOperationIds ?? [];
+    for (const childId of childIds) {
+      const child = this.#get().operations[childId];
+      if (child?.type === 'reasoning' && child.status === 'running') {
+        this.completeOperation(childId);
+      }
+    }
   };
 
   getOperationAbortSignal = (operationId: string): AbortSignal => {

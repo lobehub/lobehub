@@ -48,6 +48,7 @@
   "generation.actions.seedApplyFailed": "Failed to Apply Seed",
   "generation.actions.seedCopied": "Seed Copied to Clipboard",
   "generation.actions.seedCopyFailed": "Failed to Copy Seed",
+  "generation.cost": "Cost",
   "generation.metadata.by": "by {{name}}",
   "generation.metadata.count": "{{count}} Images",
   "generation.metadata.createdAt": "Created at {{time}}",

@@ -8,7 +8,8 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/artifact-template": "workspace:*"
+    "@lobechat/artifact-template": "workspace:*",
+    "@lobechat/business-const": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

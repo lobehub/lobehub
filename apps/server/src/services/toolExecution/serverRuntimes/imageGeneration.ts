@@ -3,11 +3,16 @@ import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generati
 import { ImageGenerationExecutionRuntime } from '@lobechat/builtin-tool-image-generation/executionRuntime';
 import type { AiProviderModelListItem } from 'model-bank';
 
+import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { aiModelRouter } from '@/server/routers/lambda/aiModel';
 import { aiProviderRouter } from '@/server/routers/lambda/aiProvider';
 import { generationRouter } from '@/server/routers/lambda/generation';
 import { generationTopicRouter } from '@/server/routers/lambda/generationTopic';
 import { imageRouter } from '@/server/routers/lambda/image';
+import {
+  filterManagedGenerationProviders,
+  resolvePreferredGenerationBilling,
+} from '@/server/services/aico/generationBilling';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -22,9 +27,12 @@ const normalizeModel = (model: AiProviderModelListItem): ImageGenerationModelSum
 });
 
 export const imageGenerationRuntime: ServerRuntimeRegistration = {
-  factory: (context) => {
+  factory: async (context) => {
     if (!context.userId) {
       throw new Error('userId is required for Image Generation tool execution');
+    }
+    if (!context.serverDB) {
+      throw new Error('serverDB is required for Image Generation tool execution');
     }
 
     const callerContext = {
@@ -37,6 +45,11 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
     const generationCaller = generationRouter.createCaller(callerContext);
     const generationTopicCaller = generationTopicRouter.createCaller(callerContext);
     const imageCaller = imageRouter.createCaller(callerContext);
+    const billingModel = new AicoBillingModel(context.serverDB);
+    const aicoBilling = await resolvePreferredGenerationBilling(
+      (userId) => billingModel.getOrCreateUserWallet(userId),
+      context.userId,
+    );
 
     return new ImageGenerationExecutionRuntime({
       createGenerationTopic: (type, title) =>
@@ -47,7 +60,7 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
             ? { visibility: context.agentVisibility }
             : {}),
         }),
-      createImage: (payload) => imageCaller.createImage(payload),
+      createImage: (payload) => imageCaller.createImage({ ...payload, aicoBilling }),
       getGenerationStatus: async ({ asyncTaskId, generationId }) => {
         const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });
         return {
@@ -58,9 +71,11 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
       },
       listImageModels: async ({ provider, limit }) => {
         const runtimeState = await aiProviderCaller.getAiProviderRuntimeState({});
-        const enabledProviders = provider
-          ? runtimeState.enabledImageAiProviders.filter((item) => item.id === provider)
-          : runtimeState.enabledImageAiProviders;
+        const enabledProviders = filterManagedGenerationProviders(
+          provider
+            ? runtimeState.enabledImageAiProviders.filter((item) => item.id === provider)
+            : runtimeState.enabledImageAiProviders,
+        );
         const providers = await Promise.all(
           enabledProviders.map(async (item) => {
             /**

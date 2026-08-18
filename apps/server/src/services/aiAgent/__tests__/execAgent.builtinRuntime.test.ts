@@ -355,7 +355,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     // Verify createOperation was called with agentConfig containing the runtime systemRole
     expect(mockCreateOperation).toHaveBeenCalledTimes(1);
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.systemRole).toContain('You are Lobe');
+    expect(callArgs.agentConfig.systemRole).toContain('You are Panachat AI');
     // Model identity is injected by ModelInfoProvider now, not the `{{model}}`
     // template placeholder; `{{date}}` still proves the runtime template merged.
     expect(callArgs.agentConfig.systemRole).toContain('{{date}}');

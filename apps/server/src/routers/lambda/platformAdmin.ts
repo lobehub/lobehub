@@ -656,6 +656,9 @@ export const platformAdminRouter = router({
         .set({ isActive: true })
         .where(eq(userWallets.userId, input.userId));
 
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      await keyService.ensureUserKey(input.userId);
+
       return { ok: true as const };
     }),
 

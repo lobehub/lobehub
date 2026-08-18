@@ -10,6 +10,16 @@ const callerMocks = vi.hoisted(() => ({
   image: vi.fn(() => ({})),
 }));
 
+const billingMocks = vi.hoisted(() => ({
+  getOrCreateUserWallet: vi.fn(),
+}));
+
+vi.mock('@/database/models/aicoBilling', () => ({
+  AicoBillingModel: vi.fn(() => ({
+    getOrCreateUserWallet: billingMocks.getOrCreateUserWallet,
+  })),
+}));
+
 vi.mock('@/server/routers/lambda/aiModel', () => ({
   aiModelRouter: { createCaller: callerMocks.aiModel },
 }));
@@ -26,6 +36,14 @@ vi.mock('@/server/routers/lambda/image', () => ({
   imageRouter: { createCaller: callerMocks.image },
 }));
 
+const factoryContext = {
+  clientIp: '203.0.113.7',
+  serverDB: {} as never,
+  toolManifestMap: {},
+  userId: 'user-1',
+  workspaceId: 'workspace-1',
+};
+
 describe('imageGenerationRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,15 +52,14 @@ describe('imageGenerationRuntime', () => {
     callerMocks.generation.mockReturnValue({});
     callerMocks.generationTopic.mockReturnValue({});
     callerMocks.image.mockReturnValue({});
+    billingMocks.getOrCreateUserWallet.mockResolvedValue({
+      preferredBillingSource: 'personal',
+      preferredOrganizationId: null,
+    });
   });
 
-  it('passes the request and workspace scope to every router caller', () => {
-    imageGenerationRuntime.factory({
-      clientIp: '203.0.113.7',
-      toolManifestMap: {},
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    });
+  it('passes the request and workspace scope to every router caller', async () => {
+    await imageGenerationRuntime.factory(factoryContext);
 
     const callerContext = {
       clientIp: '203.0.113.7',
@@ -61,7 +78,7 @@ describe('imageGenerationRuntime', () => {
     callerMocks.generationTopic.mockReturnValue({ createTopic });
     callerMocks.aiProvider.mockReturnValue({
       getAiProviderRuntimeState: vi.fn().mockResolvedValue({
-        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+        enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
       }),
     });
     callerMocks.aiModel.mockReturnValue({
@@ -77,11 +94,9 @@ describe('imageGenerationRuntime', () => {
       }),
     });
 
-    const runtime = imageGenerationRuntime.factory({
+    const runtime = await imageGenerationRuntime.factory({
+      ...factoryContext,
       agentVisibility: 'public',
-      toolManifestMap: {},
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
     });
 
     const result = await runtime.generateImage({
@@ -97,10 +112,49 @@ describe('imageGenerationRuntime', () => {
     });
   });
 
+  it('passes stored wallet billing into createImage', async () => {
+    const createImage = vi.fn().mockResolvedValue({
+      data: {
+        batch: { id: 'batch-1' },
+        generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+      },
+      success: true,
+    });
+    billingMocks.getOrCreateUserWallet.mockResolvedValue({
+      preferredBillingSource: 'organization',
+      preferredOrganizationId: 'org_9',
+    });
+    callerMocks.generationTopic.mockReturnValue({
+      createTopic: vi.fn().mockResolvedValue('topic-1'),
+    });
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'or-image' }]),
+    });
+    callerMocks.image.mockReturnValue({ createImage });
+
+    const runtime = await imageGenerationRuntime.factory(factoryContext);
+
+    await runtime.generateImage({
+      prompt: 'Wallet-backed photo',
+      waitUntilComplete: false,
+    });
+
+    expect(createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aicoBilling: { organizationId: 'org_9', source: 'organization' },
+      }),
+    );
+  });
+
   it('preserves model descriptions and complete parameter schemas', async () => {
     callerMocks.aiProvider.mockReturnValue({
       getAiProviderRuntimeState: vi.fn().mockResolvedValue({
-        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+        enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
       }),
     });
     callerMocks.aiModel.mockReturnValue({
@@ -122,13 +176,9 @@ describe('imageGenerationRuntime', () => {
       ]),
     });
 
-    const runtime = imageGenerationRuntime.factory({
-      toolManifestMap: {},
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    });
+    const runtime = await imageGenerationRuntime.factory(factoryContext);
 
-    const result = await runtime.listImageModels({ provider: 'provider-1' });
+    const result = await runtime.listImageModels({ provider: 'openrouter' });
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('Description: A fast image generation and editing model.');
@@ -153,8 +203,8 @@ describe('imageGenerationRuntime', () => {
   it('does not list models hidden for the current user', async () => {
     callerMocks.aiProvider.mockReturnValue({
       getAiProviderRuntimeState: vi.fn().mockResolvedValue({
-        enabledImageAiProviders: [{ id: 'lobehub', name: 'LobeHub' }],
-        hiddenBuiltinModels: [{ id: 'hidden-image', providerId: 'lobehub' }],
+        enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
+        hiddenBuiltinModels: [{ id: 'hidden-image', providerId: 'openrouter' }],
       }),
     });
     callerMocks.aiModel.mockReturnValue({
@@ -164,17 +214,38 @@ describe('imageGenerationRuntime', () => {
       }),
     });
 
-    const runtime = imageGenerationRuntime.factory({
-      toolManifestMap: {},
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    });
+    const runtime = await imageGenerationRuntime.factory(factoryContext);
 
-    const result = await runtime.listImageModels({ limit: 1, provider: 'lobehub' });
+    const result = await runtime.listImageModels({ limit: 1, provider: 'openrouter' });
 
     expect(result).toMatchObject({
       state: {
-        providers: [{ id: 'lobehub', models: [{ id: 'visible-image' }] }],
+        providers: [{ id: 'openrouter', models: [{ id: 'visible-image' }] }],
+        totalModels: 1,
+      },
+      success: true,
+    });
+  });
+
+  it('omits unmanaged image providers from the chat tool list', async () => {
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [
+          { id: 'google', name: 'Google' },
+          { id: 'openrouter', name: 'OpenRouter' },
+        ],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'or-image' }]),
+    });
+
+    const runtime = await imageGenerationRuntime.factory(factoryContext);
+    const result = await runtime.listImageModels({});
+
+    expect(result).toMatchObject({
+      state: {
+        providers: [{ id: 'openrouter', models: [{ id: 'or-image' }] }],
         totalModels: 1,
       },
       success: true,
@@ -186,17 +257,13 @@ describe('imageGenerationRuntime', () => {
     callerMocks.aiModel.mockReturnValue({ getAiProviderModelList });
     callerMocks.aiProvider.mockReturnValue({
       getAiProviderRuntimeState: vi.fn().mockResolvedValue({
-        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+        enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
       }),
     });
 
-    const runtime = imageGenerationRuntime.factory({
-      toolManifestMap: {},
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    });
+    const runtime = await imageGenerationRuntime.factory(factoryContext);
 
-    const result = await runtime.listImageModels({ provider: 'provider-2' });
+    const result = await runtime.listImageModels({ provider: 'google' });
 
     expect(result).toMatchObject({
       state: { providers: [], totalModels: 0 },

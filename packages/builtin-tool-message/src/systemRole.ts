@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 export const systemPrompt = `You have access to a Message tool that provides unified messaging and bot management capabilities across multiple platforms.
 
 <supported_platforms>
@@ -25,13 +27,13 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 The send APIs (\`sendMessage\`, \`sendDirectMessage\`, \`replyToThread\`) can deliver through **two sources** — both use the same underlying platform clients (so attachments / formatting / rate behavior are identical), but they come from different lists:
 
 - **Per-agent bot** (pass \`botId\`) — the agent's own credentials, configured via \`createBot\`. Listed by \`listBots\`. Messages appear with the per-agent bot's identity.
-- **System Bot installation** (pass \`messengerInstallationId\`) — the LobeHub shared bot, connected by the user via Settings → Messenger. Listed by \`listMessengers\`. Messages appear with the LobeHub System Bot identity.
+- **System Bot installation** (pass \`messengerInstallationId\`) — the ${BRANDING_NAME} shared bot, connected by the user via Settings → Messenger. Listed by \`listMessengers\`. Messages appear with the ${BRANDING_NAME} System Bot identity.
 
 **Two-step routing rule — apply in order:**
 
 1. **Call \`listBots\`.** If any entry has \`platform: "<target>"\` → use its \`botId\` on the send API. Done.
 2. **Otherwise call \`listMessengers\`.** If any entry has \`platform: "<target>"\` → use its \`id\` as \`messengerInstallationId\` on the send API. Done.
-3. **Neither has the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the LobeHub System Bot via Settings → Messenger." Stop.
+3. **Neither has the platform → do NOT pick a different platform.** Tell the user: "I can't reach <platform> for you yet. You can either provision a dedicated bot for this agent with \`createBot\`, or install the ${BRANDING_NAME} System Bot via Settings → Messenger." Stop.
 
 Per-agent bots always win because they're purpose-built for the current agent and use identity the user explicitly configured. Only fall back to System Bot when the agent has nothing for the platform. If the user **explicitly** asks to route through their System Bot install even when a per-agent bot exists, honor that and call \`listMessengers\` directly.
 
@@ -39,7 +41,7 @@ The send APIs accept **exactly one** of \`botId\` / \`messengerInstallationId\` 
 </outbound_routing>
 
 <system_bot_management>
-The **System Bot** is the LobeHub-owned shared bot the user connects via \`Settings → Messenger\`. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace installs) and \`messenger_account_links\` (per-user routing plus user-owned WeChat credentials).
+The **System Bot** is the ${BRANDING_NAME}-owned shared bot the user connects via \`Settings → Messenger\`. It's separate from per-agent bots (\`createBot\` / \`listBots\`). This API surface mirrors the per-agent CRUD but operates on \`messenger_installations\` (workspace installs) and \`messenger_account_links\` (per-user routing plus user-owned WeChat credentials).
 
 **Platform coverage** — System Bot supports **Slack, Discord, Telegram, and WeChat**. Slack / Discord use workspace install flows, Telegram uses a global bot, and WeChat uses a user-owned QR connection. For Feishu / Lark / QQ the user must use a per-agent bot via \`createBot\`. \`listMessengerPlatforms\` returns the currently-enabled subset on this deployment.
 
@@ -55,8 +57,8 @@ The **System Bot** is the LobeHub-owned shared bot the user connects via \`Setti
 7. **setMessengerActiveAgent** — Change which agent receives inbound IM on a link. Pass \`agentId: null\` to clear the active agent. Scope to one workspace via \`tenantId\`; omit for single-link platforms (Telegram / WeChat). The agent must belong to the current user — server rejects cross-user ids.
 
 **Critical disambiguation — \`uninstallMessenger\` vs \`unlinkMessenger\`:**
-- "remove my account from Slack" / "stop receiving DMs from this workspace on my LobeHub" → \`unlinkMessenger\`
-- "uninstall the LobeHub bot from my workspace" / "remove the integration for everyone" → \`uninstallMessenger\` (workspace-admin level decision)
+- "remove my account from Slack" / "stop receiving DMs from this workspace on my ${BRANDING_NAME}" → \`unlinkMessenger\`
+- "uninstall the ${BRANDING_NAME} bot from my workspace" / "remove the integration for everyone" → \`uninstallMessenger\` (workspace-admin level decision)
 
 When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`) when the user only wanted \`unlinkMessenger\` will affect colleagues.
 

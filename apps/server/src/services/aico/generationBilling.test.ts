@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveManagedGenerationBilling, toManagedGenerationModelId } from './generationBilling';
+import {
+  filterManagedGenerationProviders,
+  resolveManagedGenerationBilling,
+  resolvePreferredGenerationBilling,
+  toManagedGenerationModelId,
+} from './generationBilling';
 import { AicoManagedPolicyError } from './managedPolicy';
 
 describe('toManagedGenerationModelId', () => {
@@ -46,5 +51,44 @@ describe('resolveManagedGenerationBilling', () => {
         provider: 'openrouter',
       }),
     ).toEqual({ organizationId: 'org_1', source: 'organization' });
+  });
+});
+
+describe('resolvePreferredGenerationBilling', () => {
+  it('uses the stored organization preference when present', async () => {
+    await expect(
+      resolvePreferredGenerationBilling(
+        async () => ({
+          preferredBillingSource: 'organization',
+          preferredOrganizationId: 'org_9',
+        }),
+        'user-1',
+      ),
+    ).resolves.toEqual({ organizationId: 'org_9', source: 'organization' });
+  });
+
+  it('falls back to personal when the org preference is incomplete', async () => {
+    await expect(
+      resolvePreferredGenerationBilling(
+        async () => ({
+          preferredBillingSource: 'organization',
+          preferredOrganizationId: null,
+        }),
+        'user-1',
+      ),
+    ).resolves.toEqual({ source: 'personal' });
+  });
+});
+
+describe('filterManagedGenerationProviders', () => {
+  it('keeps only wallet-backed providers', () => {
+    expect(
+      filterManagedGenerationProviders([
+        { id: 'google' },
+        { id: 'openrouter' },
+        { id: 'aico' },
+        { id: 'openai' },
+      ]),
+    ).toEqual([{ id: 'openrouter' }, { id: 'aico' }]);
   });
 });

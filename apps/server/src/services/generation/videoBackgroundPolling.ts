@@ -88,6 +88,7 @@ export async function processBackgroundVideoPolling(
     });
 
     const asset: VideoGenerationAsset = {
+      ...(typeof pollResult.costUsd === 'number' ? { costUsd: pollResult.costUsd } : {}),
       coverUrl: processResult.coverKey,
       duration: processResult.duration,
       height: processResult.height,
@@ -161,7 +162,7 @@ export async function processBackgroundVideoPolling(
 async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
-): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
+): Promise<{ costUsd?: number; headers?: Record<string, string>; videoUrl: string } | null> {
   const maxRetries = 120;
   const pollingInterval = 5000;
 
@@ -173,7 +174,11 @@ async function pollUntilCompletion(
 
       if (result.status === 'success') {
         log('Video generation succeeded for task: %s', inferenceId);
-        return { headers: result.headers, videoUrl: result.videoUrl };
+        return {
+          ...(typeof result.costUsd === 'number' ? { costUsd: result.costUsd } : {}),
+          headers: result.headers,
+          videoUrl: result.videoUrl,
+        };
       }
 
       if (result.status === 'failed') {
