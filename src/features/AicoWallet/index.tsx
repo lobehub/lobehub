@@ -12,9 +12,9 @@ import { Link } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import type { AicoBillingContext, AicoBillingSource } from '@/features/AicoBilling';
 import {
-  type AicoBillingContext,
-  type AicoBillingSource,
+  AICO_MY_WALLET_SWR_KEY,
   formatRemainingUsd,
   useAicoBillingSources,
 } from '@/features/AicoBilling';
@@ -97,7 +97,7 @@ export const AicoWallet = () => {
     Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
   );
 
-  const { data: wallet, mutate: mutateWallet } = useClientDataSWR('aico-my-wallet', () =>
+  const { data: wallet, mutate: mutateWallet } = useClientDataSWR(AICO_MY_WALLET_SWR_KEY, () =>
     lambdaClient.aicoBilling.getMyWallet.query(),
   );
   const { data: fx } = useClientDataSWR('aico-fx', () =>
@@ -114,6 +114,9 @@ export const AicoWallet = () => {
   );
 
   const { canSwitch, data: billingSources, isSelected, selectSource } = useAicoBillingSources();
+  const personalRemainingUsd = billingSources?.sources.find(
+    (source) => source.source === 'personal',
+  )?.remainingUsd;
 
   return (
     <Flexbox className={styles.page} gap={20}>
@@ -129,8 +132,10 @@ export const AicoWallet = () => {
 
       <div className={styles.grid}>
         <StatisticCard
-          statistic={{ value: `$${Number(wallet?.balanceUsd ?? 0).toFixed(4)}` }}
           title={t('wallet.balanceUsd')}
+          statistic={{
+            value: `$${Number(personalRemainingUsd ?? wallet?.balanceUsd ?? 0).toFixed(4)}`,
+          }}
         />
         <StatisticCard
           statistic={{ value: Number(wallet?.balanceToman ?? 0).toLocaleString() }}
