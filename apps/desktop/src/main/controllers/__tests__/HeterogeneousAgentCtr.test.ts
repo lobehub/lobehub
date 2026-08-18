@@ -111,6 +111,10 @@ const {
   codexAppServerShouldFailAfterThread,
   codexAppServerShouldFailResume,
   codexAppServerShouldFallback,
+  cursorAcpSessionCloseMock,
+  cursorAcpSessionConstructMock,
+  cursorAcpSessionInterruptMock,
+  cursorAcpSessionRunMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -133,6 +137,10 @@ const {
   codexAppServerShouldFailAfterThread: { value: false },
   codexAppServerShouldFailResume: { value: false },
   codexAppServerShouldFallback: { value: false },
+  cursorAcpSessionCloseMock: vi.fn(),
+  cursorAcpSessionConstructMock: vi.fn(),
+  cursorAcpSessionInterruptMock: vi.fn(),
+  cursorAcpSessionRunMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -297,6 +305,53 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockCursorAcpSession {
+    constructor(private readonly options: any) {
+      cursorAcpSessionConstructMock(options);
+    }
+
+    close() {
+      cursorAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      cursorAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (cursorAcpSessionRunMock.getMockImplementation()) {
+        return cursorAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'cursor-acp',
+      });
+      this.options.onSessionId('cursor-session-1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'cursor-acp',
+      });
+    }
+  }
+
   class MockTraeAcpSession {
     constructor(private readonly options: any) {
       traeAcpSessionConstructMock(options);
@@ -349,6 +404,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerClient: MockCodexAppServerClient,
     CodexThreadSession: MockCodexThreadSession,
+    CursorAcpSession: MockCursorAcpSession,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
@@ -462,6 +518,10 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerShouldFailAfterThread.value = false;
     codexAppServerShouldFailResume.value = false;
     codexAppServerShouldFallback.value = false;
+    cursorAcpSessionCloseMock.mockReset();
+    cursorAcpSessionConstructMock.mockReset();
+    cursorAcpSessionInterruptMock.mockReset();
+    cursorAcpSessionRunMock.mockReset();
     grokAcpSessionCloseMock.mockReset();
     grokAcpSessionConstructMock.mockReset();
     grokAcpSessionInterruptMock.mockReset();
@@ -1107,53 +1167,189 @@ describe('HeterogeneousAgentCtr', () => {
       execFileMock.mockReset();
     });
 
-    it('spawns with the positional prompt without writing it to argv logs or trace metadata', async () => {
-      const originalNodeEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+    it('routes Cursor through ACP and persists its native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'cursor',
+        args: ['--model', 'composer-1.5'],
+        command: 'agent',
+        resumeSessionId: 'cursor-session-old',
+      });
 
-      try {
-        const prompt = 'private user request';
-        const systemContext = 'private selected workspace context';
-        const payload = `${systemContext}\n\n${prompt}`;
-        const { proc, writes } = createFakeProc();
-        nextFakeProc = proc;
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
-        const { sessionId } = await ctr.startSession({
-          agentType: 'cursor',
-          command: 'agent',
-          cwd: appStoragePath,
-        });
+      await ctr.sendPrompt({
+        operationId: 'op-cursor',
+        prompt: 'private user request',
+        sessionId,
+        systemContext: 'private selected workspace context',
+      });
 
-        await ctr.sendPrompt({
-          operationId: 'op-cursor-private',
-          prompt,
+      expect(spawnCalls).toHaveLength(0);
+      expect(cursorAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'composer-1.5'],
+          askUserBridge: expect.any(Object),
+          clientVersion: '1.0.0-test',
+          commandPath: 'agent',
+          cwd: FAKE_DESKTOP_PATH,
+          operationId: 'op-cursor',
+          prompt: [
+            { text: 'private selected workspace context', type: 'text' },
+            { text: 'private user request', type: 'text' },
+          ],
+          resumeSessionId: 'cursor-session-old',
           sessionId,
-          systemContext,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'cursor-session-1',
+      });
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentRuntimeStatus',
+        expect.objectContaining({ state: 'running', transport: 'cursor-acp' }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('forwards Cursor questions through the existing intervention bridge and returns the answer', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let receivedAnswer: unknown;
+      cursorAcpSessionRunMock.mockImplementation(async (options) => {
+        receivedAnswer = await options.askUserBridge.pending({
+          arguments: {
+            questions: [
+              {
+                header: 'Scope',
+                multiSelect: false,
+                options: [{ label: 'Narrow' }, { label: 'Full' }],
+                question: 'How broad?',
+              },
+            ],
+          },
+          toolCallId: 'cursor-question-1',
         });
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
+      const run = ctr.sendPrompt({ operationId: 'op-cursor-question', prompt: 'work', sessionId });
 
-        const { args: cliArgs } = spawnCalls[0];
-        expect(cliArgs.at(-2)).toBe('--');
-        expect(cliArgs.at(-1)).toBe(payload);
-        expect(writes).toEqual([]);
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith(
+          'heteroAgentEvent',
+          expect.objectContaining({
+            event: expect.objectContaining({
+              data: expect.objectContaining({ toolCallId: 'cursor-question-1' }),
+              type: 'agent_intervention_request',
+            }),
+            sessionId,
+          }),
+        ),
+      );
+      await ctr.submitIntervention({
+        operationId: 'op-cursor-question',
+        result: { 'How broad?': 'Full' },
+        toolCallId: 'cursor-question-1',
+      });
+      await run;
 
-        const logged = JSON.stringify(loggerInfoMock.mock.calls);
-        expect(logged).toContain('<argv payload redacted>');
-        expect(logged).not.toContain(prompt);
-        expect(logged).not.toContain(systemContext);
+      expect(receivedAnswer).toEqual({ result: { 'How broad?': 'Full' } });
+    });
 
-        const traceRoot = path.join(appStoragePath, '.heerogeneous-tracing', 'cursor');
-        const traceDirs = await readdir(traceRoot);
-        const metaText = await readFile(path.join(traceRoot, traceDirs[0], 'meta.json'), 'utf8');
-        const meta = JSON.parse(metaText);
-        expect(meta.args).toEqual(cliArgs.slice(0, -1));
-        expect(metaText).not.toContain(prompt);
-        expect(metaText).not.toContain(systemContext);
-      } finally {
-        process.env.NODE_ENV = originalNodeEnv;
-      }
+    it('classifies an exact Cursor ACP session/load not-found error for resume fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_602,
+        message: 'Session "legacy-cursor-session" not found',
+      });
+      cursorAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr('Cursor ACP diagnostic\n');
+        throw missingSessionError;
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'cursor',
+        command: 'agent',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'legacy-cursor-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-cursor-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+      );
+
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: {
+          agentType: 'cursor',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'agent',
+          details: {
+            code: -32_602,
+            message: 'Session "legacy-cursor-session" not found',
+          },
+          message:
+            'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+          resumeSessionId: 'legacy-cursor-session',
+          stderr: missingSessionError.message,
+          workingDirectory: '/Users/fake/projects/repo',
+        },
+        sessionId,
+      });
+      expect(send).not.toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it.each([
+      ['cancelSession', cursorAcpSessionInterruptMock],
+      ['stopSession', cursorAcpSessionCloseMock],
+    ] as const)('%s delegates to the active Cursor ACP session', async (action, expectedMock) => {
+      let resolveRun: (() => void) | undefined;
+      cursorAcpSessionRunMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
+      const run = ctr.sendPrompt({ operationId: 'op-cursor', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(cursorAcpSessionConstructMock).toHaveBeenCalledOnce());
+
+      await ctr[action]({ sessionId });
+
+      expect(expectedMock).toHaveBeenCalledOnce();
+      resolveRun?.();
+      await run;
     });
   });
 

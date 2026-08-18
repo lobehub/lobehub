@@ -1014,7 +1014,14 @@ export const executeHeterogeneousAgent = async (
     completed = true;
     fallbackPromise = (async () => {
       await clearStaleResumeMetadata().catch(console.error);
-      toast?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      toast?.info?.(
+        t(
+          adapterType === 'cursor'
+            ? 'heteroAgent.resumeReset.cursorAcpIncompatible'
+            : 'heteroAgent.resumeReset.resumeFailed',
+          { ns: 'chat' },
+        ),
+      );
       await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
     })();
 

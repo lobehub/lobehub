@@ -727,6 +727,7 @@
   "heteroAgent.quota.updatedAgo": "{{duration}}前更新",
   "heteroAgent.quota.updatedJustNow": "刚刚更新",
   "heteroAgent.quota.weekly": "每周",
+  "heteroAgent.resumeReset.cursorAcpIncompatible": "之前的 Cursor 会话无法通过 ACP 恢复，已使用全新上下文开始新对话。",
   "heteroAgent.resumeReset.cwdChanged": "工作目录已切换，之前的 Claude Code 会话只能在原目录下继续，已开始新对话。",
   "heteroAgent.resumeReset.resumeFailed": "已保存的 Codex 线程无法安全恢复，当前话题已自动开启新会话。",
   "heteroAgent.switchCwd.cancel": "取消",
