@@ -75,6 +75,22 @@ export interface HeterogeneousAgentModelCatalogFailure {
 export type HeterogeneousAgentModelCatalog =
   HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
 
+/** Authentication source used by a heterogeneous agent CLI. */
+export type HeterogeneousAuthMode = 'api' | 'subscription';
+
+/**
+ * Reference-only API binding for a heterogeneous agent.
+ * Provider credentials are resolved at launch and are never persisted here.
+ */
+export interface HeterogeneousApiConfig {
+  /** Primary model used by the CLI. */
+  model: string;
+  /** LobeHub provider whose runtime credentials are resolved locally. */
+  providerId: string;
+  /** Optional model used for fast/background work. Defaults to the primary model. */
+  smallFastModel?: string | null;
+}
+
 /**
  * Heterogeneous agent provider configuration.
  * When set, the assistant delegates execution to an external agent runtime
@@ -92,8 +108,12 @@ export type HeterogeneousAgentModelCatalog =
  *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
+  /** API binding. Only used by Claude Code when `authMode` is `api`. */
+  apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];
+  /** Defaults to `subscription` for backwards compatibility. */
+  authMode?: HeterogeneousAuthMode;
   /** Command to spawn the agent (e.g. 'claude') (local CLI only). */
   command?: string;
   /**

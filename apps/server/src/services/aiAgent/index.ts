@@ -48,6 +48,7 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
+  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
   getHeterogeneousAgentConfig,
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
@@ -2485,6 +2486,34 @@ export class AiAgentService {
           threadId: appContext?.threadId ?? undefined,
         },
       });
+
+      if (
+        agentConfig.agencyConfig?.heterogeneousProvider?.type === 'claude-code' &&
+        agentConfig.agencyConfig.heterogeneousProvider.authMode === 'api'
+      ) {
+        await this.finalizeHeteroDispatchError({
+          agentId: resolvedAgentId,
+          assistantMessageId: assistantMessageRecord.id,
+          detail: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+          message: 'Claude Code API mode does not support this execution target',
+          operationId,
+          topicId,
+        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId: assistantMessageRecord.id,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+          message: 'Claude Code API mode requires Desktop local execution',
+          operationId,
+          status: 'error',
+          success: false,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+        };
+      }
 
       // Notify-based platform agents (openclaw / hermes) communicate back via
       // agentNotify.notify. A local run uses the requesting desktop's device ID;

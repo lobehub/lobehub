@@ -404,6 +404,32 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it('should reject Claude Code API mode before sandbox or device dispatch', async () => {
+    heteroAgentConfig.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: {
+        apiConfig: { model: 'claude-test', providerId: 'anthropic' },
+        authMode: 'api',
+        type: 'claude-code',
+      },
+    } as any;
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'This must not receive provider credentials remotely',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining('Desktop local execution'),
+        status: 'error',
+        success: false,
+      }),
+    );
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+  });
+
   it('should pass resolved Codex model and reasoning effort args to sandbox dispatch', async () => {
     heteroAgentConfig.model = 'codex';
     heteroAgentConfig.provider = 'codex';

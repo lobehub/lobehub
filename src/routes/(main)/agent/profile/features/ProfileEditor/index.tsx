@@ -2,6 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Tabs } from '@lobehub/ui/base-ui';
@@ -13,6 +14,8 @@ import { useTranslation } from 'react-i18next';
 
 import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -57,6 +60,8 @@ const ProfileEditor = memo(() => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
+  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
+    useEffectiveAgencyConfig(agentId);
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -78,6 +83,24 @@ const ProfileEditor = memo(() => {
     });
   };
 
+  const updateHeterogeneousAuthMode = async (authMode: HeterogeneousAuthMode) => {
+    if (!canEdit || !heterogeneousProvider) return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, authMode },
+      },
+    });
+  };
+
+  const updateHeterogeneousApiConfig = async (apiConfig: HeterogeneousApiConfig | undefined) => {
+    if (!canEdit || !heterogeneousProvider) return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
+      },
+    });
+  };
+
   const updateBoundDeviceId = async (boundDeviceId: string) => {
     await updateAgentConfigById(agentId, {
       agencyConfig: { ...config?.agencyConfig, boundDeviceId, executionTarget: 'device' },
@@ -89,6 +112,13 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
+  const apiModeAvailable =
+    isDesktop &&
+    resolveExecutionTarget(effectiveAgencyConfig, {
+      clientExecutionAvailable: true,
+      isHetero: true,
+      workspaceScoped,
+    }) === 'local';
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
@@ -111,7 +141,10 @@ const ProfileEditor = memo(() => {
           disabled: !isDesktop,
           children: (
             <HeterogeneousAgentStatusCard
+              apiModeAvailable={apiModeAvailable}
               provider={heterogeneousProvider}
+              onApiConfigChange={updateHeterogeneousApiConfig}
+              onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
             />
           ),

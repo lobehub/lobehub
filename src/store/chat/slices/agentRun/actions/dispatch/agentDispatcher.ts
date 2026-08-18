@@ -1,5 +1,8 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -103,6 +106,27 @@ export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
+  if (
+    ctx.heterogeneousProvider?.type === 'claude-code' &&
+    ctx.heterogeneousProvider.authMode === 'api'
+  ) {
+    const target = resolveExecutionTarget(
+      {
+        boundDeviceId: ctx.boundDeviceId,
+        executionTarget: ctx.executionTarget,
+        heterogeneousProvider: ctx.heterogeneousProvider,
+      },
+      {
+        isHetero: true,
+        clientExecutionAvailable: isDesktop,
+        workspaceScoped: ctx.isWorkspaceAgent,
+      },
+    );
+    if (target !== 'local' || (ctx.parentRuntime && ctx.parentRuntime !== 'hetero')) {
+      throw new Error(CLAUDE_CODE_API_LOCAL_ONLY_ERROR);
+    }
+  }
+
   if (ctx.parentRuntime) return ctx.parentRuntime;
   // Notify-based platform agents (openclaw / hermes) use the gateway transport for both
   // targets: `local` presets this desktop's personal device ID on the request, while

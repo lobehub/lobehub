@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { selectRuntimeType } from '../dispatch/agentDispatcher';
 
 const heteroProvider = { command: 'claude', type: 'claude-code' as const };
+const apiHeteroProvider = {
+  apiConfig: { model: 'claude-test', providerId: 'anthropic' },
+  authMode: 'api' as const,
+  command: 'claude',
+  type: 'claude-code' as const,
+};
 const remoteHeteroProvider = { type: 'openclaw' as const };
 const remoteHeteroProviderHermes = { type: 'hermes' as const };
 
@@ -78,6 +84,89 @@ describe('selectRuntimeType', () => {
   });
 
   describe('executionTarget routing for local CLI hetero', () => {
+    it('allows Claude Code API mode only for Desktop local execution', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'sandbox',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toThrow(/Desktop local execution/);
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: false },
+        ),
+      ).toThrow(/Desktop local execution/);
+    });
+
+    it.each(['client', 'gateway'] as const)(
+      'rejects API mode inherited from the %s parent runtime',
+      (parentRuntime) => {
+        expect(() =>
+          selectRuntimeType(
+            {
+              executionTarget: 'local',
+              heterogeneousProvider: apiHeteroProvider,
+              isGatewayMode: false,
+              parentRuntime,
+            },
+            { isDesktop: true },
+          ),
+        ).toThrow(/Desktop local execution/);
+      },
+    );
+
+    it('allows API mode inherited from the Desktop hetero parent runtime', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+            parentRuntime: 'hetero',
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+    });
+
+    it.each(['client', 'gateway', 'hetero'] as const)(
+      'rejects every %s parent runtime for API mode on web',
+      (parentRuntime) => {
+        expect(() =>
+          selectRuntimeType(
+            {
+              executionTarget: 'local',
+              heterogeneousProvider: apiHeteroProvider,
+              isGatewayMode: false,
+              parentRuntime,
+            },
+            { isDesktop: false },
+          ),
+        ).toThrow(/Desktop local execution/);
+      },
+    );
+
     it('routes to gateway when executionTarget = device on desktop', () => {
       expect(
         selectRuntimeType(

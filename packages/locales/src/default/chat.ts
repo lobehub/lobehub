@@ -521,6 +521,15 @@ export default {
   'heteroAgent.cloudNotConfigured.desc':
     'Configure your Claude Code token in agent profile to start sending messages.',
   'heteroAgent.cloudNotConfigured.title': 'Cloud credentials required',
+  'heteroAgent.apiMode.configMissing':
+    'Claude Code API mode requires a provider and model binding. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.localOnly.desc':
+    'Switch the execution environment to Local device, or use Subscription authentication.',
+  'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',
+  'heteroAgent.apiMode.modelUnavailable':
+    'The model "{{providerId}}/{{model}}" is disabled or no longer available.',
+  'heteroAgent.apiMode.providerUnavailable':
+    'The provider "{{providerId}}" is disabled or no longer available.',
   'heteroAgent.cloudRepo.sectionTitle': 'Repositories',
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',

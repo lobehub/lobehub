@@ -76,6 +76,7 @@ import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBinding
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
+import { sanitizeAgentApiConfig } from '../utils/sanitizeAgentApiConfig';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import {
@@ -1038,7 +1039,9 @@ export class AgentModel {
    */
   create = async (input: Partial<AgentItem>): Promise<AgentItem> => {
     const config = this.stripReservedSlug(input);
-    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig);
+    const agencyConfig = this.withWorkspaceSelectionPolicyDefaults(
+      sanitizeAgentApiConfig(config.agencyConfig),
+    );
 
     await this.assertWorkspaceDeviceBinding(this.workspaceId ?? null, agencyConfig);
     await this.assertFixedExecutionTarget(this.workspaceId ?? null, agencyConfig);
@@ -1069,7 +1072,9 @@ export class AgentModel {
 
     const normalizedConfigs = configs.map((config) => ({
       ...this.stripReservedSlug(config),
-      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(config.agencyConfig),
+      agencyConfig: this.withWorkspaceSelectionPolicyDefaults(
+        sanitizeAgentApiConfig(config.agencyConfig),
+      ),
     }));
 
     await Promise.all(
@@ -1096,9 +1101,12 @@ export class AgentModel {
   };
 
   update = async (agentId: string, data: Partial<AgentItem>) => {
+    const apiSafeData = Object.hasOwn(data, 'agencyConfig')
+      ? { ...data, agencyConfig: sanitizeAgentApiConfig(data.agencyConfig) }
+      : data;
     const sanitizedData = await this.stripAgentBuilderProtectedFields(
       agentId,
-      this.stripImmutableFields(data),
+      this.stripImmutableFields(apiSafeData),
     );
 
     return this.db
@@ -1361,6 +1369,7 @@ export class AgentModel {
     }
 
     const mergedValue = merge(agent, restData);
+    mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
 
     // The inbox is LobeHub's built-in default cloud agent; it must never be
     // turned into a heterogeneous (external-CLI) agent. Two independent inputs can
