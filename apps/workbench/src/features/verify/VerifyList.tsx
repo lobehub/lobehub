@@ -1,12 +1,11 @@
 'use client';
 
-import ActionIcon from '@lobehub/ui/es/ActionIcon/index';
 import Empty from '@lobehub/ui/es/Empty/index';
 import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Icon from '@lobehub/ui/es/Icon/index';
 import Text from '@lobehub/ui/es/Text/index';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft, ClipboardCheck, Search, TriangleAlert } from 'lucide-react';
+import { ClipboardCheck, Search, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -14,6 +13,7 @@ import useSWR from 'swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
+import WorkbenchBrandLink from '../../shell/WorkbenchBrandLink';
 import VerifyRow from './VerifyRow';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -98,7 +98,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const WorkbenchVerifyList = memo(() => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
   const [query, setQuery] = useState('');
   const trimmedQuery = query.trim();
   const { data, error, isLoading, mutate } = useSWR(
@@ -120,11 +120,7 @@ const WorkbenchVerifyList = memo(() => {
     <Flexbox className={styles.page}>
       <Flexbox className={styles.header} gap={12}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <ActionIcon
-            icon={ArrowLeft}
-            title={t('back', { ns: 'common' })}
-            onClick={() => window.location.assign('/')}
-          />
+          <WorkbenchBrandLink />
           <Text strong style={{ flex: 1, fontSize: 17 }}>
             {t('workspace.title')}
           </Text>

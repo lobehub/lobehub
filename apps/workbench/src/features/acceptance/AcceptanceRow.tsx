@@ -165,7 +165,7 @@ interface AcceptanceRowProps {
 }
 
 const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
   const { message } = App.useApp();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
@@ -277,10 +277,10 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
       label: t('verify:acceptance.workspace.actions.delete'),
       onClick: () => {
         confirmModal({
-          cancelText: t('common:cancel'),
+          cancelText: t('actions.cancel'),
           content: t('verify:acceptance.workspace.deleteConfirmDescription', { title }),
           okButtonProps: { danger: true },
-          okText: t('common:delete'),
+          okText: t('actions.delete'),
           onOk: async () => {
             setMutating(true);
             try {

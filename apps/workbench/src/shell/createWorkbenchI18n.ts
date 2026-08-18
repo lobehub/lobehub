@@ -3,23 +3,14 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
 import { DEFAULT_LANG } from '@/const/locale';
-import defaultCommon from '@/locales/default/common';
-import defaultError from '@/locales/default/error';
 import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
-const defaultResources = {
-  common: defaultCommon,
-  error: defaultError,
-};
+export const workbenchNamespaces = ['verify'] as const;
 
-const loadWorkbenchNamespace = async (lng: string, ns: string) => {
+export const loadWorkbenchNamespace = async (lng: string, ns: string) => {
   const locale = normalizeLocale(lng);
-
-  if (locale === DEFAULT_LANG && ns in defaultResources) {
-    return defaultResources[ns as keyof typeof defaultResources];
-  }
 
   return unwrapESMModule(
     await loadI18nNamespaceModule({
@@ -31,7 +22,19 @@ const loadWorkbenchNamespace = async (lng: string, ns: string) => {
   );
 };
 
-export const createWorkbenchI18n = (lang?: string) => {
+export const loadWorkbenchResources = async (lang?: string) => {
+  const locale = normalizeLocale(lang);
+  const entries = await Promise.all(
+    workbenchNamespaces.map(async (ns) => [ns, await loadWorkbenchNamespace(locale, ns)] as const),
+  );
+
+  return Object.fromEntries(entries) as Record<string, unknown>;
+};
+
+export const createWorkbenchI18n = (lang?: string, bundledResources?: Record<string, unknown>) => {
+  const locale = normalizeLocale(lang);
+  const resources = bundledResources ? { [locale]: bundledResources } : undefined;
+
   const instance = i18next
     .createInstance()
     .use(initReactI18next)
@@ -40,19 +43,19 @@ export const createWorkbenchI18n = (lang?: string) => {
   return {
     init: (params: { initAsync?: boolean } = {}) =>
       instance.init({
-        defaultNS: ['common', 'error'],
+        defaultNS: 'verify',
         fallbackLng: DEFAULT_LANG,
         initAsync: params.initAsync ?? true,
         interpolation: { escapeValue: false },
         keySeparator: false,
-        lng: normalizeLocale(lang),
+        lng: locale,
         ns: [],
         partialBundledLanguages: true,
         react: {
           bindI18nStore: 'added',
           useSuspense: false,
         },
-        resources: { [DEFAULT_LANG]: defaultResources },
+        resources,
         showSupportNotice: false,
       }),
     instance,

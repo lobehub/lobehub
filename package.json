@@ -304,7 +304,7 @@
     "@lobehub/icons": "^5.15.0",
     "@lobehub/market-sdk": "0.39.2",
     "@lobehub/tts": "^5.1.2",
-    "@lobehub/ui": "^5.30.0",
+    "@lobehub/ui": "^5.32.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.3.0",
@@ -576,7 +576,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@lobehub/editor",
-      "ffmpeg-static"
+      "ffmpeg-static",
+      "workerd"
     ],
     "overrides": {
       "@react-pdf/image": "3.0.4",

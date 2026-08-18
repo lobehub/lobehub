@@ -8,7 +8,7 @@ import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Icon from '@lobehub/ui/es/Icon/index';
 import Text from '@lobehub/ui/es/Text/index';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft, Check, ListFilter, ScrollText, Search, TriangleAlert } from 'lucide-react';
+import { Check, ListFilter, ScrollText, Search, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -23,6 +23,7 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
+import WorkbenchBrandLink from '../../shell/WorkbenchBrandLink';
 import AcceptanceRow from './AcceptanceRow';
 
 const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
@@ -113,7 +114,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const WorkbenchAcceptanceList = memo(() => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
   const { data, error, isLoading, mutate } = useSWR(
     verifyKeys.acceptances(),
     () => verifyService.listAcceptances(),
@@ -149,11 +150,7 @@ const WorkbenchAcceptanceList = memo(() => {
     <Flexbox className={styles.page}>
       <Flexbox className={styles.header} gap={12}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <ActionIcon
-            icon={ArrowLeft}
-            title={t('back', { ns: 'common' })}
-            onClick={() => window.location.assign('/')}
-          />
+          <WorkbenchBrandLink />
           <Text strong style={{ flex: 1, fontSize: 17 }}>
             {t('acceptance.workspace.title')}
           </Text>

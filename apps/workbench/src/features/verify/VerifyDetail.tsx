@@ -1,16 +1,17 @@
 'use client';
 
-import ActionIcon from '@lobehub/ui/es/ActionIcon/index';
 import { Flexbox } from '@lobehub/ui/es/Flex/index';
 import Text from '@lobehub/ui/es/Text/index';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+import { useParams } from 'react-router';
 
-import { ReportViewer } from '@/features/Verify';
+import { useVerifyReportBundle } from '@/features/Verify/hooks';
+import ReportViewer from '@/features/Verify/ReportViewer';
+import { extractUuid } from '@/features/Verify/utils';
 
+import WorkbenchBrandLink from '../../shell/WorkbenchBrandLink';
 import SWRMutateInitializer from '../acceptance/SWRMutateInitializer';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -36,19 +37,19 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const WorkbenchVerifyDetail = memo(() => {
-  const { t } = useTranslation(['verify', 'common']);
-  const navigate = useNavigate();
+  const { t } = useTranslation('verify');
+  const params = useParams<{ runId: string }>();
+  const runId = extractUuid(params.runId);
+  const { data } = useVerifyReportBundle(runId ?? null);
 
   return (
     <Flexbox className={styles.page}>
       <SWRMutateInitializer />
       <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        <ActionIcon
-          icon={ArrowLeft}
-          title={t('back', { ns: 'common' })}
-          onClick={() => navigate('/verify')}
-        />
-        <Text strong>{t('workspace.title')}</Text>
+        <WorkbenchBrandLink />
+        <Text ellipsis strong style={{ minWidth: 0 }}>
+          {data?.run.title ?? t('report.titleFallback')}
+        </Text>
       </Flexbox>
       <div className={styles.body}>
         <ReportViewer />

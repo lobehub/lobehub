@@ -10,12 +10,28 @@ import type { SPAServerConfig } from '@/types/spaServerConfig';
 import WorkbenchLocale from './WorkbenchLocale';
 import WorkbenchTheme from './WorkbenchTheme';
 
-const WorkbenchShell = memo<PropsWithChildren>(({ children }) => {
-  const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
-  const locale = document.documentElement.lang || 'en-US';
+interface WorkbenchShellProps extends PropsWithChildren {
+  locale?: string;
+  resources?: Record<string, unknown>;
+  serverConfig?: SPAServerConfig | null;
+}
+
+const WorkbenchShell = memo<WorkbenchShellProps>((props) => {
+  const { children, resources } = props;
+
+  const serverConfig: SPAServerConfig | undefined =
+    props.serverConfig === undefined
+      ? typeof window === 'undefined'
+        ? undefined
+        : window.__SERVER_CONFIG__
+      : (props.serverConfig ?? undefined);
+
+  const locale =
+    props.locale ??
+    (typeof document === 'undefined' ? 'en-US' : document.documentElement.lang || 'en-US');
 
   return (
-    <WorkbenchLocale defaultLang={locale}>
+    <WorkbenchLocale defaultLang={locale} resources={resources}>
       <WorkbenchTheme>
         <ServerConfigStoreProvider
           isMobile

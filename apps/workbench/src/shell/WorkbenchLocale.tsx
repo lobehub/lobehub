@@ -42,14 +42,15 @@ const updateDayjs = async (lang: string) => {
 
 interface WorkbenchLocaleProps extends PropsWithChildren {
   defaultLang?: string;
+  resources?: Record<string, unknown>;
 }
 
-const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang }) => {
-  const [i18n] = useState(() => createWorkbenchI18n(defaultLang));
+const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, resources }) => {
+  const [i18n] = useState(() => createWorkbenchI18n(defaultLang, resources));
   const [lang, setLang] = useState(defaultLang ?? 'en-US');
   const [antdLocale, setAntdLocale] = useState<any>();
 
-  if (!i18n.instance.isInitialized) void i18n.init();
+  if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
 
   useEffect(() => {
     const applyLocale = async (nextLang: string) => {
