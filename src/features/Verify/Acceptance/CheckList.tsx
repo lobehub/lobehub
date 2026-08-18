@@ -48,6 +48,7 @@ import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AudioPlayer from '@/features/AudioPlayer';
+import { useIsHydrated } from '@/hooks/useIsHydrated';
 import type { AcceptanceBundle } from '@/services/verify';
 
 import {
@@ -609,12 +610,13 @@ const EvidenceList = memo<{
  */
 const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
   const { t } = useTranslation('verify');
+  const hydrated = useIsHydrated();
   return (
     <Flexbox horizontal align={'center'} gap={6}>
       <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={13} />
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.review.acceptedNote', {
-          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+          time: hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : '',
         })}
       </Text>
     </Flexbox>
@@ -623,12 +625,13 @@ const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) =
 
 const IgnoredNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
   const { t } = useTranslation('verify');
+  const hydrated = useIsHydrated();
   return (
     <Flexbox horizontal align={'center'} gap={6}>
       <Icon color={cssVar.colorTextQuaternary} icon={Ban} size={13} />
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.review.ignoredNote', {
-          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+          time: hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : '',
         })}
       </Text>
     </Flexbox>
@@ -645,6 +648,7 @@ const FeedbackCard = memo<{
   review: AcceptanceCheckReviewEntry;
 }>(({ evidenceById, review }) => {
   const { t } = useTranslation('verify');
+  const hydrated = useIsHydrated();
   if (review.action === 'accept') return <AcceptedNote review={review} />;
   if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
@@ -666,7 +670,7 @@ const FeedbackCard = memo<{
           {t('acceptance.review.feedbackLabel')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
-          {dayjs(review.createdAt).format('MM-DD HH:mm')}
+          {hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : null}
         </Text>
       </Flexbox>
       {review.comment && <Text style={{ fontSize: 12 }}>{review.comment}</Text>}
@@ -1731,6 +1735,7 @@ const CheckList = memo<CheckListProps>(
     round,
   }) => {
     const { t } = useTranslation('verify');
+    const hydrated = useIsHydrated();
     const [acceptingGroup, setAcceptingGroup] = useState<string | null>(null);
 
     const visible = (check: AcceptanceCheck) =>
@@ -2031,7 +2036,7 @@ const CheckList = memo<CheckListProps>(
                             {t('acceptance.group.feedbackLabel')}
                           </Text>
                           <Text fontSize={12} type={'secondary'}>
-                            {dayjs(entry.createdAt).format('MM-DD HH:mm')}
+                            {hydrated ? dayjs(entry.createdAt).format('MM-DD HH:mm') : null}
                           </Text>
                         </Flexbox>
                         <Text style={{ fontSize: 12 }}>{entry.comment}</Text>
