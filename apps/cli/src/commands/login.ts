@@ -7,7 +7,8 @@ import type { Command } from 'commander';
 import { getUserIdFromApiKey } from '../auth/apiKey';
 import { saveCredentials } from '../auth/credentials';
 import { parseJwtSub } from '../auth/resolveToken';
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { readCliApiKeyEnv } from '../constants/auth';
+import { CLI_PRODUCT_NAME } from '../constants/identity';
 import { OFFICIAL_SERVER_URL } from '../constants/urls';
 import { registerDevice, resolveDeviceIdentity } from '../device/register';
 import { loadSettings, normalizeUrl, saveSettings } from '../settings';
@@ -55,14 +56,16 @@ async function parseJsonResponse<T>(res: Response, endpoint: string): Promise<T>
 export function registerLoginCommand(program: Command) {
   program
     .command('login')
-    .description('Log in to LobeHub via browser (Device Code Flow) or configure API key server')
-    .option('--server <url>', 'LobeHub server URL', OFFICIAL_SERVER_URL)
+    .description(
+      `Log in to ${CLI_PRODUCT_NAME} via browser (Device Code Flow) or configure API key server`,
+    )
+    .option('--server <url>', `${CLI_PRODUCT_NAME} server URL`, OFFICIAL_SERVER_URL)
     .action(async (options: LoginOptions) => {
       const serverUrl = normalizeUrl(options.server) || OFFICIAL_SERVER_URL;
 
       log.info('Starting login...');
 
-      const apiKey = process.env[CLI_API_KEY_ENV];
+      const apiKey = readCliApiKeyEnv();
       if (apiKey) {
         try {
           await getUserIdFromApiKey(apiKey, serverUrl);
