@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 
 import { getTrpcClient } from '../api/client';
+import { CLI_PRODUCT_NAME, resolveCliDirName } from '../constants/identity';
 import { getTask, listTasks, removeTask, saveTask } from '../daemon/taskRegistry';
 import { log } from '../utils/logger';
 
@@ -13,7 +14,7 @@ import { log } from '../utils/logger';
 // Maps topicId → hermes session_id so multi-turn conversations can resume
 // the same session across separate `runHeteroTask` invocations.
 
-const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
+const LOBEHUB_DIR_NAME = resolveCliDirName();
 const HERMES_SESSIONS_FILE = path.join(os.homedir(), LOBEHUB_DIR_NAME, 'hermes-sessions.json');
 
 function parseHermesSessionId(stderr: string): string | undefined {
@@ -144,8 +145,8 @@ async function sendTerminalSignal(
  */
 function buildNotifyProtocol(lhPath: string, topicId: string): string {
   return (
-    `## Context: This task was dispatched by LobeHub\n\n` +
-    `This conversation / task was sent to you by the **LobeHub platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the LobeHub chat interface.\n\n` +
+    `## Context: This task was dispatched by ${CLI_PRODUCT_NAME}\n\n` +
+    `This conversation / task was sent to you by the **${CLI_PRODUCT_NAME} platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the ${CLI_PRODUCT_NAME} chat interface.\n\n` +
     `**When to call notify**: any time you have something meaningful to tell the user — a key finding, a decision you made, a result, a question, or your final answer. Think of it as speaking directly to the user in the chat window.\n\n` +
     `**What to hide**: internal work details such as tool call sequences, file reads, intermediate command output, retries, or low-level reasoning steps. The user cares about outcomes and insights, not your step-by-step mechanics.\n\n` +
     `## Sending messages back to the user\n\n` +
