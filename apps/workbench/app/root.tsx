@@ -1,5 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import type { CSSProperties, PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
 import {
   Links,
@@ -14,6 +14,7 @@ import { isRtlLang } from 'rtl-detect';
 import { href as antdStaticCssHref } from 'virtual:lobehub/antd-static-css';
 import { href as themeVarsCssHref } from 'virtual:lobehub/theme-vars-css';
 
+import ErrorCapture, { type ErrorType } from '@/components/Error';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import { normalizeLocale } from '@/locales/resources';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
@@ -92,62 +93,22 @@ export default function Root() {
   );
 }
 
-const buttonStyle: CSSProperties = {
-  background: 'transparent',
-  border: '1px solid currentcolor',
-  borderRadius: 6,
-  color: 'inherit',
-  cursor: 'pointer',
-  font: 'inherit',
-  padding: '6px 16px',
-};
-
 export const ErrorBoundary = () => {
-  const error = useRouteError() as Error;
+  const rawError = useRouteError();
+  const data = useRouteLoaderData<typeof loader>('root');
 
-  if (typeof window !== 'undefined' && isChunkLoadError(error)) notifyChunkError();
+  if (typeof window !== 'undefined' && isChunkLoadError(rawError)) notifyChunkError();
 
-  const detail =
-    error instanceof Error ? `${error.message}\n\n${error.stack ?? ''}` : JSON.stringify(error);
+  const error =
+    rawError instanceof Error ? (rawError as ErrorType) : new Error(JSON.stringify(rawError));
 
+  // The boundary replaces Root, so it must rebuild the provider shell itself
+  // (theme + i18n) for the shared error page to render properly.
   return (
-    <div
-      style={{
-        alignItems: 'center',
-        color: 'inherit',
-        display: 'flex',
-        flexDirection: 'column',
-        fontFamily: 'sans-serif',
-        gap: 16,
-        justifyContent: 'center',
-        minHeight: '100dvh',
-        padding: 16,
-      }}
-    >
-      <h2 style={{ margin: 0 }}>Something went wrong</h2>
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button style={buttonStyle} type={'button'} onClick={() => window.location.reload()}>
-          Retry
-        </button>
-        <button style={buttonStyle} type={'button'} onClick={() => window.location.assign('/')}>
-          Back
-        </button>
-      </div>
-      <pre
-        style={{
-          background: 'rgba(125, 125, 125, 0.1)',
-          borderRadius: 8,
-          fontSize: 12,
-          maxHeight: '40dvh',
-          maxWidth: 720,
-          overflow: 'auto',
-          padding: 12,
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {detail}
-      </pre>
-    </div>
+    <NextThemeProvider>
+      <WorkbenchShell locale={data?.locale} resources={data?.resources} serverConfig={null}>
+        <ErrorCapture error={error} />
+      </WorkbenchShell>
+    </NextThemeProvider>
   );
 };
