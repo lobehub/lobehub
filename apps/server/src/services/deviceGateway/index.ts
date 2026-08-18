@@ -466,7 +466,7 @@ export class DeviceGateway {
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
+    type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
     userId: string;
     workspaceId?: string;
   }): Promise<HeterogeneousAgentModelCatalog> {
