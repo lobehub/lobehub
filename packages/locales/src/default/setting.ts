@@ -1457,6 +1457,9 @@ When I am ___, I need ___
   'systemAgent.agentMeta.modelDesc':
     'Model used to generate names, descriptions, avatars, and tags',
   'systemAgent.agentMeta.title': 'Profile Generation',
+  'systemAgent.expertise.modelDesc':
+    'Model used to draft expertise domains and extract reusable experience from conversations.',
+  'systemAgent.expertise.title': 'Agent Self-Evolution',
   'systemAgent.customPrompt.addPrompt': 'Add Custom Prompt',
   'systemAgent.customPrompt.desc':
     'Once filled out, the system agent will use the custom prompt when generating content',

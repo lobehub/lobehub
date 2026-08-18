@@ -6,16 +6,13 @@ import { expertiseHits, expertiseRuns } from '@/database/schemas';
 import type { SelfIterationCompletionPayload } from '../agentSignal/services/selfIteration/completion';
 import { ExpertiseIngestionService } from './ingestion';
 
-const getAgentModelConfig = vi.fn();
+const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
+  resolveExpertiseModelConfig: vi.fn(),
+}));
 const generateObject = vi.fn();
 const listDomainsForAgent = vi.fn();
 const listLessons = vi.fn();
 
-vi.mock('@/database/models/agent', () => ({
-  AgentModel: class {
-    getAgentModelConfig = getAgentModelConfig;
-  },
-}));
 vi.mock('@/database/models/expertise', () => ({
   ExpertiseModel: class {
     listDomainsForAgent = listDomainsForAgent;
@@ -27,6 +24,7 @@ vi.mock('@/server/services/aiGeneration', () => ({
     generateObject = generateObject;
   },
 }));
+vi.mock('./modelConfig', () => ({ resolveExpertiseModelConfig }));
 
 const completion = (selfIteration: SelfIterationCompletionPayload) => ({
   agentId: 'agent-signal-reflection',
@@ -132,9 +130,9 @@ describe('ExpertiseIngestionService.ingestCompletion', () => {
       },
     ] as never);
     listLessons.mockResolvedValue([]);
-    getAgentModelConfig.mockResolvedValue({
-      model: 'test-model',
-      provider: 'test-provider',
+    resolveExpertiseModelConfig.mockResolvedValue({
+      model: 'service-model',
+      provider: 'service-provider',
     });
     generateObject.mockResolvedValue({ domains: [] });
 
@@ -145,7 +143,10 @@ describe('ExpertiseIngestionService.ingestCompletion', () => {
     });
 
     expect(generateObject).toHaveBeenCalledWith(
-      expect.any(Object),
+      expect.objectContaining({
+        model: 'service-model',
+        provider: 'service-provider',
+      }),
       expect.objectContaining({
         tracing: expect.objectContaining({ scenario: 'expertise_topic_ingestion' }),
       }),

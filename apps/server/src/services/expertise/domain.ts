@@ -3,10 +3,11 @@ import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT } from '@lobechat/prompts';
 import { z } from 'zod';
 
-import { AgentModel } from '@/database/models/agent';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
+
+import { resolveExpertiseModelConfig } from './modelConfig';
 
 const LayerSchema = z.object({
   description: z.string().nullable(),
@@ -137,9 +138,7 @@ export class ExpertiseDomainService {
 
   /** Turns one natural-language brief into an editable domain draft; nothing is persisted. */
   draftFromBrief = async (input: DraftFromBriefInput) => {
-    const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
-    const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
-    if (!modelConfig) throw new Error('Agent model configuration is unavailable');
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
 
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     return DomainDraftSchema.parse(

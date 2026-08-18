@@ -14,12 +14,13 @@ import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
+
+import { resolveExpertiseModelConfig } from './modelConfig';
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
@@ -265,9 +266,7 @@ export class ExpertiseIngestionService {
     const context = topicContext.serializedContext.slice(-MAX_CONTEXT_CHARS);
     if (!context.trim()) return { ingested: 0, reason: 'empty-context' } as const;
 
-    const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
-    const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
-    if (!modelConfig) return { ingested: 0, reason: 'no-model' } as const;
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
 
     const domains = await Promise.all(
       bound.map(async ({ domain }) => ({

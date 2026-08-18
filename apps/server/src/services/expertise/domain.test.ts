@@ -4,15 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DomainDraft } from './domain';
 import { EditableDomainDraftSchema, ExpertiseDomainService } from './domain';
 
-const getAgentModelConfig = vi.fn();
+const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
+  resolveExpertiseModelConfig: vi.fn(),
+}));
 const generateObject = vi.fn();
 const createDomain = vi.fn();
 
-vi.mock('@/database/models/agent', () => ({
-  AgentModel: class {
-    getAgentModelConfig = getAgentModelConfig;
-  },
-}));
 vi.mock('@/database/models/expertise', () => ({
   ExpertiseModel: class {
     createDomain = createDomain;
@@ -23,6 +20,7 @@ vi.mock('@/server/services/aiGeneration', () => ({
     generateObject = generateObject;
   },
 }));
+vi.mock('./modelConfig', () => ({ resolveExpertiseModelConfig }));
 
 const draft = {
   canonEntries: [
@@ -46,10 +44,15 @@ const draft = {
 } satisfies DomainDraft;
 
 describe('ExpertiseDomainService', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolveExpertiseModelConfig.mockResolvedValue({
+      model: 'service-model',
+      provider: 'service-provider',
+    });
+  });
 
   it('drafts a full anchor (layers + canon) without persisting anything', async () => {
-    getAgentModelConfig.mockResolvedValue({ model: 'test-model', provider: 'test-provider' });
     generateObject.mockResolvedValue(draft);
 
     const result = await new ExpertiseDomainService({} as never, 'user_1').draftFromBrief({
@@ -59,6 +62,8 @@ describe('ExpertiseDomainService', () => {
 
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
+        model: 'service-model',
+        provider: 'service-provider',
         schema: expect.objectContaining({ name: 'expertise_domain_draft' }),
       }),
       expect.objectContaining({
@@ -71,7 +76,6 @@ describe('ExpertiseDomainService', () => {
   });
 
   it('revises the current draft from a natural-language adjustment', async () => {
-    getAgentModelConfig.mockResolvedValue({ model: 'test-model', provider: 'test-provider' });
     generateObject.mockResolvedValue(draft);
 
     await new ExpertiseDomainService({} as never, 'user_1').draftFromBrief({
