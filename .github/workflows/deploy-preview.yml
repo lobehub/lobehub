@@ -22,10 +22,8 @@ on:
         type: boolean
         default: false
 
-concurrency:
-  group: deploy-preview
-  cancel-in-progress: false
-
+# No workflow-level queue: a newer preview SHA must start building immediately.
+# Image jobs cancel the previous SHA. SSH deploy never cancels (blue-green in flight).
 permissions:
   contents: read
   packages: write
@@ -36,6 +34,9 @@ env:
 jobs:
   build:
     name: Build and push Panachat preview image
+    concurrency:
+      group: deploy-preview-chat-image
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.vars.outputs.image }}
@@ -119,6 +120,9 @@ jobs:
 
   build-control-plane:
     name: Build and push preview control-plane image
+    concurrency:
+      group: deploy-preview-control-plane-image
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.vars.outputs.image }}
@@ -185,6 +189,9 @@ jobs:
 
   deploy:
     name: SSH preview blue-green deploy
+    concurrency:
+      group: deploy-preview-ssh
+      cancel-in-progress: false
     needs: [build, build-control-plane]
     if: ${{ always() && needs.build.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.skip_deploy != true) }}
     runs-on: ubuntu-latest
