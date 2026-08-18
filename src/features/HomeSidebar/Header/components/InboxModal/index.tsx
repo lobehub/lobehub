@@ -246,9 +246,15 @@ const InboxModalContent = memo(() => {
     // Rows only leave the unread view when read; in the all view they stay
     // (as read rows), so there the post-action refresh updates them in place.
     if (readStatus === 'unread') listHandleRef.current?.optimisticClear();
-    void refreshNavigationCounts((counts) => counts?.map((item) => ({ ...item, unreadCount: 0 })), {
-      revalidate: false,
-    });
+    // Pending is action-driven, not read-driven: its badge counts live
+    // requests that mark-all-as-read cannot (and must not) resolve. Zeroing
+    // it optimistically would flash the count away only to bounce back on the
+    // refresh — reading as a broken button — so it stays untouched.
+    void refreshNavigationCounts(
+      (counts) =>
+        counts?.map((item) => (item.category === 'pending' ? item : { ...item, unreadCount: 0 })),
+      { revalidate: false },
+    );
     try {
       await notificationService.markAllAsRead();
       refreshInbox();
@@ -281,7 +287,13 @@ const InboxModalContent = memo(() => {
     return isRead ? item.readCount : item.unreadCount;
   };
   const allCount = categoryCounts.reduce((total, item) => total + countForStatus(item), 0);
-  const allUnreadCount = categoryCounts.reduce((total, item) => total + item.unreadCount, 0);
+  // Pending's unread number counts live requests that mark-all-as-read cannot
+  // resolve, so it must not light the button up on its own — with only pending
+  // left, clicking would change nothing visible and read as a broken button.
+  const markableUnreadCount = categoryCounts.reduce(
+    (total, item) => total + (item.category === 'pending' ? 0 : item.unreadCount),
+    0,
+  );
   const allTotalCount = categoryCounts.reduce((total, item) => total + item.totalCount, 0);
   return (
     <Flexbox className={styles.root} height={'100%'}>
@@ -315,7 +327,7 @@ const InboxModalContent = memo(() => {
                 size="small"
                 type="text"
                 disabled={
-                  allUnreadCount === 0 ||
+                  markableUnreadCount === 0 ||
                   !!bulkAction ||
                   isNavigationCountsLoading ||
                   !!navigationCountsError
