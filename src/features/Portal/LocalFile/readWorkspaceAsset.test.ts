@@ -2,25 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const callTool = vi.fn();
 
-vi.mock('@lobechat/const', () => ({
-  isDesktop: false,
-}));
-
 vi.mock('@/services/cloudSandbox', () => ({
   cloudSandboxService: {
     callTool,
   },
 }));
 
-vi.mock('@/services/electron/localFileService', () => ({
-  localFileService: {
-    readLocalFileBytes: vi.fn(),
-  },
-}));
-
 vi.mock('@/services/projectFile', () => ({
   projectFileService: {
     getLocalFilePreview: vi.fn(),
+    readProjectFileBytes: vi.fn(),
   },
 }));
 

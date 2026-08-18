@@ -17,29 +17,18 @@ describe('prepareWorkspaceHtmlPublish', () => {
     readWorkspaceAsset.mockReset();
   });
 
-  it('packs provided HTML and looks up an existing deployment', async () => {
-    const getExisting = vi.fn(async () => ({
-      identifier: 'workspace-html-index-html',
-      publicUrl: 'https://demo.lobe.page',
-    }));
-
+  it('packs provided HTML without reading the file', async () => {
     const plan = await prepareWorkspaceHtmlPublish({
       content: '<html><title>Demo</title></html>',
       filePath: '/repo/index.html',
-      getExisting,
-      topicId: 'tpc_1',
       workingDirectory: '/repo',
     });
 
     expect('blocked' in plan).toBe(false);
     if ('blocked' in plan) return;
 
-    expect(plan.hasExisting).toBe(true);
     expect(plan.gathered.title).toBe('Demo');
-    expect(getExisting).toHaveBeenCalledWith({
-      identifier: plan.gathered.identifier,
-      topicId: 'tpc_1',
-    });
+    expect(plan.packed.html).toContain('Demo');
     expect(readWorkspaceAsset).not.toHaveBeenCalled();
   });
 
@@ -51,7 +40,6 @@ describe('prepareWorkspaceHtmlPublish', () => {
 
     const plan = await prepareWorkspaceHtmlPublish({
       filePath: '/repo/pages/index.html',
-      topicId: 'tpc_1',
       workingDirectory: '/repo',
     });
 
@@ -64,7 +52,6 @@ describe('prepareWorkspaceHtmlPublish', () => {
     expect('blocked' in plan).toBe(false);
     if ('blocked' in plan) return;
     expect(plan.gathered.title).toBe('From disk');
-    expect(plan.hasExisting).toBe(false);
   });
 
   it('returns unreadable when the HTML file cannot be loaded', async () => {
@@ -73,7 +60,6 @@ describe('prepareWorkspaceHtmlPublish', () => {
     await expect(
       prepareWorkspaceHtmlPublish({
         filePath: '/repo/missing.html',
-        topicId: 'tpc_1',
         workingDirectory: '/repo',
       }),
     ).resolves.toEqual({ blocked: 'unreadable' });

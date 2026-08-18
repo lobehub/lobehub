@@ -1,9 +1,14 @@
+import { decodeFromBase64, encodeToBase64 } from '@lobechat/utils';
+import { escapeRegExp } from 'es-toolkit';
+
 import type { WorkspaceHtmlArtifactFile } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
 
 import {
   collectCssResourceHrefs,
   collectJsResourceHrefs,
   collectLocalResourceRefs,
+  isCssAssetPath,
+  isJsAssetPath,
 } from './collectHtmlLocalResources';
 import {
   resolveWorkspaceAssetContentType,
@@ -20,35 +25,25 @@ export interface PackedWorkspaceHtmlSite {
   unresolvedHrefs: string[];
 }
 
-const escapeRegExp = (value: string) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const normalizePath = (path: string) => path.replaceAll('\\', '/').replace(/^\/+/u, '');
 
-const normalizePath = (path: string) => path.replaceAll('\\', '/').replace(/^\/+/u, '');
+export const hostedPath = (path: string) => `/${normalizePath(path)}`;
 
-const hostedPath = (path: string) => `/${normalizePath(path)}`;
-
-const decodeFileText = (file: WorkspaceHtmlArtifactFile): string => {
-  if (file.encoding === 'utf8') return file.content;
-
-  const binary = globalThis.atob(file.content);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-};
-
-const utf8ToBase64 = (text: string): string => {
-  const bytes = new TextEncoder().encode(text);
-  let binary = '';
-  const chunkSize = 8192;
-  for (let index = 0; index < bytes.byteLength; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+const exceedsInlineLimit = (file: WorkspaceHtmlArtifactFile): boolean => {
+  if (file.encoding === 'utf8') {
+    // UTF-8 byte length is never below the UTF-16 unit count, so oversized
+    // content short-circuits without encoding multi-MB strings.
+    if (file.content.length > WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES) return true;
+    return (
+      new TextEncoder().encode(file.content).byteLength > WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES
+    );
   }
-  return globalThis.btoa(binary);
-};
-
-const fileByteLength = (file: WorkspaceHtmlArtifactFile): number => {
-  if (file.encoding === 'utf8') return new TextEncoder().encode(file.content).byteLength;
 
   const padding = file.content.endsWith('==') ? 2 : file.content.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor((file.content.length * 3) / 4) - padding);
+  return (
+    Math.max(0, Math.floor((file.content.length * 3) / 4) - padding) >
+    WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES
+  );
 };
 
 const resolveSitePath = (href: string, sourcePath: string): string | undefined => {
@@ -63,17 +58,10 @@ const resolveSitePath = (href: string, sourcePath: string): string | undefined =
 };
 
 const isCssFile = (file: WorkspaceHtmlArtifactFile) =>
-  file.contentType.includes('css') || normalizePath(file.path).toLowerCase().endsWith('.css');
+  file.contentType.includes('css') || isCssAssetPath(file.path);
 
-const isJsFile = (file: WorkspaceHtmlArtifactFile) => {
-  const path = normalizePath(file.path).toLowerCase();
-  return (
-    file.contentType.includes('javascript') ||
-    path.endsWith('.js') ||
-    path.endsWith('.mjs') ||
-    path.endsWith('.cjs')
-  );
-};
+const isJsFile = (file: WorkspaceHtmlArtifactFile) =>
+  file.contentType.includes('javascript') || isJsAssetPath(file.path);
 
 const replaceHrefToken = (source: string, href: string, replacement: string): string => {
   const escaped = escapeRegExp(href);
@@ -102,14 +90,25 @@ export const packWorkspaceHtmlDocument = ({
   }
 
   const visiting = new Set<string>();
+  const decodedText = new Map<string, string>();
   const rewrittenCss = new Map<string, string>();
   const inlinableCache = new Map<string, boolean>();
   const jsPinnedPaths = new Set<string>();
 
+  const fileText = (file: WorkspaceHtmlArtifactFile): string => {
+    const key = normalizePath(file.path);
+    const cached = decodedText.get(key);
+    if (cached !== undefined) return cached;
+
+    const text = file.encoding === 'utf8' ? file.content : decodeFromBase64(file.content);
+    decodedText.set(key, text);
+    return text;
+  };
+
   for (const file of files) {
     if (!isJsFile(file)) continue;
 
-    const localTargets = collectJsResourceHrefs(decodeFileText(file))
+    const localTargets = collectJsResourceHrefs(fileText(file))
       .map((href) => resolveSitePath(href, file.path))
       .filter((target): target is string => Boolean(target && fileMap.has(normalizePath(target))))
       .map((target) => normalizePath(target));
@@ -131,7 +130,7 @@ export const packWorkspaceHtmlDocument = ({
       return false;
     }
 
-    if (fileByteLength(file) > WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES) {
+    if (exceedsInlineLimit(file)) {
       inlinableCache.set(key, false);
       return false;
     }
@@ -147,8 +146,7 @@ export const packWorkspaceHtmlDocument = ({
     }
 
     visiting.add(key);
-    const css = decodeFileText(file);
-    const nestedInlinable = collectCssResourceHrefs(css).every((href) => {
+    const nestedInlinable = collectCssResourceHrefs(fileText(file)).every((href) => {
       const target = resolveSitePath(href, file.path);
       return !target || !fileMap.has(normalizePath(target)) || isInlinable(target);
     });
@@ -162,8 +160,8 @@ export const packWorkspaceHtmlDocument = ({
     if (!file || !isInlinable(relativePath)) return;
 
     if (isCssFile(file)) {
-      const css = rewriteCss(decodeFileText(file), file.path);
-      return `data:text/css;base64,${utf8ToBase64(css)}`;
+      const css = rewriteCss(fileText(file), file.path);
+      return `data:text/css;base64,${encodeToBase64(css)}`;
     }
 
     const contentType = resolveWorkspaceAssetContentType(file.path, file.contentType);
@@ -172,7 +170,7 @@ export const packWorkspaceHtmlDocument = ({
       return `data:${contentType};base64,${file.content}`;
     }
 
-    return `data:${contentType};base64,${utf8ToBase64(file.content)}`;
+    return `data:${contentType};base64,${encodeToBase64(file.content)}`;
   };
 
   const rewriteHref = (href: string, sourcePath: string): string | undefined => {
@@ -199,7 +197,7 @@ export const packWorkspaceHtmlDocument = ({
     return next;
   };
 
-  const html = decodeFileText(entry);
+  const html = fileText(entry);
   const collected = collectLocalResourceRefs({
     content: html,
     sourceKind: 'html',
@@ -237,7 +235,7 @@ export const packWorkspaceHtmlDocument = ({
       isCssFile(file)
         ? {
             ...file,
-            content: rewriteCss(decodeFileText(file), file.path),
+            content: rewriteCss(fileText(file), file.path),
             encoding: 'utf8' as const,
           }
         : file,

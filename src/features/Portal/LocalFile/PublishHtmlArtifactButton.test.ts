@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createWorkspaceHtmlArtifactIdentifier } from './collectHtmlLocalResources';
 import { usePublishHtmlArtifactModel } from './PublishHtmlArtifactButton';
+import { createWorkspaceHtmlArtifactIdentifier } from './workspaceHtmlPath';
 
 vi.mock('antd-style', () => ({
   createStaticStyles: () => ({ bar: 'bar', url: 'url' }),
@@ -60,6 +60,21 @@ const prepareWorkspaceHtmlPublish = vi.hoisted(() => vi.fn());
 vi.mock('./prepareWorkspaceHtmlPublish', () => ({
   notifyWorkspaceHtmlPublishBlocked: vi.fn(),
   prepareWorkspaceHtmlPublish,
+  publishPreparedWorkspaceHtml: async ({
+    plan,
+    publish: run,
+    topicId,
+  }: {
+    plan: { gathered: { identifier: string } };
+    publish: (input: { identifier: string; topicId: string }) => Promise<unknown>;
+    topicId: string;
+  }) => {
+    try {
+      return await run({ identifier: plan.gathered.identifier, topicId });
+    } catch {
+      return undefined;
+    }
+  },
 }));
 
 vi.mock('./PublishHtmlArtifactConfirm', () => ({
@@ -107,8 +122,7 @@ describe('usePublishHtmlArtifactModel', () => {
   it('marks the current file live once its publish completes', async () => {
     prepareWorkspaceHtmlPublish.mockResolvedValue({
       gathered: gatheredFor('a.html'),
-      hasExisting: false,
-      packed: {},
+      packed: { html: '', sidecars: [] },
     });
     publish.mockResolvedValue({ publicUrl: 'https://pub.example.com/a' });
 
@@ -128,8 +142,7 @@ describe('usePublishHtmlArtifactModel', () => {
   it('discards a publish result that finishes after switching to another file', async () => {
     prepareWorkspaceHtmlPublish.mockResolvedValue({
       gathered: gatheredFor('a.html'),
-      hasExisting: false,
-      packed: {},
+      packed: { html: '', sidecars: [] },
     });
 
     let resolvePublish: (value: { publicUrl: string }) => void = () => {};

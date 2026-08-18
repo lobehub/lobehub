@@ -1,25 +1,7 @@
-import { getFileExtension } from './Body.helpers';
-import {
-  createWorkspaceHtmlArtifactIdentifier,
-  extractHtmlTitle,
-  isPathInsideWorkspace,
-  lowestCommonAncestorDirectory,
-  parentDirectory,
-  resolveLocalResourceHref,
-  toWorkspaceAbsolutePath,
-  toWorkspaceRelativePath,
-} from './workspaceHtmlPath';
+import { findAttribute, findOpeningTag, findTagEnd } from '@/components/HtmlPreview/htmlTagScanner';
 
-export {
-  createWorkspaceHtmlArtifactIdentifier,
-  extractHtmlTitle,
-  isPathInsideWorkspace,
-  lowestCommonAncestorDirectory,
-  parentDirectory,
-  resolveLocalResourceHref,
-  toWorkspaceAbsolutePath,
-  toWorkspaceRelativePath,
-};
+import { getFileExtension } from './Body.helpers';
+import { parentDirectory, resolveLocalResourceHref } from './workspaceHtmlPath';
 
 const ALLOWED_ASSET_EXTENSIONS = new Set([
   'avif',
@@ -82,8 +64,17 @@ const isAllowedAssetPath = (absolutePath: string): boolean => {
   return ALLOWED_ASSET_EXTENSIONS.has(extension);
 };
 
+export const isCssAssetPath = (path: string): boolean =>
+  getFileExtension(path).toLowerCase() === 'css';
+
+const JS_ASSET_EXTENSIONS = new Set(['cjs', 'js', 'mjs']);
+
+export const isJsAssetPath = (path: string): boolean =>
+  JS_ASSET_EXTENSIONS.has(getFileExtension(path).toLowerCase());
+
 const pushRef = (
   result: CollectLocalResourceResult,
+  seenRefs: Set<string>,
   resolved: ReturnType<typeof resolveLocalResourceHref>,
 ) => {
   if (resolved.kind === 'empty') {
@@ -108,12 +99,9 @@ const pushRef = (
 
   // Dedupe by (path, href) pair: every distinct spelling of the same file must
   // survive so packing can rewrite each token, not just the first one.
-  if (
-    result.refs.some(
-      (ref) => ref.absolutePath === resolved.absolutePath && ref.href === resolved.href,
-    )
-  )
-    return;
+  const refKey = `${resolved.absolutePath}\u0000${resolved.href}`;
+  if (seenRefs.has(refKey)) return;
+  seenRefs.add(refKey);
 
   result.refs.push({ absolutePath: resolved.absolutePath, href: resolved.href });
 };
@@ -141,94 +129,14 @@ const readQuotedValue = (
   return { end: index + 1, value: source.slice(start + 1, index) };
 };
 
-const findTagEnd = (content: string, start: number): number => {
-  let quote: '"' | "'" | undefined;
-
-  for (let index = start + 1; index < content.length; index += 1) {
-    const char = content[index];
-    if (quote) {
-      if (char === quote) quote = undefined;
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-    if (char === '>') return index + 1;
-  }
-
-  return -1;
-};
-
-const isTagNameBoundary = (value: string | undefined): boolean =>
-  !value || value === '>' || value === '/' || /\s/.test(value);
-
-const findOpeningTag = (
-  content: string,
-  tagName: string,
-): { end: number; start: number; text: string } | undefined => {
-  const lowerContent = content.toLowerCase();
-  const tagPrefix = `<${tagName}`;
-  let searchFrom = 0;
-
-  while (searchFrom < content.length) {
-    const start = lowerContent.indexOf(tagPrefix, searchFrom);
-    if (start === -1) return;
-
-    if (!isTagNameBoundary(content[start + tagPrefix.length])) {
-      searchFrom = start + tagPrefix.length;
-      continue;
-    }
-
-    const end = findTagEnd(content, start);
-    if (end === -1) return;
-
-    return { end, start, text: content.slice(start, end) };
-  }
-};
-
-const findAttribute = (tagText: string, attributeName: string): string | undefined => {
-  const lowerAttributeName = attributeName.toLowerCase();
-  let index = 1;
-
-  while (index < tagText.length - 1) {
-    while (index < tagText.length && /\s/.test(tagText[index])) index += 1;
-
-    const nameStart = index;
-    while (index < tagText.length && /[^\s=/>]/.test(tagText[index])) index += 1;
-    if (nameStart === index) {
-      index += 1;
-      continue;
-    }
-
-    const name = tagText.slice(nameStart, index).toLowerCase();
-    while (index < tagText.length && /\s/.test(tagText[index])) index += 1;
-    if (tagText[index] !== '=') continue;
-
-    index += 1;
-    while (index < tagText.length && /\s/.test(tagText[index])) index += 1;
-
-    const quoted = readQuotedValue(tagText, index);
-    if (quoted) {
-      if (name === lowerAttributeName) return quoted.value;
-      index = quoted.end;
-      continue;
-    }
-
-    const valueStart = index;
-    while (index < tagText.length && !/[\s"'=<>`]/.test(tagText[index])) index += 1;
-    if (name === lowerAttributeName) return tagText.slice(valueStart, index);
-  }
-};
-
 const collectTagAttributeHrefs = (tagText: string): string[] => {
   const hrefs: string[] = [];
   for (const attributeName of ['src', 'href', 'poster', 'data']) {
-    const value = findAttribute(tagText, attributeName);
+    const value = findAttribute(tagText, attributeName)?.value;
     if (value) hrefs.push(value);
   }
 
-  const srcset = findAttribute(tagText, 'srcset');
+  const srcset = findAttribute(tagText, 'srcset')?.value;
   if (srcset) hrefs.push(...splitSrcset(srcset));
 
   return hrefs;
@@ -366,7 +274,7 @@ const resolveHtmlResourceBasePath = (
   workingDirectory: string,
 ): { remote: boolean; sourcePath: string } => {
   const baseTag = findOpeningTag(html, 'base');
-  const baseHref = baseTag ? findAttribute(baseTag.text, 'href') : undefined;
+  const baseHref = baseTag ? findAttribute(baseTag.text, 'href')?.value : undefined;
   if (!baseHref) return { remote: false, sourcePath: htmlFilePath };
 
   const resolved = resolveLocalResourceHref({
@@ -418,6 +326,7 @@ export const collectLocalResourceRefs = ({
   workingDirectory: string;
 }): CollectLocalResourceResult => {
   const result: CollectLocalResourceResult = { refs: [], skipped: [] };
+  const seenRefs = new Set<string>();
 
   if (sourceKind === 'css' || sourceKind === 'js') {
     const hrefs =
@@ -425,6 +334,7 @@ export const collectLocalResourceRefs = ({
     for (const href of hrefs) {
       pushRef(
         result,
+        seenRefs,
         resolveLocalResourceHref({
           href,
           rootDirectory,
@@ -452,7 +362,7 @@ export const collectLocalResourceRefs = ({
       return;
     }
 
-    pushRef(result, resolved);
+    pushRef(result, seenRefs, resolved);
   };
 
   walkHtmlTags(content, (tagName, tagText) => {

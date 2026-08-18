@@ -1,20 +1,26 @@
-import type { WorkspaceHtmlArtifactFile } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
+import { bytesToBase64 } from '@lobechat/utils';
 
-import { getFileExtension } from './Body.helpers';
+import type { WorkspaceHtmlArtifactFile } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
+import { extractHtmlTitle } from '@/components/HtmlPreview/htmlTagScanner';
+
 import {
+  type CollectedLocalResourceRef,
   collectLocalResourceRefs,
-  createWorkspaceHtmlArtifactIdentifier,
-  extractHtmlTitle,
-  lowestCommonAncestorDirectory,
-  parentDirectory,
-  toWorkspaceAbsolutePath,
-  toWorkspaceRelativePath,
+  isCssAssetPath,
+  isJsAssetPath,
 } from './collectHtmlLocalResources';
 import {
   type ReadWorkspaceAssetResult,
   WORKSPACE_HTML_ARTIFACT_MAX_FILES,
   WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES,
 } from './readWorkspaceAsset';
+import {
+  lowestCommonAncestorDirectory,
+  parentDirectory,
+  toWorkspaceAbsolutePath,
+  toWorkspaceRelativePath,
+  workspaceHtmlArtifactIdentifierForFile,
+} from './workspaceHtmlPath';
 
 export interface GatheredWorkspaceHtmlArtifact {
   blocked?: 'too-large' | 'too-many';
@@ -28,25 +34,10 @@ export interface GatheredWorkspaceHtmlArtifact {
   totalBytes: number;
 }
 
-const bytesToBase64 = (bytes: Uint8Array): string => {
-  let binary = '';
-  const chunkSize = 8192;
-  for (let index = 0; index < bytes.byteLength; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return globalThis.btoa(binary);
-};
-
-const isCssPath = (absolutePath: string): boolean =>
-  getFileExtension(absolutePath).toLowerCase() === 'css';
-
-const isJsPath = (absolutePath: string): boolean => {
-  const extension = getFileExtension(absolutePath).toLowerCase();
-  return extension === 'js' || extension === 'mjs' || extension === 'cjs';
-};
+const READ_CONCURRENCY = 5;
 
 const isWalkableAssetPath = (absolutePath: string): boolean =>
-  isCssPath(absolutePath) || isJsPath(absolutePath);
+  isCssAssetPath(absolutePath) || isJsAssetPath(absolutePath);
 
 const toArtifactFile = (
   relativePath: string,
@@ -130,6 +121,22 @@ export const gatherWorkspaceHtmlArtifact = async ({
     else if (totalBytes > WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES) blocked = 'too-large';
   };
 
+  const readLeafAsset = async (ref: CollectedLocalResourceRef) => {
+    const asset = await readAsset(ref.absolutePath);
+    if (!asset.ok) {
+      if (asset.reason === 'oversized') oversized.push(ref.href);
+      else missing.push(ref.href);
+      return;
+    }
+
+    registerAsset({
+      absolutePath: ref.absolutePath,
+      bytes: asset.bytes,
+      contentType: asset.contentType,
+      text: asset.text,
+    });
+  };
+
   while (!blocked && walkQueue.length > 0) {
     const walkRef = walkQueue.shift();
     if (!walkRef) break;
@@ -160,8 +167,8 @@ export const gatherWorkspaceHtmlArtifact = async ({
 
     const nested = collectLocalResourceRefs({
       content: text,
-      rootDirectory: isJsPath(walkRef.absolutePath) ? htmlDirectory : undefined,
-      sourceKind: isJsPath(walkRef.absolutePath) ? 'js' : 'css',
+      rootDirectory: isJsAssetPath(walkRef.absolutePath) ? htmlDirectory : undefined,
+      sourceKind: isJsAssetPath(walkRef.absolutePath) ? 'js' : 'css',
       sourcePath: walkRef.absolutePath,
       workingDirectory,
     });
@@ -175,24 +182,16 @@ export const gatherWorkspaceHtmlArtifact = async ({
     }
   }
 
-  for (const ref of pending) {
-    if (blocked) break;
-    if (handled.has(ref.absolutePath)) continue;
+  // Leaf assets are independent reads; batch them so remote transports
+  // (sandbox runCommand round trips) don't serialize into seconds.
+  const leaves = pending.filter((ref) => {
+    if (handled.has(ref.absolutePath)) return false;
     handled.add(ref.absolutePath);
+    return true;
+  });
 
-    const asset = await readAsset(ref.absolutePath);
-    if (!asset.ok) {
-      if (asset.reason === 'oversized') oversized.push(ref.href);
-      else missing.push(ref.href);
-      continue;
-    }
-
-    registerAsset({
-      absolutePath: ref.absolutePath,
-      bytes: asset.bytes,
-      contentType: asset.contentType,
-      text: asset.text,
-    });
+  for (let index = 0; index < leaves.length && !blocked; index += READ_CONCURRENCY) {
+    await Promise.all(leaves.slice(index, index + READ_CONCURRENCY).map(readLeafAsset));
   }
 
   const siteRoot = lowestCommonAncestorDirectory(
@@ -200,7 +199,6 @@ export const gatherWorkspaceHtmlArtifact = async ({
     workingDirectory,
   );
   const entryPath = toWorkspaceRelativePath(absoluteHtmlPath, siteRoot) || 'index.html';
-  const relativeHtmlPath = toWorkspaceRelativePath(absoluteHtmlPath, workingDirectory);
   const filename = htmlFilePath.split(/[/\\]/).at(-1) || 'index.html';
 
   const files: WorkspaceHtmlArtifactFile[] = blocked
@@ -221,7 +219,7 @@ export const gatherWorkspaceHtmlArtifact = async ({
     blocked,
     entryPath,
     files,
-    identifier: createWorkspaceHtmlArtifactIdentifier(relativeHtmlPath),
+    identifier: workspaceHtmlArtifactIdentifierForFile(htmlFilePath, workingDirectory),
     missing,
     oversized,
     remotes,

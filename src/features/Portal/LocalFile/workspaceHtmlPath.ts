@@ -185,12 +185,6 @@ export const resolveLocalResourceHref = ({
   return { absolutePath: resolvedPath, href, kind: 'resolved' };
 };
 
-export const extractHtmlTitle = (html: string): string | undefined => {
-  const match = html.match(/<title>([\S\s]*?)<\/title>/i);
-  const title = match?.[1]?.replaceAll(/\s+/g, ' ').trim();
-  return title || undefined;
-};
-
 export const createWorkspaceHtmlArtifactIdentifier = (relativePath: string): string => {
   const normalized = relativePath.replaceAll('\\', '/').replace(/^\/+/u, '');
   const slug = normalized
@@ -201,6 +195,19 @@ export const createWorkspaceHtmlArtifactIdentifier = (relativePath: string): str
   const digest = sha256(normalized).slice(0, 10);
 
   return `workspace-html-${slug || 'page'}-${digest}`;
+};
+
+export const workspaceHtmlArtifactIdentifierForFile = (
+  filePath: string,
+  workingDirectory: string,
+): string => {
+  const relativePath =
+    toWorkspaceRelativePath(
+      toWorkspaceAbsolutePath(filePath, workingDirectory),
+      workingDirectory,
+    ) ||
+    (stripTrailingSlash(toSlashPath(filePath)).split('/').at(-1) ?? filePath);
+  return createWorkspaceHtmlArtifactIdentifier(relativePath);
 };
 
 export { parentDirectory };

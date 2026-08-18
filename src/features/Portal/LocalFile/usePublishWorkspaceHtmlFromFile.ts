@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceHtmlArtifactPublish } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
+import { isHtmlFile } from '@/components/HtmlPreview';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -10,9 +11,9 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import {
   notifyWorkspaceHtmlPublishBlocked,
   prepareWorkspaceHtmlPublish,
+  publishPreparedWorkspaceHtml,
 } from './prepareWorkspaceHtmlPublish';
 import { openWorkspaceHtmlPublishConfirm } from './PublishHtmlArtifactConfirm';
-import { shouldOfferWorkspaceHtmlPublish } from './publishHtmlArtifactUi';
 
 interface UsePublishWorkspaceHtmlFromFileInput {
   deviceId?: string;
@@ -31,13 +32,7 @@ export const usePublishWorkspaceHtmlFromFile = ({
   const openLocalFile = useChatStore((s) => s.openLocalFile);
 
   const canOfferFile = useCallback(
-    (path: string, isFolder: boolean) =>
-      shouldOfferWorkspaceHtmlPublish({
-        available,
-        enabled,
-        isFolder,
-        path,
-      }),
+    (path: string, isFolder: boolean) => enabled && available && !isFolder && isHtmlFile({ path }),
     [available, enabled],
   );
 
@@ -53,8 +48,6 @@ export const usePublishWorkspaceHtmlFromFile = ({
         const plan = await prepareWorkspaceHtmlPublish({
           deviceId,
           filePath,
-          getExisting,
-          topicId,
           workingDirectory,
         });
 
@@ -65,31 +58,17 @@ export const usePublishWorkspaceHtmlFromFile = ({
           return;
         }
 
+        const existing = await getExisting({ identifier: plan.gathered.identifier, topicId });
+
         openWorkspaceHtmlPublishConfirm({
+          hasExisting: !!existing,
           plan,
           onOk: () => {
-            void (async () => {
-              try {
-                await publish({
-                  agentId: agentId ?? undefined,
-                  entryPath: plan.gathered.entryPath,
-                  files: plan.gathered.files,
-                  identifier: plan.gathered.identifier,
-                  title: plan.gathered.title,
-                  topicId,
-                });
-                toast.success(t('workingPanel.localFile.publish.success'));
-                openLocalFile({ deviceId, filePath, workingDirectory });
-              } catch (error) {
-                toast.error(
-                  error instanceof Error && error.message === 'unresolved-local-assets'
-                    ? t('workingPanel.localFile.publish.unresolvedLocals')
-                    : error instanceof Error && error.message
-                      ? error.message
-                      : t('workingPanel.localFile.publish.failed'),
-                );
-              }
-            })();
+            void publishPreparedWorkspaceHtml({ agentId, plan, publish, topicId }).then(
+              (result) => {
+                if (result) openLocalFile({ deviceId, filePath, workingDirectory });
+              },
+            );
           },
         });
       } catch {

@@ -203,7 +203,7 @@ describe('gatherWorkspaceHtmlArtifact', () => {
   });
 
   it('stops reading as soon as the total byte limit is exceeded', async () => {
-    const refs = Array.from({ length: 4 }, (_, index) => `<img src="b${index}.png">`).join('');
+    const refs = Array.from({ length: 12 }, (_, index) => `<img src="b${index}.png">`).join('');
     let reads = 0;
 
     const result = await gatherWorkspaceHtmlArtifact({
@@ -217,7 +217,7 @@ describe('gatherWorkspaceHtmlArtifact', () => {
     });
 
     expect(result.blocked).toBe('too-large');
-    expect(reads).toBe(3);
+    expect(reads).toBe(5);
   });
 
   it('reads a file once when it is referenced through several spellings', async () => {

@@ -1,7 +1,10 @@
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import type { WorkspaceHtmlArtifactExisting } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
+import type {
+  WorkspaceHtmlArtifactPublisher,
+  WorkspaceHtmlArtifactPublishResult,
+} from '@/business/client/features/WorkspaceHtmlArtifactPublish';
 
 import {
   type GatheredWorkspaceHtmlArtifact,
@@ -12,6 +15,11 @@ import {
   packWorkspaceHtmlDocument,
 } from './packWorkspaceHtmlDocument';
 import { readWorkspaceAsset } from './readWorkspaceAsset';
+
+export interface ReadyWorkspaceHtmlPublishPlan {
+  gathered: GatheredWorkspaceHtmlArtifact;
+  packed: PackedWorkspaceHtmlSite;
+}
 
 export type WorkspaceHtmlPublishPlan =
   | {
@@ -25,23 +33,13 @@ export type WorkspaceHtmlPublishPlan =
       blocked: 'unresolved';
       unresolvedHrefs: string[];
     }
-  | {
-      gathered: GatheredWorkspaceHtmlArtifact;
-      hasExisting: boolean;
-      packed: PackedWorkspaceHtmlSite;
-    };
+  | ReadyWorkspaceHtmlPublishPlan;
 
 interface PrepareWorkspaceHtmlPublishInput {
   content?: string;
   deviceId?: string;
   filePath: string;
-  getExisting?: (input: {
-    identifier: string;
-    topicId: string;
-  }) => Promise<WorkspaceHtmlArtifactExisting | null>;
-  hasExisting?: boolean;
   sandboxTopicId?: string;
-  topicId: string;
   workingDirectory: string;
 }
 
@@ -49,10 +47,7 @@ export const prepareWorkspaceHtmlPublish = async ({
   content,
   deviceId,
   filePath,
-  getExisting,
-  hasExisting,
   sandboxTopicId,
-  topicId,
   workingDirectory,
 }: PrepareWorkspaceHtmlPublishInput): Promise<WorkspaceHtmlPublishPlan> => {
   let htmlContent = content;
@@ -93,20 +88,7 @@ export const prepareWorkspaceHtmlPublish = async ({
     return { blocked: 'unresolved', unresolvedHrefs: packed.unresolvedHrefs };
   }
 
-  if (hasExisting !== undefined) {
-    return { gathered, hasExisting, packed };
-  }
-
-  if (!getExisting) {
-    return { gathered, hasExisting: false, packed };
-  }
-
-  const existing = await getExisting({
-    identifier: gathered.identifier,
-    topicId,
-  });
-
-  return { gathered, hasExisting: !!existing, packed };
+  return { gathered, packed };
 };
 
 export const notifyWorkspaceHtmlPublishBlocked = (
@@ -130,4 +112,42 @@ export const notifyWorkspaceHtmlPublishBlocked = (
       { ns: 'chat', size: plan.totalBytes },
     ),
   );
+};
+
+const workspaceHtmlPublishErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message === 'unresolved-local-assets') {
+    return t('workingPanel.localFile.publish.unresolvedLocals', { ns: 'chat' });
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return t('workingPanel.localFile.publish.failed', { ns: 'chat' });
+};
+
+export const publishPreparedWorkspaceHtml = async ({
+  agentId,
+  plan,
+  publish,
+  topicId,
+}: {
+  agentId?: string | null;
+  plan: ReadyWorkspaceHtmlPublishPlan;
+  publish: WorkspaceHtmlArtifactPublisher['publish'];
+  topicId: string;
+}): Promise<WorkspaceHtmlArtifactPublishResult | undefined> => {
+  try {
+    const result = await publish({
+      agentId: agentId ?? undefined,
+      entryPath: plan.gathered.entryPath,
+      files: plan.gathered.files,
+      identifier: plan.gathered.identifier,
+      packed: { html: plan.packed.html, sidecars: plan.packed.sidecars },
+      title: plan.gathered.title,
+      topicId,
+    });
+
+    toast.success(t('workingPanel.localFile.publish.success', { ns: 'chat' }));
+    return result;
+  } catch (error) {
+    toast.error(workspaceHtmlPublishErrorMessage(error));
+    return;
+  }
 };

@@ -127,6 +127,42 @@ describe('publishWorkspaceHtmlArtifact', () => {
     });
   });
 
+  it('publishes a prepacked plan without re-packing the file set', async () => {
+    const createMessage = vi.fn(
+      async (_params: {
+        agentId: string;
+        content: string;
+        role: 'assistant';
+        topicId: string;
+      }) => ({
+        id: 'msg_1',
+      }),
+    );
+    const publishArtifact = vi.fn(async () => ({ latestRevisionNumber: 1 }));
+
+    await publishWorkspaceHtmlArtifact(
+      {
+        agentId: 'agt_1',
+        entryPath: 'index.html',
+        files: [
+          {
+            content: '<html><link rel="stylesheet" href="./app.css"></html>',
+            contentType: 'text/html',
+            encoding: 'utf8',
+            path: 'index.html',
+          },
+        ],
+        identifier: 'workspace-html-index-html',
+        packed: { html: '<html>prepacked</html>', sidecars: [] },
+        title: 'Demo',
+        topicId: 'tpc_1',
+      },
+      { createMessage, publishArtifact },
+    );
+
+    expect(createMessage.mock.calls[0]?.[0]?.content).toContain('<html>prepacked</html>');
+  });
+
   it('refuses to publish html that still points at unpacked local files', async () => {
     await expect(
       publishWorkspaceHtmlArtifact(

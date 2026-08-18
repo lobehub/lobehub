@@ -3,8 +3,7 @@ import { Button, createModal, ScrollArea, useModalContext } from '@lobehub/ui/ba
 import { t } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
-import type { WorkspaceHtmlPublishPlan } from './prepareWorkspaceHtmlPublish';
-import { hasWorkspaceHtmlPackingDetails } from './publishHtmlArtifactUi';
+import type { ReadyWorkspaceHtmlPublishPlan } from './prepareWorkspaceHtmlPublish';
 import { WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './readWorkspaceAsset';
 
 const CONFIRM_BODY_MAX_HEIGHT = 'min(52vh, 360px)';
@@ -28,7 +27,7 @@ interface PublishHtmlArtifactConfirmContentProps {
   uploadedPaths: string[];
 }
 
-export const PublishHtmlArtifactConfirmContent = ({
+const PublishHtmlArtifactConfirmContent = ({
   inlineLimit,
   inlinedPaths,
   missing,
@@ -37,13 +36,9 @@ export const PublishHtmlArtifactConfirmContent = ({
   uploadedPaths,
 }: PublishHtmlArtifactConfirmContentProps) => {
   const { t } = useTranslation('chat');
-  const showDetails = hasWorkspaceHtmlPackingDetails({
-    inlinedPaths,
-    missing,
-    oversized,
-    remotes,
-    uploadedPaths,
-  });
+  const showDetails = [inlinedPaths, uploadedPaths, missing, oversized, remotes].some(
+    (list) => list.length > 0,
+  );
 
   return (
     <ScrollArea
@@ -115,7 +110,7 @@ export const PublishHtmlArtifactConfirmContent = ({
   );
 };
 
-export const PublishHtmlArtifactConfirmFooter = ({
+const PublishHtmlArtifactConfirmFooter = ({
   okText,
   onOk,
 }: {
@@ -153,14 +148,16 @@ export const PublishHtmlArtifactConfirmFooter = ({
 };
 
 export const openWorkspaceHtmlPublishConfirm = ({
+  hasExisting,
   onOk,
   plan,
 }: {
+  hasExisting: boolean;
   onOk: () => void;
-  plan: Extract<WorkspaceHtmlPublishPlan, { gathered: unknown }>;
+  plan: ReadyWorkspaceHtmlPublishPlan;
 }) => {
   const okText = t(
-    plan.hasExisting
+    hasExisting
       ? 'workingPanel.localFile.publish.version'
       : 'workingPanel.localFile.publish.action',
     { ns: 'chat' },

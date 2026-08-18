@@ -10,6 +10,7 @@ export interface WorkspaceHtmlArtifactPublishInput {
   entryPath: string;
   files: WorkspaceHtmlArtifactFile[];
   identifier: string;
+  packed?: { html: string; sidecars: WorkspaceHtmlArtifactFile[] };
   title: string;
   topicId: string;
 }

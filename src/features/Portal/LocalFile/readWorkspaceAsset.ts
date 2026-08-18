@@ -1,10 +1,7 @@
-import { isDesktop } from '@lobechat/const';
+import { base64ToBytes, getMimeType } from '@lobechat/utils';
 
 import { cloudSandboxService } from '@/services/cloudSandbox';
-import { localFileService } from '@/services/electron/localFileService';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
-
-import { getFileExtension } from './Body.helpers';
 
 export const WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES = 8 * 1024 * 1024;
 export const WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
@@ -38,37 +35,13 @@ const TEXT_CONTENT_TYPES = new Set([
   'text/plain',
 ]);
 
-const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
-  css: 'text/css',
-  gif: 'image/gif',
-  html: 'text/html',
-  ico: 'image/x-icon',
-  jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
-  js: 'text/javascript',
-  json: 'application/json',
-  mjs: 'text/javascript',
-  png: 'image/png',
-  svg: 'image/svg+xml',
-  ttf: 'font/ttf',
-  txt: 'text/plain',
-  wasm: 'application/wasm',
-  webp: 'image/webp',
-  woff: 'font/woff',
-  woff2: 'font/woff2',
-  xml: 'application/xml',
-};
-
 const isTextContentType = (contentType: string): boolean => {
   const bare = contentType.split(';')[0].trim().toLowerCase();
   return bare.startsWith('text/') || TEXT_CONTENT_TYPES.has(bare);
 };
 
-const guessContentType = (path: string): string =>
-  CONTENT_TYPE_BY_EXTENSION[getFileExtension(path).toLowerCase()] ?? 'application/octet-stream';
-
 export const resolveWorkspaceAssetContentType = (path: string, reported?: string): string => {
-  const guessed = guessContentType(path);
+  const guessed = getMimeType(path);
   if (guessed !== 'application/octet-stream') return guessed;
 
   const reportedType = reported?.split(';')[0]?.trim();
@@ -81,8 +54,7 @@ const decodeBase64Bytes = (value: string): Uint8Array | undefined => {
   const compact = value.replaceAll(/\s+/g, '');
   if (!compact) return;
   try {
-    const binary = globalThis.atob(compact);
-    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return base64ToBytes(compact);
   } catch {
     return;
   }
@@ -165,7 +137,7 @@ export const readWorkspaceAsset = async ({
 }): Promise<ReadWorkspaceAssetResult> => {
   try {
     if (sandboxTopicId) {
-      const contentType = guessContentType(path);
+      const contentType = getMimeType(path);
       if (isTextContentType(contentType)) {
         const result = await cloudSandboxService.callTool(
           'readLocalFile',
@@ -184,10 +156,7 @@ export const readWorkspaceAsset = async ({
 
         return {
           bytes,
-          contentType: resolveWorkspaceAssetContentType(
-            path,
-            result.result.mimeType || contentType,
-          ),
+          contentType: resolveWorkspaceAssetContentType(path, result.result.mimeType),
           ok: true,
           text,
         };
@@ -199,7 +168,7 @@ export const readWorkspaceAsset = async ({
         return { ok: false, reason: 'oversized' };
       }
 
-      return { bytes, contentType: resolveWorkspaceAssetContentType(path, contentType), ok: true };
+      return { bytes, contentType, ok: true };
     }
 
     const preview = await projectFileService.getLocalFilePreview({
@@ -216,24 +185,21 @@ export const readWorkspaceAsset = async ({
       };
     }
 
-    if (!deviceId && isDesktop) {
-      const bytesResult = await localFileService.readLocalFileBytes({
-        path,
-        workingDirectory,
-      });
-      if (!bytesResult) return { ok: false, reason: 'missing' };
-      if (bytesResult.bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
-        return { ok: false, reason: 'oversized' };
-      }
-
-      const contentType = resolveWorkspaceAssetContentType(path, bytesResult.contentType);
-      const text = isTextContentType(contentType)
-        ? new TextDecoder().decode(bytesResult.bytes)
-        : undefined;
-      return { ...bytesResult, contentType, ok: true, text };
+    const bytesResult = await projectFileService.readProjectFileBytes({
+      deviceId,
+      path,
+      workingDirectory,
+    });
+    if (!bytesResult) return { ok: false, reason: 'unreadable' };
+    if (bytesResult.bytes.byteLength > WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES) {
+      return { ok: false, reason: 'oversized' };
     }
 
-    return { ok: false, reason: 'unreadable' };
+    const contentType = resolveWorkspaceAssetContentType(path, bytesResult.contentType);
+    const text = isTextContentType(contentType)
+      ? new TextDecoder().decode(bytesResult.bytes)
+      : undefined;
+    return { ...bytesResult, contentType, ok: true, text };
   } catch {
     return { ok: false, reason: 'missing' };
   }

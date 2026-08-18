@@ -1,4 +1,5 @@
 import { ARTIFACT_TAG } from '@lobechat/const';
+import { escapeXmlAttr } from '@lobechat/prompts';
 
 import type {
   WorkspaceHtmlArtifactFile,
@@ -6,12 +7,7 @@ import type {
   WorkspaceHtmlArtifactPublishResult,
 } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
 
-import { packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
-
-const escapeXml = (value: string) =>
-  value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
-
-const hostedPath = (path: string) => `/${path.replaceAll('\\', '/').replace(/^\/+/u, '')}`;
+import { hostedPath, packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
 
 export const wrapWorkspaceHtmlArtifact = ({
   html,
@@ -22,7 +18,7 @@ export const wrapWorkspaceHtmlArtifact = ({
   identifier: string;
   title: string;
 }): string =>
-  `<${ARTIFACT_TAG} identifier="${escapeXml(identifier)}" type="text/html" title="${escapeXml(title)}">\n${html}\n</${ARTIFACT_TAG}>`;
+  `<${ARTIFACT_TAG} identifier="${escapeXmlAttr(identifier)}" type="text/html" title="${escapeXmlAttr(title)}">\n${html}\n</${ARTIFACT_TAG}>`;
 
 export interface PublishWorkspaceHtmlSiteParams {
   artifactIdentifier: string;
@@ -56,14 +52,18 @@ export const publishWorkspaceHtmlArtifact = async (
     throw new Error('unavailable');
   }
 
-  const packed = packWorkspaceHtmlDocument({
-    entryPath: input.entryPath,
-    files: input.files,
-  });
-
-  if (packed.unresolvedHrefs.length > 0) {
-    throw new Error('unresolved-local-assets');
-  }
+  const packed =
+    input.packed ??
+    (() => {
+      const fresh = packWorkspaceHtmlDocument({
+        entryPath: input.entryPath,
+        files: input.files,
+      });
+      if (fresh.unresolvedHrefs.length > 0) {
+        throw new Error('unresolved-local-assets');
+      }
+      return fresh;
+    })();
 
   if (packed.sidecars.length > 0) {
     if (!deps.publishSite) {

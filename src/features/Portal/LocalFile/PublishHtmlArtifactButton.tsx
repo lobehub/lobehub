@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { WorkspaceHtmlArtifactExisting } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
 import { useWorkspaceHtmlArtifactPublish } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
 import { isHtmlFile } from '@/components/HtmlPreview';
 import { useChatStore } from '@/store/chat';
@@ -13,17 +14,13 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import {
-  createWorkspaceHtmlArtifactIdentifier,
-  toWorkspaceAbsolutePath,
-  toWorkspaceRelativePath,
-} from './collectHtmlLocalResources';
-import type { GatheredWorkspaceHtmlArtifact } from './gatherWorkspaceHtmlArtifact';
-import {
   notifyWorkspaceHtmlPublishBlocked,
   prepareWorkspaceHtmlPublish,
+  publishPreparedWorkspaceHtml,
+  type ReadyWorkspaceHtmlPublishPlan,
 } from './prepareWorkspaceHtmlPublish';
 import { openWorkspaceHtmlPublishConfirm } from './PublishHtmlArtifactConfirm';
-import { getPublishHtmlArtifactSlots } from './publishHtmlArtifactUi';
+import { workspaceHtmlArtifactIdentifierForFile } from './workspaceHtmlPath';
 
 interface PublishHtmlArtifactButtonProps {
   children?: ReactNode;
@@ -64,10 +61,6 @@ const liveBarStyles = createStaticStyles(({ css }) => ({
 
 const PublishHtmlArtifactContext = createContext<PublishHtmlArtifactModel | null>(null);
 
-const relativeHtmlPath = (filePath: string, workingDirectory: string) =>
-  toWorkspaceRelativePath(toWorkspaceAbsolutePath(filePath, workingDirectory), workingDirectory) ||
-  (filePath.split(/[/\\]/).at(-1) ?? filePath);
-
 export const usePublishHtmlArtifactModel = ({
   content,
   deviceId,
@@ -81,12 +74,11 @@ export const usePublishHtmlArtifactModel = ({
   const agentId = useChatStore((s) => s.activeAgentId);
   const { available, getExisting, publish } = useWorkspaceHtmlArtifactPublish();
   const [busy, setBusy] = useState<'publishing' | 'scanning' | null>(null);
-  const [publicUrl, setPublicUrl] = useState<string>();
-  const [hasExisting, setHasExisting] = useState(false);
+  const [existing, setExisting] = useState<WorkspaceHtmlArtifactExisting | null>(null);
 
   const isHtml = isHtmlFile({ path: filePath });
   const identifier = useMemo(
-    () => createWorkspaceHtmlArtifactIdentifier(relativeHtmlPath(filePath, workingDirectory)),
+    () => workspaceHtmlArtifactIdentifierForFile(filePath, workingDirectory),
     [filePath, workingDirectory],
   );
 
@@ -97,15 +89,12 @@ export const usePublishHtmlArtifactModel = ({
   }, [scopeKey]);
 
   useEffect(() => {
-    setHasExisting(false);
-    setPublicUrl(undefined);
+    setExisting(null);
     if (!available || !enabled || !isHtml || !topicId) return;
 
     let cancelled = false;
-    void getExisting({ identifier, topicId }).then((existing) => {
-      if (cancelled) return;
-      setHasExisting(!!existing);
-      setPublicUrl(existing?.publicUrl);
+    void getExisting({ identifier, topicId }).then((result) => {
+      if (!cancelled) setExisting(result);
     });
 
     return () => {
@@ -114,40 +103,25 @@ export const usePublishHtmlArtifactModel = ({
   }, [available, enabled, getExisting, identifier, isHtml, topicId]);
 
   const runPublish = useCallback(
-    async (gathered: GatheredWorkspaceHtmlArtifact) => {
+    async (plan: ReadyWorkspaceHtmlPublishPlan) => {
       if (!topicId) return;
 
       const requestScope = scopeRef.current;
       setBusy('publishing');
       try {
-        const result = await publish({
-          agentId: agentId ?? undefined,
-          entryPath: gathered.entryPath,
-          files: gathered.files,
-          identifier: gathered.identifier,
-          title: gathered.title,
-          topicId,
-        });
-
-        toast.success(t('workingPanel.localFile.publish.success'));
+        const result = await publishPreparedWorkspaceHtml({ agentId, plan, publish, topicId });
         // Publishing may outlive a file/topic switch under the same provider;
         // a completion for a previous scope must not label the current file.
-        if (scopeRef.current !== requestScope) return;
-        setHasExisting(true);
-        if (result.publicUrl) setPublicUrl(result.publicUrl);
-      } catch (error) {
-        toast.error(
-          error instanceof Error && error.message === 'unresolved-local-assets'
-            ? t('workingPanel.localFile.publish.unresolvedLocals')
-            : error instanceof Error && error.message
-              ? error.message
-              : t('workingPanel.localFile.publish.failed'),
-        );
+        if (!result || scopeRef.current !== requestScope) return;
+        setExisting((previous) => ({
+          identifier: plan.gathered.identifier,
+          publicUrl: result.publicUrl ?? previous?.publicUrl,
+        }));
       } finally {
         setBusy(null);
       }
     },
-    [agentId, publish, t, topicId],
+    [agentId, publish, topicId],
   );
 
   const handlePublish = useCallback(async () => {
@@ -159,9 +133,7 @@ export const usePublishHtmlArtifactModel = ({
         content,
         deviceId,
         filePath,
-        hasExisting,
         sandboxTopicId,
-        topicId,
         workingDirectory,
       });
 
@@ -171,9 +143,10 @@ export const usePublishHtmlArtifactModel = ({
       }
 
       openWorkspaceHtmlPublishConfirm({
+        hasExisting: !!existing,
         plan,
         onOk: () => {
-          void runPublish(plan.gathered);
+          void runPublish(plan);
         },
       });
     } catch {
@@ -185,8 +158,8 @@ export const usePublishHtmlArtifactModel = ({
     busy,
     content,
     deviceId,
+    existing,
     filePath,
-    hasExisting,
     runPublish,
     sandboxTopicId,
     t,
@@ -194,19 +167,16 @@ export const usePublishHtmlArtifactModel = ({
     workingDirectory,
   ]);
 
-  const slots = getPublishHtmlArtifactSlots({
-    available,
-    enabled,
-    isHtml,
-    publicUrl,
-  });
+  const publicUrl = existing?.publicUrl;
+  const visible = available && enabled && isHtml;
 
   return {
     busy,
     handlePublish,
     publicUrl,
+    showLiveBar: visible && !!publicUrl,
+    showOverlayTrigger: visible && !publicUrl,
     topicId,
-    ...slots,
   };
 };
 
@@ -284,9 +254,3 @@ export const PublishHtmlArtifactTrigger = () => {
 
   return <PublishAction />;
 };
-
-export const PublishHtmlArtifactButton = (props: PublishHtmlArtifactButtonProps) => (
-  <PublishHtmlArtifactProvider {...props}>
-    <PublishHtmlArtifactTrigger />
-  </PublishHtmlArtifactProvider>
-);
