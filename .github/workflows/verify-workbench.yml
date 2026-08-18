@@ -1,0 +1,83 @@
+name: Verify Workbench
+
+on:
+  pull_request: {}
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: verify-workbench-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve last successful deploy
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "${{ github.repository }}" \
+            --workflow deploy-workbench.yml --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId' || true)
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download last deployed build-inputs manifest
+        id: manifest
+        if: steps.base.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh run download "${{ steps.base.outputs.run_id }}" --repo "${{ github.repository }}" \
+            -n workbench-build-inputs -D /tmp/workbench-manifest; then
+            echo "path=/tmp/workbench-manifest/build-inputs.txt" >> "$GITHUB_OUTPUT"
+          else
+            echo "no manifest artifact on last successful run"
+          fi
+
+      - name: Detect workbench input changes
+        id: detect
+        env:
+          WORKBENCH_MANIFEST: ${{ steps.manifest.outputs.path }}
+        run: |
+          if [ -z "$WORKBENCH_MANIFEST" ]; then
+            echo "no previous deploy manifest — building"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            node apps/workbench/scripts/should-build.mjs \
+              "origin/${{ github.base_ref }}" HEAD
+          fi
+
+      - name: Setup environment
+        if: steps.detect.outputs.should_build == 'true'
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        if: steps.detect.outputs.should_build == 'true'
+        run: pnpm install
+
+      - name: Build workbench
+        if: steps.detect.outputs.should_build == 'true'
+        run: bun run build:rr
+        working-directory: apps/workbench
+
+      - name: Validate worker bundle
+        if: steps.detect.outputs.should_build == 'true'
+        run: |
+          node_modules/.bin/wrangler deploy --dry-run \
+            --config build/server/wrangler.json | tee /tmp/dry-run.log
+          gzip_kib=$(grep -Eo 'gzip: [0-9.]+ KiB' /tmp/dry-run.log | grep -Eo '[0-9.]+' | head -1)
+          echo "worker gzip size: ${gzip_kib} KiB"
+          if [ -n "$gzip_kib" ] && [ "$(printf '%.0f' "$gzip_kib")" -gt 8192 ]; then
+            echo "::error::worker bundle ${gzip_kib} KiB gzip exceeds the 8 MiB guard (plan limit is 10 MiB)"
+            exit 1
+          fi
+        working-directory: apps/workbench
