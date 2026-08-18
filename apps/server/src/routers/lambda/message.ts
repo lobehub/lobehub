@@ -423,10 +423,10 @@ export const messageRouter = router({
       z.object({
         agentId: z.string().nullish(),
         anchor: z.object({ createdAt: z.string(), id: z.string() }).nullish(),
-        countBudget: z.number().optional(),
+        countBudget: z.number().int().min(1).max(10_000).optional(),
         cursor: z.object({ createdAt: z.string(), id: z.string() }).nullish(),
         includeFileWorks: z.boolean().optional(),
-        roundLimit: z.number().optional(),
+        roundLimit: z.number().int().min(1).max(100).optional(),
         sessionId: z.string().nullish(),
         skipWorks: z.boolean().optional(),
         topicId: z.string(),
