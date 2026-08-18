@@ -13,7 +13,7 @@ describe('useAicoPanelContainerProps', () => {
     vi.mocked(useIsMobile).mockReset();
   });
 
-  it('uses compact padding and horizontal overflow on mobile', () => {
+  it('uses compact padding and hides page-level horizontal overflow on mobile', () => {
     vi.mocked(useIsMobile).mockReturnValue(true);
 
     const props = useAicoPanelContainerProps(1100);
@@ -21,7 +21,8 @@ describe('useAicoPanelContainerProps', () => {
     expect(props.maxWidth).toBe(1100);
     expect(props.paddingBlock).toBe('16px 32px');
     expect(props.paddingInline).toBe(12);
-    expect(props.style.overflowX).toBe('auto');
+    expect(props.style.overflowX).toBe('hidden');
+    expect(props.style.minWidth).toBe(0);
   });
 
   it('uses desktop padding when not mobile', () => {

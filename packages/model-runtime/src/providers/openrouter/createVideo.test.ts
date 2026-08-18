@@ -95,6 +95,24 @@ describe('pollOpenRouterVideoStatus', () => {
     });
   });
 
+  it('persists OpenRouter usage.cost as costUsd on success', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      json: async () => ({
+        status: 'completed',
+        unsigned_urls: ['https://storage.example.com/out.mp4'],
+        usage: { cost: 0.042 },
+      }),
+      ok: true,
+    });
+
+    await expect(
+      pollOpenRouterVideoStatus('video-job-1', { apiKey: 'test-api-key' }),
+    ).resolves.toMatchObject({
+      costUsd: 0.042,
+      status: 'success',
+    });
+  });
+
   it('returns pending while the job is still running', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       json: async () => ({ status: 'processing' }),

@@ -271,6 +271,60 @@ describe('Operation Actions', () => {
       expect(operation.metadata.duration).toBeDefined();
       expect(operation.metadata.duration).toBeGreaterThanOrEqual(0);
     });
+
+    it('should complete still-running reasoning children when the parent finishes', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let parentId: string;
+      let reasoningId: string;
+
+      act(() => {
+        parentId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        }).operationId;
+        reasoningId = result.current.startOperation({
+          context: { agentId: 'session1' },
+          parentOperationId: parentId,
+          type: 'reasoning',
+        }).operationId;
+      });
+
+      expect(result.current.operations[reasoningId!].status).toBe('running');
+
+      act(() => {
+        result.current.completeOperation(parentId!);
+      });
+
+      expect(result.current.operations[parentId!].status).toBe('completed');
+      expect(result.current.operations[reasoningId!].status).toBe('completed');
+    });
+
+    it('should complete reasoning children when the parent marks visible loading done', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let parentId: string;
+      let reasoningId: string;
+
+      act(() => {
+        parentId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        }).operationId;
+        reasoningId = result.current.startOperation({
+          context: { agentId: 'session1' },
+          parentOperationId: parentId,
+          type: 'reasoning',
+        }).operationId;
+      });
+
+      act(() => {
+        result.current.updateOperationMetadata(parentId!, { visibleLoadingDone: true });
+      });
+
+      expect(result.current.operations[parentId!].status).toBe('running');
+      expect(result.current.operations[reasoningId!].status).toBe('completed');
+    });
   });
 
   describe('cancelOperation', () => {

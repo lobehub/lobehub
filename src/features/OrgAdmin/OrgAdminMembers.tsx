@@ -19,7 +19,7 @@ import {
   type FxTopupFormValues,
 } from '@/features/AicoBilling/FxTopupFields';
 import { groupedNumberInputProps } from '@/features/AicoBilling/groupedNumberInput';
-import { aicoPanelStyles } from '@/features/AicoPanels';
+import { AICO_TABLE_SCROLL, aicoPanelStyles } from '@/features/AicoPanels';
 import { presentInviteLink } from '@/features/OrgAdmin/InviteLinkModal';
 import { buildPhoneVerifyRedirectUrl, isValidIranianPhoneNumber } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
@@ -28,21 +28,6 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-  `,
-  page: css`
-    width: 100%;
-    max-width: 1100px;
-  `,
-  section: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
   dangerCard: css`
     padding: 16px;
     border: 1px solid ${cssVar.colorErrorBorder};
@@ -76,7 +61,11 @@ const nextUtcBoundaryLocal = (period: 'daily' | 'weekly' | 'monthly' | undefined
   if (period === 'weekly') {
     const day = utcNow.getUTCDay(); // 0 Sun … 6 Sat
     const daysUntilMon = day === 0 ? 1 : 8 - day;
-    next.setUTCFullYear(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), utcNow.getUTCDate() + daysUntilMon);
+    next.setUTCFullYear(
+      utcNow.getUTCFullYear(),
+      utcNow.getUTCMonth(),
+      utcNow.getUTCDate() + daysUntilMon,
+    );
     next.setUTCHours(0, 0, 0, 0);
   } else if (period === 'monthly') {
     next.setUTCFullYear(utcNow.getUTCFullYear(), utcNow.getUTCMonth() + 1, 1);
@@ -320,8 +309,8 @@ export const OrgAdminMembers = () => {
 
   if (manageable.length === 0) {
     return (
-      <Flexbox className={styles.page} gap={16}>
-        <Block className={styles.section} variant="outlined">
+      <Flexbox className={aicoPanelStyles.page} gap={16}>
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={12}>
             <Flexbox gap={4}>
               <Text strong style={{ fontSize: 18 }}>
@@ -379,7 +368,7 @@ export const OrgAdminMembers = () => {
   }
 
   return (
-    <Flexbox className={styles.page} gap={20}>
+    <Flexbox className={aicoPanelStyles.page} gap={20}>
       <Flexbox gap={8}>
         <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
           <Flexbox gap={4}>
@@ -416,7 +405,7 @@ export const OrgAdminMembers = () => {
         </div>
       ) : null}
 
-      <div className={styles.grid}>
+      <div className={aicoPanelStyles.grid}>
         <StatisticCard
           statistic={{ prefix: <WalletIcon size={16} />, value: usd(dashboard?.unallocatedUsd) }}
           title={t('org.stat.unallocated')}
@@ -454,7 +443,7 @@ export const OrgAdminMembers = () => {
 
       {tab === 'overview' && (
         <Flexbox gap={16}>
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('org.usageChart')}</Text>
               <Text type="secondary">{t('org.usageChartHint')}</Text>
@@ -487,79 +476,86 @@ export const OrgAdminMembers = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('org.memberUsageTitle')}</Text>
               {usageBars.length > 0 ? (
                 <BarList data={usageBars} valueFormatter={(v) => usd(v)} />
               ) : null}
-              <Table
-                dataSource={dashboard?.members || []}
-                pagination={false}
-                rowKey="memberId"
-                size="middle"
-                columns={[
-                  {
-                    dataIndex: 'publicCode',
-                    title: t('org.columns.publicId'),
-                    render: (v: string | null, row) => v || row.userId.slice(0, 12),
-                  },
-                  {
-                    dataIndex: 'email',
-                    title: t('org.columns.email'),
-                    render: (v: string | null) => v || '—',
-                  },
-                  {
-                    dataIndex: 'username',
-                    title: t('org.columns.username'),
-                    render: (v: string | null) => v || '—',
-                  },
-                  { dataIndex: 'role', title: t('org.columns.role') },
-                  {
-                    dataIndex: 'teamName',
-                    title: t('org.columns.team'),
-                    render: (v: string | null) => v || t('org.unspecifiedTeam'),
-                  },
-                  {
-                    dataIndex: 'period',
-                    title: t('org.columns.period'),
-                    render: (v: string | null) => t(periodLabelKey(v)),
-                  },
-                  {
-                    dataIndex: 'periodAmountUsd',
-                    title: t('org.columns.limit'),
-                    render: (v: string) => usd(v),
-                  },
-                  {
-                    dataIndex: 'settledUsageUsd',
-                    title: t('org.columns.used'),
-                    render: (v: string) => usd(v),
-                  },
-                  {
-                    dataIndex: 'remainingUsd',
-                    title: t('org.columns.remaining'),
-                    render: (v: string) => usd(v),
-                  },
-                  {
-                    dataIndex: 'nextRenewalAt',
-                    title: t('org.columns.nextRenewal'),
-                    render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—'),
-                  },
-                  {
-                    key: 'pending',
-                    title: t('org.columns.pending'),
-                    render: (_, row) =>
-                      row.pendingPeriod
-                        ? `${t(periodLabelKey(row.pendingPeriod))} ${usd(row.pendingPeriodAmountUsd)}`
-                        : '—',
-                  },
-                  {
-                    dataIndex: 'renewalStatus',
-                    title: t('org.columns.renewalStatus'),
-                    render: (v: string | null) => v || '—',
-                  },
-                ]}
-              />
+              <div className={aicoPanelStyles.tableScroll}>
+                <Table
+                  dataSource={dashboard?.members || []}
+                  pagination={false}
+                  rowKey="memberId"
+                  scroll={AICO_TABLE_SCROLL}
+                  size="middle"
+                  columns={[
+                    {
+                      dataIndex: 'publicCode',
+                      ellipsis: true,
+                      title: t('org.columns.publicId'),
+                      render: (v: string | null, row) => v || row.userId.slice(0, 12),
+                    },
+                    {
+                      dataIndex: 'email',
+                      ellipsis: true,
+                      title: t('org.columns.email'),
+                      render: (v: string | null) => v || '—',
+                    },
+                    {
+                      dataIndex: 'username',
+                      ellipsis: true,
+                      title: t('org.columns.username'),
+                      render: (v: string | null) => v || '—',
+                    },
+                    { dataIndex: 'role', title: t('org.columns.role') },
+                    {
+                      dataIndex: 'teamName',
+                      ellipsis: true,
+                      title: t('org.columns.team'),
+                      render: (v: string | null) => v || t('org.unspecifiedTeam'),
+                    },
+                    {
+                      dataIndex: 'period',
+                      title: t('org.columns.period'),
+                      render: (v: string | null) => t(periodLabelKey(v)),
+                    },
+                    {
+                      dataIndex: 'periodAmountUsd',
+                      title: t('org.columns.limit'),
+                      render: (v: string) => usd(v),
+                    },
+                    {
+                      dataIndex: 'settledUsageUsd',
+                      title: t('org.columns.used'),
+                      render: (v: string) => usd(v),
+                    },
+                    {
+                      dataIndex: 'remainingUsd',
+                      title: t('org.columns.remaining'),
+                      render: (v: string) => usd(v),
+                    },
+                    {
+                      dataIndex: 'nextRenewalAt',
+                      title: t('org.columns.nextRenewal'),
+                      render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—'),
+                    },
+                    {
+                      key: 'pending',
+                      title: t('org.columns.pending'),
+                      render: (_, row) =>
+                        row.pendingPeriod
+                          ? `${t(periodLabelKey(row.pendingPeriod))} ${usd(row.pendingPeriodAmountUsd)}`
+                          : '—',
+                    },
+                    {
+                      dataIndex: 'renewalStatus',
+                      title: t('org.columns.renewalStatus'),
+                      render: (v: string | null) => v || '—',
+                    },
+                  ]}
+                />
+              </div>
             </Flexbox>
           </Block>
         </Flexbox>
@@ -567,7 +563,7 @@ export const OrgAdminMembers = () => {
 
       {tab === 'members' && (
         <Flexbox gap={16}>
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Text strong>{t('org.invite.title')}</Text>
               <Form
@@ -632,7 +628,7 @@ export const OrgAdminMembers = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('org.allocateTitle')}</Text>
               <Text type="secondary">{t('org.allocateHint')}</Text>
@@ -693,12 +689,12 @@ export const OrgAdminMembers = () => {
                     style={{ minWidth: 160 }}
                   >
                     <Select
+                      style={{ width: '100%' }}
                       options={[
                         { label: t('org.period.daily'), value: 'daily' },
                         { label: t('org.period.weekly'), value: 'weekly' },
                         { label: t('org.period.monthly'), value: 'monthly' },
                       ]}
-                      style={{ width: '100%' }}
                     />
                   </Form.Item>
                   <Form.Item
@@ -722,8 +718,11 @@ export const OrgAdminMembers = () => {
                   </Text>
                 ) : null}
                 {(() => {
-                  const current = (dashboard?.members || []).find((m) => m.memberId === allocMemberId);
-                  if (!current?.period || !allocPeriod || current.period === allocPeriod) return null;
+                  const current = (dashboard?.members || []).find(
+                    (m) => m.memberId === allocMemberId,
+                  );
+                  if (!current?.period || !allocPeriod || current.period === allocPeriod)
+                    return null;
                   if (Number(current.periodAmountUsd) <= 0) return null;
                   return (
                     <Text type="secondary">
@@ -741,62 +740,142 @@ export const OrgAdminMembers = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('org.membersTitle')}</Text>
-              <Table
-                dataSource={roster?.members || []}
-                loading={loadingRoster}
-                pagination={false}
-                rowKey="id"
-                columns={[
-                  {
-                    dataIndex: 'publicCode',
-                    title: t('org.columns.publicId'),
-                    render: (v: string | null, row) => v || row.userId.slice(0, 12),
-                  },
-                  {
-                    dataIndex: 'email',
-                    title: t('org.columns.email'),
-                    render: (v: string | null) => v || '—',
-                  },
-                  {
-                    dataIndex: 'username',
-                    title: t('org.columns.username'),
-                    render: (v: string | null) => v || '—',
-                  },
-                  { dataIndex: 'role', title: t('org.columns.role') },
-                  { dataIndex: 'status', title: t('org.columns.status') },
-                  {
-                    key: 'team',
-                    title: t('org.columns.team'),
-                    render: (_, row) => (
-                      <Select
-                        disabled={readOnly}
-                        placeholder={t('org.assignTeam')}
-                        style={{ minWidth: 140 }}
-                        options={(teams || []).map((team) => ({
-                          label: team.name,
-                          value: team.id,
-                        }))}
-                        onChange={async (teamId) => {
-                          if (!selectedOrgId || readOnly) return;
-                          await lambdaClient.organization.assignMemberToTeam.mutate({
-                            orgId: selectedOrgId,
-                            orgMemberId: row.id,
-                            teamId,
-                          });
-                          toast.success(t('org.teamAssigned'));
-                          await refreshAll();
-                        }}
-                      />
-                    ),
-                  },
-                  {
-                    key: 'actions',
-                    title: t('org.columns.actions'),
-                    render: (_, row) =>
-                      row.role === 'owner' || readOnly ? null : (
+              <div className={aicoPanelStyles.tableScroll}>
+                <Table
+                  dataSource={roster?.members || []}
+                  loading={loadingRoster}
+                  pagination={false}
+                  rowKey="id"
+                  scroll={AICO_TABLE_SCROLL}
+                  columns={[
+                    {
+                      dataIndex: 'publicCode',
+                      ellipsis: true,
+                      title: t('org.columns.publicId'),
+                      render: (v: string | null, row) => v || row.userId.slice(0, 12),
+                    },
+                    {
+                      dataIndex: 'email',
+                      ellipsis: true,
+                      title: t('org.columns.email'),
+                      render: (v: string | null) => v || '—',
+                    },
+                    {
+                      dataIndex: 'username',
+                      ellipsis: true,
+                      title: t('org.columns.username'),
+                      render: (v: string | null) => v || '—',
+                    },
+                    { dataIndex: 'role', title: t('org.columns.role') },
+                    { dataIndex: 'status', title: t('org.columns.status') },
+                    {
+                      key: 'team',
+                      title: t('org.columns.team'),
+                      render: (_, row) => (
+                        <Select
+                          disabled={readOnly}
+                          placeholder={t('org.assignTeam')}
+                          style={{ minWidth: 140 }}
+                          options={(teams || []).map((team) => ({
+                            label: team.name,
+                            value: team.id,
+                          }))}
+                          onChange={async (teamId) => {
+                            if (!selectedOrgId || readOnly) return;
+                            await lambdaClient.organization.assignMemberToTeam.mutate({
+                              orgId: selectedOrgId,
+                              orgMemberId: row.id,
+                              teamId,
+                            });
+                            toast.success(t('org.teamAssigned'));
+                            await refreshAll();
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      key: 'actions',
+                      title: t('org.columns.actions'),
+                      render: (_, row) =>
+                        row.role === 'owner' || readOnly ? null : (
+                          <Flexbox horizontal gap={4}>
+                            <Button
+                              size="small"
+                              type="text"
+                              onClick={async () => {
+                                if (!selectedOrgId) return;
+                                try {
+                                  const result =
+                                    await lambdaClient.organization.revokeMemberBudget.mutate({
+                                      orgId: selectedOrgId,
+                                      orgMemberId: row.id,
+                                    });
+                                  toast.success(
+                                    t('org.reclaimSuccess', {
+                                      usd: Number(result.reclaimedUsd).toFixed(2),
+                                    }),
+                                  );
+                                  await refreshAll();
+                                } catch (error) {
+                                  toastAicoError(error, t, 'org.reclaimFailed');
+                                }
+                              }}
+                            >
+                              {t('org.reclaim')}
+                            </Button>
+                            <Button
+                              size="small"
+                              type="text"
+                              onClick={async () => {
+                                if (!selectedOrgId) return;
+                                try {
+                                  await lambdaClient.organization.removeMember.mutate({
+                                    memberId: row.id,
+                                    orgId: selectedOrgId,
+                                  });
+                                  toast.success(t('org.removeSuccess'));
+                                  await refreshAll();
+                                } catch (error) {
+                                  toastAicoError(error, t, 'org.removeFailed');
+                                }
+                              }}
+                            >
+                              {t('org.remove')}
+                            </Button>
+                          </Flexbox>
+                        ),
+                    },
+                  ]}
+                />
+              </div>
+            </Flexbox>
+          </Block>
+
+          <Block className={aicoPanelStyles.section} variant="outlined">
+            <Flexbox gap={12}>
+              <Text strong>{t('org.pendingInvites')}</Text>
+              <div className={aicoPanelStyles.tableScroll}>
+                <Table
+                  dataSource={roster?.invites || []}
+                  loading={loadingRoster}
+                  pagination={false}
+                  rowKey="id"
+                  scroll={AICO_TABLE_SCROLL}
+                  columns={[
+                    { dataIndex: 'identifierType', title: t('org.columns.type') },
+                    {
+                      dataIndex: 'identifierValue',
+                      ellipsis: true,
+                      title: t('org.columns.value'),
+                    },
+                    { dataIndex: 'role', title: t('org.columns.role') },
+                    {
+                      key: 'actions',
+                      title: t('org.columns.actions'),
+                      render: (_, row) => (
                         <Flexbox horizontal gap={4}>
                           <Button
                             size="small"
@@ -804,106 +883,39 @@ export const OrgAdminMembers = () => {
                             onClick={async () => {
                               if (!selectedOrgId) return;
                               try {
-                                const result =
-                                  await lambdaClient.organization.revokeMemberBudget.mutate({
-                                    orgId: selectedOrgId,
-                                    orgMemberId: row.id,
-                                  });
-                                toast.success(
-                                  t('org.reclaimSuccess', {
-                                    usd: Number(result.reclaimedUsd).toFixed(2),
-                                  }),
-                                );
-                                await refreshAll();
+                                const result = await lambdaClient.organization.getInviteLink.query({
+                                  inviteId: row.id,
+                                  orgId: selectedOrgId,
+                                });
+                                presentInviteLink(result.inviteUrl);
                               } catch (error) {
-                                toastAicoError(error, t, 'org.reclaimFailed');
+                                toastAicoError(error, t, 'org.invite.showLinkFailed');
                               }
                             }}
                           >
-                            {t('org.reclaim')}
+                            {t('org.invite.showLink')}
                           </Button>
                           <Button
+                            disabled={readOnly}
                             size="small"
                             type="text"
                             onClick={async () => {
-                              if (!selectedOrgId) return;
-                              try {
-                                await lambdaClient.organization.removeMember.mutate({
-                                  memberId: row.id,
-                                  orgId: selectedOrgId,
-                                });
-                                toast.success(t('org.removeSuccess'));
-                                await refreshAll();
-                              } catch (error) {
-                                toastAicoError(error, t, 'org.removeFailed');
-                              }
-                            }}
-                          >
-                            {t('org.remove')}
-                          </Button>
-                        </Flexbox>
-                      ),
-                  },
-                ]}
-              />
-            </Flexbox>
-          </Block>
-
-          <Block className={styles.section} variant="outlined">
-            <Flexbox gap={12}>
-              <Text strong>{t('org.pendingInvites')}</Text>
-              <Table
-                dataSource={roster?.invites || []}
-                loading={loadingRoster}
-                pagination={false}
-                rowKey="id"
-                columns={[
-                  { dataIndex: 'identifierType', title: t('org.columns.type') },
-                  { dataIndex: 'identifierValue', title: t('org.columns.value') },
-                  { dataIndex: 'role', title: t('org.columns.role') },
-                  {
-                    key: 'actions',
-                    title: t('org.columns.actions'),
-                    render: (_, row) => (
-                      <Flexbox horizontal gap={4}>
-                        <Button
-                          size="small"
-                          type="text"
-                          onClick={async () => {
-                            if (!selectedOrgId) return;
-                            try {
-                              const result = await lambdaClient.organization.getInviteLink.query({
+                              if (!selectedOrgId || readOnly) return;
+                              await lambdaClient.organization.revokeInvite.mutate({
                                 inviteId: row.id,
                                 orgId: selectedOrgId,
                               });
-                              presentInviteLink(result.inviteUrl);
-                            } catch (error) {
-                              toastAicoError(error, t, 'org.invite.showLinkFailed');
-                            }
-                          }}
-                        >
-                          {t('org.invite.showLink')}
-                        </Button>
-                        <Button
-                          disabled={readOnly}
-                          size="small"
-                          type="text"
-                          onClick={async () => {
-                            if (!selectedOrgId || readOnly) return;
-                            await lambdaClient.organization.revokeInvite.mutate({
-                              inviteId: row.id,
-                              orgId: selectedOrgId,
-                            });
-                            await mutate();
-                          }}
-                        >
-                          {t('org.revoke')}
-                        </Button>
-                      </Flexbox>
-                    ),
-                  },
-                ]}
-              />
+                              await mutate();
+                            }}
+                          >
+                            {t('org.revoke')}
+                          </Button>
+                        </Flexbox>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
             </Flexbox>
           </Block>
         </Flexbox>
@@ -911,7 +923,7 @@ export const OrgAdminMembers = () => {
 
       {tab === 'teams' && (
         <Flexbox gap={16}>
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Text strong>{t('org.teamsTitle')}</Text>
               <Text type="secondary">{t('org.teamsHint')}</Text>
@@ -943,54 +955,57 @@ export const OrgAdminMembers = () => {
                   {t('org.teamCreate')}
                 </Button>
               </Form>
-              <Table
-                dataSource={teams || []}
-                pagination={false}
-                rowKey="id"
-                columns={[
-                  { dataIndex: 'name', title: t('org.columns.team') },
-                  {
-                    dataIndex: 'isDefault',
-                    title: t('org.columns.default'),
-                    render: (v: boolean) => (v ? '✓' : ''),
-                  },
-                  {
-                    dataIndex: 'modelIds',
-                    title: t('org.columns.models'),
-                    render: (ids: string[]) =>
-                      ids?.length ? (
-                        <Flexbox horizontal gap={4} wrap="wrap">
-                          {ids.map((id) => (
-                            <Tag key={id}>{id}</Tag>
-                          ))}
-                        </Flexbox>
-                      ) : (
-                        t('org.noModelsGranted')
-                      ),
-                  },
-                  {
-                    key: 'actions',
-                    title: t('org.columns.actions'),
-                    render: (_, row) =>
-                      row.isDefault || readOnly ? null : (
-                        <Button
-                          size="small"
-                          type="text"
-                          onClick={async () => {
-                            if (!selectedOrgId) return;
-                            await lambdaClient.organization.deleteTeam.mutate({
-                              orgId: selectedOrgId,
-                              teamId: row.id,
-                            });
-                            await mutateTeams();
-                          }}
-                        >
-                          {t('org.delete')}
-                        </Button>
-                      ),
-                  },
-                ]}
-              />
+              <div className={aicoPanelStyles.tableScroll}>
+                <Table
+                  dataSource={teams || []}
+                  pagination={false}
+                  rowKey="id"
+                  scroll={AICO_TABLE_SCROLL}
+                  columns={[
+                    { dataIndex: 'name', ellipsis: true, title: t('org.columns.team') },
+                    {
+                      dataIndex: 'isDefault',
+                      title: t('org.columns.default'),
+                      render: (v: boolean) => (v ? '✓' : ''),
+                    },
+                    {
+                      dataIndex: 'modelIds',
+                      title: t('org.columns.models'),
+                      render: (ids: string[]) =>
+                        ids?.length ? (
+                          <Flexbox horizontal gap={4} wrap="wrap">
+                            {ids.map((id) => (
+                              <Tag key={id}>{id}</Tag>
+                            ))}
+                          </Flexbox>
+                        ) : (
+                          t('org.noModelsGranted')
+                        ),
+                    },
+                    {
+                      key: 'actions',
+                      title: t('org.columns.actions'),
+                      render: (_, row) =>
+                        row.isDefault || readOnly ? null : (
+                          <Button
+                            size="small"
+                            type="text"
+                            onClick={async () => {
+                              if (!selectedOrgId) return;
+                              await lambdaClient.organization.deleteTeam.mutate({
+                                orgId: selectedOrgId,
+                                teamId: row.id,
+                              });
+                              await mutateTeams();
+                            }}
+                          >
+                            {t('org.delete')}
+                          </Button>
+                        ),
+                    },
+                  ]}
+                />
+              </div>
               <Form
                 disabled={readOnly}
                 form={modelsForm}
@@ -1050,7 +1065,7 @@ export const OrgAdminMembers = () => {
 
       {tab === 'wallet' && (
         <Flexbox gap={16}>
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={16}>
               <Flexbox horizontal align="center" gap={8}>
                 <Building2Icon size={18} />
@@ -1083,41 +1098,45 @@ export const OrgAdminMembers = () => {
             </Flexbox>
           </Block>
 
-          <Block className={styles.section} variant="outlined">
+          <Block className={aicoPanelStyles.section} variant="outlined">
             <Flexbox gap={12}>
               <Text strong>{t('org.txTitle')}</Text>
               <Text type="secondary">{t('org.txHint')}</Text>
               {rangePicker}
               {(txHistory || []).length > 0 ? (
-                <Table
-                  dataSource={txHistory || []}
-                  pagination={{ pageSize: 20 }}
-                  rowKey="id"
-                  size="middle"
-                  columns={[
-                    {
-                      dataIndex: 'createdAt',
-                      title: t('wallet.columns.date'),
-                      render: (v: string) => new Date(v).toLocaleString(),
-                    },
-                    { dataIndex: 'type', title: t('wallet.columns.type') },
-                    {
-                      dataIndex: 'amountToman',
-                      title: t('wallet.columns.toman'),
-                      render: (v: string) => Number(v).toLocaleString(),
-                    },
-                    {
-                      dataIndex: 'amountUsd',
-                      title: t('wallet.columns.usd'),
-                      render: (v: string) => usd(v),
-                    },
-                    {
-                      dataIndex: 'description',
-                      title: t('org.txDescription'),
-                      render: (v: string | null) => v || '—',
-                    },
-                  ]}
-                />
+                <div className={aicoPanelStyles.tableScroll}>
+                  <Table
+                    dataSource={txHistory || []}
+                    pagination={{ pageSize: 20 }}
+                    rowKey="id"
+                    scroll={AICO_TABLE_SCROLL}
+                    size="middle"
+                    columns={[
+                      {
+                        dataIndex: 'createdAt',
+                        title: t('wallet.columns.date'),
+                        render: (v: string) => new Date(v).toLocaleString(),
+                      },
+                      { dataIndex: 'type', title: t('wallet.columns.type') },
+                      {
+                        dataIndex: 'amountToman',
+                        title: t('wallet.columns.toman'),
+                        render: (v: string) => Number(v).toLocaleString(),
+                      },
+                      {
+                        dataIndex: 'amountUsd',
+                        title: t('wallet.columns.usd'),
+                        render: (v: string) => usd(v),
+                      },
+                      {
+                        dataIndex: 'description',
+                        ellipsis: true,
+                        title: t('org.txDescription'),
+                        render: (v: string | null) => v || '—',
+                      },
+                    ]}
+                  />
+                </div>
               ) : (
                 <Text type="secondary">{t('org.txEmpty')}</Text>
               )}

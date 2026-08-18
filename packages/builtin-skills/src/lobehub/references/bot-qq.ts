@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 const content = `# QQ Bot Setup Guide
 
 Connect a QQ Official Bot to your agent.
@@ -74,14 +76,14 @@ Some specialized events require explicit approval from Tencent.
 
 #### WebSocket Mode
 
-- LobeHub's \`lh bot connect\` handles the WebSocket gateway automatically
+- ${BRANDING_NAME}'s \`lh bot connect\` handles the WebSocket gateway automatically
 - No URL configuration needed — just provide AppID and AppSecret
 
 ### Step 6: Configure IP Whitelist
 
 1. In development settings, add your server's IP address to the **IP whitelist**
 2. IP whitelist is required — without it, API calls and bot launch are blocked
-3. For LobeHub-hosted bots, contact support for the outbound IP range to whitelist
+3. For ${BRANDING_NAME}-hosted bots, contact support for the outbound IP range to whitelist
 
 ### Step 7: Test in Sandbox, Then Submit for Review
 

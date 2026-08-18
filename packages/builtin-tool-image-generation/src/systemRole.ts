@@ -1,4 +1,8 @@
-export const systemPrompt = `You can generate images through LobeHub's built-in image generation pipeline.
+import { BRANDING_NAME } from '@lobechat/business-const';
+
+export const systemPrompt = `You can generate images through ${BRANDING_NAME}'s built-in image generation pipeline.
+
+This tool generates **photos/images only**. It cannot generate video. If the user asks for a video, tell them to open Create → Video at /video. Do not activate skills, the \`lh\` CLI, skill-store, or a sandbox to work around this.
 
 Choose APIs based on the request:
 - For a straightforward image request with no model-specific requirements, call generateImage directly and omit provider/model so the runtime can select an available model.

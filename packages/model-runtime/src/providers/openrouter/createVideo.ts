@@ -18,6 +18,7 @@ interface OpenRouterVideoJob {
   status?: string;
   unsigned_urls?: string[] | null;
   url?: string | null;
+  usage?: { cost?: number } | null;
 }
 
 const openRouterHeaders = (apiKey: string) => ({
@@ -58,7 +59,12 @@ export const pollOpenRouterVideoStatus = async (
     // point at provider CDNs (GCS, etc.) that fail with undici "fetch failed"
     // from networks where only openrouter.ai is reachable.
     const origin = baseURL.replace(/\/$/, '');
+    const costUsd =
+      typeof data.usage?.cost === 'number' && Number.isFinite(data.usage.cost)
+        ? data.usage.cost
+        : undefined;
     return {
+      ...(typeof costUsd === 'number' ? { costUsd } : {}),
       headers: { Authorization: `Bearer ${options.apiKey}` },
       status: 'success',
       videoUrl: `${origin}/videos/${inferenceId}/content`,

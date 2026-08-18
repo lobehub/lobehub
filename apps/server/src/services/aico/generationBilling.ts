@@ -40,3 +40,31 @@ export const managedPolicyErrorToTrpc = (error: AicoManagedPolicyError) => ({
   code: 'BAD_REQUEST' as const,
   message: error.code || error.message,
 });
+
+/**
+ * Billing context for server-side generation tools that have no client header.
+ * Uses the user's stored wallet preference — not a first-match inference.
+ */
+export const resolvePreferredGenerationBilling = async (
+  getWallet: (userId: string) => Promise<{
+    preferredBillingSource: string | null;
+    preferredOrganizationId: string | null;
+  } | null>,
+  userId: string,
+): Promise<AicoBillingContext> => {
+  const wallet = await getWallet(userId);
+  if (
+    wallet?.preferredBillingSource === 'organization' &&
+    typeof wallet.preferredOrganizationId === 'string' &&
+    wallet.preferredOrganizationId.trim()
+  ) {
+    return { organizationId: wallet.preferredOrganizationId.trim(), source: 'organization' };
+  }
+  return { source: 'personal' };
+};
+
+export const isManagedGenerationProvider = (provider: string): boolean =>
+  AicoManagedPolicy.isManagedProvider(provider);
+
+export const filterManagedGenerationProviders = <T extends { id: string }>(providers: T[]): T[] =>
+  providers.filter((item) => isManagedGenerationProvider(item.id));

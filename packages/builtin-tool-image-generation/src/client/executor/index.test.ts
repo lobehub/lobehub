@@ -69,8 +69,8 @@ describe('ImageGenerationExecutor', () => {
     mocks.enabledImageModelList.mockReturnValue([
       {
         children: [{ id: 'image-model-1' }],
-        id: 'provider-1',
-        name: 'Provider 1',
+        id: 'openrouter',
+        name: 'OpenRouter',
       },
     ]);
     mocks.loadDefaultHiddenBuiltinModels.mockResolvedValue([]);
@@ -89,7 +89,7 @@ describe('ImageGenerationExecutor', () => {
       {
         model: 'image-model-1',
         prompt: 'A shared workspace illustration',
-        provider: 'provider-1',
+        provider: 'openrouter',
         waitUntilComplete: false,
       },
       {
@@ -109,8 +109,8 @@ describe('ImageGenerationExecutor', () => {
   it('does not expose hidden models while the store model list is hydrating', async () => {
     mocks.enabledImageModelList.mockReturnValue([]);
     mocks.getAiProviderRuntimeState.mockResolvedValue({
-      enabledImageAiProviders: [{ id: 'lobehub', name: 'LobeHub' }],
-      hiddenBuiltinModels: [{ id: 'hidden-image', providerId: 'lobehub' }],
+      enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
+      hiddenBuiltinModels: [{ id: 'hidden-image', providerId: 'openrouter' }],
     });
     mocks.getAiProviderModelList.mockImplementation(
       async (_providerId: string, options: { limit?: number }) => {
@@ -122,14 +122,14 @@ describe('ImageGenerationExecutor', () => {
 
     const result = await imageGenerationExecutor.listImageModels({
       limit: 1,
-      provider: 'lobehub',
+      provider: 'openrouter',
     });
 
     expect(result).toMatchObject({
       state: {
         providers: [
           {
-            id: 'lobehub',
+            id: 'openrouter',
             models: [{ id: 'visible-image' }],
           },
         ],
@@ -142,10 +142,10 @@ describe('ImageGenerationExecutor', () => {
   it('uses the client default blocklist with an older runtime-state response', async () => {
     mocks.enabledImageModelList.mockReturnValue([]);
     mocks.getAiProviderRuntimeState.mockResolvedValue({
-      enabledImageAiProviders: [{ id: 'lobehub', name: 'LobeHub' }],
+      enabledImageAiProviders: [{ id: 'openrouter', name: 'OpenRouter' }],
     });
     mocks.loadDefaultHiddenBuiltinModels.mockResolvedValue([
-      { id: 'hidden-image', providerId: 'lobehub' },
+      { id: 'hidden-image', providerId: 'openrouter' },
     ]);
     mocks.getAiProviderModelList.mockResolvedValue([
       { id: 'hidden-image' },
@@ -154,12 +154,37 @@ describe('ImageGenerationExecutor', () => {
 
     const result = await imageGenerationExecutor.listImageModels({
       limit: 1,
-      provider: 'lobehub',
+      provider: 'openrouter',
     });
 
     expect(result).toMatchObject({
       state: {
-        providers: [{ id: 'lobehub', models: [{ id: 'visible-image' }] }],
+        providers: [{ id: 'openrouter', models: [{ id: 'visible-image' }] }],
+        totalModels: 1,
+      },
+      success: true,
+    });
+  });
+
+  it('omits unmanaged image providers from the chat tool list', async () => {
+    mocks.enabledImageModelList.mockReturnValue([
+      {
+        children: [{ id: 'gemini-image' }],
+        id: 'google',
+        name: 'Google',
+      },
+      {
+        children: [{ id: 'or-image' }],
+        id: 'openrouter',
+        name: 'OpenRouter',
+      },
+    ]);
+
+    const result = await imageGenerationExecutor.listImageModels({ limit: 10 });
+
+    expect(result).toMatchObject({
+      state: {
+        providers: [{ id: 'openrouter', models: [{ id: 'or-image' }] }],
         totalModels: 1,
       },
       success: true,
@@ -175,7 +200,7 @@ describe('ImageGenerationExecutor', () => {
 
     const result = await imageGenerationExecutor.listImageModels({
       limit: 1,
-      provider: 'lobehub',
+      provider: 'openrouter',
     });
 
     expect(result).toMatchObject({

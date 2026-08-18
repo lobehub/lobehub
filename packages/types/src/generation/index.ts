@@ -18,6 +18,11 @@ export interface ImageGenerationTopic {
 }
 
 export interface BaseGenerationAsset {
+  /**
+   * Billed USD cost for this generation when the provider reported it
+   * (e.g. OpenRouter `usage.cost`). Omitted when unknown.
+   */
+  costUsd?: number;
   type: string;
 }
 

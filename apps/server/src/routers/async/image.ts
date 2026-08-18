@@ -250,9 +250,14 @@ export const imageRouter = router({
           checkAbortSignal(signal);
 
           log('Updating generation asset and file');
+          const costUsd =
+            typeof modelUsage?.cost === 'number' && Number.isFinite(modelUsage.cost)
+              ? modelUsage.cost
+              : undefined;
           await generationModel.createAssetAndFile(
             generationId,
             {
+              ...(typeof costUsd === 'number' ? { costUsd } : {}),
               height: height ?? image.height,
               // If imageUrl is base64 data, use uploadedImageUrl instead to avoid storing large base64 in DB
               originalUrl: imageUrl.startsWith('data:') ? uploadedImageUrl : imageUrl,

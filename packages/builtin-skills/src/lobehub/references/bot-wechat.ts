@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 const content = `# WeChat Bot Setup Guide
 
 Connect a WeChat bot to your agent via iLink API.
@@ -14,9 +16,9 @@ WeChat uses **polling** mode (long-polling) — no webhook URL or WebSocket setu
 
 ## Setup: Use the Web UI
 
-WeChat requires a QR code scan to link your account, which is only supported through the LobeHub Web UI:
+WeChat requires a QR code scan to link your account, which is only supported through the ${BRANDING_NAME} Web UI:
 
-1. Open your agent in LobeHub
+1. Open your agent in ${BRANDING_NAME}
 2. In the left sidebar, click **Message Channel** (消息频道)
 3. Select **WeChat** from the platform list on the right
 4. A QR code is displayed — scan it with WeChat to authenticate
