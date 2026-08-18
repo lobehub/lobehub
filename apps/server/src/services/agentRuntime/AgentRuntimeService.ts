@@ -54,6 +54,7 @@ import {
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import { startWechatTypingKeeper } from '@/server/services/bot/platforms/wechat/typingKeeper';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { MessageService } from '@/server/services/message';
@@ -1113,9 +1114,21 @@ export class AgentRuntimeService {
 
         // Execute step (skipped when force-finishing a parked supervisor op).
         const startAt = Date.now();
-        const stepResult = forcedFinishState
-          ? { events: [], newState: forcedFinishState, nextContext: undefined }
-          : await runtime.step(currentState, currentContext);
+        // Keep the WeChat typing indicator alive for the duration of this
+        // step when the message gateway no longer owns it (no-op otherwise).
+        // Scoped to exactly the runtime.step await — the keeper must never
+        // outlive this invocation.
+        const stopTypingKeeper = forcedFinishState
+          ? undefined
+          : await startWechatTypingKeeper(currentState.metadata?.botContext);
+        let stepResult: Awaited<ReturnType<typeof runtime.step>>;
+        try {
+          stepResult = forcedFinishState
+            ? { events: [], newState: forcedFinishState, nextContext: undefined }
+            : await runtime.step(currentState, currentContext);
+        } finally {
+          stopTypingKeeper?.();
+        }
 
         // Inner runtime.step() catches model-runtime exceptions and stuffs the
         // raw error into newState.error without re-throwing — so the outer

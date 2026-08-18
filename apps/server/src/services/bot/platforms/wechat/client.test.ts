@@ -204,6 +204,187 @@ describe('WechatGatewayClient', () => {
     await Promise.all(backgroundTasks);
   });
 
+  // Regression: a poll window used to prime from `undefined`, asking the server
+  // for "latest" and silently dropping every message that arrived while nobody
+  // was polling (the gap between windows, a deploy, a shard handover).
+  it('resumes long polling from the persisted cursor and writes advances back', async () => {
+    runtimeRedis.get.mockImplementation(async (key: string) =>
+      key === 'wechat:poll:cursor:wechat-app' ? 'cursor-persisted' : null,
+    );
+
+    let resolveLoop: ((value: any) => void) | undefined;
+    mockGetUpdates
+      .mockResolvedValueOnce({ get_updates_buf: 'cursor-advanced', msgs: [], ret: 0 })
+      .mockImplementationOnce(
+        (_cursor?: string, signal?: AbortSignal) =>
+          new Promise((resolve, reject) => {
+            resolveLoop = resolve;
+            signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      );
+
+    const client = new WechatClientFactory().createClient(
+      {
+        applicationId: 'wechat-app',
+        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        platform: 'wechat',
+        settings: {},
+      },
+      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+    );
+
+    const backgroundTasks: Promise<any>[] = [];
+    await client.start({
+      waitUntil: (task: Promise<any>) => {
+        backgroundTasks.push(task.catch(() => {}));
+      },
+    });
+
+    // Probe resumes from the stored cursor, and the loop continues from the
+    // advance rather than from scratch.
+    expect(mockGetUpdates).toHaveBeenNthCalledWith(1, 'cursor-persisted', expect.any(AbortSignal));
+    expect(mockGetUpdates).toHaveBeenNthCalledWith(2, 'cursor-advanced', expect.any(AbortSignal));
+    expect(runtimeRedis.set).toHaveBeenCalledWith(
+      'wechat:poll:cursor:wechat-app',
+      'cursor-advanced',
+      'EX',
+      expect.any(Number),
+    );
+
+    await client.stop();
+    resolveLoop?.({ get_updates_buf: 'cursor-advanced', msgs: [], ret: 0 });
+    await Promise.all(backgroundTasks);
+  });
+
+  // Regression: `-14` used to `sleep(60min)` before breaking, which pins the
+  // caller's invocation far past any serverless poll window, and left no
+  // durable marker — so the next window immediately re-hit the dead session.
+  it('parks immediately on session expiry (-14) instead of sleeping', async () => {
+    mockGetUpdates
+      .mockResolvedValueOnce({ get_updates_buf: 'cursor-1', msgs: [], ret: 0 })
+      .mockImplementationOnce(() => {
+        const err = new Error('session expired') as Error & { code: number };
+        err.code = -14;
+        return Promise.reject(err);
+      });
+
+    const client = new WechatClientFactory().createClient(
+      {
+        applicationId: 'wechat-app',
+        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        platform: 'wechat',
+        settings: {},
+      },
+      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+    );
+
+    const backgroundTasks: Promise<any>[] = [];
+    const startedAt = Date.now();
+    await client.start({
+      waitUntil: (task: Promise<any>) => {
+        backgroundTasks.push(task.catch(() => {}));
+      },
+    });
+
+    // The poll loop must settle on its own — no stop() and no fake timers.
+    await Promise.all(backgroundTasks);
+    expect(Date.now() - startedAt).toBeLessThan(5000);
+
+    expect(runtimeRedis.set).toHaveBeenCalledWith(
+      'wechat:poll:parked:wechat-app',
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
+    // starting → connected → failed: the terminal write is the one that must
+    // carry the re-scan instruction the settings surface renders.
+    const statusWrites = runtimeRedis.set.mock.calls.filter(
+      ([key]) => key === 'bot:runtime-status:wechat:wechat-app',
+    );
+    expect(statusWrites.at(-1)?.[1]).toContain('re-scan the QR code');
+    expect(statusWrites.at(-1)?.[1]).toContain('"status":"failed"');
+  });
+
+  // Regression (LOBE-12812 verify): the shard worker calls stop() at the end of
+  // EVERY poll window, and stop() used to report `disconnected` unconditionally.
+  // That erased the re-scan instruction within one window (~13 min in
+  // production), leaving the settings page showing a generic "disconnected" that
+  // invites a reconnect which can never clear a -14.
+  it('keeps the re-scan status after stop() when the bot is parked', async () => {
+    // First call is the readiness probe; the poll loop's first call is the -14.
+    mockGetUpdates
+      .mockResolvedValueOnce({ get_updates_buf: 'cursor-1', msgs: [], ret: 0 })
+      .mockImplementationOnce(() => {
+        const err = new Error('session expired') as Error & { code: number };
+        err.code = -14;
+        return Promise.reject(err);
+      });
+
+    const client = new WechatClientFactory().createClient(
+      {
+        applicationId: 'wechat-app',
+        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        platform: 'wechat',
+        settings: {},
+      },
+      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+    );
+
+    const backgroundTasks: Promise<any>[] = [];
+    await client.start({
+      waitUntil: (task: Promise<any>) => {
+        backgroundTasks.push(task.catch(() => {}));
+      },
+    });
+    await Promise.all(backgroundTasks);
+
+    await client.stop();
+
+    const statusWrites = runtimeRedis.set.mock.calls.filter(
+      ([key]) => key === 'bot:runtime-status:wechat:wechat-app',
+    );
+    expect(statusWrites.at(-1)?.[1]).toContain('"status":"failed"');
+    expect(statusWrites.at(-1)?.[1]).toContain('re-scan the QR code');
+  });
+
+  it('still reports disconnected on stop() for a healthy bot', async () => {
+    let resolveLoop: ((value: any) => void) | undefined;
+    mockGetUpdates
+      .mockResolvedValueOnce({ get_updates_buf: 'cursor-1', msgs: [], ret: 0 })
+      .mockImplementationOnce(
+        (_cursor?: string, signal?: AbortSignal) =>
+          new Promise((resolve, reject) => {
+            resolveLoop = resolve;
+            signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      );
+
+    const client = new WechatClientFactory().createClient(
+      {
+        applicationId: 'wechat-app',
+        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        platform: 'wechat',
+        settings: {},
+      },
+      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+    );
+
+    const backgroundTasks: Promise<any>[] = [];
+    await client.start({
+      waitUntil: (task: Promise<any>) => {
+        backgroundTasks.push(task.catch(() => {}));
+      },
+    });
+    await client.stop();
+    resolveLoop?.({ get_updates_buf: 'cursor-1', msgs: [], ret: 0 });
+    await Promise.all(backgroundTasks);
+
+    const statusWrites = runtimeRedis.set.mock.calls.filter(
+      ([key]) => key === 'bot:runtime-status:wechat:wechat-app',
+    );
+    expect(statusWrites.at(-1)?.[1]).toContain('"status":"disconnected"');
+  });
+
   it('throws a readable error when bot token is missing', () => {
     expect(() =>
       new WechatClientFactory().createClient(

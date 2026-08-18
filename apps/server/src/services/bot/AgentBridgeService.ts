@@ -14,6 +14,7 @@ import { createAbortError, isAbortError } from '@/server/services/agentRuntime/a
 import { AiAgentService } from '@/server/services/aiAgent';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { isWechatVercelPollerEnabled } from '@/server/services/gateway/wechatPoll/config';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -810,7 +811,13 @@ export class AgentBridgeService {
       if (botContext?.platformThreadId && botContext?.applicationId) {
         const platform = botContext.platformThreadId.split(':')[0];
         try {
-          if (botContext.messengerInstallationKey) {
+          if (platform === 'wechat' && isWechatVercelPollerEnabled()) {
+            // Another host owns WeChat's connections, so there is no gateway
+            // object left to drive typing. The step executor keeps it alive
+            // directly (see startWechatTypingKeeper); registering here would
+            // only produce dead 400s against a torn-down connection.
+            log('executeWithWebhooks: %s is gateway-unmanaged, direct typing owns it', platform);
+          } else if (botContext.messengerInstallationKey) {
             // Messenger run: shard typing by `(platform, lobeUserId)` so each
             // user gets their own DO. Solves both the cross-conversation
             // TypingState overwrite bug (single shared DO) and the 200K-MAU

@@ -32,6 +32,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { consumeSendCredits, recordInboundToken, type WechatWindowRedis } from './contextWindow';
+import { getPollCursor, parkPoll, setPollCursor, type WechatPollStateRedis } from './pollState';
 import { sendWechatAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:wechat:bot');
@@ -40,7 +41,10 @@ const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_RETRY_DELAY_MS = 10_000; // 10 seconds cap (matches reference)
 const READY_PROBE_TIMEOUT_MS = 3000; // Allow the first long-poll request to establish
-const SESSION_EXPIRED_BACKOFF_MS = 60 * 60 * 1000; // 60 minutes
+/** iLink: the QR-issued session is gone; only a fresh scan can restore it. */
+const SESSION_EXPIRED_CODE = -14;
+const SESSION_EXPIRED_MESSAGE =
+  'WeChat session expired — re-scan the QR code to reconnect (errcode -14)';
 
 export interface WechatGatewayOptions {
   durationMs?: number;
@@ -77,8 +81,18 @@ class WechatGatewayClient implements PlatformClient {
   private api: WechatApiClient;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  /**
+   * Set once this bot has been parked for re-auth. `stop()` then leaves the
+   * runtime status alone — see `parkForReauth`.
+   */
+  private parkedForReauth = false;
   /** Cached context tokens per user ID for replies */
   private contextTokens = new Map<string, string>();
+
+  /** See WechatPollStateRedis: the declared type is not the runtime shape. */
+  private get pollStateRedis(): WechatPollStateRedis | undefined {
+    return this.context.redisClient as unknown as WechatPollStateRedis | undefined;
+  }
 
   constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
     this.config = config;
@@ -169,6 +183,9 @@ class WechatGatewayClient implements PlatformClient {
       this.refreshTimer = null;
     }
     this.abort.abort();
+    // A parked bot already reported why it is down; don't overwrite that with a
+    // generic disconnected (see parkForReauth).
+    if (this.parkedForReauth) return;
     await updateBotRuntimeStatus(
       {
         applicationId: this.applicationId,
@@ -197,23 +214,25 @@ class WechatGatewayClient implements PlatformClient {
         // Reset retry delay on success
         retryDelay = 1000;
 
-        // Update cursor
-        if (response.get_updates_buf) {
+        // Advance and persist the cursor so a later poll window (or another
+        // process taking over this bot) resumes here instead of rewinding.
+        if (response.get_updates_buf && response.get_updates_buf !== cursor) {
           cursor = response.get_updates_buf;
+          await setPollCursor(this.pollStateRedis, this.applicationId, cursor);
         }
 
         await this.processUpdates(response.msgs, webhookUrl);
       } catch (err: any) {
         if (this.abort.signal.aborted) break;
 
-        // Session expired (errcode -14) — clear cursor, long backoff
-        if (err?.code === -14) {
-          log(
-            'WechatBot appId=%s session expired, backing off %dmin',
-            this.applicationId,
-            SESSION_EXPIRED_BACKOFF_MS / 60_000,
-          );
-          await this.sleep(SESSION_EXPIRED_BACKOFF_MS);
+        // Session expired (errcode -14): only a fresh QR scan can recover it.
+        // Park durably and leave at once — sleeping here would pin the caller's
+        // invocation (a serverless poll window is minutes, not an hour), and a
+        // bare `break` would let the next window immediately re-hit the dead
+        // session, burning one request per bot per window forever.
+        if (err?.code === SESSION_EXPIRED_CODE) {
+          log('WechatBot appId=%s session expired, parking until re-auth', this.applicationId);
+          await this.parkForReauth();
           break;
         }
 
@@ -233,6 +252,11 @@ class WechatGatewayClient implements PlatformClient {
    * success before WeChat long-polling has had a chance to come online.
    */
   private async primePolling(webhookUrl: string): Promise<string | undefined> {
+    // Resume from the persisted cursor. Starting a fresh window from `undefined`
+    // asks the server for "latest", which silently drops everything that
+    // arrived while no one was polling — the gap between poll windows, a
+    // deploy, or a shard handover.
+    const persisted = await getPollCursor(this.pollStateRedis, this.applicationId);
     const probeAbort = new AbortController();
     const timer = setTimeout(() => {
       probeAbort.abort();
@@ -240,20 +264,55 @@ class WechatGatewayClient implements PlatformClient {
 
     try {
       const signal = AbortSignal.any([this.abort.signal, probeAbort.signal]);
-      const response = await this.api.getUpdates(undefined, signal);
+      const response = await this.api.getUpdates(persisted, signal);
 
       await this.processUpdates(response.msgs, webhookUrl);
-      return response.get_updates_buf || undefined;
+      const advanced = response.get_updates_buf || undefined;
+      if (advanced && advanced !== persisted) {
+        await setPollCursor(this.pollStateRedis, this.applicationId, advanced);
+      }
+      return advanced ?? persisted;
     } catch (err) {
       if (this.abort.signal.aborted || probeAbort.signal.aborted) {
         log('WechatBot appId=%s readiness probe timed out, continuing', this.applicationId);
-        return undefined;
+        // Keep the resume point: a probe timeout says nothing about the cursor.
+        return persisted;
       }
 
       throw err;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Mark the session dead so nothing restarts it until the owner re-scans.
+   * Reported as `failed` with an explicit re-scan message rather than a generic
+   * error, because that string is what the bot settings surface shows.
+   */
+  /**
+   * `errcode -14` means the iLink session is dead and only the owner re-scanning
+   * the QR code can revive it. Park the bot so later poll windows skip it, and
+   * report a status the owner can act on.
+   *
+   * The flag matters because `stop()` normally reports `disconnected`, and the
+   * shard worker calls `stop()` at the end of EVERY poll window — without it the
+   * actionable "re-scan" message would survive at most one window (~13 min in
+   * production) and the settings page would fall back to a generic "disconnected"
+   * that invites a reconnect which can never work.
+   */
+  private async parkForReauth(): Promise<void> {
+    this.parkedForReauth = true;
+    await parkPoll(this.pollStateRedis, this.applicationId);
+    await updateBotRuntimeStatus(
+      {
+        applicationId: this.applicationId,
+        errorMessage: SESSION_EXPIRED_MESSAGE,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.failed,
+      },
+      { redisClient: this.context.redisClient as any },
+    ).catch(() => {});
   }
 
   private async processUpdates(

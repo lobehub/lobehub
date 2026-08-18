@@ -36,6 +36,7 @@ import {
   type MessageGatewayConnectionStatus,
 } from './MessageGatewayClient';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
+import { isWechatVercelPollerEnabled } from './wechatPoll/config';
 
 /**
  * Per-user messenger gateway connections live on the gateway as webhook-mode
@@ -154,6 +155,18 @@ const resolveBotGatewayCapabilities = (
 });
 
 const isVercel = !!process.env.VERCEL_ENV;
+
+/**
+ * Platforms whose persistent connections are NOT managed by the message
+ * gateway, because another host owns them.
+ *
+ * Such a platform is deliberately absent from the reconcile's desired set, so
+ * the sync never connects it and any connection the gateway still holds falls
+ * into the stale diff and is torn down; start/stop client calls likewise fall
+ * back to the local connection lifecycle instead of the gateway API.
+ */
+const resolveUnmanagedPlatforms = (): Set<string> =>
+  isWechatVercelPollerEnabled() ? new Set(['wechat']) : new Set<string>();
 
 export class GatewayService {
   /**
@@ -399,9 +412,17 @@ export class GatewayService {
     const desired = new Map<string, DesiredGatewayConnection>();
     let desiredComplete = true;
     const gated = new Set<string>();
+    const unmanaged = resolveUnmanagedPlatforms();
 
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
+      // Unmanaged platforms are deliberately absent from desired: the sync
+      // never connects them, and their existing gateway connections fall into
+      // the stale diff and get disconnected.
+      if (unmanaged.has(platform)) {
+        log('Gateway sync: platform %s is unmanaged, excluded from desired set', platform);
+        continue;
+      }
       try {
         // includeUndecryptable: rows whose credentials can't be decrypted stay
         // in the desired set (with empty credentials) so a KEY_VAULTS_SECRET
@@ -647,7 +668,10 @@ export class GatewayService {
     applicationId: string,
     userId: string,
   ): Promise<'started' | 'queued'> {
-    if (this.useMessageGateway) {
+    // Unmanaged platforms never go through the gateway API — they fall
+    // through to the local lifecycle below (on Vercel: the connect queue,
+    // which whatever runs their connections consumes).
+    if (this.useMessageGateway && !resolveUnmanagedPlatforms().has(platform)) {
       return this.startClientViaGateway(platform, applicationId, userId);
     }
 
@@ -807,7 +831,9 @@ export class GatewayService {
   }
 
   async stopClient(platform: string, applicationId: string, userId?: string): Promise<void> {
-    if (this.useMessageGateway) {
+    // Mirror startClient: unmanaged platforms use the local lifecycle
+    // (queue cleanup + runtime status) instead of the gateway API.
+    if (this.useMessageGateway && !resolveUnmanagedPlatforms().has(platform)) {
       return this.stopClientViaGateway(platform, applicationId);
     }
 
