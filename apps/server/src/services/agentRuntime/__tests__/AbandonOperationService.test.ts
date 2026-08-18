@@ -51,14 +51,10 @@ vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(() => ({ findById: findThreadMock })),
 }));
 
-const topicFindByIdMock = vi.fn().mockResolvedValue(null);
-const topicUpdateMetadataMock = vi.fn().mockResolvedValue(undefined);
-const topicSettleRunningStatusMock = vi.fn().mockResolvedValue(undefined);
+const topicSettleRunningOperationMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
-    findById: topicFindByIdMock,
-    settleRunningStatus: topicSettleRunningStatusMock,
-    updateMetadata: topicUpdateMetadataMock,
+    settleRunningOperation: topicSettleRunningOperationMock,
   })),
 }));
 
@@ -95,9 +91,7 @@ describe('AbandonOperationService', () => {
     findOperationMock.mockReset().mockResolvedValue(null);
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
-    topicFindByIdMock.mockReset().mockResolvedValue(null);
-    topicUpdateMetadataMock.mockReset().mockResolvedValue(undefined);
-    topicSettleRunningStatusMock.mockReset().mockResolvedValue(undefined);
+    topicSettleRunningOperationMock.mockReset().mockResolvedValue(undefined);
   });
 
   it('returns found:false when coordinator has no state', async () => {
@@ -134,14 +128,7 @@ describe('AbandonOperationService', () => {
         workspaceId: 'ws_x',
       },
     });
-    topicFindByIdMock.mockResolvedValue({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'msg_assist_1',
-          operationId: 'op_x',
-        },
-      },
-    });
+    topicSettleRunningOperationMock.mockResolvedValue({ assistantMessageId: 'msg_assist_1' });
 
     const svc = new AbandonOperationService(db, {
       coordinator: coord as any,
@@ -165,8 +152,7 @@ describe('AbandonOperationService', () => {
         toolCalls: 0,
       }),
     );
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
-    expect(topicSettleRunningStatusMock).toHaveBeenCalledWith('tpc_x');
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
       content: '',
       error: expect.objectContaining({
@@ -214,15 +200,6 @@ describe('AbandonOperationService', () => {
         userId: 'user_x',
       },
     });
-    topicFindByIdMock.mockResolvedValue({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'msg_new_placeholder',
-          operationId: 'op_new',
-        },
-      },
-    });
-
     const svc = new AbandonOperationService(db, {
       coordinator: coord as any,
       snapshotStore: store as any,
@@ -232,12 +209,11 @@ describe('AbandonOperationService', () => {
 
     expect(result.abandoned).toBe(true);
     expect(recordCompletionMock).toHaveBeenCalled();
-    expect(topicUpdateMetadataMock).not.toHaveBeenCalled();
-    expect(topicSettleRunningStatusMock).not.toHaveBeenCalled();
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_old');
     expect(messageUpdateMock).not.toHaveBeenCalled();
   });
 
-  it('settles a stuck running topic even when runningOperation is already cleared', async () => {
+  it('does not settle a running topic when operation ownership is no longer provable', async () => {
     const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
     const store = buildStore();
     const db = buildDb({
@@ -253,8 +229,6 @@ describe('AbandonOperationService', () => {
         workspaceId: 'ws_x',
       },
     });
-    topicFindByIdMock.mockResolvedValue({ metadata: { runningOperation: null } });
-
     const svc = new AbandonOperationService(db, {
       coordinator: coord as any,
       snapshotStore: store as any,
@@ -262,8 +236,8 @@ describe('AbandonOperationService', () => {
 
     await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
 
-    expect(topicUpdateMetadataMock).not.toHaveBeenCalled();
-    expect(topicSettleRunningStatusMock).toHaveBeenCalledWith('tpc_x');
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
+    expect(messageUpdateMock).not.toHaveBeenCalled();
   });
 
   it('finalizes snapshot and marks assistant message errored when state + partial exist', async () => {
@@ -280,15 +254,6 @@ describe('AbandonOperationService', () => {
         { stepIndex: 1, stepType: 'call_tool' },
       ],
     });
-    topicFindByIdMock.mockResolvedValue({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'msg_assist_1',
-          operationId: 'op_x',
-        },
-      },
-    });
-
     const svc = new AbandonOperationService({} as any, {
       coordinator: coord as any,
       snapshotStore: store as any,
@@ -323,8 +288,7 @@ describe('AbandonOperationService', () => {
         type: 'AgentRuntimeError',
       }),
     });
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
-    expect(topicSettleRunningStatusMock).toHaveBeenCalledWith('tpc_x');
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(dispatchHooksMock).toHaveBeenCalledWith(
       'op_x',
       expect.objectContaining({
@@ -350,15 +314,6 @@ describe('AbandonOperationService', () => {
       });
       const store = buildStore();
       store.loadPartial.mockResolvedValue(null);
-      topicFindByIdMock.mockResolvedValue({
-        metadata: {
-          runningOperation: {
-            assistantMessageId: 'msg_assist_1',
-            operationId: 'op_x',
-          },
-        },
-      });
-
       const svc = new AbandonOperationService({} as any, {
         coordinator: coord as any,
         snapshotStore: store as any,
@@ -367,7 +322,7 @@ describe('AbandonOperationService', () => {
       const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
       expect(result.found).toBe(true);
-      expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+      expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
       expect(dispatchHooksMock).not.toHaveBeenCalled();
     },
   );

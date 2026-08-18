@@ -1298,6 +1298,42 @@ export class TopicModel {
   };
 
   /**
+   * Atomically clear and settle the operation that still owns a topic.
+   * A row lock keeps a stale watchdog from clearing a newer operation between
+   * the ownership check and update. Missing markers are intentionally not
+   * settled because a client-side run can set `status = 'running'` without an
+   * operation marker, so there is no proof that the stale operation owns it.
+   */
+  settleRunningOperation = async (id: string, operationId: string) => {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (runningOperation?.operationId !== operationId) return undefined;
+
+      const metadata = {
+        ...existing.metadata,
+        runningOperation: null,
+      } as ChatTopicMetadata;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata,
+          ...(existing.status === 'running' ? { status: 'unread' as const } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return { assistantMessageId: runningOperation.assistantMessageId };
+    });
+  };
+
+  /**
    * Move multiple topics (and all their messages) to another agent.
    *
    * Reassigns ownership purely through the `agentId` foreign key (the new data

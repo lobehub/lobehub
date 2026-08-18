@@ -1,7 +1,9 @@
 // @vitest-environment node
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { topics, workspaceMembers, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiAgentRouter } from '../aiAgent';
@@ -50,6 +52,10 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    await serverDB.insert(topics).values([
+      { id: 'topic-1', title: 'Personal topic 1', userId },
+      { id: 'topic-2', title: 'Personal topic 2', userId },
+    ]);
     mockHeteroIngest.mockReset();
     mockHeteroFinish.mockReset();
     mockHeteroIngest.mockResolvedValue(undefined);
@@ -61,12 +67,20 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
     vi.clearAllMocks();
   });
 
-  const createCaller = () =>
-    aiAgentRouter.createCaller({
-      jwtPayload: { userId },
-      oidcAuth: { purpose: 'hetero-operation', sub: userId },
-      userId,
+  const createCaller = (
+    params: { authKind?: 'operation' | 'user'; authUserId?: string; workspaceId?: string } = {},
+  ) => {
+    const authUserId = params.authUserId ?? userId;
+    return aiAgentRouter.createCaller({
+      jwtPayload: { userId: authUserId },
+      oidcAuth: {
+        ...(params.authKind === 'user' ? {} : { purpose: 'hetero-operation' }),
+        sub: authUserId,
+      },
+      userId: authUserId,
+      workspaceId: params.workspaceId,
     } as any);
+  };
 
   describe('heteroIngest', () => {
     it('delegates the batch to HeterogeneousAgentService and acks', async () => {
@@ -150,6 +164,95 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
           topicId: 'topic-1',
         }),
       ).rejects.toThrow();
+    });
+
+    it("accepts a device user ingesting and finishing another member's workspace topic", async () => {
+      const creatorId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'Hetero ingest workspace',
+          primaryOwnerId: creatorId,
+          slug: `hetero-ingest-${creatorId.slice(0, 8)}`,
+        })
+        .returning();
+
+      try {
+        await serverDB.insert(workspaceMembers).values([
+          { role: 'owner', userId: creatorId, workspaceId: workspace.id },
+          { role: 'member', userId, workspaceId: workspace.id },
+        ]);
+        await serverDB.insert(topics).values({
+          id: 'workspace-topic',
+          title: 'Created by another member',
+          userId: creatorId,
+          workspaceId: workspace.id,
+        });
+
+        const caller = createCaller({ authKind: 'user' });
+        const ingestResult = await caller.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-workspace',
+          topicId: 'workspace-topic',
+        });
+        const finishResult = await caller.heteroFinish({
+          agentType: 'claude-code',
+          operationId: 'op-workspace',
+          result: 'success',
+          topicId: 'workspace-topic',
+        });
+
+        expect(ingestResult).toEqual({ ack: true });
+        expect(finishResult).toEqual({ ack: true });
+        expect(mockHeteroIngest).toHaveBeenCalledWith(
+          expect.objectContaining({ topicId: 'workspace-topic' }),
+        );
+        expect(mockHeteroFinish).toHaveBeenCalledWith(
+          expect.objectContaining({ topicId: 'workspace-topic' }),
+        );
+      } finally {
+        await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
+        await cleanupTestUser(serverDB, creatorId);
+      }
+    });
+
+    it('rejects a user who is not a member of the topic workspace', async () => {
+      const creatorId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'Foreign hetero workspace',
+          primaryOwnerId: creatorId,
+          slug: `foreign-hetero-${creatorId.slice(0, 8)}`,
+        })
+        .returning();
+
+      try {
+        await serverDB.insert(workspaceMembers).values({
+          role: 'owner',
+          userId: creatorId,
+          workspaceId: workspace.id,
+        });
+        await serverDB.insert(topics).values({
+          id: 'foreign-workspace-topic',
+          title: 'Foreign workspace topic',
+          userId: creatorId,
+          workspaceId: workspace.id,
+        });
+
+        await expect(
+          createCaller().heteroIngest({
+            agentType: 'claude-code',
+            events: [buildEvent('stream_chunk', 0)],
+            operationId: 'op-foreign',
+            topicId: 'foreign-workspace-topic',
+          }),
+        ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      } finally {
+        await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
+        await cleanupTestUser(serverDB, creatorId);
+      }
     });
   });
 

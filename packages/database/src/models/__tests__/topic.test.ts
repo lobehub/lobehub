@@ -567,6 +567,53 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('settleRunningOperation', () => {
+    it('atomically clears and settles the matching operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'matching operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ assistantMessageId: 'msg-old' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('unread');
+    });
+
+    it('does not let an old watchdog settle a newer operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-new', operationId: 'op-new' },
+        },
+        title: 'newer operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toBeUndefined();
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation?.operationId).toBe('op-new');
+      expect(row?.status).toBe('running');
+    });
+
+    it('does not settle an unmarked client-side run', async () => {
+      const topic = await topicModel.create({ title: 'client operation' });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toBeUndefined();
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('running');
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({

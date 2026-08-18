@@ -164,13 +164,7 @@ export class AbandonOperationService {
       if (metadata.topicId) {
         try {
           const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
-          const topic = await topicModel.findById(metadata.topicId);
-          const running = topic?.metadata?.runningOperation as
-            { assistantMessageId?: string; operationId?: string } | undefined;
-          if (running?.operationId === operationId) {
-            await topicModel.updateMetadata(metadata.topicId, { runningOperation: null });
-            await topicModel.settleRunningStatus(metadata.topicId);
-          }
+          await topicModel.settleRunningOperation(metadata.topicId, operationId);
         } catch (e) {
           log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
         }
@@ -328,23 +322,9 @@ export class AbandonOperationService {
     if (op.topicId) {
       try {
         topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
-        const topic = await topicModel.findById(op.topicId);
-        const running = topic?.metadata?.runningOperation as
-          { assistantMessageId?: string; operationId?: string } | undefined;
-
-        if (running?.operationId && running.operationId !== operationId) return undefined;
-
-        // This op owns the topic (or nothing claims it). Clear the pointer and
-        // settle `status: 'running'` — otherwise a no-state watchdog abandon
-        // leaves the topic spinning forever (hetero ingest never called
-        // settleRunningStatus).
-        if (running?.operationId === operationId) {
-          await topicModel.updateMetadata(op.topicId, { runningOperation: null }).catch(() => {});
-        }
-        await topicModel.settleRunningStatus(op.topicId).catch(() => {});
-        if (running?.operationId === operationId && running.assistantMessageId) {
-          return running.assistantMessageId;
-        }
+        const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
+        if (!settled) return undefined;
+        if (settled.assistantMessageId) return settled.assistantMessageId;
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
       }
