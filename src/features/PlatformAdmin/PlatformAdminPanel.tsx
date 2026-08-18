@@ -254,23 +254,27 @@ export const PlatformAdminPanel = () => {
                   },
                   {
                     dataIndex: 'actorEmail',
+                    ellipsis: true,
                     title: t('platform.columns.actor'),
                     render: (v: string | null) => v || '—',
                   },
                   {
                     dataIndex: 'orgName',
+                    ellipsis: true,
                     title: t('platform.columns.org'),
                     render: (v: string | null, row: { orgId?: string | null }) =>
                       v || (row.orgId ? row.orgId.slice(0, 12) : '—'),
                   },
                   {
                     dataIndex: 'userEmail',
+                    ellipsis: true,
                     title: t('platform.columns.userId'),
                     render: (v: string | null, row: { userId?: string | null }) =>
                       v || (row.userId ? row.userId.slice(0, 12) : '—'),
                   },
                   {
                     dataIndex: 'description',
+                    ellipsis: true,
                     title: t('platform.columns.description'),
                     render: (v: string | null) => v || '—',
                   },
@@ -415,7 +419,7 @@ export const PlatformAdminPanel = () => {
                       title: t('platform.columns.publicId'),
                       render: (v: string) => (v ? <Tag>{v}</Tag> : '—'),
                     },
-                    { dataIndex: 'name', title: t('platform.columns.name') },
+                    { dataIndex: 'name', ellipsis: true, title: t('platform.columns.name') },
                     {
                       dataIndex: 'status',
                       title: t('platform.columns.status'),
@@ -677,16 +681,19 @@ export const PlatformAdminPanel = () => {
                   },
                   {
                     dataIndex: 'email',
+                    ellipsis: true,
                     title: t('platform.columns.email'),
                     render: (v: string | null) => v || '—',
                   },
                   {
                     dataIndex: 'username',
+                    ellipsis: true,
                     title: t('platform.columns.username'),
                     render: (v: string | null) => v || '—',
                   },
                   {
                     dataIndex: 'userId',
+                    ellipsis: true,
                     title: t('platform.columns.userId'),
                     render: (v: string) => v.slice(0, 14),
                   },

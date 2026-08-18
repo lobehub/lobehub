@@ -36,6 +36,7 @@ const SettingContainer = memo<PropsWithChildren<SettingContainerProps>>(
           width={'100%'}
           style={{
             maxWidth,
+            minWidth: 0,
           }}
         >
           {children}
