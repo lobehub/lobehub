@@ -1,5 +1,6 @@
 'use client';
 
+import { FileClockIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -16,6 +17,7 @@ import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 const mobileChatElement = dynamicElement(
@@ -286,6 +288,32 @@ export const sharedMainAreaChildren: RouteObject[] = [
   },
 
   ...BusinessMobileRoutesWithMainLayout,
+
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/changelog'), 'Mobile > Changelog', {
+          preloadId: 'mobile-changelog',
+        }),
+        handle: {
+          meta: routeMeta({ icon: FileClockIcon, titleKey: 'navigation.changelog' }),
+        },
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/changelog/[id]'),
+          'Mobile > Changelog > Detail',
+        ),
+        handle: {
+          meta: routeMeta({ icon: FileClockIcon, titleKey: 'navigation.changelog' }),
+        },
+        path: ':id',
+      },
+    ],
+    errorElement: <ErrorBoundary />,
+    path: 'changelog',
+  },
 ];
 
 // Mobile router configuration (declarative mode)

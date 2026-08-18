@@ -118,6 +118,7 @@ COPY --from=builder /app/public/_spa-auth /app/public/_spa-auth
 COPY --from=builder /app/public/_spa-workbench /app/public/_spa-workbench
 # Copy database migrations
 COPY --from=builder /app/packages/database/migrations /app/migrations
+COPY --from=builder /app/docs/changelog /app/docs/changelog
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
 COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
 

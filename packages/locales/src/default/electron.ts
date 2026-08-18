@@ -1,5 +1,6 @@
 export default {
   'navigation.agents': 'Agents',
+  'navigation.changelog': 'Changelog',
   'navigation.channels': 'Channels',
   'navigation.chat': 'Chat',
   'navigation.discover': 'Discover',

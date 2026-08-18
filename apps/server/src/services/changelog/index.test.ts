@@ -1,4 +1,8 @@
 // @vitest-environment node
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ChangelogIndexItem } from '@/types/changelog';
@@ -113,6 +117,53 @@ describe('ChangelogService', () => {
       const result = await service.getChangelogIndex();
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('community1');
+    });
+
+    it('should read changelog index from CHANGELOG_DIR without fetching', async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'changelog-'));
+      await writeFile(
+        path.join(dir, 'index.json'),
+        JSON.stringify({
+          cloud: [],
+          community: [{ id: 'local1', date: '2026-01-01', versionRange: ['1.0.0'] }],
+        }),
+      );
+
+      process.env.CHANGELOG_DIR = dir;
+      vi.resetModules();
+      const { ChangelogService: LocalChangelogService } = await import('./index');
+      const localService = new LocalChangelogService();
+
+      const result = await localService.getChangelogIndex();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('local1');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should read a changelog post from CHANGELOG_DIR without fetching', async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'changelog-post-'));
+      await writeFile(
+        path.join(dir, 'index.json'),
+        JSON.stringify({
+          cloud: [],
+          community: [{ id: 'local1', date: '2026-01-01', versionRange: ['1.0.0'] }],
+        }),
+      );
+      await writeFile(path.join(dir, 'local1.mdx'), '# Local Title\nHello from disk');
+
+      process.env.CHANGELOG_DIR = dir;
+      vi.resetModules();
+      const { ChangelogService: LocalChangelogService } = await import('./index');
+      const localService = new LocalChangelogService();
+
+      const result = await localService.getPostById('local1');
+
+      expect(result).toMatchObject({
+        rawTitle: 'Local Title',
+        title: 'Local Title',
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 
