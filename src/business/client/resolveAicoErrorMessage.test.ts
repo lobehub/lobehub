@@ -55,6 +55,17 @@ describe('Aico error catalog', () => {
     );
     expect(isAicoErrorCode('PERSONAL_FUNDS_UNAVAILABLE')).toBe(true);
   });
+
+  it('includes control-plane operator auth codes with Persian defaults', () => {
+    expect(isAicoErrorCode('INVALID_CREDENTIALS')).toBe(true);
+    expect(isAicoErrorCode('EMAIL_PASSWORD_REQUIRED')).toBe(true);
+    expect(isAicoErrorCode('PASSWORD_TOO_WEAK')).toBe(true);
+    expect(isAicoErrorCode('OPERATOR_EMAIL_EXISTS')).toBe(true);
+    expect(AICO_ERROR_MESSAGES_FA.INVALID_CREDENTIALS).toBe('ایمیل یا رمز عبور نادرست است.');
+    expect(AICO_ERROR_MESSAGES_FA.EMAIL_PASSWORD_REQUIRED).toBe('ایمیل و رمز عبور الزامی است.');
+    expect(AICO_ERROR_MESSAGES_FA.PASSWORD_TOO_WEAK).toContain('۸');
+    expect(AICO_ERROR_MESSAGES_FA.OPERATOR_EMAIL_EXISTS).toContain('اپراتور');
+  });
 });
 
 describe('resolveAicoErrorMessage', () => {
@@ -65,6 +76,7 @@ describe('resolveAicoErrorMessage', () => {
     expect(resolveAicoErrorMessage('MODEL_NOT_ALLOWED:claude-sonnet')).toBe(
       'دسترسی به این مدل برای شما فعال نیست.',
     );
+    expect(resolveAicoErrorMessage('INVALID_CREDENTIALS')).toBe('ایمیل یا رمز عبور نادرست است.');
   });
 
   it('uses i18n when provided', async () => {

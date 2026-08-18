@@ -23,6 +23,7 @@ export type AicoSecurityAuditSource = 'trpc' | 'job' | 'auth' | 'system';
 
 export interface RecordAicoSecurityEventParams {
   action: AicoSecurityAuditAction | (string & {});
+  actorAdminId?: string | null;
   actorUserId?: string | null;
   ipAddress?: string | null;
   metadata?: Record<string, unknown>;
@@ -46,6 +47,7 @@ export class AicoSecurityAuditLogModel {
       .insert(aicoSecurityAuditLogs)
       .values({
         action: params.action,
+        actorAdminId: params.actorAdminId ?? null,
         actorUserId: params.actorUserId ?? null,
         ipAddress: params.ipAddress ?? null,
         metadata: params.metadata ?? {},

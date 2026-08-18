@@ -11,19 +11,23 @@ Privileged operations app for Aico. **Not** part of the customer product surface
 
 ## Env
 
-| Variable                             | Required   | Notes                                                                                                                       |
-| ------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `AICO_IS_CONTROL_PLANE`              | yes (`1`)  | Set automatically by `dev` entry                                                                                            |
-| `OPENROUTER_MANAGEMENT_API_KEY`      | production | Real OpenRouter management key                                                                                              |
-| `AICO_CONTROL_PLANE_SERVICE_TOKEN`   | yes        | Shared with product. ≥24 chars; `devtok` rejected at startup                                                                |
-| `DATABASE_URL` / auth secrets        | yes        | Same DB + Better Auth as product                                                                                            |
-| `AICO_CONTROL_PLANE_PORT`            | no         | Host port (default `3020`, moz binds `127.0.0.1` only)                                                                      |
-| `AICO_CONTROL_PLANE_PUBLIC_URL`      | no         | Browser origin (default `http://localhost:3020`). Set to any domain when reverse-proxying, e.g. `https://admin.example.com` |
-| `AICO_INSECURE_AUTH_COOKIES`         | no         | `1` for HTTP; use `0` when PUBLIC\_URL is `https://`                                                                        |
-| `AICO_OPENROUTER_MOCK`               | local QA   | Mock when no management key; needs `AICO_ALLOW_INSECURE_CONTROL_PLANE=1` under `NODE_ENV=production`                        |
-| `AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH` | no         | Never set in shared envs — re-enables tRPC mock-user bypass on the control plane                                            |
+| Variable                             | Required   | Notes                                                                                                                                                                                                                                                                    |
+| ------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AICO_IS_CONTROL_PLANE`              | yes (`1`)  | Set automatically by `dev` entry                                                                                                                                                                                                                                         |
+| `OPENROUTER_MANAGEMENT_API_KEY`      | production | Real OpenRouter management key                                                                                                                                                                                                                                           |
+| `AICO_CONTROL_PLANE_SERVICE_TOKEN`   | yes        | Shared with product. ≥24 chars; `devtok` rejected at startup                                                                                                                                                                                                             |
+| `DATABASE_URL`                       | yes        | Same Postgres as the product (operator tables live here, not Better Auth `users`)                                                                                                                                                                                        |
+| `AICO_CONTROL_PLANE_PORT`            | no         | Host port (default `3020`, moz binds `127.0.0.1` only)                                                                                                                                                                                                                   |
+| `AICO_CONTROL_PLANE_PUBLIC_URL`      | no         | Browser origin (default `http://localhost:3020`). Set to any domain when reverse-proxying, e.g. `https://admin.example.com`                                                                                                                                              |
+| `AICO_INSECURE_AUTH_COOKIES`         | no         | `1` for HTTP; use `0` when PUBLIC\_URL is `https://`                                                                                                                                                                                                                     |
+| `AICO_BOOTSTRAP_ADMIN_EMAIL`         | first boot | Upserts **one** operator with `AICO_BOOTSTRAP_ADMIN_PASSWORD` (independent from chat). Additional operators are not created from env.                                                                                                                                    |
+| `AICO_BOOTSTRAP_ADMIN_PASSWORD`      | first boot | Min 8 chars, letter + digit. Does not change the chat password for the same email. **Single-quote** values that contain `#`, `>`, `$`, or spaces in `.env` (unquoted `#` is a comment). Recreate the control-plane container after changing env so bootstrap runs again. |
+| `AICO_OPENROUTER_MOCK`               | local QA   | Mock when no management key; needs `AICO_ALLOW_INSECURE_CONTROL_PLANE=1` under `NODE_ENV=production`                                                                                                                                                                     |
+| `AICO_ALLOW_CONTROL_PLANE_MOCK_AUTH` | no         | Never set in shared envs — re-enables tRPC mock-user bypass on the control plane                                                                                                                                                                                         |
 
-Better Auth runs **on this process** (`/api/auth/*`). `APP_URL` must equal the public browser origin.
+Operators sign in at **`/api/admin/sign-in`** (cookie `aico_admin_session`). Chat Better Auth is not used on this origin. The same email may exist in chat `users` with a different password.
+
+Open **<http://127.0.0.1:3020/>** — design-system panel with operator login. tRPC stays on 3020.
 
 ### Security notes
 
@@ -63,7 +67,7 @@ moz -d # recreate lobe + aico-control-plane
 moz -i # status includes control-plane /health
 ```
 
-Open **<http://127.0.0.1:3020/>** — design-system panel with login. Auth is proxied to the product app; tRPC stays on 3020.
+Open **<http://127.0.0.1:3020/>** — design-system panel with operator login. tRPC stays on 3020.
 
 ## Production image (CI)
 
@@ -87,4 +91,8 @@ Normal operators / moz do **not** need 3021.
 
 ## Platform admin seed
 
-Sign in with a user that exists in `platform_admins` (same Better Auth users as the product).
+Bootstrap upserts **one** control-plane operator from `AICO_BOOTSTRAP_ADMIN_EMAIL` + `AICO_BOOTSTRAP_ADMIN_PASSWORD` on process start. That password is independent from the chat Better Auth password for the same email.
+
+Further operators are added after you can sign in (tRPC `platformAdmin.addPlatformAdmin`), not from extra env vars.
+
+Sign in at **`/api/admin/sign-in`** (this origin). Chat login will not unlock the control plane.

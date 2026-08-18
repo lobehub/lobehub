@@ -7,8 +7,9 @@ import { ShieldIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveAicoErrorMessage } from '@/business/client/resolveAicoErrorMessage';
 import { aicoPanelStyles } from '@/features/AicoPanels';
-import { signIn } from '@/libs/better-auth/auth-client';
+import AuthLangButton from '@/features/AuthShell/AuthLangButton';
 
 interface LoginFormValues {
   email: string;
@@ -23,20 +24,26 @@ const ControlPlaneLogin = () => {
   const onFinish = async (values: LoginFormValues) => {
     setLoading(true);
     try {
-      const result = await signIn.email({
-        callbackURL: '/',
-        email: values.email.trim(),
-        // Keep password as typed — special chars (% ^ :) must not be transformed.
-        password: values.password,
+      const response = await fetch('/api/admin/sign-in', {
+        body: JSON.stringify({
+          email: values.email.trim(),
+          password: values.password,
+        }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
 
-      if (result.error) {
-        console.error('Control plane sign-in error', result.error);
-        toast.error(result.error.message || t('platform.loginFailed'));
+      if (!response.ok) {
+        toast.error(
+          resolveAicoErrorMessage(payload?.error?.message, t) ?? t('platform.loginFailed'),
+        );
         return;
       }
 
-      // Full reload so useSession + credentialed tRPC pick up the new cookie.
       window.location.reload();
     } catch (error) {
       console.error('Control plane sign-in failed', error);
@@ -53,11 +60,14 @@ const ControlPlaneLogin = () => {
       style={{ maxWidth: 420, margin: '10vh auto' }}
     >
       <Flexbox gap={4}>
-        <Flexbox horizontal align="center" gap={8}>
-          <ShieldIcon size={20} />
-          <Text strong as="h1" style={{ fontSize: 22, margin: 0 }}>
-            {t('platform.loginTitle')}
-          </Text>
+        <Flexbox horizontal align="center" justify="space-between">
+          <Flexbox horizontal align="center" gap={8}>
+            <ShieldIcon size={20} />
+            <Text strong as="h1" style={{ fontSize: 22, margin: 0 }}>
+              {t('platform.loginTitle')}
+            </Text>
+          </Flexbox>
+          <AuthLangButton />
         </Flexbox>
         <Text type="secondary">{t('platform.loginSubtitle')}</Text>
       </Flexbox>

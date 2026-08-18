@@ -67,6 +67,8 @@ services:
       # Local OpenRouter mock without a real management key (requires allow flag)
       AICO_OPENROUTER_MOCK: ${AICO_OPENROUTER_MOCK:-1}
       AICO_ALLOW_INSECURE_CONTROL_PLANE: ${AICO_ALLOW_INSECURE_CONTROL_PLANE:-1}
+      AICO_BOOTSTRAP_ADMIN_EMAIL: ${AICO_BOOTSTRAP_ADMIN_EMAIL:-}
+      AICO_BOOTSTRAP_ADMIN_PASSWORD: ${AICO_BOOTSTRAP_ADMIN_PASSWORD:-}
     ports:
       # Loopback only — do not publish admin/API on all interfaces
       - '127.0.0.1:${AICO_CONTROL_PLANE_PORT:-3020}:3020'
