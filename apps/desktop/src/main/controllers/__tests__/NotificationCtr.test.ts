@@ -5,8 +5,14 @@ import type { App } from '@/core/App';
 
 import NotificationCtr from '../NotificationCtr';
 
-const { ipcMainHandleMock, macNotificationsMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, loggerMock, macNotificationsMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  loggerMock: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
   macNotificationsMock: {
     getAuthorizationStatus: vi.fn(async () => 'authorized'),
     isSupported: vi.fn(() => false),
@@ -23,14 +29,8 @@ const { ipcMainHandleMock, macNotificationsMock } = vi.hoisted(() => ({
 
 vi.mock('@lobechat/electron-mac-notifications', () => macNotificationsMock);
 
-// Mock logger
 vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
+  createLogger: () => loggerMock,
 }));
 
 // Mock electron
@@ -163,6 +163,28 @@ describe('NotificationCtr', () => {
         error: 'Desktop notifications not supported',
         success: false,
       });
+    });
+
+    it('does not log the avatar data URL', async () => {
+      const { Notification } = await import('electron');
+      vi.mocked(Notification.isSupported).mockReturnValue(true);
+      mockBrowserWindow.isVisible.mockReturnValue(true);
+      mockBrowserWindow.isFocused.mockReturnValue(true);
+      mockBrowserWindow.isMinimized.mockReturnValue(false);
+
+      const avatarDataUrl = `data:image/png;base64,${'A'.repeat(80)}`;
+      await controller.showDesktopNotification({
+        ...params,
+        sender: { avatarDataUrl, conversationId: 'a1', name: 'Agent' },
+      });
+
+      expect(loggerMock.debug).toHaveBeenCalledWith(
+        'Received desktop notification request:',
+        expect.objectContaining({
+          sender: { avatarDataUrl: '[redacted]', conversationId: 'a1', name: 'Agent' },
+        }),
+      );
+      expect(JSON.stringify(loggerMock.debug.mock.calls)).not.toContain(avatarDataUrl);
     });
 
     it('should skip notification when window is visible and focused', async () => {

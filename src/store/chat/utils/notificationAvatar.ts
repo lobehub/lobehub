@@ -2,10 +2,23 @@ const AVATAR_SIZE = 256;
 const FALLBACK_BACKGROUND = '#EBEBEB';
 const EMOJI_FONT_RATIO = 0.62;
 
+export const NOTIFICATION_AVATAR_LOAD_TIMEOUT_MS = 2000;
+export const NOTIFICATION_AVATAR_CACHE_LIMIT = 32;
+
 const avatarCache = new Map<string, Promise<string | undefined>>();
 
 const isImageAvatar = (avatar: string) =>
   avatar.startsWith('http') || avatar.startsWith('data:') || avatar.startsWith('/');
+
+const rememberAvatar = (key: string, value: Promise<string | undefined>) => {
+  if (avatarCache.has(key)) {
+    avatarCache.delete(key);
+  } else if (avatarCache.size >= NOTIFICATION_AVATAR_CACHE_LIMIT) {
+    const oldest = avatarCache.keys().next().value;
+    if (oldest !== undefined) avatarCache.delete(oldest);
+  }
+  avatarCache.set(key, value);
+};
 
 const createCanvas = () => {
   const canvas = document.createElement('canvas');
@@ -18,8 +31,26 @@ const loadImage = (src: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.crossOrigin = 'anonymous';
-    image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', () => reject(new Error(`failed to load avatar: ${src}`)));
+    let settled = false;
+
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      action();
+    };
+
+    const timer = setTimeout(() => {
+      finish(() => {
+        image.src = '';
+        reject(new Error(`avatar load timed out: ${src}`));
+      });
+    }, NOTIFICATION_AVATAR_LOAD_TIMEOUT_MS);
+
+    image.addEventListener('load', () => finish(() => resolve(image)));
+    image.addEventListener('error', () =>
+      finish(() => reject(new Error(`failed to load avatar: ${src}`))),
+    );
     image.src = src;
   });
 
@@ -57,7 +88,10 @@ export const renderAvatarToDataUrl = (
 
   const key = [cacheKey, avatar, backgroundColor].join('|');
   const cached = avatarCache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    rememberAvatar(key, cached);
+    return cached;
+  }
 
   const pending = (async () => {
     try {
@@ -66,11 +100,11 @@ export const renderAvatarToDataUrl = (
         : renderEmojiAvatar(avatar, backgroundColor);
     } catch (error) {
       console.error('Notification avatar render failed:', error);
-      avatarCache.delete(key);
+      if (avatarCache.get(key) === pending) avatarCache.delete(key);
       return undefined;
     }
   })();
 
-  avatarCache.set(key, pending);
+  rememberAvatar(key, pending);
   return pending;
 };

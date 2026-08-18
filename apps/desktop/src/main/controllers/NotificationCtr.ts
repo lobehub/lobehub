@@ -21,6 +21,14 @@ const logger = createLogger('controllers:NotificationCtr');
 
 const NAVIGATE_MAP_LIMIT = 100;
 
+export const toLoggableNotificationParams = (params: ShowDesktopNotificationParams) => {
+  if (!params.sender?.avatarDataUrl) return params;
+  return {
+    ...params,
+    sender: { ...params.sender, avatarDataUrl: '[redacted]' },
+  };
+};
+
 export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';
 
@@ -187,7 +195,7 @@ export default class NotificationCtr extends ControllerModule {
   async showDesktopNotification(
     params: ShowDesktopNotificationParams,
   ): Promise<DesktopNotificationResult> {
-    logger.debug('Received desktop notification request:', params);
+    logger.debug('Received desktop notification request:', toLoggableNotificationParams(params));
 
     try {
       // Check notification support

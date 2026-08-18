@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAvatarToDataUrl } from './notificationAvatar';
+import {
+  NOTIFICATION_AVATAR_CACHE_LIMIT,
+  NOTIFICATION_AVATAR_LOAD_TIMEOUT_MS,
+  renderAvatarToDataUrl,
+} from './notificationAvatar';
 
 const create2dContext = () => ({
   drawImage: vi.fn(),
@@ -16,6 +20,7 @@ let context2d: ReturnType<typeof create2dContext>;
 let toDataURL: ReturnType<typeof vi.fn>;
 
 class MockImage {
+  static hang = false;
   crossOrigin = '';
   private listeners = new Map<string, () => void>();
 
@@ -24,6 +29,7 @@ class MockImage {
   }
 
   set src(value: string) {
+    if (MockImage.hang || value.includes('stall')) return;
     queueMicrotask(() => {
       this.listeners.get(value.includes('broken') ? 'error' : 'load')?.();
     });
@@ -43,6 +49,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  MockImage.hang = false;
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -94,5 +102,66 @@ describe('renderAvatarToDataUrl', () => {
     );
 
     expect(await renderAvatarToDataUrl('no-context', { avatar: '🤖' })).toBeUndefined();
+  });
+
+  it('resolves undefined when the image load times out', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const pending = renderAvatarToDataUrl('stall-1', {
+      avatar: 'https://example.com/stall.png',
+    });
+    await vi.advanceTimersByTimeAsync(NOTIFICATION_AVATAR_LOAD_TIMEOUT_MS);
+
+    expect(await pending).toBeUndefined();
+  });
+
+  it('retries after a timed-out avatar load', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    MockImage.hang = true;
+
+    const pending = renderAvatarToDataUrl('retry-1', {
+      avatar: 'https://example.com/retry.png',
+    });
+    await vi.advanceTimersByTimeAsync(NOTIFICATION_AVATAR_LOAD_TIMEOUT_MS);
+    expect(await pending).toBeUndefined();
+
+    MockImage.hang = false;
+    vi.useRealTimers();
+
+    expect(
+      await renderAvatarToDataUrl('retry-1', { avatar: 'https://example.com/retry.png' }),
+    ).toBe('data:image/png;base64,CANVAS');
+  });
+
+  it('evicts the oldest cached avatar once the cache is full', async () => {
+    const firstMeta = { avatar: 'https://example.com/0.png' };
+    const first = renderAvatarToDataUrl('agent-0', firstMeta);
+    await first;
+
+    for (let i = 1; i <= NOTIFICATION_AVATAR_CACHE_LIMIT; i += 1) {
+      await renderAvatarToDataUrl(`agent-${i}`, { avatar: `https://example.com/${i}.png` });
+    }
+
+    const again = renderAvatarToDataUrl('agent-0', firstMeta);
+    expect(again).not.toBe(first);
+    expect(await again).toBe('data:image/png;base64,CANVAS');
+  });
+
+  it('keeps a recently reused avatar when the cache is full', async () => {
+    const firstMeta = { avatar: 'https://example.com/keep.png' };
+    const first = renderAvatarToDataUrl('keep', firstMeta);
+    await first;
+
+    for (let i = 0; i < NOTIFICATION_AVATAR_CACHE_LIMIT - 1; i += 1) {
+      await renderAvatarToDataUrl(`fill-${i}`, { avatar: `https://example.com/fill-${i}.png` });
+    }
+
+    expect(renderAvatarToDataUrl('keep', firstMeta)).toBe(first);
+
+    await renderAvatarToDataUrl('overflow', { avatar: 'https://example.com/overflow.png' });
+
+    expect(renderAvatarToDataUrl('keep', firstMeta)).toBe(first);
   });
 });
