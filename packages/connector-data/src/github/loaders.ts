@@ -117,11 +117,7 @@ export const loadUserProfile = async (
   profileBundle: Awaited<ReturnType<typeof loadProfileBundle>>,
   transport: GitHubConnectorTransport,
 ): Promise<GitHubUserProfile> => {
-  const authenticated = await withConnectorRetry(() => transport.getAuthenticatedUser(), {
-    code: 'github_request_failed',
-    operation: 'getAuthenticatedUser',
-    provider: 'github',
-  });
+  const authenticated = await withConnectorRetry(() => transport.getAuthenticatedUser());
   const { viewer } = profileBundle;
 
   return {
@@ -139,13 +135,8 @@ export const loadUserProfile = async (
 export const loadOrganizations = async (
   transport: GitHubConnectorTransport,
 ): Promise<GitHubOrganization[]> => {
-  const organizations = await withConnectorRetry(
-    () => transport.listUserOrganizations({ perPage: 20 }),
-    {
-      code: 'github_request_failed',
-      operation: 'listUserOrganizations',
-      provider: 'github',
-    },
+  const organizations = await withConnectorRetry(() =>
+    transport.listUserOrganizations({ perPage: 20 }),
   );
 
   return organizations.flatMap((organization) =>
@@ -444,18 +435,12 @@ export const loadRepositoryContributors = async (
   const [owner, repositoryName, ...rest] = repository.split('/');
   if (!owner || !repositoryName || rest.length > 0) return [];
 
-  const contributors = await withConnectorRetry(
-    () =>
-      transport.listRepositoryContributors({
-        owner,
-        perPage: MAX_CONTRIBUTORS,
-        repository: repositoryName,
-      }),
-    {
-      code: 'github_request_failed',
-      operation: 'listRepositoryContributors',
-      provider: 'github',
-    },
+  const contributors = await withConnectorRetry(() =>
+    transport.listRepositoryContributors({
+      owner,
+      perPage: MAX_CONTRIBUTORS,
+      repository: repositoryName,
+    }),
   );
 
   return contributors.slice(0, MAX_CONTRIBUTORS).map(({ contributions, login }) => ({

@@ -90,6 +90,8 @@ interface ExecOptions {
   effort?: string;
   image?: string[];
   inputJson?: string;
+  /** Amp agent mode, forwarded as the native `--mode` flag. */
+  mode?: string;
   model?: string;
   operationId?: string;
   prompt?: string;
@@ -127,35 +129,39 @@ const collectImage = (value: string, previous: string[] = []): string[] => [...p
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
 
 const buildExtraArgs = (
-  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'model' | 'speed' | 'type'>,
+  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
-    options.type === 'amp' || options.type === 'trae'
-      ? []
-      : options.type === 'codex'
-        ? [
-            ...(options.model ? ['--model', options.model] : []),
-            ...(options.effort
-              ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
-              : []),
-            ...(options.speed ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`] : []),
-          ]
-        : options.type === 'claude-code' || options.type === 'codebuddy'
+    options.type === 'amp'
+      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      : options.type === 'trae'
+        ? []
+        : options.type === 'codex'
           ? [
               ...(options.model ? ['--model', options.model] : []),
-              ...(options.effort ? ['--effort', options.effort] : []),
+              ...(options.effort
+                ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+                : []),
+              ...(options.speed
+                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
+                : []),
             ]
-          : options.type === 'cursor' ||
-              options.type === 'kimi-code' ||
-              options.type === 'opencode' ||
-              options.type === 'pi'
-            ? [...(options.model ? ['--model', options.model] : [])]
-            : options.type === 'qoder'
-              ? [
-                  ...(options.model ? ['--model', options.model] : []),
-                  ...(options.effort ? ['--reasoning-effort', options.effort] : []),
-                ]
-              : [];
+          : options.type === 'claude-code' || options.type === 'codebuddy'
+            ? [
+                ...(options.model ? ['--model', options.model] : []),
+                ...(options.effort ? ['--effort', options.effort] : []),
+              ]
+            : options.type === 'cursor' ||
+                options.type === 'kimi-code' ||
+                options.type === 'opencode' ||
+                options.type === 'pi'
+              ? [...(options.model ? ['--model', options.model] : [])]
+              : options.type === 'qoder'
+                ? [
+                    ...(options.model ? ['--model', options.model] : []),
+                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                  ]
+                : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
   return extraArgs.length > 0 ? extraArgs : undefined;
@@ -205,16 +211,28 @@ const parseImageArg = (value: string): AgentImageSource => {
  * Accepts:
  *   - `'plain text'` → single text block
  *   - `[{ type: 'text', text }, { type: 'image', source }]` → content blocks
- *   - `{ content: [...] }` (Anthropic message shape) → unwraps `content`
+ *   - `{ content: [...], resumeFallback?: [...] }` → unwraps the primary prompt
+ *     and reserves the fallback for a retry without native resume
  *   - `{ type: 'text', ... } | { type: 'image', ... }` → single block
  */
-const coerceJsonPrompt = (parsed: unknown): AgentPromptInput => {
-  if (typeof parsed === 'string') return parsed;
-  if (Array.isArray(parsed)) return parsed as AgentContentBlock[];
+const coerceJsonPrompt = (
+  parsed: unknown,
+): Pick<ResolvedPrompt, 'prompt' | 'resumeFallbackPrompt'> => {
+  if (typeof parsed === 'string') return { prompt: parsed };
+  if (Array.isArray(parsed)) return { prompt: parsed as AgentContentBlock[] };
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj.content)) return obj.content as AgentContentBlock[];
-    if (obj.type === 'text' || obj.type === 'image') return [obj as AgentContentBlock];
+    if (Array.isArray(obj.content)) {
+      return {
+        prompt: obj.content as AgentContentBlock[],
+        ...(Array.isArray(obj.resumeFallback)
+          ? { resumeFallbackPrompt: obj.resumeFallback as AgentContentBlock[] }
+          : {}),
+      };
+    }
+    if (obj.type === 'text' || obj.type === 'image') {
+      return { prompt: [obj as unknown as AgentContentBlock] };
+    }
   }
   throw new Error(
     'Invalid --input-json shape: expected a string, array of content blocks, ' +
@@ -226,6 +244,8 @@ interface ResolvedPrompt {
   /** Human-readable description for the empty-input check. */
   describe: () => string;
   prompt: AgentPromptInput;
+  /** Full prompt used only when native resume fails and the CLI retries fresh. */
+  resumeFallbackPrompt?: AgentPromptInput;
 }
 
 const buildPromptFromText = (text: string, images: string[]): ResolvedPrompt => {
@@ -267,7 +287,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
       throw new Error('--image cannot be combined with --input-json (put images in the JSON).');
     }
     const raw = await readInputJson(options.inputJson);
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
 
   if (options.prompt !== undefined && options.prompt !== '-') {
@@ -277,7 +297,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   // No --prompt or --prompt -: read stdin and auto-detect.
   const raw = await readStdin();
   if (looksLikeJsonInput(raw)) {
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
   return buildPromptFromText(raw, images);
 };
@@ -836,7 +856,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         includePartialMessages: options.type === 'claude-code',
         initialModel: options.type === 'trae' ? options.model : undefined,
         operationId,
-        prompt: resolved.prompt,
+        prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
         uploadImage,
         // No resumeSessionId — start fresh
       },
@@ -951,6 +971,7 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')
     .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(

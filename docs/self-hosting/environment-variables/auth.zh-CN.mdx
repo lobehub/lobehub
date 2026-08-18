@@ -23,6 +23,13 @@ LobeHub 在部署时提供了完善的身份验证服务能力，以下是相关
 - 默认值：`-`
 - 示例：`Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
 
+#### `AUTH_COOKIE_PREFIX`
+
+- 类型：可选
+- 描述：应用于所有 Better Auth cookie 名称的前缀。当多个部署可能在同一父域名下写入 cookie 时，应为每个部署配置唯一值。修改此值会使当前部署的已有会话失效，除非另行迁移这些会话。
+- 默认值：`better-auth`
+- 示例：`my-lobehub`
+
 #### `AUTH_EMAIL_VERIFICATION`
 
 - 类型：可选

@@ -10,20 +10,58 @@
  * existing editor must `seedAttachments(...)` from persisted file metadata.
  */
 
-const urlToFileId = new Map<string, string>();
+export interface RegisteredAttachment {
+  downloadUrl?: string;
+  fileId: string;
+}
 
-export const registerAttachment = (url: string, fileId: string): void => {
+const urlToAttachment = new Map<string, RegisteredAttachment>();
+
+const getUrlKeys = (url: string): string[] => {
+  const keys = [url];
+
+  try {
+    const normalizedUrl = new URL(url);
+    normalizedUrl.hash = '';
+    normalizedUrl.search = '';
+    const normalized = normalizedUrl.toString();
+    if (normalized !== url) keys.push(normalized);
+  } catch {
+    const normalized = url.split(/[?#]/, 1)[0];
+    if (normalized && normalized !== url) keys.push(normalized);
+  }
+
+  return keys;
+};
+
+export const registerAttachment = (url: string, fileId: string, downloadUrl?: string): void => {
   if (!url) return;
-  urlToFileId.set(url, fileId);
+
+  const attachment = { downloadUrl, fileId } satisfies RegisteredAttachment;
+  for (const key of getUrlKeys(url)) urlToAttachment.set(key, attachment);
+};
+
+export const getRegisteredAttachment = (
+  url: string | undefined,
+): RegisteredAttachment | undefined => {
+  if (!url) return undefined;
+
+  for (const key of getUrlKeys(url)) {
+    const attachment = urlToAttachment.get(key);
+    if (attachment) return attachment;
+  }
+
+  return undefined;
 };
 
 export const getFileIdForUrl = (url: string | undefined): string | undefined => {
-  if (!url) return undefined;
-  return urlToFileId.get(url);
+  return getRegisteredAttachment(url)?.fileId;
 };
 
-export const seedAttachments = (items: Array<{ id: string; url: string }>): void => {
+export const seedAttachments = (
+  items: Array<{ downloadUrl?: string; id: string; url: string }>,
+): void => {
   for (const item of items) {
-    if (item?.url && item?.id) urlToFileId.set(item.url, item.id);
+    if (item?.url && item?.id) registerAttachment(item.url, item.id, item.downloadUrl);
   }
 };

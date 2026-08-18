@@ -5,6 +5,7 @@ import { memo, useCallback, useState } from 'react';
 
 import InlineRename from '@/components/InlineRename';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
@@ -58,6 +59,9 @@ const RecentListItem = memo<RecentItem>((item) => {
         }
         icon={(() => {
           if (type === 'task') {
+            // Same liveness signal as running topics: an executing task wears
+            // the animated running mark, not the static status glyph.
+            if (status === 'running') return <RunningGlyph size={16} />;
             return <TaskStatusIcon size={16} status={status ?? 'backlog'} />;
           }
 

@@ -42,4 +42,25 @@ describe('getGoalPresentation', () => {
       },
     );
   });
+
+  it('keeps an executing round shown as running while the verify plan is only planned', () => {
+    // Regression (caught by the E2E acceptance run): the verify plan is
+    // confirmed at run start, so the acceptance phase reads `planned` for the
+    // whole executing round. That phase must fall through to the goal entity
+    // status (`running`) instead of rendering 验证中.
+    expect(
+      getGoalPresentation({
+        acceptanceStatus: 'planned',
+        goalStatus: 'running',
+        rounds: 1,
+        taskStatus: 'running',
+      }).statusKey,
+    ).toBe('goalList.status.running');
+  });
+
+  it('prefers the goal entity status over the task-status heuristic', () => {
+    expect(
+      getGoalPresentation({ goalStatus: 'paused', rounds: 1, taskStatus: 'running' }).statusKey,
+    ).toBe('goalList.status.paused');
+  });
 });

@@ -487,7 +487,7 @@ export const buildServerCallLlmContext = async ({
   // Group Agent Builder — mirrors the block above for the group Profile panel.
   // Without this the model has no idea which group it is editing, so it cannot
   // address members by id (updateAgentPrompt) and falls back to telling the user
-  // to wire the group up by hand (LOBE-12941).
+  // to wire the group up by hand — built-in group agents were missing from the member list.
   let groupAgentBuilderContext: GroupAgentBuilderContext | undefined;
   const editingGroupId = state.metadata?.editingGroupId;
   if (editingGroupId && ctx.serverDB && ctx.userId) {
@@ -611,8 +611,10 @@ export const buildServerCallLlmContext = async ({
     capabilities,
     botPlatformContext: ctx.botPlatformContext,
     discordContext: ctx.discordContext,
+    enableExpertise: state.enableExpertise,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: ctx.evalContext,
+    expertise: state.expertise,
     forceFinish: state.forceFinish,
     ...(groupAgentBuilderContext && { groupAgentBuilderContext }),
     historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),

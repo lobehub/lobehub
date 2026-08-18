@@ -45,6 +45,16 @@ describe('splitBriefs', () => {
     expect(needsYou.map((b) => b.id)).toEqual(['dec', 'err']);
   });
 
+  it('removes an optimistically resolved decision from needsYou immediately', () => {
+    const resolved = {
+      ...brief('resolved', 'decision'),
+      resolvedAction: 'ignore',
+      resolvedAt: '2026-08-15T00:00:00.000Z',
+    } as BriefItem;
+
+    expect(splitBriefs([resolved]).needsYou).toEqual([]);
+  });
+
   it('preserves server order within the same rank', () => {
     const { needsYou } = splitBriefs([
       brief('d1', 'decision'),

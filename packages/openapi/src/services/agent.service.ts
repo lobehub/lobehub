@@ -87,6 +87,7 @@ export class AgentService extends BaseService {
         // Prepare creation data
         const newAgentData: NewAgent = {
           accessedAt: new Date(),
+          agencyConfig: request.agencyConfig || null,
           avatar: request.avatar || null,
           chatConfig: request.chatConfig || null,
           createdAt: new Date(),
@@ -154,6 +155,9 @@ export class AgentService extends BaseService {
         // Only update fields actually provided in the request to avoid overwriting existing values with undefined
         const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
+        if (request.agencyConfig !== undefined) {
+          updateData.agencyConfig = request.agencyConfig ?? null;
+        }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
         if (request.chatConfig !== undefined) updateData.chatConfig = request.chatConfig ?? null;
         if (request.description !== undefined) updateData.description = request.description ?? null;

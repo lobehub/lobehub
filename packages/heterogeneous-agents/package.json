@@ -27,6 +27,7 @@
     "@anthropic-ai/sdk": "^0.93.0",
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "@lobehub/icons": "^5.15.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "diff": "^8.0.4",

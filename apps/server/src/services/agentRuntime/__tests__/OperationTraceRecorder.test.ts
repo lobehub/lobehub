@@ -76,6 +76,12 @@ describe('OperationTraceRecorder', () => {
         {
           finalState: {
             activatedStepTools: [{ id: 'kept' }],
+            expertise: {
+              contentHash: 'hash',
+              domains: [{ id: 'product-design', lessonIds: ['lesson-1'] }],
+              renderedContext: '<expertise>heavy learned context</expertise>',
+              schemaVersion: 1,
+            },
             messages: ['heavy'],
             operationToolSet: { manifestMap: {} },
             otherStateField: 'kept',
@@ -108,6 +114,7 @@ describe('OperationTraceRecorder', () => {
       const doneEvent = step.events.find((e: any) => e.type === 'done');
       expect(doneEvent.finalState.activatedStepTools).toEqual([{ id: 'kept' }]);
       expect(doneEvent.finalState.otherStateField).toBe('kept');
+      expect(doneEvent.finalState.expertise).toBeUndefined();
       expect(doneEvent.finalState.messages).toBeUndefined();
       expect(doneEvent.finalState.operationToolSet).toBeUndefined();
       expect(doneEvent.finalState.toolManifestMap).toBeUndefined();

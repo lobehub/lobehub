@@ -10,7 +10,8 @@ import {
 } from './heteroSelectorCapabilities';
 
 describe('selector availability', () => {
-  it('derives the selectable provider set from the model dimension', () => {
+  it('derives the selectable provider set from any registered dimension', () => {
+    expect(isHeteroSelectorAvailable('amp')).toBe(true);
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
@@ -20,13 +21,19 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
     expect(isHeteroSelectorAvailable('trae')).toBe(true);
 
-    expect(isHeteroSelectorAvailable('amp')).toBe(false);
     expect(isHeteroSelectorAvailable('kimi-code')).toBe(false);
     expect(isHeteroSelectorAvailable('openclaw')).toBe(false);
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });
 
   it('exposes the dimensions each provider actually supports', () => {
+    expect(getHeteroSelectorCapability('amp')?.mode?.levels).toEqual([
+      'low',
+      'medium',
+      'high',
+      'ultra',
+    ]);
+    expect(getHeteroSelectorCapability('amp')?.model).toBeUndefined();
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
@@ -50,9 +57,9 @@ describe('selector availability', () => {
 
 describe('applyHeteroSelection', () => {
   it('passes the selection through untouched for providers with no selector', () => {
-    expect(applyHeteroSelection({ args: ['--model', 'x'], type: 'amp' }, { model: 'y' })).toEqual({
-      model: 'y',
-    });
+    expect(
+      applyHeteroSelection({ args: ['--model', 'x'], type: 'kimi-code' }, { model: 'y' }),
+    ).toEqual({ model: 'y' });
   });
 
   it('leaves args alone when the provider is unknown', () => {
@@ -66,6 +73,21 @@ describe('applyHeteroSelection', () => {
         { model: 'opus' },
       ),
     ).toEqual({ args: ['--verbose', '--foo=bar'], model: 'opus' });
+  });
+
+  it('clears a hand-authored Amp mode before applying a structured selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--mode', 'low', '--dangerously-allow-all'],
+      type: 'amp',
+    };
+    const patch = applyHeteroSelection(provider, { mode: 'high' });
+
+    expect(patch).toEqual({ args: ['--dangerously-allow-all'], mode: 'high' });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--dangerously-allow-all',
+      '--mode',
+      'high',
+    ]);
   });
 
   it('clears the claude-code effort flag in its joined spelling', () => {

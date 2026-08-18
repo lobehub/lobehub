@@ -2,7 +2,10 @@ import type { SWRResponse } from 'swr';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import {
+  getActiveWorkspaceId,
+  useActiveWorkspaceId,
+} from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { projectService } from '@/services/project';
 import { createDevtools } from '@/store/middleware/createDevtools';
@@ -24,9 +27,11 @@ interface ProjectStore {
     name: string;
     slug?: string;
   }) => Promise<ProjectListItem>;
+  deleteProject: (id: string) => Promise<void>;
   projectDetails: Record<string, Record<string, ProjectDetail>>;
   projectLists: Record<string, ProjectListItem[]>;
   refreshProjectList: () => Promise<void>;
+  updateProject: (id: string, input: { name: string }) => Promise<ProjectListItem>;
   useFetchProjectDetail: (id?: string) => SWRResponse<ProjectDetailResponse>;
   useFetchProjectList: (enabled?: boolean) => SWRResponse<ProjectListResponse>;
 }
@@ -36,13 +41,47 @@ const devtools = createDevtools('project');
 export const useProjectStore = createWithEqualityFn<ProjectStore>()(
   devtools((set, get) => ({
     createProject: async (input) => {
-      const response = await projectService.create(input);
+      const response = await projectService.create(input, getActiveWorkspaceId());
       await get().refreshProjectList();
       return response.data;
+    },
+    deleteProject: async (id) => {
+      await projectService.delete(id);
+      await get().refreshProjectList();
     },
     projectDetails: {},
     projectLists: {},
     refreshProjectList: async () => mutate(LIST_KEY),
+    updateProject: async (id, input) => {
+      const response = await projectService.update(id, input);
+      const project = response.data;
+
+      set(
+        (state) => ({
+          projectDetails: Object.fromEntries(
+            Object.entries(state.projectDetails).map(([scope, details]) => [
+              scope,
+              Object.fromEntries(
+                Object.entries(details).map(([reference, detail]) => [
+                  reference,
+                  detail.project.id === id ? { ...detail, project } : detail,
+                ]),
+              ),
+            ]),
+          ),
+          projectLists: Object.fromEntries(
+            Object.entries(state.projectLists).map(([scope, projects]) => [
+              scope,
+              projects.map((item) => (item.id === id ? project : item)),
+            ]),
+          ),
+        }),
+        false,
+        'updateProject/success',
+      );
+      await get().refreshProjectList();
+      return project;
+    },
     useFetchProjectDetail: (id) => {
       const workspaceId = useActiveWorkspaceId();
       const scope = projectScopeKey(workspaceId);

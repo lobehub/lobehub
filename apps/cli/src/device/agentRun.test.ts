@@ -138,6 +138,34 @@ describe('spawnHeteroAgentRun', () => {
     );
   });
 
+  it('sends recovery history only in the resume fallback prompt', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      prompt: 'continue',
+      resumeFallbackSystemContext: 'workspace rules\n\nprevious conversation',
+      resumeSessionId: 'session-1',
+      systemContext: 'workspace rules',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(child.stdin.write).toHaveBeenCalledWith(
+      JSON.stringify({
+        content: [
+          { text: 'workspace rules', type: 'text' },
+          { text: 'continue', type: 'text' },
+        ],
+        resumeFallback: [
+          { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+          { text: 'continue', type: 'text' },
+        ],
+      }),
+    );
+  });
+
   it('appends image blocks to stdin when imageList is provided', async () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);

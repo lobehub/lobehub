@@ -19,6 +19,7 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
@@ -233,6 +234,8 @@ const Header = memo(() => {
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
+  // Ownership handover to a workspace member — separate from the scope moves.
+  const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
   useEffect(
@@ -291,8 +294,11 @@ const Header = memo(() => {
       },
       importMenuItem ? { type: 'divider' as const } : null,
       importMenuItem,
-      businessTransferMenuItems.length > 0 ? { type: 'divider' as const } : null,
+      businessTransferMenuItems.length > 0 || transferToMemberItem
+        ? { type: 'divider' as const }
+        : null,
       ...businessTransferMenuItems,
+      transferToMemberItem,
       canManage ? { type: 'divider' as const } : null,
       canManage
         ? {
@@ -345,6 +351,7 @@ const Header = memo(() => {
     t,
     importMenuItem,
     transferMenuItems,
+    transferToMemberItem,
   ]);
 
   return (

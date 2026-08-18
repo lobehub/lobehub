@@ -30,6 +30,8 @@
   "features.oauthApps.title": "OAuth Uygulamaları",
   "features.projects.desc": "Uzun vadeli hedefleri, kendi ajanları, bilgi tabanları ve görevleriyle özel çalışma alanlarında organize edin.",
   "features.projects.title": "Proje Çalışma Alanları",
+  "features.selfLearning.desc": "Her bir ajanın gerçek uygulamalardan ne öğrendiğini gösterin — kural tabanı, hangi kuralların gerçekten kullanıldığını ve hangi katmanların hâlâ boş olduğunu.",
+  "features.selfLearning.title": "Kendi Kendine Gelişen",
   "features.taskVerify.desc": "Görev detayına teslimat kabul bölümü ekleyin: kabulü bir cümleyle açıklayın ve düzenlenebilir doğrulama kriterlerini AI ile oluşturun.",
   "features.taskVerify.title": "Görev Teslimat Kabulü",
   "features.topicAcceptance.desc": "Mevcut konu için bir teslimat kontrol listesi oluşturun ve bunu düzenleyiciye hemen üstüne yerleştirin, böylece konuşma her zaman düzenleyebileceğiniz standartlara uygun şekilde yapılır.",

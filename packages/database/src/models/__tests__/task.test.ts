@@ -8,6 +8,7 @@ import {
   agents,
   briefs,
   documents,
+  goals,
   tasks,
   topics,
   users,
@@ -16,6 +17,7 @@ import {
 import { taskTopics } from '../../schemas/task';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
+import { GoalModel } from '../goal';
 import { ProjectModel } from '../project';
 import { TaskModel } from '../task';
 import { WorkModel } from '../work';
@@ -565,11 +567,16 @@ describe('TaskModel', () => {
       expect(result[0].tasks).toHaveLength(1);
     });
 
-    it('should filter tasks by the goal marker', async () => {
+    it('should filter tasks by their bound goal entity', async () => {
       const model = new TaskModel(serverDB, userId);
 
-      const goal = await model.create({ instruction: 'Persistent objective' });
-      await model.update(goal.id, { config: { goal: { maxIterations: 5 } } });
+      const goalTask = await model.create({ instruction: 'Persistent objective' });
+      const goalRow = await new GoalModel(serverDB, userId).create({
+        maxRounds: 5,
+        subjectId: goalTask.id,
+        subjectType: 'task',
+        title: 'Persistent objective',
+      });
       await model.create({ instruction: 'Ordinary task' });
 
       const goals = await model.groupList({
@@ -581,9 +588,13 @@ describe('TaskModel', () => {
         hasGoal: false,
       });
 
-      expect(goals[0].tasks.map((task) => task.id)).toEqual([goal.id]);
+      expect(goals[0].tasks.map((task) => task.id)).toEqual([goalTask.id]);
+      // The goal entity rides along on the returned task row.
+      expect(goals[0].tasks[0].goal?.id).toBe(goalRow.id);
+      expect(goals[0].tasks[0].goal?.maxRounds).toBe(5);
       expect(ordinary[0].tasks).toHaveLength(1);
       expect(ordinary[0].tasks[0].instruction).toBe('Ordinary task');
+      expect(ordinary[0].tasks[0].goal).toBeNull();
     });
 
     it('should group only tasks from the requested project', async () => {
@@ -1264,6 +1275,24 @@ describe('TaskModel', () => {
       const { total: total2 } = await model2.list();
       expect(total1).toBe(0);
       expect(total2).toBe(1);
+    });
+
+    it('sweeps the goals bound to bulk-deleted tasks', async () => {
+      // Regression (codex review): the FK-less goals rows survived clearAll,
+      // orphaning every cleared goal — only single and subtree deletion swept.
+      const model = new TaskModel(serverDB, userId);
+      const goalModel = new GoalModel(serverDB, userId);
+      const goalTask = await model.create({ instruction: 'Goal task' });
+      await goalModel.create({ subjectId: goalTask.id, subjectType: 'task', title: 'Doomed' });
+      const otherUsers = new GoalModel(serverDB, userId2);
+      await otherUsers.create({ subjectId: 'task_foreign', subjectType: 'task', title: 'Keep' });
+
+      await model.deleteAll();
+
+      const mine = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId) });
+      const theirs = await serverDB.query.goals.findMany({ where: eq(goals.userId, userId2) });
+      expect(mine).toHaveLength(0);
+      expect(theirs).toHaveLength(1);
     });
   });
 

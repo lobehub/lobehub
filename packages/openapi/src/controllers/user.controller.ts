@@ -26,7 +26,7 @@ export class UserController extends BaseController {
 
   /**
    * `/me` is reachable by every authenticated caller so a key can resolve its
-   * own identity — `lh login` depends on it (LOBE-12934). What it *returns*
+   * own identity — `lh login` depends on it. What it *returns*
    * is still scoped, because identity bootstrap needs an id, not a profile:
    *
    * - without `user:read` the response is narrowed to the id, keeping the

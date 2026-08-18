@@ -954,6 +954,34 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * By-id topic detail fetch, used as a fallback when a topic the UI is
+   * anchored on is missing from the loaded list bucket — e.g. an archived
+   * (`completed`) topic that the sidebar fetch excludes via `excludeStatuses`,
+   * or a topic deep-linked from the Topics management page. The result lands
+   * in `topicDetailMap`, which `currentActiveTopic` / `getTopicById` read as
+   * a fallback. Pass `undefined` to disable the fetch.
+   */
+  useFetchTopicDetail = (topicId?: string | null): SWRResponse<ChatTopic | null> =>
+    useClientDataSWRWithSync<ChatTopic | null>(
+      topicId ? topicKeys.detail(topicId) : null,
+      () => topicService.getTopicDetail(topicId!),
+      {
+        onData: (topic) => {
+          if (!topic) return;
+
+          const currentMap = this.#get().topicDetailMap;
+          if (isEqual(currentMap[topic.id], topic)) return;
+
+          this.#set(
+            { topicDetailMap: { ...currentMap, [topic.id]: topic } },
+            false,
+            n('useFetchTopicDetail(onData)', { topicId: topic.id }),
+          );
+        },
+      },
+    );
+
+  /**
    * Topic fetch dedicated to the Agent Topics management page.
    * Lives in its own SWR key + state bucket so the heavier `withDetails`
    * payload doesn't collide with the sidebar's cheap fetch — sharing one
@@ -1305,6 +1333,17 @@ export class ChatTopicActionImpl {
     if (!activeAgentId) return;
 
     await topicService.removeTopicsByAgentId(activeAgentId, scope);
+    this.#set(
+      (state) => ({
+        topicDetailMap: Object.fromEntries(
+          Object.entries(state.topicDetailMap).filter(
+            ([, topic]) => topic.sessionId !== activeAgentId,
+          ),
+        ),
+      }),
+      false,
+      n('removeSessionTopics/detail'),
+    );
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this agent)
     void evictMessageCache((ctx) => ctx.agentId === activeAgentId);
@@ -1320,6 +1359,9 @@ export class ChatTopicActionImpl {
     const { switchTopic, refreshTopic } = this.#get();
 
     await topicService.removeTopicsByGroupId(groupId, scope);
+    // Topic detail rows don't carry their group id, so the safe invalidation
+    // boundary for a group-wide delete is the whole by-id detail cache.
+    this.#set({ topicDetailMap: {} }, false, n('removeGroupTopics/detail'));
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this group)
     void evictMessageCache((ctx) => ctx.groupId === groupId);
@@ -1332,6 +1374,7 @@ export class ChatTopicActionImpl {
     const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
+    this.#set({ topicDetailMap: {} }, false, n('removeAllTopics/detail'));
     await refreshTopic();
     // every topic is gone — wipe all cached message lists
     void evictMessageCache(() => true);
@@ -1362,6 +1405,9 @@ export class ChatTopicActionImpl {
       .map((topic) => topic.id);
 
     await topicService.batchRemoveTopics(topicIds);
+    topicIds.forEach((id) =>
+      this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeUnstarredTopic'),
+    );
     await refreshTopic();
     // drop the deleted topics' message caches
     const removed = new Set(topicIds);
@@ -1606,9 +1652,31 @@ export class ChatTopicActionImpl {
     const nextViewItems = viewData ? topicReducer(viewData.items, payload) : undefined;
     const viewChanged = viewData ? !isEqual(nextViewItems, viewData.items) : false;
 
-    // no need to update if both maps are unchanged
+    const detailMap = this.#get().topicDetailMap ?? {};
+    const detailId = payload.type === 'addTopic' ? undefined : payload.id;
+    const detailTopic = detailId ? detailMap[detailId] : undefined;
+    let nextDetailMap = detailMap;
+
+    if (payload.type === 'updateTopic' && detailTopic) {
+      nextDetailMap = {
+        ...detailMap,
+        [payload.id]: { ...detailTopic, ...payload.value },
+      };
+    } else if (payload.type === 'deleteTopic' && detailTopic) {
+      const { [payload.id]: _deleted, ...remainingDetailMap } = detailMap;
+      nextDetailMap = remainingDetailMap;
+    } else if (payload.type === 'replaceTopicId' && detailTopic) {
+      const { [payload.id]: _replaced, ...remainingDetailMap } = detailMap;
+      nextDetailMap = {
+        ...remainingDetailMap,
+        [payload.nextId]: { ...detailTopic, ...payload.value, id: payload.nextId },
+      };
+    }
+
+    // no need to update if all maps are unchanged
     const mainChanged = !isEqual(nextItems, currentData?.items);
-    if (!mainChanged && !viewChanged) return;
+    const detailChanged = nextDetailMap !== detailMap;
+    if (!mainChanged && !viewChanged && !detailChanged) return;
 
     const currentTotal = currentData?.total ?? currentData?.items?.length ?? 0;
     const total =
@@ -1619,6 +1687,8 @@ export class ChatTopicActionImpl {
           : currentTotal;
 
     const nextState: Record<string, unknown> = {};
+
+    if (detailChanged) nextState.topicDetailMap = nextDetailMap;
 
     if (mainChanged) {
       nextState.topicDataMap = {

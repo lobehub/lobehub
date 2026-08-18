@@ -1,5 +1,6 @@
 'use client';
 
+import type { BlockProps } from '@lobehub/ui';
 import { ActionIcon, Avatar, Block, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
@@ -23,36 +24,48 @@ interface SidebarHeaderSelectPopoverProps {
 }
 
 export const SidebarHeaderSelectPopover = memo<SidebarHeaderSelectPopoverProps>(
-  ({ children, content, width = 240 }) => (
+  ({ children, content, width = 280 }) => (
     <Popover
       classNames={{ trigger: styles.trigger }}
       content={content}
       nativeButton={false}
       placement={'bottomLeft'}
-      styles={{ content: { padding: 0, width } }}
       trigger={'click'}
+      styles={{
+        content: {
+          maxHeight: 'min(420px, 70vh)',
+          overflow: 'hidden',
+          padding: 0,
+          paddingBlock: 0,
+          paddingInline: 0,
+          width,
+        },
+      }}
     >
       {children}
     </Popover>
   ),
 );
 
-interface SidebarHeaderSelectTriggerProps {
+// Popover clones this trigger to inject onClick/ref; rest must reach Block.
+interface SidebarHeaderSelectTriggerProps extends Omit<BlockProps, 'children' | 'title'> {
   avatar?: ReactNode | string;
   background?: string;
   title: ReactNode;
 }
 
 export const SidebarHeaderSelectTrigger = memo<SidebarHeaderSelectTriggerProps>(
-  ({ avatar, background, title }) => (
+  ({ avatar, background, className, style, title, ...rest }) => (
     <Block
       clickable
       horizontal
       align={'center'}
+      className={className}
       gap={8}
       padding={2}
-      style={{ minWidth: 32, overflow: 'hidden' }}
+      style={{ minWidth: 32, overflow: 'hidden', ...style }}
       variant={'borderless'}
+      {...rest}
     >
       <Avatar avatar={avatar} background={background} shape={'square'} size={28} />
       <Text ellipsis weight={500}>

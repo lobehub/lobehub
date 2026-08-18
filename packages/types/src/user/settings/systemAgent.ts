@@ -12,6 +12,8 @@ export interface PromptRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled
 
 export interface UserSystemAgentConfig {
   agentMeta: SystemAgentItem;
+  /** Model used to draft expertise domains and extract reusable experience from conversations. */
+  expertise: SystemAgentItem;
   followUpAction: SystemAgentItem;
   generationTopic: SystemAgentItem;
   historyCompress: SystemAgentItem;
