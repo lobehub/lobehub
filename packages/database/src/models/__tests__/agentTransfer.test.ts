@@ -14,6 +14,10 @@ import {
   chatGroups,
   chatGroupsAgents,
   documents,
+  expertiseBindings,
+  expertiseHits,
+  expertiseInsights,
+  expertiseRuns,
   files,
   knowledgeBases,
   messages,
@@ -33,6 +37,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
@@ -143,6 +148,88 @@ describe('AgentModel.transferAgent', () => {
       .from(agentsToSessions)
       .where(eq(agentsToSessions.agentId, agent.id));
     expect(link.workspaceId).toBe(wsId1);
+  });
+
+  it('should transfer agent-owned expertise and its learned content', async () => {
+    const agentModel = new AgentModel(serverDB, userId, wsId1);
+    const agent = await agentModel.create({ title: 'Learning Agent' });
+    const expertiseModel = new ExpertiseModel(serverDB, userId, wsId1);
+    const domainId = await expertiseModel.createDomain({
+      agentId: agent.id,
+      brief: 'Improve incident response',
+      domainFilter: 'I practice when I investigate production incidents.',
+      title: 'Incident response',
+    });
+    const lesson = await expertiseModel.teachLesson({
+      domainId,
+      text: 'I verify the blast radius before changing production systems.',
+    });
+    const [run] = await serverDB
+      .insert(expertiseRuns)
+      .values({
+        actorId: agent.id,
+        actorType: 'agent',
+        domainId,
+        runIndex: 1,
+        subjectId: 'incident-1',
+        subjectType: 'topic',
+        userId,
+        workspaceId: wsId1,
+      })
+      .returning({ id: expertiseRuns.id });
+    const [hit] = await serverDB
+      .insert(expertiseHits)
+      .values({
+        domainId,
+        lessonId: lesson!.id,
+        outcome: 'pass',
+        runId: run.id,
+      })
+      .returning({ id: expertiseHits.id });
+    const [insight] = await serverDB
+      .insert(expertiseInsights)
+      .values({
+        body: 'The same diagnostic gap appears repeatedly.',
+        domainId,
+        headline: 'Recurring diagnostic gap',
+        kind: 'repeated-mistake',
+        userId,
+        workspaceId: wsId1,
+      })
+      .returning({ id: expertiseInsights.id });
+
+    await agentModel.transferAgent(agent.id, wsId2, targetUserId);
+    await serverDB.delete(workspaces).where(eq(workspaces.id, wsId1));
+
+    const transferredExpertise = new ExpertiseModel(serverDB, targetUserId, wsId2);
+    const [domain, lessons, binding, transferredInsight, transferredRun, transferredHit] =
+      await Promise.all([
+        transferredExpertise.findDomain(domainId),
+        transferredExpertise.listLessons(domainId),
+        serverDB
+          .select({ workspaceId: expertiseBindings.workspaceId })
+          .from(expertiseBindings)
+          .where(eq(expertiseBindings.domainId, domainId)),
+        serverDB
+          .select({ workspaceId: expertiseInsights.workspaceId })
+          .from(expertiseInsights)
+          .where(eq(expertiseInsights.id, insight.id)),
+        serverDB
+          .select({ userId: expertiseRuns.userId, workspaceId: expertiseRuns.workspaceId })
+          .from(expertiseRuns)
+          .where(eq(expertiseRuns.id, run.id)),
+        serverDB
+          .select({ id: expertiseHits.id })
+          .from(expertiseHits)
+          .where(eq(expertiseHits.id, hit.id)),
+      ]);
+
+    expect(domain?.workspaceId).toBe(wsId2);
+    expect(lessons).toHaveLength(1);
+    expect(binding[0].workspaceId).toBe(wsId2);
+    expect(transferredInsight[0].workspaceId).toBe(wsId2);
+    expect(transferredRun[0]).toEqual({ userId: targetUserId, workspaceId: wsId2 });
+    expect(transferredHit[0].id).toBe(hit.id);
   });
 
   it('should clear stale session group references on transfer', async () => {

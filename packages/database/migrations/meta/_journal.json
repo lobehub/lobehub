@@ -987,6 +987,34 @@
       "when": 1786545606298,
       "tag": "0140_productive_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1786766455568,
+      "tag": "0141_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786791246437,
+      "tag": "0142_expertise_domain_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786847279485,
+      "tag": "0143_resource_transfer_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786968214710,
+      "tag": "0144_notifications_add_metadata_column",
+      "breakpoints": true
     }
   ],
   "version": "6"

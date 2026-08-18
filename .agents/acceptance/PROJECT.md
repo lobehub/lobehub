@@ -278,7 +278,9 @@ Routes worth jumping to:
 | `/`                          | Home (has a chat input)           |
 | `/agent/<agentId>`           | Agent conversation (latest topic) |
 | `/agent/<agentId>/<topicId>` | Specific topic in a conversation  |
-| `/task` · `/task/<taskId>`   | Task list / task detail           |
+| `/tasks`                     | Task list                         |
+| `/task`                      | Task assistant                    |
+| `/task/<taskId>`             | Task detail                       |
 | `/page`                      | Documents (文稿)                  |
 | `/settings`                  | Settings                          |
 | `/community`                 | Discover / community              |

@@ -1741,7 +1741,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
-    it('should inject local workspace context only when starting a native session', async () => {
+    it('should not inject local workspace context into native sessions', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
       const params = {
@@ -1756,9 +1756,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       await executeHeterogeneousAgent(get, params);
 
-      expect(mockSendPrompt.mock.calls[0][0].systemContext).toContain(
-        "You are running on the user's own machine. Your working directory is `/Users/me/repo`.",
-      );
+      expect(mockSendPrompt.mock.calls[0][0].systemContext).toBe('Follow the agent rules.');
 
       await executeHeterogeneousAgent(get, {
         ...params,

@@ -30,6 +30,8 @@
   "features.oauthApps.title": "App OAuth",
   "features.projects.desc": "Organizza obiettivi a lungo termine in spazi di lavoro dedicati con i propri agenti, basi di conoscenza e attività.",
   "features.projects.title": "Spazi di lavoro per progetti",
+  "features.selfLearning.desc": "Mostra ciò che ogni agente ha imparato dalla pratica reale: la sua base di regole, quali regole vengono effettivamente utilizzate e quali livelli sono ancora vuoti.",
+  "features.selfLearning.title": "Auto-evoluzione",
   "features.taskVerify.desc": "Aggiungi una sezione di accettazione della consegna al dettaglio del compito: descrivi l'accettazione in una frase e lascia che l'IA generi criteri di verifica modificabili.",
   "features.taskVerify.title": "Accettazione della Consegna del Compito",
   "features.topicAcceptance.desc": "Crea una lista di controllo per la consegna dell'argomento corrente proprio sopra il compositore, in modo che la conversazione rispetti gli standard che puoi modificare in qualsiasi momento.",

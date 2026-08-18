@@ -20,6 +20,13 @@ vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(() => ({ findByOperation: verifyFindByOperation })),
 }));
 
+// Goal-loop rounds suppress the per-topic brief; onTopicComplete asks the
+// goals table whether this task carries a goal. Default = plain task.
+const goalFindBySubject = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(() => ({ findBySubject: goalFindBySubject })),
+}));
+
 // Error-brief copy is localized at the source via the server translator; mock it
 // with a tiny table so the error-branch tests can assert both the friendly-copy
 // mapping (a known error code → its human message) and the raw-message fallback

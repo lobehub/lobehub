@@ -206,6 +206,10 @@ export const UserLabSchema = z.object({
    */
   enableProjects: z.boolean().optional(),
   /**
+   * show the per-agent self-learning (expertise) page and its sidebar entry
+   */
+  enableSelfLearning: z.boolean().optional(),
+  /**
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */
   enableTaskVerify: z.boolean().optional(),

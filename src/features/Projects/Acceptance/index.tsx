@@ -39,8 +39,8 @@ const PROJECT_DECISION_KEYS: Record<
 const ProjectAcceptance = memo(() => {
   const { t } = useTranslation('project');
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
-  const id = projectId ?? '';
-  const detail = useCurrentProjectDetail(id);
+  const reference = projectId ?? '';
+  const detail = useCurrentProjectDetail(reference);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const [loadingAction, setLoadingAction] = useState<ProjectAcceptanceAction>();
 
@@ -52,6 +52,8 @@ const ProjectAcceptance = memo(() => {
         <NeuralNetworkLoading />
       </Flexbox>
     );
+
+  const id = detail.project.id;
 
   const actions = getProjectAcceptanceActions(detail.project.status);
   const completionReviews = detail.completionReviews ?? [];

@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { MarketAPIError } from '@lobehub/market-sdk';
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -175,5 +177,79 @@ describe('skillRouter.getSkillRatingDistribution', () => {
     await expect(
       caller.getSkillRatingDistribution({ identifier: 'github.acme.skill-a' }),
     ).rejects.toThrow('Failed to fetch skill rating distribution');
+  });
+});
+
+describe('skillRouter.getSkillList error mapping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Collapsing an upstream 429 into a blanket 500 is what made the skill store
+   * fail on open: the client could not tell a throttle from an outage, so SWR
+   * retried on a 1s/2s/4s/8s/16s backoff and every retry landed back inside the
+   * rate-limit window, keeping the bucket empty.
+   */
+  it('surfaces an upstream rate limit as TOO_MANY_REQUESTS, not a blanket 500', async () => {
+    mockSearchSkill.mockRejectedValue(
+      new MarketAPIError(429, 'Too Many Requests', {
+        error: 'Too many requests. Please try again later.',
+      }),
+    );
+    const caller = await createCaller();
+
+    await expect(caller.getSkillList({ page: 1 })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+  });
+
+  it.each([
+    [400, 'BAD_REQUEST'],
+    [403, 'FORBIDDEN'],
+    [404, 'NOT_FOUND'],
+  ])('maps upstream %i to %s', async (status, code) => {
+    mockSearchSkill.mockRejectedValue(new MarketAPIError(status, 'nope', undefined));
+    const caller = await createCaller();
+
+    await expect(caller.getSkillList({ page: 1 })).rejects.toMatchObject({ code });
+  });
+
+  /**
+   * `UNAUTHORIZED` drives re-authentication UI: `createResponseMeta` tags it
+   * with `X-Auth-Required` (unless it carries the Market sentinel message) and
+   * the desktop proxy opens the LobeHub re-login prompt on that header. These
+   * are `publicProcedure`s authenticated by the server's trusted-client token,
+   * so an upstream 401 is our misconfiguration — it must never ask the user to
+   * sign in again.
+   */
+  it('never maps an upstream 401 onto the app re-auth path', async () => {
+    mockSearchSkill.mockRejectedValue(new MarketAPIError(401, 'invalid_token', undefined));
+    const caller = await createCaller();
+
+    const error = await caller.getSkillList({ page: 1 }).catch((e) => e);
+
+    expect(error.code).toBe('INTERNAL_SERVER_ERROR');
+    expect(error.code).not.toBe('UNAUTHORIZED');
+  });
+
+  it('falls back to INTERNAL_SERVER_ERROR for unmapped upstream statuses', async () => {
+    mockSearchSkill.mockRejectedValue(new MarketAPIError(503, 'Service Unavailable', undefined));
+    const caller = await createCaller();
+
+    await expect(caller.getSkillList({ page: 1 })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  });
+
+  it('wraps non-Market failures into an internal server error', async () => {
+    mockSearchSkill.mockRejectedValue(new Error('boom'));
+    const caller = await createCaller();
+
+    const error = await caller.getSkillList({ page: 1 }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(TRPCError);
+    expect(error.code).toBe('INTERNAL_SERVER_ERROR');
+    expect(error.message).toBe('Failed to fetch skill list');
   });
 });

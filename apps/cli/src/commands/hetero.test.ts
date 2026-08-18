@@ -1089,6 +1089,95 @@ describe('hetero exec command', () => {
   });
 
   describe('--resume auto-retry on session-not-found', () => {
+    it('uses recovery history only for the retry without native resume', async () => {
+      const dir = await mkdtemp(`${tmpdir()}/hetero-resume-fallback-`);
+      const file = path.join(dir, 'input.json');
+      const primaryPrompt = [
+        { text: 'workspace rules', type: 'text' },
+        { text: 'continue', type: 'text' },
+      ];
+      const fallbackPrompt = [
+        { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+        { text: 'continue', type: 'text' },
+      ];
+      await writeFile(
+        file,
+        JSON.stringify({ content: primaryPrompt, resumeFallback: fallbackPrompt }),
+      );
+      const resumeNotFoundEvent = {
+        data: { message: 'No conversation found with session ID cc-stale' },
+        operationId: 'op-fallback',
+        stepIndex: 0,
+        timestamp: 1,
+        type: 'error',
+      };
+      mockSpawnAgent
+        .mockReturnValueOnce(createFakeHandle({ events: [resumeNotFoundEvent], exitCode: 1 }))
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      try {
+        await runCmd([
+          'hetero',
+          'exec',
+          '--type',
+          'claude-code',
+          '--input-json',
+          file,
+          '--resume',
+          'cc-stale',
+          '--operation-id',
+          'op-fallback',
+        ]);
+      } finally {
+        await rm(dir, { force: true, recursive: true });
+      }
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+        prompt: primaryPrompt,
+        resumeSessionId: 'cc-stale',
+      });
+      expect(mockSpawnAgent.mock.calls[1][0]).toMatchObject({ prompt: fallbackPrompt });
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+    });
+
+    it('does not consume the recovery prompt when native resume succeeds', async () => {
+      const dir = await mkdtemp(`${tmpdir()}/hetero-resume-primary-`);
+      const file = path.join(dir, 'input.json');
+      const primaryPrompt = [{ text: 'continue', type: 'text' }];
+      await writeFile(
+        file,
+        JSON.stringify({
+          content: primaryPrompt,
+          resumeFallback: [{ text: 'previous conversation', type: 'text' }, ...primaryPrompt],
+        }),
+      );
+      mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: 0 }));
+
+      try {
+        await runCmd([
+          'hetero',
+          'exec',
+          '--type',
+          'codex',
+          '--input-json',
+          file,
+          '--resume',
+          'thread-existing',
+        ]);
+      } finally {
+        await rm(dir, { force: true, recursive: true });
+      }
+
+      expect(mockSpawnAgent).toHaveBeenCalledOnce();
+      expect(mockSpawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: primaryPrompt,
+          resumeSessionId: 'thread-existing',
+        }),
+      );
+    });
+
     it('retries without --resume when the error stream event indicates the session is gone', async () => {
       // First spawn: exits non-zero, emits a resume-not-found error event
       const resumeNotFoundEvent = {

@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
     } as Record<string, { createdByUserId?: string | null; visibility?: 'private' | 'public' }>,
   },
   transferItems: [
-    { key: 'transfer-task', label: 'Transfer to...' },
+    { key: 'transfer-task', label: 'Move to…' },
     { key: 'copy-task', label: 'Copy to...' },
   ] as MenuItem[],
   updateTaskVisibility: vi.fn(),

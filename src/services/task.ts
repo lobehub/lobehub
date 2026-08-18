@@ -1,4 +1,9 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  CreateTaskGoalInput,
+  TaskAutomationMode,
+  TaskStatus,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -64,6 +69,8 @@ class TaskService {
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
+    /** Bind a goal entity (`goals` row) to the created task. */
+    goal?: CreateTaskGoalInput;
     identifierPrefix?: string;
     instruction: string;
     name?: string;

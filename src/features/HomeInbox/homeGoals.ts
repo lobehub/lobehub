@@ -65,11 +65,11 @@ export const buildHomeGoalEntries = (
   acceptanceStatusByTaskId: Record<string, string> = {},
 ): HomeGoalEntry[] => {
   const entries = goals.flatMap<HomeGoalEntry>((goal) => {
-    const config = goal.config as { goal?: { maxIterations?: number | null } } | null;
-    const maxRounds = config?.goal?.maxIterations ?? null;
+    const maxRounds = goal.goal?.maxRounds ?? null;
     const rounds = goal.totalTopics ?? 0;
     const { statusKey } = getGoalPresentation({
       acceptanceStatus: acceptanceStatusByTaskId[goal.id],
+      goalStatus: goal.goal?.status,
       maxRounds,
       rounds,
       taskStatus: goal.status,

@@ -48,6 +48,9 @@ export default {
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',
+  'features.selfLearning.desc':
+    'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
+  'features.selfLearning.title': 'Self-evolving',
   'features.topicAcceptance.desc':
     'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
   'features.topicAcceptance.title': 'Topic Acceptance',

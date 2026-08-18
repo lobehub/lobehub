@@ -31,8 +31,8 @@ import {
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
   mapWithConcurrency,
-  resolveVerifyModelConfig,
   REVIEW_PREDICT_CONCURRENCY,
+  REVIEW_PREDICT_MODEL_CONFIG,
   shouldSurfaceProposal,
   VerifyReviewPredictorService,
 } from '@/server/services/verify';
@@ -701,12 +701,9 @@ export const acceptanceRouter = router({
         runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
       );
 
-      const modelConfig = await resolveVerifyModelConfig(
-        ctx.serverDB,
-        acceptance.userId,
-        { verifierAgentId: acceptance.config?.verifierAgentId },
-        acceptance.workspaceId ?? undefined,
-      );
+      // Pinned, never the verifier's own model: the predictor reads screenshots,
+      // and a text-only verifier model silently judges frames it cannot see.
+      const modelConfig = REVIEW_PREDICT_MODEL_CONFIG;
 
       const predictor = new VerifyReviewPredictorService(
         ctx.serverDB,

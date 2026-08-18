@@ -6,6 +6,7 @@ import type {
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
   AcceptanceSubjectType,
+  GoalStatus,
   ReviewProposalOutcome,
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
@@ -18,6 +19,7 @@ import debug from 'debug';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -534,9 +536,45 @@ export class AcceptanceService {
     const status = statusFromRound(current, Boolean(report));
     if (status !== acceptance.status) {
       await this.acceptanceModel.updateStatus(acceptanceId, status);
+      await this.mirrorGoalStatus(acceptance.subjectType, acceptance.subjectId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }
     return status;
+  };
+
+  /**
+   * Keep a task-carried goal's live phase in lockstep with the acceptance
+   * lifecycle. Only the in-flight phases are mirrored here — the decision
+   * transitions (`achieved` / `paused` / `running` next round / `failed`) are
+   * written by their owning flows (accept / reject / settle / goal loop).
+   * Best-effort: goal state must never break acceptance recompute.
+   */
+  private mirrorGoalStatus = async (
+    subjectType: string,
+    subjectId: string,
+    status: AcceptanceStatus,
+  ): Promise<void> => {
+    if (subjectType !== 'task') return;
+    // `planned` is deliberately NOT mirrored: the plan being confirmed at run
+    // start says nothing about verification running — the round is still
+    // executing, and flipping the goal to `verifying` here would show 验证中
+    // for the whole execution phase (caught by the E2E acceptance run).
+    const mirrored: Partial<Record<AcceptanceStatus, GoalStatus>> = {
+      delivered: 'review',
+      repairing: 'verifying',
+      verifying: 'verifying',
+    };
+    const next = mirrored[status];
+    if (!next) return;
+
+    try {
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', subjectId);
+      if (!goal || goal.status === 'achieved' || goal.status === 'canceled') return;
+      if (goal.status !== next) await goalModel.updateStatus(goal.id, next);
+    } catch (error) {
+      log('mirrorGoalStatus failed (non-fatal): %O', error);
+    }
   };
 
   /** Latest round of an aggregate — the row `stampDecision` would write to. */
@@ -564,15 +602,17 @@ export class AcceptanceService {
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
 
-  /** Flip a goal task's origin card to its terminal "done" state. Best-effort. */
+  /** Flip a goal (and its origin card) to the terminal "achieved" state. Best-effort. */
   private syncGoalStateOnAccept = async (subjectId: string): Promise<void> => {
     try {
       const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
       const task = await taskModel.findById(subjectId);
       if (!task) return;
-      const goal = taskModel.getGoalConfig(task);
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', task.id);
       if (!goal) return;
 
+      await goalModel.updateStatus(goal.id, 'achieved');
       await syncGoalToolState({
         db: this.db,
         state: { phase: 'done', roundsRun: task.totalTopics || 0 },
@@ -620,7 +660,8 @@ export class AcceptanceService {
       const task = await taskModel.findById(subjectId);
       if (!task) return;
 
-      const goal = taskModel.getGoalConfig(task);
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', task.id);
       if (!goal) return;
 
       const outcome = await maybeContinueGoalLoop({
@@ -630,6 +671,11 @@ export class AcceptanceService {
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
+      // `continued` already flipped the goal to `running` inside the loop; a
+      // budget-blocked or failed spawn leaves the rejected goal parked on the
+      // user (raise the budget / retry), which is `paused` in the goal
+      // vocabulary.
+      if (outcome !== 'continued') await goalModel.updateStatus(goal.id, 'paused');
       log('reject on goal task %s → loop outcome: %s', task.identifier, outcome);
     } catch (error) {
       log('spawnGoalRoundOnReject failed (non-fatal): %O', error);
