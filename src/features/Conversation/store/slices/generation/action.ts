@@ -202,6 +202,15 @@ const runHeterogeneousFromExistingMessage = async (
   const assistantMsg = await messageService.createMessage({
     agentId,
     content: LOADING_FLAT,
+    groupId: context.groupId ?? undefined,
+    metadata:
+      context.isSupervisor || context.orchestrationRole || context.subAgentId
+        ? {
+            ...(context.isSupervisor && { isSupervisor: true }),
+            ...(context.orchestrationRole && { orchestrationRole: context.orchestrationRole }),
+            ...(context.subAgentId && { subAgentId: context.subAgentId }),
+          }
+        : undefined,
     parentId: parentMessageId,
     // External CLIs own model selection; persist only the runtime provider up
     // front. The adapter backfills the actual model later if the CLI reports it.
@@ -471,7 +480,9 @@ const regenerateUserMessageFromSource = async (
 
       await chatStore.switchMessageBranch(messageId, nextBranchIndex, { operationId });
 
-      const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+      const postSwitchOp = operationSelectors.getOperationById(operationId)(
+        useChatStore.getState(),
+      );
       if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
       await chatStore.internal_execGroupOrchestration({

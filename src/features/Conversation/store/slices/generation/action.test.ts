@@ -2090,6 +2090,59 @@ describe('Generation Actions', () => {
       );
     });
 
+    it('keeps heterogeneous member retries in the group transcript', async () => {
+      await setupHeteroChatStore();
+
+      const context: ConversationContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        orchestrationRole: 'member',
+        scope: 'group',
+        subAgentId: 'member-agent',
+        threadId: null,
+        topicId: 'topic-1',
+      };
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          dbMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+          displayMessages: [
+            { id: 'user-1', role: 'user', content: 'Hello' },
+            {
+              agentId: 'member-agent',
+              content: 'Member response',
+              id: 'assistant-1',
+              metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'user-1',
+              role: 'assistant',
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateAssistantMessage('assistant-1');
+      });
+
+      expect(createMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: 'group-1',
+          metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+        }),
+      );
+    });
+
     it('creates the child execHeterogeneousAgent op as a child of the parent regenerate op', async () => {
       const { mockHeteroStartOperation, mockAssociateMessageWithOperation } =
         await setupHeteroChatStore();
