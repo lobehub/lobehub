@@ -569,9 +569,22 @@ describe('TopicModel', () => {
 
   describe('settleRunningOperation', () => {
     it('atomically clears and settles the matching operation', async () => {
+      const hooks = [
+        {
+          id: 'hook-old',
+          type: 'onComplete',
+          webhook: { url: '/callback' },
+        },
+      ];
       const topic = await topicModel.create({
         metadata: {
-          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+          heteroCurrentMsgId: { msgId: 'msg-current', operationId: 'op-old' },
+          runningOperation: {
+            assistantMessageId: 'msg-old',
+            hooks,
+            operationId: 'op-old',
+            threadId: 'thread-old',
+          },
         },
         title: 'matching operation',
       });
@@ -579,7 +592,12 @@ describe('TopicModel', () => {
 
       const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
 
-      expect(settled).toEqual({ assistantMessageId: 'msg-old' });
+      expect(settled).toEqual({
+        assistantMessageId: 'msg-current',
+        hooks,
+        status: 'settled',
+        threadId: 'thread-old',
+      });
       const row = await topicModel.findById(topic.id);
       expect(row?.metadata?.runningOperation).toBeNull();
       expect(row?.status).toBe('unread');
@@ -596,7 +614,7 @@ describe('TopicModel', () => {
 
       const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
 
-      expect(settled).toBeUndefined();
+      expect(settled).toEqual({ activeOperationId: 'op-new', status: 'conflict' });
       const row = await topicModel.findById(topic.id);
       expect(row?.metadata?.runningOperation?.operationId).toBe('op-new');
       expect(row?.status).toBe('running');
@@ -608,9 +626,23 @@ describe('TopicModel', () => {
 
       const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
 
-      expect(settled).toBeUndefined();
+      expect(settled).toEqual({ assistantMessageId: undefined, status: 'missing' });
       const row = await topicModel.findById(topic.id);
       expect(row?.status).toBe('running');
+    });
+
+    it('retains the operation-scoped assistant pointer after another terminal path cleared the marker', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-current', operationId: 'op-old' },
+          runningOperation: null,
+        },
+        title: 'already cleared operation',
+      });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ assistantMessageId: 'msg-current', status: 'missing' });
     });
   });
 

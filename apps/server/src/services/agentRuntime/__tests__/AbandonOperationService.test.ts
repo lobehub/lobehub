@@ -51,7 +51,9 @@ vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(() => ({ findById: findThreadMock })),
 }));
 
-const topicSettleRunningOperationMock = vi.fn().mockResolvedValue(undefined);
+const topicSettleRunningOperationMock = vi
+  .fn()
+  .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     settleRunningOperation: topicSettleRunningOperationMock,
@@ -91,7 +93,9 @@ describe('AbandonOperationService', () => {
     findOperationMock.mockReset().mockResolvedValue(null);
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
-    topicSettleRunningOperationMock.mockReset().mockResolvedValue(undefined);
+    topicSettleRunningOperationMock
+      .mockReset()
+      .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
   });
 
   it('returns found:false when coordinator has no state', async () => {
@@ -128,7 +132,10 @@ describe('AbandonOperationService', () => {
         workspaceId: 'ws_x',
       },
     });
-    topicSettleRunningOperationMock.mockResolvedValue({ assistantMessageId: 'msg_assist_1' });
+    topicSettleRunningOperationMock.mockResolvedValue({
+      assistantMessageId: 'msg_assist_1',
+      status: 'settled',
+    });
 
     const svc = new AbandonOperationService(db, {
       coordinator: coord as any,

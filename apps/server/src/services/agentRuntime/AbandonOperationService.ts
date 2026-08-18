@@ -323,7 +323,7 @@ export class AbandonOperationService {
       try {
         topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
         const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
-        if (!settled) return undefined;
+        if (settled.status !== 'settled') return undefined;
         if (settled.assistantMessageId) return settled.assistantMessageId;
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);

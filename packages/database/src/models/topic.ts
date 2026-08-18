@@ -1299,10 +1299,15 @@ export class TopicModel {
 
   /**
    * Atomically clear and settle the operation that still owns a topic.
-   * A row lock keeps a stale watchdog from clearing a newer operation between
-   * the ownership check and update. Missing markers are intentionally not
-   * settled because a client-side run can set `status = 'running'` without an
-   * operation marker, so there is no proof that the stale operation owns it.
+   * A row lock keeps a stale terminal callback from clearing a newer operation
+   * between the ownership check and update. Missing markers are intentionally
+   * not settled because a client-side run can set `status = 'running'` without
+   * an operation marker, so there is no proof that the terminal callback owns it.
+   *
+   * The result distinguishes a missing marker from a conflicting operation:
+   * some legitimate hetero callbacks arrive after another terminal path has
+   * already cleared their marker, while a callback that observes a newer
+   * operation must stop before dispatching lifecycle hooks for the wrong run.
    */
   settleRunningOperation = async (id: string, operationId: string) => {
     return this.db.transaction(async (tx) => {
@@ -1313,7 +1318,17 @@ export class TopicModel {
         .for('update');
 
       const runningOperation = existing?.metadata?.runningOperation;
-      if (runningOperation?.operationId !== operationId) return undefined;
+      if (!runningOperation) {
+        const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        return {
+          assistantMessageId:
+            currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+          status: 'missing' as const,
+        };
+      }
+      if (runningOperation.operationId !== operationId) {
+        return { activeOperationId: runningOperation.operationId, status: 'conflict' as const };
+      }
 
       const metadata = {
         ...existing.metadata,
@@ -1329,7 +1344,16 @@ export class TopicModel {
         })
         .where(and(eq(topics.id, id), this.ownership()));
 
-      return { assistantMessageId: runningOperation.assistantMessageId };
+      const currentMessage = existing.metadata?.heteroCurrentMsgId;
+      return {
+        assistantMessageId:
+          currentMessage?.operationId === operationId
+            ? currentMessage.msgId
+            : runningOperation.assistantMessageId,
+        hooks: runningOperation.hooks,
+        status: 'settled' as const,
+        threadId: runningOperation.threadId ?? undefined,
+      };
     });
   };
 
