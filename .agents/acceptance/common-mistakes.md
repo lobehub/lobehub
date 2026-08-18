@@ -614,6 +614,53 @@ input timing confirmed in a foreground tab — the user's window, or a screensho
 check that tolerates a frozen transition. A negative result from a hidden tab is not
 evidence of a defect.
 
+### L-S11 — Long `confirmModal` bodies overlay the footer
+
+**Wrong approach:** put a long list into `confirmModal({ content })` and assume the
+library pins Cancel / OK below a scroll area.
+
+**Why it fails:** `confirmModal` renders `ConfirmBody` (content + footer) inside
+`ModalContent`, which is itself `overflow: auto`. A tall list makes the dialog
+scroll as one column, or the footer paints over the last rows. Callers cannot pass
+content styles to change that.
+
+**Correct approach:** for any confirm body that can exceed a few lines, use
+`createModal` with a height-capped `ScrollArea` as `content` and put the actions in
+the modal `footer` slot. Assert `footer.top === scroller.bottom` at both ends of the
+list, not just that the dialog opened.
+
+### L-S12 — Bundled SPA HTML is not the whole site
+
+**Wrong approach:** collect only tags and CSS `url()` from `index.html`, then treat
+a Vite/webpack `dist` as publishable.
+
+**Why it fails:** hashed images and public sprites live in the JS bundle
+(`new URL('hero-….png', import.meta.url)`, `href: '/icons.svg#…'`). HTML-only
+collection ships CSS/JS and drops the files the app actually paints. Those JS
+references also cannot be inlined as data URIs: `import.meta.url` and SVG
+`<use href="/icons.svg#id">` need real sibling/root files.
+
+**Correct approach:** walk collected JS the same way as CSS. Keep
+`import.meta.url` targets and root-absolute sprites as sidecars even when they
+are under the inline size limit. Judge a Vite publish by the running page
+(images, icons, counter), not by whether `index.html` listed three tags.
+
+### L-S13 — macOS `/tmp` and `/private/tmp` are the same workspace
+
+**Wrong approach:** treat a Files-tree path and the topic working directory as
+outside each other when one string starts with `/tmp` and the other with
+`/private/tmp`.
+
+**Why it fails:** Darwin's `/tmp` is a symlink to `/private/tmp`. Electron's
+project index reports the real path; topic cwd is often the public alias. A
+prefix check then marks `./app.css` as an escape, HTML-only publish keeps the
+relative hrefs, and the live host 404s those files.
+
+**Correct approach:** canonicalize those Darwin private aliases before workspace
+containment. Prove a publish by fetching the public HTML (data URIs or 200
+sidecars) and opening the live page — in-app preview of the local file does not
+prove the hosted assets.
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions
