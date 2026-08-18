@@ -1243,6 +1243,24 @@ which runs on the golden profile in place and decrypts normally. It boots on the
 loading shell once, so reload once before probing (see L-S8). Gate on
 `app-probe.sh auth` AND `server-auth`, never on the helper's "Ready" line.
 
+### Workspace HTML publish: prove the hosted page, not the local preview
+
+**Situation:** after publishing workspace HTML, checking whether CSS/SVG/images
+actually load on the public Artifact URL.
+
+**Doesn't work:** grepping the in-app HTML preview, or treating `app.css` /
+`dot.svg` HTTP 404 on the host as failure after a successful inline publish.
+Those paths are not uploaded when files are inlined. Opening a relative
+`index.html` tab (instead of the Files-tree absolute path) also fails to load
+and hides the publish control.
+
+**Works:** click the Files-tree row so `openLocalFiles[].filePath` is the
+Electron absolute path (on macOS often `/private/tmp/...`). After publish,
+`curl` the public URL and assert the HTML no longer contains `./app.css`. Then
+open that URL and assert computed CSS plus `img.naturalWidth > 0`. If the hosted
+`<img>` is a data URI with `text/plain`, the image is broken even though it is
+not a 404.
+
 ## Detailed references
 
 - [Probe field notes](./references/probe-field-notes.md) — all historical

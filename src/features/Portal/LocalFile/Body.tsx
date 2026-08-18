@@ -25,6 +25,11 @@ import {
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
+import {
+  PublishHtmlArtifactLiveBar,
+  PublishHtmlArtifactProvider,
+  PublishHtmlArtifactTrigger,
+} from './PublishHtmlArtifactButton';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
 const DocumentPreview = lazy(() => import('./DocumentPreview'));
@@ -162,6 +167,7 @@ interface TextPreviewPaneProps {
   readOnly?: boolean;
   reloading?: boolean;
   resourceBaseUrl?: string;
+  sandboxTopicId?: string;
   workingDirectory: string;
 }
 
@@ -178,6 +184,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     readOnly = false,
     reloading = false,
     resourceBaseUrl,
+    sandboxTopicId,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
@@ -277,75 +284,93 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     }, [onReload]);
 
     return (
-      <Flexbox
-        flex={1}
-        height={'100%'}
-        style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
+      <PublishHtmlArtifactProvider
+        content={editingValue}
+        deviceId={deviceId}
+        filePath={filePath}
+        sandboxTopicId={sandboxTopicId}
+        topicId={activeTopicId}
+        workingDirectory={workingDirectory}
       >
-        {canRender && (
-          <Flexbox horizontal align={'center'} className={floatingControlsStyles.container} gap={4}>
-            {isHtml && (
-              <ActionIcon
-                icon={RefreshCwIcon}
-                loading={reloading}
-                size={'small'}
-                title={t('workingPanel.localFile.preview.reload')}
-                onClick={handleReloadPreview}
-              />
-            )}
-
-            <Tabs
-              activeKey={mode}
-              size={'small'}
-              items={[
-                {
-                  icon: <Icon icon={EyeIcon} />,
-                  key: 'render',
-                  label: t('workingPanel.localFile.preview.render'),
-                },
-                {
-                  icon: <Icon icon={CodeIcon} />,
-                  key: 'raw',
-                  label: t(
-                    isHtml
-                      ? 'workingPanel.localFile.preview.source'
-                      : 'workingPanel.localFile.preview.raw',
-                  ),
-                },
-              ]}
-              onChange={(key) => setMode(key as TextPreviewMode)}
-            />
-          </Flexbox>
-        )}
-        <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
-          {isMarkdown && mode === 'render' ? (
-            <>
-              <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
-              <Markdown
-                components={markdownComponents}
-                style={{ paddingBlock: 8, paddingInline: 12 }}
+        <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+          <PublishHtmlArtifactLiveBar />
+          <Flexbox
+            flex={1}
+            height={'100%'}
+            style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
+          >
+            {canRender && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={floatingControlsStyles.container}
+                gap={4}
               >
-                {body}
-              </Markdown>
-            </>
-          ) : showHtmlPreview ? (
-            <InlineHtmlPreview
-              baseUrl={resourceBaseUrl}
-              content={editingValue}
-              key={`${filePath}:${htmlPreviewRevision}`}
-            />
-          ) : (
-            <CodeEditorPane
-              language={extensionToLanguage(ext)}
-              readOnly={readOnly}
-              style={{ fontSize: 12, minHeight: '100%' }}
-              value={editingValue}
-              onChange={readOnly ? undefined : handleCodeChange}
-              onSave={readOnly ? undefined : handleSave}
-            />
-          )}
-        </div>
-      </Flexbox>
+                {isHtml && (
+                  <ActionIcon
+                    icon={RefreshCwIcon}
+                    loading={reloading}
+                    size={'small'}
+                    title={t('workingPanel.localFile.preview.reload')}
+                    onClick={handleReloadPreview}
+                  />
+                )}
+
+                <Tabs
+                  activeKey={mode}
+                  size={'small'}
+                  items={[
+                    {
+                      icon: <Icon icon={EyeIcon} />,
+                      key: 'render',
+                      label: t('workingPanel.localFile.preview.render'),
+                    },
+                    {
+                      icon: <Icon icon={CodeIcon} />,
+                      key: 'raw',
+                      label: t(
+                        isHtml
+                          ? 'workingPanel.localFile.preview.source'
+                          : 'workingPanel.localFile.preview.raw',
+                      ),
+                    },
+                  ]}
+                  onChange={(key) => setMode(key as TextPreviewMode)}
+                />
+                <PublishHtmlArtifactTrigger />
+              </Flexbox>
+            )}
+            <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
+              {isMarkdown && mode === 'render' ? (
+                <>
+                  <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
+                  <Markdown
+                    components={markdownComponents}
+                    style={{ paddingBlock: 8, paddingInline: 12 }}
+                  >
+                    {body}
+                  </Markdown>
+                </>
+              ) : showHtmlPreview ? (
+                <InlineHtmlPreview
+                  baseUrl={resourceBaseUrl}
+                  content={editingValue}
+                  key={`${filePath}:${htmlPreviewRevision}`}
+                />
+              ) : (
+                <CodeEditorPane
+                  language={extensionToLanguage(ext)}
+                  readOnly={readOnly}
+                  style={{ fontSize: 12, minHeight: '100%' }}
+                  value={editingValue}
+                  onChange={readOnly ? undefined : handleCodeChange}
+                  onSave={readOnly ? undefined : handleSave}
+                />
+              )}
+            </div>
+          </Flexbox>
+        </Flexbox>
+      </PublishHtmlArtifactProvider>
     );
   },
 );
@@ -503,6 +528,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         readOnly={!!sandboxTopicId}
         reloading={isValidating}
         resourceBaseUrl={preview.resourceBaseUrl}
+        sandboxTopicId={sandboxTopicId}
         workingDirectory={workingDirectory}
         onReload={handleReload}
         onSaved={handleSavedContent}
