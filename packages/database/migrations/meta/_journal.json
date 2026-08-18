@@ -1015,6 +1015,13 @@
       "when": 1786968214710,
       "tag": "0144_notifications_add_metadata_column",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1787141104502,
+      "tag": "0145_agents_add_identity_columns",
+      "breakpoints": true
     }
   ],
   "version": "6"
