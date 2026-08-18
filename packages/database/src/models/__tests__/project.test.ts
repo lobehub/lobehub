@@ -82,6 +82,21 @@ describe('ProjectModel', () => {
     expect(await model.findByIdOrSlug('other-apollo')).toBeNull();
   });
 
+  it('finds a bounded set of readable projects', async () => {
+    const first = await createProject(model, { name: 'First' });
+    const second = await createProject(model, { name: 'Second' });
+    const hidden = await createProject(otherModel, { name: 'Hidden', visibility: 'private' });
+
+    expect(await model.findByIds([])).toEqual([]);
+    expect(await model.findByIds([first.id, second.id, hidden.id])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: first.id }),
+        expect.objectContaining({ id: second.id }),
+      ]),
+    );
+    expect(await model.findByIds([first.id, second.id, hidden.id])).toHaveLength(2);
+  });
+
   it('normalizes identifiers and enforces uniqueness within their ownership scope', async () => {
     const first = await model.create({ identifier: ' lobe ', name: 'First' });
     expect(first.identifier).toBe('LOBE');

@@ -477,12 +477,39 @@ export class AcceptanceService {
     defaults?: { requirement?: string; title?: string },
   ): Promise<AcceptanceItem> => {
     await this.assertSubjectExists(subjectType, subjectId);
+    const projectId = await this.resolveSubjectProjectId(subjectType, subjectId);
     return this.acceptanceModel.ensureForSubject(subjectType, subjectId, {
+      projectId,
       requirement: defaults?.requirement,
       ...(subjectType === 'standalone' && defaults?.title
         ? { metadata: { title: defaults.title } }
         : {}),
     });
+  };
+
+  private resolveSubjectProjectId = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+  ): Promise<string | null> => {
+    if (subjectType === 'task') {
+      return (
+        (await new TaskModel(this.db, this.userId, this.workspaceId).resolve(subjectId))
+          ?.projectId ?? null
+      );
+    }
+    if (subjectType === 'topic') {
+      const taskTopic = await new TaskTopicModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findByTopicId(subjectId);
+      if (!taskTopic) return null;
+      return (
+        (await new TaskModel(this.db, this.userId, this.workspaceId).resolve(taskTopic.taskId))
+          ?.projectId ?? null
+      );
+    }
+    return null;
   };
 
   /**
@@ -904,32 +931,31 @@ export class AcceptanceService {
     };
   };
 
-  /** Resolve the project that owns a task-backed acceptance, when one exists. */
-  private resolveProject = async (
-    acceptance: AcceptanceItem,
-  ): Promise<{ id: string; name: string } | null> => {
-    try {
-      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
-      const task =
-        acceptance.subjectType === 'task'
-          ? await taskModel.resolve(acceptance.subjectId)
-          : acceptance.subjectType === 'topic'
-            ? await new TaskTopicModel(this.db, this.userId, this.workspaceId)
-                .findByTopicId(acceptance.subjectId)
-                .then((taskTopic) =>
-                  taskTopic ? taskModel.resolve(taskTopic.taskId) : Promise.resolve(null),
-                )
-            : null;
-      if (!task?.projectId) return null;
+  /** Resolve the projects referenced directly by acceptances in one bounded read. */
+  private resolveProjects = async (
+    acceptances: AcceptanceItem[],
+  ): Promise<Map<string, { id: string; name: string }>> => {
+    const result = new Map<string, { id: string; name: string }>();
+    const projectIds = [
+      ...new Set(acceptances.map(({ projectId }) => projectId).filter((id): id is string => !!id)),
+    ];
+    if (projectIds.length === 0) return result;
 
-      const project = await new ProjectModel(this.db, this.userId, this.workspaceId).findById(
-        task.projectId,
+    try {
+      const projects = await new ProjectModel(this.db, this.userId, this.workspaceId).findByIds(
+        projectIds,
       );
-      return project ? { id: project.id, name: project.name } : null;
+      const projectById = new Map(projects.map((project) => [project.id, project]));
+
+      for (const acceptance of acceptances) {
+        if (!acceptance.projectId) continue;
+        const project = projectById.get(acceptance.projectId);
+        if (project) result.set(acceptance.id, { id: project.id, name: project.name });
+      }
     } catch (error) {
-      log('resolveProject failed (non-fatal): %O', error);
-      return null;
+      log('resolveProjects failed (non-fatal): %O', error);
     }
+    return result;
   };
 
   /**
@@ -972,12 +998,15 @@ export class AcceptanceService {
    */
   listWithSubjects = async (limit = 50) => {
     const rows = await this.acceptanceModel.query(limit);
-    const checkCounts = await this.latestCheckCounts(rows.map((row) => row.id));
+    const [checkCounts, projects] = await Promise.all([
+      this.latestCheckCounts(rows.map((row) => row.id)),
+      this.resolveProjects(rows),
+    ]);
     return Promise.all(
       rows.map(async (row) => ({
         ...row,
         checkCount: checkCounts.get(row.id) ?? null,
-        project: await this.resolveProject(row),
+        project: projects.get(row.id) ?? null,
         subject: await this.resolveSubject(row),
       })),
     );

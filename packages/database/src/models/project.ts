@@ -137,6 +137,14 @@ export class ProjectModel {
     return project ?? null;
   }
 
+  async findByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(projects)
+      .where(and(inArray(projects.id, ids), this.readable()));
+  }
+
   async findByIdOrSlug(reference: string) {
     const [project] = await this.db
       .select()
