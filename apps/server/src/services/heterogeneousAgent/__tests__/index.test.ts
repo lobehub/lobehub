@@ -466,6 +466,39 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
+    it('ignores a delayed finish when a newer operation owns the topic', async () => {
+      const { manager, published } = createFakeStreamManager();
+      const persistenceHandler = createFakePersistenceHandler();
+      const topicModel = {
+        settleRunningOperation: vi.fn(async () => ({
+          activeOperationId: 'op-new',
+          status: 'conflict' as const,
+        })),
+      } as any;
+      const completeOperationSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue();
+      const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler,
+        snapshotStore: null,
+        streamEventManager: manager,
+        topicModel,
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-old',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
+      expect(published).toHaveLength(0);
+      expect(completeOperationSpy).not.toHaveBeenCalled();
+
+      completeOperationSpy.mockRestore();
+    });
+
     // The unified terminal funnel: heteroFinish must drive the run's lifecycle
     // hooks through the shared hookDispatcher (the same mechanism the normal LLM
     // path uses), which is what marks the owning task done/failed and fires any
@@ -695,11 +728,12 @@ describe('HeterogeneousAgentService', () => {
       const topicModel = {
         // Mirror what execAgent persisted at dispatch: the serialized hooks live
         // under runningOperation. heteroFinish must read them from here.
-        findById: vi.fn(async () => ({
-          id: 'topic-q',
-          metadata: { runningOperation: { hooks, operationId: 'op-q' } },
+        settleRunningOperation: vi.fn(async () => ({
+          assistantMessageId: undefined,
+          hooks,
+          status: 'settled' as const,
+          threadId: undefined,
         })),
-        updateMetadata: vi.fn(async () => {}),
       } as any;
       const { manager } = createFakeStreamManager();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
@@ -788,13 +822,41 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata:
-    // a non-atomic read-modify-write that shallow-merges the patch over a
-    // snapshot. `mergeBase` lets a test force the "read a stale snapshot" race.
+    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata.
+    // `mergeBase` lets a test force the historical stale-snapshot race, while
+    // settleRunningOperation models the operation-owned terminal CAS.
     const makeStore = () => {
       let meta: Record<string, any> = {};
       const topicModel = {
-        findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
+        settleRunningOperation: vi.fn(async (_id: string, operationId: string) => {
+          const runningOperation = meta.runningOperation;
+          if (!runningOperation) {
+            const currentMessage = meta.heteroCurrentMsgId;
+            return {
+              assistantMessageId:
+                currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+              status: 'missing' as const,
+            };
+          }
+          if (runningOperation.operationId !== operationId) {
+            return {
+              activeOperationId: runningOperation.operationId,
+              status: 'conflict' as const,
+            };
+          }
+
+          const currentMessage = meta.heteroCurrentMsgId;
+          meta = { ...meta, runningOperation: null };
+          return {
+            assistantMessageId:
+              currentMessage?.operationId === operationId
+                ? currentMessage.msgId
+                : runningOperation.assistantMessageId,
+            hooks: runningOperation.hooks,
+            status: 'settled' as const,
+            threadId: runningOperation.threadId,
+          };
+        }),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
           meta = { ...(mergeBase ?? meta), ...patch };
         }),

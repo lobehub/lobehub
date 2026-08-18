@@ -32,6 +32,13 @@ const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', '
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
+/** Grok Build reasoning-effort levels accepted by the CLI's `--effort` flag. */
+const GROK_BUILD_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
+
+export type GrokBuildReasoningEffort = (typeof GROK_BUILD_REASONING_EFFORT_LEVELS)[number];
+
+export const GROK_BUILD_REASONING_EFFORT_FLAGS = ['--effort', '--reasoning-effort'] as const;
+
 /**
  * Codex reasoning-effort levels, mirrored to the CLI config key
  * `model_reasoning_effort`.
@@ -67,7 +74,10 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
 export type HeterogeneousReasoningEffortLevel =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | QoderReasoningEffort;
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | GrokBuildReasoningEffort
+  | QoderReasoningEffort;
 
 export type HeterogeneousReasoningEffort =
   HeterogeneousReasoningEffortLevel | HeterogeneousAgentDefaultSelection;
@@ -115,6 +125,11 @@ export const isClaudeCodeReasoningEffort = (
 
 export const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
   !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
+
+export const isGrokBuildReasoningEffort = (
+  value: string | undefined,
+): value is GrokBuildReasoningEffort =>
+  !!value && GROK_BUILD_REASONING_EFFORT_LEVELS.includes(value as GrokBuildReasoningEffort);
 
 export const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
   !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
@@ -214,6 +229,15 @@ export const resolveCodexSpeedMode = (
   )?.trim();
 
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const resolveGrokBuildReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getAnyCliFlagValue(source?.args, GROK_BUILD_REASONING_EFFORT_FLAGS) ?? source?.effort
+  )?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 const resolveQoderReasoningEffort = (
@@ -355,7 +379,18 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
-  'grok-build': {},
+  'grok-build': {
+    effort: {
+      encodings: [{ flags: GROK_BUILD_REASONING_EFFORT_FLAGS, kind: 'flag' }],
+      levels: () => GROK_BUILD_REASONING_EFFORT_LEVELS,
+      resolve: resolveGrokBuildReasoningEffort,
+    },
+    model: {
+      encodings: [MODEL_FLAGS_ENCODING],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'kimi-code': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },

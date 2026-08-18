@@ -169,6 +169,45 @@ describe('buildHeteroSpawnArgs', () => {
     ).toEqual(['--model', 'gpt-5']);
   });
 
+  it('forwards Grok Build model and effort through direct ACP and device execution', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--no-subagents'],
+      effort: 'xhigh',
+      model: 'grok-4.6',
+      type: 'grok-build',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--no-subagents',
+      '--model',
+      'grok-4.6',
+      '--effort',
+      'xhigh',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--no-subagents',
+      '--agent-arg=--model',
+      '--agent-arg=grok-4.6',
+      '--agent-arg=--effort',
+      '--agent-arg=xhigh',
+    ]);
+  });
+
+  it('keeps native Grok Build selector flags authoritative', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m=grok-build', '--reasoning-effort=low'],
+      effort: 'high',
+      model: 'grok-4.6',
+      type: 'grok-build',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['-m=grok-build', '--reasoning-effort=low']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=-m=grok-build',
+      '--agent-arg=--reasoning-effort=low',
+    ]);
+  });
+
   it('keeps TRAE model selection in the wrapper instead of native process arguments', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--feature', 'test'],

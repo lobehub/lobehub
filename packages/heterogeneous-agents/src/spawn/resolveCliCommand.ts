@@ -713,8 +713,13 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         const localAppData = process.env.LOCALAPPDATA;
         if (!localAppData) return [];
 
-        const binDir = path.win32.join(localAppData, 'trae-cli', 'bin');
-        return [path.win32.join(binDir, 'traecli.exe'), path.win32.join(binDir, 'trae-cli.exe')];
+        const currentBinDir = path.win32.join(localAppData, 'Programs', 'TraeCLI', 'bin');
+        const legacyBinDir = path.win32.join(localAppData, 'trae-cli', 'bin');
+        return [
+          path.win32.join(currentBinDir, 'traex.exe'),
+          path.win32.join(legacyBinDir, 'traecli.exe'),
+          path.win32.join(legacyBinDir, 'trae-cli.exe'),
+        ];
       }
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 

@@ -567,6 +567,85 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('settleRunningOperation', () => {
+    it('atomically clears and settles the matching operation', async () => {
+      const hooks = [
+        {
+          id: 'hook-old',
+          type: 'onComplete',
+          webhook: { url: '/callback' },
+        },
+      ];
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-current', operationId: 'op-old' },
+          runningOperation: {
+            assistantMessageId: 'msg-old',
+            hooks,
+            operationId: 'op-old',
+            threadId: 'thread-old',
+          },
+        },
+        title: 'matching operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({
+        assistantMessageId: 'msg-current',
+        hooks,
+        status: 'settled',
+        threadId: 'thread-old',
+      });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('unread');
+    });
+
+    it('does not let an old watchdog settle a newer operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-new', operationId: 'op-new' },
+        },
+        title: 'newer operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ activeOperationId: 'op-new', status: 'conflict' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation?.operationId).toBe('op-new');
+      expect(row?.status).toBe('running');
+    });
+
+    it('does not settle an unmarked client-side run', async () => {
+      const topic = await topicModel.create({ title: 'client operation' });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ assistantMessageId: undefined, status: 'missing' });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('running');
+    });
+
+    it('retains the operation-scoped assistant pointer after another terminal path cleared the marker', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-current', operationId: 'op-old' },
+          runningOperation: null,
+        },
+        title: 'already cleared operation',
+      });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      expect(settled).toEqual({ assistantMessageId: 'msg-current', status: 'missing' });
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({

@@ -117,6 +117,21 @@ describe('cliSpawn', () => {
     expect(execFileMock).not.toHaveBeenCalled();
   });
 
+  it('resolves the TRAE Windows shim that uses the native %~dp0 batch expansion', async () => {
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\Programs\\TraeCLI\\bin\\traecli.cmd';
+    const exePath = 'C:\\Users\\Hanam\\AppData\\Local\\Programs\\TraeCLI\\bin\\traex.exe';
+    existingPaths(shimPath, exePath);
+    readFileMock.mockResolvedValue('@echo off\r\n"%~dp0traex.exe" %*\r\n');
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan(shimPath, ['acp', 'serve'])).resolves.toEqual({
+      args: ['acp', 'serve'],
+      command: exePath,
+    });
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
   it('resolves a .cmd npm shim that invokes node.exe plus a JS bin', async () => {
     platformMock.mockReturnValue('win32');
     const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd';

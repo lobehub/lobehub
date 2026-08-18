@@ -755,7 +755,38 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       }
     });
 
-    it('finds TRAE in its official Windows install directory when PATH is missing it', async () => {
+    it('finds the current TRAE public CLI executable when PATH is missing it', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      const localAppData = 'C:\\Users\\x\\AppData\\Local';
+      const traeCli = `${localAppData}\\Programs\\TraeCLI\\bin\\traex.exe`;
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [traeCli]: true });
+        callExecFileError(new Error('not found')); // where traecli
+        callExecFileError(new Error('no registry')); // reg query HKLM
+        callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFile('traecli 0.201.2 (public edition)');
+        callExecFile(TRAE_ACP_HELP);
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: traeCli,
+          version: '0.201.2',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocalAppData;
+      }
+    });
+
+    it('still finds TRAE in its legacy Windows install directory', async () => {
       const originalLocalAppData = process.env.LOCALAPPDATA;
       const originalPath = process.env.PATH;
       const localAppData = 'C:\\Users\\x\\AppData\\Local';
@@ -768,6 +799,7 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         callExecFileError(new Error('not found')); // where traecli
         callExecFileError(new Error('no registry')); // reg query HKLM
         callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFileError(new Error('not found')); // current Programs/TraeCLI/bin/traex.exe
         callExecFile('trae-cli version 0.120.52');
         callExecFile(TRAE_ACP_HELP);
 

@@ -2557,6 +2557,7 @@ describe('HeterogeneousAgentCtr', () => {
           LOBEHUB_SERVER: 'https://server.example.com',
         }),
       );
+      expect(spawnCall.options.env).not.toHaveProperty('LOBEHUB_WORKSPACE_ID');
       expect(proc.stdin.write).not.toHaveBeenCalled();
 
       proc.emit('spawn');
@@ -2564,6 +2565,23 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(ack).resolves.toEqual({ status: 'accepted' });
       expect(proc.stdin.write).toHaveBeenCalledOnce();
       expect(proc.stdin.end).toHaveBeenCalledOnce();
+    });
+
+    it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, workspaceId: 'ws-lobehub' });
+      proc.emit('spawn');
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+      expect(spawnCalls[0].options.env).toEqual(
+        expect.objectContaining({ LOBEHUB_WORKSPACE_ID: 'ws-lobehub' }),
+      );
     });
 
     it('encodes primary and resume fallback contexts for the embedded CLI', async () => {
