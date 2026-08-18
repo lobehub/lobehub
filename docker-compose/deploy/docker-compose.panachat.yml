@@ -34,6 +34,8 @@ services:
         condition: service_completed_successfully
     environment:
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${PANACHAT_DB_NAME}'
+      # env_file can leak DATABASE_DRIVER=neon; Neon WS fails against compose Postgres.
+      - 'DATABASE_DRIVER=node'
       - 'INTERNAL_APP_URL=http://localhost:3210'
       - 'S3_ENDPOINT=${S3_ENDPOINT}'
       - 'S3_INTERNAL_ENDPOINT=http://rustfs:9000'
@@ -78,6 +80,8 @@ services:
         condition: service_completed_successfully
     environment:
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${PANACHAT_DB_NAME}'
+      # env_file can leak DATABASE_DRIVER=neon; Neon WS fails against compose Postgres.
+      - 'DATABASE_DRIVER=node'
       - 'INTERNAL_APP_URL=http://localhost:3210'
       - 'S3_ENDPOINT=${S3_ENDPOINT}'
       - 'S3_INTERNAL_ENDPOINT=http://rustfs:9000'
@@ -121,6 +125,8 @@ services:
       AICO_CONTROL_PLANE_SERVICE_TOKEN: ${AICO_CONTROL_PLANE_SERVICE_TOKEN:-}
       OPENROUTER_MANAGEMENT_API_KEY: ${OPENROUTER_MANAGEMENT_API_KEY:-}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${PANACHAT_DB_NAME}
+      # env_file can leak DATABASE_DRIVER=neon; Neon WS fails against compose Postgres.
+      DATABASE_DRIVER: node
       REDIS_URL: redis://redis:6379
       REDIS_PREFIX: ${REDIS_PREFIX:-panachat}
       REDIS_TLS: '0'
