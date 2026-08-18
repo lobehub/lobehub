@@ -119,7 +119,7 @@ const AcceptanceRow = memo<{
   item: AcceptanceListItem;
   onChanged: () => Promise<unknown> | unknown;
 }>(({ active, item, onChanged }) => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -189,10 +189,10 @@ const AcceptanceRow = memo<{
 
   const removeAcceptance = () => {
     confirmModal({
-      cancelText: t('common:cancel'),
+      cancelText: t('actions.cancel'),
       content: t('verify:acceptance.workspace.deleteConfirmDescription', { title }),
       okButtonProps: { danger: true },
-      okText: t('common:delete'),
+      okText: t('actions.delete'),
       onOk: async () => {
         setMutating(true);
         try {

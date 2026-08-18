@@ -193,7 +193,7 @@ const styles = createStaticStyles(({ css }) => ({
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<ReportPanelExpand>(({ expand, isNarrow, setExpand }) => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
   const navigate = useNavigate();
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
