@@ -1,3 +1,9 @@
+# syntax=docker/dockerfile:1
+# Empty ENV names (*_API_KEY, AUTH_SECRET, …) document runtime config; real
+# values come from compose/host at start. Dummy builder placeholders are not
+# production secrets. BuildKit flags the names anyway.
+# check=skip=SecretsUsedInArgOrEnv
+
 ## Set global build ENV
 ARG NODEJS_VERSION="24"
 
