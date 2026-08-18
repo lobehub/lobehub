@@ -21,7 +21,8 @@ Use `agent-tracing` for execution-snapshot diagnosis and `agent-runtime-hooks` f
 
 ## Prompt Ownership and Versioning
 
-- Put reusable prompts in `packages/prompts` and export them through its barrel files. Do not leave substantial system prompts embedded in a service.
+- Put a reusable generation contract in `packages/prompts/src/chains`: the message builder, JSON schema, schema name, and prompt version should be exported together. Do not leave substantial system prompts or model-facing input serialization embedded in a service.
+- Keep execution concerns in the owning server service: model configuration, `AiGenerationService`, tracing entity IDs, Zod validation, persistence, and business error handling do not belong in the prompt chain.
 - Keep each `*_PROMPT_VERSION` beside the prompt it versions and export both from the same module.
 - Format versions as `v<major>` or `v<major>.<minor>`, for example `v1` or `v1.2`.
 - Store only the version in `promptVersion`. Do not include a feature or scenario prefix such as `expertise-ingestion-v1`; `scenario` carries workflow identity.

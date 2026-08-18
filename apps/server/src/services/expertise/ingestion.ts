@@ -10,10 +10,10 @@ import {
   messages,
   topics,
 } from '@lobechat/database/schemas';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import {
+  chainExpertiseTopicIngestion,
+  EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
-  EXPERTISE_TOPIC_INGESTION_SYSTEM_PROMPT,
 } from '@lobechat/prompts';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -48,46 +48,6 @@ const AnalysisSchema = z.object({
     }),
   ),
 });
-
-const ANALYSIS_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'expertise_topic_ingestion',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      domains: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            domainId: { type: 'string' },
-            matches: { type: 'boolean' },
-            observations: {
-              items: {
-                additionalProperties: false,
-                properties: {
-                  existingCode: { type: ['string', 'null'] },
-                  example: { type: 'string' },
-                  layer: { type: ['string', 'null'] },
-                  outcome: { enum: ['pass', 'violation'], type: 'string' },
-                  reasoning: { type: 'string' },
-                  title: { type: 'string' },
-                },
-                required: ['existingCode', 'example', 'layer', 'outcome', 'reasoning', 'title'],
-                type: 'object',
-              },
-              maxItems: 8,
-              type: 'array',
-            },
-          },
-          required: ['domainId', 'matches', 'observations'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-    },
-    required: ['domains'],
-    type: 'object',
-  },
-};
 
 interface ExpertiseCompletionInput {
   agentId: string;
@@ -288,18 +248,9 @@ export class ExpertiseIngestionService {
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          {
-            content: EXPERTISE_TOPIC_INGESTION_SYSTEM_PROMPT,
-            role: 'system',
-          },
-          {
-            content: `DOMAINS\n${JSON.stringify(domains)}\n\nTOPIC CONTEXT (bounded at this completed turn)\n${context}`,
-            role: 'user',
-          },
-        ],
+        ...chainExpertiseTopicIngestion({ context, domains }),
         ...modelConfig,
-        schema: ANALYSIS_JSON_SCHEMA,
+        schema: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
       },
       {
         metadata: { trigger: 'expertise_topic_ingestion' },
@@ -307,7 +258,7 @@ export class ExpertiseIngestionService {
           agentId: input.agentId,
           promptVersion: EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.ExpertiseTopicIngestion,
-          schemaName: ANALYSIS_JSON_SCHEMA.name,
+          schemaName: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA.name,
           topicId: input.topicId,
         },
       },

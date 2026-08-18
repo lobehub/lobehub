@@ -1,8 +1,8 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import {
+  chainExpertiseDomainDraft,
+  EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
   EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
-  EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT,
 } from '@lobechat/prompts';
 import { z } from 'zod';
 
@@ -70,61 +70,6 @@ export const DomainDraftSchema = z.object({
 export type DomainDraft = z.infer<typeof DomainDraftSchema>;
 export type EditableDomainDraft = z.infer<typeof EditableDomainDraftSchema>;
 
-const DOMAIN_DRAFT_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'expertise_domain_draft',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      canonEntries: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            key: { type: 'string' },
-            source: { type: 'string' },
-            statement: { type: 'string' },
-            title: { type: 'string' },
-          },
-          required: ['key', 'source', 'statement', 'title'],
-          type: 'object',
-        },
-        maxItems: 8,
-        type: 'array',
-      },
-      domainFilter: { type: 'string' },
-      layerCanonRef: { type: ['string', 'null'] },
-      layerSource: { enum: ['canonical', 'invented'], type: 'string' },
-      layers: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            description: { type: ['string', 'null'] },
-            key: { type: 'string' },
-            title: { type: 'string' },
-          },
-          required: ['description', 'key', 'title'],
-          type: 'object',
-        },
-        maxItems: 6,
-        type: 'array',
-      },
-      outOfScope: { type: ['string', 'null'] },
-      rationale: { type: ['string', 'null'] },
-      title: { maxLength: 80, type: 'string' },
-    },
-    required: [
-      'canonEntries',
-      'domainFilter',
-      'layerCanonRef',
-      'layerSource',
-      'layers',
-      'outOfScope',
-      'rationale',
-      'title',
-    ],
-    type: 'object',
-  },
-};
-
 interface DraftFromBriefInput {
   adjustment?: string;
   agentId: string;
@@ -147,25 +92,9 @@ export class ExpertiseDomainService {
     return DomainDraftSchema.parse(
       await ai.generateObject(
         {
-          messages: input.currentDraft
-            ? [
-                { content: EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT, role: 'system' },
-                {
-                  content: [
-                    `Original brief:\n${input.brief.trim()}`,
-                    `Current editable draft:\n${JSON.stringify(input.currentDraft)}`,
-                    `Requested adjustment:\n${input.adjustment?.trim()}`,
-                    'Revise the current draft to satisfy the requested adjustment while preserving unaffected fields and the original intent. Return the complete revised draft.',
-                  ].join('\n\n'),
-                  role: 'user',
-                },
-              ]
-            : [
-                { content: EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT, role: 'system' },
-                { content: input.brief.trim(), role: 'user' },
-              ],
+          ...chainExpertiseDomainDraft(input),
           ...modelConfig,
-          schema: DOMAIN_DRAFT_JSON_SCHEMA,
+          schema: EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
         },
         {
           metadata: { trigger: 'expertise_domain_draft' },
@@ -173,7 +102,7 @@ export class ExpertiseDomainService {
             agentId: input.agentId,
             promptVersion: EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.ExpertiseDomainDraft,
-            schemaName: DOMAIN_DRAFT_JSON_SCHEMA.name,
+            schemaName: EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA.name,
           },
         },
       ),
