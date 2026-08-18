@@ -1,4 +1,4 @@
-import type { ChatStreamPayload } from '@lobechat/types';
+import type { OpenAIChatMessage } from '@lobechat/types';
 
 import {
   AGENT_SIGNAL_ANALYZE_INTENT_FEEDBACK_SATISFACTION_SYSTEM_ROLE,
@@ -18,10 +18,39 @@ import {
  * Returns:
  * - A two-message chat payload for the satisfaction step
  */
+export const AGENT_SIGNAL_FEEDBACK_SATISFACTION_PROMPT_VERSION = 'v1';
+
+export const AGENT_SIGNAL_FEEDBACK_SATISFACTION_JSON_SCHEMA = {
+  name: 'agent_signal_feedback_satisfaction',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      confidence: { maximum: 1, minimum: 0, type: 'number' },
+      evidence: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            cue: { type: 'string' },
+            excerpt: { type: 'string' },
+          },
+          required: ['cue', 'excerpt'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+      reason: { type: 'string' },
+      result: { enum: ['neutral', 'not_satisfied', 'satisfied'], type: 'string' },
+    },
+    required: ['confidence', 'evidence', 'reason', 'result'],
+    type: 'object' as const,
+  },
+  strict: true,
+};
+
 export const chainAgentSignalAnalyzeIntentFeedbackSatisfaction = (input: {
   message: string;
   serializedContext?: string;
-}): Partial<ChatStreamPayload> => {
+}): { messages: OpenAIChatMessage[] } => {
   return {
     messages: [
       {

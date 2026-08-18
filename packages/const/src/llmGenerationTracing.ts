@@ -18,6 +18,7 @@ export const TRACING_SCENARIOS = {
   HomeBrief: 'home_brief',
   InputCompletion: 'input_completion',
   MemoryExtract: 'memory_extract',
+  OnboardingTaskRecommendation: 'onboarding_task_recommendation',
   SignalFeedbackDomain: 'signal_feedback_domain',
   SignalFeedbackSatisfaction: 'signal_feedback_satisfaction',
   SignalSkillIntent: 'signal_skill_intent',
@@ -28,10 +29,13 @@ export const TRACING_SCENARIOS = {
   TaskHandoff: 'task_handoff',
   TopicTitle: 'topic_title',
   TopicAutoSummary: 'topic_auto_summary',
+  UnderstandingAnalysis: 'understanding_analysis',
+  UnderstandingDetailedPersona: 'understanding_detailed_persona',
   Unknown: 'unknown',
   ReviewPredict: 'review_predict',
   VerifyJudge: 'verify_judge',
   VerifyPlanGen: 'verify_plan_gen',
+  VerifyReport: 'verify_report',
 } as const;
 
 export type TracingScenario = (typeof TRACING_SCENARIOS)[keyof typeof TRACING_SCENARIOS];

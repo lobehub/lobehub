@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
 import { isProgrammaticTestCheck } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyPlan,
+  GENERATED_CRITERIA_JSON_SCHEMA,
+  VERIFY_PLAN_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
@@ -14,8 +19,7 @@ import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildPlanPrompt, VERIFY_PLAN_PROMPT_VERSION } from './prompts';
-import { GENERATED_CRITERIA_JSON_SCHEMA, RawGeneratedCriteriaSchema } from './schema';
+import { RawGeneratedCriteriaSchema } from './schema';
 
 const log = debug('lobe-server:verify-plan-generator');
 
@@ -176,7 +180,7 @@ export class VerifyPlanGeneratorService {
     modelConfig: { model: string; provider: string };
   }): Promise<CriterionDraft[]> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
-    const { system, user } = buildPlanPrompt({
+    const chain = chainVerifyPlan({
       context: params.context,
       goal: params.goal,
       maxCriteria,
@@ -185,10 +189,7 @@ export class VerifyPlanGeneratorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
+        ...chain,
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
@@ -331,7 +332,7 @@ export class VerifyPlanGeneratorService {
     modelConfig: { model: string; provider: string };
     operationId: string;
   }): Promise<VerifyCheckItem[]> {
-    const { system, user } = buildPlanPrompt({
+    const chain = chainVerifyPlan({
       context: params.context,
       existingTitles: params.existingTitles,
       goal: params.goal,
@@ -341,10 +342,7 @@ export class VerifyPlanGeneratorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
+        ...chain,
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,

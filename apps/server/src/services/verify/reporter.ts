@@ -1,3 +1,11 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyReport,
+  type JudgeEvidence,
+  REPORT_NARRATIVE_JSON_SCHEMA,
+  VERIFY_REPORT_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import debug from 'debug';
 
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -6,9 +14,8 @@ import { VerifyReportModel } from '@/database/models/verifyReport';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildReportPrompt, type JudgeEvidence } from './prompts';
 import { countStats, meanConfidence, rollupVerdict } from './reportRollup';
-import { REPORT_NARRATIVE_JSON_SCHEMA, ReportNarrativeSchema } from './schema';
+import { ReportNarrativeSchema } from './schema';
 
 const log = debug('lobe-server:verify-reporter');
 
@@ -65,7 +72,7 @@ export class VerifyReporterService {
     const verdict = rollupVerdict(results);
     const stats = countStats(results);
 
-    const { system, user } = buildReportPrompt({
+    const chain = chainVerifyReport({
       deliverable,
       goal,
       items: results.map((r) => ({
@@ -81,7 +88,7 @@ export class VerifyReporterService {
       verdict,
     });
 
-    const narrative = await this.buildNarrative(system, user, modelConfig);
+    const narrative = await this.buildNarrative(chain, modelConfig);
 
     return this.reportModel.upsertByRun({
       content: narrative?.content ?? null,
@@ -100,21 +107,26 @@ export class VerifyReporterService {
 
   /** Generate the narrative, degrading to no prose (stats-only card) on failure. */
   private async buildNarrative(
-    system: string,
-    user: string,
+    chain: ReturnType<typeof chainVerifyReport>,
     modelConfig: { model: string; provider: string },
   ) {
     try {
       const ai = new AiGenerationService(this.db, this.userId);
-      const raw = await ai.generateObject({
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
-        model: modelConfig.model,
-        provider: modelConfig.provider,
-        schema: REPORT_NARRATIVE_JSON_SCHEMA,
-      });
+      const raw = await ai.generateObject(
+        {
+          ...chain,
+          model: modelConfig.model,
+          provider: modelConfig.provider,
+          schema: REPORT_NARRATIVE_JSON_SCHEMA,
+        },
+        {
+          tracing: {
+            promptVersion: VERIFY_REPORT_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.VerifyReport,
+            schemaName: REPORT_NARRATIVE_JSON_SCHEMA.name,
+          } satisfies TracingOptions,
+        },
+      );
       const parsed = ReportNarrativeSchema.safeParse(raw);
       return parsed.success ? parsed.data : null;
     } catch (error) {
