@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePendingRetryTurn } from './usePendingRetryTurn';
 
-const state = vi.hoisted(() => ({ agentId: 'agt-1', hasNoReply: true, isRetrying: false }));
+const state = vi.hoisted(() => ({
+  agentId: 'agt-1',
+  groupId: undefined as string | undefined,
+  hasNoReply: true,
+  isRetrying: false,
+}));
 
 vi.mock('../../store', () => ({
   dataSelectors: {
@@ -12,12 +17,14 @@ vi.mock('../../store', () => ({
   messageStateSelectors: {
     isMessageRegenerating: () => () => state.isRetrying,
   },
-  useConversationStore: (selector: (s: any) => any) => selector({}),
+  useConversationStore: (selector: (s: any) => any) =>
+    selector({ context: { groupId: state.groupId } }),
 }));
 
 describe('usePendingRetryTurn', () => {
   beforeEach(() => {
     state.agentId = 'agt-1';
+    state.groupId = undefined;
     state.hasNoReply = true;
     state.isRetrying = false;
   });
@@ -29,7 +36,21 @@ describe('usePendingRetryTurn', () => {
   it('shows a stand-in while a retry runs and the old reply is already gone', () => {
     state.isRetrying = true;
 
-    expect(usePendingRetryTurn('user-1')).toEqual({ agentId: 'agt-1', showPendingTurn: true });
+    expect(usePendingRetryTurn('user-1')).toEqual({
+      agentId: 'agt-1',
+      groupId: undefined,
+      showPendingTurn: true,
+    });
+  });
+
+  it('keeps the group identity available for the retry placeholder', () => {
+    state.groupId = 'group-1';
+    state.isRetrying = true;
+
+    expect(usePendingRetryTurn('user-1')).toMatchObject({
+      groupId: 'group-1',
+      showPendingTurn: true,
+    });
   });
 
   it('stops as soon as the replacement reply exists', () => {

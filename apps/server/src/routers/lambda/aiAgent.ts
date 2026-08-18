@@ -258,6 +258,8 @@ const ExecAgentSchema = z
     parentMessageId: z.string().optional(),
     /** Existing gateway operation this fresh turn atomically supersedes. */
     replacesOperationId: z.string().optional(),
+    /** Existing assistant row to overwrite while preserving its tree position. */
+    replaceAssistantMessageId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -957,6 +959,7 @@ export const aiAgentRouter = router({
       fileIds,
       mentionedAgents,
       parentMessageId,
+      replaceAssistantMessageId,
       resumeApproval,
       resumeApprovals,
       resumeToolResult,
@@ -981,6 +984,7 @@ export const aiAgentRouter = router({
         messageIds: [
           ...existingMessageIds,
           parentMessageId,
+          replaceAssistantMessageId,
           resumeApproval?.parentMessageId,
           // Every batch target is authorized too — a caller must not be able to
           // slip a message it doesn't own into the list behind an owned anchor.
@@ -1008,6 +1012,7 @@ export const aiAgentRouter = router({
         mentionedAgents,
         parentMessageId,
         prompt,
+        replaceAssistantMessageId,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,

@@ -178,6 +178,7 @@ const resolveHeteroRunContext = (
 const runHeterogeneousFromExistingMessage = async (
   chatStore: ReturnType<typeof useChatStore.getState>,
   params: {
+    assistantMessageId?: string;
     context: ConversationContext;
     heterogeneousProvider: HeterogeneousProviderConfig;
     /** Image attachments from the original user message — forwarded to the CLI for vision support */
@@ -187,8 +188,15 @@ const runHeterogeneousFromExistingMessage = async (
     prompt: string;
   },
 ): Promise<string> => {
-  const { context, heterogeneousProvider, imageList, parentMessageId, parentOperationId, prompt } =
-    params;
+  const {
+    assistantMessageId,
+    context,
+    heterogeneousProvider,
+    imageList,
+    parentMessageId,
+    parentOperationId,
+    prompt,
+  } = params;
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
@@ -199,30 +207,36 @@ const runHeterogeneousFromExistingMessage = async (
   );
   if (cwdChanged) toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
 
-  const assistantMsg = await messageService.createMessage({
-    agentId,
-    content: LOADING_FLAT,
-    groupId: context.groupId ?? undefined,
-    metadata:
-      context.isSupervisor || context.orchestrationRole || context.subAgentId
-        ? {
-            ...(context.isSupervisor && { isSupervisor: true }),
-            ...(context.orchestrationRole && { orchestrationRole: context.orchestrationRole }),
-            ...(context.subAgentId && { subAgentId: context.subAgentId }),
-          }
-        : undefined,
-    parentId: parentMessageId,
-    // External CLIs own model selection; persist only the runtime provider up
-    // front. The adapter backfills the actual model later if the CLI reports it.
-    provider: heterogeneousProvider.type,
-    role: 'assistant',
-    threadId: context.threadId ?? undefined,
-    topicId: context.topicId ?? undefined,
-  });
+  let assistantMsgId = assistantMessageId;
+  if (!assistantMsgId) {
+    const assistantMessage = await messageService.createMessage({
+      agentId,
+      content: LOADING_FLAT,
+      groupId: context.groupId ?? undefined,
+      metadata:
+        context.isSupervisor || context.orchestrationRole || context.subAgentId
+          ? {
+              ...(context.isSupervisor && { isSupervisor: true }),
+              ...(context.orchestrationRole && {
+                orchestrationRole: context.orchestrationRole,
+              }),
+              ...(context.subAgentId && { subAgentId: context.subAgentId }),
+            }
+          : undefined,
+      parentId: parentMessageId,
+      // External CLIs own model selection; persist only the runtime provider up
+      // front. The adapter backfills the actual model later if the CLI reports it.
+      provider: heterogeneousProvider.type,
+      role: 'assistant',
+      threadId: context.threadId ?? undefined,
+      topicId: context.topicId ?? undefined,
+    });
+    assistantMsgId = assistantMessage.id;
 
-  // Pull the new row into the store so the loading bubble is visible while
-  // the executor runs (the executor only dispatches updates, not creates).
-  await chatStore.refreshMessages();
+    // Pull the new row into the store so the loading bubble is visible while
+    // the executor runs (the executor only dispatches updates, not creates).
+    await chatStore.refreshMessages();
+  }
 
   const { operationId: heteroOpId } = chatStore.startOperation({
     context,
@@ -231,12 +245,12 @@ const runHeterogeneousFromExistingMessage = async (
     parentOperationId,
     type: 'execHeterogeneousAgent',
   });
-  chatStore.associateMessageWithOperation(assistantMsg.id, heteroOpId);
+  chatStore.associateMessageWithOperation(assistantMsgId, heteroOpId);
 
   const { executeHeterogeneousAgent } =
     await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
   await executeHeterogeneousAgent(() => useChatStore.getState(), {
-    assistantMessageId: assistantMsg.id,
+    assistantMessageId: assistantMsgId,
     context,
     heterogeneousProvider,
     imageList: imageList?.length ? imageList : undefined,
@@ -246,7 +260,7 @@ const runHeterogeneousFromExistingMessage = async (
     workingDirectory,
   });
 
-  return assistantMsg.id;
+  return assistantMsgId;
 };
 
 export interface HeteroContinuationScheduleParams {
@@ -269,8 +283,14 @@ type RetryExecutionContext = Pick<
   'agentId' | 'groupId' | 'scope' | 'subAgentId' | 'isSupervisor' | 'orchestrationRole'
 >;
 
+interface RetryMessageIdentity {
+  agentId?: UIChatMessage['agentId'];
+  groupId?: UIChatMessage['groupId'];
+  metadata?: UIChatMessage['metadata'];
+}
+
 const getRetryExecutionContext = (
-  message: UIChatMessage | undefined,
+  message: RetryMessageIdentity | undefined,
   fallback: ConversationContext,
 ): ConversationContext => {
   if (
@@ -389,6 +409,170 @@ const captureRegenerateUserMessageSource = (
       return useChatStore.getState().dbMessagesMap[contextKey] ?? dbMessages;
     },
   };
+};
+
+const collectMessageDescendantIds = (messageId: string, messages: UIChatMessage[]): string[] => {
+  const childIdsByParent = new Map<string, string[]>();
+  for (const message of messages) {
+    if (!message.parentId) continue;
+    const childIds = childIdsByParent.get(message.parentId) ?? [];
+    childIds.push(message.id);
+    childIdsByParent.set(message.parentId, childIds);
+  }
+
+  const descendants: string[] = [];
+  const pending = [...(childIdsByParent.get(messageId) ?? [])];
+  while (pending.length > 0) {
+    const descendantId = pending.shift()!;
+    descendants.push(descendantId);
+    pending.push(...(childIdsByParent.get(descendantId) ?? []));
+  }
+
+  return descendants;
+};
+
+const resetAssistantMessageForRetry = async (
+  chatStore: ReturnType<typeof useChatStore.getState>,
+  messageId: string,
+  context: ConversationContext,
+  operationId: string,
+) => {
+  chatStore.internal_dispatchMessage(
+    {
+      id: messageId,
+      type: 'updateMessage',
+      value: { content: LOADING_FLAT, error: null, search: null, tools: [] },
+    },
+    { operationId },
+  );
+
+  const result = await messageService.updateMessage(
+    messageId,
+    { content: LOADING_FLAT, error: null, search: null, tools: null },
+    context,
+  );
+  if (result?.success && result.messages) {
+    chatStore.replaceMessages(result.messages, { context });
+  } else {
+    await chatStore.refreshMessages();
+  }
+};
+
+const regenerateGroupMemberMessageFromSource = async (
+  messageId: string,
+  source: RegenerateUserMessageSource,
+): Promise<boolean> => {
+  const { context: sourceContext, hooks, readDbMessages } = source;
+  if (!sourceContext.groupId || sourceContext.scope !== 'group') return false;
+
+  const dbMessages = readDbMessages();
+  const targetMessage = dbMessages.find((message) => message.id === messageId);
+  if (!targetMessage || targetMessage.metadata?.orchestrationRole !== 'member') return false;
+  if (!targetMessage.parentId) return false;
+
+  const chatStore = useChatStore.getState();
+  if (operationSelectors.isMessageRegenerating(messageId)(chatStore)) {
+    toast.info(t('messageAction.regenerateAlreadyRunning', { ns: 'chat' }));
+    return true;
+  }
+
+  const context = getRetryExecutionContext(targetMessage, sourceContext);
+  const executionAgentId = getRetryExecutionAgentId(context);
+  const { operationId } = chatStore.startOperation({
+    context: { ...context, messageId },
+    type: 'regenerate',
+  });
+  chatStore.associateMessageWithOperation(messageId, operationId);
+
+  try {
+    const initialContext = mergeAgentRuntimeInitialContexts(
+      await resolveActiveTopicDocumentInitialContext(context),
+      undefined,
+    );
+
+    if (hooks.onBeforeRegenerate) {
+      const shouldProceed = await hooks.onBeforeRegenerate(messageId);
+      if (shouldProceed === false) {
+        chatStore.completeOperation(operationId);
+        return true;
+      }
+    }
+
+    const preflightOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
+    if (preflightOp && preflightOp.status !== 'running') return true;
+
+    const descendantIds = collectMessageDescendantIds(messageId, dbMessages);
+    if (descendantIds.length > 0) {
+      await chatStore.optimisticDeleteMessages(descendantIds, { operationId });
+    }
+    await resetAssistantMessageForRetry(chatStore, messageId, sourceContext, operationId);
+
+    const parentMessage = dbMessages.find((message) => message.id === targetMessage.parentId);
+    const parentMessageType =
+      parentMessage?.role === 'user' || parentMessage?.role === 'tool'
+        ? parentMessage.role
+        : 'assistant';
+    const excludedIds = new Set([messageId, ...descendantIds]);
+    const contextMessages = dbMessages.filter((message) => !excludedIds.has(message.id));
+    const userMessageId = findUserMessageId(targetMessage, dbMessages);
+    const retryPrompt = dbMessages.find((message) => message.id === userMessageId)?.content ?? '';
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(executionAgentId);
+    const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+    const runtimeType = selectRuntimeType({
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      executionTarget: agencyConfig?.executionTarget,
+      heterogeneousProvider,
+      isGatewayMode: chatStore.isGatewayModeEnabled(executionAgentId),
+      isWorkspaceAgent: workspaceScoped,
+    });
+
+    if (runtimeType === 'gateway') {
+      await chatStore.executeGatewayAgent({
+        context: getRetryGatewayExecutionContext(context),
+        message: retryPrompt,
+        messageContext: context,
+        onComplete: () =>
+          settleGenerationEntry(chatStore, operationId, () =>
+            hooks.onRegenerateComplete?.(messageId),
+          ),
+        parentMessageId: targetMessage.parentId,
+        parentOperationId: operationId,
+        replaceAssistantMessageId: messageId,
+      });
+      return true;
+    }
+
+    if (runtimeType === 'hetero' && heterogeneousProvider) {
+      await runHeterogeneousFromExistingMessage(chatStore, {
+        assistantMessageId: messageId,
+        context: getRetryHeterogeneousExecutionContext(context),
+        heterogeneousProvider,
+        parentMessageId: targetMessage.parentId,
+        parentOperationId: operationId,
+        prompt: retryPrompt,
+      });
+      settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
+      return true;
+    }
+
+    await chatStore.executeClientAgent({
+      context,
+      initialContext,
+      messages: contextMessages,
+      parentMessageId: targetMessage.parentId,
+      parentMessageType,
+      parentOperationId: operationId,
+      replaceAssistantMessageId: messageId,
+    });
+    settleGenerationEntry(chatStore, operationId, () => hooks.onRegenerateComplete?.(messageId));
+    return true;
+  } catch (error) {
+    chatStore.failOperation(operationId, {
+      message: error instanceof Error ? error.message : String(error),
+      type: 'RegenerateError',
+    });
+    throw error;
+  }
 };
 
 const regenerateUserMessageFromSource = async (
@@ -1332,6 +1516,9 @@ export const generationSlice: StateCreator<
 
   regenerateAssistantMessage: async (messageId: string) => {
     const { dbMessages, displayMessages } = get();
+    const source = captureRegenerateUserMessageSource(get);
+
+    if (await regenerateGroupMemberMessageFromSource(messageId, source)) return;
 
     // Find the assistant message
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
@@ -1343,7 +1530,6 @@ export const generationSlice: StateCreator<
     if (!userId) return;
 
     // Delegate to regenerateUserMessage with the parent user message
-    const source = captureRegenerateUserMessageSource(get);
     await regenerateUserMessageFromSource(
       userId,
       source,

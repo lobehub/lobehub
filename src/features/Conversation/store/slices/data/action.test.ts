@@ -422,6 +422,39 @@ describe('DataSlice', () => {
       expect(notFound).toBeUndefined();
     });
 
+    it('getDisplayMessageById should find an in-bubble council member', () => {
+      const store = createTestStore();
+
+      store.setState({
+        displayMessages: [
+          {
+            children: [
+              {
+                content: '',
+                council: [
+                  {
+                    agentId: 'member-agent',
+                    content: 'Member response',
+                    id: 'member-1',
+                    role: 'assistant',
+                  },
+                ],
+                id: 'council-block',
+              },
+            ],
+            content: '',
+            id: 'supervisor-group',
+            role: 'assistantGroup',
+          },
+        ],
+      } as any);
+
+      expect(dataSelectors.getDisplayMessageById('member-1')(store.getState())).toMatchObject({
+        agentId: 'member-agent',
+        content: 'Member response',
+      });
+    });
+
     it('getBlockContent should find assistant blocks in compressed messages', () => {
       const store = createTestStore();
 

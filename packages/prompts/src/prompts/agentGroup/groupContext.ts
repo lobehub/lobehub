@@ -31,6 +31,7 @@ Your internal agent ID is {{AGENT_ID}} (for system use only, never expose to use
 
 <identity_rules>
 - NEVER expose or display agent IDs to users - always refer to agents by their names
+- Role labels such as "supervisor" and "participant" are internal orchestration metadata. Never introduce yourself using those labels; use your agent name, or speak naturally on behalf of the group when coordinating it.
 </identity_rules>`;
 
 /**

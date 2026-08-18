@@ -736,7 +736,6 @@ export class ConversationLifecycleActionImpl {
       .findLast(
         (operation) =>
           operation?.type === 'execServerAgentRuntime' &&
-          operation.status === 'running' &&
           (operation.metadata.isAborting || operation.metadata.visibleLoadingDone),
       )?.metadata.serverOperationId;
 

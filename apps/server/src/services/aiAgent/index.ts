@@ -1334,6 +1334,7 @@ export class AiAgentService {
       queueRetryDelay,
       parentMessageId,
       parentOperationId,
+      replaceAssistantMessageId,
       resume,
       resumeApproval,
       resumeApprovals,
@@ -1349,7 +1350,12 @@ export class AiAgentService {
     // parentMessageId), and a replayed id there would collide with the row the
     // original send already created — so those paths drop the ids defensively
     // rather than trusting every caller to omit them.
-    const isResumeLike = !!resume || !!resumeApproval || !!resumeToolResult || !!parentMessageId;
+    const isResumeLike =
+      !!resume ||
+      !!resumeApproval ||
+      !!resumeToolResult ||
+      !!parentMessageId ||
+      !!replaceAssistantMessageId;
     const clientIds = isResumeLike ? undefined : params.clientIds;
 
     // Validate that either agentId or slug is provided
@@ -1671,6 +1677,7 @@ export class AiAgentService {
     }
 
     let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
+    let replacementAssistantMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
     // `resumeApproval` implies the same "load parent message + skip user
     // message creation" semantics as `resume`. Callers that go through the
@@ -1686,7 +1693,8 @@ export class AiAgentService {
         ? [resumeApproval]
         : [];
 
-    const effectiveResume = resume || approvalDecisions.length > 0 || !!resumeToolResult;
+    const effectiveResume =
+      resume || approvalDecisions.length > 0 || !!resumeToolResult || !!replaceAssistantMessageId;
 
     // Both resume and suppressUserMessage run the turn off existing history
     // instead of appending a new user message — share the message-construction
@@ -1726,6 +1734,31 @@ export class AiAgentService {
 
       if (resumeParentMessage.sessionId && resumeParentMessage.sessionId !== appContext.sessionId) {
         throw new Error('appContext.sessionId does not match parent message');
+      }
+    }
+
+    if (replaceAssistantMessageId) {
+      if (!parentMessageId || !appContext?.topicId) {
+        throw new Error(
+          'replaceAssistantMessageId requires parentMessageId and appContext.topicId',
+        );
+      }
+
+      replacementAssistantMessage = await this.messageModel.findById(replaceAssistantMessageId);
+      if (!replacementAssistantMessage || replacementAssistantMessage.role !== 'assistant') {
+        throw new Error('replaceAssistantMessageId must point at an assistant message');
+      }
+      if (replacementAssistantMessage.parentId !== parentMessageId) {
+        throw new Error('replaceAssistantMessageId does not belong to parentMessageId');
+      }
+      if (replacementAssistantMessage.topicId !== appContext.topicId) {
+        throw new Error('replaceAssistantMessageId does not belong to the requested topic');
+      }
+      if ((replacementAssistantMessage.threadId ?? undefined) !== appContext.threadId) {
+        throw new Error('replaceAssistantMessageId does not belong to the requested thread');
+      }
+      if ((replacementAssistantMessage.groupId ?? undefined) !== appContext.groupId) {
+        throw new Error('replaceAssistantMessageId does not belong to the requested group');
       }
     }
 
@@ -2196,29 +2229,51 @@ export class AiAgentService {
     // / `turn_metadata` (backfilled by HeterogeneousPersistenceHandler), and
     // seeding the agent's chat model would leak it into the model tag. A normal
     // run seeds model + provider as usual.
-    const assistantMessageRecord = await this.messageModel.create(
-      {
-        agentId: assistantAgentId,
+    const assistantMessageRecord = replacementAssistantMessage
+      ? {
+          ...replacementAssistantMessage,
+          content: LOADING_FLAT,
+          error: null,
+          id: replacementAssistantMessage.id,
+          metadata: { ...replacementAssistantMessage.metadata, ...orchestrationMetadata },
+          model: isHeteroAgent ? undefined : model,
+          provider: isHeteroAgent ? heteroType : provider,
+          tools: null,
+        }
+      : await this.messageModel.create(
+          {
+            agentId: assistantAgentId,
+            content: LOADING_FLAT,
+            // Stamp groupId so the assistant turn is visible in the group read path
+            // (MessageModel.query filters group chats by messages.groupId).
+            groupId: appContext?.groupId ?? undefined,
+            metadata: orchestrationMetadata,
+            model: isHeteroAgent ? undefined : model,
+            // Chain onto the user turn we just persisted; `parentMessageId` is the
+            // anchor only on a resume, where no user message is created. A batch
+            // approval overrides it with the assistant that emitted the batch — the
+            // previous LLM call — so the spine stays one node per call and never
+            // depends on which of the batch's tool rows the client sent as anchor.
+            parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
+            provider: isHeteroAgent ? heteroType : provider,
+            role: 'assistant',
+            threadId: appContext?.threadId ?? undefined,
+            topicId,
+          },
+          // The id the client's assistant placeholder already renders under.
+          clientIds?.assistantMessageId,
+        );
+    if (replacementAssistantMessage) {
+      await this.messageModel.update(replacementAssistantMessage.id, {
         content: LOADING_FLAT,
-        // Stamp groupId so the assistant turn is visible in the group read path
-        // (MessageModel.query filters group chats by messages.groupId).
-        groupId: appContext?.groupId ?? undefined,
-        metadata: orchestrationMetadata,
+        error: null,
+        metadata: { ...replacementAssistantMessage.metadata, ...orchestrationMetadata },
         model: isHeteroAgent ? undefined : model,
-        // Chain onto the user turn we just persisted; `parentMessageId` is the
-        // anchor only on a resume, where no user message is created. A batch
-        // approval overrides it with the assistant that emitted the batch — the
-        // previous LLM call — so the spine stays one node per call and never
-        // depends on which of the batch's tool rows the client sent as anchor.
-        parentId: userMessageRecord?.id ?? batchApprovalAnchorId ?? parentMessageId,
         provider: isHeteroAgent ? heteroType : provider,
-        role: 'assistant',
-        threadId: appContext?.threadId ?? undefined,
-        topicId,
-      },
-      // The id the client's assistant placeholder already renders under.
-      clientIds?.assistantMessageId,
-    );
+        search: null,
+        tools: null,
+      });
+    }
     selfMessageIds.add(assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
@@ -3067,6 +3122,18 @@ export class AiAgentService {
           topicId: appContext.topicId,
         });
         historyMessagesCache = pruneRegeneratedBranch(historyMessagesCache, tree, parentMessageId);
+      }
+
+      if (historyMessagesCache && replaceAssistantMessageId && appContext?.topicId) {
+        const tree = await this.messageModel.queryTopicMessageTree({
+          threadId: appContext.threadId,
+          topicId: appContext.topicId,
+        });
+        historyMessagesCache = pruneRegeneratedBranch(
+          historyMessagesCache,
+          tree,
+          replaceAssistantMessageId,
+        );
       }
 
       return historyMessagesCache;

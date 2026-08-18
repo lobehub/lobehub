@@ -64,6 +64,11 @@ describe('groupContextTemplate', () => {
   it('should match snapshot', () => {
     expect(groupContextTemplate).toMatchSnapshot();
   });
+
+  it('should keep orchestration role labels internal', () => {
+    expect(groupContextTemplate).toContain('internal orchestration metadata');
+    expect(groupContextTemplate).toContain('Never introduce yourself using those labels');
+  });
 });
 
 describe('formatGroupMembers', () => {

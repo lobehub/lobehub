@@ -386,6 +386,16 @@ export class GroupOrchestrationActionImpl {
       log('[internal_execGroupOrchestration] Operation failed');
     }
 
+    if (topicId && (this.#get().activeTopicId === topicId || state.status === 'error')) {
+      void this.#get().updateTopicStatus?.({
+        agentId: supervisorAgentId,
+        groupId,
+        scope: 'group',
+        status: 'active',
+        topicId,
+      });
+    }
+
     return state;
   };
 

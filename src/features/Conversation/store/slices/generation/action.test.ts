@@ -31,6 +31,10 @@ const mockExecuteClientAgent = vi.fn();
 const mockInternalExecGroupOrchestration = vi.fn();
 const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
+const mockInternalDispatchMessage = vi.fn();
+const mockOptimisticDeleteMessages = vi.fn();
+const mockRefreshMessages = vi.fn();
+const mockReplaceMessages = vi.fn();
 
 const createDefaultChatStoreState = (): any => ({
   messagesMap: {
@@ -58,6 +62,10 @@ const createDefaultChatStoreState = (): any => ({
   internal_execGroupOrchestration: mockInternalExecGroupOrchestration,
   isGatewayModeEnabled: mockIsGatewayModeEnabled,
   executeGatewayAgent: mockExecuteGatewayAgent,
+  internal_dispatchMessage: mockInternalDispatchMessage,
+  optimisticDeleteMessages: mockOptimisticDeleteMessages,
+  refreshMessages: mockRefreshMessages,
+  replaceMessages: mockReplaceMessages,
 });
 
 vi.mock('@/store/chat', () => ({
@@ -1414,9 +1422,16 @@ describe('Generation Actions', () => {
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
+        internal_dispatchMessage: mockInternalDispatchMessage,
         isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        optimisticDeleteMessages: mockOptimisticDeleteMessages,
+        refreshMessages: mockRefreshMessages,
+        replaceMessages: mockReplaceMessages,
         switchMessageBranch: mockSwitchMessageBranch,
       } as any);
+      const updateMessageSpy = vi
+        .spyOn(messageService, 'updateMessage')
+        .mockResolvedValue({ messages: [], success: true } as any);
       mockIsGatewayModeEnabled.mockImplementation(
         ((agentId: string) => agentId === 'member-agent') as any,
       );
@@ -1468,8 +1483,17 @@ describe('Generation Actions', () => {
             orchestrationRole: 'member',
             subAgentId: 'member-agent',
           }),
+          parentMessageId: 'user-1',
+          replaceAssistantMessageId: 'assistant-1',
         }),
       );
+      expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
+      expect(updateMessageSpy).toHaveBeenCalledWith(
+        'assistant-1',
+        expect.objectContaining({ content: expect.any(String), tools: null }),
+        context,
+      );
+      updateMessageSpy.mockRestore();
     });
 
     it('reuses a member identity when its assistant bubble is nested below a tool message', async () => {
@@ -1484,9 +1508,16 @@ describe('Generation Actions', () => {
         failOperation: mockFailOperation,
         executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
+        internal_dispatchMessage: mockInternalDispatchMessage,
         isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        optimisticDeleteMessages: mockOptimisticDeleteMessages,
+        refreshMessages: mockRefreshMessages,
+        replaceMessages: mockReplaceMessages,
         switchMessageBranch: mockSwitchMessageBranch,
       } as any);
+      const updateMessageSpy = vi
+        .spyOn(messageService, 'updateMessage')
+        .mockResolvedValue({ messages: [], success: true } as any);
       const context: ConversationContext = {
         agentId: 'supervisor-agent',
         groupId: 'group-1',
@@ -1506,6 +1537,14 @@ describe('Generation Actions', () => {
               content: 'Member response',
               id: 'assistant-1',
               metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+              parentId: 'speak-tool-1',
+              role: 'assistant',
+            },
+            {
+              agentId: 'sibling-agent',
+              content: 'Sibling response',
+              id: 'assistant-2',
+              metadata: { orchestrationRole: 'member', subAgentId: 'sibling-agent' },
               parentId: 'speak-tool-1',
               role: 'assistant',
             },
@@ -1535,9 +1574,20 @@ describe('Generation Actions', () => {
             orchestrationRole: 'member',
             subAgentId: 'member-agent',
           }),
-          parentMessageId: 'user-1',
+          parentMessageId: 'speak-tool-1',
+          parentMessageType: 'tool',
+          replaceAssistantMessageId: 'assistant-1',
         }),
       );
+      expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
+      expect(mockOptimisticDeleteMessages).not.toHaveBeenCalled();
+      expect(updateMessageSpy).toHaveBeenCalledWith('assistant-1', expect.any(Object), context);
+      expect(updateMessageSpy).not.toHaveBeenCalledWith(
+        'assistant-2',
+        expect.anything(),
+        expect.anything(),
+      );
+      updateMessageSpy.mockRestore();
     });
 
     it('should bail out if the interim op was cancelled during preflight (Stop pressed)', async () => {
@@ -2005,6 +2055,9 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
+        internal_dispatchMessage: mockInternalDispatchMessage,
+        optimisticDeleteMessages: mockOptimisticDeleteMessages,
+        replaceMessages: mockReplaceMessages,
         ...overrides,
       } as any);
 
@@ -2017,6 +2070,7 @@ describe('Generation Actions', () => {
 
     let executeHeterogeneousAgentSpy: ReturnType<typeof vi.spyOn>;
     let createMessageSpy: ReturnType<typeof vi.spyOn>;
+    let updateMessageSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
       // Force the hetero routing decision.
@@ -2029,6 +2083,9 @@ describe('Generation Actions', () => {
       createMessageSpy = vi
         .spyOn(messageService, 'createMessage')
         .mockResolvedValue({ id: 'hetero-assistant-msg', messages: [] } as any) as any;
+      updateMessageSpy = vi
+        .spyOn(messageService, 'updateMessage')
+        .mockResolvedValue({ messages: [], success: true } as any) as any;
 
       executeHeterogeneousAgentSpy = vi
         .spyOn(heterogeneousAgentExecutor, 'executeHeterogeneousAgent')
@@ -2135,16 +2192,16 @@ describe('Generation Actions', () => {
         await store.getState().regenerateAssistantMessage('assistant-1');
       });
 
-      expect(createMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: 'member-agent',
-          groupId: 'group-1',
-          metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
-        }),
+      expect(createMessageSpy).not.toHaveBeenCalled();
+      expect(updateMessageSpy).toHaveBeenCalledWith(
+        'assistant-1',
+        expect.objectContaining({ content: expect.any(String), tools: null }),
+        context,
       );
       expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
         expect.any(Function),
         expect.objectContaining({
+          assistantMessageId: 'assistant-1',
           context: expect.objectContaining({
             agentId: 'member-agent',
             groupId: 'group-1',

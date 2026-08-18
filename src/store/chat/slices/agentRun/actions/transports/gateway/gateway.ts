@@ -436,6 +436,8 @@ export class GatewayActionImpl {
     parentMessageId?: string;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
+    /** Existing assistant row to overwrite while preserving its tree position. */
+    replaceAssistantMessageId?: string;
     /**
      * Caller-owned operation that should be completed once the gateway side
      * has finished phase-1 init (network round-trip + child
@@ -502,6 +504,7 @@ export class GatewayActionImpl {
       optimisticTopic,
       parentMessageId,
       parentOperationId,
+      replaceAssistantMessageId,
       replacesOperationId,
       resumeApproval,
       resumeApprovals,
@@ -625,6 +628,7 @@ export class GatewayActionImpl {
         mentionedAgents,
         parentMessageId,
         prompt: message,
+        replaceAssistantMessageId,
         resumeApproval,
         resumeApprovals,
         resumeToolResult,

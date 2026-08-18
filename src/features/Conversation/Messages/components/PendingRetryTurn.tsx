@@ -1,8 +1,14 @@
 'use client';
 
+import { Tag } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { useAgentMeta } from '../../hooks';
 import ContentLoading from './ContentLoading';
@@ -28,18 +34,38 @@ interface PendingRetryTurnProps {
  * whole window, and this renders the reply that is on its way.
  */
 const PendingRetryTurn = memo<PendingRetryTurnProps>(({ userMessageId }) => {
-  const { agentId, showPendingTurn } = usePendingRetryTurn(userMessageId);
+  const { agentId, groupId, showPendingTurn } = usePendingRetryTurn(userMessageId);
   const avatar = useAgentMeta(agentId);
+  const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(groupId ?? '')(s));
+  const memberAvatars = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupMemberAvatars(groupId ?? '')(s),
+    isEqual,
+  );
+  const { t } = useTranslation('chat');
 
   if (!showPendingTurn) return null;
+
+  const isGroupRetry = !!groupId;
 
   return (
     <ChatItem
       loading
       showTitle
-      avatar={avatar}
+      avatar={isGroupRetry ? { ...avatar, name: undefined, title: groupMeta.title } : avatar}
       id={`${userMessageId}-pending-retry`}
       placement={'left'}
+      titleAddon={isGroupRetry ? <Tag>{t('supervisor.label')}</Tag> : undefined}
+      customAvatarRender={
+        isGroupRetry
+          ? () => (
+              <AgentGroupAvatar
+                avatar={groupMeta.avatar}
+                backgroundColor={groupMeta.backgroundColor}
+                memberAvatars={memberAvatars}
+              />
+            )
+          : undefined
+      }
     >
       <ContentLoading id={userMessageId} />
     </ChatItem>

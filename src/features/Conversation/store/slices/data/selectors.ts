@@ -17,21 +17,34 @@ const dbMessages = (s: State) => s.dbMessages;
 const messagesInit = (s: State) => s.messagesInit;
 const skipFetch = (s: State) => s.skipFetch;
 
-const getDisplayMessageById = (id: string) => (s: State) => {
-  // First, try to find in top-level displayMessages
-  const topLevelMessage = s.displayMessages.find((m) => m.id === id);
-  if (topLevelMessage) return topLevelMessage;
+const findDisplayMessageById = (
+  id: string,
+  messages: UIChatMessage[],
+): UIChatMessage | undefined => {
+  for (const message of messages) {
+    if (message.id === id) return message;
 
-  // If not found, search in agentCouncil members
-  for (const message of s.displayMessages) {
-    if (message.role === 'agentCouncil' && (message as any).members) {
-      const member = (message as any).members.find((m: UIChatMessage) => m.id === id);
-      if (member) return member;
+    for (const child of message.children ?? []) {
+      const councilMember = child.council ? findDisplayMessageById(id, child.council) : undefined;
+      if (councilMember) return councilMember;
+    }
+
+    if (message.compressedMessages) {
+      const compressedMessage = findDisplayMessageById(id, message.compressedMessages);
+      if (compressedMessage) return compressedMessage;
+    }
+
+    if (message.role === 'agentCouncil' && message.members) {
+      const councilMember = findDisplayMessageById(id, message.members);
+      if (councilMember) return councilMember;
     }
   }
 
   return undefined;
 };
+
+const getDisplayMessageById = (id: string) => (s: State) =>
+  findDisplayMessageById(id, s.displayMessages);
 const getDbMessageById = (id: string) => (s: State) => s.dbMessages.find((m) => m.id === id);
 const getDbMessageByToolCallId = (id: string) => (s: State) =>
   s.dbMessages.find((m) => m.tool_call_id === id);

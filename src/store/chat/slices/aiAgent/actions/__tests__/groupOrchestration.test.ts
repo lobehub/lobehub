@@ -49,6 +49,7 @@ describe('groupOrchestration actions', () => {
         }),
         completeOperation: vi.fn(),
         failOperation: vi.fn(),
+        updateTopicStatus: vi.fn(),
       });
     });
   });
@@ -101,6 +102,30 @@ describe('groupOrchestration actions', () => {
           label: expect.stringContaining('Group Orchestration'),
         }),
       );
+    });
+
+    it('should reset the active group topic status after orchestration completes', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.internal_execGroupOrchestration({
+          groupId: TEST_IDS.GROUP_ID,
+          initialResult: {
+            payload: { decision: 'finish', params: {}, skipCallSupervisor: true },
+            type: 'supervisor_decided',
+          },
+          supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+          topicId: TEST_IDS.TOPIC_ID,
+        });
+      });
+
+      expect(result.current.updateTopicStatus).toHaveBeenCalledWith({
+        agentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+        groupId: TEST_IDS.GROUP_ID,
+        scope: 'group',
+        status: 'active',
+        topicId: TEST_IDS.TOPIC_ID,
+      });
     });
   });
 

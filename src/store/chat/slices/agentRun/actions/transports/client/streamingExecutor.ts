@@ -502,6 +502,8 @@ export class StreamingExecutorActionImpl {
     parentMessageId: string;
     parentMessageType: 'user' | 'assistant' | 'tool';
     parentOperationId?: string;
+    /** Existing assistant row to overwrite while preserving its tree position. */
+    replaceAssistantMessageId?: string;
     skipCreateFirstMessage?: boolean;
     isSubAgent?: boolean;
     /**
@@ -558,8 +560,12 @@ export class StreamingExecutorActionImpl {
       });
       operationId = newOperationId;
 
-      // Associate message with operation
-      this.#get().associateMessageWithOperation(parentMessageId, operationId);
+      // Associate the visible assistant being replaced when present. Its
+      // parent remains the runtime context anchor and must not carry loading.
+      this.#get().associateMessageWithOperation(
+        params.replaceAssistantMessageId ?? parentMessageId,
+        operationId,
+      );
     }
 
     log(
@@ -649,11 +655,14 @@ export class StreamingExecutorActionImpl {
       chatConfigOverride: params.chatConfigOverride,
     });
 
-    if (params.skipCreateFirstMessage) {
-      initialAgentState.pendingAssistantMessageId = params.parentMessageId;
+    const existingAssistantMessageId =
+      params.replaceAssistantMessageId ??
+      (params.skipCreateFirstMessage ? params.parentMessageId : undefined);
+    if (existingAssistantMessageId) {
+      initialAgentState.pendingAssistantMessageId = existingAssistantMessageId;
       initialAgentContext.payload = {
         ...(initialAgentContext.payload as Record<string, unknown>),
-        assistantMessageId: params.parentMessageId,
+        assistantMessageId: existingAssistantMessageId,
       };
     }
 

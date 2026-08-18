@@ -2408,6 +2408,47 @@ describe('ConversationLifecycle actions', () => {
         expect(enqueueMessageSpy).not.toHaveBeenCalled();
       });
 
+      it('should replace a completed gateway operation whose server marker is still busy', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID };
+        const contextKey = messageMapKey(context);
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'server-operation-next',
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            operations: {
+              'op-visible-done': {
+                childOperationIds: [],
+                context,
+                id: 'op-visible-done',
+                metadata: {
+                  serverOperationId: 'server-operation-previous',
+                  visibleLoadingDone: true,
+                },
+                status: 'completed',
+                type: 'execServerAgentRuntime',
+              },
+            } as any,
+            operationsByContext: { [contextKey]: ['op-visible-done'] },
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({ context, message: 'follow-up after terminal event' });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ replacesOperationId: 'server-operation-previous' }),
+        );
+      });
+
       it('should NOT enqueue behind an aborting op (Stop already pressed)', async () => {
         // Stop flips the composer back to Send immediately via `isAborting`. The
         // queue drains on success only, so queueing behind an aborting run would

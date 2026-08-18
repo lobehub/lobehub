@@ -84,7 +84,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     });
   }, [id, cancelCompression, t]);
 
-  const content = message?.content;
+  const content = message?.content ?? '';
   const rawCompressedMessages = (message as UIChatMessage)?.compressedMessages;
   const expanded = (message?.metadata as CompressionGroupMetadata)?.expanded ?? true;
 
@@ -125,7 +125,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
         label: t('compression.history'),
       },
     ],
-    [],
+    [t],
   );
 
   return (

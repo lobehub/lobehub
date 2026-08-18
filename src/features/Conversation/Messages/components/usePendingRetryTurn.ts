@@ -21,6 +21,7 @@ export const usePendingRetryTurn = (userMessageId: string) => {
   const agentId = useConversationStore(
     (s) => dataSelectors.getDisplayMessageById(userMessageId)(s)?.agentId,
   );
+  const groupId = useConversationStore((s) => s.context.groupId);
 
-  return { agentId, showPendingTurn: isRetrying && hasNoReply };
+  return { agentId, groupId, showPendingTurn: isRetrying && hasNoReply };
 };
