@@ -82,18 +82,10 @@ const createService = (
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
   const topicModel = {
-    findById: vi.fn(async (): Promise<any> => ({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'asst-1',
-          operationId: overrides.operationId ?? 'op-1',
-        },
-      },
-    })),
-    settleRunningStatus: vi.fn(async () => {}),
-    takeRunningOperation: vi.fn(async (_topicId: string, operationId: string): Promise<any> => ({
-      isRoot: true,
-      operation: { assistantMessageId: 'asst-1', operationId },
+    settleRunningOperation: vi.fn(async (_topicId: string, operationId: string): Promise<any> => ({
+      assistantMessageId: 'asst-1',
+      operationId,
+      status: 'settled',
     })),
   };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
@@ -484,6 +476,39 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
+    it('ignores a delayed finish when a newer operation owns the topic', async () => {
+      const { manager, published } = createFakeStreamManager();
+      const persistenceHandler = createFakePersistenceHandler();
+      const topicModel = {
+        settleRunningOperation: vi.fn(async () => ({
+          activeOperationId: 'op-new',
+          status: 'conflict' as const,
+        })),
+      } as any;
+      const completeOperationSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue();
+      const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler,
+        snapshotStore: null,
+        streamEventManager: manager,
+        topicModel,
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-old',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
+      expect(published).toHaveLength(0);
+      expect(completeOperationSpy).not.toHaveBeenCalled();
+
+      completeOperationSpy.mockRestore();
+    });
+
     // The unified terminal funnel: heteroFinish must drive the run's lifecycle
     // hooks through the shared hookDispatcher (the same mechanism the normal LLM
     // path uses), which is what marks the owning task done/failed and fires any
@@ -596,27 +621,10 @@ describe('HeterogeneousAgentService', () => {
 
     it('forwards a group member role to the completion lifecycle', async () => {
       const { service, topicModel } = createService({ operationId: 'op-member' });
-      topicModel.findById.mockResolvedValue({
-        metadata: {
-          runningOperation: {
-            childOperations: [
-              {
-                assistantMessageId: 'asst-member',
-                operationId: 'op-member',
-                orchestrationRole: 'member',
-              },
-            ],
-            operationId: 'op-supervisor',
-          },
-        },
-      });
-      topicModel.takeRunningOperation.mockResolvedValue({
-        isRoot: false,
-        operation: {
-          assistantMessageId: 'asst-member',
-          operationId: 'op-member',
-          orchestrationRole: 'member',
-        },
+      topicModel.settleRunningOperation.mockResolvedValue({
+        assistantMessageId: 'asst-member',
+        orchestrationRole: 'member',
+        status: 'settled',
       });
       const completeOperationSpy = vi
         .spyOn(CompletionLifecycle.prototype, 'completeOperation')
@@ -755,16 +763,12 @@ describe('HeterogeneousAgentService', () => {
       const topicModel = {
         // Mirror what execAgent persisted at dispatch: the serialized hooks live
         // under runningOperation. heteroFinish must read them from here.
-        findById: vi.fn(async () => ({
-          id: 'topic-q',
-          metadata: { runningOperation: { hooks, operationId: 'op-q' } },
+        settleRunningOperation: vi.fn(async () => ({
+          assistantMessageId: undefined,
+          hooks,
+          status: 'settled' as const,
+          threadId: undefined,
         })),
-        settleRunningStatus: vi.fn(async () => {}),
-        takeRunningOperation: vi.fn(async () => ({
-          isRoot: true,
-          operation: { assistantMessageId: 'asst-q', hooks, operationId: 'op-q' },
-        })),
-        updateMetadata: vi.fn(async () => {}),
       } as any;
       const { manager } = createFakeStreamManager();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
@@ -853,34 +857,57 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata:
-    // a non-atomic read-modify-write that shallow-merges the patch over a
-    // snapshot. `mergeBase` lets a test force the "read a stale snapshot" race.
+    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata.
+    // `mergeBase` lets a test force the historical stale-snapshot race, while
+    // settleRunningOperation models the operation-owned terminal CAS.
     const makeStore = () => {
       let meta: Record<string, any> = {};
       const topicModel = {
-        findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
-        settleRunningStatus: vi.fn(async () => {}),
-        takeRunningOperation: vi.fn(async (_id: string, operationId: string) => {
-          const running = meta.runningOperation;
-          if (running?.operationId === operationId) {
-            meta = { ...meta, runningOperation: null };
-            return { isRoot: true, operation: running };
+        settleRunningOperation: vi.fn(async (_id: string, operationId: string) => {
+          const runningOperation = meta.runningOperation;
+          if (!runningOperation) {
+            const currentMessage = meta.heteroCurrentMsgId;
+            return {
+              assistantMessageId:
+                currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+              status: 'missing' as const,
+            };
           }
-          const child = running?.childOperations?.find(
-            (candidate: any) => candidate.operationId === operationId,
-          );
-          if (!child) return undefined;
+          const isRoot = runningOperation.operationId === operationId;
+          const operation = isRoot
+            ? runningOperation
+            : runningOperation.childOperations?.find(
+                (candidate: any) => candidate.operationId === operationId,
+              );
+          if (!operation) {
+            return {
+              activeOperationId: runningOperation.operationId,
+              status: 'conflict' as const,
+            };
+          }
+
+          const currentMessage = meta.heteroCurrentMsgId;
           meta = {
             ...meta,
-            runningOperation: {
-              ...running,
-              childOperations: running.childOperations.filter(
-                (candidate: any) => candidate.operationId !== operationId,
-              ),
-            },
+            runningOperation: isRoot
+              ? null
+              : {
+                  ...runningOperation,
+                  childOperations: runningOperation.childOperations.filter(
+                    (candidate: any) => candidate.operationId !== operationId,
+                  ),
+                },
           };
-          return { isRoot: false, operation: child };
+          return {
+            assistantMessageId:
+              currentMessage?.operationId === operationId
+                ? currentMessage.msgId
+                : operation.assistantMessageId,
+            hooks: operation.hooks,
+            orchestrationRole: operation.orchestrationRole,
+            status: 'settled' as const,
+            threadId: operation.threadId,
+          };
         }),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
           meta = { ...(mergeBase ?? meta), ...patch };

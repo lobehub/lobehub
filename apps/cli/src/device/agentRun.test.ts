@@ -73,6 +73,7 @@ describe('spawnHeteroAgentRun', () => {
         LOBEHUB_SERVER: 'https://app.lobehub.com',
       }),
     });
+    expect(opts.env).not.toHaveProperty('LOBEHUB_WORKSPACE_ID');
 
     // stdin is only written after the child actually spawns.
     expect(child.stdin.write).not.toHaveBeenCalled();
@@ -92,6 +93,25 @@ describe('spawnHeteroAgentRun', () => {
 
     await expect(ackPromise).resolves.toEqual({ reason: 'spawn ENOENT', status: 'rejected' });
     expect(child.stdin.write).not.toHaveBeenCalled();
+  });
+
+  it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      workspaceId: 'ws-lobehub',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env).toEqual(
+      expect.objectContaining({
+        LOBEHUB_WORKSPACE_ID: 'ws-lobehub',
+      }),
+    );
   });
 
   it('appends --resume when resuming a session', () => {

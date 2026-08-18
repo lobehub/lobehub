@@ -283,41 +283,39 @@ export class HeterogeneousAgentService {
     });
 
     let serializedHooks: SerializedHook[] | undefined;
-    let assistantMessageId: string | undefined;
+    let assistantMessageId = seedAssistantMessageId;
     let isolationThreadId: string | undefined;
     let orchestrationRole: 'member' | 'supervisor' | undefined;
 
     // `cancelled` is only an intermediate process signal. Keep the marker for
     // the following success/error terminal callback, which owns completion.
     if (result !== 'cancelled') {
-      const topic = await this.topicModel.findById(topicId);
-      const marker = topic?.metadata?.runningOperation;
-      const running =
-        marker?.operationId === operationId
-          ? marker
-          : marker?.childOperations?.find((child) => child.operationId === operationId);
-      if (!running) {
-        log('heteroFinish: ignoring already-settled terminal callback for op=%s', operationId);
-        return;
+      try {
+        const settled = await this.topicModel.settleRunningOperation(topicId, operationId);
+        if (settled.status === 'conflict') {
+          log(
+            'heteroFinish: ignore stale finish topic=%s op=%s; current operation is %s',
+            topicId,
+            operationId,
+            settled.activeOperationId,
+          );
+          return;
+        }
+
+        assistantMessageId = settled.assistantMessageId ?? assistantMessageId;
+        if (settled.status === 'settled') {
+          serializedHooks = settled.hooks as SerializedHook[] | undefined;
+          isolationThreadId = settled.threadId;
+          orchestrationRole = settled.orchestrationRole;
+        }
+      } catch (err) {
+        log('heteroFinish: failed to settle runningOperation (non-fatal): %O', err);
       }
-
-      serializedHooks = running.hooks as SerializedHook[] | undefined;
-      isolationThreadId = running.threadId ?? undefined;
-      orchestrationRole = running.orchestrationRole;
-
-      // The per-step pointer is independent from the running marker, so it
-      // remains available after the atomic claim removes that marker.
-      const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
-      assistantMessageId =
-        currentMsgRef?.operationId === operationId
-          ? currentMsgRef.msgId
-          : running.assistantMessageId;
     }
 
-    // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
-    // down even if the CLI stream missed it (process killed mid-flight,
-    // network drop on last batch). Idempotent on the renderer side: the
-    // gateway event handler latches `terminalState` on first end-event.
+    // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
+    // if the CLI stream missed it. A stale callback that belongs to neither the
+    // root operation nor one of its children returns above.
     await this.streamEventManager.publishStreamEvent(operationId, {
       data: {
         agentType,
@@ -501,8 +499,6 @@ export class HeterogeneousAgentService {
       },
       completionReason,
     );
-    const claimed = await this.topicModel.takeRunningOperation(topicId, operationId);
-    if (claimed?.isRoot) await this.topicModel.settleRunningStatus(topicId);
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
   }
 

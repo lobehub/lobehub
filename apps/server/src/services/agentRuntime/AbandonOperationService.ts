@@ -163,13 +163,7 @@ export class AbandonOperationService {
     if (metadata.topicId && metadata.userId) {
       try {
         const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
-        const topic = await topicModel.findById(metadata.topicId);
-        const marker = topic?.metadata?.runningOperation;
-        const running =
-          marker?.operationId === operationId
-            ? marker
-            : marker?.childOperations?.find((child) => child.operationId === operationId);
-        if (running) await topicModel.takeRunningOperation(metadata.topicId, operationId);
+        await topicModel.settleRunningOperation(metadata.topicId, operationId);
       } catch (e) {
         log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
       }
@@ -327,19 +321,9 @@ export class AbandonOperationService {
     if (op.topicId) {
       try {
         topicModel = new TopicModel(this.db, op.userId, op.workspaceId ?? undefined);
-        const topic = await topicModel.findById(op.topicId);
-        const marker = topic?.metadata?.runningOperation;
-        const running =
-          marker?.operationId === operationId
-            ? marker
-            : marker?.childOperations?.find((child) => child.operationId === operationId);
-
-        if (running) {
-          await topicModel.takeRunningOperation(op.topicId, operationId).catch(() => undefined);
-          return running.assistantMessageId;
-        }
-
-        if (marker) return undefined;
+        const settled = await topicModel.settleRunningOperation(op.topicId, operationId);
+        if (settled.status !== 'settled') return undefined;
+        if (settled.assistantMessageId) return settled.assistantMessageId;
       } catch (e) {
         log('[%s] no-state abandon: topic lookup failed (non-fatal): %O', operationId, e);
       }
