@@ -156,6 +156,38 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       minWidth: undefined,
       label: t('taskList.form.showCompleted'),
     },
+    {
+      children: (
+        <Switch
+          checked={options.showSubTasks}
+          size={'small'}
+          onChange={(checked) => {
+            setOptions((prev) => ({ ...prev, showSubTasks: checked }));
+          }}
+        />
+      ),
+      minWidth: undefined,
+      label: t('taskList.form.showSubTasks'),
+    },
+    // Only meaningful once sub-tasks are on the list — otherwise the toggle
+    // would sit there controlling nothing.
+    ...(options.showSubTasks
+      ? [
+          {
+            children: (
+              <Switch
+                checked={options.nestedSubTasks}
+                size={'small'}
+                onChange={(checked) => {
+                  setOptions((prev) => ({ ...prev, nestedSubTasks: checked }));
+                }}
+              />
+            ),
+            minWidth: undefined,
+            label: t('taskList.form.nestedSubTasks'),
+          } satisfies FormItemProps,
+        ]
+      : []),
   ];
 
   const panelContent = (
