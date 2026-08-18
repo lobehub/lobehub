@@ -22,6 +22,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { parseAicoBillingContext } from '@/server/services/aico/billingContext';
 import { toManagedGenerationModelId } from '@/server/services/aico/generationBilling';
 import { VideoGenerationService } from '@/server/services/generation/video';
+import { isTerminalVideoPollError } from '@/server/services/generation/videoBackgroundPolling';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { FileSource } from '@/types/files';
 
@@ -99,7 +100,7 @@ async function pollUntilCompletion(
     } catch (error) {
       checkAbortSignal(signal);
 
-      if (error instanceof Error && error.message.includes('failed')) {
+      if (isTerminalVideoPollError(error)) {
         throw error;
       }
 

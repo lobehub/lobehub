@@ -21,10 +21,8 @@ on:
         type: boolean
         default: false
 
-concurrency:
-  group: deploy-canary
-  cancel-in-progress: false
-
+# No workflow-level queue: a newer canary SHA must start building immediately.
+# Image jobs cancel the previous SHA. SSH deploy never cancels (blue-green in flight).
 permissions:
   contents: read
   packages: write
@@ -35,6 +33,9 @@ env:
 jobs:
   build:
     name: Build and push Panachat image
+    concurrency:
+      group: deploy-canary-chat-image
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.vars.outputs.image }}
@@ -125,6 +126,9 @@ jobs:
 
   build-control-plane:
     name: Build and push control-plane image
+    concurrency:
+      group: deploy-canary-control-plane-image
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.vars.outputs.image }}
@@ -191,6 +195,9 @@ jobs:
 
   deploy:
     name: SSH blue-green deploy
+    concurrency:
+      group: deploy-canary-ssh
+      cancel-in-progress: false
     needs: [build, build-control-plane]
     if: ${{ always() && needs.build.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.skip_deploy != true) }}
     runs-on: ubuntu-latest

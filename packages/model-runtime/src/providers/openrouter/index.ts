@@ -3,6 +3,7 @@ import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenRouterVideo, pollOpenRouterVideoStatus } from './createVideo';
 import { fetchOpenRouterModels } from './modelFetch';
 import type { OpenRouterReasoning } from './type';
 
@@ -91,9 +92,15 @@ export const params = {
       'X-Title': BRANDING_NAME,
     },
   },
+  createVideo: createOpenRouterVideo,
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
+  handlePollVideoStatus: async (inferenceId, options) =>
+    pollOpenRouterVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || 'https://openrouter.ai/api/v1',
+    }),
   models: fetchOpenRouterModels,
   provider: ModelProvider.OpenRouter,
 } satisfies OpenAICompatibleFactoryOptions;

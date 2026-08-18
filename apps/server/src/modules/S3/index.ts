@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { fileEnv } from '@/envs/file';
 import { YEAR } from '@/utils/units';
 
+import { ensureLocalNoProxyEnv, resolveS3SdkEndpoint } from './localEndpoint';
+
 export const fileSchema = z.object({
   Key: z.string(),
   LastModified: z.date(),
@@ -31,8 +33,29 @@ export interface PreSignedUpload {
   url: string;
 }
 
+const createS3Client = (
+  accessKeyId: string,
+  secretAccessKey: string,
+  endpoint: string,
+  options?: { forcePathStyle?: boolean; region?: string },
+) =>
+  new S3Client({
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+    endpoint,
+    forcePathStyle: options?.forcePathStyle,
+    region: options?.region || DEFAULT_S3_REGION,
+    // refs: https://github.com/lobehub/lobe-chat/pull/5479
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+  });
+
 export class S3 {
   private readonly client: S3Client;
+
+  private readonly signingClient: S3Client;
 
   private readonly bucket: string;
 
@@ -47,6 +70,7 @@ export class S3 {
       forcePathStyle?: boolean;
       region?: string;
       setAcl?: boolean;
+      signingEndpoint?: string;
     },
   ) {
     if (!accessKeyId || !secretAccessKey || !endpoint)
@@ -56,18 +80,18 @@ export class S3 {
     this.bucket = options?.bucket;
     this.setAcl = options?.setAcl || false;
 
-    this.client = new S3Client({
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-      endpoint,
+    ensureLocalNoProxyEnv();
+
+    const clientOptions = {
       forcePathStyle: options?.forcePathStyle,
-      region: options?.region || DEFAULT_S3_REGION,
-      // refs: https://github.com/lobehub/lobe-chat/pull/5479
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
-    });
+      region: options?.region,
+    };
+
+    this.client = createS3Client(accessKeyId, secretAccessKey, endpoint, clientOptions);
+    this.signingClient =
+      options?.signingEndpoint && options.signingEndpoint !== endpoint
+        ? createS3Client(accessKeyId, secretAccessKey, options.signingEndpoint, clientOptions)
+        : this.client;
   }
 
   public async deleteFile(key: string) {
@@ -150,7 +174,7 @@ export class S3 {
       Key: key,
     });
 
-    const url = await getSignedUrl(this.client, command, { expiresIn: 3600 });
+    const url = await getSignedUrl(this.signingClient, command, { expiresIn: 3600 });
 
     return {
       headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
@@ -164,7 +188,7 @@ export class S3 {
       Key: key,
     });
 
-    return getSignedUrl(this.client, command, {
+    return getSignedUrl(this.signingClient, command, {
       expiresIn: expiresIn ?? fileEnv.S3_PREVIEW_URL_EXPIRE_IN,
     });
   }
@@ -221,11 +245,18 @@ export class S3 {
 
 export class FileS3 extends S3 {
   constructor() {
-    super(fileEnv.S3_ACCESS_KEY_ID, fileEnv.S3_SECRET_ACCESS_KEY, fileEnv.S3_ENDPOINT, {
+    const publicEndpoint = fileEnv.S3_ENDPOINT;
+    const sdkEndpoint = resolveS3SdkEndpoint(publicEndpoint, fileEnv.S3_INTERNAL_ENDPOINT);
+
+    super(fileEnv.S3_ACCESS_KEY_ID, fileEnv.S3_SECRET_ACCESS_KEY, sdkEndpoint, {
       bucket: fileEnv.S3_BUCKET,
       forcePathStyle: fileEnv.S3_ENABLE_PATH_STYLE,
       region: fileEnv.S3_REGION,
       setAcl: fileEnv.S3_SET_ACL,
+      signingEndpoint:
+        publicEndpoint && sdkEndpoint && publicEndpoint !== sdkEndpoint
+          ? publicEndpoint
+          : undefined,
     });
   }
 }

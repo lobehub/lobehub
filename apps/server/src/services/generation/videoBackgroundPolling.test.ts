@@ -5,7 +5,10 @@ import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
-import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import {
+  isTerminalVideoPollError,
+  processBackgroundVideoPolling,
+} from '@/server/services/generation/videoBackgroundPolling';
 import { AsyncTaskError, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 
@@ -289,6 +292,40 @@ describe('videoBackgroundPolling', () => {
         expect.objectContaining({ status: AsyncTaskStatus.Success }),
       );
     });
+
+    it('should retry undici fetch failed errors instead of aborting', async () => {
+      mockModelRuntime.handlePollVideoStatus
+        .mockRejectedValueOnce(new TypeError('fetch failed'))
+        .mockResolvedValueOnce({ status: 'processing' })
+        .mockResolvedValueOnce({
+          status: 'success',
+          videoUrl: 'https://example.com/video.mp4',
+        });
+
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 10,
+        fileHash: 'hash',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 1920,
+      });
+
+      mockGenerationModel.createAssetAndFile.mockResolvedValue(undefined);
+
+      const pollPromise = processBackgroundVideoPolling(mockDb, mockParams);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await pollPromise;
+
+      expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledTimes(3);
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith(
+        'task-123',
+        expect.objectContaining({ status: AsyncTaskStatus.Success }),
+      );
+    });
   });
 
   describe('async task duration calculation', () => {
@@ -326,6 +363,16 @@ describe('videoBackgroundPolling', () => {
           status: AsyncTaskStatus.Success,
         }),
       );
+    });
+  });
+
+  describe('isTerminalVideoPollError', () => {
+    it('treats undici fetch failed as retryable', () => {
+      expect(isTerminalVideoPollError(new TypeError('fetch failed'))).toBe(false);
+    });
+
+    it('treats a provider-reported job failure as terminal', () => {
+      expect(isTerminalVideoPollError(new Error('Video generation failed: safety'))).toBe(true);
     });
   });
 });
