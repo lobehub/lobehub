@@ -127,6 +127,17 @@ A records (or AAAA) pointing at `5.135.244.12`:
 - `adchat.panafor.com`
 - `s3.panafor.com`
 - `s3-preview.panafor.com`
+- `mailer.panafor.com` — **DNS-only** (never CDN-proxied). Used for Stalwart WebAdmin HTTPS and SMTP STARTTLS.
+
+Inbound MX for `panafor.com` currently points at `mail.panafor.com` (`194.180.11.117`). Keep that MX if that box still receives `@panafor.com` mail. Do **not** switch MX to `mailer.panafor.com` unless you are moving inboxes onto kamyar.
+
+For Panachat **sending** from kamyar, also publish (copy exact DKIM from Stalwart → Management → Domains → DNS):
+
+- SPF TXT on `panafor.com` must **include** this VPS, e.g. `v=spf1 mx ip4:5.135.244.12 a:mailer.panafor.com -all` (merge with any existing SPF; do not drop `mail.panafor.com`)
+- DKIM TXT `selector._domainkey.panafor.com` from Stalwart
+- DMARC TXT `_dmarc.panafor.com` e.g. `v=DMARC1; p=quarantine; rua=mailto:noreply@panafor.com`
+
+**OVH:** set reverse DNS / PTR for `5.135.244.12` → `mailer.panafor.com`. Unlock **outbound TCP 25** (OVH blocks it by default) or Gmail will not accept mail Stalwart tries to deliver.
 
 Wait until `dig +short chat.panafor.com` returns the VPS IP (`5.135.244.12`). If you use ArvanCloud (or any CDN), **Cloud must be OFF** (DNS-only). Proxied A records hide the origin and HTTP-01 / nginx on this VPS never see the challenge.
 
@@ -201,6 +212,7 @@ sudo certbot --nginx -d chat.panafor.com
 sudo certbot --nginx -d adchat.panafor.com
 sudo certbot --nginx -d preview.panafor.com
 sudo certbot --nginx -d s3.panafor.com
+sudo certbot --nginx -d mailer.panafor.com
 # optional: sudo certbot --nginx -d s3-preview.panafor.com
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
@@ -305,3 +317,34 @@ PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh rollback
 ```
 
 Architecture notes: [canary-cicd.md](../../.cursor/skills/self-host-deploy/canary-cicd.md), [preview-cicd.md](../../.cursor/skills/self-host-deploy/preview-cicd.md).
+
+---
+
+## 12. Mailer (Stalwart SMTP for Panachat)
+
+Stalwart runs as a **separate** Docker container on this VPS (volumes `stalwart-etc`, `stalwart-data`). Nginx fronts **WebAdmin only**. SMTP stays on host ports 25 / 465 / 587.
+
+Compose lives at `/home/panachat/stalwart/docker-compose.yml`. Publish 8080 on **loopback**: `'127.0.0.1:8080:8080'`. Nginx site: copy [`nginx/panachat-mailer-site.example.conf`](nginx/panachat-mailer-site.example.conf) to `/etc/nginx/sites-available/panachat-mailer`, `server_name mailer.panafor.com`, then certbot.
+
+In Stalwart WebAdmin (`https://mailer.panafor.com/admin`):
+
+1. Hostname = `mailer.panafor.com`
+2. Domain = `panafor.com` (not `mailer.panafor.com`)
+3. User `noreply@panafor.com` — this is `SMTP_USER` / `SMTP_PASS`
+4. Copy DKIM/SPF from the domain DNS panel into ArvanCloud (DNS-only)
+
+Panachat `/home/panachat/panachat/.env`:
+
+```env
+EMAIL_SERVICE_PROVIDER=nodemailer
+SMTP_HOST=mailer.panafor.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=noreply@panafor.com
+SMTP_PASS='…'
+SMTP_FROM=Panachat <noreply@panafor.com>
+```
+
+Recreate the **active app slot** after env changes (`compose up -d --force-recreate panachat-green` or `panachat-blue`). Never `docker compose down -v`. App containers use `extra_hosts: mailer.panafor.com:host-gateway` so SMTP does not hairpin through the public IP.
+
+Point Stalwart SMTP TLS at `/etc/letsencrypt/live/mailer.panafor.com/` (or a deploy-hook copy) so STARTTLS on 587 matches the hostname.
