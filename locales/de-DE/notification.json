@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Bilderstellung abgeschlossen",
   "inbox.actionFailed": "Benachrichtigungen konnten nicht aktualisiert werden. Bitte versuchen Sie es erneut.",
   "inbox.all": "Alle Benachrichtigungen",
+  "inbox.allStatus": "Alle",
   "inbox.archive": "Archivieren",
   "inbox.archiveAll": "Alle archivieren",
   "inbox.empty": "Noch keine Benachrichtigungen",

@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Создание изображения завершено",
   "inbox.actionFailed": "Не удалось обновить уведомления. Пожалуйста, попробуйте еще раз.",
   "inbox.all": "Все уведомления",
+  "inbox.allStatus": "Все",
   "inbox.archive": "Архивировать",
   "inbox.archiveAll": "Архивировать все",
   "inbox.empty": "Уведомлений пока нет",

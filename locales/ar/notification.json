@@ -45,6 +45,7 @@
   "image_generation_completed_title": "اكتملت عملية إنشاء الصورة",
   "inbox.actionFailed": "تعذر تحديث الإشعارات. يرجى المحاولة مرة أخرى.",
   "inbox.all": "جميع الإشعارات",
+  "inbox.allStatus": "الكل",
   "inbox.archive": "أرشيف",
   "inbox.archiveAll": "أرشفة الكل",
   "inbox.empty": "لا توجد إشعارات بعد",

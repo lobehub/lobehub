@@ -45,6 +45,7 @@
   "image_generation_completed_title": "圖片生成完成",
   "inbox.actionFailed": "無法更新通知。請再試一次。",
   "inbox.all": "所有通知",
+  "inbox.allStatus": "全部",
   "inbox.archive": "封存",
   "inbox.archiveAll": "全部歸檔",
   "inbox.empty": "尚無通知",

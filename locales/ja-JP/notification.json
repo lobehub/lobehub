@@ -45,6 +45,7 @@
   "image_generation_completed_title": "画像生成が完了しました",
   "inbox.actionFailed": "通知を更新できませんでした。もう一度お試しください。",
   "inbox.all": "すべての通知",
+  "inbox.allStatus": "すべて",
   "inbox.archive": "アーカイブ",
   "inbox.archiveAll": "すべてをアーカイブ",
   "inbox.empty": "通知はまだありません",

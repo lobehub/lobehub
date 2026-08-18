@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Generazione immagine completata",
   "inbox.actionFailed": "Impossibile aggiornare le notifiche. Riprova.",
   "inbox.all": "Tutte le notifiche",
+  "inbox.allStatus": "Tutti",
   "inbox.archive": "Archivia",
   "inbox.archiveAll": "Archivia tutto",
   "inbox.empty": "Nessuna notifica al momento",

@@ -45,6 +45,7 @@
   "image_generation_completed_title": "이미지 생성 완료",
   "inbox.actionFailed": "알림을 업데이트할 수 없습니다. 다시 시도해 주세요.",
   "inbox.all": "모든 알림",
+  "inbox.allStatus": "전체",
   "inbox.archive": "보관",
   "inbox.archiveAll": "모두 보관",
   "inbox.empty": "알림이 아직 없습니다",

@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Afbeeldingsgeneratie voltooid",
   "inbox.actionFailed": "Kon meldingen niet bijwerken. Probeer het opnieuw.",
   "inbox.all": "Alle meldingen",
+  "inbox.allStatus": "Alles",
   "inbox.archive": "Archiveren",
   "inbox.archiveAll": "Alles archiveren",
   "inbox.empty": "Nog geen meldingen",

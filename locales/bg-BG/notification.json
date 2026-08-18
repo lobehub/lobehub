@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Генерирането на изображението завърши",
   "inbox.actionFailed": "Неуспешно актуализиране на известията. Моля, опитайте отново.",
   "inbox.all": "Всички известия",
+  "inbox.allStatus": "Всички",
   "inbox.archive": "Архивиране",
   "inbox.archiveAll": "Архивирай всички",
   "inbox.empty": "Все още няма известия",

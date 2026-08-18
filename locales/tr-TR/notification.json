@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Görsel oluşturma tamamlandı",
   "inbox.actionFailed": "Bildirimler güncellenemedi. Lütfen tekrar deneyin.",
   "inbox.all": "Tüm bildirimler",
+  "inbox.allStatus": "Tümü",
   "inbox.archive": "Arşivle",
   "inbox.archiveAll": "Tümünü arşivle",
   "inbox.empty": "Henüz bildirim yok",

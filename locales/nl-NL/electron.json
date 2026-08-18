@@ -6,6 +6,7 @@
   "gateway.statusDisconnected": "Niet verbonden met Gateway",
   "gateway.title": "Apparaat Gateway",
   "navigation.agents": "Agenten",
+  "navigation.apps": "Apps",
   "navigation.channels": "Kanalen",
   "navigation.chat": "Chat",
   "navigation.discover": "Ontdekken",

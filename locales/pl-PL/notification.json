@@ -45,6 +45,7 @@
   "image_generation_completed_title": "Generowanie obrazu zakończone",
   "inbox.actionFailed": "Nie udało się zaktualizować powiadomień. Spróbuj ponownie.",
   "inbox.all": "Wszystkie powiadomienia",
+  "inbox.allStatus": "Wszystko",
   "inbox.archive": "Archiwizuj",
   "inbox.archiveAll": "Zarchiwizuj wszystko",
   "inbox.empty": "Brak powiadomień",
