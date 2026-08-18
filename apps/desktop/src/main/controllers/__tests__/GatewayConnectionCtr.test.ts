@@ -902,6 +902,18 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
+    it('forwards ingestWorkspaceId to spawnLhHeteroExec as workspaceId', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('grok-build', 'op-ws', 'hi', 'mock-jwt', {
+        ingestWorkspaceId: 'ws-lobehub',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-lobehub' }),
+      );
+    });
+
     it('sends accepted ack and spawns lh hetero exec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('openclaw', 'op-xyz');

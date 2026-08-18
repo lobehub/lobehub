@@ -51,6 +51,8 @@ export interface SandboxRunParams {
   systemContext?: string;
   topicId: string;
   userId: string;
+  /** Topic/run workspace — injected as `LOBEHUB_WORKSPACE_ID` for ingest. */
+  workspaceId?: string;
 }
 
 /**
@@ -145,6 +147,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     resumeSessionId,
     topicId,
     userId,
+    workspaceId,
   } = params;
 
   // For cloud sandbox, default cwd is /workspace — must be explicit so CC stores and
@@ -198,6 +201,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     `LOBEHUB_JWT=${shellQuote(jwt)}`,
     `LOBEHUB_SERVER=${shellQuote(serverUrl)}`,
     `LOBEHUB_ASSISTANT_MESSAGE_ID=${shellQuote(assistantMessageId)}`,
+    ...(workspaceId ? [`LOBEHUB_WORKSPACE_ID=${shellQuote(workspaceId)}`] : []),
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),

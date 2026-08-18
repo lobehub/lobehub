@@ -2447,6 +2447,8 @@ export default class HeterogeneousAgentCtr {
     serverUrl: string;
     systemContext?: string;
     topicId: string;
+    /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
+    workspaceId?: string;
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
@@ -2462,6 +2464,7 @@ export default class HeterogeneousAgentCtr {
       serverUrl,
       systemContext,
       topicId,
+      workspaceId,
     } = params;
     const workDir = cwd ?? process.cwd();
 
@@ -2514,6 +2517,10 @@ export default class HeterogeneousAgentCtr {
       LOBEHUB_JWT: jwt,
       ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
+      // Same reason `runHeteroTask` injects this for notify: without it the
+      // CLI's heteroIngest/heteroFinish fall back to personal scope and the
+      // workspace topic 404s (empty assistant, topic stuck `running`).
+      ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
     };
 
     logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);

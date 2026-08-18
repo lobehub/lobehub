@@ -1035,6 +1035,40 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       );
     });
 
+    it('forwards the topic workspace as ingestWorkspaceId on device hetero dispatch', async () => {
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'do the task on my device',
+      } as any);
+
+      expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+        expect.objectContaining({ ingestWorkspaceId: 'workspace-a' }),
+      );
+    });
+
+    it('forwards the topic workspace into the cloud sandbox hetero spawn', async () => {
+      heteroAgentConfig.agencyConfig = {
+        heterogeneousProvider: { type: 'claude-code' },
+      } as any;
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'do the task in the cloud sandbox',
+      } as any);
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'workspace-a' }),
+      );
+    });
+
     it('keeps the conversation workspace separate from a personal platform device scope', async () => {
       heteroAgentConfig.agencyConfig = {
         executionTarget: 'local',

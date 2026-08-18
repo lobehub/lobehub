@@ -115,8 +115,16 @@ const resolveShimPathToken = (shimPath: string, token: string): string | undefin
     );
   }
 
-  if (lowerToken.startsWith('%dp0%')) {
-    return joinShimRelativePath(shimPath, trimmedToken.slice('%dp0%'.length).replace(/^[\\/]/, ''));
+  const shimDirectoryPrefix = lowerToken.startsWith('%~dp0')
+    ? '%~dp0'
+    : lowerToken.startsWith('%dp0%')
+      ? '%dp0%'
+      : undefined;
+  if (shimDirectoryPrefix) {
+    return joinShimRelativePath(
+      shimPath,
+      trimmedToken.slice(shimDirectoryPrefix.length).replace(/^[\\/]/, ''),
+    );
   }
 
   if (path.win32.isAbsolute(trimmedToken)) return trimmedToken;
@@ -183,7 +191,7 @@ const inferWindowsNodeScriptFromShim = async (
   const patterns: Array<RegExp | [RegExp, string]> = [
     /exec\s+"(\$basedir[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
     /exec\s+(node(?:\.exe)?)\s+"([^"]+)"/i,
-    /"(%dp0%[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
+    /"(%(?:~dp0|dp0%)[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
     /"(%_prog%)"\s+"([^"]+)"/i,
     [/(?:^|\r?\n)\s*(node(?:\.exe)?)\s+"([^"]+)"/i, 'node'],
   ];
@@ -208,7 +216,7 @@ const inferWindowsExecutableFromShim = async (
 ): Promise<WindowsShimTarget | undefined> => {
   const matches = [
     ...source.matchAll(/\$basedir[\\/]([^"\s]+?\.exe)/gi),
-    ...source.matchAll(/%dp0%\\([^"\r\n]+?\.exe)/gi),
+    ...source.matchAll(/%(?:~dp0|dp0%)[\\/]?([^"\r\n]+?\.exe)/gi),
   ];
 
   for (const match of matches) {

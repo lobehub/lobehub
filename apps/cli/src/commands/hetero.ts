@@ -146,7 +146,9 @@ const buildExtraArgs = (
                 ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
                 : []),
             ]
-          : options.type === 'claude-code' || options.type === 'codebuddy'
+          : options.type === 'claude-code' ||
+              options.type === 'codebuddy' ||
+              options.type === 'grok-build'
             ? [
                 ...(options.model ? ['--model', options.model] : []),
                 ...(options.effort ? ['--effort', options.effort] : []),

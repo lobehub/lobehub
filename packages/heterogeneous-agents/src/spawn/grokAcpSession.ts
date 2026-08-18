@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { getAnyCliFlagValue, GROK_BUILD_REASONING_EFFORT_FLAGS } from '@lobechat/types';
 
 import type { AgentPromptInput } from '../protocol';
 import type { AcpRpcMessage } from './acpStdioClient';
@@ -13,6 +14,7 @@ import { normalizeImage } from './input';
 const ACP_PROTOCOL_VERSION = 1;
 const ACP_CANCEL_GRACE_MS = 2_000;
 const GROK_ACP_TRANSPORT = 'acp-stdio' as const;
+const GROK_MODEL_FLAGS = ['-m', '--model'] as const;
 const SUPPORTED_AUTH_METHODS = ['cached_token', 'xai.api_key'] as const;
 
 interface AcpTextContentBlock {
@@ -173,9 +175,17 @@ export class GrokAcpSession {
       }
 
       let acpSessionId: string;
+      const model = getAnyCliFlagValue(this.options.args, GROK_MODEL_FLAGS)?.trim();
+      const effort = getAnyCliFlagValue(
+        this.options.args,
+        GROK_BUILD_REASONING_EFFORT_FLAGS,
+      )?.trim();
       if (this.options.resumeSessionId) {
         await this.client.request('session/load', {
-          _meta: { noReplay: true },
+          _meta: {
+            noReplay: true,
+            ...(effort && !model ? { reasoningEffort: effort } : {}),
+          },
           cwd: this.options.cwd,
           mcpServers: [],
           sessionId: this.options.resumeSessionId,
@@ -189,6 +199,14 @@ export class GrokAcpSession {
         });
         if (!session.sessionId) throw new Error('Grok Build ACP returned no session id');
         acpSessionId = session.sessionId;
+      }
+
+      if (this.options.resumeSessionId && model) {
+        await this.client.request('session/set_model', {
+          ...(effort ? { _meta: { reasoningEffort: effort } } : {}),
+          modelId: model,
+          sessionId: acpSessionId,
+        });
       }
 
       this.acpSessionId = acpSessionId;
