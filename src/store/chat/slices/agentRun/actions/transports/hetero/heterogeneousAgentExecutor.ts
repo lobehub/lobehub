@@ -610,6 +610,20 @@ export const executeHeterogeneousAgent = async (
     return out;
   };
 
+  const groupOrchestrationMetadata =
+    context.groupId && (context.isSupervisor || context.orchestrationRole || context.subAgentId)
+      ? {
+          ...(context.isSupervisor && { isSupervisor: true }),
+          ...(context.orchestrationRole && { orchestrationRole: context.orchestrationRole }),
+          ...(context.subAgentId && { subAgentId: context.subAgentId }),
+        }
+      : {};
+
+  const withGroupOrchestrationMetadata = (metadata: Record<string, unknown> = {}) => ({
+    ...groupOrchestrationMetadata,
+    ...metadata,
+  });
+
   /**
    * Global `tool_use.id → tool message DB id` lookup, shared across the
    * main agent and every subagent run. `tool_result` events identify
@@ -748,7 +762,11 @@ export const executeHeterogeneousAgent = async (
 
     data.assistantMessage = {
       agentId: context.agentId,
+      ...(context.groupId && { groupId: context.groupId }),
       id: mainState.currentAssistantId,
+      ...(Object.keys(groupOrchestrationMetadata).length > 0 && {
+        metadata: groupOrchestrationMetadata,
+      }),
       model: data.model,
       provider: data.provider,
       role: 'assistant',
@@ -853,6 +871,7 @@ export const executeHeterogeneousAgent = async (
   const updateMessageOrThrow = async (messageId: string, update: Record<string, any>) => {
     const result = await messageService.updateMessage(messageId, update, {
       agentId: context.agentId,
+      groupId: context.groupId,
       topicId: context.topicId,
     });
     if (result?.success === false) {
@@ -861,6 +880,7 @@ export const executeHeterogeneousAgent = async (
   };
   const messageWriteCtx: MessageQueryContext = {
     agentId: context.agentId,
+    groupId: context.groupId,
     topicId: context.topicId,
   };
   const messageWriteBatcher = createMessageWriteBatcher({
@@ -1476,11 +1496,14 @@ export const executeHeterogeneousAgent = async (
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
       case 'createAssistant': {
-        const createMetadata: Record<string, any> = { ...heteroProvenance(intent.mainMessageId) };
+        const createMetadata: Record<string, any> = withGroupOrchestrationMetadata(
+          heteroProvenance(intent.mainMessageId),
+        );
         if (intent.signal) createMetadata.signal = intent.signal;
         const messageToCreate = {
           agentId: intent.agentId ?? context.agentId,
           content: '',
+          ...(context.groupId && { groupId: context.groupId }),
           id: intent.messageId,
           ...(Object.keys(createMetadata).length > 0 ? { metadata: createMetadata } : {}),
           model: intent.model,
@@ -1509,7 +1532,7 @@ export const executeHeterogeneousAgent = async (
         if (intent.reasoning !== undefined) update.reasoning = { content: intent.reasoning };
         if (intent.model) update.model = intent.model;
         if (intent.provider) update.provider = intent.provider;
-        if (intent.metadata) update.metadata = intent.metadata;
+        if (intent.metadata) update.metadata = withGroupOrchestrationMetadata(intent.metadata);
         if (Object.keys(update).length === 0) return;
         messageWriteBatcher.enqueueUpdateMessage(
           intent.messageId,
@@ -1565,10 +1588,13 @@ export const executeHeterogeneousAgent = async (
         };
 
         const buildToolMessage = (x: (typeof intent.tools)[number]) => {
-          const toolMetadata = heteroProvenance(mainState.currentMainMessageId);
+          const toolMetadata = withGroupOrchestrationMetadata(
+            heteroProvenance(mainState.currentMainMessageId),
+          );
           return {
             agentId: context.agentId,
             content: '',
+            ...(context.groupId && { groupId: context.groupId }),
             id: x.toolMessageId,
             ...(Object.keys(toolMetadata).length > 0 ? { metadata: toolMetadata } : {}),
             parentId: intent.assistantMessageId,
@@ -1709,7 +1735,9 @@ export const executeHeterogeneousAgent = async (
           usage: intent.usage as ModelUsage,
           // Wholesale metadata overwrite — re-stamp the provenance the
           // createAssistant write put there.
-          metadata: heteroProvenance(mainState.currentMainMessageId),
+          metadata: withGroupOrchestrationMetadata(
+            heteroProvenance(mainState.currentMainMessageId),
+          ),
           ...(intent.model && { model: intent.model }),
           ...(intent.provider && { provider: intent.provider }),
         };

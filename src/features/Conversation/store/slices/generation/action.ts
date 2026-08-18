@@ -354,6 +354,15 @@ const getRetryGatewayExecutionContext = (context: ConversationContext): Conversa
   return { ...context, agentId, subAgentId: undefined };
 };
 
+const getRetryHeterogeneousExecutionContext = (
+  context: ConversationContext,
+): ConversationContext => {
+  const agentId = getRetryExecutionAgentId(context);
+  if (agentId === context.agentId) return context;
+
+  return { ...context, agentId };
+};
+
 const getGroupSupervisorAgentId = (context: ConversationContext) => {
   if (!context.groupId) return context.agentId;
 
@@ -560,7 +569,7 @@ const regenerateUserMessageFromSource = async (
     // so prior context is preserved.
     if (runtimeType === 'hetero' && heterogeneousProvider) {
       await runHeterogeneousFromExistingMessage(chatStore, {
-        context,
+        context: getRetryHeterogeneousExecutionContext(context),
         heterogeneousProvider,
         // Forward the original user message's images so regenerate re-runs
         // the CLI with the same vision input as the first attempt. Without

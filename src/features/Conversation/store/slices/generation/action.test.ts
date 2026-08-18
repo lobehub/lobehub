@@ -2137,8 +2137,20 @@ describe('Generation Actions', () => {
 
       expect(createMessageSpy).toHaveBeenCalledWith(
         expect.objectContaining({
+          agentId: 'member-agent',
           groupId: 'group-1',
           metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+        }),
+      );
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          context: expect.objectContaining({
+            agentId: 'member-agent',
+            groupId: 'group-1',
+            orchestrationRole: 'member',
+            subAgentId: 'member-agent',
+          }),
         }),
       );
     });

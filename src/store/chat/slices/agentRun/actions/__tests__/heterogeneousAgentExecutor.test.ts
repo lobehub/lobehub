@@ -1150,6 +1150,41 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(dispatched![0].value.metadata.usage).toBeUndefined();
     });
 
+    it('keeps group member ownership when persisting heterogeneous usage', async () => {
+      await runWithEvents(
+        [
+          ccInit(),
+          ccMessageStart('msg_01', 'claude-opus-4-6'),
+          ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+          ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+          ccResult(),
+        ],
+        {
+          params: {
+            context: {
+              agentId: 'member-agent',
+              groupId: 'group-1',
+              orchestrationRole: 'member',
+              scope: 'group',
+              subAgentId: 'member-agent',
+              topicId: 'topic-1',
+            },
+          },
+        },
+      );
+
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'member-agent' }),
+      );
+      const usageWrite = mockUpdateMessage.mock.calls.find(
+        ([, value]: any) => value.usage !== undefined,
+      );
+      expect(usageWrite?.[1].metadata).toMatchObject({
+        orchestrationRole: 'member',
+        subAgentId: 'member-agent',
+      });
+    });
+
     it('should write accumulated reasoning', async () => {
       await runWithEvents([
         ccInit(),
