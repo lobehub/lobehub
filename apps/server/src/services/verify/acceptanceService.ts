@@ -20,7 +20,9 @@ import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { GoalModel } from '@/database/models/goal';
+import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
@@ -902,6 +904,34 @@ export class AcceptanceService {
     };
   };
 
+  /** Resolve the project that owns a task-backed acceptance, when one exists. */
+  private resolveProject = async (
+    acceptance: AcceptanceItem,
+  ): Promise<{ id: string; name: string } | null> => {
+    try {
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      const task =
+        acceptance.subjectType === 'task'
+          ? await taskModel.resolve(acceptance.subjectId)
+          : acceptance.subjectType === 'topic'
+            ? await new TaskTopicModel(this.db, this.userId, this.workspaceId)
+                .findByTopicId(acceptance.subjectId)
+                .then((taskTopic) =>
+                  taskTopic ? taskModel.resolve(taskTopic.taskId) : Promise.resolve(null),
+                )
+            : null;
+      if (!task?.projectId) return null;
+
+      const project = await new ProjectModel(this.db, this.userId, this.workspaceId).findById(
+        task.projectId,
+      );
+      return project ? { id: project.id, name: project.name } : null;
+    } catch (error) {
+      log('resolveProject failed (non-fatal): %O', error);
+      return null;
+    }
+  };
+
   /**
    * The latest round's total-check count per acceptance — a cheap glance for the
    * list panel (two batched reads, never a per-row union recompute). The signed-
@@ -947,6 +977,7 @@ export class AcceptanceService {
       rows.map(async (row) => ({
         ...row,
         checkCount: checkCounts.get(row.id) ?? null,
+        project: await this.resolveProject(row),
         subject: await this.resolveSubject(row),
       })),
     );

@@ -1,6 +1,5 @@
 import { Flexbox, Input, Text } from '@lobehub/ui';
 import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +21,12 @@ interface CreateProjectFormState {
   slug: string;
   slugEdited: boolean;
 }
+
+const CreateProjectTitle = memo(() => {
+  const { t } = useTranslation('project');
+
+  return t('create.title');
+});
 
 const CreateProjectContent = memo(() => {
   const { t } = useTranslation(['project', 'common']);
@@ -144,6 +149,6 @@ export const openCreateProjectModal = () =>
     content: <CreateProjectContent />,
     footer: null,
     styles: { content: { padding: 0 } },
-    title: translate('create.title', { ns: 'project' }),
+    title: <CreateProjectTitle />,
     width: 460,
   });
