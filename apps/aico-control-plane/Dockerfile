@@ -8,12 +8,11 @@ ARG NODEJS_VERSION="24"
 
 FROM node:${NODEJS_VERSION}-bookworm-slim AS builder
 
-# This repo sets lockfile=false (.npmrc / pnpm-workspace.yaml). `--frozen-lockfile`
-# plus CI=true (GitHub Actions / Buildx) makes the next `pnpm run` attempt a
-# headless install and fail with:
-#   Headless installation requires a pnpm-lock.yaml file
-# Match the product Dockerfile: `pnpm i` (not frozen). Empty CI so pnpm does not
-# treat the environment as CI. Allow postinstall so vite's esbuild binary exists.
+# This repo sets lockfile=false. Do not use frozen-lockfile (headless install
+# fails) or pnpm's allow-all-builds config (conflicts with
+# onlyBuiltDependencies: neverBuiltDependencies + onlyBuiltDependencies).
+# Empty CI so `pnpm run` does not re-install in GitHub Actions / Buildx.
+# Add esbuild to the allowlist so Vite has a binary (postinstall is otherwise skipped).
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_OPTIONS=--max-old-space-size=8192 \
     APP_URL=http://app.com \
@@ -32,8 +31,11 @@ RUN apt-get update \
 
 COPY . .
 
-RUN corepack use "$(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json)" \
-    && pnpm i --config.dangerouslyAllowAllBuilds=true
+RUN set -e; \
+    grep -qE '^[[:space:]]*-[[:space:]]*esbuild$' pnpm-workspace.yaml \
+      || sed -i '/^onlyBuiltDependencies:/a\  - esbuild' pnpm-workspace.yaml; \
+    corepack use "$(sed -n 's/.*"packageManager": "\(.*\)".*/\1/p' package.json)"; \
+    pnpm i
 
 RUN pnpm run build:spa:control-plane \
     && pnpm --filter @aico/control-plane build \

@@ -6,7 +6,7 @@
 #   PANACHAT_ENV=preview ./scripts/panachat-deploy-remote.sh deploy <image-ref>
 #   ./scripts/panachat-deploy-remote.sh rollback
 #   ./scripts/panachat-deploy-remote.sh bootstrap <image-ref>
-#   ./scripts/panachat-deploy-remote.sh status
+#   ./scripts/panachat-deploy-remote.sh status     # moz -i equivalent (containers, users, health)
 #
 # Safety:
 #   - Always runs panachat-backup.sh before deploy (unless PANACHAT_SKIP_BACKUP=1)
@@ -237,6 +237,12 @@ postgres_user_count() {
   local container="${POSTGRES_CONTAINER:-${PANACHAT_STACK}-postgres}"
   local db="${LOBE_DB_NAME:-${PANACHAT_DB_NAME:-lobechat}}"
   docker exec "$container" psql -U postgres -d "$db" -Atc "SELECT count(*) FROM users;" 2>/dev/null || echo "?"
+}
+
+postgres_admin_count() {
+  local container="${POSTGRES_CONTAINER:-${PANACHAT_STACK}-postgres}"
+  local db="${LOBE_DB_NAME:-${PANACHAT_DB_NAME:-lobechat}}"
+  docker exec "$container" psql -U postgres -d "$db" -Atc "SELECT count(*) FROM platform_admins;" 2>/dev/null || echo "?"
 }
 
 # Same safety as moz: refuse deploy if live users dropped vs last healthy fingerprint.
@@ -510,6 +516,21 @@ require_env_files() {
 cmd_status() {
   load_infra_defaults
   load_state
+  if [[ -f "$APP_ENV_FILE" ]]; then
+    # shellcheck disable=SC1090
+    set -a
+    # shellcheck disable=SC1090
+    source "$APP_ENV_FILE"
+    set +a
+  fi
+  local live_port live_http cp_code cp_name fp_file fp_users
+  live_port="$(slot_port "${CURRENT_SLOT:-blue}")"
+  live_http="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${live_port}/signin" 2>/dev/null || echo 000)"
+  cp_name="${PANACHAT_STACK}-control-plane"
+  cp_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${CONTROL_PLANE_PORT}/health" 2>/dev/null || echo 000)"
+  fp_file="$(fingerprint_file)"
+  fp_users="$(grep -E '^users=' "$fp_file" 2>/dev/null | head -1 | cut -d= -f2- || echo none)"
+
   echo "PANACHAT_ENV=$PANACHAT_ENV"
   echo "PANACHAT_STACK=$PANACHAT_STACK"
   echo "PANACHAT_VOLUME_PREFIX=$PANACHAT_VOLUME_PREFIX"
@@ -521,7 +542,13 @@ cmd_status() {
   echo "PREVIOUS_SLOT=${PREVIOUS_SLOT:-}"
   echo "PREVIOUS_SHA=${PREVIOUS_SHA:-}"
   echo "PANACHAT_IMAGE=${PANACHAT_IMAGE:-}"
-  echo "PORTS blue=$PORT_BLUE green=$PORT_GREEN"
+  echo "PORTS blue=$PORT_BLUE green=$PORT_GREEN control-plane=$CONTROL_PLANE_PORT"
+  echo "HTTP /signin (slot ${CURRENT_SLOT:-?} :${live_port}): $live_http"
+  echo "Control plane /health (:${CONTROL_PLANE_PORT}): $cp_code  container=$(docker inspect -f '{{.State.Status}}' "$cp_name" 2>/dev/null || echo missing)"
+  echo "Users: $(postgres_user_count)"
+  echo "Platform admins: $(postgres_admin_count)"
+  echo "DB fingerprint users: $fp_users  ($fp_file)"
+  echo ""
   docker ps --filter "name=${PANACHAT_STACK}-" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
 }
 

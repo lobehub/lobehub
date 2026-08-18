@@ -186,7 +186,7 @@ jobs:
   deploy:
     name: SSH preview blue-green deploy
     needs: [build, build-control-plane]
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_deploy != true }}
+    if: ${{ always() && needs.build.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.skip_deploy != true) }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy preview over SSH
@@ -211,7 +211,7 @@ jobs:
             PANACHAT_ENV=preview ./scripts/panachat-deploy-remote.sh deploy "$IMAGE"
         env:
           IMAGE: ${{ needs.build.outputs.image }}:${{ needs.build.outputs.sha_short }}
-          CONTROL_PLANE_IMAGE: ${{ needs.build-control-plane.outputs.image }}:${{ needs.build-control-plane.outputs.sha_short }}
+          CONTROL_PLANE_IMAGE: ${{ needs.build-control-plane.result == 'success' && format('{0}:{1}', needs.build-control-plane.outputs.image, needs.build-control-plane.outputs.sha_short) || '' }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           GHCR_USER: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}

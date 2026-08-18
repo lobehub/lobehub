@@ -41,5 +41,21 @@ describe('control-plane CI/CD wiring', () => {
     expect(dockerfile).toContain('pnpm --filter @aico/control-plane build');
     expect(dockerfile).toContain('CMD ["node", "dist/standalone.js"]');
     expect(dockerfile).toContain('Do not bind-mount');
+    expect(dockerfile).not.toMatch(/pnpm i[^\n]*--frozen-lockfile/);
+    expect(dockerfile).not.toMatch(/--config\.dangerouslyAllowAllBuilds/);
+  });
+
+  it('prints moz-like status (users, health) and deploys chat even if control-plane build fails', () => {
+    const script = read('scripts/panachat-deploy-remote.sh');
+    const canary = read('.github/workflows/deploy-canary.yml');
+    const preview = read('.github/workflows/deploy-preview.yml');
+
+    expect(script).toContain('echo "Users:');
+    expect(script).toContain('Platform admins:');
+    expect(script).toContain('Control plane /health');
+
+    for (const yaml of [canary, preview]) {
+      expect(yaml).toContain("always() && needs.build.result == 'success'");
+    }
   });
 });
