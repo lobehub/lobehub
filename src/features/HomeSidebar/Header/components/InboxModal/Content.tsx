@@ -93,14 +93,18 @@ const Content = memo<ContentProps>(
 
     const liveRequests = (showTransfers && currentUserId && transferRequests) || [];
     // While a request is live its actionable item replaces the immutable
-    // `agent_transfer_requested` row EVERYWHERE — the suppression set derives
-    // from the unfiltered live list, not the render-gated one, so a read row
-    // cannot resurface in the Read tab while its request still awaits action.
-    // Once resolved the row reappears as the historical record.
+    // `agent_transfer_requested` row in every TAB — the suppression set
+    // derives from the unfiltered live list, not the render-gated one, so a
+    // read row cannot resurface in the Read tab while its request still
+    // awaits action. Once resolved the row reappears as the historical
+    // record. Suppression is scoped to the `pending` CATEGORY to mirror the
+    // server's count reconciliation exactly: a linked row that landed in
+    // another category stays counted there, so it must stay rendered there —
+    // hiding it would advertise a badge over an empty list.
     const liveRequestIds = new Set((transferRequests ?? []).map((request) => request.id));
     const visibleNotifications = notifications.filter((item) => {
       const requestId = getLinkedRequestId(item);
-      return !requestId || !liveRequestIds.has(requestId);
+      return !requestId || item.category !== 'pending' || !liveRequestIds.has(requestId);
     });
 
     const handleTransferSettled = useCallback(
