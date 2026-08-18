@@ -22,6 +22,7 @@ import {
   ExternalLink,
   MessageCircle,
   MoreHorizontal,
+  Trash,
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -87,6 +88,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
+  const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const addComment = useTaskStore((s) => s.addComment);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const { allowed: canEditTask } = usePermission('create_content');
@@ -166,6 +168,24 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
     });
   }, [activity.id, cancelTopic, t]);
 
+  const handleDelete = useCallback(() => {
+    if (!activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.deleteConfirm.content', {
+        defaultValue:
+          'This run and its messages will be permanently deleted. This action cannot be undone.',
+      }),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onOk: async () => {
+        await deleteTopic(topicId);
+      },
+      title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
+    });
+  }, [activity.id, deleteTopic, t]);
+
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
@@ -205,6 +225,19 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
       key: 'copyOperationId',
       label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
       onClick: handleCopyOperationId,
+    },
+    { type: 'divider' as const },
+    {
+      danger: true,
+      // A running topic is deleted server-side via interrupt-then-remove, but
+      // the row already offers an explicit Stop for that case — keep delete
+      // scoped to finished runs so this menu doesn't offer two destructive
+      // exits for the same in-flight state.
+      disabled: !activity.id || isRunning,
+      icon: Trash,
+      key: 'delete',
+      label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onClick: handleDelete,
     },
   ];
 

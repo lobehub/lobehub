@@ -4,9 +4,9 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
-import { FloatingPanel } from '@lobehub/ui/base-ui';
+import { confirmModal, FloatingPanel } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Copy, ExternalLink, Maximize2, Minimize2, MoreHorizontal, Share2 } from 'lucide-react';
+import { Copy, ExternalLink, Maximize2, Minimize2, MoreHorizontal, Share2, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -128,6 +128,7 @@ const TopicChatDrawer = memo(() => {
   const drawerTitle = useTaskStore(taskDetailSelectors.topicDrawerTitle);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
+  const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
@@ -158,6 +159,28 @@ const TopicChatDrawer = memo(() => {
     navigate(AGENT_CHAT_TOPIC_URL(agentId, topicId));
   }, [agentId, closeTopicDrawer, navigate, topicId]);
 
+  // Deleting the open run has nowhere to keep showing itself — close the
+  // drawer first so the confirm dialog isn't left pointing at a panel whose
+  // topic no longer exists.
+  const handleDelete = useCallback(() => {
+    if (!topicId) return;
+    const targetTopicId = topicId;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.deleteConfirm.content', {
+        defaultValue:
+          'This run and its messages will be permanently deleted. This action cannot be undone.',
+      }),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onOk: async () => {
+        closeTopicDrawer();
+        await deleteTopic(targetTopicId);
+      },
+      title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
+    });
+  }, [closeTopicDrawer, deleteTopic, t, topicId]);
+
   const menuItems = useMemo<DropdownItem[]>(
     () => [
       {
@@ -182,12 +205,25 @@ const TopicChatDrawer = memo(() => {
         label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
         onClick: handleCopyOperationId,
       },
+      { type: 'divider' },
+      {
+        danger: true,
+        // Mirrors the run row's menu: a running topic already has an explicit
+        // Stop affordance, so delete here stays scoped to finished runs.
+        disabled: !topicId || activity?.status === 'running',
+        icon: Trash,
+        key: 'delete',
+        label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+        onClick: handleDelete,
+      },
     ],
     [
       activity?.operationId,
+      activity?.status,
       agentId,
       handleCopyOperationId,
       handleCopyTopicId,
+      handleDelete,
       handleOpenAgentTopic,
       t,
       topicId,

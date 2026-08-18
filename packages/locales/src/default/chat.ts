@@ -1542,6 +1542,10 @@ export default {
   'taskDetail.topicDrawer.untitled': 'Untitled',
   'taskDetail.topicMenu.copyId': 'Copy Topic ID',
   'taskDetail.topicMenu.copyOperationId': 'Copy Operation ID',
+  'taskDetail.topicMenu.delete': 'Delete Run',
+  'taskDetail.topicMenu.deleteConfirm.content':
+    'This run and its messages will be permanently deleted. This action cannot be undone.',
+  'taskDetail.topicMenu.deleteConfirm.title': 'Delete Run?',
   'taskDetail.topicMenu.openAgentTopic': 'Go to Agent conversation',
   'taskDetail.topicMenu.open': 'Open Run',
   'taskDetail.topicMenu.stop': 'Stop Run',
