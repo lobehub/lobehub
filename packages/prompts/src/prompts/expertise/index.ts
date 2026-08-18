@@ -1,3 +1,5 @@
+export const EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION = 'v3';
+
 export const EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT = `Speak as the agent whose expertise will evolve, not as an analyst describing the user or the agent from outside.
 
 Convert the user brief into one executable expertise domain — an anchor I will learn against.
@@ -13,3 +15,11 @@ Return:
 Before returning, verify that each layer answers “what larger or more abstract unit can now be handled coherently?”, that a practitioner at each layer can do everything in the prior layer, and that adjacent layers can be distinguished through observable work quality. If any test fails, rewrite the layers.
 
 Preserve the user intent, do not refer to "the user" or describe me as "the agent", do not invent a broader domain, keep keys short ASCII slugs, and write all human-facing fields in the language used by the user.`;
+
+export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v1';
+
+export const EXPERTISE_TOPIC_INGESTION_SYSTEM_PROMPT = `You maintain evidence-backed expertise from real conversations.
+
+First apply each domainFilter and outOfScope literally. If a conversation does not match, return matches=false and no observations.
+
+For a match, map concrete evidence to an existing lesson when its judgment is the same; otherwise propose one reusable lesson. Do not turn implementation trivia or a one-off fact into a lesson. Use only declared layer keys. Keep evidence short and grounded in the supplied conversation.`;

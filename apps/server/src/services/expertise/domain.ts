@@ -1,6 +1,9 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import { EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT } from '@lobechat/prompts';
+import {
+  EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
+  EXPERTISE_DOMAIN_DRAFT_SYSTEM_PROMPT,
+} from '@lobechat/prompts';
 import { z } from 'zod';
 
 import { ExpertiseModel } from '@/database/models/expertise';
@@ -168,7 +171,7 @@ export class ExpertiseDomainService {
           metadata: { trigger: 'expertise_domain_draft' },
           tracing: {
             agentId: input.agentId,
-            promptVersion: 'expertise-domain-draft-v3',
+            promptVersion: EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.ExpertiseDomainDraft,
             schemaName: DOMAIN_DRAFT_JSON_SCHEMA.name,
           },

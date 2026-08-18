@@ -1,18 +1,18 @@
 import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = '3';
+export const VERIFY_PLAN_PROMPT_VERSION = 'v3';
 /** Bump when the judge prompt meaningfully changes. */
-export const VERIFY_JUDGE_PROMPT_VERSION = '2';
+export const VERIFY_JUDGE_PROMPT_VERSION = 'v2';
 /** Bump when the report prompt meaningfully changes. */
-export const VERIFY_REPORT_PROMPT_VERSION = '1';
+export const VERIFY_REPORT_PROMPT_VERSION = 'v1';
 /**
  * Bump when the review-prediction prompt meaningfully changes. Doubles as part
  * of the uniqueness key on `verify_review_predictions`, so a bump makes the next
  * run write a NEW opinion instead of overwriting the old one — which is what
  * keeps two prompt versions comparable on the same checks.
  */
-export const REVIEW_PREDICT_PROMPT_VERSION = '1';
+export const REVIEW_PREDICT_PROMPT_VERSION = 'v1';
 
 export interface PlanPromptInput {
   /** Optional run context (agent role, repo, constraints). */

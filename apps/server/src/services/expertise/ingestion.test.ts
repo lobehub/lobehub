@@ -148,7 +148,10 @@ describe('ExpertiseIngestionService.ingestCompletion', () => {
         provider: 'service-provider',
       }),
       expect.objectContaining({
-        tracing: expect.objectContaining({ scenario: 'expertise_topic_ingestion' }),
+        tracing: expect.objectContaining({
+          promptVersion: 'v1',
+          scenario: 'expertise_topic_ingestion',
+        }),
       }),
     );
   });

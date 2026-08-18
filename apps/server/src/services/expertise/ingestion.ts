@@ -11,6 +11,10 @@ import {
   topics,
 } from '@lobechat/database/schemas';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import {
+  EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
+  EXPERTISE_TOPIC_INGESTION_SYSTEM_PROMPT,
+} from '@lobechat/prompts';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -24,8 +28,6 @@ import { resolveExpertiseModelConfig } from './modelConfig';
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
-const PROMPT_VERSION = 'expertise-ingestion-v1';
-
 const AnalysisSchema = z.object({
   domains: z.array(
     z.object({
@@ -288,8 +290,7 @@ export class ExpertiseIngestionService {
       {
         messages: [
           {
-            content:
-              'You maintain evidence-backed expertise from real conversations. First apply each domainFilter and outOfScope literally. If a conversation does not match, return matches=false and no observations. For a match, map concrete evidence to an existing lesson when its judgment is the same; otherwise propose one reusable lesson. Do not turn implementation trivia or a one-off fact into a lesson. Use only declared layer keys. Keep evidence short and grounded in the supplied conversation.',
+            content: EXPERTISE_TOPIC_INGESTION_SYSTEM_PROMPT,
             role: 'system',
           },
           {
@@ -304,7 +305,7 @@ export class ExpertiseIngestionService {
         metadata: { trigger: 'expertise_topic_ingestion' },
         tracing: {
           agentId: input.agentId,
-          promptVersion: PROMPT_VERSION,
+          promptVersion: EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.ExpertiseTopicIngestion,
           schemaName: ANALYSIS_JSON_SCHEMA.name,
           topicId: input.topicId,

@@ -212,7 +212,7 @@ Treat `scenario` as the stable product-workflow partition key, not as a label fo
 - Reuse a scenario only when the call belongs to the same user-visible workflow and lifecycle stage.
 - Add a new `TRACING_SCENARIOS` entry when the business action differs, even if it reuses the same prompt or JSON schema. For example, editable `createGoal` criteria drafting and run-time verify-plan generation require separate scenarios.
 - Never borrow a nearby scenario as a placeholder. It corrupts latency, cost, success-rate, and quality dashboards for both workflows.
-- Keep `promptVersion` next to the prompt it versions and pass `schemaName` for structured generation.
+- Keep `promptVersion` next to the prompt it versions, format it as `v<major>` or `v<major>.<minor>`, and pass `schemaName` for structured generation. Do not prefix the version with the scenario or feature name; `scenario` already carries that identity.
 - Add a regression assertion on the emitted tracing options whenever introducing or correcting a scenario.
 
 ## Real-World Example: agent-evals

@@ -67,7 +67,10 @@ describe('ExpertiseDomainService', () => {
         schema: expect.objectContaining({ name: 'expertise_domain_draft' }),
       }),
       expect.objectContaining({
-        tracing: expect.objectContaining({ scenario: 'expertise_domain_draft' }),
+        tracing: expect.objectContaining({
+          promptVersion: 'v3',
+          scenario: 'expertise_domain_draft',
+        }),
       }),
     );
     expect(result.layers).toHaveLength(2);
