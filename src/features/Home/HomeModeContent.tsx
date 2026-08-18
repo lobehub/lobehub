@@ -28,12 +28,11 @@ import { recentKeys } from '@/libs/swr/keys';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/slices/agentList/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -202,10 +201,10 @@ const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, traili
 const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
   ({ showAuthor, topic }) => {
     const agent = useAgentDisplayMeta(topic.agentId);
-    const group = useHomeStore(homeAgentListSelectors.getAgentById(topic.groupId ?? ''));
-    const groupAvatar =
-      group?.groupAvatar || (typeof group?.avatar === 'string' ? group.avatar : undefined);
-    const avatar = groupAvatar || agent?.avatar;
+    const group = useAgentGroupStore((s) =>
+      topic.groupId ? s.groupMap[topic.groupId] : undefined,
+    );
+    const avatar = group?.avatar || agent?.avatar;
     const backgroundColor = group?.backgroundColor || agent?.backgroundColor;
     const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
     // The snippet is raw markdown (a user note or the last assistant reply);
@@ -483,6 +482,8 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const tasksHidden = hiddenWidgets.includes('tasks');
   const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
   const cacheScope = useCacheScope();
+  const useFetchGroups = useAgentGroupStore((s) => s.useFetchGroups);
+  useFetchGroups(Boolean(isLogin && !recentsHidden), Boolean(isLogin));
 
   // One page-level mine/team scope, shared by the inbox sections and Recent
   // topics. In personal mode the member map is empty, `isTeam` stays false and
