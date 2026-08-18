@@ -167,7 +167,11 @@ export class VerifyService {
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
-  listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
+  listAcceptances = (options?: { quiet?: boolean }): Promise<AcceptanceListItem[]> =>
+    lambdaClient.acceptance.list.query(
+      undefined,
+      options?.quiet ? { context: { showNotification: false } } : undefined,
+    );
 
   /**
    * Acceptance status for a known set of subjects. `listAcceptances` is capped
