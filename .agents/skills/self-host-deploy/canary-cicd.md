@@ -123,9 +123,9 @@ App updates only touch `${PANACHAT_STACK}-blue` / `-green` (default `panachat-bl
 
 After deploy, open **Settings → About**. You should see:
 
-- SemVer from `package.json` (or override from a `v*` Git tag via `PANACHAT_VERSION`)
+- Aico product SemVer `0.9.1` (`AICO_PRODUCT_VERSION` in `packages/const`) unless `PANACHAT_VERSION` is set
 - Channel tag `canary`
 - Short Git SHA (click to copy full SHA)
 - Build time when CI injected `BUILD_TIME`
 
-Optional: create a GitHub Release / tag `v1.2.3` on `canary` so the next image shows that SemVer without auto-committing `package.json`.
+Optional: create a GitHub Release / tag `v1.2.3` on `canary` so the next image shows that SemVer via `PANACHAT_VERSION` without changing LobeHub `package.json`.

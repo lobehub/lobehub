@@ -7,7 +7,9 @@ import { ShieldIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveAicoErrorMessage } from '@/business/client/resolveAicoErrorMessage';
 import { aicoPanelStyles } from '@/features/AicoPanels';
+import AuthLangButton from '@/features/AuthShell/AuthLangButton';
 
 interface LoginFormValues {
   email: string;
@@ -36,7 +38,9 @@ const ControlPlaneLogin = () => {
       } | null;
 
       if (!response.ok) {
-        toast.error(payload?.error?.message || t('platform.loginFailed'));
+        toast.error(
+          resolveAicoErrorMessage(payload?.error?.message, t) ?? t('platform.loginFailed'),
+        );
         return;
       }
 
@@ -56,11 +60,14 @@ const ControlPlaneLogin = () => {
       style={{ maxWidth: 420, margin: '10vh auto' }}
     >
       <Flexbox gap={4}>
-        <Flexbox horizontal align="center" gap={8}>
-          <ShieldIcon size={20} />
-          <Text strong as="h1" style={{ fontSize: 22, margin: 0 }}>
-            {t('platform.loginTitle')}
-          </Text>
+        <Flexbox horizontal align="center" justify="space-between">
+          <Flexbox horizontal align="center" gap={8}>
+            <ShieldIcon size={20} />
+            <Text strong as="h1" style={{ fontSize: 22, margin: 0 }}>
+              {t('platform.loginTitle')}
+            </Text>
+          </Flexbox>
+          <AuthLangButton />
         </Flexbox>
         <Text type="secondary">{t('platform.loginSubtitle')}</Text>
       </Flexbox>

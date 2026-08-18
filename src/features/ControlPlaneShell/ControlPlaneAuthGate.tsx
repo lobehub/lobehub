@@ -5,6 +5,7 @@ import { Button } from '@lobehub/ui/base-ui';
 import { memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AuthLangButton from '@/features/AuthShell/AuthLangButton';
 import { useClientDataSWR } from '@/libs/swr';
 import { controlPlaneClient } from '@/libs/trpc/client/controlPlane';
 
@@ -49,6 +50,7 @@ const ControlPlaneAuthGate = memo<PropsWithChildren>(({ children }) => {
         paddingBlock={12}
         paddingInline={24}
       >
+        <AuthLangButton />
         <Text style={{ fontSize: 13 }} type="secondary">
           {access.email}
         </Text>
