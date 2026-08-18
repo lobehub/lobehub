@@ -164,9 +164,16 @@ const config = {
     // createRequire('../package.json') resolves correctly in the packaged app.
     // The CLI script lives at Resources/bin/lobe-cli.js, so '../package.json'
     // resolves to Resources/package.json.
-    const cliPkg = JSON.parse(
-      await fs.readFile(path.resolve(__dirname, '../cli/package.json'), 'utf8'),
-    );
+    // Read the manifest that belongs to the bundle actually being embedded.
+    // With a prebuilt bundle that is the one beside it (<pkg>/dist/index.js ->
+    // <pkg>/package.json); otherwise the workspace CLI's own. Taking it from
+    // `../cli/package.json` unconditionally made the embedded CLI report the
+    // workspace package's name no matter whose bundle it was — and that name is
+    // user-visible, e.g. in "run `npx -y <name> login`".
+    const cliPkgPath = prebuiltCli
+      ? path.resolve(path.dirname(prebuiltCli), '../package.json')
+      : path.resolve(__dirname, '../cli/package.json');
+    const cliPkg = JSON.parse(await fs.readFile(cliPkgPath, 'utf8'));
     await fs.writeFile(
       path.resolve(__dirname, 'resources/cli-package.json'),
       JSON.stringify({ name: cliPkg.name, type: 'module', version: cliPkg.version }),
