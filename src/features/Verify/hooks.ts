@@ -1,5 +1,5 @@
 import type { AcceptanceSubjectType } from '@lobechat/types';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -35,8 +35,21 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
  */
 const TERMINAL_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed']);
 
-export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
-  if (!acceptance) return 2000;
+/**
+ * `hasExisted` disambiguates the two reasons `getBySubject` returns null: a
+ * subject that has never had an aggregate created (still discovering — poll
+ * fast) versus one whose aggregate existed and was since removed
+ * (`acceptance.remove`, e.g. "Remove acceptance" in the task detail panel).
+ * The endpoint itself cannot tell these apart — both read as a plain `null` —
+ * so a caller that once observed a non-null aggregate for this subject must
+ * pass `true` once it flips back to null, or the fastest "still discovering"
+ * interval fires forever and the tab polls every 2s indefinitely.
+ */
+export const getAcceptanceBySubjectRefreshInterval = (
+  acceptance: unknown,
+  hasExisted = false,
+) => {
+  if (!acceptance) return hasExisted ? 0 : 2000;
   const status = (acceptance as { status?: string }).status;
   return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
 };
@@ -73,18 +86,35 @@ export const useAcceptanceBundle = (acceptanceId: string | null) =>
 export const useAcceptanceBySubject = (
   subjectType: AcceptanceSubjectType,
   subjectId: string | null,
-) =>
-  useClientDataSWR(
+) => {
+  // Sticky per-subject "was this ever non-null" flag — see
+  // getAcceptanceBySubjectRefreshInterval's `hasExisted` doc. Resets when the
+  // caller points the hook at a different subject.
+  const hasExistedRef = useRef(false);
+  const trackedSubjectIdRef = useRef(subjectId);
+  if (trackedSubjectIdRef.current !== subjectId) {
+    trackedSubjectIdRef.current = subjectId;
+    hasExistedRef.current = false;
+  }
+
+  return useClientDataSWR(
     subjectId ? verifyKeys.acceptanceBySubject(subjectType, subjectId) : null,
     () => verifyService.getAcceptanceBySubject(subjectType, subjectId!),
     {
       ...ACCEPTANCE_BUNDLE_SWR_CONFIG,
+      onSuccess: (data) => {
+        if (data) hasExistedRef.current = true;
+      },
       // A task can mount before its first Verify Run creates the aggregate.
       // Discover that server-side transition without requiring focus/reload,
-      // then stop polling as soon as the Acceptance exists.
-      refreshInterval: getAcceptanceBySubjectRefreshInterval,
+      // then stop polling as soon as the Acceptance exists — or, once it
+      // existed and was removed, stop immediately instead of re-entering the
+      // fastest "still discovering" interval forever.
+      refreshInterval: (latestData: unknown) =>
+        getAcceptanceBySubjectRefreshInterval(latestData, hasExistedRef.current),
     },
   );
+};
 
 /** The caller's recent acceptance aggregates (with subject headers) — the list panel. */
 export const useAcceptanceList = (enabled: boolean) =>
