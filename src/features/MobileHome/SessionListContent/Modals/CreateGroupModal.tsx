@@ -6,13 +6,15 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
+import { useHomeStore } from '@/store/home';
 import { useSessionStore } from '@/store/session';
 
 interface CreateGroupContentProps {
   id: string;
+  isVirtualAgent?: boolean;
 }
 
-const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
+const CreateGroupContent = memo<CreateGroupContentProps>(({ id, isVirtualAgent }) => {
   const { t } = useTranslation(['chat', 'common']);
   const { close } = useModalContext();
   const { allowed: canCreate } = usePermission('create_content');
@@ -22,6 +24,7 @@ const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
     s.updateSessionGroupId,
     s.addSessionGroup,
   ]);
+  const updateAgentGroup = useHomeStore((s) => s.updateAgentGroup);
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,7 +40,7 @@ const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
     setLoading(true);
     try {
       const groupId = await addCustomGroup(input);
-      await updateSessionGroup(id, groupId);
+      await (isVirtualAgent ? updateAgentGroup(id, groupId) : updateSessionGroup(id, groupId));
       toggleExpandSessionGroup(groupId, true);
       toast.success(t('sessionGroup.createSuccess'));
       close();
@@ -70,9 +73,9 @@ const CreateGroupContent = memo<CreateGroupContentProps>(({ id }) => {
 
 CreateGroupContent.displayName = 'MobileCreateGroupContent';
 
-export const openCreateGroupModal = (id: string) =>
+export const openCreateGroupModal = (id: string, isVirtualAgent?: boolean) =>
   createModal({
-    content: <CreateGroupContent id={id} />,
+    content: <CreateGroupContent id={id} isVirtualAgent={isVirtualAgent} />,
     footer: null,
     styles: { content: { padding: 0 } },
     title: translate('sessionGroup.createGroup', { ns: 'chat' }),

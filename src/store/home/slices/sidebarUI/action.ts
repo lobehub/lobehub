@@ -1,6 +1,8 @@
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { mutate } from '@/libs/swr';
+import { sessionKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -28,6 +30,10 @@ export class SidebarUIActionImpl {
     this.#get = get;
   }
 
+  #refreshSidebar = async (): Promise<void> => {
+    await Promise.all([this.#get().refreshAgentList(), mutate(sessionKeys.list(true))]);
+  };
+
   duplicateAgent = async (agentId: string, newTitle?: string): Promise<void> => {
     const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
@@ -39,7 +45,7 @@ export class SidebarUIActionImpl {
       return;
     }
 
-    await this.#get().refreshAgentList();
+    await this.#refreshSidebar();
     loadingToast.close();
     toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
@@ -74,7 +80,7 @@ export class SidebarUIActionImpl {
   // want an item in their own sidebar hides it instead (personal layer).
   pinAgent = async (agentId: string, pinned: boolean): Promise<void> => {
     await agentService.updateAgentPinned(agentId, pinned);
-    await this.#get().refreshAgentList();
+    await this.#refreshSidebar();
   };
 
   pinAgentGroup = async (groupId: string, pinned: boolean): Promise<void> => {
@@ -84,7 +90,7 @@ export class SidebarUIActionImpl {
 
   removeAgent = async (agentId: string): Promise<void> => {
     await agentService.removeAgent(agentId);
-    await this.#get().refreshAgentList();
+    await this.#refreshSidebar();
     // deleting an agent cascade-deletes its topics + messages on the server; drop
     // their message cache too so it doesn't orphan in IndexedDB (never expires)
     void evictMessageCache((ctx) => ctx.agentId === agentId);
@@ -114,7 +120,7 @@ export class SidebarUIActionImpl {
   updateAgentGroup = async (agentId: string, groupId: string | null): Promise<void> => {
     const normalized = groupId === 'default' ? null : groupId;
     await homeService.updateAgentSessionGroupId(agentId, normalized);
-    await this.#get().refreshAgentList();
+    await this.#refreshSidebar();
   };
 
   addGroup = async (name: string, visibility?: 'private' | 'public'): Promise<string> => {

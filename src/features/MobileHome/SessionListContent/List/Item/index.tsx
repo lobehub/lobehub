@@ -78,7 +78,7 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
       <Actions
         group={group}
         id={id}
-        openCreateGroupModal={() => openCreateGroupModal(id)}
+        openCreateGroupModal={(isVirtualAgent) => openCreateGroupModal(id, isVirtualAgent)}
         parentType={sessionType}
         setOpen={setOpen}
       />
