@@ -140,9 +140,22 @@ const config = {
     // apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts.
 
     // Build and copy CLI bundle for embedding
-    console.info('📦 Building CLI for embedding...');
-    execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
-    const cliSrc = path.resolve(__dirname, '../cli/dist/index.js');
+    // A distribution that builds the CLI with its own config (different bin
+    // name, server, config directory) has to be able to embed THAT bundle —
+    // otherwise the installer ships a CLI branded for a different product than
+    // the app around it, with a different config directory, and the two
+    // disagree about where credentials live.
+    //
+    // Point DESKTOP_EMBEDDED_CLI_BUNDLE at a prebuilt bundle to skip the
+    // default build. Unset, this behaves exactly as before.
+    const prebuiltCli = process.env.DESKTOP_EMBEDDED_CLI_BUNDLE;
+    if (prebuiltCli) {
+      console.info(`📦 Using prebuilt CLI bundle: ${prebuiltCli}`);
+    } else {
+      console.info('📦 Building CLI for embedding...');
+      execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
+    }
+    const cliSrc = prebuiltCli ?? path.resolve(__dirname, '../cli/dist/index.js');
     const cliDest = path.resolve(__dirname, 'resources/bin/lobe-cli.js');
     await fs.mkdir(path.dirname(cliDest), { recursive: true });
     await fs.copyFile(cliSrc, cliDest);

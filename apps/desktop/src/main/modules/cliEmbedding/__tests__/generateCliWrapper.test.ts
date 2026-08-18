@@ -43,6 +43,10 @@ vi.mock('@/const/env', () => ({
   OFFICIAL_CLOUD_SERVER: 'https://server.example.com',
 }));
 
+vi.mock('@/env', () => ({
+  getDesktopEnv: () => ({ DESKTOP_CLI_BIN_NAMES: 'brandcli,bc' }),
+}));
+
 const setPlatform = (platform: NodeJS.Platform) =>
   Object.defineProperty(process, 'platform', { configurable: true, value: platform });
 
@@ -60,7 +64,7 @@ describe('generateCliWrapper', () => {
   afterEach(() => setPlatform(originalPlatform));
 
   describe.each([
-    { alias: 3, platform: 'win32' as const },
+    { alias: 2, platform: 'win32' as const },
     { alias: 1, platform: 'darwin' as const },
   ])('on $platform', ({ platform, alias }) => {
     it('defaults the server without overriding an explicit one', async () => {
@@ -85,6 +89,14 @@ describe('generateCliWrapper', () => {
           /: "\$\{LOBEHUB_SERVER:=/.test(content);
         expect(guarded).toBe(true);
       }
+
+      // The wrapper must install the distribution's command names, not the
+      // built-in ones — an app branded as X putting `lh` on the path collides
+      // with a real upstream CLI on the same machine.
+      const written = writeFileMock.mock.calls.map(([target]) => String(target));
+      expect(written.some((f) => /brandcli/.test(f))).toBe(true);
+      const basenames = written.map((f) => f.split(/[\\/]/).pop() ?? '');
+      expect(basenames.some((n) => /^(?:lh|lobe|lobehub)(?:\.cmd)?(?:\.|$)/.test(n))).toBe(false);
     });
   });
 });

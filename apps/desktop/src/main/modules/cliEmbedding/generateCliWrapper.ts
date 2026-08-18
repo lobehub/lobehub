@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('modules:cliEmbedding');
@@ -23,6 +24,23 @@ const logger = createLogger('modules:cliEmbedding');
  * would then appear to succeed against the wrong deployment.
  */
 const SERVER_ENV_VAR = 'LOBEHUB_SERVER';
+
+/**
+ * Command names the wrapper installs, primary first.
+ *
+ * Comes from `getDesktopEnv().DESKTOP_CLI_BIN_NAMES` so a distribution that
+ * embeds its own CLI build installs shims under ITS command name. Leaving these
+ * hardcoded put `lh` / `lobe` / `lobehub` on the path of an app branded as
+ * something else — and on a machine that also has the real upstream CLI, the
+ * two would fight over the same three names.
+ */
+const binNames = (): string[] => {
+  const configured = getDesktopEnv()
+    .DESKTOP_CLI_BIN_NAMES?.split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return configured?.length ? configured : ['lobehub', 'lh', 'lobe'];
+};
 
 /**
  * Resolve the correct Electron binary path per platform.
@@ -75,12 +93,13 @@ export async function generateCliWrapper(): Promise<void> {
       `"${electronBin}" "${cliScript}" %*`,
     ].join('\r\n');
 
-    const cmdPath = path.join(wrapperDir, 'lobehub.cmd');
+    const [primary, ...aliases] = binNames();
+    const cmdPath = path.join(wrapperDir, `${primary}.cmd`);
     await atomicWrite(cmdPath, content);
 
-    // Create short aliases: lh.cmd, lobe.cmd (copies on Windows, symlinks unreliable)
-    for (const alias of ['lh.cmd', 'lobe.cmd']) {
-      await atomicWrite(path.join(wrapperDir, alias), content);
+    // Aliases are copies on Windows, where symlinks are unreliable.
+    for (const alias of aliases) {
+      await atomicWrite(path.join(wrapperDir, `${alias}.cmd`), content);
     }
 
     logger.info(`CLI wrapper generated: ${cmdPath}`);
@@ -92,15 +111,15 @@ export async function generateCliWrapper(): Promise<void> {
       `ELECTRON_RUN_AS_NODE=1 exec "${electronBin}" "${cliScript}" "$@"`,
     ].join('\n');
 
-    const wrapperPath = path.join(wrapperDir, 'lobehub');
+    const [primary, ...aliases] = binNames();
+    const wrapperPath = path.join(wrapperDir, primary);
     await atomicWrite(wrapperPath, content);
     await chmod(wrapperPath, 0o755);
 
-    // Create short aliases: lh, lobe → lobehub
-    for (const alias of ['lh', 'lobe']) {
+    for (const alias of aliases) {
       const linkPath = path.join(wrapperDir, alias);
       await unlink(linkPath).catch(() => {});
-      await symlink('lobehub', linkPath);
+      await symlink(primary, linkPath);
     }
 
     logger.info(`CLI wrapper generated: ${wrapperPath}`);

@@ -1,3 +1,4 @@
+import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
 import { type ClientMetadata } from 'oidc-provider';
 import urlJoin from 'url-join';
 
@@ -6,17 +7,35 @@ import { appEnv } from '@/envs/app';
 const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
 
 /**
+ * Consent-screen identity for the first-party clients.
+ *
+ * `client_name` and `logo_uri` are not internal metadata — `Consent/index.tsx`
+ * and `DeviceCodeConfirm.tsx` render them straight to the user, and there is no
+ * first-party bypass of the consent step. So on a rebranded deployment the
+ * authorisation page was the one screen still introducing the vendor, right at
+ * the moment the user is deciding whether to trust the app.
+ *
+ * The logo falls back to each client's original URL rather than being dropped,
+ * matching how `BRANDING_LOGO_URL` is used everywhere else in this codebase
+ * (`DEFAULT_INBOX_AVATAR` is the precedent). That keeps the default build
+ * byte-identical; a distribution that sets a logo also stops the consent page
+ * fetching an image from a CDN a private deployment may not reach.
+ */
+const clientDisplay = (suffix: string, defaultLogoUri: string) => ({
+  client_name: `${BRANDING_NAME} ${suffix}`,
+  logo_uri: BRANDING_LOGO_URL || defaultLogoUri,
+});
+
+/**
  * Default OIDC client configuration
  */
 export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: 'lobehub-desktop',
-    client_name: 'LobeHub Desktop',
+    ...clientDisplay('Desktop', 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png'),
     // Only supports authorization code flow
     grant_types: ['authorization_code', 'refresh_token'],
-
-    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
 
     post_logout_redirect_uris: [
       // Dynamically construct web page callback URL
@@ -41,10 +60,12 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'native', // Mobile uses native type
     client_id: 'lobehub-mobile',
-    client_name: 'LobeHub Mobile',
+    ...clientDisplay(
+      'Mobile',
+      'https://hub-apac-1.lobeobjects.space/docs/73f69adfa1b802a0e250f6ff9d62f70b.png',
+    ),
     // Supports authorization code flow and refresh token
     grant_types: ['authorization_code', 'refresh_token'],
-    logo_uri: 'https://hub-apac-1.lobeobjects.space/docs/73f69adfa1b802a0e250f6ff9d62f70b.png',
     // Mobile does not need post_logout_redirect_uris as logout is typically handled within the app
     post_logout_redirect_uris: [],
     // Mobile uses custom URL Scheme
@@ -56,18 +77,19 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'native',
     client_id: 'lobehub-cli',
-    client_name: 'LobeHub CLI',
+    ...clientDisplay('CLI', 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png'),
     grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'],
-    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
     response_types: [],
     token_endpoint_auth_method: 'none',
   },
   {
     application_type: 'web',
     client_id: 'lobehub-market',
-    client_name: 'LobeHub Marketplace',
+    ...clientDisplay(
+      'Marketplace',
+      'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
+    ),
     grant_types: ['authorization_code', 'refresh_token'],
-    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
     post_logout_redirect_uris: [
       urlJoin(marketBaseUrl!, '/lobehub-oidc/logout'),
       'http://localhost:8787/lobehub-oidc/logout',

@@ -58,6 +58,7 @@ const envNumber = (defaultValue: number) =>
 const getRuntimeEnv = () => ({
   ...process.env,
   DESKTOP_APP_ID: process.env.DESKTOP_APP_ID,
+  DESKTOP_CLI_BIN_NAMES: process.env.DESKTOP_CLI_BIN_NAMES,
   DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: process.env.DESKTOP_BACKEND_PROXY_RETHROW_ERRORS,
   DESKTOP_DISABLE_UPDATES: process.env.DESKTOP_DISABLE_UPDATES,
   DESKTOP_EXTERNAL_NAVIGATION_HOSTS: process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS,
@@ -99,6 +100,11 @@ export const getDesktopEnv = memoize(() =>
       // to claim the same one. Keep the fallback below in step with
       // `electron-builder.mjs`.
       DESKTOP_APP_ID: z.string().optional().default('com.lobehub.lobehub-desktop'),
+      /**
+       * Comma-separated command names the CLI wrapper installs, primary first.
+       * Unset keeps the built-in `lobehub,lh,lobe`.
+       */
+      DESKTOP_CLI_BIN_NAMES: z.string().optional(),
 
       DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: envBoolean(false),
 
