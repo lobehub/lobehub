@@ -129,6 +129,31 @@ const STEP_LOCK_TTL_SECONDS = 120;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
 
 /**
+ * How many times a delivery that lost the operation lock re-queues itself
+ * before giving up and falling back to a retryable response.
+ */
+const STEP_LOCK_RETRY_MAX_ATTEMPTS = 12;
+/** Base delay for the first lock-conflict re-delivery. */
+const STEP_LOCK_RETRY_BASE_DELAY_MS = 15_000;
+/**
+ * Ceiling on a single lock-conflict backoff. Together with the base delay,
+ * {@link STEP_LOCK_RETRY_MAX_ATTEMPTS} attempts span ~20 minutes — comfortably
+ * longer than the platform's hard step ceiling, so a step that legitimately
+ * holds the lock for minutes no longer strands the delivery waiting behind it.
+ */
+const STEP_LOCK_RETRY_MAX_DELAY_MS = 120_000;
+
+/**
+ * Exponential backoff for the Nth (1-based) lock-conflict re-delivery:
+ * 15s, 30s, 60s, 120s, then capped at {@link STEP_LOCK_RETRY_MAX_DELAY_MS}.
+ */
+const stepLockRetryDelayMs = (attempt: number): number =>
+  Math.min(
+    STEP_LOCK_RETRY_BASE_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
+    STEP_LOCK_RETRY_MAX_DELAY_MS,
+  );
+
+/**
  * Exponential backoff delay for the Nth (1-based) watchdog re-check:
  * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
  */
@@ -750,6 +775,7 @@ export class AgentRuntimeService {
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
       externalRetryCount = 0,
+      lockRetryAttempt = 0,
     } = params;
 
     // Group member timeout watchdog: enforce a member's deadline without claiming
@@ -820,6 +846,64 @@ export class AgentRuntimeService {
           stepResult: null,
           success: true,
         };
+      }
+
+      // The lock is held by a live step of this operation, and this delivery is
+      // not a stale duplicate — it still has to run once the holder is done.
+      //
+      // Don't lean on the queue's own retry budget for that wait: the lock is
+      // heartbeat-refreshed for as long as the holding step runs (unbounded),
+      // while the budget is a handful of fixed-delay retries. A step that runs
+      // longer than the budget therefore exhausts it and the delivery is
+      // dead-lettered — the step it carried is then never executed. Re-queue a
+      // fresh delivery on our own bounded backoff instead, and ACK this one.
+      const nextLockRetryAttempt = lockRetryAttempt + 1;
+      if (this.queueService && nextLockRetryAttempt <= STEP_LOCK_RETRY_MAX_ATTEMPTS) {
+        const delay = stepLockRetryDelayMs(nextLockRetryAttempt);
+        log(
+          '[%s][%d] Step lock conflict — re-queueing attempt %d/%d in %dms',
+          operationId,
+          stepIndex,
+          nextLockRetryAttempt,
+          STEP_LOCK_RETRY_MAX_ATTEMPTS,
+          delay,
+        );
+
+        try {
+          await this.queueService.scheduleMessage({
+            context,
+            delay,
+            endpoint: `${this.baseURL}/run`,
+            operationId,
+            payload: { lockRetryAttempt: nextLockRetryAttempt },
+            priority: 'high',
+            retryDelay:
+              typeof currentState?.metadata?.queueRetryDelay === 'string'
+                ? currentState.metadata.queueRetryDelay
+                : undefined,
+            retries:
+              typeof currentState?.metadata?.queueRetries === 'number'
+                ? currentState.metadata.queueRetries
+                : undefined,
+            stepIndex,
+          });
+
+          return {
+            locked: true,
+            lockRescheduled: true,
+            nextStepScheduled: true,
+            state: {},
+            success: true,
+          };
+        } catch (error) {
+          // Fall through to the retryable response so the delivery isn't lost.
+          log(
+            '[%s][%d] Failed to re-queue after step lock conflict: %O',
+            operationId,
+            stepIndex,
+            error,
+          );
+        }
       }
 
       log(

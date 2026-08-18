@@ -154,6 +154,13 @@ export interface AgentExecutionParams {
    */
   groupMemberTimeout?: GroupMemberTimeoutParams;
   humanInput?: any;
+  /**
+   * 1-based attempt number carried by a re-delivery that a previous attempt
+   * re-queued after losing the operation lock. Lets the bounded backoff stop
+   * after a fixed number of tries instead of re-queueing forever. Absent
+   * (treated as attempt 0) on the original delivery.
+   */
+  lockRetryAttempt?: number;
   operationId: string;
   /**
    * Whether a rejection should resume execution by treating the rejected tool
@@ -192,6 +199,13 @@ export interface AgentExecutionResult {
    * this response retryable so fresh deliveries can run after the lock clears.
    */
   locked?: boolean;
+  /**
+   * Set alongside `locked` when this delivery re-queued itself for a later
+   * attempt. The caller should ACK (2xx) rather than returning a retryable
+   * status: the redelivery is already scheduled, so letting the queue retry on
+   * top of it only amplifies the conflict and burns the retry budget.
+   */
+  lockRescheduled?: boolean;
   nextStepScheduled: boolean;
   state: any;
   stepResult?: any;
