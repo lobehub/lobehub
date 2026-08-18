@@ -479,7 +479,7 @@ export const verifyRouter = router({
 
   /**
    * Config-time: turn a one-sentence acceptance requirement into proposed
-   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.VerifyPlanGen),
+   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.GoalCriteriaGen),
    * returns drafts only — nothing persisted, no operation needed.
    */
   generateCriteria: verifyWriteProcedure

@@ -3,6 +3,14 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 /** Table divider rows such as `|------|------|` or `| :--- | ---: |` */
 const TABLE_DIVIDER_LINE = /^[\s:|]*-[-\s:|]*$/;
 
+/**
+ * Heading markers that survive markdown stripping because the body was already
+ * collapsed to a single line upstream (e.g. `… analysis. ## Section title`) —
+ * mid-line `##` is not valid heading syntax, so `markdownToTxt` keeps it.
+ * Requires trailing whitespace so hashtags like `#topic` stay intact.
+ */
+const INLINE_HEADING_MARKER = /(^|\s)#{1,6}(?=\s)/g;
+
 const MAX_LENGTH = 300;
 
 /**
@@ -21,7 +29,13 @@ export const toNotificationPreview = (content?: string | null): string => {
     .split('\n')
     .filter((line) => !TABLE_DIVIDER_LINE.test(line))
     // `remove-markdown` keeps table pipes — flatten cells into spaced text
-    .map((line) => line.replaceAll('|', ' ').replaceAll(/\s+/g, ' ').trim())
+    .map((line) =>
+      line
+        .replaceAll('|', ' ')
+        .replaceAll(INLINE_HEADING_MARKER, ' ')
+        .replaceAll(/\s+/g, ' ')
+        .trim(),
+    )
     .filter(Boolean)
     .join(' ');
 

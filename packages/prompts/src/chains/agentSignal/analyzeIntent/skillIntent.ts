@@ -35,9 +35,37 @@ const createAgentSignalAnalyzeIntentSkillIntentPrompt = (
  * Returns:
  * - System and user messages for structured skill-intent classification
  */
-export const createAgentSignalAnalyzeIntentSkillIntentMessages = (
-  input: AgentSignalSkillIntentPromptInput,
-) => [
+export const AGENT_SIGNAL_SKILL_INTENT_PROMPT_VERSION = 'v1';
+
+export const AGENT_SIGNAL_SKILL_INTENT_JSON_SCHEMA = {
+  name: 'agent_signal_skill_intent',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      actionIntent: {
+        enum: ['create', 'refine', 'consolidate', 'maintain', 'noop', null],
+        type: ['string', 'null'],
+      },
+      confidence: { maximum: 1, minimum: 0, type: 'number' },
+      explicitness: {
+        enum: [
+          'explicit_action',
+          'implicit_strong_learning',
+          'weak_positive',
+          'non_skill_preference',
+        ],
+        type: 'string',
+      },
+      reason: { type: 'string' },
+      route: { enum: ['direct_decision', 'accumulate', 'non_skill'], type: 'string' },
+    },
+    required: ['actionIntent', 'confidence', 'explicitness', 'reason', 'route'],
+    type: 'object' as const,
+  },
+  strict: true,
+};
+
+export const chainAgentSignalSkillIntent = (input: AgentSignalSkillIntentPromptInput) => [
   {
     content: AGENT_SIGNAL_ANALYZE_INTENT_SKILL_INTENT_SYSTEM_ROLE,
     role: 'system' as const,

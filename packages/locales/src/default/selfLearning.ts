@@ -75,13 +75,13 @@ export default {
 
   'domain.delete': 'Delete',
   'domain.deleteConfirm.content':
-    'Its {{habits}} habits and {{runs}} practice records in this direction go with it. This cannot be undone.',
+    'Its {{habits}} experiences and {{runs}} practice records in this direction go with it. This cannot be undone.',
   'domain.deleteConfirm.ok': 'Delete',
   'domain.deleteConfirm.title': 'Delete “{{name}}”?',
   'domain.deleted': 'Direction deleted.',
   'domain.deleteFailed': 'Could not delete the direction. Try again.',
   'domain.more': 'More',
-  'domains.meta': '{{habits}} habits · {{runs}} practices',
+  'domains.meta': '{{habits}} experiences · {{runs}} practices',
   'domains.title': 'Directions',
   'domains.word.fresh': 'just starting',
   'domains.word.recurring': '{{count}} recurring',
@@ -122,31 +122,32 @@ export default {
     'What is off? Say it in your words — it folds this into the lesson…',
   'habit.teach.placeholderRecurring': 'Tell it when this applies and when it absolutely does not…',
   'habit.teach.send': 'Teach it',
-  'habits.search': 'Search habits',
-  'habits.summary': '{{stable}} formed · {{shaky}} shaky · {{recurring}} recurring · {{fresh}} new',
-  'habits.title': 'Its habits',
+  'habits.search': 'Search experiences',
+  'habits.summary':
+    '{{stable}} mastered · {{shaky}} shaky · {{recurring}} recurring · {{fresh}} new',
+  'habits.title': 'Its experiences',
   'habits.viewAll': 'All {{count}} lessons',
 
-  'headline.multi.ok': 'Across {{domains}} directions, everything it learned has become a habit.',
+  'headline.multi.ok': 'Across {{domains}} directions, every experience it learned is now solid.',
   'headline.single.fresh':
     '{{name}}: {{runs}} practice in, {{count}} lessons captured, none tested yet.',
   'headline.single.notPracticed': '{{name}} is set as a direction — nothing practiced yet.',
   'headline.detail.recurring': '“{{title}}” keeps going wrong',
-  'headline.detail.shaky': '{{count}} habits still go either way',
-  'headline.single.recurring': '{{name}}: {{runs}} practices in, habits are mostly solid.',
-  'headline.single.shaky': '{{name}}: {{runs}} practices in, most habits are solid.',
+  'headline.detail.shaky': '{{count}} experiences still go either way',
+  'headline.single.recurring': '{{name}}: {{runs}} practices in, its experiences are mostly solid.',
+  'headline.single.shaky': '{{name}}: {{runs}} practices in, most experiences are solid.',
   'headline.single.stable':
-    '{{name}}: {{runs}} practices in, everything it learned has become a habit.',
+    '{{name}}: {{runs}} practices in, every experience it learned is now solid.',
   'headline.subline':
-    '{{habits}} habits · {{runs}} practices · lessons take effect as soon as they are learned; correct anything you see wrong',
+    '{{habits}} experiences · {{runs}} practices · lessons take effect as soon as they are learned; correct anything you see wrong',
   'headline.sublineMulti':
-    '{{domains}} directions · {{habits}} habits · lessons take effect as soon as they are learned; correct anything you see wrong',
+    '{{domains}} directions · {{habits}} experiences · lessons take effect as soon as they are learned; correct anything you see wrong',
 
   'nav.newDomain': 'Create new domain',
   'nav.teach': 'Teach it one',
   'nav.warmup': 'Review past conversations',
 
-  'profile.counts': '{{count}} habits',
+  'profile.counts': '{{count}} experiences',
   'profile.fresh': '{{count}} new',
   'profile.recurring': '{{count}} recurring',
   'profile.shaky': '{{count}} shaky',

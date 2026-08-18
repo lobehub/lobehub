@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
@@ -8,7 +9,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
-import { resolveCliSpawnPlan } from './cliSpawn';
+import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
@@ -727,24 +728,23 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
 /** Spawn TRAE's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
 export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
-  const command = resolveHeterogeneousAgentCommand('trae', options.command);
-  const commandName = command
-    .trim()
-    .split(/[\\/]/)
-    .at(-1)
-    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
-  if (commandName?.toLowerCase() === 'trae-cli') {
-    throw new Error(
-      'The open-source `trae-cli` trajectory runner is unsupported; install TRAE Enterprise `traecli` instead.',
-    );
-  }
-
+  const requestedCommand = resolveHeterogeneousAgentCommand('trae', options.command);
   const cwd = options.cwd || process.cwd();
   if (!existsSync(cwd)) {
     throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
       code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
       workingDirectory: cwd,
     });
+  }
+  const command =
+    isPathLikeCommand(requestedCommand) && !path.isAbsolute(requestedCommand)
+      ? path.resolve(cwd, requestedCommand)
+      : requestedCommand;
+  const childEnv = { ...process.env, ...options.env };
+  const { detectHeterogeneousCliCommand } = await import('./resolveCliCommand');
+  const commandStatus = await detectHeterogeneousCliCommand('trae', command, childEnv);
+  if (!commandStatus.available || !commandStatus.path) {
+    throw new Error(`TRAE command does not expose the required ACP runtime: ${requestedCommand}`);
   }
 
   const prompt = await buildTraeAcpPrompt(options.prompt, options.inputOptions);
@@ -761,9 +761,12 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
   const session = new TraeAcpSession({
     args: options.extraArgs ?? [],
     clientVersion: '1.0.0',
-    commandPath: command,
+    commandPath: commandStatus.path,
     cwd,
-    env: { ...process.env, ...options.env },
+    env: {
+      ...childEnv,
+      ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
+    },
     initialModel: options.initialModel,
     onEvents: (events) => {
       queue.push(...events);

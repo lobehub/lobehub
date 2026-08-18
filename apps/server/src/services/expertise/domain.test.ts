@@ -4,15 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DomainDraft } from './domain';
 import { EditableDomainDraftSchema, ExpertiseDomainService } from './domain';
 
-const getAgentModelConfig = vi.fn();
+const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
+  resolveExpertiseModelConfig: vi.fn(),
+}));
 const generateObject = vi.fn();
 const createDomain = vi.fn();
 
-vi.mock('@/database/models/agent', () => ({
-  AgentModel: class {
-    getAgentModelConfig = getAgentModelConfig;
-  },
-}));
 vi.mock('@/database/models/expertise', () => ({
   ExpertiseModel: class {
     createDomain = createDomain;
@@ -23,6 +20,7 @@ vi.mock('@/server/services/aiGeneration', () => ({
     generateObject = generateObject;
   },
 }));
+vi.mock('./modelConfig', () => ({ resolveExpertiseModelConfig }));
 
 const draft = {
   canonEntries: [
@@ -46,10 +44,15 @@ const draft = {
 } satisfies DomainDraft;
 
 describe('ExpertiseDomainService', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resolveExpertiseModelConfig.mockResolvedValue({
+      model: 'service-model',
+      provider: 'service-provider',
+    });
+  });
 
   it('drafts a full anchor (layers + canon) without persisting anything', async () => {
-    getAgentModelConfig.mockResolvedValue({ model: 'test-model', provider: 'test-provider' });
     generateObject.mockResolvedValue(draft);
 
     const result = await new ExpertiseDomainService({} as never, 'user_1').draftFromBrief({
@@ -59,29 +62,23 @@ describe('ExpertiseDomainService', () => {
 
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        messages: expect.arrayContaining([
-          expect.objectContaining({
-            content: expect.stringContaining('domain-native levels of abstraction'),
-            role: 'system',
-          }),
-        ]),
+        model: 'service-model',
+        provider: 'service-provider',
         schema: expect.objectContaining({ name: 'expertise_domain_draft' }),
       }),
-      expect.any(Object),
+      expect.objectContaining({
+        tracing: expect.objectContaining({
+          promptVersion: 'v3',
+          scenario: 'expertise_domain_draft',
+        }),
+      }),
     );
     expect(result.layers).toHaveLength(2);
     expect(result.canonEntries[0].key).toBe('blameless');
     expect(createDomain).not.toHaveBeenCalled();
-
-    const systemPrompt = generateObject.mock.calls[0][0].messages[0].content;
-    expect(systemPrompt).toContain('generic seniority labels');
-    expect(systemPrompt).toContain(
-      'what larger or more abstract unit can now be handled coherently?',
-    );
   });
 
   it('revises the current draft from a natural-language adjustment', async () => {
-    getAgentModelConfig.mockResolvedValue({ model: 'test-model', provider: 'test-provider' });
     generateObject.mockResolvedValue(draft);
 
     await new ExpertiseDomainService({} as never, 'user_1').draftFromBrief({

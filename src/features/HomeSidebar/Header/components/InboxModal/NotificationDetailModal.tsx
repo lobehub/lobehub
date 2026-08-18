@@ -7,7 +7,6 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface NotificationDetailParams {
-  category?: string;
   content: string;
   context?: string | null;
   createdAt: Date | string;
@@ -16,14 +15,13 @@ interface NotificationDetailParams {
 }
 
 const NotificationDetailContent = memo<Omit<NotificationDetailParams, 'title'>>(
-  ({ category, content, context, createdAt, onAction }) => {
+  ({ content, context, createdAt, onAction }) => {
     const { t } = useTranslation('notification');
     const { close } = useModalContext();
 
     return (
       <Flexbox gap={12}>
         <Text fontSize={12} type="secondary">
-          {category && `${t(`category.${category}`, { defaultValue: category })} · `}
           {dayjs(createdAt).format('YYYY-MM-DD HH:mm')}
         </Text>
         {context && (
@@ -52,9 +50,10 @@ const NotificationDetailContent = memo<Omit<NotificationDetailParams, 'title'>>(
   },
 );
 
+NotificationDetailContent.displayName = 'NotificationDetailContent';
+
 export const createNotificationDetailModal = ({
   title,
-  category,
   content,
   context,
   createdAt,
@@ -63,7 +62,6 @@ export const createNotificationDetailModal = ({
   createModal({
     content: (
       <NotificationDetailContent
-        category={category}
         content={content}
         context={context}
         createdAt={createdAt}

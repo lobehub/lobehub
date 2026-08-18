@@ -10,6 +10,7 @@ const {
   createRubricMock,
   ensureForOperationMock,
   findByIdsMock,
+  generateObjectMock,
   getCriteriaMock,
   setCriteriaMock,
   setPlanMock,
@@ -19,6 +20,7 @@ const {
   createRubricMock: vi.fn(async () => ({ id: 'rub-created' })),
   ensureForOperationMock: vi.fn(async () => ({ id: 'run-1' })),
   findByIdsMock: vi.fn(async () => [] as any[]),
+  generateObjectMock: vi.fn(),
   getCriteriaMock: vi.fn(async () => [] as any[]),
   setCriteriaMock: vi.fn(),
   setPlanMock: vi.fn(async (_runId: string, _items: any[]) => {}),
@@ -45,7 +47,9 @@ vi.mock('@/database/models/verifyCriterion', () => ({
   })),
 }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn(() => ({})) }));
-vi.mock('@/server/services/aiGeneration', () => ({ AiGenerationService: vi.fn(() => ({})) }));
+vi.mock('@/server/services/aiGeneration', () => ({
+  AiGenerationService: vi.fn(() => ({ generateObject: generateObjectMock })),
+}));
 
 const db = {} as any;
 const lastPlan = (): VerifyCheckItem[] => setPlanMock.mock.calls.at(-1)![1] as VerifyCheckItem[];
@@ -143,5 +147,23 @@ describe('generateDraftPlan — holistic fallback', () => {
     expect(lastPlan()[0].verifierConfig).toEqual({
       requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
     });
+  });
+});
+
+describe('generateCriteria tracing', () => {
+  it('uses the createGoal criteria scenario instead of the run-time plan scenario', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({
+      goal: 'Ship the feature',
+      modelConfig: { model: 'test-model', provider: 'test-provider' },
+    });
+
+    expect(generateObjectMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        tracing: expect.objectContaining({ scenario: 'goal_criteria_gen' }),
+      }),
+    );
   });
 });

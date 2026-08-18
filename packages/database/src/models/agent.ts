@@ -40,6 +40,10 @@ import {
   chatGroupsAgents,
   devices,
   documents,
+  expertiseBindings,
+  expertiseDomains,
+  expertiseInsights,
+  expertiseRuns,
   files,
   knowledgeBases,
   messages,
@@ -2317,13 +2321,82 @@ export class AgentModel {
 
       await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.agentId, agentIds));
 
-      // 13. Update agent bot providers (transfer, not delete)
+      // 13. Move expertise owned exclusively by these agents. The domain is
+      // the ownership root for lessons, hits and snapshots, so those rows keep
+      // their IDs and follow it without per-table rewrites. Runs additionally
+      // carry their own scope for attribution and must be re-scoped explicitly.
+      // A domain
+      // that is also bound to a carrier outside this transfer is shared state
+      // and must stay in the source scope; only the moved agent's binding is
+      // re-scoped in that case.
+      const boundExpertiseDomains = await trx
+        .select({ domainId: expertiseBindings.domainId })
+        .from(expertiseBindings)
+        .innerJoin(expertiseDomains, eq(expertiseDomains.id, expertiseBindings.domainId))
+        .where(
+          and(
+            inArray(expertiseBindings.agentId, agentIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              expertiseDomains,
+            ),
+          ),
+        );
+      const candidateDomainIds = [...new Set(boundExpertiseDomains.map((row) => row.domainId))];
+
+      await trx
+        .update(expertiseBindings)
+        .set({ workspaceId: targetWorkspaceId, updatedAt: expertiseBindings.updatedAt })
+        .where(inArray(expertiseBindings.agentId, agentIds));
+
+      if (candidateDomainIds.length > 0) {
+        const bindings = await trx
+          .select({
+            agentId: expertiseBindings.agentId,
+            boundUserId: expertiseBindings.boundUserId,
+            boundWorkspaceId: expertiseBindings.boundWorkspaceId,
+            domainId: expertiseBindings.domainId,
+            projectId: expertiseBindings.projectId,
+          })
+          .from(expertiseBindings)
+          .where(inArray(expertiseBindings.domainId, candidateDomainIds));
+        const movedAgentIds = new Set(agentIds);
+        const transferableDomainIds = candidateDomainIds.filter((domainId) =>
+          bindings
+            .filter((binding) => binding.domainId === domainId)
+            .every(
+              (binding) =>
+                binding.agentId !== null &&
+                movedAgentIds.has(binding.agentId) &&
+                binding.projectId === null &&
+                binding.boundWorkspaceId === null &&
+                binding.boundUserId === null,
+            ),
+        );
+
+        if (transferableDomainIds.length > 0) {
+          await trx
+            .update(expertiseDomains)
+            .set({ ...ownershipUpdate, updatedAt: expertiseDomains.updatedAt })
+            .where(inArray(expertiseDomains.id, transferableDomainIds));
+          await trx
+            .update(expertiseInsights)
+            .set({ ...ownershipUpdate, updatedAt: expertiseInsights.updatedAt })
+            .where(inArray(expertiseInsights.domainId, transferableDomainIds));
+          await trx
+            .update(expertiseRuns)
+            .set({ ...ownershipUpdate, updatedAt: expertiseRuns.updatedAt })
+            .where(inArray(expertiseRuns.domainId, transferableDomainIds));
+        }
+      }
+
+      // 14. Update agent bot providers (transfer, not delete)
       await trx
         .update(agentBotProviders)
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(inArray(agentBotProviders.agentId, agentIds));
 
-      // 14. Leave every chat group: a group belongs to the source scope, and a
+      // 15. Leave every chat group: a group belongs to the source scope, and a
       // roster row pointing at an agent that now lives elsewhere would render
       // as a member nobody in either scope can use. Guard 1c above has already
       // rejected the memberships where leaving would damage the GROUP, so

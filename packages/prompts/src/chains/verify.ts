@@ -1,18 +1,193 @@
 import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = '3';
+export const VERIFY_PLAN_PROMPT_VERSION = 'v3';
 /** Bump when the judge prompt meaningfully changes. */
-export const VERIFY_JUDGE_PROMPT_VERSION = '2';
+export const VERIFY_JUDGE_PROMPT_VERSION = 'v2';
 /** Bump when the report prompt meaningfully changes. */
-export const VERIFY_REPORT_PROMPT_VERSION = '1';
+export const VERIFY_REPORT_PROMPT_VERSION = 'v1';
 /**
  * Bump when the review-prediction prompt meaningfully changes. Doubles as part
  * of the uniqueness key on `verify_review_predictions`, so a bump makes the next
  * run write a NEW opinion instead of overwriting the old one — which is what
  * keeps two prompt versions comparable on the same checks.
  */
-export const REVIEW_PREDICT_PROMPT_VERSION = '1';
+export const REVIEW_PREDICT_PROMPT_VERSION = 'v1';
+
+export const VERIFY_VERIFIER_TYPES = ['program', 'agent', 'llm'] as const;
+export const VERIFY_ON_FAIL_ACTIONS = ['manual', 'auto_repair'] as const;
+export const VERIFY_EVIDENCE_TYPES = [
+  'screenshot',
+  'gif',
+  'video',
+  'audio',
+  'text',
+  'markdown',
+  'dom_snapshot',
+  'transcript',
+] as const;
+export const VERIFY_EVIDENCE_MODALITIES = [
+  'audio',
+  'document',
+  'image',
+  'structured',
+  'text',
+  'video',
+] as const;
+export const VERIFY_EVIDENCE_SCOPES = ['deliverable', 'run_evidence', 'task_artifacts'] as const;
+export const VERIFY_VERDICTS = ['passed', 'failed', 'uncertain'] as const;
+export const REVIEW_PREDICTION_ACTIONS = ['accept', 'reject'] as const;
+
+export const GENERATED_CRITERIA_JSON_SCHEMA = {
+  name: 'verify_plan_criteria',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      criteria: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            description: { maxLength: 280, type: 'string' },
+            instruction: { type: 'string' },
+            onFail: { enum: [...VERIFY_ON_FAIL_ACTIONS], type: 'string' },
+            requiredEvidence: {
+              items: {
+                additionalProperties: false,
+                properties: {
+                  hint: { type: 'string' },
+                  modality: { enum: [...VERIFY_EVIDENCE_MODALITIES], type: 'string' },
+                  scope: { enum: [...VERIFY_EVIDENCE_SCOPES], type: 'string' },
+                  type: { enum: [...VERIFY_EVIDENCE_TYPES], type: 'string' },
+                },
+                required: ['type', 'modality', 'scope', 'hint'],
+                type: 'object',
+              },
+              type: 'array',
+            },
+            required: { type: 'boolean' },
+            title: { maxLength: 80, minLength: 1, type: 'string' },
+            verifierType: { enum: [...VERIFY_VERIFIER_TYPES], type: 'string' },
+          },
+          required: [
+            'title',
+            'description',
+            'instruction',
+            'verifierType',
+            'required',
+            'onFail',
+            'requiredEvidence',
+          ],
+          type: 'object',
+        },
+        maxItems: 8,
+        type: 'array',
+      },
+    },
+    required: ['criteria'],
+    type: 'object' as const,
+  },
+  strict: true,
+};
+
+const toulminJsonProperties = {
+  confidence: { maximum: 1, minimum: 0, type: 'number' },
+  counterEvidence: { type: 'string' },
+  evidence: { type: 'string' },
+  limitation: { type: 'string' },
+  reasoning: { type: 'string' },
+  suggestion: { type: 'string' },
+  verdict: { enum: [...VERIFY_VERDICTS], type: 'string' },
+} as const;
+
+const toulminRequired = ['verdict', 'confidence', 'evidence', 'reasoning'];
+
+export const SINGLE_VERDICT_JSON_SCHEMA = {
+  name: 'verify_verdict',
+  schema: {
+    additionalProperties: false,
+    properties: { ...toulminJsonProperties },
+    required: toulminRequired,
+    type: 'object' as const,
+  },
+  strict: false,
+};
+
+export const BATCH_VERDICT_JSON_SCHEMA = {
+  name: 'verify_verdicts',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      verdicts: {
+        items: {
+          additionalProperties: false,
+          properties: { checkItemId: { type: 'string' }, ...toulminJsonProperties },
+          required: ['checkItemId', ...toulminRequired],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    required: ['verdicts'],
+    type: 'object' as const,
+  },
+  strict: false,
+};
+
+export const REPORT_NARRATIVE_JSON_SCHEMA = {
+  name: 'verify_report',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      content: { type: 'string' },
+      summary: { maxLength: 600, type: 'string' },
+    },
+    required: ['summary', 'content'],
+    type: 'object' as const,
+  },
+  strict: true,
+};
+
+export const REVIEW_PREDICTION_JSON_SCHEMA = {
+  name: 'review_prediction',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      action: { enum: [...REVIEW_PREDICTION_ACTIONS], type: 'string' },
+      comment: {
+        description: 'One actionable sentence naming what is wrong and where',
+        maxLength: 300,
+        type: 'string',
+      },
+      confidence: { maximum: 1, minimum: 0, type: 'number' },
+      rationale: {
+        description: 'Full reasoning, kept for analysis',
+        maxLength: 2000,
+        type: 'string',
+      },
+      regions: {
+        description: 'Required when action is reject: the exact regions at fault',
+        items: {
+          additionalProperties: false,
+          properties: {
+            comment: { maxLength: 300, type: 'string' },
+            height: { maximum: 1, minimum: 0, type: 'number' },
+            imageIndex: { minimum: 0, type: 'integer' },
+            width: { maximum: 1, minimum: 0, type: 'number' },
+            x: { maximum: 1, minimum: 0, type: 'number' },
+            y: { maximum: 1, minimum: 0, type: 'number' },
+          },
+          required: ['imageIndex', 'x', 'y', 'width', 'height', 'comment'],
+          type: 'object',
+        },
+        maxItems: 5,
+        type: 'array',
+      },
+    },
+    required: ['action', 'confidence', 'comment', 'rationale', 'regions'],
+    type: 'object' as const,
+  },
+  strict: true,
+};
 
 export interface PlanPromptInput {
   /** Optional run context (agent role, repo, constraints). */
@@ -23,7 +198,7 @@ export interface PlanPromptInput {
   maxCriteria: number;
 }
 
-export const buildPlanPrompt = ({
+export const chainVerifyPlan = ({
   goal,
   context,
   existingTitles,
@@ -55,7 +230,12 @@ export const buildPlanPrompt = ({
     .filter(Boolean)
     .join('\n');
 
-  return { system, user };
+  return {
+    messages: [
+      { content: system, role: 'system' as const },
+      { content: user, role: 'user' as const },
+    ],
+  };
 };
 
 /** One captured artifact, summarized for the judge. */
@@ -105,7 +285,7 @@ const describeItem = (item: JudgePromptInput['items'][number]) => {
   return `${item.title}${instruction}${describeEvidence(item.evidence)}`;
 };
 
-export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePromptInput) => {
+export const chainVerifyJudge = ({ goal, deliverable, items, mode }: JudgePromptInput) => {
   const system = [
     'You are a rigorous delivery checker. Judge whether the deliverable satisfies each criterion using the Toulmin argument model.',
     'For every criterion output:',
@@ -134,7 +314,26 @@ export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePrompt
     `\n## Deliverable\n${deliverable}`,
   ].join('\n');
 
-  return { system, user };
+  const visualEvidence =
+    mode === 'single' ? (items[0]?.evidence ?? []).filter((evidence) => evidence.accessUrl) : [];
+
+  return {
+    messages: [
+      { content: system, role: 'system' as const },
+      visualEvidence.length > 0
+        ? {
+            content: [
+              { text: user, type: 'text' as const },
+              ...visualEvidence.map((evidence) => ({
+                image_url: { detail: 'high' as const, url: evidence.accessUrl! },
+                type: 'image_url' as const,
+              })),
+            ],
+            role: 'user' as const,
+          }
+        : { content: user, role: 'user' as const },
+    ],
+  };
 };
 
 export interface ReportPromptItem {
@@ -161,7 +360,7 @@ export interface ReportPromptInput {
  * and handed in, so the LLM writes prose around fixed numbers rather than
  * re-deriving (and possibly contradicting) them.
  */
-export const buildReportPrompt = ({
+export const chainVerifyReport = ({
   goal,
   deliverable,
   items,
@@ -196,7 +395,12 @@ export const buildReportPrompt = ({
     `\n## Deliverable\n${deliverable}`,
   ].join('\n');
 
-  return { system, user };
+  return {
+    messages: [
+      { content: system, role: 'system' as const },
+      { content: user, role: 'user' as const },
+    ],
+  };
 };
 
 // ============================================
@@ -217,7 +421,7 @@ export interface ReviewPredictPromptInput {
   /** The verifier's claim. Almost always `passed` — that is the point. */
   verdict?: string;
   /** Captions for the attached artifacts, indexed to match the image order. */
-  visuals: string[];
+  visuals: { accessUrl: string; description?: string | null }[];
 }
 
 /**
@@ -236,7 +440,7 @@ export interface ReviewPredictPromptInput {
  *     below deliberately scope the model to "does the evidence show THIS check
  *     satisfied" and tell it to pass anything it cannot judge from the frame.
  */
-export const buildReviewPredictPrompt = (input: ReviewPredictPromptInput) => {
+export const chainVerifyReviewPrediction = (input: ReviewPredictPromptInput) => {
   const system = [
     'You audit whether a delivery really satisfies ONE acceptance check, by looking at the screenshots captured during verification.',
     '',
@@ -265,7 +469,7 @@ export const buildReviewPredictPrompt = (input: ReviewPredictPromptInput) => {
 
   const visualBlock = input.visuals.length
     ? input.visuals
-        .map((caption, index) => `  [image ${index}] ${caption || '(untitled)'}`)
+        .map(({ description }, index) => `  [image ${index}] ${description || '(untitled)'}`)
         .join('\n')
     : '  (none)';
 
@@ -283,5 +487,19 @@ export const buildReviewPredictPrompt = (input: ReviewPredictPromptInput) => {
     .filter(Boolean)
     .join('\n');
 
-  return { system, user };
+  return {
+    messages: [
+      { content: system, role: 'system' as const },
+      {
+        content: [
+          { text: user, type: 'text' as const },
+          ...input.visuals.map((visual) => ({
+            image_url: { detail: 'high' as const, url: visual.accessUrl },
+            type: 'image_url' as const,
+          })),
+        ],
+        role: 'user' as const,
+      },
+    ],
+  };
 };

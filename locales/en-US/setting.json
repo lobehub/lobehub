@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Once filled out, the system agent will use the custom prompt when generating content",
   "systemAgent.customPrompt.placeholder": "Please enter custom prompt",
   "systemAgent.customPrompt.title": "Custom Prompt",
+  "systemAgent.expertise.modelDesc": "Model used to draft expertise domains and extract reusable experience from conversations.",
+  "systemAgent.expertise.title": "Agent Self-Evolution",
   "systemAgent.followUpAction.label": "Follow-up Suggestions Model",
   "systemAgent.followUpAction.modelDesc": "Model used to suggest one-click follow-up replies under each assistant message",
   "systemAgent.followUpAction.title": "Follow-up Suggestions",
