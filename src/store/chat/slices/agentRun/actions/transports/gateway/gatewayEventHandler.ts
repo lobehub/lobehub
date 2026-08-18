@@ -29,6 +29,10 @@ import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import {
+  fetchPagedMessageWindow,
+  isPagedMessageListContext,
+} from '@/store/chat/utils/pagedMessageList';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
@@ -75,9 +79,15 @@ const fetchAndReplaceMessages = async (
   },
 ) => {
   const skipWorks = options?.skipWorks;
-  const messages = await messageService.getMessages(
-    skipWorks ? { ...context, skipWorks } : context,
-  );
+
+  // Cursor-windowed contexts re-fetch only the loaded `[windowStart, newest]`
+  // window: these refetches fire on every stream/tool/step boundary, and a
+  // full fetch here would re-read the whole topic per tool round — the exact
+  // O(topic) read the paged path exists to avoid. The anchor keeps a
+  // scrolled-up reader's loaded rounds covered instead of collapsing them.
+  const messages = isPagedMessageListContext(context)
+    ? (await fetchPagedMessageWindow(context, { skipWorks })).messages
+    : await messageService.getMessages(skipWorks ? { ...context, skipWorks } : context);
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;
 };

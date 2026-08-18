@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "入力後、システムアシスタントは生成するコンテンツにカスタムプロンプトを使用します",
   "systemAgent.customPrompt.placeholder": "カスタムプロンプトを入力してください",
   "systemAgent.customPrompt.title": "カスタムプロンプト",
+  "systemAgent.expertise.modelDesc": "専門分野を作成し、会話から再利用可能な経験を抽出するために使用されるモデル。",
+  "systemAgent.expertise.title": "エージェント自己進化",
   "systemAgent.followUpAction.label": "フォローアップ提案モデル",
   "systemAgent.followUpAction.modelDesc": "各アシスタントメッセージの下にワンクリックで返信できるフォローアップを提案するためのモデル",
   "systemAgent.followUpAction.title": "フォローアップ提案",

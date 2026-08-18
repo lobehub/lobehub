@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "След попълване, системният агент ще използва персонализираната подсказка при генериране на съдържание",
   "systemAgent.customPrompt.placeholder": "Моля, въведете персонализирана подсказка",
   "systemAgent.customPrompt.title": "Персонализирана подсказка",
+  "systemAgent.expertise.modelDesc": "Моделът, използван за създаване на експертни области и извличане на повторно използваем опит от разговори.",
+  "systemAgent.expertise.title": "Саморазвитие на Агента",
   "systemAgent.followUpAction.label": "Модел за предложения за последващи действия",
   "systemAgent.followUpAction.modelDesc": "Модел, използван за предлагане на бързи отговори под всяко съобщение на асистента",
   "systemAgent.followUpAction.title": "Предложения за последващи действия",

@@ -90,9 +90,17 @@ export const createEphemeralResetState = (): Partial<State> => ({
   heteroOverloadRetryAttempts: {},
   heteroOverloadWaitOpIds: {},
   inputMessage: '',
+  isLoadingMoreMessages: false,
   isScrolling: false,
+  loadMoreMessagesError: undefined,
   messageEditingIds: [],
   messageLoadingIds: [],
+  // Cursor-window metadata belongs to the previous conversation — a carried-over
+  // nextCursor would page the NEW topic with the old topic's boundary.
+  messagesHasMore: false,
+  messagesNextCursor: null,
+  messagesPrependNonce: 0,
+  messagesWindowStart: null,
   pendingArgsUpdates: new Map(),
   scheduledSendAt: undefined,
   selectedMessageIds: [],

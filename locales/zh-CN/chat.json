@@ -900,6 +900,7 @@
   "messageForward.topic.modalTitle": "转发话题给助手",
   "messageForward.transcript.header": "以下 {{count}} 条消息转发自另一段对话，请将其作为上下文并继续处理：",
   "messageLink.openInSideBrowser": "在侧边浏览器中打开",
+  "messageList.loadEarlierFailed": "加载更早的消息失败",
   "messageLongCollapse.collapse": "收起",
   "messageLongCollapse.expand": "展开全部",
   "messages.dm.sentTo": "仅对 {{name}} 可见",

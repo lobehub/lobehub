@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "填寫後，系統助理將在生成內容時使用自訂提示",
   "systemAgent.customPrompt.placeholder": "請輸入自訂提示詞",
   "systemAgent.customPrompt.title": "自訂提示詞",
+  "systemAgent.expertise.modelDesc": "用於起草專業領域並從對話中提取可重用經驗的模型。",
+  "systemAgent.expertise.title": "代理自我進化",
   "systemAgent.followUpAction.label": "跟進建議模型",
   "systemAgent.followUpAction.modelDesc": "用於在每條助理消息下方建議一鍵跟進回覆的模型",
   "systemAgent.followUpAction.title": "跟進建議",

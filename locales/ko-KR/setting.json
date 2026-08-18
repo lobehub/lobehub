@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "작성 후, 시스템 도우미는 콘텐츠 생성 시 사용자 정의 프롬프트를 사용합니다.",
   "systemAgent.customPrompt.placeholder": "사용자 정의 프롬프트 입력",
   "systemAgent.customPrompt.title": "사용자 정의 프롬프트",
+  "systemAgent.expertise.modelDesc": "전문 분야를 작성하고 대화에서 재사용 가능한 경험을 추출하는 데 사용되는 모델입니다.",
+  "systemAgent.expertise.title": "에이전트 자기 진화",
   "systemAgent.followUpAction.label": "후속 제안 모델",
   "systemAgent.followUpAction.modelDesc": "각 어시스턴트 메시지 아래에 원클릭 후속 응답을 제안하는 데 사용되는 모델",
   "systemAgent.followUpAction.title": "후속 제안",

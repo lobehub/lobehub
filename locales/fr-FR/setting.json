@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Une fois remplie, l’agent système utilisera l’invite personnalisée pour générer du contenu",
   "systemAgent.customPrompt.placeholder": "Veuillez saisir une invite personnalisée",
   "systemAgent.customPrompt.title": "Invite personnalisée",
+  "systemAgent.expertise.modelDesc": "Modèle utilisé pour élaborer des domaines d'expertise et extraire des expériences réutilisables à partir des conversations.",
+  "systemAgent.expertise.title": "Évolution Autonome de l'Agent",
   "systemAgent.followUpAction.label": "Modèle de suggestions de suivi",
   "systemAgent.followUpAction.modelDesc": "Modèle utilisé pour suggérer des réponses de suivi en un clic sous chaque message de l'assistant",
   "systemAgent.followUpAction.title": "Suggestions de suivi",

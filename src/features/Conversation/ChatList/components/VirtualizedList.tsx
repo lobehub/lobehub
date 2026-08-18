@@ -29,11 +29,15 @@ import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
+import LoadEarlier from './LoadEarlier';
 
 const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 
 const CONVERSATION_FOOTER_ID = '__conversation_footer__';
 const CONVERSATION_HEADER_ID = '__conversation_header__';
+const CONVERSATION_LOAD_EARLIER_ID = '__conversation_load_earlier__';
+/** Distance from the list top (px) at which the previous rounds start loading. */
+const LOAD_EARLIER_THRESHOLD = 300;
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -55,11 +59,20 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastUserScrollIntentAtRef = useRef(0);
 
-    // A header slot prepends one synthetic row to the VList, shifting every
-    // virtua row index off the message index. All index-based APIs exposed to
-    // the store (and the hooks that talk to virtua directly) work in MESSAGE
-    // index space; this offset translates at the virtua boundary.
-    const headerOffset = headerSlot ? 1 : 0;
+    // Cursor-window pagination (gateway-mode paged read path): older rounds
+    // exist below the loaded window and load on scroll-up via a top sentinel.
+    const messagesHasMore = useConversationStore(dataSelectors.messagesHasMore);
+    const isLoadingMoreMessages = useConversationStore(dataSelectors.isLoadingMoreMessages);
+    const loadMoreMessagesError = useConversationStore(dataSelectors.loadMoreMessagesError);
+    const loadMoreMessages = useConversationStore((s) => s.loadMoreMessages);
+    const showLoadEarlier = messagesHasMore || isLoadingMoreMessages || !!loadMoreMessagesError;
+
+    // Synthetic rows above the first message (header slot + load-earlier
+    // sentinel) shift every virtua row index off the message index. All
+    // index-based APIs exposed to the store (and the hooks that talk to virtua
+    // directly) work in MESSAGE index space; this offset translates at the
+    // virtua boundary.
+    const headerOffset = (headerSlot ? 1 : 0) + (showLoadEarlier ? 1 : 0);
     const headerOffsetRef = useRef(headerOffset);
     headerOffsetRef.current = headerOffset;
 
@@ -178,6 +191,19 @@ const VirtualizedList = memo<VirtualizedListProps>(
         recordScroll(ref.scrollOffset, isAtBottom);
       }
 
+      // Near the top of a cursor-windowed list: load the previous rounds.
+      // Single-flighted in the store; a failed page waits for the explicit
+      // inline retry instead of re-firing on every scroll event.
+      if (
+        ref &&
+        messagesHasMore &&
+        !isLoadingMoreMessages &&
+        !loadMoreMessagesError &&
+        ref.scrollOffset <= LOAD_EARLIER_THRESHOLD
+      ) {
+        void loadMoreMessages();
+      }
+
       // Clear existing timer
       if (scrollEndTimerRef.current) {
         clearTimeout(scrollEndTimerRef.current);
@@ -187,7 +213,18 @@ const VirtualizedList = memo<VirtualizedListProps>(
       scrollEndTimerRef.current = setTimeout(() => {
         setScrollState({ isScrolling: false });
       }, 150);
-    }, [activeIndex, checkAtBottom, onScrollOffset, recordScroll, setActiveIndex, setScrollState]);
+    }, [
+      activeIndex,
+      checkAtBottom,
+      isLoadingMoreMessages,
+      loadMoreMessages,
+      loadMoreMessagesError,
+      messagesHasMore,
+      onScrollOffset,
+      recordScroll,
+      setActiveIndex,
+      setScrollState,
+    ]);
 
     const handleScrollEnd = useCallback(() => {
       setScrollState({ isScrolling: false });
@@ -279,16 +316,29 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const dataWithSlots = useMemo(
       () => [
         ...(headerSlot ? [CONVERSATION_HEADER_ID] : []),
+        ...(showLoadEarlier ? [CONVERSATION_LOAD_EARLIER_ID] : []),
         ...listData,
         ...(footerSlot ? [CONVERSATION_FOOTER_ID] : []),
       ],
-      [footerSlot, headerSlot, listData],
+      [footerSlot, headerSlot, listData, showLoadEarlier],
     );
 
     const keepMountedIndicesWithSlots = useMemo(
-      () => (headerSlot ? keepMountedIndices.map((index) => index + 1) : keepMountedIndices),
-      [headerSlot, keepMountedIndices],
+      () =>
+        headerOffset ? keepMountedIndices.map((index) => index + headerOffset) : keepMountedIndices,
+      [headerOffset, keepMountedIndices],
     );
+
+    // virtua must keep the visual position when rows are inserted at the head
+    // (scroll-up pagination). The store bumps `messagesPrependNonce` on every
+    // prepend; `shift` stays true exactly for the commits between that bump and
+    // the post-commit effect below, which are the ones carrying the new rows.
+    const prependNonce = useConversationStore((s) => s.messagesPrependNonce);
+    const seenPrependNonceRef = useRef(prependNonce);
+    const shift = prependNonce !== seenPrependNonceRef.current;
+    useEffect(() => {
+      seenPrependNonceRef.current = prependNonce;
+    }, [prependNonce]);
 
     // Mirror the latest data length into a ref so the scroll-methods registered
     // once on mount can read the current total count (including spacer/footer,
@@ -320,6 +370,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
           data={dataWithSlots}
           keepMounted={keepMountedIndicesWithSlots}
           ref={virtuaRef}
+          shift={shift}
           style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
           onScroll={handleScroll}
           onScrollEnd={handleScrollEnd}
@@ -329,6 +380,16 @@ const VirtualizedList = memo<VirtualizedListProps>(
               return (
                 <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                   {headerSlot}
+                </WideScreenContainer>
+              );
+            }
+            if (messageId === CONVERSATION_LOAD_EARLIER_ID) {
+              return (
+                <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                  <LoadEarlier
+                    error={loadMoreMessagesError}
+                    onRetry={() => void loadMoreMessages()}
+                  />
                 </WideScreenContainer>
               );
             }
@@ -365,7 +426,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
             }
 
             const isAgentCouncil = messageId.includes('agentCouncil');
-            const messageIndex = headerSlot ? index - 1 : index;
+            const messageIndex = index - headerOffset;
             const isLastItem = messageIndex === dataSource.length - 1;
             const content = itemContent(messageIndex, messageId);
 

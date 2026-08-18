@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "پس از تکمیل، عامل سیستمی از این درخواست سفارشی برای تولید محتوا استفاده خواهد کرد",
   "systemAgent.customPrompt.placeholder": "لطفاً درخواست سفارشی را وارد کنید",
   "systemAgent.customPrompt.title": "درخواست سفارشی",
+  "systemAgent.expertise.modelDesc": "مدلی که برای طراحی حوزه‌های تخصصی و استخراج تجربیات قابل استفاده مجدد از مکالمات استفاده می‌شود.",
+  "systemAgent.expertise.title": "تکامل خودکار عامل",
   "systemAgent.followUpAction.label": "مدل پیشنهادات پیگیری",
   "systemAgent.followUpAction.modelDesc": "مدلی که برای پیشنهاد پاسخ‌های سریع زیر هر پیام دستیار استفاده می‌شود",
   "systemAgent.followUpAction.title": "پیشنهادات پیگیری",

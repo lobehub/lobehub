@@ -693,6 +693,7 @@ export default {
     'The following topic was forwarded from another conversation. Please use it as context and continue:',
   'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',
   'messageForward.topic.modalTitle': 'Forward topic to Agent',
+  'messageList.loadEarlierFailed': 'Failed to load earlier messages',
   'messageLongCollapse.collapse': 'Show less',
   'messageLongCollapse.expand': 'Show more',
   'messages.dm.sentTo': 'Visible only to {{name}}',

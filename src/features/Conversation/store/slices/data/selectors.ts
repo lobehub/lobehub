@@ -16,6 +16,9 @@ const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);
 const dbMessages = (s: State) => s.dbMessages;
 const messagesInit = (s: State) => s.messagesInit;
 const skipFetch = (s: State) => s.skipFetch;
+const isLoadingMoreMessages = (s: State) => s.isLoadingMoreMessages;
+const loadMoreMessagesError = (s: State) => s.loadMoreMessagesError;
+const messagesHasMore = (s: State) => s.messagesHasMore;
 
 const getDisplayMessageById = (id: string) => (s: State) => {
   // First, try to find in top-level displayMessages
@@ -288,7 +291,10 @@ export const dataSelectors = {
   getToolMessageCreatedAt,
   getToolsInBlock,
   hasNoRenderedReply,
+  isLoadingMoreMessages,
   isSecondLastMessageFromUser,
+  loadMoreMessagesError,
+  messagesHasMore,
   messagesInit,
   pendingInterventions,
   skipFetch,

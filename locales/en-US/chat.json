@@ -900,6 +900,7 @@
   "messageForward.topic.modalTitle": "Forward topic to Agent",
   "messageForward.transcript.header": "The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:",
   "messageLink.openInSideBrowser": "Open in side browser",
+  "messageList.loadEarlierFailed": "Failed to load earlier messages",
   "messageLongCollapse.collapse": "Show less",
   "messageLongCollapse.expand": "Show more",
   "messages.dm.sentTo": "Visible only to {{name}}",

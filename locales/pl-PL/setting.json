@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Po wypełnieniu agent systemowy użyje własnej podpowiedzi do generowania treści",
   "systemAgent.customPrompt.placeholder": "Wprowadź własną podpowiedź",
   "systemAgent.customPrompt.title": "Własna podpowiedź",
+  "systemAgent.expertise.modelDesc": "Model używany do opracowywania dziedzin ekspertyz i wydobywania wielokrotnego doświadczenia z rozmów.",
+  "systemAgent.expertise.title": "Samorozwój Agenta",
   "systemAgent.followUpAction.label": "Model sugestii dalszych odpowiedzi",
   "systemAgent.followUpAction.modelDesc": "Model używany do sugerowania jednorazowych dalszych odpowiedzi pod każdą wiadomością asystenta",
   "systemAgent.followUpAction.title": "Sugestie dalszych odpowiedzi",

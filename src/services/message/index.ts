@@ -46,6 +46,38 @@ interface MessageReadQueryContext {
   topicShareId?: string;
 }
 
+/**
+ * Round-boundary cursor into a topic's mainline conversation. `createdAt` is a
+ * lossless microsecond string minted by the server — never rebuild one from a
+ * client `Date` (millisecond precision would leak rows between pages).
+ */
+export interface MessageRoundCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** One cursor-paginated window of a topic's mainline messages. */
+export interface MessageListPage {
+  hasMore: boolean;
+  messages: UIChatMessage[];
+  /** Cursor to load the previous (older) rounds, or null at the topic start. */
+  nextCursor: MessageRoundCursor | null;
+  /** Lower bound of this window — the `anchor` for whole-window revalidation. */
+  windowStart: MessageRoundCursor | null;
+}
+
+export interface MessageCursorQueryParams {
+  agentId?: string | null;
+  /** Re-fetch the whole `[anchor, newest]` window (revalidation). */
+  anchor?: MessageRoundCursor | null;
+  /** Load the rounds strictly before this cursor (scroll up). */
+  cursor?: MessageRoundCursor | null;
+  roundLimit?: number;
+  /** Skip server-side Work-summary assembly (mid-stream refetches). */
+  skipWorks?: boolean;
+  topicId: string;
+}
+
 export type MessageBatchOperation =
   | {
       message: CreateMessageParams;
@@ -156,6 +188,22 @@ export class MessageService {
     });
 
     return data as unknown as UIChatMessage[];
+  };
+
+  /**
+   * Cursor-paginated (round-aligned) window of a topic's mainline messages —
+   * the DISPLAY-ONLY read path for gateway mode, where the server builds model
+   * context from the DB itself. Legacy client mode keeps `getMessages` (full
+   * fetch) because it resends the whole session each turn.
+   */
+  getMessagesByCursor = async (params: MessageCursorQueryParams): Promise<MessageListPage> => {
+    // includeFileWorks mirrors getMessages — see its note above.
+    const data = await lambdaClient.message.getMessagesByCursor.query({
+      ...params,
+      includeFileWorks: true,
+    });
+
+    return { ...data, messages: data.messages as unknown as UIChatMessage[] };
   };
 
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {

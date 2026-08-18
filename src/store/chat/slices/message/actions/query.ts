@@ -6,7 +6,7 @@ import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { isMessageListKey } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
+import { type MessageListPage, messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
   getMessageListFetchPolicy,
@@ -25,6 +25,11 @@ import { type StoreSetter } from '@/store/types';
 
 import { type MessageMapKeyInput } from '../../../utils/messageMapKey';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import {
+  isPagedMessageListContext,
+  runPagedMessageListQuery,
+  toPagedMessageListContext,
+} from '../../../utils/pagedMessageList';
 import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
 /**
@@ -60,12 +65,19 @@ export class MessageQueryActionImpl {
     // revalidation would return an empty list and wipe the optimistic messages.
     if (topicId && this.#get().creatingTopicIds.includes(topicId)) return;
 
+    // Target the key variant this context actually reads: the paged (windowed)
+    // key in gateway mode, the full-fetch key otherwise.
+    const baseContext = { agentId, groupId, threadId, topicId };
+    const ctx = isPagedMessageListContext(baseContext)
+      ? toPagedMessageListContext(baseContext)
+      : baseContext;
+
     // Topic navigation is a soft ensure: a completed prefetch is already the
     // server snapshot the destination hook needs, while an in-flight prefetch
     // will be shared by the coordinator when the hook mounts.
-    if (isMessageListServerVerified({ agentId, groupId, threadId, topicId })) return;
+    if (isMessageListServerVerified(ctx)) return;
 
-    await mutate(messageListKey({ agentId, groupId, threadId, topicId }));
+    await mutate(messageListKey(ctx));
   };
 
   refreshMessages = async (context?: Partial<ConversationContext>): Promise<void> => {
@@ -90,28 +102,43 @@ export class MessageQueryActionImpl {
     // prefetch an empty list and clobber the optimistic messages on screen.
     if (this.#get().creatingTopicIds.includes(context.topicId)) return;
 
-    const messagesKey = getMessageListCacheIdentity(context);
+    // Warm the key variant the destination hook will actually read — a
+    // full-fetch prefetch for a paged context would fire the very
+    // whole-topic query the windowed path exists to avoid.
+    const paged = isPagedMessageListContext(context);
+    const fetchContext = paged ? toPagedMessageListContext(context) : context;
+
+    const messagesKey = getMessageListCacheIdentity(fetchContext);
     if (operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) return;
-    if (isMessageListServerVerified(context)) return;
+    if (isMessageListServerVerified(fetchContext)) return;
     if (prefetchingMessageKeys.has(messagesKey)) return;
 
     prefetchingMessageKeys.add(messagesKey);
 
-    const request = runMessageListQuery(context, messageService.getMessages).then((messages) => {
-      // Re-check at DELIVERY time, not just at start: the user can open this
-      // topic and submit a follow-up while the request is in flight. Applying
-      // the pre-run snapshot then would drop the freshly created user/assistant
-      // rows, and streaming updates targeting those now-missing ids are silent
-      // no-ops until terminal reconciliation. Mirrors the defense-in-depth gate
-      // in `useFetchMessages`' onData; the SWR cache seed below is unaffected.
+    // Re-check at DELIVERY time, not just at start: the user can open this
+    // topic and submit a follow-up while the request is in flight. Applying
+    // the pre-run snapshot then would drop the freshly created user/assistant
+    // rows, and streaming updates targeting those now-missing ids are silent
+    // no-ops until terminal reconciliation. Mirrors the defense-in-depth gate
+    // in `useFetchMessages`' onData; the SWR cache seed below is unaffected.
+    const applyPrefetched = (messages: UIChatMessage[]) => {
       if (!operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) {
         this.#get().replaceMessages(messages, { action: 'prefetchMessages', context });
       }
-      return messages;
-    });
+    };
+
+    const request: Promise<UIChatMessage[] | MessageListPage> = paged
+      ? runPagedMessageListQuery(context).then((page) => {
+          applyPrefetched(page.messages);
+          return page;
+        })
+      : runMessageListQuery(context, messageService.getMessages).then((messages) => {
+          applyPrefetched(messages);
+          return messages;
+        });
 
     try {
-      await mutate(messageListKey(context), request, { revalidate: false });
+      await mutate(messageListKey(fetchContext), request, { revalidate: false });
       await request;
     } catch (error) {
       // Background warming should never surface an unhandled rejection.

@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Khi đã điền, tác nhân hệ thống sẽ sử dụng prompt tùy chỉnh khi tạo nội dung",
   "systemAgent.customPrompt.placeholder": "Vui lòng nhập prompt tùy chỉnh",
   "systemAgent.customPrompt.title": "Prompt Tùy Chỉnh",
+  "systemAgent.expertise.modelDesc": "Mô hình được sử dụng để xây dựng các lĩnh vực chuyên môn và trích xuất kinh nghiệm có thể tái sử dụng từ các cuộc trò chuyện.",
+  "systemAgent.expertise.title": "Tự Tiến Hóa của Đại Diện",
   "systemAgent.followUpAction.label": "Mô hình Gợi ý tiếp theo",
   "systemAgent.followUpAction.modelDesc": "Mô hình được sử dụng để gợi ý các câu trả lời tiếp theo bằng một cú nhấp chuột dưới mỗi tin nhắn của trợ lý",
   "systemAgent.followUpAction.title": "Gợi ý tiếp theo",

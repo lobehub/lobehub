@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Doldurulduğunda, sistem temsilcisi içerik üretirken özel komutu kullanacaktır",
   "systemAgent.customPrompt.placeholder": "Lütfen özel komut girin",
   "systemAgent.customPrompt.title": "Özel Komut",
+  "systemAgent.expertise.modelDesc": "Uzmanlık alanlarını taslak olarak hazırlamak ve konuşmalardan yeniden kullanılabilir deneyim çıkarmak için kullanılan model.",
+  "systemAgent.expertise.title": "Ajanın Kendi Kendine Evrimi",
   "systemAgent.followUpAction.label": "Takip Önerileri Modeli",
   "systemAgent.followUpAction.modelDesc": "Her asistan mesajının altında tek tıklamayla takip yanıtları önermek için kullanılan model",
   "systemAgent.followUpAction.title": "Takip Önerileri",

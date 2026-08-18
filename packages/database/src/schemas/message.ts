@@ -171,6 +171,15 @@ export const messages = pgTable(
     index('messages_usage_cost_idx').on(sql`(("usage"->>'cost')::numeric)`),
     index('messages_usage_total_tokens_idx').on(sql`(("usage"->>'totalTokens')::numeric)`),
     index('messages_workspace_id_idx').on(table.workspaceId),
+    /**
+     * Keyset (cursor) pagination of a topic's mainline conversation by round
+     * boundary (see `MessageModel.queryTopicMessagesByCursor`): topicId equality
+     * then `(createdAt, id)` order, restricted to mainline rows. Without it
+     * PostgreSQL scans and sorts the whole topic on every scroll-up page.
+     */
+    index('messages_topic_mainline_created_at_id_idx')
+      .on(table.topicId, table.createdAt, table.id)
+      .where(sql`${table.threadId} IS NULL AND ${table.messageGroupId} IS NULL`),
   ],
 );
 

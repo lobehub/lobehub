@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Una volta compilato, l'agente di sistema utilizzerà il prompt personalizzato per generare contenuti",
   "systemAgent.customPrompt.placeholder": "Inserisci prompt personalizzato",
   "systemAgent.customPrompt.title": "Prompt Personalizzato",
+  "systemAgent.expertise.modelDesc": "Modello utilizzato per delineare i domini di competenza ed estrarre esperienze riutilizzabili dalle conversazioni.",
+  "systemAgent.expertise.title": "Auto-Evoluzione dell'Agente",
   "systemAgent.followUpAction.label": "Modello di suggerimenti di Follow-up",
   "systemAgent.followUpAction.modelDesc": "Modello utilizzato per suggerire risposte rapide sotto ogni messaggio dell'assistente",
   "systemAgent.followUpAction.title": "Suggerimenti di Follow-up",

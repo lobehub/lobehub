@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "После заполнения системный агент будет использовать пользовательский запрос при генерации контента",
   "systemAgent.customPrompt.placeholder": "Введите пользовательский запрос",
   "systemAgent.customPrompt.title": "Пользовательский запрос",
+  "systemAgent.expertise.modelDesc": "Модель, используемая для разработки областей экспертизы и извлечения повторно используемого опыта из разговоров.",
+  "systemAgent.expertise.title": "Саморазвитие агента",
   "systemAgent.followUpAction.label": "Модель предложений последующих действий",
   "systemAgent.followUpAction.modelDesc": "Модель, используемая для предложения быстрых ответов под каждым сообщением ассистента",
   "systemAgent.followUpAction.title": "Предложения последующих действий",

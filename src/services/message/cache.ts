@@ -14,7 +14,10 @@ const MAX_MESSAGE_LIST_CLIENT_STATES = 500;
 
 interface ActiveMessageListRequest {
   generation: number;
-  promise: Promise<UIChatMessage[]>;
+  // The paged and full-fetch variants carry different payload shapes; each
+  // canonical context always maps to exactly one shape (paged is part of the
+  // identity), so the public generic API narrows this safely.
+  promise: Promise<unknown>;
   settled: boolean;
 }
 
@@ -96,19 +99,19 @@ export const getMessageListFetchPolicy = (context: MessageListQueryContext) => (
   revalidateIfStale: !isMessageListServerVerified(context),
 });
 
-type MessageListQuery = (context: CanonicalMessageListContext) => Promise<UIChatMessage[]>;
+type MessageListQuery<T> = (context: CanonicalMessageListContext) => Promise<T>;
 
-const startCurrentGenerationQuery = (
+const startCurrentGenerationQuery = <T>(
   state: MessageListClientState,
-  query: MessageListQuery,
+  query: MessageListQuery<T>,
   reuseSettledRequest = false,
-): Promise<UIChatMessage[]> => {
+): Promise<T> => {
   const activeRequest = state.currentRequest;
   if (
     activeRequest?.generation === state.generation &&
     (!activeRequest.settled || reuseSettledRequest)
   ) {
-    return activeRequest.promise;
+    return activeRequest.promise as Promise<T>;
   }
 
   // A verification window describes the last successful server snapshot. Once
@@ -117,9 +120,9 @@ const startCurrentGenerationQuery = (
   const requestGeneration = state.generation;
   state.activeRequestGenerations.add(requestGeneration);
 
-  const request: Promise<UIChatMessage[]> = Promise.resolve()
+  const request: Promise<T> = Promise.resolve()
     .then(async () => {
-      let messages: UIChatMessage[];
+      let messages: T;
       try {
         messages = await query(state.context);
       } catch (error) {
@@ -165,10 +168,10 @@ const startCurrentGenerationQuery = (
  * request generation. Direct MessageService callers intentionally stay outside
  * this client-cache policy.
  */
-export const runMessageListQuery = (
+export const runMessageListQuery = <T = UIChatMessage[]>(
   context: MessageListQueryContext,
-  query: MessageListQuery,
-): Promise<UIChatMessage[]> => startCurrentGenerationQuery(getOrCreateState(context), query);
+  query: MessageListQuery<T>,
+): Promise<T> => startCurrentGenerationQuery(getOrCreateState(context), query);
 
 /**
  * Synchronously invalidate verification and advance the request generation for

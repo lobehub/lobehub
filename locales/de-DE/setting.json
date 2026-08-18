@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Nach dem Ausfüllen verwendet der Systemagent den benutzerdefinierten Prompt zur Inhaltserstellung",
   "systemAgent.customPrompt.placeholder": "Benutzerdefinierten Prompt eingeben",
   "systemAgent.customPrompt.title": "Benutzerdefinierter Prompt",
+  "systemAgent.expertise.modelDesc": "Modell zur Erstellung von Fachgebieten und zur Extraktion wiederverwendbarer Erfahrungen aus Gesprächen.",
+  "systemAgent.expertise.title": "Agenten-Selbstentwicklung",
   "systemAgent.followUpAction.label": "Modell für Nachfolgevorschläge",
   "systemAgent.followUpAction.modelDesc": "Modell, das Ein-Klick-Nachfolgeantworten unter jeder Assistentennachricht vorschlägt",
   "systemAgent.followUpAction.title": "Nachfolgevorschläge",

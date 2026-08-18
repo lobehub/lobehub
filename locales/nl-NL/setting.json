@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "Zodra ingevuld, gebruikt de systeemagent de aangepaste prompt bij het genereren van inhoud",
   "systemAgent.customPrompt.placeholder": "Voer aangepaste prompt in",
   "systemAgent.customPrompt.title": "Aangepaste Prompt",
+  "systemAgent.expertise.modelDesc": "Model gebruikt om expertisegebieden op te stellen en herbruikbare ervaring uit gesprekken te halen.",
+  "systemAgent.expertise.title": "Agent Zelf-Evolutie",
   "systemAgent.followUpAction.label": "Model voor vervolgvoorstellen",
   "systemAgent.followUpAction.modelDesc": "Model dat wordt gebruikt om één-klik vervolgopties voor te stellen onder elk assistentbericht",
   "systemAgent.followUpAction.title": "Vervolgvoorstellen",

@@ -1788,6 +1788,7 @@ table messages {
     () [name: 'messages_usage_cost_idx']
     () [name: 'messages_usage_total_tokens_idx']
     workspace_id [name: 'messages_workspace_id_idx']
+    (topic_id, created_at, id) [name: 'messages_topic_mainline_created_at_id_idx']
   }
 }
 

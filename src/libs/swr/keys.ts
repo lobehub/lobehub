@@ -49,6 +49,14 @@ interface LocalFilePreviewKeyParams {
 export interface MessageListQueryContext {
   agentId?: string | null;
   groupId?: string | null;
+  /**
+   * Cursor-paginated (windowed) variant of the list — the cached value is a
+   * `MessageListPage`, not a plain `UIChatMessage[]`. Kept in the key so the
+   * paged and full-fetch caches never serve each other's shape, while
+   * `isMessageListKey` invalidation (matched on agentId/topicId) still hits
+   * both variants.
+   */
+  paged?: boolean;
   threadId?: string | null;
   topicId?: string | null;
   topicShareId?: string;
@@ -57,6 +65,7 @@ export interface MessageListQueryContext {
 export interface CanonicalMessageListContext {
   agentId: string | null;
   groupId: string | null;
+  paged?: true;
   threadId: string | null;
   topicId: string | null;
   topicShareId?: string;
@@ -75,6 +84,7 @@ export const normalizeMessageListQueryContext = (
   groupId: context.groupId ?? null,
   threadId: context.threadId ?? null,
   topicId: context.topicId ?? null,
+  ...(context.paged ? { paged: true as const } : {}),
   ...(context.topicShareId === undefined ? {} : { topicShareId: context.topicShareId }),
 });
 

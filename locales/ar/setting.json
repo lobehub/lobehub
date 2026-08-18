@@ -1249,6 +1249,8 @@
   "systemAgent.customPrompt.desc": "عند تعبئته، سيستخدم الوكيل النظامي الموجه المخصص عند توليد المحتوى",
   "systemAgent.customPrompt.placeholder": "يرجى إدخال موجه مخصص",
   "systemAgent.customPrompt.title": "موجه مخصص",
+  "systemAgent.expertise.modelDesc": "النموذج المستخدم لصياغة مجالات الخبرة واستخراج التجارب القابلة لإعادة الاستخدام من المحادثات.",
+  "systemAgent.expertise.title": "تطور الوكيل الذاتي",
   "systemAgent.followUpAction.label": "نموذج اقتراحات المتابعة",
   "systemAgent.followUpAction.modelDesc": "النموذج المستخدم لاقتراح ردود متابعة سريعة أسفل كل رسالة مساعد",
   "systemAgent.followUpAction.title": "اقتراحات المتابعة",

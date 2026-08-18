@@ -5,7 +5,7 @@ import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
-import { messageService } from '@/services/message';
+import { type MessageListPage, messageService } from '@/services/message';
 import {
   getMessageListFetchPolicy,
   messageListKey,
@@ -18,6 +18,14 @@ import {
   mergeLocalMessagesByCreatedAt,
 } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import {
+  getMessageListPayload,
+  isPagedMessageListContext,
+  LOAD_MORE_ROUND_LIMIT,
+  runPagedMessageListQuery,
+  setMessageWindowStart,
+  toPagedMessageListContext,
+} from '@/store/chat/utils/pagedMessageList';
 
 import { type Store as ConversationStore } from '../../action';
 import { isSameConversationContext } from '../../utils/contextGuard';
@@ -76,6 +84,15 @@ export interface DataAction {
   internal_dispatchMessage: (payload: MessageDispatch) => void;
 
   /**
+   * Load the previous (older) rounds of the cursor-paginated window and
+   * prepend them to the transcript. No-op outside the paged read path, while
+   * a page is already in flight, or when the topic start is reached. A failed
+   * page lands in `loadMoreMessagesError` for an inline retry row — it never
+   * auto-retries.
+   */
+  loadMoreMessages: () => Promise<void>;
+
+  /**
    * Replace all messages with new data
    * Used for syncing after database operations (optimistic update pattern)
    *
@@ -115,7 +132,7 @@ export interface DataAction {
   useFetchMessages: (
     context: ConversationContext,
     options?: { revalidateOnFocus?: boolean; skipFetch?: boolean },
-  ) => SWRResponse<UIChatMessage[]>;
+  ) => SWRResponse<UIChatMessage[] | MessageListPage>;
 }
 
 export const dataSlice: StateCreator<
@@ -188,6 +205,86 @@ export const dataSlice: StateCreator<
     get().onMessagesChange?.(newDbMessages, get().context);
   },
 
+  loadMoreMessages: async () => {
+    const { context, isLoadingMoreMessages, messagesHasMore, messagesNextCursor } = get();
+    if (isLoadingMoreMessages || !messagesHasMore || !messagesNextCursor) return;
+    if (!context.topicId || !isPagedMessageListContext(context)) return;
+
+    const contextKey = messageMapKey(context);
+    set(
+      { isLoadingMoreMessages: true, loadMoreMessagesError: undefined },
+      false,
+      'loadMoreMessages/start',
+    );
+
+    try {
+      // Deliberately outside the single-flight cache layer: older pages are
+      // store-local extensions of the window, never SWR cache entries — the
+      // paged SWR key always holds the `[windowStart, newest]` snapshot.
+      const page = await messageService.getMessagesByCursor({
+        agentId: context.agentId,
+        cursor: messagesNextCursor,
+        // Scroll-up pages load more rounds than the initial window so history
+        // browsing triggers far fewer times (see LOAD_MORE_ROUND_LIMIT).
+        roundLimit: LOAD_MORE_ROUND_LIMIT,
+        topicId: context.topicId,
+      });
+
+      // Topic switched while the page was in flight — the store now belongs to
+      // another conversation; drop the result (the flag was reset with it).
+      if (messageMapKey(get().context) !== contextKey) return;
+
+      const existing = get().dbMessages;
+      const existingIds = new Set(existing.map((message) => message.id));
+      const olderMessages = page.messages.filter((message) => !existingIds.has(message.id));
+      const merged = [...olderMessages, ...existing];
+
+      const { flatList } = parse(merged);
+      const stableFlatList = stabilizeReferences(get().displayMessages, flatList);
+
+      log(
+        '[loadMoreMessages] loaded | contextKey=%s | pageCount=%d | totalCount=%d | hasMore=%s',
+        contextKey,
+        olderMessages.length,
+        merged.length,
+        page.hasMore,
+      );
+
+      set(
+        {
+          dbMessages: merged,
+          displayMessages: stableFlatList,
+          isLoadingMoreMessages: false,
+          messagesHasMore: page.hasMore,
+          messagesNextCursor: page.nextCursor,
+          messagesPrependNonce: get().messagesPrependNonce + 1,
+          // The loaded window now reaches down to this page's start; later
+          // revalidations must anchor here to keep covering it.
+          messagesWindowStart: page.windowStart ?? get().messagesWindowStart,
+        },
+        false,
+        'loadMoreMessages/success',
+      );
+
+      // The shared window registry is what anchors every later window re-fetch
+      // (SWR revalidation AND the gateway handler's mid-stream refetches) —
+      // widen it to this page's start so they keep covering the loaded rounds.
+      if (page.windowStart) setMessageWindowStart(context, page.windowStart);
+
+      // `source: 'fetch'` — a server snapshot echo; must not write through the
+      // SWR cache (the paged key deliberately keeps only the newest window).
+      get().onMessagesChange?.(merged, context, { source: 'fetch' });
+    } catch (error) {
+      if (messageMapKey(get().context) !== contextKey) return;
+      log('[loadMoreMessages] failed | contextKey=%s | error=%O', contextKey, error);
+      set(
+        { isLoadingMoreMessages: false, loadMoreMessagesError: error as Error },
+        false,
+        'loadMoreMessages/error',
+      );
+    }
+  },
+
   replaceMessages: (messages, options) => {
     const currentContext = get().context;
     const contextKey = messageMapKey(currentContext);
@@ -249,25 +346,37 @@ export const dataSlice: StateCreator<
     // Also skip fetch when topicId is null (new conversation state) - there's no server data,
     // only local optimistic updates. Fetching would return empty array and overwrite local data.
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
+    // Cursor-windowed read path (gateway mode, mainline): fetch the newest
+    // rounds instead of the whole topic, under a distinct `paged` key.
+    const paged = shouldFetch && isPagedMessageListContext(context);
+    const fetchContext = paged ? toPagedMessageListContext(context) : context;
     const contextKey = messageMapKey(context);
     const storeContextKeyAtRequest = messageMapKey(get().context);
     const onMessagesChange = get().onMessagesChange;
 
     log(
-      '[useFetchMessages] hook | contextKey=%s | shouldFetch=%s | skipFetch=%s | agentId=%s | topicId=%s',
+      '[useFetchMessages] hook | contextKey=%s | shouldFetch=%s | skipFetch=%s | paged=%s | agentId=%s | topicId=%s',
       contextKey,
       shouldFetch,
       skipFetch,
+      paged,
       context.agentId,
       context.topicId,
     );
 
-    return useClientDataSWRWithSync<UIChatMessage[]>(
-      shouldFetch ? messageListKey(context) : null,
+    return useClientDataSWRWithSync<UIChatMessage[] | MessageListPage>(
+      shouldFetch ? messageListKey(fetchContext) : null,
 
-      () => runMessageListQuery(context, messageService.getMessages),
+      // The paged fetcher anchors on the loaded window's start (shared window
+      // registry, read at request time) so a revalidation re-fetches the whole
+      // `[windowStart, newest]` range — a plain newest page would slide past
+      // the loaded older pages and leave a round gap between them.
+      () =>
+        paged
+          ? runPagedMessageListQuery(context)
+          : runMessageListQuery(context, messageService.getMessages),
       {
-        ...getMessageListFetchPolicy(context),
+        ...getMessageListFetchPolicy(fetchContext),
         ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
         // Fresh in-memory or prefetched data can render without an immediate
         // switch-time revalidation. Missing cache data still fetches because
@@ -302,12 +411,14 @@ export const dataSlice: StateCreator<
           if (operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState()))
             return;
 
+          const { messages: fetchedMessages, page } = getMessageListPayload(data);
+
           const prevDbMessages = get().dbMessages;
           const activeVoiceMessageIds = new Set(
             Object.keys(getChatStoreState().voiceMessageUploadMap),
           );
           const mergedMessages = mergeFetchedMessagesWithLocalState(
-            data,
+            fetchedMessages,
             prevDbMessages,
             activeVoiceMessageIds,
           );
@@ -330,6 +441,15 @@ export const dataSlice: StateCreator<
             dbMessages: mergedMessages,
             displayMessages: stableFlatList,
             messagesInit: true,
+            // The paged payload replaces the whole window (anchor semantics),
+            // so its metadata replaces the window metadata wholesale too.
+            ...(paged
+              ? {
+                  messagesHasMore: page?.hasMore ?? false,
+                  messagesNextCursor: page?.nextCursor ?? null,
+                  messagesWindowStart: page?.windowStart ?? null,
+                }
+              : {}),
           });
 
           // Use the callback and context captured when this fetch was registered.
