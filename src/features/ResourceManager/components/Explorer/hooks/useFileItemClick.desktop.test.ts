@@ -48,13 +48,17 @@ const shellWrapper = ({ children }: PropsWithChildren) =>
 const renderFileClick = (options: Parameters<typeof useFileItemClick>[0]) =>
   renderHook(() => useFileItemClick(options), { wrapper: shellWrapper });
 
-beforeEach(() => {
+const setupActiveTab = (url: string) => {
   resetTabRouterManager();
   useElectronStore.setState({
     activeTabId: TAB_ID,
-    tabs: [{ id: TAB_ID, lastVisited: 0, url: TAB_URL }],
+    tabs: [{ id: TAB_ID, lastVisited: 0, url }],
   });
-  getOrCreateTabRouter(TAB_ID, TAB_URL, createRouter);
+  getOrCreateTabRouter(TAB_ID, url, createRouter);
+};
+
+beforeEach(() => {
+  setupActiveTab(TAB_URL);
 });
 
 afterEach(() => {
@@ -95,6 +99,25 @@ describe('useFileItemClick (desktop shell)', () => {
     const search = new URLSearchParams(getTabRouter(TAB_ID)!.state.location.search);
     expect(search.get('file')).toBe('page_1');
     expect(search.get('view')).toBe('grid');
+  });
+
+  it('leaves the permission page when selecting a page from the library sidebar', async () => {
+    setupActiveTab('/resource/library/kb_1/permission?view=grid');
+    const { result } = renderFileClick({
+      id: 'page_1',
+      isFolder: false,
+      isPage: true,
+      libraryId: 'kb_1',
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
+    expect(pathname).toBe('/resource/library/kb_1');
+    expect(new URLSearchParams(search).get('file')).toBe('page_1');
+    expect(new URLSearchParams(search).get('view')).toBe('grid');
   });
 
   it('drops the file param and keeps the tab router when entering a folder', async () => {

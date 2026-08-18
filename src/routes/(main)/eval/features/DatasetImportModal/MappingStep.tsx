@@ -1,8 +1,8 @@
 'use client';
 
 import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Checkbox, Table } from 'antd';
+import { Checkbox, Select } from '@lobehub/ui/base-ui';
+import { Table } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,13 +35,7 @@ const CATEGORY_CANDIDATES = new Set(['category', 'topic', 'type', 'subject', 'cl
 const CHOICES_CANDIDATES = new Set(['choices', 'options', 'alternatives', 'candidates']);
 
 type MappingTarget =
-  | 'choices'
-  | 'category'
-  | 'expected'
-  | 'ignore'
-  | 'input'
-  | 'metadata'
-  | 'sortOrder';
+  'choices' | 'category' | 'expected' | 'ignore' | 'input' | 'metadata' | 'sortOrder';
 
 export interface FieldMappingValue {
   category?: string;
@@ -287,7 +281,7 @@ const MappingStep = memo<MappingStepProps>(
               </Flexbox>
             )}
             {hasIgnored && (
-              <Checkbox checked={hideSkipped} onChange={(e) => setHideSkipped(e.target.checked)}>
+              <Checkbox checked={hideSkipped} onChange={setHideSkipped}>
                 <Text fontSize={12} type="secondary">
                   {t('dataset.import.hideSkipped')}
                 </Text>

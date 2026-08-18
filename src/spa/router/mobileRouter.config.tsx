@@ -6,6 +6,7 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
+import AppsSkeleton from '@/components/Skeleton/Apps';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import {
   acceptanceRouteMeta,
@@ -294,11 +295,13 @@ export const mobileRoutes: RouteObject[] = [
     children: [
       ...sharedMainAreaChildren,
 
-      // Downloads page (personal-only — never mirrored under /:workspaceSlug)
+      // Apps page (personal-only — never mirrored under /:workspaceSlug)
       {
-        element: dynamicElement(() => import('@/routes/(main)/downloads'), 'Mobile > Downloads'),
+        element: dynamicElement(() => import('@/routes/(main)/apps'), 'Mobile > Apps', {
+          fallback: <AppsSkeleton />,
+        }),
         errorElement: <ErrorBoundary />,
-        path: 'downloads',
+        path: 'apps',
       },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)

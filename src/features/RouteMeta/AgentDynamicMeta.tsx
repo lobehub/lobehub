@@ -20,9 +20,11 @@ const useTopicTitle = (
   useChatStore((state) => {
     if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
 
-    const topic = state.topicDataMap[topicMapKey({ agentId })]?.items?.find(
-      (item) => item.id === topicId,
-    );
+    // Archived (completed) topics are excluded from the list fetch — fall back
+    // to the by-id detail cache filled by `useFetchTopicDetail`.
+    const topic =
+      state.topicDataMap[topicMapKey({ agentId })]?.items?.find((item) => item.id === topicId) ??
+      state.topicDetailMap[topicId];
     return topic?.title || undefined;
   });
 
@@ -92,6 +94,7 @@ export const TopicsDynamicMeta = createAgentSectionDynamicMeta('navigation.topic
 export const ProfileDynamicMeta = createAgentSectionDynamicMeta('navigation.profile');
 export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.channels');
 export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
+export const SelfLearningDynamicMeta = createAgentSectionDynamicMeta('navigation.selfLearning');
 export const PermissionDynamicMeta = createAgentSectionDynamicMeta('navigation.permission');
 
 export default AgentDynamicMeta;

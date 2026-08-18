@@ -25,6 +25,12 @@ import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 export type AsyncErrorVariant = 'page' | 'block' | 'inline' | 'metric';
 
 export interface AsyncErrorProps {
+  /**
+   * Custom action rendered in the retry button's slot — for terminal errors
+   * where retrying can never succeed but the user still needs a way out
+   * (e.g. a Back button on a 403).
+   */
+  action?: ReactNode;
   /** Override the auto-derived description (status-based copy otherwise). */
   description?: ReactNode;
   /** The thrown error; normalized for status-specific copy + retryable gating. */
@@ -66,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const AsyncError = memo<AsyncErrorProps>(
-  ({ variant = 'block', error, onRetry, retrying = false, title, description }) => {
+  ({ variant = 'block', error, onRetry, retrying = false, title, description, action }) => {
     const { t } = useTranslation('error');
     const { status, retryable } = normalizeAsyncError(error);
 
@@ -144,17 +150,18 @@ const AsyncError = memo<AsyncErrorProps>(
             {reason}
           </Text>
         </Flexbox>
-        {showRetry && (
-          <Button
-            disabled={retrying}
-            icon={<Icon icon={RotateCwIcon} />}
-            loading={retrying}
-            size={'small'}
-            onClick={onRetry}
-          >
-            {t('error.retry')}
-          </Button>
-        )}
+        {action ??
+          (showRetry && (
+            <Button
+              disabled={retrying}
+              icon={<Icon icon={RotateCwIcon} />}
+              loading={retrying}
+              size={'small'}
+              onClick={onRetry}
+            >
+              {t('error.retry')}
+            </Button>
+          ))}
       </Center>
     );
   },

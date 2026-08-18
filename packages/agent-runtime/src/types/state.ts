@@ -7,6 +7,7 @@ import type {
 } from '@lobechat/context-engine';
 import type {
   ChatToolPayload,
+  ExpertiseContextSnapshot,
   SecurityBlacklistConfig,
   UserInterventionConfig,
 } from '@lobechat/types';
@@ -35,7 +36,11 @@ export interface AgentState {
   costLimit?: CostLimit;
   // --- Metadata ---
   createdAt: string;
+  /** Whether ContextEngine may inject the operation expertise snapshot. */
+  enableExpertise?: boolean;
   error?: any;
+  /** Immutable expertise snapshot resolved once when this operation starts. */
+  expertise?: ExpertiseContextSnapshot;
   /**
    * When true, the agent is in force-finish mode (maxSteps exceeded).
    * Tools are allowed to complete, but the next LLM call will have tools stripped

@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
+import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
@@ -55,6 +56,11 @@ export const useGroupDropdownMenu = ({
     backgroundColor,
     description,
     memberAvatars,
+    title,
+  });
+  const transferToMemberItem = useAgentGroupTransferToMemberMenuItem(id, {
+    avatar,
+    backgroundColor,
     title,
   });
 
@@ -112,8 +118,12 @@ export const useGroupDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
-        ...(canConfigure && transferMenuItems?.length
-          ? [{ type: 'divider' as const }, ...transferMenuItems]
+        ...(canConfigure && (transferMenuItems?.length || transferToMemberItem)
+          ? [
+              { type: 'divider' as const },
+              ...(transferMenuItems ?? []),
+              ...(transferToMemberItem ? [transferToMemberItem] : []),
+            ]
           : []),
         ...(canConfigure && canManage
           ? [
@@ -162,6 +172,7 @@ export const useGroupDropdownMenu = ({
       openAgentInNewWindow,
       removeAgentGroup,
       transferMenuItems,
+      transferToMemberItem,
     ],
   );
 };

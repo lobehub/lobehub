@@ -1,90 +1,76 @@
 'use client';
 
-import { AGENT_DOCUMENT_CATEGORY, AGENT_DOCUMENT_SKILL_CATEGORY } from '@lobechat/const';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { PanelRightCloseIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { ChevronLeftIcon } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isDesktop } from '@/const/version';
 import AgentDocumentsGroup from '@/features/Conversation/WorkingSidebar/ResourcesSection/AgentDocumentsGroup';
-import RightPanel from '@/features/RightPanel';
+import { appNavigate } from '@/features/Electron/navigation/appNavigate';
+import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useClientDataSWR } from '@/libs/swr';
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { useGlobalStore } from '@/store/global';
-import { standardizeIdentifier } from '@/utils/identifier';
-
-type AgentDocumentPanelTab = 'documents' | 'skills';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  backLink: css`
+    display: flex;
+    gap: 2px;
+    align-items: center;
+
+    width: fit-content;
+    padding-block: 3px;
+    padding-inline: 4px 6px;
+    border-radius: 6px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    text-decoration: none;
+
+    background: transparent;
+
+    transition:
+      color 150ms ease,
+      background 150ms ease;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   body: css`
     overflow-y: auto;
     flex: 1;
     min-height: 0;
   `,
-  header: css`
-    flex-shrink: 0;
-  `,
-  tab: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border: none;
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    transition:
-      color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  tabActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  tabs: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  `,
 }));
 
-const TABS = [
-  { key: 'documents', labelKey: 'workingPanel.resources.filter.documents' },
-  { key: 'skills', labelKey: 'workingPanel.skills.title' },
-] as const satisfies readonly { key: AgentDocumentPanelTab; labelKey: string }[];
-
-const AgentDocumentRightPanel = memo(() => {
+const AgentDocumentSidebarContent = memo(() => {
   const { t } = useTranslation('chat');
-  // null = not yet picked by the user → follow the auto default below.
-  const [pickedTab, setPickedTab] = useState<AgentDocumentPanelTab | null>(null);
-  const { docId } = useParams<{ docId?: string }>();
-  const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const { aid: agentId = '' } = useActiveRouteParams<{
+    aid?: string;
+  }>();
+  const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+  const agentTitle = agentDisplayName(agentMeta, t('untitledAgent'));
+  const agentPath = buildWorkspaceAwarePath(`/agent/${agentId}`, activeWorkspaceSlug);
+  const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  const workingDirectory = useEffectiveWorkingDirectory(agentId);
   const agencyConfig = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
+    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
   );
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
   const isWorkspaceAgent = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.isWorkspaceAgentById(activeAgentId)(s) : false,
+    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
   );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
@@ -97,86 +83,47 @@ const AgentDocumentRightPanel = memo(() => {
       ? agencyConfig.boundDeviceId
       : undefined;
 
-  // Deduped against AgentDocumentsGroup's own fetch (same SWR key). When the
-  // agent has no plain documents (e.g. only skills) we default to the Skills
-  // tab so the panel doesn't open on an empty Documents view.
-  const {
-    data: documentList = [],
-    error: documentListError,
-    isLoading: isDocumentListLoading,
-  } = useClientDataSWR(
-    activeAgentId ? agentDocumentSWRKeys.documentsList(activeAgentId) : null,
-    () => agentDocumentService.listDocuments({ agentId: activeAgentId! }),
-  );
-  const hasDocuments = useMemo(
-    () => documentList.some((doc) => doc.category === AGENT_DOCUMENT_CATEGORY),
-    [documentList],
-  );
-  // The open doc itself decides the default tab: a skill entry (SKILL.md or any
-  // file inside a skill bundle) lands on Skills even when normal documents
-  // exist — otherwise the skill-entry flow would open on the wrong tab.
-  const isSkillEntry = useMemo(
-    () =>
-      docId
-        ? documentList.some(
-            (doc) =>
-              standardizeIdentifier(doc.documentId) === docId &&
-              doc.category === AGENT_DOCUMENT_SKILL_CATEGORY,
-          )
-        : false,
-    [docId, documentList],
-  );
-  const activeTab: AgentDocumentPanelTab =
-    pickedTab ??
-    (isSkillEntry || (!documentListError && !isDocumentListLoading && !hasDocuments)
-      ? 'skills'
-      : 'documents');
+  const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
 
-  return (
-    <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
-      <Flexbox height={'100%'} width={'100%'}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.header}
-          height={44}
-          justify={'space-between'}
-          paddingInline={4}
-        >
-          <div className={styles.tabs}>
-            {TABS.map((tab) => (
-              <button
-                className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
-                key={tab.key}
-                type="button"
-                onClick={() => setPickedTab(tab.key)}
-              >
-                {t(tab.labelKey)}
-              </button>
-            ))}
-          </div>
-          <ActionIcon
-            icon={PanelRightCloseIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            onClick={() => toggleRightPanel(false)}
-          />
-        </Flexbox>
-        <Flexbox className={styles.body} width={'100%'}>
-          <AgentDocumentsGroup
-            activeFilter={activeTab}
-            deviceId={remoteDeviceId}
-            openMode="route"
-            showFilterTabs={false}
-            showLocalProjectSkills={isDesktop}
-            style={{ flex: 1, minHeight: 0 }}
-            workingDirectory={workingDirectory}
-          />
-        </Flexbox>
-      </Flexbox>
-    </RightPanel>
+    event.preventDefault();
+    appNavigate(agentPath, { escape: true });
+  };
+
+  const header = (
+    <Flexbox
+      horizontal
+      align={'center'}
+      flex={'none'}
+      justify={'space-between'}
+      padding={'8px 6px'}
+    >
+      <a className={styles.backLink} href={agentPath} onClick={handleBack}>
+        <Icon icon={ChevronLeftIcon} size={14} />
+        {t('agentDocument.backToAgent', { name: agentTitle })}
+      </a>
+      <ToggleLeftPanelButton />
+    </Flexbox>
   );
+
+  const body = (
+    <Flexbox className={styles.body} width={'100%'}>
+      <AgentDocumentsGroup
+        activeFilter="documents"
+        deviceId={remoteDeviceId}
+        openMode="route"
+        showFilterTabs={false}
+        showLocalProjectSkills={false}
+        style={{ flex: 1, minHeight: 0 }}
+        workingDirectory={workingDirectory}
+      />
+    </Flexbox>
+  );
+
+  return <SideBarLayout body={body} header={header} />;
 });
 
-AgentDocumentRightPanel.displayName = 'AgentDocumentRightPanel';
+AgentDocumentSidebarContent.displayName = 'AgentDocumentSidebarContent';
 
-export default AgentDocumentRightPanel;
+export default AgentDocumentSidebarContent;

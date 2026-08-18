@@ -1,7 +1,7 @@
 'use client';
 
-import { Alert, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';

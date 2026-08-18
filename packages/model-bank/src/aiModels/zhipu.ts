@@ -13,12 +13,72 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Zhipu’s latest flagship model. Built on the same base as GLM-5.2, it scales post-training with tens of times more long-horizon task environments and substantially longer training cycles. Coding experience improves by about 50% over the previous generation, ranking first among open-source models on Terminal Bench 3.0. It also shows strong cybersecurity capability, approaching Mythos 5 on white-box code review and vulnerability discovery.',
+    displayName: 'GLM-5.3',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.3',
+    id: 'glm-5.3',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-14',
+    settings: {
+      extendParams: ['glm5_3ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'GLM-5.2 is Zhipu’s flagship model for the era of long-horizon tasks. It supports a solid 1M context window that can hold project-scale engineering context, with more stable long-horizon execution and more reliable adherence to engineering conventions. A single task can complete the full development path from requirements to multi-platform deployable artifacts.',
+    displayName: 'GLM-5.2',
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'glm-5.2',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-17',
+    settings: {
+      extendParams: ['enableReasoning', 'glm5_2ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     contextWindowTokens: 200_000,
     description:
       'GLM-5.1 is Zhipu’s latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. It excels at long-horizon tasks, able to autonomously plan, execute, and iterate for up to 8 hours in a single task, making it an ideal foundation for Autonomous Agents and long-horizon Coding Agents.',
     displayName: 'GLM-5.1',
-    enabled: true,
     family: 'glm',
     generation: 'glm-5.1',
     id: 'glm-5.1',
@@ -207,7 +267,6 @@ const zhipuChatModels: AIChatModelCard[] = [
     description:
       'GLM-5 is Zhipu’s next-generation flagship foundation model, purpose-built for Agentic Engineering. It delivers reliable productivity in complex systems engineering and long-horizon agentic tasks. In coding and agent capabilities, GLM-5 achieves state-of-the-art performance among open-source models. In real-world programming scenarios, its user experience approaches that of Claude Opus 4.5. It excels at complex systems engineering and long-horizon agent tasks, making it an ideal foundation model for general-purpose agent assistants.',
     displayName: 'GLM-5',
-    enabled: true,
     family: 'glm',
     generation: 'glm-5',
     id: 'glm-5',

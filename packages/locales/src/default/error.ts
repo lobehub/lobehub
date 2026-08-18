@@ -249,8 +249,17 @@ export default {
     'A previous move of this resource is still migrating its history. Try again once it finishes.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
+  'transfer.targetIsCurrentOwner': 'This agent already belongs to that member. Pick someone else.',
   'transfer.targetNoWriteAccess':
     'You need Member or Owner access to move resources into the target workspace.',
+  'transfer.targetNotWorkspaceMember':
+    'The selected recipient is not an active member of this workspace. Refresh the member list and try again.',
+  'transfer.transferRequestPending':
+    'This agent already has a pending transfer request. Withdraw it or wait for the recipient to respond.',
+  'transfer.transferRequestExpired':
+    'This transfer request has expired. Ask for a new one to be sent.',
+  'transfer.transferRequestStale':
+    'The agent changed since this request was created, so it can no longer complete.',
   'unlock.addProxyUrl': 'Add OpenAI proxy URL (optional)',
   'unlock.apiKey.description': 'Enter your {{name}} API Key to start the session',
   'unlock.apiKey.imageGenerationDescription': 'Enter your {{name}} API Key to start generating',

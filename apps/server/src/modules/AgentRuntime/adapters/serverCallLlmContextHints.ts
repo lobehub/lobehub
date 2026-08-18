@@ -171,13 +171,16 @@ export const resolveServerCallLlmContextHints = async ({
   // visible text (controlled replay: ~30% answer-in-thinking with the
   // placeholder vs ~2.5% when the genuine reasoning is replayed). The only
   // opt-out is a V4 model whose thinking the user explicitly disabled via
-  // `deepseekV4ReasoningEffort: 'none'`. That flag is V4-specific and may
-  // linger on an agent after switching models, so it must NOT suppress
-  // replay for `deepseek-reasoner`, which is thinking-only and always
-  // forces reasoning history in the payload builder — suppressing it there
-  // would reintroduce the 400/answer-hidden behavior.
+  // `deepseekV4ReasoningEffort` / `deepseekV4GAReasoningEffort` `'none'`.
+  // Those flags are V4-specific and may linger on an agent after switching
+  // models, so they must NOT suppress replay for `deepseek-reasoner`, which
+  // is thinking-only and always forces reasoning history in the payload
+  // builder — suppressing it there would reintroduce the 400/answer-hidden
+  // behavior.
   const deepseekV4ThinkingDisabled =
-    isDeepSeekV4FamilyModel(model) && effectiveChatConfig?.deepseekV4ReasoningEffort === 'none';
+    isDeepSeekV4FamilyModel(model) &&
+    (effectiveChatConfig?.deepseekV4GAReasoningEffort === 'none' ||
+      effectiveChatConfig?.deepseekV4ReasoningEffort === 'none');
   const deepseekForcesPreserveThinking =
     isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
   const modelForcesPreserveThinking = kimiForcesPreserveThinking || deepseekForcesPreserveThinking;

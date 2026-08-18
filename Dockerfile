@@ -93,6 +93,9 @@ RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
 # run build standalone for docker version
 RUN npm run build:docker
 
+# Preserve SWC helpers referenced through pnpm virtual-store symlinks by Next.js.
+RUN mkdir -p /runtime-deps && cp -a node_modules/.pnpm/@swc+helpers@* /runtime-deps/
+
 ## Application image, copy all the files for production
 FROM busybox:latest AS app
 
@@ -113,6 +116,7 @@ COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
 # copy dependencies
 COPY --from=builder /deps/node_modules/.pnpm /app/node_modules/.pnpm
 COPY --from=builder /deps/node_modules/pg /app/node_modules/pg
+COPY --from=builder /runtime-deps/ /app/node_modules/.pnpm/
 COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
 
 # Copy server launcher and shared scripts

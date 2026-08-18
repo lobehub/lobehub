@@ -545,6 +545,35 @@ describe('LobeZhipuAI - custom features', () => {
       });
     });
 
+    describe('GLM-5.3 always-on thinking', () => {
+      it('should coerce disabled thinking to enabled', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.3',
+          reasoning_effort: 'low',
+          temperature: 1,
+          thinking: { type: 'disabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('low');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should enable thinking when the payload omits it', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.3',
+          reasoning_effort: 'max',
+          temperature: 1,
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+    });
+
     describe('preserve thinking mapping', () => {
       it('should map preserveThinking=true to clear_thinking=false and convert reasoning content', () => {
         const payload = {

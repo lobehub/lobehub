@@ -207,7 +207,7 @@ const Footer = memo(() => {
               icon: <Icon icon={Download} />,
               key: 'get-app',
               label: (
-                <WorkspaceLink escape to="/downloads">
+                <WorkspaceLink escape to="/apps">
                   {t('getApp')}
                 </WorkspaceLink>
               ),

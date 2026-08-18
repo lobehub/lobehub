@@ -38,6 +38,27 @@ vi.mock('@lobehub/ui/base-ui', () => {
     Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button {...props}>{children}</button>
     ),
+    Checkbox: ({
+      checked,
+      children,
+      disabled,
+      onChange,
+    }: {
+      checked?: boolean;
+      children?: ReactNode;
+      disabled?: boolean;
+      onChange?: (checked: boolean) => void;
+    }) => (
+      <label>
+        <input
+          checked={checked}
+          disabled={disabled}
+          type="checkbox"
+          onChange={(event) => onChange?.(event.currentTarget.checked)}
+        />
+        {children}
+      </label>
+    ),
     Drawer: ({
       children,
       onClose,

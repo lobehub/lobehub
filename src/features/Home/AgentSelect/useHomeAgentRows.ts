@@ -1,6 +1,10 @@
 'use client';
 
-import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
+import {
+  agentDisplayName,
+  agentSecondaryDisplayName,
+  type SidebarAgentItem,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +25,7 @@ export interface AgentRow {
   backgroundColor?: string;
   id: string;
   pinned?: boolean;
+  subtitle?: string;
   title: string;
 }
 
@@ -82,6 +87,7 @@ export const useHomeAgentRows = (): HomeAgentRows => {
             backgroundColor: item.backgroundColor || undefined,
             id: item.id,
             pinned: item.pinned ?? false,
+            subtitle: agentSecondaryDisplayName(item),
             title: agentDisplayName(item, t('untitledAgent')),
           });
         }

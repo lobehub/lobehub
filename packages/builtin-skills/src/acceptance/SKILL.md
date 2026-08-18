@@ -181,6 +181,14 @@ Rules of thumb:
 
 - **Don't open a browser for a backend change.** If a criterion is satisfied by a
   command's output, capture that as `text` — it's the strongest, cheapest proof.
+- **Structured data uses native Acceptance visualizations by default.** Metrics,
+  time series, model or benchmark comparisons, distributions, matrices, and
+  tables belong in `cases[].datasets` plus `cases[].visualizations`; keep the raw
+  CSV/JSON, benchmark output, trace, profile, or vectors as `evidence`. Do not
+  generate a PNG/GIF when a supported renderer can faithfully express the data.
+  Static charts are only a fallback when no native renderer fits, and that
+  limitation must be stated in the case observation. See
+  [references/report.md](references/report.md#structured-visualizations).
 - **A deliverable the user hears needs `audio`.** TTS output, a voice reply, an
   alert tone: upload the clip itself so the page renders a player. Prose about a
   sound, or a screenshot of a waveform, proves nothing.

@@ -78,6 +78,8 @@ export const lobeHubOnlineModelDescriptions = {
     "Zai's latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. Excels at long-horizon tasks with autonomous work up to 8 hours, an ideal foundation for Autonomous Agents and long-horizon Coding Agents.",
   'lobehub.glm-5.2.description':
     'GLM-5.2 is the first open-source model to approach the performance of the latest-generation Claude Opus released in the same period.',
+  'lobehub.glm-5.3.description':
+    "Z.ai's latest flagship. Same base as GLM-5.2 with scaled post-training — 50% stronger coding, open-source SOTA on Terminal Bench 3.0, and a large jump in cyber capability. Thinking is always on.",
   'lobehub.gpt-4-turbo.description':
     'GPT-4 Turbo is a cost-effective multimodal model that balances accuracy and efficiency for real-time tasks.',
   'lobehub.gpt-4.1-mini.description':

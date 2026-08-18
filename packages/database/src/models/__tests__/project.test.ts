@@ -69,6 +69,19 @@ describe('ProjectModel', () => {
     ).toHaveLength(0);
   });
 
+  it('resolves a project by slug without escaping the current scope', async () => {
+    const project = await createProject(model, { name: 'Apollo', slug: 'apollo' });
+    await createProject(otherModel, { name: 'Other Apollo', slug: 'other-apollo' });
+
+    expect(await model.findByIdOrSlug('apollo')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(await model.findByIdOrSlug(project.id)).toEqual(
+      expect.objectContaining({ slug: 'apollo' }),
+    );
+    expect(await model.findByIdOrSlug('other-apollo')).toBeNull();
+  });
+
   it('normalizes identifiers and enforces uniqueness within their ownership scope', async () => {
     const first = await model.create({ identifier: ' lobe ', name: 'First' });
     expect(first.identifier).toBe('LOBE');

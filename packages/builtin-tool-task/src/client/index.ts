@@ -16,7 +16,6 @@ export {
   ViewTaskInspector,
 } from './Inspector';
 export { TaskInterventions } from './Intervention';
-export { openCriterionEditModal } from './Intervention/CriterionEditModal';
 
 // Render components (read-only snapshots)
 export {

@@ -29,25 +29,28 @@ const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
   const { canShowControls } = useChatInputResourceAccess();
   const allowExpand = useChatInputStore((s) => s.allowExpand);
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
-  const voiceMessageActive = useChatInputStore((s) => s.activeAudioInputMode === 'voiceMessage');
+  const activeAudioInputMode = useChatInputStore((s) => s.activeAudioInputMode);
+  const audioInputActive = activeAudioInputMode !== undefined;
 
   const items = useMemo(
     () =>
       canShowControls
         ? mapActionsToItems(
-            voiceMessageActive
-              ? (['voiceMessage'] as ActionKey[])
+            audioInputActive
+              ? ([
+                  activeAudioInputMode === 'dictation' ? 'voiceDictation' : 'voiceMessage',
+                ] as ActionKey[])
               : resolveSendAreaActionKeys(rightActions as ActionKey[], hideContextWindow),
           )
         : [],
-    [canShowControls, hideContextWindow, rightActions, voiceMessageActive],
+    [activeAudioInputMode, audioInputActive, canShowControls, hideContextWindow, rightActions],
   );
 
   return (
     <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
-      {canShowControls && allowExpand && !voiceMessageActive && <ExpandButton />}
+      {canShowControls && allowExpand && !audioInputActive && <ExpandButton />}
       {items}
-      {!voiceMessageActive && <SendButton />}
+      {!audioInputActive && <SendButton />}
     </Flexbox>
   );
 });

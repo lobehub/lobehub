@@ -5,7 +5,6 @@ import {
   count,
   countDistinct,
   eq,
-  gt,
   gte,
   inArray,
   isNull,
@@ -13,10 +12,14 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import { agents, messagePlugins, messages, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+
+/** Restores the cursor timestamp inside PostgreSQL so workflow JSON never truncates its precision. */
+const cursorUsers = alias(users, 'nightly_review_cursor_users');
 
 /**
  * Normalizes database aggregate timestamps.
@@ -32,9 +35,9 @@ const parseAggregateTimestamp = (value: Date | string) =>
 
 /** Cursor for stable user pagination in AgentSignal nightly review scheduling. */
 export interface ListAgentSignalNightlyReviewUsersCursor {
-  /** User creation time used as the primary cursor key. */
+  /** User creation time retained in the serialized checkpoint for observability. */
   createdAt: Date;
-  /** User id used as the tie-break cursor key. */
+  /** User id used to restore the exact database cursor tuple. */
   id: string;
 }
 
@@ -126,11 +129,15 @@ export class AgentSignalNightlyReviewModel {
    * - Users sorted by `createdAt, id` for deterministic pagination
    */
   listEligibleUsers = (options: ListAgentSignalNightlyReviewUsersOptions = {}) => {
+    const cursorTuple = options.cursor
+      ? this.db
+          .select({ createdAt: cursorUsers.createdAt, id: cursorUsers.id })
+          .from(cursorUsers)
+          .where(eq(cursorUsers.id, options.cursor.id))
+          .limit(1)
+      : undefined;
     const cursorCondition = options.cursor
-      ? or(
-          gt(users.createdAt, options.cursor.createdAt),
-          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
-        )
+      ? sql`(${users.createdAt}, ${users.id}) > (${cursorTuple})`
       : undefined;
 
     const whitelistCondition =

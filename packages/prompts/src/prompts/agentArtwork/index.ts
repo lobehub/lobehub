@@ -53,6 +53,33 @@ const BACKGROUND_STYLE_OVERRIDES: Partial<Record<AgentArtworkStyle, string>> = {
  */
 const MOTIF_DIRECTION = `Ground the imagery in the agent's specific domain and personality. Avoid generic AI and technology clichés — starry space scenes, glowing particles, circuit boards, neural-network lines, holographic grids — unless the agent's subject matter is explicitly about them.`;
 
+const AVATAR_CANVAS_DIRECTION = `Fill the entire square canvas edge to edge with the artwork: use a full-bleed composition with no white background, no white matte, no empty margin, no padding, no frame, and no border. No words, no letters, and no logo. The result must remain clear as a small app avatar.`;
+
+/**
+ * `character` is for avatars, where the references define the TARGET subject
+ * feel (the official mascot look) — the wording asks for that same energy while
+ * fencing off the literal faces / hats / subjects, since copying those would
+ * make every avatar look like the same mascot. `surface` is for covers, which
+ * forbid portraits and may only borrow rendering qualities.
+ */
+const buildStyleReferenceDirection = (
+  count: number,
+  mode: 'character' | 'surface',
+  subject: string,
+): string => {
+  if (count === 0) return '';
+
+  const imageWord = count === 1 ? 'image' : 'images';
+  const possessive = count === 1 ? 'its' : 'their';
+
+  return mode === 'character'
+    ? `\n\nUse the attached ${imageWord} as the target character style — the same mascot-like head-dominant look, single-color skin, material, lighting, and color energy. Do not copy ${possessive} exact faces, hats, or subjects — invent a new character for the ${subject} described above.`
+    : `\n\nUse the attached ${imageWord} only as a rendering-style reference — match ${possessive} materials, lighting, color saturation, and level of finish. Do not copy ${possessive} subjects or compositions.`;
+};
+
+const countStyleReferences = (urls?: string[] | null): number =>
+  urls?.filter((url) => url.trim()).length ?? 0;
+
 export interface AgentArtworkPromptInput {
   description?: string | null;
   id: string;
@@ -105,19 +132,12 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
       ? (BACKGROUND_STYLE_OVERRIDES[style] ?? STYLE_DIRECTIONS[style])
       : STYLE_DIRECTIONS[style];
 
-  const styleReferenceCount =
-    input.styleReferenceImageUrls?.filter((url) => url.trim()).length ?? 0;
-  // For avatars the references define the TARGET character feel (the official
-  // mascot look), so the wording asks for that same energy while fencing off
-  // the literal faces / hats / subjects — copying those would make every agent
-  // look like the same mascot. Covers must not inherit the character wording
-  // (they forbid portraits), so they only borrow surface qualities.
-  const styleReferenceDirection =
-    styleReferenceCount > 0
-      ? input.kind === 'avatar'
-        ? `\n\nUse the attached ${styleReferenceCount === 1 ? 'image' : 'images'} as the target character style — the same mascot-like head-dominant look, single-color skin, material, lighting, and color energy. Do not copy ${styleReferenceCount === 1 ? 'its' : 'their'} exact faces, hats, or subjects — invent a new character for the agent described above.`
-        : `\n\nUse the attached ${styleReferenceCount === 1 ? 'image' : 'images'} only as a rendering-style reference — match ${styleReferenceCount === 1 ? 'its' : 'their'} materials, lighting, color saturation, and level of finish. Do not copy ${styleReferenceCount === 1 ? 'its' : 'their'} subjects or compositions.`
-      : '';
+  const styleReferenceCount = countStyleReferences(input.styleReferenceImageUrls);
+  const styleReferenceDirection = buildStyleReferenceDirection(
+    styleReferenceCount,
+    input.kind === 'avatar' ? 'character' : 'surface',
+    'agent',
+  );
   const counterpartReferenceUrl = styleReferenceCount > 0 ? undefined : input.referenceImageUrl;
 
   if (input.kind === 'avatar') {
@@ -132,7 +152,7 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
 
 ${agentContext}
 
-Translate the agent's identity, purpose, and personality into one coherent visual concept. Use a single centered subject with a simple silhouette. ${styleDirection} ${MOTIF_DIRECTION} Fill the entire square canvas edge to edge with the artwork: use a full-bleed composition with no white background, no white matte, no empty margin, no padding, no frame, and no border. No words, no letters, and no logo. The result must remain clear as a small app avatar.${styleReferenceDirection}${referenceDirection}`;
+Translate the agent's identity, purpose, and personality into one coherent visual concept. Use a single centered subject with a simple silhouette. ${styleDirection} ${MOTIF_DIRECTION} ${AVATAR_CANVAS_DIRECTION}${styleReferenceDirection}${referenceDirection}`;
   }
 
   const referenceDirection = counterpartReferenceUrl?.trim()
@@ -144,4 +164,66 @@ Translate the agent's identity, purpose, and personality into one coherent visua
 ${agentContext}
 
 Translate the agent's identity, purpose, and personality into an abstract environment. ${styleDirection} ${MOTIF_DIRECTION} Use generous negative space and a balanced composition. Do not use a person portrait, words, letters, a logo, or a border.${styleReferenceDirection}${referenceDirection}`;
+};
+
+/**
+ * A workspace is a team rather than a character, so the mascot direction's
+ * "the agent's personality" phrasing has to be re-pointed at the team. Only the
+ * presets whose wording names the agent need an override.
+ */
+const WORKSPACE_STYLE_OVERRIDES: Partial<Record<AgentArtworkStyle, string>> = {
+  lobe: STYLE_DIRECTIONS.lobe.replace("the agent's personality", "the team's character"),
+};
+
+const WORKSPACE_MOTIF_DIRECTION = `Ground the imagery in what this team actually works on. Avoid generic AI and technology clichés — starry space scenes, glowing particles, circuit boards, neural-network lines, holographic grids — unless the team's work is explicitly about them.`;
+
+export interface WorkspaceArtworkPromptInput {
+  description?: string | null;
+  id: string;
+  name?: string | null;
+  style?: AgentArtworkStyle | null;
+  /** See {@link AgentArtworkPromptInput.styleReferenceImageUrls}. */
+  styleReferenceImageUrls?: string[] | null;
+}
+
+const formatWorkspaceContext = ({
+  description,
+  id,
+  name,
+}: Omit<WorkspaceArtworkPromptInput, 'style' | 'styleReferenceImageUrls'>): string => {
+  const attributes = [`id="${escapeXmlAttr(id)}"`];
+
+  if (name?.trim()) attributes.push(`name="${escapeXmlAttr(name.trim())}"`);
+
+  const details = description?.trim()
+    ? `<description>${escapeXmlContent(description.trim())}</description>`
+    : '';
+
+  return `<workspace ${attributes.join(' ')}>${details}</workspace>`;
+};
+
+/**
+ * Square brand avatar for a team workspace. Workspaces have no cover artwork
+ * and no system role, so this is deliberately avatar-only and much narrower
+ * than {@link buildAgentArtworkPrompt}.
+ */
+export const buildWorkspaceArtworkPrompt = (input: WorkspaceArtworkPromptInput): string => {
+  const workspaceContext = formatWorkspaceContext({
+    description: input.description,
+    id: input.id,
+    name: input.name,
+  });
+  const style = input.style ?? DEFAULT_AGENT_ARTWORK_STYLE;
+  const styleDirection = WORKSPACE_STYLE_OVERRIDES[style] ?? STYLE_DIRECTIONS[style];
+  const styleReferenceDirection = buildStyleReferenceDirection(
+    countStyleReferences(input.styleReferenceImageUrls),
+    'character',
+    'team',
+  );
+
+  return `Create a distinctive square profile icon for the team workspace described below.
+
+${workspaceContext}
+
+Translate the team's name, focus, and character into one coherent visual concept. Use a single centered subject with a simple silhouette. ${styleDirection} ${WORKSPACE_MOTIF_DIRECTION} ${AVATAR_CANVAS_DIRECTION}${styleReferenceDirection}`;
 };

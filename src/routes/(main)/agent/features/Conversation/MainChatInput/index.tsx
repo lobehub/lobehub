@@ -15,9 +15,10 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import AgentConfigError from './AgentConfigError';
 import { useSendMenuItems } from './useSendMenuItems';
 
-const contextWindowRightActions: ActionKeys[] = ['voiceMessage', 'contextWindow'];
+const contextWindowRightActions: ActionKeys[] = ['voiceDictation', 'voiceMessage', 'contextWindow'];
 const promptTransformRightActions: ActionKeys[] = [
   'promptTransform',
+  'voiceDictation',
   'voiceMessage',
   'contextWindow',
 ];

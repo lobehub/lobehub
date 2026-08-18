@@ -24,8 +24,15 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
+  // Pinned to the same 28px row as the plain ControlBar so the composer footer
+  // keeps its rhythm regardless of which chips render. `flex: none` matters:
+  // the bar sits in a column flex parent and would otherwise shrink to the
+  // (compact) chips' min-content height.
   bar: css`
     container: runtimebar / inline-size;
+    flex: none;
+
+    height: 28px;
     padding-block: 0;
     padding-inline: 4px;
   `,

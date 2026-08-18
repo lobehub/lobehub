@@ -117,6 +117,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   type CreateTaskArgs = {
     instruction: string;
     assigneeAgentId?: string;
+    // Bind a goal entity to the created task (see TaskService.createTask).
+    goal?: {
+      maxRounds?: number | null;
+      maxTotalCost?: number | null;
+      requirement?: string | null;
+      title?: string;
+    };
     name: string;
     parentIdentifier?: string;
     priority?: number;
@@ -162,6 +169,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
       context: origin ? { origin } : undefined,
       createdByAgentId: agentId,
+      goal: args.goal,
       instruction: args.instruction,
       name: args.name,
       parentTaskId,
@@ -255,6 +263,14 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       const created = await createTaskImpl({
         assigneeAgentId: agentId,
+        // The goals row is created together with the task, so the "is a goal"
+        // marker can never race the verify-config write below.
+        goal: {
+          maxRounds: args.maxIterations,
+          maxTotalCost: args.maxTotalCost ?? null,
+          requirement: args.name,
+          title: args.name,
+        },
         instruction: args.instruction,
         name: args.name,
       });
@@ -278,19 +294,6 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         );
         const maxIterations = Math.min(10, Math.max(2, args.maxIterations ?? 3));
 
-        // Both operations merge into tasks.config. Running them concurrently
-        // can lose either the goal marker or verify config to last-write-wins.
-        await taskModel().updateTaskConfig(created.taskId, {
-          goal: {
-            // `null` is the user's explicit "no cap"; `undefined` means they
-            // never chose, which must fall back to the documented default.
-            // Coercing the second into the first made an uncapped loop the
-            // default for every goal that omitted the field.
-            maxIterations: args.maxIterations,
-            maxTotalCost: args.maxTotalCost ?? null,
-            originTopicId: topicId ?? null,
-          },
-        });
         await taskCaller().updateVerifyConfig({
           id: created.taskId,
           verify: {

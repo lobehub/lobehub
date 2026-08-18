@@ -218,6 +218,23 @@ describe('useHomeAgentRows', () => {
     expect(result.current.workspaceRows.find((row) => row.id === 'agt_pinned')?.pinned).toBe(true);
   });
 
+  it('keeps the agent role as the secondary row title', () => {
+    mocks.homeState.ungroupedAgents = [
+      agent('agt_codex', 'Codex', { name: 'Coco' }),
+      agent('agt_legacy', 'Legacy role'),
+    ];
+
+    const { result } = renderHook(() => useHomeAgentRows());
+
+    expect(result.current.workspaceRows.find((row) => row.id === 'agt_codex')).toMatchObject({
+      subtitle: 'Codex',
+      title: 'Coco',
+    });
+    expect(result.current.workspaceRows.find((row) => row.id === 'agt_legacy')?.subtitle).toBe(
+      undefined,
+    );
+  });
+
   it('excludes chat groups so only agent ids reach the home input', () => {
     mocks.homeState.ungroupedAgents = [
       agent('agt_a', 'Agent'),

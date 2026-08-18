@@ -304,7 +304,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
         AGENT_ARTWORK_STYLES.map((style) => ({
           icon: style === artworkStyle ? Check : undefined,
           key: style,
-          label: t(`settingAgent.artwork.style.${style}`),
+          label: t(`artworkStudio.style.${style}`),
           onClick: () => {
             setArtworkStyle(style);
             void generateArtwork(kind, style);

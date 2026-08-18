@@ -904,6 +904,7 @@ function bindGatewayClientHandlers(client: GatewayClient, ctx: GatewayHandlerCon
           jwt: request.jwt,
           operationId: request.operationId,
           prompt: request.prompt,
+          resumeFallbackSystemContext: request.resumeFallbackSystemContext,
           resumeSessionId: request.resumeSessionId,
           serverUrl: getServerUrl(),
           systemContext: request.systemContext,

@@ -6,8 +6,8 @@ import {
   SiPnpm,
   SiPython,
 } from '@icons-pack/react-simple-icons';
-import { type AutoCompleteProps } from '@lobehub/ui';
-import { AutoComplete, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { AutoComplete, type AutoCompleteProps } from '@lobehub/ui/base-ui';
 import { type FC } from 'react';
 import { memo } from 'react';
 

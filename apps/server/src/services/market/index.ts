@@ -1,4 +1,5 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
+import { CacheRevalidate, CacheTag } from '@lobechat/types';
 import { MarketSDK, type OrgRef, orgRefToPathSegment } from '@lobehub/market-sdk';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
@@ -443,7 +444,18 @@ export class MarketService {
   }) {
     log('searchSkill: %O', params);
 
-    const result = await this.market.marketSkills.getSkillList(params);
+    // Cache the catalogue the same way every other discover list is cached
+    // (see DiscoverService.getMcpList). Without this the skill store was the one
+    // browse surface that hit Market on every open and every page, which is why
+    // it — alone among the store's tabs — went down whenever the upstream was
+    // throttled or a credential went stale. The MCP tab looked healthy through
+    // the same incidents only because it was being served from this cache.
+    const result = await this.market.marketSkills.getSkillList(params, {
+      next: {
+        revalidate: CacheRevalidate.List,
+        tags: [CacheTag.Discover, CacheTag.Skills],
+      },
+    });
 
     log('searchSkill response: %O', result);
 

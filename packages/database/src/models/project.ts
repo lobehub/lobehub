@@ -1,9 +1,10 @@
 import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import { knowledgeBases } from '../schemas/file';
+import { goals } from '../schemas/goal';
 import {
   projectAgents,
   projectCompletionReviews,
@@ -132,6 +133,15 @@ export class ProjectModel {
       .select()
       .from(projects)
       .where(and(eq(projects.id, id), this.readable()))
+      .limit(1);
+    return project ?? null;
+  }
+
+  async findByIdOrSlug(reference: string) {
+    const [project] = await this.db
+      .select()
+      .from(projects)
+      .where(and(or(eq(projects.id, reference), eq(projects.slug, reference)), this.readable()))
       .limit(1);
     return project ?? null;
   }
@@ -322,7 +332,7 @@ export class ProjectModel {
 
   async listTasks(projectId: string) {
     if (!(await this.findById(projectId))) return null;
-    return this.db
+    const rows = await this.db
       .select()
       .from(tasks)
       .where(
@@ -339,6 +349,26 @@ export class ProjectModel {
         ),
       )
       .orderBy(asc(tasks.sortOrder), asc(tasks.seq));
+
+    // Attach the goal entity carried by each task so project surfaces can tell
+    // goal roots apart from plain tasks without re-querying per row.
+    const goalRows =
+      rows.length === 0
+        ? []
+        : await this.db
+            .select()
+            .from(goals)
+            .where(
+              and(
+                eq(goals.subjectType, 'task'),
+                inArray(
+                  goals.subjectId,
+                  rows.map(({ id }) => id),
+                ),
+              ),
+            );
+    const goalByTaskId = new Map(goalRows.map((row) => [row.subjectId!, row]));
+    return rows.map((row) => ({ ...row, goal: goalByTaskId.get(row.id) ?? null }));
   }
 
   async getEnabledKnowledgeBaseIdsForTask(taskId: string) {
