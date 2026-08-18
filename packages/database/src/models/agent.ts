@@ -43,6 +43,7 @@ import {
   expertiseBindings,
   expertiseDomains,
   expertiseInsights,
+  expertiseRuns,
   files,
   knowledgeBases,
   messages,
@@ -2321,8 +2322,10 @@ export class AgentModel {
       await trx.update(briefs).set(ownershipUpdate).where(inArray(briefs.agentId, agentIds));
 
       // 13. Move expertise owned exclusively by these agents. The domain is
-      // the ownership root for lessons, runs, hits and snapshots, so those
-      // rows keep their IDs and follow it without per-table rewrites. A domain
+      // the ownership root for lessons, hits and snapshots, so those rows keep
+      // their IDs and follow it without per-table rewrites. Runs additionally
+      // carry their own scope for attribution and must be re-scoped explicitly.
+      // A domain
       // that is also bound to a carrier outside this transfer is shared state
       // and must stay in the source scope; only the moved agent's binding is
       // re-scoped in that case.
@@ -2380,6 +2383,10 @@ export class AgentModel {
             .update(expertiseInsights)
             .set({ ...ownershipUpdate, updatedAt: expertiseInsights.updatedAt })
             .where(inArray(expertiseInsights.domainId, transferableDomainIds));
+          await trx
+            .update(expertiseRuns)
+            .set({ ...ownershipUpdate, updatedAt: expertiseRuns.updatedAt })
+            .where(inArray(expertiseRuns.domainId, transferableDomainIds));
         }
       }
 
