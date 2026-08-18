@@ -12,6 +12,8 @@ import {
   organizationTeamMembers,
   organizationTeams,
   platformAdmins,
+  platformAdminSessions,
+  platformAdminUsers,
   platformTrialConfig,
   trialAbuseBlocklist,
   usageLogs,
@@ -28,6 +30,8 @@ export const cleanupAicoTables = async (db: LobeChatDatabase) => {
   await db.delete(userTrials);
   await db.delete(platformTrialConfig);
   await db.delete(walletTransactions);
+  await db.delete(platformAdminSessions);
+  await db.delete(platformAdminUsers);
   await db.delete(memberBudgets);
   await db.delete(modelAccessRules);
   await db.delete(organizationTeamMembers);

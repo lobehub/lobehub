@@ -221,6 +221,8 @@ export default {
   'platform.b2cTitle': 'B2C wallets',
   'platform.b2cWallets': 'B2C wallets',
   'platform.columns.actions': 'Actions',
+  'platform.columns.actor': 'Actor',
+  'platform.columns.description': 'Description',
   'platform.columns.email': 'Email',
   'platform.columns.key': 'Key',
   'platform.columns.members': 'Members',
@@ -258,11 +260,11 @@ export default {
   'platform.loadErrorTitle': 'Failed to load',
   'platform.loginChecking': 'Checking session…',
   'platform.loginEmail': 'Email',
-  'platform.loginFailed':
-    'Sign-in failed. Check email, password, and that the product API is running.',
+  'platform.loginFailed': 'Sign-in failed. Use a control-plane operator email and password.',
   'platform.loginPassword': 'Password',
   'platform.loginSubmit': 'Sign in',
-  'platform.loginSubtitle': 'Sign in with a platform admin account.',
+  'platform.loginSubtitle':
+    'Operator account only — a chat password for the same email will not work here.',
   'platform.loginTitle': 'Control plane',
   'platform.notAdminDesc':
     '{{email}} is signed in but is not a platform admin. Sign out and use a platform admin account.',

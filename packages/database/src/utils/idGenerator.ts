@@ -39,6 +39,8 @@ const prefixes = {
   organizations: 'org',
   orSyncRuns: 'orsr',
   platformAdmins: 'padm',
+  platformAdminSessions: 'opsess',
+  platformAdminUsers: 'opusr',
   plugins: 'plg',
   renewalBatches: 'rnw',
   sessionGroups: 'sg',

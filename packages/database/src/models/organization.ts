@@ -537,7 +537,8 @@ export class OrganizationModel {
   addManualCredit = async (params: {
     amountMicroUsd?: number;
     amountToman: number;
-    createdByUserId: string;
+    createdByAdminId?: string | null;
+    createdByUserId?: string | null;
     description?: string;
     fxRateTomanPerUsd?: number;
     /** Optional client idempotency key — unique in wallet_transactions.gateway_ref_id (FIN-003). */
@@ -597,7 +598,8 @@ export class OrganizationModel {
             balanceAfterToman: Number(org.walletBalanceToman ?? 0),
             balanceBeforeMicroUsd,
             balanceBeforeToman,
-            createdByUserId: params.createdByUserId,
+            createdByAdminId: params.createdByAdminId ?? null,
+            createdByUserId: params.createdByUserId ?? null,
             description: params.description,
             fxRateTomanPerUsd,
             gatewayRefId: params.idempotencyKey ?? null,

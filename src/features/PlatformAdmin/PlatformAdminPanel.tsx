@@ -253,14 +253,26 @@ export const PlatformAdminPanel = () => {
                     render: (v: number) => v?.toLocaleString?.() ?? v,
                   },
                   {
-                    dataIndex: 'orgId',
-                    title: t('platform.columns.org'),
-                    render: (v: string | null) => (v ? v.slice(0, 12) : '—'),
+                    dataIndex: 'actorEmail',
+                    title: t('platform.columns.actor'),
+                    render: (v: string | null) => v || '—',
                   },
                   {
-                    dataIndex: 'userId',
+                    dataIndex: 'orgName',
+                    title: t('platform.columns.org'),
+                    render: (v: string | null, row: { orgId?: string | null }) =>
+                      v || (row.orgId ? row.orgId.slice(0, 12) : '—'),
+                  },
+                  {
+                    dataIndex: 'userEmail',
                     title: t('platform.columns.userId'),
-                    render: (v: string | null) => (v ? v.slice(0, 12) : '—'),
+                    render: (v: string | null, row: { userId?: string | null }) =>
+                      v || (row.userId ? row.userId.slice(0, 12) : '—'),
+                  },
+                  {
+                    dataIndex: 'description',
+                    title: t('platform.columns.description'),
+                    render: (v: string | null) => v || '—',
                   },
                   {
                     dataIndex: 'createdAt',

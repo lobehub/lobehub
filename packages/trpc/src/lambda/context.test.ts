@@ -484,9 +484,9 @@ describe('createLambdaContext', () => {
         headers: { 'lobe-auth-dev-backend-api': '1' },
       });
       const context = await createLambdaContext(request);
-      // Falls through to session auth — not the mock user id
-      expect(context.userId).not.toBe('user_mock_admin');
-      expect(mockGetSession).toHaveBeenCalled();
+      expect(context.userId).toBeNull();
+      expect(context.adminId).toBeNull();
+      expect(mockGetSession).not.toHaveBeenCalled();
     } finally {
       process.env.NODE_ENV = prev.nodeEnv;
       if (prev.isCp === undefined) delete process.env.AICO_IS_CONTROL_PLANE;

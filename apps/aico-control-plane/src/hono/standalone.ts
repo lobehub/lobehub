@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 
 import honoApp from './index';
+import { ensureBootstrapAdmin } from './operatorAuth';
 import { assertServiceTokenConfigured } from './serviceToken';
 
 type HonoStandaloneGlobal = typeof globalThis & {
@@ -100,6 +101,7 @@ const closePreviousServer = (previousServer: Server | undefined) =>
 const startServer = async () => {
   // Fail closed before binding — weak/default tokens must never gate /internal/*.
   assertServiceTokenConfigured();
+  await ensureBootstrapAdmin();
 
   const standaloneGlobal = globalThis as HonoStandaloneGlobal;
 

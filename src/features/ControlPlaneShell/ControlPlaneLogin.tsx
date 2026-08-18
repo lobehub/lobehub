@@ -8,7 +8,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { aicoPanelStyles } from '@/features/AicoPanels';
-import { signIn } from '@/libs/better-auth/auth-client';
 
 interface LoginFormValues {
   email: string;
@@ -23,20 +22,24 @@ const ControlPlaneLogin = () => {
   const onFinish = async (values: LoginFormValues) => {
     setLoading(true);
     try {
-      const result = await signIn.email({
-        callbackURL: '/',
-        email: values.email.trim(),
-        // Keep password as typed — special chars (% ^ :) must not be transformed.
-        password: values.password,
+      const response = await fetch('/api/admin/sign-in', {
+        body: JSON.stringify({
+          email: values.email.trim(),
+          password: values.password,
+        }),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
 
-      if (result.error) {
-        console.error('Control plane sign-in error', result.error);
-        toast.error(result.error.message || t('platform.loginFailed'));
+      if (!response.ok) {
+        toast.error(payload?.error?.message || t('platform.loginFailed'));
         return;
       }
 
-      // Full reload so useSession + credentialed tRPC pick up the new cookie.
       window.location.reload();
     } catch (error) {
       console.error('Control plane sign-in failed', error);

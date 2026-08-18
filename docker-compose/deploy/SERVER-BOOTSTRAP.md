@@ -262,9 +262,9 @@ Then:
 PANACHAT_ENV=canary ./scripts/panachat-deploy-remote.sh status
 ```
 
-Open `https://chat.panafor.com`. Sign up the first user; grant platform admin if needed (see self-host-deploy skill). Do not commit passwords.
+Open `https://chat.panafor.com`. Sign up the first chat user separately from admin.
 
-Admin UI: `https://adchat.panafor.com` (`AICO_CONTROL_PLANE_PUBLIC_URL` must match). CI pulls the control-plane image and runs `compose --profile control-plane up -d --force-recreate panachat-control-plane`.
+Admin UI: `https://adchat.panafor.com` (`AICO_CONTROL_PLANE_PUBLIC_URL` must match). Set `AICO_BOOTSTRAP_ADMIN_EMAIL` + `AICO_BOOTSTRAP_ADMIN_PASSWORD` on the control-plane service (independent from the chat password, even if the email matches). CI pulls the control-plane image and runs `compose --profile control-plane up -d --force-recreate panachat-control-plane`.
 
 ---
 
