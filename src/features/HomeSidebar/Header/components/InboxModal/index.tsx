@@ -299,13 +299,14 @@ const InboxModalContent = memo(() => {
     return isRead ? item.readCount : item.unreadCount;
   };
   const allCount = categoryCounts.reduce((total, item) => total + countForStatus(item), 0);
-  // Pending's unread number counts live requests that mark-all-as-read cannot
-  // resolve, so it must not light the button up on its own — with only pending
-  // left, clicking would change nothing visible and read as a broken button.
-  const markableUnreadCount = categoryCounts.reduce(
-    (total, item) => total + (item.category === 'pending' ? 0 : item.unreadCount),
-    0,
-  );
+  // Mark-all-read cannot resolve live requests — each live card holds exactly
+  // one unit of pending's unreadCount (server reconciliation), so subtracting
+  // the card count leaves the rows the action would visibly flip. Ordinary
+  // pending rows (personal context has no live cards) stay markable; with
+  // only live cards left the button stays off — clicking would change
+  // nothing visible and read as a broken button.
+  const allUnreadCount = categoryCounts.reduce((total, item) => total + item.unreadCount, 0);
+  const markableUnreadCount = Math.max(0, allUnreadCount - liveTransferCount);
   const allTotalCount = categoryCounts.reduce((total, item) => total + item.totalCount, 0);
   // Live cards are not archivable; with only live cards left, archive-all
   // would visibly do nothing — keep it disabled then.
