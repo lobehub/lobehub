@@ -52,6 +52,8 @@ services:
     env_file:
       - ${PANACHAT_APP_ENV_FILE:-../../.env}
       - ${PANACHAT_INFRA_ENV_FILE:-.env}
+    extra_hosts:
+      - 'mailer.panafor.com:host-gateway'
     networks:
       - panachat-network
     restart: unless-stopped
@@ -93,6 +95,8 @@ services:
     env_file:
       - ${PANACHAT_APP_ENV_FILE:-../../.env}
       - ${PANACHAT_INFRA_ENV_FILE:-.env}
+    extra_hosts:
+      - 'mailer.panafor.com:host-gateway'
     networks:
       - panachat-network
     restart: unless-stopped
