@@ -7,7 +7,7 @@ import {
   Icon,
   Text,
 } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -43,8 +43,23 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
         okButtonProps: { danger: true },
         okText: t('brief.deleteConfirm.ok'),
         onOk: async () => {
-          await deleteBrief(brief.id);
-          await onAfterDelete?.();
+          try {
+            await deleteBrief(brief.id);
+          } catch (error) {
+            // Same class as every other brief mutation: the tRPC client only
+            // console.errors non-401 failures, so without this the modal just
+            // closes and the row stays put with no explanation.
+            toast.error((error as Error)?.message || t('brief.actionFailed'));
+            return;
+          }
+
+          // The refresh runs after the delete has already landed — a rejection
+          // here leaves the view stale, it does not mean the delete failed.
+          try {
+            await onAfterDelete?.();
+          } catch (error) {
+            console.error('[TaskBriefCard] post-delete refresh failed', error);
+          }
         },
         title: t('brief.deleteConfirm.title'),
       });
@@ -102,6 +117,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
             <BriefCardArtifacts artifacts={brief.artifacts} />
             <BriefCardActions
               actions={brief.actions}
+              agentId={brief.agentId ?? brief.agent?.id}
               briefId={brief.id}
               briefType={brief.type}
               resolvedAction={brief.resolvedAction}

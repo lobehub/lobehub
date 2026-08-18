@@ -4,6 +4,7 @@ import type { OpenAIChatMessage } from '@/types/index';
 
 import { ContextEngine } from '../../pipeline';
 import {
+  ActivationResultTrimProcessor,
   AgentCouncilFlattenProcessor,
   CompressedGroupRoleTransformProcessor,
   DisabledToolCallFilter,
@@ -38,6 +39,7 @@ import {
   ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
+  ExpertiseContextInjector,
   ForceFinishSummaryInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
@@ -51,7 +53,10 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   PlanInjector,
+  RuntimeAdditionalContextProvider,
+  selectActivatedSkills,
   SelectedSkillInjector,
+  selectToolPromptManifests,
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
@@ -168,6 +173,7 @@ export class MessagesEngine {
       onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
+      additionalContexts,
       agentGroup,
       agentDocuments,
       planTodo,
@@ -222,6 +228,21 @@ export class MessagesEngine {
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
       string | undefined;
 
+    // Mirror the injection gates of SkillContextProvider / ToolSystemRoleProvider
+    // (enable flags + FC support + the shared select predicates) so
+    // ActivationResultTrimProcessor only trims activation tool results whose full
+    // documentation is confirmed to be injected into the system prompt for this
+    // request.
+    const canUseFC = capabilities?.isCanUseFC || (() => true);
+    const injectedActivatedSkills =
+      isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
+        ? selectActivatedSkills(skillsConfig?.enabledSkills)
+        : [];
+    const injectedToolManifests =
+      (toolsConfig?.manifests?.length ?? 0) > 0 && !!canUseFC(model, provider)
+        ? selectToolPromptManifests(toolsConfig?.manifests)
+        : [];
+
     // Shared config for all agent document injectors
     const agentDocConfig = {
       currentUserMessage,
@@ -270,6 +291,7 @@ export class MessagesEngine {
         knowledgeCutoff: modelKnowledgeCutoff,
         modelId: model,
         nativeMediaCapabilities: {
+          audio: capabilities?.isCanUseAudio?.(model, provider),
           video: capabilities?.isCanUseVideo?.(model, provider),
           vision: capabilities?.isCanUseVision?.(model, provider),
         },
@@ -305,6 +327,11 @@ export class MessagesEngine {
 
       // User memory
       new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
+      // Operation-scoped learned expertise (captured once and reused verbatim across steps)
+      new ExpertiseContextInjector({
+        enabled: this.params.enableExpertise,
+        expertise: this.params.expertise,
+      }),
       // Group context (agent identity and group info for multi-agent chat)
       new GroupContextInjector({
         currentAgentId: agentGroup?.currentAgentId,
@@ -420,6 +447,7 @@ export class MessagesEngine {
         enabled: !!onboardingContext?.phaseGuidance,
         onboardingContext,
       }),
+      new RuntimeAdditionalContextProvider({ additionalContexts }),
 
       // =============================================
       // Phase 5: Message Transformation
@@ -474,6 +502,17 @@ export class MessagesEngine {
             }),
           ]
         : []),
+      // Dynamic-activation result trimming — replaces activateTools /
+      // activateSkill tool-result documents that are ALSO injected into the
+      // system prompt (by ToolSystemRoleProvider / SkillContextProvider above)
+      // with a short confirmation, so each activated document reaches the LLM
+      // payload exactly once. MUST run AFTER the flatten steps (grouped /
+      // compressed tool rows are only hoisted back to `role: 'tool'` with
+      // plugin/pluginState there) and BEFORE ToolCallProcessor.
+      new ActivationResultTrimProcessor({
+        injectedManifests: injectedToolManifests,
+        injectedSkills: injectedActivatedSkills,
+      }),
       // Placeholder variables processing — MUST run AFTER all flatten / role
       // transform steps. AssistantGroup / Supervisor messages keep their real
       // content (including any `{{...}}` placeholders inside tool results)

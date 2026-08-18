@@ -2,6 +2,7 @@ import { type UIChatMessage } from '@lobechat/types';
 
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
   type MessagesChangeMeta,
@@ -22,6 +23,11 @@ export interface State extends DataState, InputState, MessageStateState, VirtuaL
    * Actions bar configuration by message type
    */
   actionsBar?: ActionsBarConfig;
+
+  /**
+   * Composer capability for this mounted conversation surface
+   */
+  composerTarget: ComposerTarget;
 
   /**
    * Conversation context (data coordinates)
@@ -60,6 +66,7 @@ export const initialState: State = {
   ...virtuaListInitialState,
 
   actionsBar: undefined,
+  composerTarget: { reason: 'unresolved', writable: false },
   context: {
     agentId: '',
     threadId: null,
@@ -69,3 +76,27 @@ export const initialState: State = {
   onMessagesChange: undefined,
   operationState: DEFAULT_OPERATION_STATE,
 };
+
+/**
+ * State patch applied in place on context switch (the Provider is NOT keyed by
+ * context, so the store instance survives). Deliberately excludes fields owned
+ * by still-mounted UI infra — `editor`, `chatInputOverlayHeight`,
+ * `virtuaScrollMethods` — which stay valid across the switch and are managed by
+ * their components' own mount/unmount lifecycles.
+ */
+export const createEphemeralResetState = (): Partial<State> => ({
+  activeIndex: null,
+  atBottom: true,
+  heteroOverloadRetryAttempts: {},
+  heteroOverloadWaitOpIds: {},
+  inputMessage: '',
+  isScrolling: false,
+  messageEditingIds: [],
+  messageLoadingIds: [],
+  pendingArgsUpdates: new Map(),
+  scheduledSendAt: undefined,
+  selectedMessageIds: [],
+  selectionAnchorId: undefined,
+  selectionMode: false,
+  visibleItems: new Map(),
+});

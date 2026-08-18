@@ -3,10 +3,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
 import {
+  DnaIcon,
+  ListTodoIcon,
   MessageSquarePlusIcon,
   MessagesSquareIcon,
-  RadioTowerIcon,
   SearchIcon,
+  TargetIcon,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,21 +22,31 @@ import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
+  const { t: tSelfLearning } = useTranslation('selfLearning');
   const params = useActiveRouteParams();
   const agentId = params.aid;
   const { pathname } = useActiveLocation();
-  const isProfileActive = pathname.includes('/profile');
-  const isChannelActive = pathname.includes('/channel');
+  // The profile entry now owns a group of sub-views — profile / channels /
+  // statistics — switched by a Segmented in the page header, so all three keep
+  // this entry lit instead of leaving the sidebar with nothing selected.
+  const isProfileActive =
+    pathname.includes('/profile') ||
+    pathname.includes('/channel') ||
+    pathname.endsWith('/statistics');
+  const isGoalsActive = pathname.endsWith('/goals');
+  // 下钻页 /self-evolving/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
+  const isSelfLearningActive = pathname.includes('/self-evolving');
+  const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
   const isTopicsActive = pathname.endsWith('/topics');
@@ -44,16 +56,12 @@ const Nav = memo(() => {
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const heterogeneousProviderType = useAgentStore(
-    agentSelectors.currentAgentHeterogeneousProviderType,
-  );
   const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
-  // Claude Code agents can use message channels; other hetero providers (e.g. codex) still hide it.
-  const hideChannel =
-    hideProfile || (!!heterogeneousProviderType && heterogeneousProviderType !== 'claude-code');
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
+  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enableSelfLearning = useUserStore(labPreferSelectors.enableSelfLearning);
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
@@ -82,6 +90,15 @@ const Nav = memo(() => {
           toggleCommandMenu(true);
         }}
       />
+      <NavItem
+        active={isTopicsActive}
+        icon={MessagesSquareIcon}
+        title={tTopic('management.sidebarEntry')}
+        onClick={() => {
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'topics'));
+        }}
+      />
       {!hideProfile && (
         <NavItem
           active={isProfileActive}
@@ -93,26 +110,37 @@ const Nav = memo(() => {
           }}
         />
       )}
-      <NavItem
-        active={isTopicsActive}
-        icon={MessagesSquareIcon}
-        title={tTopic('management.sidebarEntry')}
-        onClick={() => {
-          switchTopic(null, { skipRefreshMessage: true });
-          router.push(urlJoin('/agent', agentId!, 'topics'));
-        }}
-      />
-      {!hideChannel && (
+      {enableSelfLearning && (
         <NavItem
-          active={isChannelActive}
-          icon={RadioTowerIcon}
-          title={t('tab.integration')}
+          active={isSelfLearningActive}
+          icon={DnaIcon}
+          title={tSelfLearning('title')}
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
-            router.push(urlJoin('/agent', agentId!, 'channel'));
+            router.push(urlJoin('/agent', agentId!, 'self-evolving'));
           }}
         />
       )}
+      {enableTopicAcceptance && (
+        <NavItem
+          active={isGoalsActive}
+          icon={TargetIcon}
+          title={t('goalList.title')}
+          onClick={() => {
+            switchTopic(null, { skipRefreshMessage: true });
+            router.push(urlJoin('/agent', agentId!, 'goals'));
+          }}
+        />
+      )}
+      <NavItem
+        active={isTasksActive}
+        icon={ListTodoIcon}
+        title={t('tab.tasks')}
+        onClick={() => {
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'tasks'));
+        }}
+      />
     </Flexbox>
   );
 });

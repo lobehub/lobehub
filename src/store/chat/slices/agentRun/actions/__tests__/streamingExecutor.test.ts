@@ -25,7 +25,7 @@ import {
 } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
-const serverConfigMock = vi.hoisted(() => ({ enableVisualUnderstanding: false }));
+const serverConfigMock = vi.hoisted(() => ({ enableMultimodalUnderstanding: false }));
 const agentSignalBridgeMock = vi.hoisted(() => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -117,11 +117,12 @@ vi.mock('@/services/electron/desktopNotification', () => ({
 }));
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({
-    serverConfig: { enableVisualUnderstanding: serverConfigMock.enableVisualUnderstanding },
+    serverConfig: { enableMultimodalUnderstanding: serverConfigMock.enableMultimodalUnderstanding },
   }),
   serverConfigSelectors: {
-    enableVisualUnderstanding: (state: { serverConfig: { enableVisualUnderstanding?: boolean } }) =>
-      !!state.serverConfig.enableVisualUnderstanding,
+    enableMultimodalUnderstanding: (state: {
+      serverConfig: { enableMultimodalUnderstanding?: boolean };
+    }) => !!state.serverConfig.enableMultimodalUnderstanding,
   },
 }));
 
@@ -187,7 +188,7 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
-  serverConfigMock.enableVisualUnderstanding = false;
+  serverConfigMock.enableMultimodalUnderstanding = false;
 
   act(() => {
     useAgentStore.setState({ availableAgents: [] });
@@ -1326,26 +1327,26 @@ describe('StreamingExecutor actions', () => {
       );
     });
 
-    it('should enable visual understanding when a previous user message has visual media', () => {
+    it('should enable multimodal understanding when a previous user message has audio', () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
-      serverConfigMock.enableVisualUnderstanding = true;
+      serverConfigMock.enableMultimodalUnderstanding = true;
 
       const { result } = renderHook(() => useChatStore());
-      const previousVisualMessage = {
-        id: 'msg_with_image',
+      const previousMediaMessage = {
+        audioList: [{ id: 'audio-file', url: 'https://example.com/audio.mp3' }],
+        id: 'msg_with_audio',
         role: 'user',
-        content: 'Please inspect this image',
-        imageList: [{ id: 'image-file', url: 'https://example.com/image.png' }],
+        content: 'Please inspect this audio',
         sessionId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
       const currentTextMessage = {
         id: TEST_IDS.USER_MESSAGE_ID,
         role: 'user',
-        content: 'Does the person in the first image wear glasses?',
+        content: 'What is said in the audio?',
         sessionId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
@@ -1367,7 +1368,7 @@ describe('StreamingExecutor actions', () => {
       } as any);
 
       result.current.internal_createAgentState({
-        messages: [previousVisualMessage, currentTextMessage],
+        messages: [previousMediaMessage, currentTextMessage],
         parentMessageId: currentTextMessage.id,
         agentId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
@@ -1380,16 +1381,16 @@ describe('StreamingExecutor actions', () => {
       );
     });
 
-    it('should not enable visual understanding when the active LobeHub model supports visual media natively', () => {
+    it('should not enable multimodal understanding when the active LobeHub model supports audio natively', () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
       });
 
-      serverConfigMock.enableVisualUnderstanding = true;
+      serverConfigMock.enableMultimodalUnderstanding = true;
       useAiInfraStore.setState({
         enabledAiModels: [
           {
-            abilities: { functionCall: true, video: true, vision: true },
+            abilities: { audio: true, functionCall: true, video: true, vision: true },
             id: 'gemini-3.1-flash-lite-preview',
             providerId: ModelProvider.Google,
             type: 'chat',
@@ -1398,18 +1399,18 @@ describe('StreamingExecutor actions', () => {
       });
 
       const { result } = renderHook(() => useChatStore());
-      const previousVisualMessage = {
-        id: 'msg_with_video',
+      const previousMediaMessage = {
+        audioList: [{ id: 'audio-file', url: 'https://example.com/audio.mp3' }],
+        id: 'msg_with_audio',
         role: 'user',
-        content: 'Please inspect this video',
+        content: 'Please inspect this audio',
         sessionId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
-        videoList: [{ id: 'video-file', url: 'https://example.com/video.mp4' }],
       } as UIChatMessage;
       const currentTextMessage = {
         id: TEST_IDS.USER_MESSAGE_ID,
         role: 'user',
-        content: 'Summarize the previous video',
+        content: 'Summarize the previous audio',
         sessionId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,
       } as UIChatMessage;
@@ -1434,7 +1435,7 @@ describe('StreamingExecutor actions', () => {
       } as any);
 
       result.current.internal_createAgentState({
-        messages: [previousVisualMessage, currentTextMessage],
+        messages: [previousMediaMessage, currentTextMessage],
         parentMessageId: currentTextMessage.id,
         agentId: TEST_IDS.SESSION_ID,
         topicId: TEST_IDS.TOPIC_ID,

@@ -1,9 +1,25 @@
 import { isDesktop } from '@lobechat/const';
+import type React from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
-import { SkillSection, SkillsList, useProjectSkills } from '@/features/SkillsList';
+import {
+  type SkillListItem,
+  SkillSection,
+  SkillsList,
+  useProjectSkills,
+} from '@/features/SkillsList';
+
+// Filesystem skills are resolved by the underlying runtime registry, so
+// we serialize them as a literal `/skill-name` (projectSkill chip).
+const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
+  startSkillDrag(event, {
+    category: 'projectSkill',
+    label: item.name,
+    type: item.name,
+  });
+};
 
 interface SkillsGroupProps {
   /** Bound remote device id; when set, skills are scanned over RPC. */
@@ -35,15 +51,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
       items={items}
       onOpenFile={onOpenFile}
       onOpenSkill={onOpenSkill}
-      onSkillDragStart={(item, event) => {
-        // Filesystem skills are resolved by the underlying runtime registry, so
-        // we serialize them as a literal `/skill-name` (projectSkill chip).
-        startSkillDrag(event, {
-          category: 'projectSkill',
-          label: item.name,
-          type: item.name,
-        });
-      }}
+      onSkillDragStart={handleSkillDragStart}
     />
   );
 

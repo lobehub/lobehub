@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { LOADING_FLAT } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   agents,
@@ -187,6 +188,35 @@ describe('createClientTaskThread Integration', () => {
       const [thread] = await serverDB.select().from(threads).where(eq(threads.id, result.threadId));
 
       expect(thread.title).toBe('Data Analysis Task');
+    });
+
+    it('should seed a thread-scoped assistant placeholder for streaming transports', async () => {
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      const result = await caller.createClientTaskThread({
+        agentId: testAgentId,
+        assistantMessage: { provider: 'claude-code' },
+        instruction: 'Inspect the repository',
+        parentMessageId,
+        topicId: testTopicId,
+      });
+
+      expect(result.assistantMessageId).toBeDefined();
+
+      const [assistantMessage] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, result.assistantMessageId!));
+
+      expect(assistantMessage).toMatchObject({
+        agentId: testAgentId,
+        content: LOADING_FLAT,
+        parentId: result.userMessageId,
+        provider: 'claude-code',
+        role: 'assistant',
+        threadId: result.threadId,
+        topicId: testTopicId,
+      });
     });
   });
 

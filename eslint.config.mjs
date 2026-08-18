@@ -59,6 +59,32 @@ const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
   },
 ];
 
+// useRef(initial) re-evaluates `initial` on every render. Ban call/new expressions
+// so expensive work and empty Map/Set allocations don't happen as throwaway inits.
+// Use useSingleton(() => ...) for a once-created value; do not wrap it in useRef.
+const useRefLazyInitMessage =
+  "Do not pass a call or `new` expression to useRef() — the argument is evaluated on every render. Use useSingleton(() => ...) from '@/hooks/useSingleton' instead (do not wrap useSingleton in useRef).";
+
+const useRefLazyInitRestrictedSyntax = [
+  {
+    message: useRefLazyInitMessage,
+    selector: "CallExpression[callee.name='useRef'] > CallExpression.arguments:first-child",
+  },
+  {
+    message: useRefLazyInitMessage,
+    selector:
+      "CallExpression[callee.property.name='useRef'] > CallExpression.arguments:first-child",
+  },
+  {
+    message: useRefLazyInitMessage,
+    selector: "CallExpression[callee.name='useRef'] > NewExpression.arguments:first-child",
+  },
+  {
+    message: useRefLazyInitMessage,
+    selector: "CallExpression[callee.property.name='useRef'] > NewExpression.arguments:first-child",
+  },
+];
+
 export default eslint(
   {
     ignores: [
@@ -97,6 +123,12 @@ export default eslint(
       '.i18nrc.js',
       // vendored code (copied from @microsoft/fetch-event-source)
       'packages/utils/src/client/fetchEventSource/parse.ts',
+      // generated files (regenerate with `bun generate:openapi` in packages/openapi)
+      'packages/openapi/openapi.yml',
+      // generated files (regenerate with `bun generate` in packages/sdk)
+      'packages/sdk/src/generated/**',
+      // generated files (regenerate with `codex app-server generate-ts`)
+      'packages/heterogeneous-agents/src/codex/protocol/generated.ts',
     ],
     next: true,
     react: 'next',
@@ -226,11 +258,12 @@ export default eslint(
     },
   },
   {
-    files: ['src/features/Home/**/*.{ts,tsx}', 'src/routes/(main)/home/**/*.{ts,tsx}'],
-    ignores: [
-      'src/routes/(main)/home/_layout/hooks/useCreateModal.tsx',
-      'src/features/Home/InputArea/EditorInput.tsx',
+    files: [
+      'src/features/Home/**/*.{ts,tsx}',
+      'src/features/HomeLayout/**/*.{ts,tsx}',
+      'src/routes/(main)/home/**/*.{ts,tsx}',
     ],
+    ignores: ['src/features/Home/InputArea/EditorInput.tsx'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule({
         paths: [
@@ -239,6 +272,34 @@ export default eslint(
               'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
             name: '@/features/Conversation',
           },
+        ],
+        patterns: [
+          {
+            message:
+              'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            regex:
+              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    // The home sidebar tree carries both sets of constraints: it is a shell tree
+    // rendered outside TabHost, and it is also a home cold path. Flat config
+    // replaces `no-restricted-imports` rather than merging it, so the shell paths
+    // have to be repeated here instead of relying on the shell block above.
+    files: ['src/features/HomeSidebar/**/*.{ts,tsx}'],
+    ignores: ['src/features/HomeSidebar/hooks/useCreateModal.tsx'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            message:
+              'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
+            name: '@/features/Conversation',
+          },
+          ...shellRouterRestrictedPaths,
         ],
         patterns: [
           {
@@ -282,6 +343,8 @@ export default eslint(
       'react/no-unknown-property': 0,
       'regexp/match-any': 0,
       'unicorn/better-regex': 0,
+      // conflicts with prettier, which lowercases hex literals
+      'unicorn/number-literal-case': 0,
     },
   },
   // TypeScript files - enforce consistent type imports
@@ -294,6 +357,7 @@ export default eslint(
           fixStyle: 'separate-type-imports',
         },
       ],
+      'no-restricted-syntax': ['error', ...useRefLazyInitRestrictedSyntax],
     },
   },
   // MDX files
@@ -325,6 +389,7 @@ export default eslint(
     rules: {
       'no-restricted-syntax': [
         'error',
+        ...useRefLazyInitRestrictedSyntax,
         {
           message: 'Chinese characters are not allowed in aiModels files. Use English instead.',
           selector: 'Literal[value=/[\\u4e00-\\u9fff]/]',

@@ -14,6 +14,9 @@ import {
   resolveUserScopedBuiltinModelState,
 } from '../action';
 
+vi.mock('@/store/user', () => ({ useUserStore: vi.fn() }));
+vi.mock('@/store/user/selectors', () => ({ authSelectors: { isLoaded: vi.fn() } }));
+
 const createChatModel = (overrides: Partial<EnabledAiModel> = {}): EnabledAiModel => ({
   abilities: overrides.abilities ?? { functionCall: true },
   contextWindowTokens: overrides.contextWindowTokens ?? 8192,

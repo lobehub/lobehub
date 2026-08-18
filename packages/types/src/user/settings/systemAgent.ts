@@ -23,6 +23,8 @@ export interface UserSystemAgentConfig {
   promptRewrite: PromptRewriteSystemAgent;
   thread: SystemAgentItem;
   topic: SystemAgentItem;
+  /** Background workflow that summarizes inactive topics into description/historySummary. */
+  topicAutoSummary: SystemAgentItem;
   translation: SystemAgentItem;
 }
 

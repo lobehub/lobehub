@@ -81,10 +81,10 @@ vi.mock('@/business/server/workspaceApiKey', () => ({
   canUseWorkspaceApiKeys: mockCanUseWorkspaceApiKeys,
 }));
 
-const mockHasWorkspaceAdminAccess = vi.hoisted(() => vi.fn(async () => true));
+const mockHasActiveWorkspaceMembership = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock('@/database/models/workspace', () => ({
-  hasWorkspaceAdminAccess: mockHasWorkspaceAdminAccess,
+  hasActiveWorkspaceMembership: mockHasActiveWorkspaceMembership,
 }));
 
 describe('createContextInner', () => {
@@ -240,6 +240,7 @@ describe('createLambdaContext', () => {
       keyHash: 'hashed-key',
       lastUsedAt: null,
       name: 'Test API Key',
+      scopes: null,
       updatedAt: new Date(),
       userId: 'api-user',
       workspaceId: null,
@@ -271,6 +272,7 @@ describe('createLambdaContext', () => {
       keyHash: 'hashed-key',
       lastUsedAt: null,
       name: 'Test API Key',
+      scopes: null,
       updatedAt: new Date(),
       userId: 'api-user',
       workspaceId,
@@ -324,9 +326,9 @@ describe('createLambdaContext', () => {
     expect(context.workspaceId).toBe('ws-1');
   });
 
-  it('should reject a workspace API key whose issuer is no longer an admin', async () => {
+  it('should reject a workspace API key whose issuer is no longer an active member', async () => {
     vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
-    mockHasWorkspaceAdminAccess.mockResolvedValueOnce(false);
+    mockHasActiveWorkspaceMembership.mockResolvedValueOnce(false);
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
@@ -339,7 +341,7 @@ describe('createLambdaContext', () => {
 
     expect(context.userId).toBeNull();
     expect(context.workspaceId).toBeUndefined();
-    expect(mockHasWorkspaceAdminAccess).toHaveBeenCalledWith(expect.anything(), {
+    expect(mockHasActiveWorkspaceMembership).toHaveBeenCalledWith(expect.anything(), {
       userId: 'api-user',
       workspaceId: 'ws-1',
     });

@@ -1,12 +1,20 @@
-import { RequestTrigger, type TaskContext, type TaskTopicHandoff } from '@lobechat/types';
+import type { ChatTopicBotContext, TaskContext, TaskTopicHandoff } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
+import { sql } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
+import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
+import type { BotCallbackBody } from '@/server/services/bot/BotCallbackService';
+import { BotCallbackService } from '@/server/services/bot/BotCallbackService';
 
 import { AiAgentService } from '../aiAgent';
+import { acquireTopicStartReservation } from '../aiAgent/topicStartReservation';
+import { TaskResultCallbackRedisStore } from './redisStore';
 
 const log = debug('lobe-server:taskResultBridge');
 
@@ -23,12 +31,6 @@ const normalizeReason = (reason: string): CallbackReason => {
   if (reason === 'error') return 'error';
   // 'done' | 'max_steps' | 'cost_limit' | … → treat as a normal completion.
   return 'done';
-};
-
-const isDuplicateKeyError = (error: unknown): boolean => {
-  const err = error as { cause?: { code?: string }; code?: string; message?: string };
-  const blob = `${err?.message ?? ''}${err?.cause?.code ?? ''}${err?.code ?? ''}`;
-  return blob.includes('23505') || blob.includes('unique') || blob.includes('duplicate');
 };
 
 const truncate = (text: string): string =>
@@ -78,6 +80,12 @@ export interface DeliverTaskResultParams {
   topicId?: string;
 }
 
+export interface CompleteCreatorWakeupParams {
+  agentId: string;
+  originTopicId: string;
+  receiptIds: string[];
+}
+
 /**
  * Delivers a finished task's handoff back to the conversation that created it
  * Fire-and-forget: appends a `role='taskCallback'` card into the
@@ -112,6 +120,8 @@ export class TaskResultBridgeService {
       log('no origin for task %s, skipping bridge', taskIdentifier);
       return;
     }
+    const originAgentId = origin.agentId;
+    const originTopicId = origin.topicId;
 
     // Automation tasks (heartbeat/schedule) run many topics — only bridge once
     // the task itself reaches a terminal state, to avoid per-tick spam. One-shot
@@ -143,52 +153,179 @@ export class TaskResultBridgeService {
     // team workspace, so the leaf lookup + create must use the matching
     // ownership predicate — a personal-mode model (workspace_id IS NULL) finds
     // no leaf and the callback would be created parentless.
-    const messageModel = new MessageModel(this.db, this.userId, this.workspaceId);
-
-    // Anchor the callback on the creator topic's CURRENT leaf at delivery time —
-    // NOT origin.messageId (the assistant turn that called createTask). A task
-    // runs for minutes while the creator agent keeps talking, so origin.messageId
-    // is a stale mid-conversation node; parenting there forks a hidden sibling
-    // branch the linear UI never follows, so the user never sees the result
-    //
-    const parentId = await messageModel.getLastMainThreadSpineMessageId(origin.topicId);
-
-    try {
-      await messageModel.create(
-        {
-          agentId: origin.agentId,
-          content,
-          metadata: {
-            taskCallback: { identifier: taskIdentifier, reason, taskId, topicId },
+    // Serialize callback-card insertion per creator topic. Two tasks can finish
+    // at the same instant; without the advisory lock they can both anchor on
+    // the same leaf and create sibling branches, hiding one result from the
+    // creator's main spine.
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${originTopicId}))`);
+      const messageModel = new MessageModel(tx, this.userId, this.workspaceId);
+      const existing = await messageModel.findById(messageId);
+      if (!existing) {
+        const parentId = await messageModel.getLastMainThreadSpineMessageId(originTopicId);
+        await messageModel.create(
+          {
+            agentId: originAgentId,
+            content,
+            metadata: {
+              taskCallback: { identifier: taskIdentifier, reason, taskId, topicId },
+            },
+            parentId,
+            role: 'taskCallback',
+            topicId: originTopicId,
           },
-          parentId,
-          role: 'taskCallback',
-          topicId: origin.topicId,
-        },
-        messageId,
-      );
-    } catch (error) {
-      if (isDuplicateKeyError(error)) {
-        log('task-callback %s already delivered, skipping', messageId);
-        return;
+          messageId,
+        );
       }
-      throw error;
-    }
-
-    // Run the creator agent off history (no new user turn): the context engine
-    // surfaces the task-callback card as a `<task_result>` user turn via
-    // TaskCallbackMessageProcessor, so the agent reads it and continues.
-    await new AiAgentService(this.db, this.userId, { workspaceId: this.workspaceId }).execAgent({
-      agentId: origin.agentId,
-      appContext: { topicId: origin.topicId },
-      autoStart: true,
-      parentMessageId: messageId,
-      prompt: `Task ${taskIdentifier} ${reason}`,
-      suppressUserMessage: true,
-      trigger: RequestTrigger.AgentSignal,
-      userInterventionConfig: { approvalMode: 'headless' },
     });
 
-    log('bridged task %s result into topic %s (%s)', taskIdentifier, origin.topicId, reason);
+    await new TaskResultCallbackRedisStore(
+      this.userId,
+      originTopicId,
+      this.workspaceId,
+    ).createPending({
+      agentId: originAgentId,
+      callbackMessageId: messageId,
+      operationId: params.operationId,
+      taskId,
+      taskTopicId: topicId,
+    });
+
+    await this.drain(originAgentId, originTopicId);
+    log('queued task %s result for creator topic %s (%s)', taskIdentifier, originTopicId, reason);
+  }
+
+  /** Claim and start one aggregated creator wakeup for the topic. */
+  async drain(agentId: string, originTopicId: string): Promise<void> {
+    const callbackStore = new TaskResultCallbackRedisStore(
+      this.userId,
+      originTopicId,
+      this.workspaceId,
+    );
+    const receipts = await callbackStore.claimPending();
+    if (receipts.length === 0) return;
+
+    const receiptIds = receipts.map((item) => item.id);
+    const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
+    const topic = await topicModel.findById(originTopicId);
+    const botContext = topic?.metadata?.bot as ChatTopicBotContext | undefined;
+    const hooks: AgentHook[] = [
+      this.createCreatorCompletionHook(receiptIds, agentId, originTopicId, botContext),
+    ];
+    const reservationId = `task-result-wakeup-${receiptIds[0]}`;
+
+    try {
+      const reserved = await acquireTopicStartReservation({
+        reservationId,
+        topicId: originTopicId,
+        topicModel,
+      });
+      if (!reserved) {
+        await callbackStore.settle(receiptIds);
+        return;
+      }
+
+      // Receipt ordering is a queue concern, not the conversation's source of
+      // truth. Re-read the live spine only after owning the topic reservation
+      // so the Creator sees every callback card that landed before this run.
+      const parentMessageId = await new MessageModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).getLastMainThreadSpineMessageId(originTopicId);
+
+      const result = await new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      }).execAgent({
+        agentId,
+        appContext: { topicId: originTopicId },
+        autoStart: true,
+        botContext,
+        hooks,
+        parentMessageId,
+        prompt: `Process ${receipts.length} completed task result${receipts.length === 1 ? '' : 's'}`,
+        suppressUserMessage: true,
+        topicStartReservationId: reservationId,
+        trigger: RequestTrigger.AgentSignal,
+        userInterventionConfig: { approvalMode: 'headless' },
+      });
+      await callbackStore.attachCreatorOperation(receiptIds, result.operationId);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start creator agent';
+      await callbackStore.release(receiptIds, errorMessage);
+      throw error;
+    } finally {
+      await topicModel.releaseTaskCallbackReservation(originTopicId, reservationId);
+    }
+  }
+
+  async completeCreatorWakeup(params: CompleteCreatorWakeupParams): Promise<void> {
+    const callbackStore = new TaskResultCallbackRedisStore(
+      this.userId,
+      params.originTopicId,
+      this.workspaceId,
+    );
+    await callbackStore.settle(params.receiptIds);
+    await this.drain(params.agentId, params.originTopicId);
+  }
+
+  private createCreatorCompletionHook(
+    receiptIds: string[],
+    agentId: string,
+    originTopicId: string,
+    botContext?: ChatTopicBotContext,
+  ): AgentHook {
+    return {
+      handler: async (event) => {
+        if (botContext?.platformThreadId) {
+          const callbackStore = new TaskResultCallbackRedisStore(
+            this.userId,
+            originTopicId,
+            this.workspaceId,
+          );
+          const deliveredChunkCount = await callbackStore.getDeliveredChunkCount(event.operationId);
+          await new BotCallbackService(this.db).handleCallback(
+            {
+              ...event,
+              applicationId: botContext.applicationId,
+              messengerInstallationKey: botContext.messengerInstallationKey,
+              platformThreadId: botContext.platformThreadId,
+              type: 'completion',
+              userId: this.userId,
+              workspaceId: this.workspaceId,
+            } as BotCallbackBody,
+            {
+              deliveredChunkCount,
+              onChunkDelivered: (count) =>
+                callbackStore.markDeliveryChunk(event.operationId, count),
+              strictDelivery: true,
+            },
+          );
+        }
+        await this.completeCreatorWakeup({
+          agentId,
+          originTopicId,
+          receiptIds,
+        });
+      },
+      id: 'task-creator-completion',
+      type: 'onComplete',
+      webhook: {
+        body: {
+          agentId,
+          applicationId: botContext?.applicationId,
+          messengerInstallationKey: botContext?.messengerInstallationKey,
+          platformThreadId: botContext?.platformThreadId,
+          receiptIds,
+          originTopicId,
+          type: 'completion',
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        },
+        delivery: 'qstash',
+        fallback: 'none',
+        url: '/api/workflows/task/on-creator-complete',
+      },
+    };
   }
 }

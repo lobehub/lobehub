@@ -42,7 +42,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/apiKey', () => ({
   ApiKeyModel: class {
-    findByKey = mockApiKeyFindByKey;
+    static findByKey = mockApiKeyFindByKey;
     updateLastUsed = mockApiKeyUpdateLastUsed;
   },
 }));
@@ -186,5 +186,46 @@ describe('OpenAPI auth middleware', () => {
       userId: 'user-1',
     });
     expect(response.status).toBe(200);
+  });
+
+  it('should re-read API Key authorization changes on every request', async () => {
+    mockExtractBearerToken.mockReturnValue('sk-lh-workspacekey01');
+    mockValidateApiKeyFormat.mockReturnValue(true);
+    mockApiKeyFindByKey
+      .mockResolvedValueOnce({
+        enabled: true,
+        expiresAt: null,
+        id: 'api-key-1',
+        name: 'Workspace key',
+        scopes: ['agent:read'],
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      })
+      .mockResolvedValueOnce({
+        enabled: false,
+        expiresAt: null,
+        id: 'api-key-1',
+        name: 'Workspace key',
+        scopes: ['agent:read'],
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+    const app = createApp();
+
+    expect(
+      (
+        await app.request('/protected', {
+          headers: { Authorization: 'Bearer sk-lh-workspacekey01' },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app.request('/protected', {
+          headers: { Authorization: 'Bearer sk-lh-workspacekey01' },
+        })
+      ).status,
+    ).toBe(401);
+    expect(mockApiKeyFindByKey).toHaveBeenCalledTimes(2);
   });
 });

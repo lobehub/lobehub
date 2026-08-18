@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { systemPrompt } from './systemRole';
 
 describe('systemPrompt', () => {
+  it('does not instruct the task tool to run the goal workflow', () => {
+    expect(systemPrompt).not.toContain('**createGoal**');
+  });
+
   it('starts a configured cron schedule by default without running it immediately', () => {
     expect(systemPrompt).toContain(
       'start its schedule by default with updateTaskStatus(identifier, "scheduled")',

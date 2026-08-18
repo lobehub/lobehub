@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "Bitte versuchen Sie es erneut oder wechseln Sie zu einer anderen Anmeldemethode",
   "authResult.failed.title": "Autorisierung fehlgeschlagen",
-  "authResult.success.desc": "Bitte klicken Sie unten auf die Schaltfläche Start, um LobeHub Desktop weiter zu verwenden",
-  "authResult.success.title": "Autorisierung erfolgreich",
   "back": "Zurück",
   "navigation.next": "Weiter",
   "next": "Weiter",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "Abbrechen",
   "screen5.actions.connectToServer": "Mit Server verbinden",
   "screen5.actions.connecting": "Verbindung wird hergestellt...",
+  "screen5.actions.done": "Fertig",
   "screen5.actions.signInCloud": "Bei LobeHub Cloud anmelden",
   "screen5.actions.signOut": "Abmelden",
   "screen5.actions.signingIn": "Anmeldung läuft...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "Selbstgehostete Instanz",
   "screen5.navigation.next": "Loslegen",
   "screen5.selfhost.endpointPlaceholder": "Geben Sie Ihre Server-URL ein (z. B. https://ihr-server.com)",
+  "screen5.status.cloud.title": "Verbunden mit LobeHub Cloud",
+  "screen5.status.description": "Agenten, Gruppen, Einstellungen und Kontext werden auf allen Ihren Geräten synchronisiert.",
+  "screen5.status.selfhost.description": "Synchronisiere Agenten, Gruppen, Einstellungen und Kontext mit {{url}}.",
+  "screen5.status.selfhost.title": "Verbunden mit Ihrem eigenen Server",
   "screen5.title": "Melden Sie sich an, um geräteübergreifend zu synchronisieren",
   "screen5.title2": "Halten Sie Ihre Daten überall synchron",
   "screen5.title3": "Ihre Daten bleiben unter Ihrer Kontrolle"

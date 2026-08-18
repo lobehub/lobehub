@@ -6,10 +6,10 @@ import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
+import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import AgentAvatar from '@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -99,6 +99,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       {agentsWithBuiltin.map((agent) => (
         <AgentItem
           active={agent.id === agentId}
+          agent={agent}
           agentId={agent.id}
           agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
           avatar={agent.avatar}

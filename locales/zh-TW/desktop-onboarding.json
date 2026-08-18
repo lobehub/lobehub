@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "請再試一次或切換其他登入方式",
   "authResult.failed.title": "授權失敗",
-  "authResult.success.desc": "請點擊下方的「開始」按鈕以繼續使用 LobeHub 桌面版",
-  "authResult.success.title": "授權成功",
   "back": "返回",
   "navigation.next": "繼續",
   "next": "下一步",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "取消",
   "screen5.actions.connectToServer": "連接伺服器",
   "screen5.actions.connecting": "連線中...",
+  "screen5.actions.done": "完成",
   "screen5.actions.signInCloud": "登入 LobeHub 雲端",
   "screen5.actions.signOut": "登出",
   "screen5.actions.signingIn": "登入中...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "自建實例",
   "screen5.navigation.next": "開始使用",
   "screen5.selfhost.endpointPlaceholder": "輸入你的伺服器網址（例如：https://your-server.com）",
+  "screen5.status.cloud.title": "已連接到 LobeHub 雲端",
+  "screen5.status.description": "代理、群組、設定和上下文正在同步到您所有的設備。",
+  "screen5.status.selfhost.description": "正在與 {{url}} 同步代理、群組、設定和上下文。",
+  "screen5.status.selfhost.title": "已連接到您的伺服器",
   "screen5.title": "登入以跨裝置同步",
   "screen5.title2": "讓你的資料隨處同步",
   "screen5.title3": "你的資料始終由你掌控"

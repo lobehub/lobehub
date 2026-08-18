@@ -1,5 +1,6 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Tag } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,20 @@ import NavHeader from '@/features/NavHeader';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+
+const styles = createStaticStyles(({ css }) => ({
+  // The tag is a flex item of the header's left slot: without these it keeps its
+  // full text width and overlaps the action icons on the right.
+  tag: css`
+    overflow: hidden;
+    min-width: 0;
+  `,
+  title: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+}));
 
 interface TopicSelectorProps {
   agentId: string;
@@ -62,8 +77,17 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
 
   return (
     <NavHeader
-      left={activeTopic?.title ? <Tag>{activeTopic.title}</Tag> : undefined}
       showTogglePanelButton={false}
+      styles={{ right: { flex: 'none' } }}
+      left={
+        activeTopic?.title ? (
+          <Tag className={styles.tag}>
+            <span className={styles.title} title={activeTopic.title}>
+              {activeTopic.title}
+            </span>
+          </Tag>
+        ) : undefined
+      }
       right={
         <>
           <ActionIcon
@@ -83,7 +107,11 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
             popupProps={{ style: { maxHeight: 600, minWidth: 200, overflowY: 'auto' } }}
             triggerProps={{ disabled: disabled || isEmpty }}
           >
-            <ActionIcon disabled={disabled || isEmpty} icon={Clock3Icon} />
+            <ActionIcon
+              disabled={disabled || isEmpty}
+              icon={Clock3Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            />
           </DropdownMenu>
         </>
       }

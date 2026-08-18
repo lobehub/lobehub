@@ -6,6 +6,7 @@ import { createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { mutate as globalMutate } from 'swr';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { lambdaClient } from '@/libs/trpc/client';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -20,6 +21,7 @@ import MarketAuthConfirmModal from './MarketAuthConfirmModal';
 import { MarketOIDC } from './oidc';
 import ProfileSetupModal from './ProfileSetupModal';
 import type { MarketAuthScene } from './scenes';
+import { createSingleFlight } from './singleFlight';
 import {
   type MarketAuthContextType,
   type MarketAuthSession,
@@ -157,6 +159,10 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     (() => void) | null
   >(null);
 
+  // Shared in-flight token refresh, so concurrent callers never replay a
+  // single-use refresh token against each other (see `runTokenRefresh`).
+  const refreshSingleFlight = useSingleton(() => createSingleFlight<boolean>());
+
   // Subscribe to user store init state; when isUserStateInit is true, settings data is fully loaded
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
 
@@ -187,47 +193,112 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   }, [isDesktop]);
 
   /**
+   * Run a token refresh, collapsing concurrent callers onto one in-flight request.
+   *
+   * Market rotates refresh tokens, so a refresh token is single-use. Refreshes
+   * are triggered from several independent places — the pre-expiry timer, the
+   * `market-unauthorized` listener, `handleUnauthorized`, and session init — so
+   * two of them overlapping is routine rather than exotic. Without this guard
+   * they race: the first rotates the token and stores the new pair, the second
+   * replays the now-consumed token and fails. Sharing one promise means the
+   * second caller observes the first one's success instead of a phantom failure.
+   */
+  const runTokenRefresh = useCallback(
+    (refreshTokenValue: string): Promise<boolean> =>
+      refreshSingleFlight(async (): Promise<boolean> => {
+        try {
+          const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
+
+          const response = await lambdaClient.market.oidc.refreshToken.mutate({
+            clientId,
+            refreshToken: refreshTokenValue,
+          });
+
+          // Calculate new expiration time (default to 1 hour if not provided)
+          const expiresIn = response.expiresIn ?? 3600;
+          const expiresAt = Date.now() + expiresIn * 1000;
+
+          // Save new tokens to DB
+          await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
+
+          // Fetch user info with new token
+          const userInfo = await fetchUserInfo(response.accessToken);
+
+          // Update session state
+          const newSession: MarketAuthSession = {
+            accessToken: response.accessToken,
+            expiresAt,
+            expiresIn,
+            scope: response.scope || 'openid profile email',
+            tokenType: 'Bearer',
+            userInfo: userInfo || undefined,
+          };
+
+          setSession(newSession);
+          setStatus('authenticated');
+
+          console.info('[MarketAuth] Token refreshed successfully');
+          return true;
+        } catch (error) {
+          console.error('[MarketAuth] Failed to refresh token:', error);
+          return false;
+        }
+      }),
+    [isDesktop, refreshSingleFlight],
+  );
+
+  /**
+   * Whether another refresh has already replaced the token we just tried to use.
+   *
+   * The in-flight guard above only covers one JS context; a second tab (or the
+   * desktop app alongside the web app) shares the same stored credentials and
+   * can rotate them underneath us. Losing that race is not an auth failure —
+   * working credentials are sitting in the store — so callers must not treat it
+   * as one and wipe them.
+   */
+  const wasRotatedByAnotherRefresh = (usedRefreshToken: string): boolean => {
+    const latest = getMarketTokensFromDB();
+    return Boolean(latest?.refreshToken) && latest?.refreshToken !== usedRefreshToken;
+  };
+
+  /**
+   * Adopt credentials another refresh stored, publishing them as our session.
+   *
+   * Detecting that we lost the race is only half the job: this context never ran
+   * the success path, so without adopting the result the caller would report
+   * success while `status` stayed `loading` and no session was ever set.
+   */
+  const adoptRotatedSession = async (): Promise<boolean> => {
+    const latest = getMarketTokensFromDB();
+    if (!latest?.accessToken || !latest.expiresAt || latest.expiresAt <= Date.now()) return false;
+
+    const userInfo = await fetchUserInfo(latest.accessToken);
+    if (!userInfo) return false;
+
+    setSession({
+      accessToken: latest.accessToken,
+      expiresAt: latest.expiresAt,
+      expiresIn: Math.floor((latest.expiresAt - Date.now()) / 1000),
+      scope: 'openid profile email',
+      tokenType: 'Bearer',
+      userInfo,
+    });
+    setStatus('authenticated');
+
+    console.info('[MarketAuth] Adopted tokens refreshed by a concurrent refresh');
+    return true;
+  };
+
+  /**
    * Try to refresh the access token using a refresh token
    * This is used during initialization when the access token is expired or invalid
    */
   const tryRefreshToken = async (refreshTokenValue: string): Promise<boolean> => {
-    try {
-      const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
+    const refreshed = await runTokenRefresh(refreshTokenValue);
+    if (refreshed) return true;
 
-      const response = await lambdaClient.market.oidc.refreshToken.mutate({
-        clientId,
-        refreshToken: refreshTokenValue,
-      });
-
-      // Calculate new expiration time (default to 1 hour if not provided)
-      const expiresIn = response.expiresIn ?? 3600;
-      const expiresAt = Date.now() + expiresIn * 1000;
-
-      // Save new tokens to DB
-      await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
-
-      // Fetch user info with new token
-      const userInfo = await fetchUserInfo(response.accessToken);
-
-      // Update session state
-      const newSession: MarketAuthSession = {
-        accessToken: response.accessToken,
-        expiresAt,
-        expiresIn,
-        scope: response.scope || 'openid profile email',
-        tokenType: 'Bearer',
-        userInfo: userInfo || undefined,
-      };
-
-      setSession(newSession);
-      setStatus('authenticated');
-
-      console.info('[MarketAuth] Token refreshed successfully during initialization');
-      return true;
-    } catch (error) {
-      console.error('[MarketAuth] Failed to refresh token during initialization:', error);
-      return false;
-    }
+    if (!wasRotatedByAnotherRefresh(refreshTokenValue)) return false;
+    return adoptRotatedSession();
   };
 
   /**
@@ -587,48 +658,22 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       return false;
     }
 
-    try {
-      const clientId = isDesktop ? 'lobehub-desktop' : 'lobechat-com';
+    const usedRefreshToken = dbTokens.refreshToken;
+    if (await runTokenRefresh(usedRefreshToken)) return true;
 
-      const response = await lambdaClient.market.oidc.refreshToken.mutate({
-        clientId,
-        refreshToken: dbTokens.refreshToken,
-      });
+    // Losing a rotation race is not an auth failure — a concurrent refresh has
+    // already stored working credentials. Clearing here would throw those away,
+    // which is precisely how one transient failure used to strand the user
+    // signed out: the wipe leaves no refresh token, so every later recovery
+    // attempt has nothing to retry with and the session can never heal itself.
+    if (wasRotatedByAnotherRefresh(usedRefreshToken) && (await adoptRotatedSession())) return true;
 
-      // Calculate new expiration time (default to 1 hour if not provided)
-      const expiresIn = response.expiresIn ?? 3600;
-      const expiresAt = Date.now() + expiresIn * 1000;
-
-      // Save new tokens to DB
-      await saveMarketTokensToDB(response.accessToken, response.refreshToken, expiresAt);
-
-      // Fetch user info with new token
-      const userInfo = await fetchUserInfo(response.accessToken);
-
-      // Update session state
-      const newSession: MarketAuthSession = {
-        accessToken: response.accessToken,
-        expiresAt,
-        expiresIn,
-        scope: response.scope || 'openid profile email',
-        tokenType: 'Bearer',
-        userInfo: userInfo || undefined,
-      };
-
-      setSession(newSession);
-      setStatus('authenticated');
-
-      console.info('[MarketAuth] Token refreshed successfully');
-      return true;
-    } catch (error) {
-      console.error('[MarketAuth] Failed to refresh token:', error);
-      // Clear invalid tokens
-      await clearMarketTokensFromDB();
-      setSession(null);
-      setStatus('unauthenticated');
-      return false;
-    }
-  }, [isDesktop]);
+    // The refresh token is genuinely spent — drop it so we stop replaying it.
+    await clearMarketTokensFromDB();
+    setSession(null);
+    setStatus('unauthenticated');
+    return false;
+  }, [runTokenRefresh]);
 
   /**
    * Handle unauthorized (401) error from Market API

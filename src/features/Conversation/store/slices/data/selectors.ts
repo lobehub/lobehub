@@ -37,6 +37,25 @@ const getDbMessageByToolCallId = (id: string) => (s: State) =>
   s.dbMessages.find((m) => m.tool_call_id === id);
 
 /**
+ * `createdAt` is typed as a number but arrives as a `Date` after a DB rehydrate
+ * (superjson keeps `timestamptz` as `Date`), so normalize before comparing.
+ */
+const toEpochMs = (value: Date | number | string | null | undefined): number | undefined => {
+  if (value === null || value === undefined) return undefined;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(time) ? undefined : time;
+};
+
+/**
+ * `createdAt` of a tool call's result row, normalized to epoch ms.
+ *
+ * Resolve the row by its unique message id rather than `tool_call_id`: Codex
+ * reuses item ids such as `item_1` across resumed turns in the same topic.
+ */
+const getToolMessageCreatedAt = (resultMessageId: string | undefined) => (s: State) =>
+  resultMessageId ? toEpochMs(getDbMessageById(resultMessageId)(s)?.createdAt) : undefined;
+
+/**
  * Helper to find last message ID in an AssistantContentBlock
  */
 const findLastBlockId = (block: AssistantContentBlock | undefined): string | undefined => {
@@ -74,6 +93,16 @@ const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | u
   // Priority 3: Return self ID
   return node.id;
 };
+
+/**
+ * Whether a message currently has no reply rendered beneath it.
+ *
+ * True during the window a retry opens up: `delAndRegenerateMessage` removes the
+ * failed turn before the replacement exists, so for a beat the user turn stands
+ * alone with nothing under it and nothing to hang a loading state on.
+ */
+const hasNoRenderedReply = (id: string) => (s: State) =>
+  !s.displayMessages.some((message) => message.parentId === id);
 
 /**
  * Finds the last (deepest) message ID from a display message
@@ -215,6 +244,21 @@ const getBlockHasTools =
     return !!tools && tools.length > 0;
   };
 
+/**
+ * Task ids whose `role='taskCallback'` handoff message already landed in this
+ * thread. Drives Goal-card dedupe: once the callback card exists it absorbs
+ * the Goal status header, so the creating turn's tracker card retires.
+ */
+const taskCallbackTaskIds = (s: State): string[] => {
+  const ids: string[] = [];
+  for (const message of s.displayMessages) {
+    if (message.role !== 'taskCallback') continue;
+    const taskId = message.metadata?.taskCallback?.taskId;
+    if (taskId) ids.push(taskId);
+  }
+  return ids;
+};
+
 /** 1-based position of a verify message among all verify messages in the thread. */
 const getVerifyOrdinal = (id: string) => (s: State) => {
   let ordinal = 0;
@@ -241,10 +285,13 @@ export const dataSelectors = {
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
   getToolInBlock,
+  getToolMessageCreatedAt,
   getToolsInBlock,
+  hasNoRenderedReply,
   isSecondLastMessageFromUser,
   messagesInit,
   pendingInterventions,
   skipFetch,
+  taskCallbackTaskIds,
   workSummariesByRootOperationId,
 };

@@ -15,17 +15,14 @@ import type {
   HeterogeneousAgentSessionError,
   HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import {
-  AMP_CLI_INSTALL_COMMANDS,
-  AMP_CLI_INSTALL_DOCS_URL,
-  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-  CODEX_CLI_INSTALL_COMMANDS,
-  CODEX_CLI_INSTALL_DOCS_URL,
-  HeterogeneousAgentSessionErrorCode,
-  OPENCODE_CLI_INSTALL_COMMANDS,
-  OPENCODE_CLI_INSTALL_DOCS_URL,
-} from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
+  buildHeterogeneousAgentAuthRequiredError,
+  buildHeterogeneousAgentCliNotFoundError,
+  getHeterogeneousAgentConfigOrThrow,
+  isHeterogeneousAgentAuthRequired,
+  resolveHeterogeneousAgentCommand,
+} from '@lobechat/heterogeneous-agents';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
@@ -46,21 +43,37 @@ import {
 } from '@lobechat/heterogeneous-agents/quota-sampler';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
+  AcpRpcResponseError,
   AgentStreamPipeline,
   buildAgentInput,
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
   ClaudeAgentSdkSession,
+  CodexAppServerClient,
+  CodexThreadSession,
   createFileStoreImageUploader,
   ensureClaudeCodeResumeTranscript,
+  getCodexAppServerUnsupportedArgs,
+  GrokAcpSession,
+  isCodexAppServerCompatibilityError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
+  TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
+import { isPlainObject } from 'es-toolkit';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import type { App } from '@/core/App';
@@ -119,15 +132,6 @@ const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /conversation .*not found/i,
   /resume.*not found/i,
 ] as const;
-const CLI_AUTH_REQUIRED_PATTERNS = [
-  /failed to authenticate/i,
-  /invalid authentication credentials/i,
-  /authentication[_ ]error/i,
-  /not authenticated/i,
-  /\bunauthorized\b/i,
-  /\b401\b/,
-] as const;
-const AMP_AUTH_REQUIRED_PATTERNS = [/please (?:log|sign) in/i, /amp_api_key/i] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
   /\bcwd\b/i,
@@ -143,10 +147,35 @@ const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
 const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WARN)\s+/;
 const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
 const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
-const CLAUDE_CODE_SDK_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
+
+export const redactPromptArgs = (
+  args: string[],
+  agentType: HeterogeneousCliAgentType,
+): string[] => {
+  let redactNext = false;
+  const supportsShortPromptFlag = agentType === 'kimi-code';
+
+  return args.map((arg) => {
+    if (redactNext) {
+      redactNext = false;
+      return '[REDACTED]';
+    }
+
+    if (arg === '--prompt' || (supportsShortPromptFlag && arg === '-p')) {
+      redactNext = true;
+      return arg;
+    }
+
+    if (arg.startsWith('--prompt=')) return '--prompt=[REDACTED]';
+    if (supportsShortPromptFlag && arg.startsWith('-p=')) return '-p=[REDACTED]';
+
+    return arg;
+  });
+};
 
 // ─── IPC types ───
 
@@ -161,10 +190,14 @@ interface StartSessionParams {
   cwd?: string;
   /** Environment variables */
   env?: Record<string, string>;
+  /** Protocol-native model selected after session setup (TRAE ACP only). */
+  initialModel?: string;
   /** Session ID to resume (for multi-turn) */
   resumeSessionId?: string;
   /** Run claude-code prompts through the Claude Agent SDK instead of CLI spawn (lab preference) */
   useClaudeCodeSdk?: boolean;
+  /** Run Codex prompts through codex app-server instead of one-shot codex exec (lab preference) */
+  useCodexAppServer?: boolean;
 }
 
 export interface StartSessionResult {
@@ -265,6 +298,7 @@ export interface SessionInfo {
 interface AgentSession {
   agentSessionId?: string;
   agentType: HeterogeneousCliAgentType;
+  appServerSession?: CodexThreadSession;
   args: string[];
   /**
    * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
@@ -274,9 +308,11 @@ interface AgentSession {
    * intentional, not agent failures.
    */
   cancelledByUs?: boolean;
+  codexAppServerFallback?: boolean;
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  grokAcpSession?: GrokAcpSession;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -300,7 +336,9 @@ interface AgentSession {
   resumeSessionId?: string;
   sdkSession?: ClaudeAgentSdkSession;
   sessionId: string;
+  traeAcpSession?: TraeAcpSession;
   useClaudeCodeSdk?: boolean;
+  useCodexAppServer?: boolean;
   verifiedModel?: string;
   verifiedModelContextWindow?: number;
   verifiedModelProvider?: string;
@@ -373,6 +411,8 @@ export default class HeterogeneousAgentCtr {
   /** Lazy single MCP server, started on first claude-code prompt. */
   private builtinMcpServer?: LobeBuiltinMcpServer;
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
+  /** One lazy, long-lived native Codex app-server connection shared by thread sessions. */
+  private codexAppServerClient?: CodexAppServerClient;
   // Fresh window sits under the renderer's 2-minute auto-refresh so each
   // scheduled poll reaches the usage API instead of a cache echo.
   private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
@@ -398,152 +438,42 @@ export default class HeterogeneousAgentCtr {
   );
 
   private resolveSessionCommand(session: AgentSession): string {
-    const resolvedCommand = session.command.trim();
-    if (resolvedCommand) return resolvedCommand;
-
-    switch (session.agentType) {
-      case 'amp': {
-        return 'amp';
-      }
-      case 'codex': {
-        return 'codex';
-      }
-      case 'opencode': {
-        return 'opencode';
-      }
-      default: {
-        return 'claude';
-      }
-    }
+    return resolveHeterogeneousAgentCommand(session.agentType, session.command);
   }
 
-  private buildAmpCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
+  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentCliNotFoundError({
+      agentType: session.agentType,
+      command: session.command,
+    });
+  }
 
+  private resolveSessionWorkingDirectory(session: AgentSession): string {
+    return session.cwd || electronApp.getPath('desktop');
+  }
+
+  private buildWorkingDirectoryMissingError(
+    session: AgentSession,
+    workingDirectory: string,
+  ): HeterogeneousAgentSessionError {
     return {
-      agentType: 'amp',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-      installCommands: AMP_CLI_INSTALL_COMMANDS,
-      message: `Amp CLI was not found. Install it and make sure \`${command}\` can be executed.`,
+      agentType: session.agentType,
+      code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
+      command: this.resolveSessionCommand(session),
+      message: `Working directory does not exist: ${workingDirectory}`,
+      workingDirectory,
     };
-  }
-
-  private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'codex',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-      installCommands: CODEX_CLI_INSTALL_COMMANDS,
-      message: `Codex CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildClaudeCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'claude-code',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-      installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-      message: `Claude Code CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildOpenCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
-    const command = this.resolveSessionCommand(session);
-
-    return {
-      agentType: 'opencode',
-      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command,
-      docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-      installCommands: OPENCODE_CLI_INSTALL_COMMANDS,
-      message: `OpenCode CLI was not found. Install it and make sure \`${command}\` can be executed.`,
-    };
-  }
-
-  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
-    switch (session.agentType) {
-      case 'amp': {
-        return this.buildAmpCliMissingError(session);
-      }
-      case 'claude-code': {
-        return this.buildClaudeCodeCliMissingError(session);
-      }
-      case 'codex': {
-        return this.buildCodexCliMissingError(session);
-      }
-      case 'opencode': {
-        return this.buildOpenCodeCliMissingError(session);
-      }
-      default: {
-        return;
-      }
-    }
   }
 
   private buildCliAuthRequiredError(
     session: AgentSession,
     stderr: string,
-  ): HeterogeneousAgentSessionError | undefined {
-    const command = this.resolveSessionCommand(session);
-
-    switch (session.agentType) {
-      case 'amp': {
-        return {
-          agentType: 'amp',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: AMP_CLI_INSTALL_DOCS_URL,
-          message:
-            'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
-          stderr,
-        };
-      }
-      case 'claude-code': {
-        return {
-          agentType: 'claude-code',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'codex': {
-        return {
-          agentType: 'codex',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
-          message:
-            'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      case 'opencode': {
-        return {
-          agentType: 'opencode',
-          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-          command,
-          docsUrl: OPENCODE_CLI_INSTALL_DOCS_URL,
-          message:
-            'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',
-          stderr,
-        };
-      }
-      default: {
-        return;
-      }
-    }
+  ): HeterogeneousAgentSessionError {
+    return buildHeterogeneousAgentAuthRequiredError({
+      agentType: session.agentType,
+      command: session.command,
+      stderr,
+    });
   }
 
   private getErrorMessage(error: unknown): string | undefined {
@@ -609,6 +539,36 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private getGrokResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'grok-build' ||
+      !session.resumeSessionId ||
+      !(error instanceof AcpRpcResponseError) ||
+      error.method !== 'session/load' ||
+      !isPlainObject(error.rpcError.data) ||
+      error.rpcError.data.code !== 'FS_NOT_FOUND'
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'grok-build',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message: 'The saved Grok Build session could not be found, so it can no longer be resumed.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -616,22 +576,24 @@ export default class HeterogeneousAgentCtr {
     const message = this.getErrorMessage(error);
 
     if (!message) return;
-    const patterns =
-      session.agentType === 'amp'
-        ? [...CLI_AUTH_REQUIRED_PATTERNS, ...AMP_AUTH_REQUIRED_PATTERNS]
-        : CLI_AUTH_REQUIRED_PATTERNS;
-    if (!patterns.some((pattern) => pattern.test(message))) return;
+    if (!isHeterogeneousAgentAuthRequired(session.agentType, message)) return;
 
     return this.buildCliAuthRequiredError(session, message);
   }
 
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
+      const workingDirectory = this.resolveSessionWorkingDirectory(session);
+      if (!existsSync(workingDirectory)) {
+        return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+      }
+
       const cliMissingError = this.buildCliMissingError(session);
       if (cliMissingError) return cliMissingError;
     }
 
-    const resumeError = this.getCodexResumeError(error, session);
+    const resumeError =
+      this.getCodexResumeError(error, session) ?? this.getGrokResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
@@ -686,17 +648,12 @@ export default class HeterogeneousAgentCtr {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
-    const defaultCommand =
-      session.agentType === 'amp'
-        ? 'amp'
-        : session.agentType === 'claude-code'
-          ? 'claude'
-          : session.agentType === 'codex'
-            ? 'codex'
-            : session.agentType === 'opencode'
-              ? 'opencode'
-              : undefined;
-    if (!defaultCommand) return;
+    const workingDirectory = this.resolveSessionWorkingDirectory(session);
+    if (!existsSync(workingDirectory)) {
+      return this.buildWorkingDirectoryMissingError(session, workingDirectory);
+    }
+
+    const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
     const command = this.resolveSessionCommand(session);
     const status =
@@ -724,8 +681,15 @@ export default class HeterogeneousAgentCtr {
    * per-user Labs toggle arrives per session as `session.useClaudeCodeSdk`.
    */
   private get isClaudeCodeSdkLabEnabled(): boolean {
-    return CLAUDE_CODE_SDK_LAB_ENABLED_VALUES.has(
+    return HETERO_RUNTIME_LAB_ENABLED_VALUES.has(
       String(process.env.LOBE_CLAUDE_CODE_SDK ?? '').toLowerCase(),
+    );
+  }
+
+  /** Environment override for development and automated app-server verification. */
+  private get isCodexAppServerLabEnabled(): boolean {
+    return HETERO_RUNTIME_LAB_ENABLED_VALUES.has(
+      String(process.env.LOBE_CODEX_APP_SERVER ?? '').toLowerCase(),
     );
   }
 
@@ -739,7 +703,14 @@ export default class HeterogeneousAgentCtr {
     // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
     if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
-    return { ...inheritedEnv, ...proxyEnv, ...session.env };
+    return {
+      ...inheritedEnv,
+      ...proxyEnv,
+      ...(session.agentType === 'codebuddy'
+        ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' }
+        : {}),
+      ...session.env,
+    };
   }
 
   private get shouldTraceCliOutput(): boolean {
@@ -856,7 +827,7 @@ export default class HeterogeneousAgentCtr {
           {
             agentSessionId: session.agentSessionId,
             agentType: session.agentType,
-            args: cliArgs,
+            args: redactPromptArgs(cliArgs, session.agentType),
             attachments: imageList.map((image) => this.getAttachmentTraceSummary(image)),
             command: session.command,
             createdAt: createdAt.toISOString(),
@@ -1120,9 +1091,11 @@ export default class HeterogeneousAgentCtr {
       command: params.command,
       cwd: params.cwd,
       env: params.env,
+      model: params.initialModel,
       sessionId,
       resumeSessionId: params.resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,
+      useCodexAppServer: params.useCodexAppServer,
     });
 
     logger.info('Session created:', { agentType, sessionId });
@@ -1139,6 +1112,7 @@ export default class HeterogeneousAgentCtr {
   async sendPrompt(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
+    session.cancelledByUs = false;
 
     const preflightError = await this.getSpawnPreflightError(session);
     if (preflightError) {
@@ -1186,11 +1160,42 @@ export default class HeterogeneousAgentCtr {
       return this.sendPromptWithClaudeSdk(params, session);
     }
 
-    // Stand up the AskUserQuestion MCP bridge for claude-code prompts BEFORE
+    if (
+      session.agentType === 'codex' &&
+      !session.codexAppServerFallback &&
+      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+    ) {
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        if (await this.sendPromptWithCodexAppServer(params, session)) return;
+      } else if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      } else {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+          sessionId: session.sessionId,
+          unsupportedArgs,
+        });
+      }
+    }
+
+    if (session.agentType === 'grok-build') {
+      return this.sendPromptWithGrokAcp(params, session);
+    }
+
+    if (session.agentType === 'trae') {
+      return this.sendPromptWithTraeAcp(params, session);
+    }
+
+    // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
-    // into `--mcp-config`. Codex / future agents skip this entirely.
+    // into `--mcp-config`. Other agents skip this entirely.
     const intervention =
-      session.agentType === 'claude-code'
+      session.agentType === 'claude-code' || session.agentType === 'qoder'
         ? await this.setupInterventionForOp(params.operationId, {
             agentId: params.agentId,
             topicId: params.topicId,
@@ -1204,6 +1209,7 @@ export default class HeterogeneousAgentCtr {
     let traceSession;
     let cwd: string;
     let initialCumulativeUsage: UsageData | undefined;
+    let resolvedCliSpawnPlan;
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
@@ -1231,6 +1237,15 @@ export default class HeterogeneousAgentCtr {
         promptInput,
         resumeSessionId: session.agentSessionId,
       });
+
+      const spawnArgs =
+        spawnPlan.argvPayload === undefined
+          ? spawnPlan.args
+          : [...spawnPlan.args, spawnPlan.argvPayload];
+      resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+        session.resolvedCommandPath ?? session.command,
+        spawnArgs,
+      );
 
       // Fall back to the user's Desktop so the process never inherits
       // the Electron parent's cwd (which is `/` when launched from Finder).
@@ -1273,16 +1288,14 @@ export default class HeterogeneousAgentCtr {
       throw err;
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
-    const cliArgs = spawnPlan.args;
-    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(
-      session.resolvedCommandPath ?? session.command,
-      cliArgs,
-    );
 
     logger.info(
       'Spawning agent:',
       resolvedCliSpawnPlan.command,
-      resolvedCliSpawnPlan.args.join(' '),
+      [
+        ...redactPromptArgs(spawnPlan.args, session.agentType),
+        ...(spawnPlan.argvPayload === undefined ? [] : ['<argv payload redacted>']),
+      ].join(' '),
       `(cwd: ${cwd})`,
     );
 
@@ -1411,6 +1424,388 @@ export default class HeterogeneousAgentCtr {
       throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
         cause: error,
       });
+    }
+  }
+
+  private async sendPromptWithCodexAppServer(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<boolean> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    let inputPlan;
+    try {
+      inputPlan = await buildAgentInput('codex', promptInput, { cacheDir: this.fileCacheDir });
+    } catch (error) {
+      logger.error('Failed to prepare Codex app-server input:', error);
+      throw new Error(
+        `Failed to attach image(s) to Codex app-server: ${this.getErrorMessage(error) || 'Unknown error'}`,
+        { cause: error },
+      );
+    }
+
+    const input = buildCodexAppServerInput(inputPlan);
+    const appServerArgs = buildCodexAppServerArgs(session.args);
+    const initialModel = await resolveCodexInitialModel({ args: session.args, env: spawnEnv });
+    if (initialModel?.model) {
+      session.model = initialModel.model;
+      session.modelSource = initialModel.source;
+    }
+    const initialCumulativeUsage = session.agentSessionId
+      ? (await readCodexSessionModel(session.agentSessionId, { env: spawnEnv }))?.cumulativeUsage
+      : undefined;
+    const inputPayload = `${JSON.stringify(input)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: appServerArgs,
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: inputPayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', inputPayload);
+
+    const clientOptions = {
+      args: appServerArgs.slice(0, -1),
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+    };
+    const existingClient = this.codexAppServerClient;
+    if (existingClient && !existingClient.canReuseFor(clientOptions)) {
+      if (!existingClient.hasConsumers) {
+        existingClient.close();
+        if (this.codexAppServerClient === existingClient) this.codexAppServerClient = undefined;
+      } else {
+        const message =
+          'The running Codex app-server uses a different binary, global configuration, or environment';
+        logger.error('Cannot reuse the native Codex app-server client:', {
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'process-error.json', {
+          message,
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentSessionError', {
+          error: message,
+          sessionId: session.sessionId,
+        });
+        throw new Error(message);
+      }
+    }
+
+    const client =
+      this.codexAppServerClient ??
+      (this.codexAppServerClient = new CodexAppServerClient(clientOptions));
+    const appServerSession =
+      session.appServerSession ??
+      new CodexThreadSession({
+        client,
+        initialCumulativeUsage,
+        initialModel: session.model,
+        initialThreadId: session.agentSessionId,
+        threadName: truncateTitle(params.prompt),
+        onEvents: async (events) => {
+          for (const event of events) {
+            this.broadcast('heteroAgentEvent', {
+              event,
+              sessionId: session.sessionId,
+            });
+          }
+        },
+        onModel: (model) => {
+          session.model = model;
+          session.modelSource = 'codex-app-server';
+        },
+        onRuntimeStatus: (status) => {
+          this.broadcast('heteroAgentRuntimeStatus', status);
+        },
+        onSessionId: (agentSessionId) => {
+          if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+        },
+        sessionId: session.sessionId,
+        threadParams: buildCodexAppServerThreadParams(session.args, cwd, session.model),
+      });
+    session.appServerSession = appServerSession;
+
+    logger.info('Starting Codex app-server session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await appServerSession.run({
+        input,
+        onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+        operationId: params.operationId,
+      });
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'codex-app-server',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+      return true;
+    } catch (error) {
+      if (appServerSession.canFallbackToExec && isCodexAppServerCompatibilityError(error)) {
+        session.codexAppServerFallback = true;
+        logger.warn('Falling back to codex exec because native app-server is unavailable:', {
+          message: this.getErrorMessage(error),
+          sessionId: session.sessionId,
+        });
+        void this.writeCliTraceJson(traceSession, 'fallback.json', {
+          message: this.getErrorMessage(error),
+          transport: 'codex-app-server',
+        });
+        await this.flushCliTrace(traceSession);
+        this.broadcast('heteroAgentEvent', {
+          event: {
+            data: {
+              message:
+                'Codex app-server is unavailable or incompatible. Upgrade Codex to use the Labs transport; continuing with codex exec.',
+            },
+            operationId: params.operationId,
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'stream_retry',
+          } satisfies AgentStreamEvent,
+          sessionId: session.sessionId,
+        });
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+        if (!client.hasConsumers) {
+          client.close();
+          if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
+        }
+        return false;
+      }
+
+      logger.error('Codex app-server session error:', error);
+      appServerSession.close();
+      if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'codex-app-server',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return true;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    }
+  }
+
+  private async sendPromptWithGrokAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = session.cwd || electronApp.getPath('desktop');
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    let prompt;
+    try {
+      prompt = await buildGrokAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    } catch (error) {
+      logger.error('Failed to prepare Grok Build ACP input:', error);
+      throw new Error(
+        `Failed to attach image(s) to Grok Build: ${this.getErrorMessage(error) || 'Unknown error'}`,
+        { cause: error },
+      );
+    }
+
+    const traceInput = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildGrokAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: traceInput,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', traceInput);
+    const acpSession = new GrokAcpSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.grokAcpSession = acpSession;
+
+    logger.info('Starting Grok Build ACP session:', {
+      commandPath,
+      cwd,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      await acpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'acp-stdio',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      logger.error('Grok Build ACP session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'acp-stdio',
+      });
+      await this.flushCliTrace(traceSession);
+
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      if (session.grokAcpSession === acpSession) session.grokAcpSession = undefined;
+    }
+  }
+
+  private async sendPromptWithTraeAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildTraeAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildTraeAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+    const stderrChunks: string[] = [];
+
+    const traeAcpSession = new TraeAcpSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'trae-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.traeAcpSession = traeAcpSession;
+
+    try {
+      await traeAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'trae-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'trae-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = stderr
+        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+            cause: error,
+          })
+        : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      if (session.traeAcpSession === traeAcpSession) session.traeAcpSession = undefined;
     }
   }
 
@@ -1666,6 +2061,7 @@ export default class HeterogeneousAgentCtr {
           }
 
           if (code === 0) {
+            broadcastStreamEvents(pipeline.validateCompletion());
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
           } else {
@@ -1692,7 +2088,7 @@ export default class HeterogeneousAgentCtr {
     return { agentSessionId: session?.agentSessionId };
   }
 
-  /** Query OpenCode's model catalog using the same cwd/env rules as a real local session. */
+  /** Query a heterogeneous CLI's model catalog using the same rules as a real local session. */
   async listModels(
     params: ListHeterogeneousAgentModelsParams,
   ): Promise<HeterogeneousAgentModelCatalog> {
@@ -1841,6 +2237,25 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.grokAcpSession) {
+      session.grokAcpSession.interrupt();
+      return;
+    }
+    if (session.appServerSession) {
+      const appServerSession = session.appServerSession;
+      try {
+        await appServerSession.interrupt();
+      } catch (error) {
+        logger.warn('Codex app-server interrupt failed; closing session:', error);
+        appServerSession.close();
+        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+      }
+      return;
+    }
+    if (session.traeAcpSession) {
+      await session.traeAcpSession.interrupt();
+      return;
+    }
     if (session.sdkSession) {
       session.sdkSession.close();
       return;
@@ -1864,6 +2279,26 @@ export default class HeterogeneousAgentCtr {
   async stopSession(params: StopSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
+
+    if (session.grokAcpSession) {
+      session.cancelledByUs = true;
+      session.grokAcpSession.close();
+    }
+
+    if (session.appServerSession) {
+      session.cancelledByUs = true;
+      try {
+        await session.appServerSession.interrupt();
+      } catch (error) {
+        logger.warn('Codex app-server interrupt failed while stopping the session:', error);
+      }
+      session.appServerSession.close();
+    }
+
+    if (session.traeAcpSession) {
+      session.cancelledByUs = true;
+      session.traeAcpSession.close();
+    }
 
     if (session.sdkSession) {
       session.cancelledByUs = true;
@@ -1937,6 +2372,18 @@ export default class HeterogeneousAgentCtr {
     electronApp.on('before-quit', () => {
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
+        if (session.grokAcpSession) {
+          session.cancelledByUs = true;
+          session.grokAcpSession.close();
+        }
+        if (session.appServerSession) {
+          session.cancelledByUs = true;
+          session.appServerSession.close();
+        }
+        if (session.traeAcpSession) {
+          session.cancelledByUs = true;
+          session.traeAcpSession.close();
+        }
         if (session.sdkSession) {
           session.cancelledByUs = true;
           session.sdkSession.close();
@@ -1946,6 +2393,8 @@ export default class HeterogeneousAgentCtr {
           this.killProcessTree(session.process, 'SIGTERM');
         }
       }
+      this.codexAppServerClient?.close();
+      this.codexAppServerClient = undefined;
       this.sessions.clear();
       // The exit handlers will tear each per-op intervention down, but if
       // CC's stdio close races shutdown we'd leave the MCP server bound to
@@ -1984,6 +2433,7 @@ export default class HeterogeneousAgentCtr {
    */
   spawnLhHeteroExec(params: {
     agentType: string;
+    assistantMessageId?: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     cwd?: string;
@@ -1992,6 +2442,7 @@ export default class HeterogeneousAgentCtr {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     serverUrl: string;
     systemContext?: string;
@@ -1999,12 +2450,14 @@ export default class HeterogeneousAgentCtr {
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
+      assistantMessageId,
       args: extraArgs,
       cwd,
       imageList,
       jwt,
       operationId,
       prompt,
+      resumeFallbackSystemContext,
       resumeSessionId,
       serverUrl,
       systemContext,
@@ -2040,7 +2493,12 @@ export default class HeterogeneousAgentCtr {
       ...(extraArgs ?? []),
     ];
 
-    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+    const stdinPayload = buildHeteroExecStdinPayload({
+      imageList,
+      prompt,
+      resumeFallbackSystemContext,
+      systemContext,
+    });
     const cliScript = resolveCliScript();
     if (!existsSync(cliScript)) {
       return Promise.resolve({
@@ -2054,6 +2512,7 @@ export default class HeterogeneousAgentCtr {
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
       LOBEHUB_JWT: jwt,
+      ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
     };
 

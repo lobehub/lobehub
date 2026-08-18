@@ -4,6 +4,7 @@ import {
   __testing,
   sharedModulePreload,
   sharedOptimizeDeps,
+  sharedRendererDedupe,
   sharedRendererPlugins,
 } from './sharedRendererConfig';
 
@@ -25,6 +26,12 @@ describe('sharedOptimizeDeps', () => {
     expect(sharedOptimizeDeps.include).toEqual(
       expect.arrayContaining(['@lobehub/ui', '@lobehub/ui/base-ui']),
     );
+  });
+});
+
+describe('sharedRendererDedupe', () => {
+  it('keeps editor entrypoints on one shared context instance', () => {
+    expect(sharedRendererDedupe).toContain('@lobehub/editor');
   });
 });
 

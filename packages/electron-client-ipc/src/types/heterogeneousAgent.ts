@@ -2,34 +2,27 @@ import type { HeteroQuotaWindow } from '@lobechat/heterogeneous-agents/quota';
 
 import type { HeterogeneousCliAgentType } from './binary';
 
-export const AMP_CLI_INSTALL_DOCS_URL = 'https://ampcode.com/manual';
-
-export const AMP_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://ampcode.com/install.sh | bash',
-  'brew install ampcode/tap/ampcode',
-] as const;
-
-export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
-  'https://docs.anthropic.com/en/docs/claude-code/setup';
-
-export const CLAUDE_CODE_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://claude.ai/install.sh | bash',
-  'brew install --cask claude-code',
-] as const;
-
-export const CODEX_CLI_INSTALL_DOCS_URL =
-  'https://github.com/openai/codex#installing-and-running-codex-cli';
-
-export const CODEX_CLI_INSTALL_COMMANDS = [
-  'npm install -g @openai/codex',
-  'brew install --cask codex',
-] as const;
-
-export const OPENCODE_CLI_INSTALL_DOCS_URL = 'https://opencode.ai/docs';
-
-export const OPENCODE_CLI_INSTALL_COMMANDS = [
-  'curl -fsSL https://opencode.ai/install | bash',
-] as const;
+export {
+  AMP_CLI_INSTALL_COMMANDS,
+  AMP_CLI_INSTALL_DOCS_URL,
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  CODEBUDDY_CLI_INSTALL_COMMANDS,
+  CODEBUDDY_CLI_INSTALL_DOCS_URL,
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  CURSOR_CLI_INSTALL_COMMANDS,
+  CURSOR_CLI_INSTALL_DOCS_URL,
+  GROK_BUILD_CLI_INSTALL_COMMANDS,
+  GROK_BUILD_CLI_INSTALL_DOCS_URL,
+  OPENCODE_CLI_INSTALL_COMMANDS,
+  OPENCODE_CLI_INSTALL_DOCS_URL,
+  PI_CLI_INSTALL_COMMANDS,
+  PI_CLI_INSTALL_DOCS_URL,
+  QODER_CLI_AUTH_DOCS_URL,
+  QODER_CLI_INSTALL_COMMANDS,
+  QODER_CLI_INSTALL_DOCS_URL,
+} from '@lobechat/heterogeneous-agents';
 
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
@@ -38,6 +31,7 @@ export const HeterogeneousAgentSessionErrorCode = {
   RateLimit: 'rate_limit',
   ResumeCwdMismatch: 'resume_cwd_mismatch',
   ResumeThreadNotFound: 'resume_thread_not_found',
+  WorkingDirectoryNotFound: 'working_directory_not_found',
 } as const;
 
 export type HeterogeneousAgentSessionErrorCode =
@@ -149,5 +143,5 @@ export interface HeterogeneousAgentRuntimeStatus {
   sessionId: string;
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
-  transport: 'claude-sdk' | 'cli-spawn';
+  transport: 'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'trae-acp';
 }

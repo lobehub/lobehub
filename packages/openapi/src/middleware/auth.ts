@@ -13,37 +13,6 @@ import { extractBearerToken } from '@/utils/server/auth';
 // Create context logger namespace
 const log = debug('lobe-hono:auth-middleware');
 
-// API Key cache configuration
-const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-interface ApiKeyCacheEntry {
-  apiKeyId: string;
-  apiKeyName: string;
-  expiresAt: Date | null;
-  timestamp: number;
-  userId: string;
-  workspaceId?: string | null;
-}
-
-// In-memory cache for API Key validation results
-const apiKeyCache = new Map<string, ApiKeyCacheEntry>();
-
-/**
- * Clean up expired cache entries periodically
- */
-const cleanupApiKeyCache = () => {
-  const now = Date.now();
-  for (const [key, entry] of apiKeyCache.entries()) {
-    if (now - entry.timestamp > API_KEY_CACHE_TTL) {
-      apiKeyCache.delete(key);
-      log('Removed expired API Key from cache: %s', key.slice(0, 10) + '...');
-    }
-  }
-};
-
-// Run cache cleanup every 10 minutes
-setInterval(cleanupApiKeyCache, 10 * 60 * 1000);
-
 /**
  * Standard Hono authentication middleware
  * Supports both OIDC tokens and API keys via Bearer token
@@ -69,6 +38,8 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
   let authType: string | null = null;
   let authData: any = null;
   let apiKeyWorkspaceId: string | null | undefined;
+  // capability scopes of the API key (`null` = full-access key)
+  let apiKeyScopes: string[] | null = null;
 
   // Try Bearer token authentication - check format first to determine type
   if (bearerToken) {
@@ -82,100 +53,47 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
       // Try API Key authentication
       log('Bearer token matches API Key format, attempting API Key authentication');
 
-      // Check cache first
-      const cachedEntry = apiKeyCache.get(bearerToken);
-      const now = Date.now();
+      // Always read the current row. Scope edits, disable and revoke are
+      // authorization changes, so a process-local TTL cache would preserve
+      // stale privileges across requests and server instances.
+      try {
+        const db = await getServerDB();
+        const apiKeyRecord = await ApiKeyModel.findByKey(db, bearerToken);
 
-      if (cachedEntry && now - cachedEntry.timestamp < API_KEY_CACHE_TTL) {
-        // Check if cached API Key is expired
-        const isExpired = cachedEntry.expiresAt && new Date() > new Date(cachedEntry.expiresAt);
+        if (apiKeyRecord?.enabled) {
+          const isExpired = apiKeyRecord.expiresAt && new Date() > new Date(apiKeyRecord.expiresAt);
 
-        if (!isExpired) {
-          userId = cachedEntry.userId;
-          authType = 'apikey';
-          authData = { apiKeyId: cachedEntry.apiKeyId, apiKeyName: cachedEntry.apiKeyName };
-          apiKeyWorkspaceId = cachedEntry.workspaceId;
+          if (!isExpired) {
+            userId = apiKeyRecord.userId;
+            authType = 'apikey';
+            authData = { apiKeyId: apiKeyRecord.id, apiKeyName: apiKeyRecord.name };
+            apiKeyWorkspaceId = apiKeyRecord.workspaceId;
+            apiKeyScopes = apiKeyRecord.scopes ?? null;
 
-          log(
-            'API Key authentication successful (from cache), userId: %s, apiKeyId: %d',
-            userId,
-            cachedEntry.apiKeyId,
-          );
-        } else {
-          log('Cached API Key is expired, removing from cache');
-          apiKeyCache.delete(bearerToken);
-        }
-      } else {
-        // Cache miss or expired, query database
-        log('API Key cache miss, querying database');
-
-        try {
-          // Get database instance
-          const db = await getServerDB();
-          log('Database connection established');
-
-          // Find API Key in database
-          const apiKeyModel = new ApiKeyModel(db, ''); // userId is not needed for findByKey
-          log('Searching for API Key in database...');
-          const apiKeyRecord = await apiKeyModel.findByKey(bearerToken);
-
-          log('API Key database query result: %s', apiKeyRecord ? 'found' : 'not found');
-
-          if (apiKeyRecord) {
             log(
-              'API Key record - enabled: %s, userId: %s, expiresAt: %s',
-              apiKeyRecord.enabled,
-              apiKeyRecord.userId,
-              apiKeyRecord.expiresAt,
+              'API Key authentication successful, userId: %s, apiKeyId: %s',
+              userId,
+              apiKeyRecord.id,
             );
-            // Validate API Key is enabled and not expired
-            if (apiKeyRecord.enabled) {
-              const isExpired =
-                apiKeyRecord.expiresAt && new Date() > new Date(apiKeyRecord.expiresAt);
 
-              if (!isExpired) {
-                userId = apiKeyRecord.userId;
-                authType = 'apikey';
-                authData = { apiKeyId: apiKeyRecord.id, apiKeyName: apiKeyRecord.name };
-                apiKeyWorkspaceId = apiKeyRecord.workspaceId;
-
-                // Cache the validated API Key
-                apiKeyCache.set(bearerToken, {
-                  apiKeyId: apiKeyRecord.id,
-                  apiKeyName: apiKeyRecord.name,
-                  expiresAt: apiKeyRecord.expiresAt,
-                  timestamp: now,
-                  userId: apiKeyRecord.userId,
-                  workspaceId: apiKeyRecord.workspaceId,
-                });
-
-                log(
-                  'API Key authentication successful, userId: %s, apiKeyId: %d (cached)',
-                  userId,
-                  apiKeyRecord.id,
-                );
-
-                // Update last used timestamp (fire and forget)
-                const userApiKeyModel = new ApiKeyModel(
-                  db,
-                  apiKeyRecord.userId,
-                  apiKeyRecord.workspaceId ?? undefined,
-                );
-                userApiKeyModel.updateLastUsed(apiKeyRecord.id).catch((err) => {
-                  log('Failed to update API Key last used timestamp: %O', err);
-                });
-              } else {
-                log('API Key is expired');
-              }
-            } else {
-              log('API Key is disabled');
-            }
+            const userApiKeyModel = new ApiKeyModel(
+              db,
+              apiKeyRecord.userId,
+              apiKeyRecord.workspaceId ?? undefined,
+            );
+            void userApiKeyModel.updateLastUsed(apiKeyRecord.id).catch((error) => {
+              log('Failed to update API Key last used timestamp: %O', error);
+            });
           } else {
-            log('API Key not found in database');
+            log('API Key is expired');
           }
-        } catch (error) {
-          log('API Key authentication failed: %O', error);
+        } else if (apiKeyRecord) {
+          log('API Key is disabled');
+        } else {
+          log('API Key not found in database');
         }
+      } catch (error) {
+        log('API Key authentication failed: %O', error);
       }
     } else if (authEnv.ENABLE_OIDC) {
       // Try OIDC authentication
@@ -207,6 +125,8 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
     c.set('authData', authData);
     c.set('authorizationHeader', authorizationHeader);
     c.set('apiKeyWorkspaceId', authType === 'apikey' ? (apiKeyWorkspaceId ?? null) : undefined);
+    // `undefined` = not API-key auth; `null` = full-access key
+    c.set('apiKeyScopes', authType === 'apikey' ? apiKeyScopes : undefined);
 
     log('Authentication successful - userId: %s, authType: %s', userId, authType);
   } else {

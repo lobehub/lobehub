@@ -375,6 +375,30 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('should persist the operation expertise snapshot in runtime state', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+      const expertise = {
+        contentHash: 'stable-hash',
+        domains: [{ id: 'domain-1', lessonIds: ['lesson-1'] }],
+        renderedContext: '<expertise>stable</expertise>',
+        schemaVersion: 1,
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        enableExpertise: true,
+        expertise,
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          enableExpertise: true,
+          expertise,
+        }),
+      );
+    });
+
     it('should restore tools activated in a previous operation into initial state', async () => {
       const taskManifest = { identifier: 'lobe-task' } as any;
       const initialMessages = [

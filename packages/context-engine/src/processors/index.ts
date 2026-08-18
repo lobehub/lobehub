@@ -1,4 +1,8 @@
 // Transformer processors
+export {
+  type ActivationResultTrimConfig,
+  ActivationResultTrimProcessor,
+} from './ActivationResultTrim';
 export { AgentCouncilFlattenProcessor } from './AgentCouncilFlatten';
 export { CompressedGroupRoleTransformProcessor } from './CompressedGroupRoleTransform';
 export { DisabledToolCallFilter } from './DisabledToolCallFilter';

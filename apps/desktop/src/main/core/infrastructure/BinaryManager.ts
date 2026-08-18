@@ -15,6 +15,9 @@ const execPromise = promisify(exec);
 const execFilePromise = promisify(execFile);
 const logger = createLogger('core:BinaryManager');
 
+/** How long an "unavailable" verdict is trusted before it is probed again. */
+const UNAVAILABLE_STATUS_TTL = 60_000;
+
 /**
  * Where on the host a binary resolution came from. Lets the UI tell the user
  * that the system-wide install is in use, vs the version this app downloaded
@@ -220,6 +223,22 @@ export class BinaryManager {
   }
 
   /**
+   * Whether a cached status must be re-detected.
+   *
+   * Only negatives expire. A binary that resolved once stays cached for the
+   * session, but "not available" is frequently a transient verdict — the CLI
+   * printed an upgrade banner that failed validation, or it was installed
+   * after this scan — and caching it forever pins the UI to "not installed"
+   * until the user finds the rescan button.
+   */
+  private isStaleStatus(status: BinaryStatus): boolean {
+    if (status.available) return false;
+
+    const checkedAt = status.lastChecked?.getTime();
+    return checkedAt === undefined || Date.now() - checkedAt >= UNAVAILABLE_STATUS_TTL;
+  }
+
+  /**
    * Detect a single binary. Checks the manager's own cache first so a
    * previously-installed managed copy wins over a stale `which` result.
    * @param name Binary name
@@ -234,8 +253,9 @@ export class BinaryManager {
       };
     }
 
-    if (!force && this.statusCache.has(name)) {
-      return this.statusCache.get(name)!;
+    const cached = this.statusCache.get(name);
+    if (!force && cached && !this.isStaleStatus(cached)) {
+      return cached;
     }
 
     const manageable = Boolean(spec.manage);

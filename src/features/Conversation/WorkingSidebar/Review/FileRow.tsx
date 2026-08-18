@@ -6,6 +6,7 @@ import { ChevronRightIcon } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { type KeyboardEvent, memo, useCallback } from 'react';
 
+import type { ComposerTarget } from '../../types';
 import FileItemBody, { FileItemHeader } from './FileItem';
 import type { ReviewMode } from './useReviewPatches';
 
@@ -56,6 +57,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FileRowProps {
+  composerTarget: ComposerTarget;
   /** Scroll anchor — the tree-nav rail scrolls to `[data-file-key]` on select. */
   dataFileKey?: string;
   /** Target device the repo lives on — undefined for local desktop. */
@@ -81,6 +83,7 @@ interface FileRowProps {
 
 const FileRow = memo<FileRowProps>(
   ({
+    composerTarget,
     dataFileKey,
     deviceId,
     entry,
@@ -148,6 +151,7 @@ const FileRow = memo<FileRowProps>(
             >
               <FileItemBody
                 expanded
+                composerTarget={composerTarget}
                 filePath={entry.filePath}
                 isBinary={entry.isBinary}
                 patch={entry.patch}

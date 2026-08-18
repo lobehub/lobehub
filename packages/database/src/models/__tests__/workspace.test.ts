@@ -272,6 +272,21 @@ describe('WorkspaceModel', () => {
     await expect(model.getSettings(workspaceId)).resolves.toEqual({ keep: true });
   });
 
+  it('defaults API Key member creation to all members and updates it without replacing settings', async () => {
+    const workspaceId = await createWorkspace();
+    const model = new WorkspaceModel(serverDB, ownerId);
+
+    await expect(model.getApiKeyMemberCreation(workspaceId)).resolves.toBe('all_members');
+    await model.updateApiKeyMemberCreation(workspaceId, 'admins_only');
+
+    await expect(model.getApiKeyMemberCreation(workspaceId)).resolves.toBe('admins_only');
+    await expect(model.getSettings(workspaceId)).resolves.toEqual({
+      apiKey: { memberCreation: 'admins_only' },
+      gracePeriodUntil: 123,
+      keep: true,
+    });
+  });
+
   it('finds a workspace by id and by slug, and returns undefined when missing', async () => {
     const workspaceId = await createWorkspace();
     const model = new WorkspaceModel(serverDB, ownerId);

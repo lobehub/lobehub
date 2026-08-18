@@ -12,8 +12,24 @@ import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/serv
 import { BriefService } from '@/server/services/brief';
 
 const briefProcedure = wsCompatProcedure.use(serverDatabase);
-// Briefs are task-domain records. Keep their write gate aligned with task
-// mutations; `task:update` is not an RBAC action and is rejected in workspace mode.
+
+/**
+ * Every brief mutation, gated on the writable-role permission.
+ *
+ * `workspace_viewer` is read-only by product decision, and a brief write is not
+ * the inert per-user bookkeeping it looks like: `resolve`, `resolveManyAsRead`
+ * and `delete` all clear the `hasUnresolvedUrgentByTask` predicate that parks a
+ * task between automated runs (`taskLifecycle`, `heartbeatTick`,
+ * `scheduleTick`). Dismissing a brief therefore lets the agent resume and spend
+ * workspace budget — an action, not a read. `markRead` alone has no lifecycle
+ * effect, but a read-only role gets no brief writes at all; one rule beats a
+ * carve-out nobody will remember.
+ *
+ * `agent:update` is the permission every writable built-in role holds
+ * (`:all` for Owner, `:owner` for Admin/Member) and Viewer does not. It is NOT
+ * `task:update` — that is not an RBAC action at all and is rejected for every
+ * role including Owner, which is what broke this router before (lobehub#17507).
+ */
 const briefWriteProcedure = briefProcedure.use(withScopedPermission('agent:update'));
 
 const idInput = z.object({ id: z.string() });
@@ -136,6 +152,26 @@ export const briefRouter = router({
       });
     }
   }),
+
+  // Day-scoped news digest for the home inbox. The client computes the local
+  // [startAt, endAt) day boundaries — the server has no per-user timezone on
+  // this path, and absolute instants keep the query timezone-agnostic.
+  listNewsByDay: briefProcedure
+    .input(z.object({ endAt: z.coerce.date(), startAt: z.coerce.date() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const service = new BriefService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const { data, hasEarlier } = await service.listNewsByDay(input);
+        return { data, hasEarlier, success: true };
+      } catch (error) {
+        console.error('[brief:listNewsByDay]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list news briefs',
+        });
+      }
+    }),
 
   listUnresolved: briefProcedure.query(async ({ ctx }) => {
     try {

@@ -57,10 +57,18 @@ export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
   autoStart?: boolean;
+  /**
+   * Client-minted ids for the rows this run creates, honoured verbatim by the
+   * server — the gateway counterpart of `sendMessageInServer`'s
+   * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Fresh
+   * sends only; resume / regeneration must not replay them.
+   */
+  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds?: string[];
+  localDeviceId?: string;
   /**
    * Agents the user @-mentioned in this message (multi-mention). The server
    * enables the callAgent tool and injects the mentioned-agents delegation
@@ -70,6 +78,8 @@ export interface ExecAgentTaskParams {
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
+  /** Existing gateway operation this fresh turn atomically supersedes. */
+  replacesOperationId?: string;
   /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
   resumeApproval?: ResumeApprovalParam;
   /**
@@ -126,6 +136,11 @@ export interface InterruptTaskParams {
  */
 export interface CreateClientTaskThreadParams {
   agentId: string;
+  /**
+   * Seed an assistant placeholder for transports that stream into an existing
+   * message (for example a local heterogeneous CLI).
+   */
+  assistantMessage?: { provider: string };
   groupId?: string;
   /** Initial user message content (task instruction) */
   instruction: string;

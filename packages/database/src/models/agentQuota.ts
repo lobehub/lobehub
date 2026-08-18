@@ -316,6 +316,20 @@ export class AgentQuotaSnapshotModel {
       .returning();
   };
 
+  /** Full reading series for an account since an instant, oldest first. */
+  listRange = async (accountId: string, since: Date) =>
+    this.db
+      .select()
+      .from(agentQuotaSnapshots)
+      .where(
+        and(
+          this.mine(),
+          eq(agentQuotaSnapshots.accountId, accountId),
+          gte(agentQuotaSnapshots.capturedAt, since),
+        ),
+      )
+      .orderBy(agentQuotaSnapshots.capturedAt);
+
   /** The most recent reading per (limitType, scopeKey) for an account. */
   latestPerBucket = async (accountId: string) =>
     this.db
@@ -361,6 +375,33 @@ export class AgentQuotaUsageLedgerModel {
         where: sql`${agentQuotaUsageLedger.externalEventId} is not null`,
       })
       .returning();
+
+  /**
+   * Per-turn token + cost rows for an account since an instant, oldest first.
+   * The calendar aggregates these by local day, so the bucketing has to happen
+   * in the client's timezone rather than the database's.
+   */
+  listSince = async (accountId: string, since: Date) =>
+    this.db
+      .select({
+        cacheReadTokens: agentQuotaUsageLedger.cacheReadTokens,
+        cacheWriteTokens: agentQuotaUsageLedger.cacheWriteTokens,
+        costUsd: agentQuotaUsageLedger.costUsd,
+        inputTokens: agentQuotaUsageLedger.inputTokens,
+        model: agentQuotaUsageLedger.model,
+        occurredAt: agentQuotaUsageLedger.occurredAt,
+        outputTokens: agentQuotaUsageLedger.outputTokens,
+        reasoningTokens: agentQuotaUsageLedger.reasoningTokens,
+      })
+      .from(agentQuotaUsageLedger)
+      .where(
+        and(
+          this.mine(),
+          eq(agentQuotaUsageLedger.accountId, accountId),
+          gte(agentQuotaUsageLedger.occurredAt, since),
+        ),
+      )
+      .orderBy(agentQuotaUsageLedger.occurredAt);
 
   /** Total USD spent on an account within [from, to). */
   sumCostUsd = async (accountId: string, from: Date, to: Date): Promise<number> => {

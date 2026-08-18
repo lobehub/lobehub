@@ -1,10 +1,11 @@
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, createModal, toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
+import { t as translate } from 'i18next';
 import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
-import { lazy, memo, Suspense, useMemo, useState } from 'react';
+import type React from 'react';
+import { lazy, memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
   openRenameSkillModal,
@@ -18,6 +19,27 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+
+const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
+  startSkillDrag(event, {
+    category: 'skill',
+    label: item.name,
+    type: item.id,
+  });
+};
+
+const openSkillDetailModal = (skillId: string) =>
+  createModal({
+    content: (
+      <Suspense fallback={<div style={{ height: '100%' }} />}>
+        <AgentSkillDetail skillId={skillId} />
+      </Suspense>
+    ),
+    footer: null,
+    styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
+    title: translate('workingPanel.skills.detail.title', { ns: 'chat' }),
+    width: 960,
+  });
 
 /**
  * Reads user-installed skills (entries in the `agent_skill` table — market
@@ -67,79 +89,89 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
   const updateAgentSkill = useToolStore((s) => s.updateAgentSkill);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const [detailSkillId, setDetailSkillId] = useState<string>();
 
-  const getRowActions = (item: SkillListItem): SkillRowAction[] => {
-    const skill = agentSkills.find((s) => s.identifier === item.id);
-    if (!skill) return [];
+  const getRowActions = useCallback(
+    (item: SkillListItem): SkillRowAction[] => {
+      const skill = agentSkills.find((s) => s.identifier === item.id);
+      if (!skill) return [];
 
-    const actions: SkillRowAction[] = [
-      {
-        icon: EyeIcon,
-        key: 'view',
-        label: t('workingPanel.skills.actions.view'),
-        onClick: () => setDetailSkillId(skill.id),
-        sfSymbol: 'eye',
-      },
-    ];
+      const actions: SkillRowAction[] = [
+        {
+          icon: EyeIcon,
+          key: 'view',
+          label: t('workingPanel.skills.actions.view'),
+          onClick: () => openSkillDetailModal(skill.id),
+          sfSymbol: 'eye',
+        },
+      ];
 
-    // Only user-authored skills carry an editable name; market imports are
-    // pinned to their source manifest.
-    if (skill.source === 'user') {
+      // Only user-authored skills carry an editable name; market imports are
+      // pinned to their source manifest.
+      if (skill.source === 'user') {
+        actions.push({
+          disabled: !canEdit,
+          icon: PencilIcon,
+          key: 'rename',
+          label: t('workingPanel.skills.actions.rename'),
+          onClick: () => {
+            openRenameSkillModal({
+              currentName: skill.name,
+              onSubmit: async (newName) => {
+                try {
+                  await updateAgentSkill({ id: skill.id, name: newName });
+                  return undefined;
+                } catch (error) {
+                  return error instanceof Error
+                    ? error.message
+                    : t('workingPanel.skills.rename.error');
+                }
+              },
+            });
+          },
+          sfSymbol: 'pencil',
+        });
+      }
+
       actions.push({
+        danger: true,
         disabled: !canEdit,
-        icon: PencilIcon,
-        key: 'rename',
-        label: t('workingPanel.skills.actions.rename'),
+        icon: Trash2Icon,
+        key: 'delete',
+        label: t('workingPanel.skills.actions.delete'),
         onClick: () => {
-          openRenameSkillModal({
-            currentName: skill.name,
-            onSubmit: async (newName) => {
+          confirmModal({
+            cancelText: tCommon('cancel'),
+            content: t('workingPanel.skills.delete.userConfirm', { name: skill.name }),
+            okButtonProps: { danger: true },
+            okText: tCommon('delete'),
+            onOk: async () => {
               try {
-                await updateAgentSkill({ id: skill.id, name: newName });
-                return undefined;
+                await deleteAgentSkill(skill.id);
+                toast.success(t('workingPanel.skills.delete.success'));
               } catch (error) {
-                return error instanceof Error
-                  ? error.message
-                  : t('workingPanel.skills.rename.error');
+                toast.error(
+                  error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
+                );
               }
             },
+            title: t('workingPanel.skills.delete.title'),
           });
         },
-        sfSymbol: 'pencil',
+        sfSymbol: 'trash',
       });
-    }
 
-    actions.push({
-      danger: true,
-      disabled: !canEdit,
-      icon: Trash2Icon,
-      key: 'delete',
-      label: t('workingPanel.skills.actions.delete'),
-      onClick: () => {
-        confirmModal({
-          cancelText: tCommon('cancel'),
-          content: t('workingPanel.skills.delete.userConfirm', { name: skill.name }),
-          okButtonProps: { danger: true },
-          okText: tCommon('delete'),
-          onOk: async () => {
-            try {
-              await deleteAgentSkill(skill.id);
-              toast.success(t('workingPanel.skills.delete.success'));
-            } catch (error) {
-              toast.error(
-                error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
-              );
-            }
-          },
-          title: t('workingPanel.skills.delete.title'),
-        });
-      },
-      sfSymbol: 'trash',
-    });
+      return actions;
+    },
+    [agentSkills, canEdit, deleteAgentSkill, t, tCommon, updateAgentSkill],
+  );
 
-    return actions;
-  };
+  const onOpenSkill = useCallback(
+    (item: SkillListItem) => {
+      const skill = agentSkills.find((s) => s.identifier === item.id);
+      if (skill) openSkillDetailModal(skill.id);
+    },
+    [agentSkills],
+  );
 
   if (items.length === 0) return null;
 
@@ -147,56 +179,22 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
     <SkillsList
       getRowActions={getRowActions}
       items={items}
-      onOpenSkill={(item) => {
-        const skill = agentSkills.find((s) => s.identifier === item.id);
-        if (skill) setDetailSkillId(skill.id);
-      }}
-      onSkillDragStart={(item, event) => {
-        startSkillDrag(event, {
-          category: 'skill',
-          label: item.name,
-          type: item.id,
-        });
-      }}
+      onOpenSkill={onOpenSkill}
+      onSkillDragStart={handleSkillDragStart}
     />
   );
 
-  const detailModal = (
-    <ImperativeModal
-      destroyOnHidden
-      footer={null}
-      open={!!detailSkillId}
-      styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-      title={t('workingPanel.skills.detail.title')}
-      width={960}
-      onCancel={() => setDetailSkillId(undefined)}
-    >
-      <Suspense fallback={<div style={{ height: '100%' }} />}>
-        {detailSkillId && <AgentSkillDetail skillId={detailSkillId} />}
-      </Suspense>
-    </ImperativeModal>
-  );
-
-  if (hideHeader)
-    return (
-      <>
-        {list}
-        {detailModal}
-      </>
-    );
+  if (hideHeader) return list;
 
   return (
-    <>
-      <SkillSection
-        sectionHeader={{
-          count: items.length,
-          title: t('workingPanel.skills.section.user'),
-        }}
-      >
-        {list}
-      </SkillSection>
-      {detailModal}
-    </>
+    <SkillSection
+      sectionHeader={{
+        count: items.length,
+        title: t('workingPanel.skills.section.user'),
+      }}
+    >
+      {list}
+    </SkillSection>
   );
 });
 

@@ -345,6 +345,7 @@ export abstract class ComputerRuntime {
         isBackground: args.background || false,
         output: r.output,
         outputFiles,
+        sandboxed: r.sandboxed,
         stderr: r.stderr,
         stdout: r.stdout,
         success: commandSuccess,

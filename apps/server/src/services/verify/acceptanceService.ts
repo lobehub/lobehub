@@ -2,9 +2,12 @@ import { normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceAttachment,
   AcceptanceCheckReviewAction,
+  AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
   AcceptanceSubjectType,
+  GoalStatus,
+  ReviewProposalOutcome,
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
@@ -16,11 +19,13 @@ import debug from 'debug';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReportModel } from '@/database/models/verifyReport';
+import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type {
   AcceptanceItem,
@@ -31,6 +36,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
 import { computeFalseFlags } from './feedbackService';
+import { maybeContinueGoalLoop, syncGoalToolState } from './goalLoop';
 
 const log = debug('lobe-server:verify-acceptance');
 
@@ -530,9 +536,51 @@ export class AcceptanceService {
     const status = statusFromRound(current, Boolean(report));
     if (status !== acceptance.status) {
       await this.acceptanceModel.updateStatus(acceptanceId, status);
+      await this.mirrorGoalStatus(acceptance.subjectType, acceptance.subjectId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }
     return status;
+  };
+
+  /**
+   * Keep a task-carried goal's live phase in lockstep with the acceptance
+   * lifecycle. Only the in-flight phases are mirrored here — the decision
+   * transitions (`achieved` / `paused` / `running` next round / `failed`) are
+   * written by their owning flows (accept / reject / settle / goal loop).
+   * Best-effort: goal state must never break acceptance recompute.
+   */
+  private mirrorGoalStatus = async (
+    subjectType: string,
+    subjectId: string,
+    status: AcceptanceStatus,
+  ): Promise<void> => {
+    if (subjectType !== 'task') return;
+    // `planned` is deliberately NOT mirrored: the plan being confirmed at run
+    // start says nothing about verification running — the round is still
+    // executing, and flipping the goal to `verifying` here would show 验证中
+    // for the whole execution phase (caught by the E2E acceptance run).
+    const mirrored: Partial<Record<AcceptanceStatus, GoalStatus>> = {
+      delivered: 'review',
+      repairing: 'verifying',
+      verifying: 'verifying',
+    };
+    const next = mirrored[status];
+    if (!next) return;
+
+    try {
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', subjectId);
+      if (!goal || goal.status === 'achieved' || goal.status === 'canceled') return;
+      if (goal.status !== next) await goalModel.updateStatus(goal.id, next);
+    } catch (error) {
+      log('mirrorGoalStatus failed (non-fatal): %O', error);
+    }
+  };
+
+  /** Latest round of an aggregate — the row `stampDecision` would write to. */
+  latestRound = async (acceptanceId: string) => {
+    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    return runs.at(-1) ?? null;
   };
 
   /**
@@ -546,9 +594,35 @@ export class AcceptanceService {
     await this.stampDecision(acceptanceId, 'accept', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
 
-    if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
+    if (acceptance.subjectType === 'task') {
+      await this.completeTaskSubject(acceptance.subjectId);
+      await this.syncGoalStateOnAccept(acceptance.subjectId);
+    }
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /** Flip a goal (and its origin card) to the terminal "achieved" state. Best-effort. */
+  private syncGoalStateOnAccept = async (subjectId: string): Promise<void> => {
+    try {
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      const task = await taskModel.findById(subjectId);
+      if (!task) return;
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', task.id);
+      if (!goal) return;
+
+      await goalModel.updateStatus(goal.id, 'achieved');
+      await syncGoalToolState({
+        db: this.db,
+        state: { phase: 'done', roundsRun: task.totalTopics || 0 },
+        task,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    } catch (error) {
+      log('syncGoalStateOnAccept failed (non-fatal): %O', error);
+    }
   };
 
   /**
@@ -557,14 +631,55 @@ export class AcceptanceService {
    * picks it up. (Spawning the repair run itself is the runtime's job — for
    * agent-bound rounds via the repair pipeline, for ingested rounds via the
    * next `lh verify ingest-report`.)
+   *
+   * Goal tasks are the exception: a reject IS the "run another round" gesture,
+   * so the outer loop spawns the next task topic right here — the comment
+   * reaches the new round through the prompt builder, which reads it off this
+   * round's decision detail. Budgets still apply; when they ran out the reject
+   * only stamps state (the UI asks the user to raise the budget first).
    */
   reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
-    await this.requireDecidableAcceptance(acceptanceId);
+    const acceptance = await this.requireDecidableAcceptance(acceptanceId);
 
     await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
 
+    if (acceptance.subjectType === 'task') await this.spawnGoalRoundOnReject(acceptance.subjectId);
+
     return (await this.acceptanceModel.findById(acceptanceId))!;
+  };
+
+  /**
+   * If the rejected subject is a goal task with budget left, start the next
+   * round (fresh topic). Best-effort: any failure leaves the acceptance in
+   * `rejected` — exactly where a non-goal reject would leave it.
+   */
+  private spawnGoalRoundOnReject = async (subjectId: string): Promise<void> => {
+    try {
+      const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
+      const task = await taskModel.findById(subjectId);
+      if (!task) return;
+
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', task.id);
+      if (!goal) return;
+
+      const outcome = await maybeContinueGoalLoop({
+        db: this.db,
+        goal,
+        task,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      // `continued` already flipped the goal to `running` inside the loop; a
+      // budget-blocked or failed spawn leaves the rejected goal parked on the
+      // user (raise the budget / retry), which is `paused` in the goal
+      // vocabulary.
+      if (outcome !== 'continued') await goalModel.updateStatus(goal.id, 'paused');
+      log('reject on goal task %s → loop outcome: %s', task.identifier, outcome);
+    } catch (error) {
+      log('spawnGoalRoundOnReject failed (non-fatal): %O', error);
+    }
   };
 
   /**
@@ -583,6 +698,10 @@ export class AcceptanceService {
       checkItemIds: string[];
       comment?: string;
       fileIds?: string[];
+      /** Recorded when this decision answered a model proposal. */
+      proposal?: Omit<ReviewProposalOutcome, 'respondedAt'>;
+      /** Which of the three jobs a reject is doing; absent means unclassified. */
+      rejectIntent?: AcceptanceRejectIntent;
     },
   ): Promise<{ resultIds: string[] }> => {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
@@ -639,19 +758,51 @@ export class AcceptanceService {
       ...(input.comment ? { comment: input.comment } : {}),
       ...(input.annotations?.length ? { annotations: input.annotations } : {}),
       ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
+      // Only meaningful on a reject — an accept has no intent to classify.
+      ...(input.rejectIntent && input.action === 'reject'
+        ? { rejectIntent: input.rejectIntent }
+        : {}),
+      ...(input.proposal
+        ? { proposal: { ...input.proposal, respondedAt: new Date().toISOString() } }
+        : {}),
     };
 
-    await Promise.all(
-      [...targets.values()].map((result) => {
-        const { isFalsePositive, isFalseNegative } = computeFalseFlags(result.verdict, decision);
-        return this.resultModel.update(result.id, {
-          isFalseNegative,
-          isFalsePositive,
-          userDecision: decision,
-          userDecisionDetail: detail,
+    // One transaction for the decision AND the proposal's answer. Written
+    // separately, a failing second write left the check rejected while its
+    // prediction stayed unanswered — and the decision then HIDES the proposal,
+    // so nothing could ever reconcile the pair again. Agreement analysis reads
+    // those two rows as a matched set; a durable split is worse than failing.
+    await this.db.transaction(async (tx) => {
+      const resultModel = new VerifyCheckResultModel(tx, this.userId, this.workspaceId);
+
+      await Promise.all(
+        [...targets.values()].map((result) => {
+          const { isFalsePositive, isFalseNegative } = computeFalseFlags(result.verdict, decision);
+          return resultModel.update(result.id, {
+            isFalseNegative,
+            isFalsePositive,
+            userDecision: decision,
+            userDecisionDetail: detail,
+          });
+        }),
+      );
+
+      if (input.proposal) {
+        const answered = await new VerifyReviewPredictionModel(
+          tx,
+          this.userId,
+          this.workspaceId,
+        ).adjudicate(input.proposal.predictionId, {
+          adjudication: input.proposal.adjudication,
+          edit: input.proposal.edit,
         });
-      }),
-    );
+        // A zero-row update means the id was wrong or not ours; committing the
+        // decision alone would produce exactly the split this transaction exists
+        // to prevent.
+        if (!answered) throw new Error(`Proposal "${input.proposal.predictionId}" not found`);
+      }
+    });
+
     log('acceptance %s: %d check result(s) marked %s', acceptanceId, targets.size, decision);
     return { resultIds: [...targets.keys()] };
   };

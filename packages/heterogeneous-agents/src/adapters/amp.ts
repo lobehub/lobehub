@@ -1,3 +1,4 @@
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
 import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
@@ -15,7 +16,8 @@ import type {
 } from '../types';
 
 const AMP_IDENTIFIER = 'amp';
-const AMP_DOCS_URL = 'https://ampcode.com/manual';
+const AMP_DOCS_URL = getHeterogeneousAgentConfigOrThrow(AMP_IDENTIFIER).auth.docsUrl;
+const AMP_MISSING_RESULT_MESSAGE = 'Amp stream ended without the required terminal `result` event.';
 
 interface AmpUsage {
   cache_creation_input_tokens?: number;
@@ -225,6 +227,33 @@ export class AmpAdapter implements AgentEventAdapter {
 
   flush(): HeterogeneousAgentEvent[] {
     return this.drainPendingToolEndEvents();
+  }
+
+  validateCompletion(): HeterogeneousAgentEvent[] {
+    if (this.terminalEmitted) return [];
+    this.terminalEmitted = true;
+
+    const events = this.drainPendingToolEndEvents();
+    if (this.started) {
+      events.push(this.makeEvent('stream_end', {}));
+      events.push(this.makeEvent('visible_output_end', {}));
+    }
+    events.push(
+      this.makeEvent('error', {
+        agentType: AMP_IDENTIFIER,
+        clearEchoedContent: true,
+        code: 'protocol_error',
+        details: {
+          expectedEventType: 'result',
+          ...(this.sessionId ? { sessionId: this.sessionId } : {}),
+        },
+        error: AMP_MISSING_RESULT_MESSAGE,
+        message: AMP_MISSING_RESULT_MESSAGE,
+      } satisfies HeterogeneousTerminalErrorData),
+    );
+    this.clearRunState();
+
+    return events;
   }
 
   private captureSessionId(raw: Record<string, unknown>): void {

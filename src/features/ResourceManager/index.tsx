@@ -2,14 +2,14 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 
 import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { documentSelectors } from '@/store/file/slices/document/selectors';
@@ -57,7 +57,15 @@ export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
  *
  * Business component, no need be reusable.
  */
-const ResourceManager = memo(() => {
+interface ResourceManagerProps {
+  /**
+   * Replaces the Explorer as the base content (used by the resource home
+   * dashboard) while keeping the editor overlays, upload dock and drag zone.
+   */
+  content?: ReactNode;
+}
+
+const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
   const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
   const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
@@ -143,8 +151,9 @@ const ResourceManager = memo(() => {
         onUploadFiles={handleUploadFiles}
       >
         <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
-          {/* Explorer is always rendered to preserve its state */}
-          <Explorer />
+          {/* Explorer stays mounted to preserve its state, unless the caller
+              swaps in its own base content (resource home dashboard) */}
+          {content ?? <Explorer />}
 
           {/* Editor overlay */}
           {mode === 'editor' && (

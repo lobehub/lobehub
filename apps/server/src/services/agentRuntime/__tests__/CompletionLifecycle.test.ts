@@ -7,7 +7,7 @@ import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
-import { hookDispatcher } from '../hooks';
+import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
 import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
@@ -524,6 +524,29 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
         type: ChatErrorType.FreePlanLimit,
       }),
     });
+  });
+
+  it('rethrows critical webhook failures after terminal persistence', async () => {
+    const lifecycle = buildLifecycle();
+    const persistCompletion = vi
+      .spyOn(lifecycle as any, 'persistCompletion')
+      .mockResolvedValue(undefined);
+    const dispatch = vi
+      .spyOn(hookDispatcher, 'dispatch')
+      .mockRejectedValue(
+        new CriticalHookDeliveryError('task-on-complete', new Error('qstash down')),
+      );
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await expect(
+      lifecycle.dispatchHooks(
+        'op-1',
+        { metadata: { _hooks: [] }, status: 'interrupted' },
+        'interrupted',
+      ),
+    ).rejects.toThrow('Critical webhook delivery failed: task-on-complete');
+
+    expect(persistCompletion).toHaveBeenCalledBefore(dispatch);
   });
 });
 
@@ -1047,6 +1070,48 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
     expect(emission.payload).toMatchObject({
       anchorMessageId: 'msg-assistant',
       assistantMessageId: 'msg-assistant',
+    });
+  });
+
+  it('hydrates a persisted self-reflection marker when terminal state metadata lost it', async () => {
+    const emitSpy = vi
+      .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+      .mockResolvedValue(undefined as any);
+    const lifecycle = buildLifecycle();
+    (lifecycle as any).agentOperationModel = {
+      findById: vi.fn().mockResolvedValue({
+        metadata: {
+          agentSignal: {
+            agentId: 'agent-1',
+            kind: 'self-reflection',
+            sourceId: 'reflection-source-1',
+            topicId: 'tpc-1',
+          },
+        },
+      }),
+    };
+
+    await lifecycle.emitSignalEvents(
+      'op-1',
+      {
+        messages: [{ content: 'review complete', id: 'msg-assistant', role: 'assistant' }],
+        metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+        stepCount: 1,
+      },
+      'done',
+    );
+
+    const [emission] = emitSpy.mock.calls[0];
+    expect(emission.payload).toMatchObject({
+      selfIteration: {
+        marker: {
+          agentId: 'agent-1',
+          kind: 'self-reflection',
+          sourceId: 'reflection-source-1',
+          topicId: 'tpc-1',
+        },
+        userId: 'user-1',
+      },
     });
   });
 });

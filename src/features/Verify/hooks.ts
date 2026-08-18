@@ -25,8 +25,21 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
   revalidateOnReconnect: true,
 } as const;
 
-export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) =>
-  acceptance ? 0 : 2000;
+/**
+ * Poll until the aggregate exists AND stops moving.
+ *
+ * Discovery was the only case handled before, so a task page left open during
+ * a goal loop kept rendering whatever state it first saw — "awaiting
+ * verification" straight through verifying, delivery and acceptance — until a
+ * focus or remount happened to refetch.
+ */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed']);
+
+export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
+  if (!acceptance) return 2000;
+  const status = (acceptance as { status?: string }).status;
+  return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
+};
 
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>
@@ -79,6 +92,27 @@ export const useAcceptanceList = (enabled: boolean) =>
     enabled ? verifyKeys.acceptances() : null,
     () => verifyService.listAcceptances(),
     VERIFY_REPORT_SWR_CONFIG,
+  );
+
+/**
+ * Acceptance status for a known subject set — one read for a whole list.
+ *
+ * Not `useAcceptanceList`: that feed is capped at the newest rows across every
+ * subject type, so any subject pushed past the cap would read as having no
+ * acceptance at all. Revalidates on focus like the bundle, because a delivery
+ * that lands while the tab sits open has to show up without a reload.
+ */
+export const useAcceptanceStatuses = (
+  subjectType: AcceptanceSubjectType,
+  subjectIds: string[],
+  enabled = true,
+) =>
+  useClientDataSWR(
+    enabled && subjectIds.length > 0
+      ? verifyKeys.acceptanceStatuses(subjectType, subjectIds)
+      : null,
+    () => verifyService.listAcceptanceStatuses(subjectType, subjectIds),
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
   );
 
 /**

@@ -14,16 +14,16 @@ import { useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import { useKeepSidebarGroupsListed } from '@/features/HomeSidebar/Body/Agent/List/useAgentList';
+import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
+import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
+import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
-import { useKeepSidebarGroupsListed } from '@/routes/(main)/home/_layout/Body/Agent/List/useAgentList';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import { useSidebarItemVisibility } from '@/routes/(main)/home/_layout/Body/Agent/useSidebarItemVisibility';
-import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -656,12 +656,10 @@ AgentViewAllPage.displayName = 'AgentViewAllPage';
 // blank-agent creation, and that modal lives in AgentModalContext — normally
 // mounted by the Home layout, which this standalone route is NOT inside. Wrap
 // the page so the "+" menu opens the same create wizard as the sidebar.
-const AgentViewAllPageWithModals = memo(() => (
+const AgentViewAllPageWithModals = () => (
   <AgentModalProvider>
     <AgentViewAllPage />
   </AgentModalProvider>
-));
-
-AgentViewAllPageWithModals.displayName = 'AgentViewAllPageWithModals';
+);
 
 export default AgentViewAllPageWithModals;

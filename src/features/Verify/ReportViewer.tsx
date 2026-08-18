@@ -13,12 +13,13 @@ import type {
   VerifyVerdict,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
-import { Block, Center, Drawer, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
+import { Button, Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
+  AudioLines,
   Bot,
   CalendarClock,
   Check,
@@ -46,6 +47,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import AudioPlayer from '@/features/AudioPlayer';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
 
 import {
@@ -922,9 +924,14 @@ const SURFACE_ICON: Record<VerifySurface, typeof Check> = {
 };
 
 const imageEvidenceTypes = new Set(['gif', 'screenshot']);
-/** Visual media that renders/plays inline in the check body, no click-to-open. */
+/** Player media — a `<video>`/`<audio>` element, not an image box. */
+const playerEvidenceTypes = new Set(['audio', 'video']);
+/** Media that renders/plays inline in the check body, no click-to-open. */
 const isInlineVisualEvidence = (evidence: VerifyEvidenceWithUrl) =>
-  Boolean(evidence.fileUrl && (imageEvidenceTypes.has(evidence.type) || evidence.type === 'video'));
+  Boolean(
+    evidence.fileUrl &&
+    (imageEvidenceTypes.has(evidence.type) || playerEvidenceTypes.has(evidence.type)),
+  );
 
 /**
  * Evidence with a directly renderable payload in the check body, no
@@ -935,16 +942,23 @@ const isInlineVisualEvidence = (evidence: VerifyEvidenceWithUrl) =>
 const isInlineEvidence = (evidence: VerifyEvidenceWithUrl) =>
   Boolean(evidence.content) || isInlineVisualEvidence(evidence);
 
-/** Coarse attachment bucket for the type marker: image / video / everything else. */
-type EvidenceCategory = 'file' | 'image' | 'video';
+/** Coarse attachment bucket for the type marker: image / video / audio / everything else. */
+type EvidenceCategory = 'audio' | 'file' | 'image' | 'video';
 const evidenceCategory = (type: VerifyEvidenceType): EvidenceCategory =>
-  type === 'video' ? 'video' : imageEvidenceTypes.has(type) ? 'image' : 'file';
+  type === 'video'
+    ? 'video'
+    : type === 'audio'
+      ? 'audio'
+      : imageEvidenceTypes.has(type)
+        ? 'image'
+        : 'file';
 const CATEGORY_ICON: Record<EvidenceCategory, typeof FileText> = {
+  audio: AudioLines,
   file: FileText,
   image: ImageIcon,
   video: Video,
 };
-const CATEGORY_ORDER: EvidenceCategory[] = ['image', 'video', 'file'];
+const CATEGORY_ORDER: EvidenceCategory[] = ['image', 'video', 'audio', 'file'];
 // `errored` is terminal too (the verifier couldn't run) — stop polling and don't
 // treat it as a live/in-progress status.
 const terminalRunStatuses = new Set(['delivered', 'errored', 'failed', 'passed']);
@@ -1250,6 +1264,16 @@ const EvidenceItem = memo<{
         </Flexbox>
       ) : e.fileUrl && e.type === 'video' ? (
         <video controls className={styles.evidenceVideo} src={e.fileUrl} />
+      ) : e.fileUrl && e.type === 'audio' ? (
+        // The same waveform player the conversation renders — one audio dialect
+        // across the product, plus the download the reviewer needs to keep the
+        // deliverable.
+        <AudioPlayer
+          fullWidth
+          alt={e.description ?? label}
+          downloadFileName={e.fileName ?? 'audio'}
+          url={e.fileUrl}
+        />
       ) : e.fileUrl ? (
         <div className={styles.evidenceDoc}>
           <DocumentViewer
@@ -1307,21 +1331,17 @@ const EvidenceDrawer = memo<{
   title: string;
 }>(({ evidence, onClose, open, title }) => (
   <Drawer
-    destroyOnHidden
     containerMaxWidth={'100%'}
     open={open}
     placement={'right'}
     title={title}
     width={'min(1120px, calc(100vw - 48px))'}
     styles={{
-      body: {
-        height: '100%',
-        padding: 0,
-      },
       bodyContent: {
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
+        padding: 0,
       },
     }}
     onClose={onClose}
@@ -1387,7 +1407,7 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
       acc[evidenceCategory(e.type)] += 1;
       return acc;
     },
-    { file: 0, image: 0, video: 0 } as Record<EvidenceCategory, number>,
+    { audio: 0, file: 0, image: 0, video: 0 } as Record<EvidenceCategory, number>,
   );
   // `required` lives on the result when there is one, on the plan item otherwise
   // — a check that never ran still knows whether it was optional.

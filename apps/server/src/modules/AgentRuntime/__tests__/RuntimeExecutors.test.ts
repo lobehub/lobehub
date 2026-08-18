@@ -2,6 +2,7 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
+import type * as ModelBank from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
@@ -78,10 +79,16 @@ vi.mock('@lobechat/model-runtime', async () => {
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  // Same treatment: the reasoning-config merge is pure, and the replay gate
+  // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
+  // implementation instead of a drifting stub.
+  const { resolveEffectiveReasoningChatConfig } =
+    await import('../../../../../../packages/model-runtime/src/utils/modelExtendParams');
   return {
     // The executor resolves extend params via this helper; an empty result keeps
     // the runtime payload unchanged, matching this suite's pre-existing behavior.
     applyModelExtendParams: vi.fn(() => ({})),
+    resolveEffectiveReasoningChatConfig,
     consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
     // `llmErrorClassification.ts` reads these at module-load time; an empty
     // spec map is fine here because this suite never exercises the runtime
@@ -107,7 +114,11 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 }));
 
 // model-bank is a TypeScript source file that cannot be dynamically imported in vitest
-vi.mock('model-bank', () => ({
+vi.mock('model-bank', async (importOriginal) => ({
+  // serverCallLlmContextHints gates the model-instance reasoning-config DB
+  // read on the real MODEL_REASONING_EXTEND_PARAMS list
+  MODEL_REASONING_EXTEND_PARAMS: (await importOriginal<typeof ModelBank>())
+    .MODEL_REASONING_EXTEND_PARAMS,
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
   ModelProvider: {
     LobeHub: 'lobehub',
@@ -2358,6 +2369,47 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(chatMessages.at(-1)).toEqual(
           expect.objectContaining({ content: 'Hello', role: 'user' }),
         );
+      });
+
+      it('should forward additional contexts without leaking model parameters', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const additionalContexts = [
+          {
+            content: { text: 'Inspect the repository.', type: 'text' as const },
+            placement: 'stable_prefix' as const,
+            wrapper: { tag: 'graph_node_context' },
+          },
+          {
+            content: { text: 'Continue.', type: 'text' as const },
+            placement: 'virtual_tail' as const,
+            wrapper: {
+              attributes: { stage: 'inspection' },
+              tag: 'graph_runtime_guidance',
+            },
+          },
+        ];
+
+        await createRuntimeExecutors(ctxWithConfig).call_llm!(
+          {
+            payload: {
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'openai',
+              additionalContexts,
+            },
+            type: 'call_llm',
+          },
+          createMockState(),
+        );
+
+        expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ additionalContexts }));
+        const modelPayload = mockChat.mock.calls[0][0];
+        expect(modelPayload).not.toHaveProperty('additionalContexts');
+        expect(JSON.stringify(modelPayload.messages)).toContain('<graph_node_context>');
+        expect(JSON.stringify(modelPayload.messages)).toContain('<graph_runtime_guidance');
       });
 
       it('should pass model knowledge cutoff into serverMessagesEngine', async () => {

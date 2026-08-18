@@ -15,9 +15,15 @@ const TabLocationReporter = () => {
 
   useEffect(() => {
     if (!tabId) return;
-    // `<Activity mode="hidden">` tears down effects in hidden trees, so only the
-    // active tab reaches here; the active-id check is belt-and-braces.
-    if (useElectronStore.getState().activeTabId !== tabId) return;
+    // `<Activity mode="hidden">` tears down effects in hidden trees. In split view both
+    // pane routers stay visible, so either one may report navigation even when keyboard
+    // focus currently belongs to the other pane.
+    const { activeTabId, splitView } = useElectronStore.getState();
+    const isVisible =
+      activeTabId === tabId ||
+      splitView?.primaryTabId === tabId ||
+      splitView?.secondaryTabId === tabId;
+    if (!isVisible) return;
 
     // A hidden tree also loses `RouterProvider`'s subscription, and remounting it
     // only reconnects — it never replays what was missed. So a background

@@ -17,6 +17,10 @@ import {
 } from '@/services/message/cache';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
+import {
+  isLocalOnlyMessage,
+  mergeLocalMessagesByCreatedAt,
+} from '@/store/chat/utils/localMessages';
 import { type StoreSetter } from '@/store/types';
 
 import { type MessageMapKeyInput } from '../../../utils/messageMapKey';
@@ -52,6 +56,10 @@ export class MessageQueryActionImpl {
     const threadId =
       context?.threadId !== undefined ? context.threadId : this.#get().activeThreadId;
 
+    // A client-minted topic with no server row yet (first-send window): a
+    // revalidation would return an empty list and wipe the optimistic messages.
+    if (topicId && this.#get().creatingTopicIds.includes(topicId)) return;
+
     // Topic navigation is a soft ensure: a completed prefetch is already the
     // server snapshot the destination hook needs, while an in-flight prefetch
     // will be shared by the coordinator when the hook mounts.
@@ -78,6 +86,9 @@ export class MessageQueryActionImpl {
 
   prefetchMessages = async (context: ConversationContext): Promise<void> => {
     if (!context.agentId || !context.topicId) return;
+    // A client-minted topic with no server row yet (first-send window) would
+    // prefetch an empty list and clobber the optimistic messages on screen.
+    if (this.#get().creatingTopicIds.includes(context.topicId)) return;
 
     const messagesKey = getMessageListCacheIdentity(context);
     if (operationSelectors.isAgentRuntimeRunningByContext(context)(this.#get())) return;
@@ -157,7 +168,7 @@ export class MessageQueryActionImpl {
     }
     // Priority 2: Get full context from operation if operationId is provided (deprecated)
     else if (params?.operationId) {
-      ctx = this.#get().internal_getConversationContext(params);
+      ctx = this.#get().internal_getConversationContext({ operationId: params.operationId });
     }
     // Priority 3: Fallback to global state
     else {
@@ -192,7 +203,31 @@ export class MessageQueryActionImpl {
     // link while the tool row survives, which would orphan the tool bubble (see
     // reconcileAssistantToolLinks). Keeps dbMessagesMap (SoT) consistent for
     // optimistic updates, not just the parsed display.
-    const reconciled = reconcileAssistantToolLinks(incoming);
+    const persistedIncoming = incoming.filter((message) => !isLocalOnlyMessage(message));
+    const persistedIds = new Set(persistedIncoming.map((message) => message.id));
+    const currentMessages = this.#get().dbMessagesMap[messagesKey] ?? [];
+    const voiceMessageUploadMap = this.#get().voiceMessageUploadMap;
+    const activeLocalMessagesById = new Map<string, UIChatMessage>();
+
+    // Server snapshots never contain the local voice placeholder. Keep it in the in-memory
+    // transcript only while the owning upload transaction is still active. Consider both the
+    // existing ChatStore bucket and the incoming ConversationStore snapshot: the latter can carry
+    // the placeholder after another server replacement briefly removed it from ChatStore.
+    for (const message of [...currentMessages, ...incoming]) {
+      if (
+        isLocalOnlyMessage(message) &&
+        voiceMessageUploadMap[message.id] &&
+        !persistedIds.has(message.id) &&
+        !activeLocalMessagesById.has(message.id)
+      ) {
+        activeLocalMessagesById.set(message.id, message);
+      }
+    }
+
+    const persistedReconciled = reconcileAssistantToolLinks(persistedIncoming);
+    const reconciled = reconcileAssistantToolLinks(
+      mergeLocalMessagesByCreatedAt(persistedReconciled, [...activeLocalMessagesById.values()]),
+    );
 
     // Get raw messages from dbMessagesMap and apply reducer
     const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };
@@ -210,8 +245,10 @@ export class MessageQueryActionImpl {
     // Fetch echoes never write through: SWR already holds that exact value, and
     // at mount the echo is the STALE cached list racing the in-flight
     // revalidation (see `source` doc above).
+    // Local-only rows can contain blob: URLs and have no durable retry owner after reload. Never
+    // write them into SWR/IndexedDB; only the server-backed portion belongs in the canonical cache.
     if (params?.source !== 'fetch') {
-      this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
+      this.#writeThroughMessageCache(ctx, messagesKey, persistedReconciled, params?.action);
     }
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;

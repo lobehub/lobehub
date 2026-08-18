@@ -55,6 +55,15 @@ export class FlatListBuilder {
     // Build the active path by traversing from root
     this.buildFlatListRecursive(rootParentId, flatList, processedIds, messages);
 
+    // Assistant groups must be assembled before ordering because their members
+    // are discovered through recursive tool-result chains. That traversal is
+    // depth-first: when parallel tool results continue under different agents,
+    // it can finish a newer user subtree and then append an older sibling subtree,
+    // leaving a stale assistant response at the request tail. A stable final sort
+    // restores the persisted chronology without changing group membership or the
+    // order of nodes with identical timestamps.
+    flatList.sort((first, second) => first.createdAt - second.createdAt);
+
     return flatList;
   }
 
@@ -177,6 +186,15 @@ export class FlatListBuilder {
 
       const message = this.messageMap.get(childId);
       if (!message) continue;
+
+      // Internal dispatch envelopes remain in the context tree so the target
+      // assistant keeps its parent chain, but they are not user-authored turns
+      // and therefore do not render as standalone bubbles.
+      if (message.metadata?.agentDispatch?.visibility === 'internal') {
+        processedIds.add(message.id);
+        this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+        continue;
+      }
 
       // Priority 1: Compare message group
       const messageGroup = message.groupId ? this.messageGroupMap.get(message.groupId) : undefined;
@@ -304,9 +322,7 @@ export class FlatListBuilder {
       const childMessages = this.childrenMap.get(message.id) ?? [];
       // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
       // a tool child is inline data of its assistant, never a sibling branch.
-      const nonToolChildMessages = childMessages.filter(
-        (childId) => this.messageMap.get(childId)?.role !== 'tool',
-      );
+      const nonToolChildMessages = this.branchResolver.getMetadataBranchIds(childMessages);
       if (this.isCompareMode(message) && childMessages.length > 1) {
         // Add user message
         flatList.push(message);
@@ -530,6 +546,10 @@ export class FlatListBuilder {
     allMessages: Message[],
   ): void {
     const lastAssistant = assistantChain.at(-1);
+    if (lastAssistant) {
+      this.suppressInactiveExplicitContinuations(lastAssistant, allToolMessages, processedIds);
+    }
+
     const parentIds = [
       ...(lastAssistant ? [lastAssistant.id] : []),
       ...allToolMessages.map((toolMessage) => toolMessage.id),
@@ -551,6 +571,44 @@ export class FlatListBuilder {
         processedIds,
         allMessages,
       );
+    }
+  }
+
+  /**
+   * Keep AssistantGroup draining in the same canonical branch space as the UI.
+   * An explicit index selects a direct non-tool child; tool-hosted continuations
+   * belong to older/inactive branches and must not be appended to the model
+   * history. For an optimistic index at `branchCount`, every existing
+   * continuation stays hidden until the newly created branch is persisted.
+   */
+  private suppressInactiveExplicitContinuations(
+    lastAssistant: Message,
+    allToolMessages: Message[],
+    processedIds: Set<string>,
+  ): void {
+    const directChildIds = this.childrenMap.get(lastAssistant.id) ?? [];
+    const metadataBranchIds = this.branchResolver.getMetadataBranchIds(directChildIds);
+    const activeBranchIndex = (lastAssistant.metadata as any)?.activeBranchIndex;
+    if (
+      typeof activeBranchIndex !== 'number' ||
+      activeBranchIndex < 0 ||
+      activeBranchIndex > metadataBranchIds.length
+    ) {
+      return;
+    }
+
+    const activeBranchId = metadataBranchIds[activeBranchIndex];
+    const tailToolIds = allToolMessages
+      .filter((toolMessage) => toolMessage.parentId === lastAssistant.id)
+      .map((toolMessage) => toolMessage.id);
+    const continuationParentIds = [lastAssistant.id, ...tailToolIds];
+
+    for (const parentId of continuationParentIds) {
+      for (const childId of this.childrenMap.get(parentId) ?? []) {
+        if (!processedIds.has(childId) && childId !== activeBranchId) {
+          processedIds.add(childId);
+        }
+      }
     }
   }
 

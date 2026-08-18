@@ -49,6 +49,18 @@ export interface ChatTopicState {
    */
   allTopicsDrawerOpen: boolean;
   creatingTopic: boolean;
+  /**
+   * Ids of client-minted topics whose server row does not exist yet (the
+   * first-send window between minting the id and the server confirming the
+   * topic). State rather than a private field because consumers must react to
+   * it: `#reconcileFetchedTopics` keeps these rows across refetches, and the
+   * message-fetch gate skips fetching a topic that cannot return rows yet —
+   * an early fetch would come back empty and wipe the optimistic messages.
+   *
+   * Registered on an `optimistic` addTopic dispatch; cleared by
+   * `replaceTopicId` (server confirmed) or `deleteTopic` (rollback).
+   */
+  creatingTopicIds: string[];
   inSearchingMode?: boolean;
   isSearchingTopic: boolean;
   searchTopics: ChatTopic[];
@@ -57,6 +69,14 @@ export interface ChatTopicState {
    * Contains items, total count, pagination state, and loading states
    */
   topicDataMap: Record<string, TopicData>;
+  /**
+   * Per-id topic detail cache, filled by `useFetchTopicDetail` when the active
+   * topic is missing from the loaded list bucket — e.g. an archived
+   * (`completed`) topic that the sidebar fetch excludes via `excludeStatuses`.
+   * `currentActiveTopic` / `getTopicById` read it as a fallback so the header
+   * keeps the real title instead of degrading to the "new topic" placeholder.
+   */
+  topicDetailMap: Record<string, ChatTopic>;
   /**
    * Internal ref-count for topic loading owners. A topic can be loading because
    * the agent is running and because title-summary is streaming at the same time.
@@ -70,11 +90,13 @@ export interface ChatTopicState {
 export const initialTopicState: ChatTopicState = {
   activeTopicId: null as any,
   agentTopicsViewMap: {},
+  creatingTopicIds: [],
   allTopicsDrawerOpen: false,
   creatingTopic: false,
   isSearchingTopic: false,
   searchTopics: [],
   topicDataMap: {},
+  topicDetailMap: {},
   topicLoadingIdCounts: {},
   topicLoadingIds: [],
   topicSearchKeywords: '',

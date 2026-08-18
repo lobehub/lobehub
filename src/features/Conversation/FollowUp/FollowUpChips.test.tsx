@@ -24,10 +24,7 @@ const CHILD_MSG = 'msg-1-child-answer';
 const KEY = 'main_agent-a_topic-1';
 const OTHER_KEY = 'main_agent-a_topic-2';
 
-const updateInputMessageMock = vi.fn();
-const editorSetDocumentMock = vi.fn();
-const editorFocusMock = vi.fn();
-const editorMock = { focus: editorFocusMock, setDocument: editorSetDocumentMock };
+const fillInputMessageMock = vi.fn();
 let isGeneratingMock = false;
 let displayMessagesMock: Array<{ children?: Array<{ id: string }>; id: string }> = [];
 
@@ -39,19 +36,16 @@ vi.mock('@/features/Conversation/store', () => ({
   useConversationStore: (selector: any) =>
     selector({
       displayMessages: displayMessagesMock,
-      editor: editorMock,
+      fillInputMessage: fillInputMessageMock,
       operationState: {
         getMessageOperationState: () => ({ isGenerating: isGeneratingMock }),
       },
-      updateInputMessage: updateInputMessageMock,
     }),
 }));
 
 describe('<FollowUpChips />', () => {
   beforeEach(() => {
-    updateInputMessageMock.mockReset();
-    editorSetDocumentMock.mockReset();
-    editorFocusMock.mockReset();
+    fillInputMessageMock.mockReset();
     isGeneratingMock = false;
     displayMessagesMock = [{ id: MSG }];
     useFollowUpActionStore.getState().reset();
@@ -162,9 +156,7 @@ describe('<FollowUpChips />', () => {
     });
     render(<FollowUpChips conversationKey={KEY} messageId={MSG} />);
     fireEvent.click(screen.getByRole('button', { name: 'go' }));
-    expect(updateInputMessageMock).toHaveBeenCalledWith('go ahead');
-    expect(editorSetDocumentMock).toHaveBeenCalledWith('text', 'go ahead');
-    expect(editorFocusMock).toHaveBeenCalled();
+    expect(fillInputMessageMock).toHaveBeenCalledWith('go ahead');
     expect(useFollowUpActionStore.getState().slots[KEY]?.status).toBe('ready');
   });
 });

@@ -4,6 +4,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 
+import { useChatInputStore } from '@/features/ChatInput/store';
 import { useFileStore } from '@/store/file';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -65,6 +66,7 @@ const styles = createStaticStyles(({ css }) => ({
  * element's own cropped screenshot in the tooltip.
  */
 const ElementItem = memo<ChatContextContent>(({ element, id, preview }) => {
+  const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
   const [removeSelection] = useFileStore((s) => [s.removeChatContextSelection]);
   if (!element) return null;
 
@@ -89,7 +91,9 @@ const ElementItem = memo<ChatContextContent>(({ element, id, preview }) => {
       closable
       icon={<SquareDashedMousePointer size={16} />}
       size={'large'}
-      onClose={() => removeSelection(id)}
+      onClose={() => {
+        if (contextSelectionKey) removeSelection({ contextKey: contextSelectionKey, id });
+      }}
     >
       <Tooltip title={tooltip}>
         <span>

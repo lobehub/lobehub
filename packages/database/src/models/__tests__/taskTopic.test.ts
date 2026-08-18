@@ -320,7 +320,7 @@ describe('TaskTopicModel', () => {
   });
 
   describe('findWithHandoff', () => {
-    it('should return completedAt joined from topics', async () => {
+    it('should return completedAt and totalCost joined from topics', async () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
@@ -330,12 +330,15 @@ describe('TaskTopicModel', () => {
       await topicModel.add(task.id, 'tpc_h1', { seq: 1 });
       await topicModel.add(task.id, 'tpc_h2', { seq: 2 });
       await topicModel.updateStatus(task.id, 'tpc_h1', 'completed');
+      await serverDB.update(topics).set({ totalCost: 0.0123 }).where(eq(topics.id, 'tpc_h1'));
 
       const rows = await topicModel.findWithHandoff(task.id, 10);
       const h1 = rows.find((r) => r.topicId === 'tpc_h1');
       const h2 = rows.find((r) => r.topicId === 'tpc_h2');
       expect(h1?.completedAt).toBeInstanceOf(Date);
+      expect(Number(h1?.totalCost)).toBeCloseTo(0.0123);
       expect(h2?.completedAt).toBeNull();
+      expect(h2?.totalCost).toBeNull();
     });
 
     it('should return source task metadata when querying multiple task ids', async () => {

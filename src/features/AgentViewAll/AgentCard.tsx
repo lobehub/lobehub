@@ -1,7 +1,8 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
-import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
+import type { SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import {
   Avatar,
   Block,
@@ -71,10 +72,25 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
       grid-template-columns: minmax(0, 1fr);
     }
   `,
+  /* Top-right "…" slot, a SIBLING of the card link (absolutely positioned
+     over it) — nesting an interactive menu trigger inside the <a> would put
+     a button inside a link in the accessibility tree. Aligned with the
+     card's 12px padding so it sits where the header row used to hold it. */
+  actions: css`
+    position: absolute;
+    inset-block-start: 12px;
+    inset-inline-end: 12px;
+  `,
   link: css`
     display: block;
     min-width: 0;
+    height: 100%;
     color: inherit;
+  `,
+  wrapper: css`
+    position: relative;
+    min-width: 0;
+    height: 100%;
   `,
   updatedAt: css`
     flex: none;
@@ -100,9 +116,7 @@ const AgentCard = memo<AgentCardProps>(
     const { description, id, type, updatedAt } = item;
     // Groups have no personal name, so this resolves to their title.
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
-    // Keep the role visible beside a personal name (same as the sidebar row) —
-    // otherwise a named agent's role disappears from this list entirely.
-    const roleTag = item.name?.trim() && item.title?.trim() ? item.title : undefined;
+    const roleTag = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support — same bridge as AgentRow: the hook-bearing menu
@@ -117,84 +131,88 @@ const AgentCard = memo<AgentCardProps>(
 
     return (
       <ContextMenuTrigger items={getContextMenuItems}>
-        <WorkspaceLink
-          aria-label={displayTitle}
-          className={cardStyles.link}
-          ref={setAnchor}
-          to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
-          onPointerEnter={activateMenu}
-        >
-          <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <AgentAvatar item={item} size={24} />
-              <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
-                <Text ellipsis style={{ minWidth: 0 }} weight={600}>
-                  {displayTitle}
-                </Text>
-                {roleTag ? (
-                  <Tag size={'small'} style={{ flex: 'none' }}>
-                    {roleTag}
-                  </Tag>
-                ) : null}
-              </Flexbox>
+        <div className={cardStyles.wrapper}>
+          <WorkspaceLink
+            aria-label={displayTitle}
+            className={cardStyles.link}
+            ref={setAnchor}
+            to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
+            onPointerEnter={activateMenu}
+          >
+            <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
+              {/* Right padding reserves the header slot the absolutely
+                  positioned "…" sibling overlays. */}
               <Flexbox
-                flex={'none'}
-                onClick={(e) => {
-                  // Keep the menu from following the card link.
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
+                horizontal
+                align={'center'}
+                gap={8}
+                style={{ minWidth: 0, paddingInlineEnd: 28 }}
               >
-                {/* Headless: the card's context menu is the only actions entry
-                    (the sidebar toggle folds into it via includeSidebarToggle). */}
-                <ItemActions
-                  hideTrigger
-                  includeSidebarToggle
-                  anchor={anchor}
-                  forceActivated={menuActivated}
-                  item={item}
-                  sidebarHidden={sidebarHidden}
-                  onMenuReady={handleMenuReady}
-                  onToggleSidebar={onToggleSidebar}
-                />
-              </Flexbox>
-            </Flexbox>
-            <Text className={cardStyles.description} fontSize={12} type={'secondary'}>
-              {description}
-            </Text>
-            {item.labels?.length ? (
-              <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
-                <LabelTags labels={item.labels} />
-              </Flexbox>
-            ) : null}
-            <Flexbox
-              horizontal
-              align={'center'}
-              gap={8}
-              justify={'space-between'}
-              style={{ marginBlockStart: 'auto' }}
-            >
-              {showAuthor ? (
-                <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-                  {author ? (
-                    <Tooltip title={author.name}>
-                      <Avatar avatar={author.avatar || DEFAULT_AVATAR} size={18} />
-                    </Tooltip>
-                  ) : (
-                    <Text fontSize={12} type={'secondary'}>
-                      –
-                    </Text>
-                  )}
+                <AgentAvatar item={item} size={24} />
+                <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
+                  <Text ellipsis style={{ minWidth: 0 }} weight={600}>
+                    {displayTitle}
+                  </Text>
+                  {roleTag ? (
+                    <Tag size={'small'} style={{ flex: 'none' }}>
+                      {roleTag}
+                    </Tag>
+                  ) : null}
                 </Flexbox>
-              ) : (
-                <div />
-              )}
-              <Text className={cardStyles.updatedAt} fontSize={12}>
-                {updatedAt ? formatUpdatedAt(updatedAt) : '–'}
+              </Flexbox>
+              <Text className={cardStyles.description} fontSize={12} type={'secondary'}>
+                {description}
               </Text>
-            </Flexbox>
-          </Block>
-        </WorkspaceLink>
+              {item.labels?.length ? (
+                <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
+                  <LabelTags labels={item.labels} />
+                </Flexbox>
+              ) : null}
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={8}
+                justify={'space-between'}
+                style={{ marginBlockStart: 'auto' }}
+              >
+                {showAuthor ? (
+                  <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+                    {author ? (
+                      <Tooltip title={author.name}>
+                        <Avatar avatar={author.avatar || DEFAULT_AVATAR} size={18} />
+                      </Tooltip>
+                    ) : (
+                      <Text fontSize={12} type={'secondary'}>
+                        –
+                      </Text>
+                    )}
+                  </Flexbox>
+                ) : (
+                  <div />
+                )}
+                <Text className={cardStyles.updatedAt} fontSize={12}>
+                  {updatedAt ? formatUpdatedAt(updatedAt) : '–'}
+                </Text>
+              </Flexbox>
+            </Block>
+          </WorkspaceLink>
+          <span className={cardStyles.actions}>
+            {/* Visible "…" trigger AND right-click open the same menu — the
+                context menu alone proved undiscoverable (the sidebar toggle
+                folds into it via includeSidebarToggle). Rendered as a SIBLING
+                of the link (not inside it) so the menu button isn't a nested
+                interactive control within the card's <a>. */}
+            <ItemActions
+              includeSidebarToggle
+              anchor={anchor}
+              forceActivated={menuActivated}
+              item={item}
+              sidebarHidden={sidebarHidden}
+              onMenuReady={handleMenuReady}
+              onToggleSidebar={onToggleSidebar}
+            />
+          </span>
+        </div>
       </ContextMenuTrigger>
     );
   },

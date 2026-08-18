@@ -45,14 +45,18 @@ interface TabItemProps {
   enterX: number;
   index: number;
   isActive: boolean;
+  isSplitVisible: boolean;
   item: ResolvedTab;
   onActivate: (id: string, url: string) => void;
   onClose: (id: string) => void;
   onCloseLeft: (id: string) => void;
   onCloseOthers: (id: string) => void;
   onCloseRight: (id: string) => void;
+  onCloseSplitView: () => void;
+  onOpenInSplitView: (id: string) => void;
   onTogglePin: (id: string) => void;
   pinnedCount: number;
+  splitViewEnabled: boolean;
   tier: TabTier;
   totalCount: number;
   width: number;
@@ -63,8 +67,10 @@ const TabItem = memo<TabItemProps>(
   ({
     item,
     isActive,
+    isSplitVisible,
     index,
     pinnedCount,
+    splitViewEnabled,
     tier,
     totalCount,
     width,
@@ -75,6 +81,8 @@ const TabItem = memo<TabItemProps>(
     onCloseOthers,
     onCloseLeft,
     onCloseRight,
+    onCloseSplitView,
+    onOpenInSplitView,
     onTogglePin,
   }) => {
     const styles = useStyles;
@@ -136,10 +144,10 @@ const TabItem = memo<TabItemProps>(
     }, [x, isSorting, targetX, springX]);
 
     const handleClick = useCallback(() => {
-      if (!isActive) {
+      if (!isActive || isSplitVisible) {
         onActivate(id, tab.url);
       }
-    }, [isActive, onActivate, id, tab.url]);
+    }, [isActive, isSplitVisible, onActivate, id, tab.url]);
 
     const handleClose = useCallback(
       (e: React.MouseEvent) => {
@@ -163,13 +171,17 @@ const TabItem = memo<TabItemProps>(
         buildTabContextMenuItems({
           id,
           index,
+          inSplitView: isSplitVisible,
           onClose,
           onCloseLeft,
           onCloseOthers,
           onCloseRight,
+          onCloseSplitView,
+          onOpenInSplitView,
           onTogglePin,
           pinned,
           pinnedCount,
+          splitViewEnabled,
           t,
           totalCount,
         }),
@@ -180,10 +192,14 @@ const TabItem = memo<TabItemProps>(
         totalCount,
         pinned,
         pinnedCount,
+        splitViewEnabled,
+        isSplitVisible,
         onClose,
         onCloseOthers,
         onCloseLeft,
         onCloseRight,
+        onCloseSplitView,
+        onOpenInSplitView,
         onTogglePin,
       ],
     );
@@ -215,6 +231,7 @@ const TabItem = memo<TabItemProps>(
           electronStylish.nodrag,
           styles.tab,
           pinned && styles.tabPinned,
+          isSplitVisible && !isActive && styles.tabSplitVisible,
           isActive && styles.tabActive,
           isDragging && styles.tabDragging,
         )}

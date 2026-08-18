@@ -2,8 +2,12 @@ import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
+  type DeviceSandboxCapabilityResult,
+  type DeviceSandboxInstallResult,
   type EditLocalFileParams,
   type EditLocalFileResult,
+  type EnsureSandboxWorkspaceParams,
+  type EnsureSandboxWorkspaceResult,
   type GetCommandOutputParams,
   type GetCommandOutputResult,
   type GlobFilesParams,
@@ -259,6 +263,34 @@ class LocalFileService {
   // Shell Commands
   async runCommand(params: RunCommandParams): Promise<RunCommandResult> {
     return ensureElectronIpc().shellCommand.handleRunCommand(params);
+  }
+
+  /**
+   * Whether this machine can run sandboxed commands. Asked before offering the
+   * "Local Sandbox" execution environment — the host, not the platform string,
+   * is the authority (Linux support depends on binaries that may be absent).
+   */
+  async getSandboxCapability(): Promise<DeviceSandboxCapabilityResult> {
+    return ensureElectronIpc().shellCommand.getSandboxCapability();
+  }
+
+  /**
+   * Provision the sandbox backend on this machine (one elevation prompt on
+   * Windows) and report the capability afterwards. User-initiated only.
+   */
+  async installSandbox(): Promise<DeviceSandboxInstallResult> {
+    return ensureElectronIpc().shellCommand.installSandbox();
+  }
+
+  /**
+   * Create (and return) the default directory a sandboxed agent should work in.
+   * The caller persists it as the agent's working directory, so the default is
+   * visible and changeable rather than hidden.
+   */
+  async ensureSandboxWorkspace(
+    params: EnsureSandboxWorkspaceParams,
+  ): Promise<EnsureSandboxWorkspaceResult> {
+    return ensureElectronIpc().shellCommand.ensureSandboxWorkspace(params);
   }
 
   async getCommandOutput(params: GetCommandOutputParams): Promise<GetCommandOutputResult> {

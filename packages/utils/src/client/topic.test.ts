@@ -226,7 +226,7 @@ describe('groupTopicsByUpdatedTime', () => {
     const today = dayjs().valueOf();
 
     // Row was edited last year (updatedAt) but had message activity today
-    // (sortUpdatedAt) — the sidebar must group it under "today". 
+    // (sortUpdatedAt) — the sidebar must group it under "today".
     const topic: ChatTopic = {
       id: 'active',
       title: 'Recently active',
@@ -400,12 +400,12 @@ describe('groupTopicsByStatus', () => {
     const topics = [
       createTopic('c', 'completed'),
       createTopic('w', 'waitingForHuman'),
-      createTopic('p', 'paused'),
+      createTopic('a', 'archived'),
     ];
 
     const result = groupTopicsByStatus(topics, 'updatedAt');
 
-    expect(result.map((g) => g.id)).toEqual(['pending', 'paused', 'completed']);
+    expect(result.map((g) => g.id)).toEqual(['pending', 'completed', 'archived']);
   });
 
   it('should sort topics inside a group by the chosen field desc', () => {

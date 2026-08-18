@@ -1,25 +1,27 @@
 'use client';
 
-import { Block, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ShieldCheck } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 
 interface TaskAcceptanceHeaderProps {
   count?: number;
+  /** Section-level action (e.g. open the full report), outside the toggle. */
+  extra?: ReactNode;
   isOpen: boolean;
   onToggle: () => void;
 }
 
 /** Canonical Task detail header shared by acceptance definition and result modes. */
 export const TaskAcceptanceHeader = memo<TaskAcceptanceHeaderProps>(
-  ({ count, isOpen, onToggle }) => {
+  ({ count, extra, isOpen, onToggle }) => {
     const { t } = useTranslation('chat');
 
-    return (
+    const toggle = (
       <Block
         clickable
         horizontal
@@ -38,6 +40,17 @@ export const TaskAcceptanceHeader = memo<TaskAcceptanceHeaderProps>(
         {Boolean(count) && <Tag size={'small'}>{count}</Tag>}
         <AccordionArrowIcon isOpen={isOpen} style={{ color: cssVar.colorTextDescription }} />
       </Block>
+    );
+
+    if (!extra) return toggle;
+
+    return (
+      <Flexbox horizontal align={'center'} justify={'space-between'}>
+        {toggle}
+        {/* Lives outside the toggle: opening the report should not also fold
+          the section the user is reading. */}
+        <Flexbox onClick={(event) => event.stopPropagation()}>{extra}</Flexbox>
+      </Flexbox>
     );
   },
 );

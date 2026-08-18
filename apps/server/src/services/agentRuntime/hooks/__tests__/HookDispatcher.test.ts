@@ -315,7 +315,7 @@ describe('HookDispatcher', () => {
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('dispatch surfaces a no-fallback delivery failure without breaking other hooks', async () => {
+    it('dispatch rejects a no-fallback delivery failure after delivering other hooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -337,7 +337,7 @@ describe('HookDispatcher', () => {
       const serialized = dispatcher.getSerializedHooks(operationId);
       await expect(
         dispatcher.dispatch(operationId, 'onComplete', makeEvent(), serialized),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow('Critical webhook delivery failed: critical-hook');
 
       // The failure is escalated to production logs, and the sibling webhook
       // still gets delivered.

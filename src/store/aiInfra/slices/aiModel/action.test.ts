@@ -11,6 +11,7 @@ import { aiModelService } from '@/services/aiModel';
 import { withSWR } from '~test-utils';
 
 import { useAiInfraStore as useStore } from '../../store';
+import { aiModelSelectors } from './selectors';
 
 vi.mock('zustand/traditional');
 
@@ -23,7 +24,7 @@ vi.mock('i18next', async (importOriginal) => {
 });
 
 vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { warning: vi.fn() },
+  toast: { error: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('@/libs/swr', async (importOriginal) => {
@@ -44,6 +45,8 @@ beforeEach(() => {
       aiModelLoadingIds: [],
       aiProviderModelList: [],
       isAiModelListInit: false,
+      modelReasoningConfigMap: {},
+      modelReasoningConfigUpdatingKeys: [],
       refreshAiProviderRuntimeState: vi.fn(),
     });
   });
@@ -625,6 +628,195 @@ describe('AiModelAction', () => {
     });
   });
 
+  describe('updateModelReasoningConfig', () => {
+    it('should optimistically merge the value and persist it via the service', async () => {
+      act(() => {
+        useStore.setState({
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningEffort: 'low' } },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi
+        .spyOn(aiModelService, 'updateAiModelReasoningConfig')
+        .mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
+          gpt5_2ReasoningEffort: 'high',
+        });
+      });
+
+      expect(serviceSpy).toHaveBeenCalledWith('gpt-5.2', 'openai', {
+        gpt5_2ReasoningEffort: 'high',
+      });
+      // merged with the previous value, not replaced
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        gpt5_2ReasoningEffort: 'high',
+        reasoningEffort: 'low',
+      });
+      expect(useStore.getState().modelReasoningConfigUpdatingKeys).toEqual([]);
+      expect(mutate).toHaveBeenCalledWith(['aiModel:reasoningConfig', 'openai', 'gpt-5.2']);
+    });
+
+    it('should clear the updating marker before revalidating', async () => {
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'updateAiModelReasoningConfig').mockResolvedValue(undefined as any);
+
+      // The fetch hook's onSuccess skips writes while the key is marked
+      // updating, so revalidating before the marker clears would discard the
+      // server-merged config (sibling fields preserved by the partial write)
+      const updatingKeysAtMutate: string[][] = [];
+      vi.mocked(mutate).mockImplementationOnce(async () => {
+        updatingKeysAtMutate.push([...useStore.getState().modelReasoningConfigUpdatingKeys]);
+        return undefined as any;
+      });
+
+      await act(async () => {
+        await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
+          gpt5_2ReasoningEffort: 'high',
+        });
+      });
+
+      expect(updatingKeysAtMutate).toEqual([[]]);
+    });
+
+    it('should rollback the optimistic value and toast on failure', async () => {
+      act(() => {
+        useStore.setState({
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningEffort: 'low' } },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'updateAiModelReasoningConfig').mockRejectedValue(
+        new Error('Service error'),
+      );
+
+      await expect(async () => {
+        await act(async () => {
+          await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
+            gpt5_2ReasoningEffort: 'high',
+          });
+        });
+      }).rejects.toThrow('Service error');
+
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'low',
+      });
+      expect(useStore.getState().modelReasoningConfigUpdatingKeys).toEqual([]);
+      expect(toast.error).toHaveBeenCalledWith(t('reasoningEffort.updateFailed', { ns: 'chat' }));
+    });
+
+    it('should drop the key on failed rollback when it was not cached before', async () => {
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'updateAiModelReasoningConfig').mockRejectedValue(
+        new Error('Service error'),
+      );
+
+      await expect(async () => {
+        await act(async () => {
+          await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
+            gpt5_2ReasoningEffort: 'high',
+          });
+        });
+      }).rejects.toThrow('Service error');
+
+      // A leftover `[key]: undefined` would make ensureModelReasoningConfig
+      // treat the key as cached and never fetch the saved server value
+      expect('openai/gpt-5.2' in useStore.getState().modelReasoningConfigMap).toBe(false);
+    });
+  });
+
+  describe('ensureModelReasoningConfig', () => {
+    beforeEach(() => {
+      vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+      // Make the runtime-state warm-up a no-op so tests exercise the fetch logic
+      act(() => {
+        useStore.setState({ isInitAiProviderRuntimeState: true });
+      });
+    });
+
+    it('should skip the fetch for models without reasoning extend params', async () => {
+      vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => false);
+
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi.spyOn(aiModelService, 'getAiModelReasoningConfig');
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-4o', 'openai');
+      });
+
+      expect(serviceSpy).not.toHaveBeenCalled();
+    });
+
+    it('should fetch and cache the config when the key is absent', async () => {
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi
+        .spyOn(aiModelService, 'getAiModelReasoningConfig')
+        .mockResolvedValue({ reasoningEffort: 'high' });
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+      });
+
+      expect(serviceSpy).toHaveBeenCalledWith('gpt-5.2', 'openai');
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'high',
+      });
+    });
+
+    it('should keep the key for an empty config so it is not refetched', async () => {
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi
+        .spyOn(aiModelService, 'getAiModelReasoningConfig')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+      });
+
+      expect(serviceSpy).toHaveBeenCalledTimes(1);
+      expect('openai/gpt-5.2' in useStore.getState().modelReasoningConfigMap).toBe(true);
+    });
+
+    it('should not fetch when the config is already cached', async () => {
+      act(() => {
+        useStore.setState({
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningEffort: 'low' } },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      const serviceSpy = vi.spyOn(aiModelService, 'getAiModelReasoningConfig');
+
+      await act(async () => {
+        await result.current.ensureModelReasoningConfig('gpt-5.2', 'openai');
+      });
+
+      expect(serviceSpy).not.toHaveBeenCalled();
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'low',
+      });
+    });
+
+    it('should swallow fetch failures', async () => {
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockRejectedValue(
+        new Error('Service error'),
+      );
+
+      await act(async () => {
+        await expect(
+          result.current.ensureModelReasoningConfig('gpt-5.2', 'openai'),
+        ).resolves.toBeUndefined();
+      });
+
+      expect('openai/gpt-5.2' in useStore.getState().modelReasoningConfigMap).toBe(false);
+    });
+  });
+
   describe('updateAiModelsConfig', () => {
     it('should update model config and refresh list', async () => {
       const updateData = {
@@ -670,6 +862,63 @@ describe('AiModelAction', () => {
 
       expect(serviceSpy).toHaveBeenCalledWith('test-provider', sortMap);
       expect(refreshSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('useFetchAiModelReasoningConfig', () => {
+    it('should fetch the reasoning config and write it to the store map', async () => {
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockResolvedValue({
+        gpt5_2ReasoningEffort: 'high',
+      });
+
+      const { result } = renderHook(
+        () => useStore.getState().useFetchAiModelReasoningConfig('gpt-5.2', 'openai'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual({ gpt5_2ReasoningEffort: 'high' });
+      });
+
+      expect(aiModelService.getAiModelReasoningConfig).toHaveBeenCalledWith('gpt-5.2', 'openai');
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        gpt5_2ReasoningEffort: 'high',
+      });
+    });
+
+    it('should not fetch when model or provider is missing', () => {
+      const serviceSpy = vi.spyOn(aiModelService, 'getAiModelReasoningConfig');
+
+      renderHook(() => useStore.getState().useFetchAiModelReasoningConfig(undefined, 'openai'), {
+        wrapper: withSWR,
+      });
+
+      expect(serviceSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not clobber an in-flight optimistic value', async () => {
+      act(() => {
+        useStore.setState({
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { gpt5_2ReasoningEffort: 'high' } },
+          modelReasoningConfigUpdatingKeys: ['openai/gpt-5.2'],
+        });
+      });
+
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockResolvedValue({
+        gpt5_2ReasoningEffort: 'low',
+      });
+
+      renderHook(() => useStore.getState().useFetchAiModelReasoningConfig('gpt-5.2', 'openai'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(aiModelService.getAiModelReasoningConfig).toHaveBeenCalled();
+      });
+
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        gpt5_2ReasoningEffort: 'high',
+      });
     });
   });
 

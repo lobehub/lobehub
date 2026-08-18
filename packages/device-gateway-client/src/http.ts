@@ -200,6 +200,7 @@ export class GatewayHttpClient {
 
   async dispatchAgentRun(params: {
     agentType: string;
+    assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     cwd?: string;
@@ -209,6 +210,7 @@ export class GatewayHttpClient {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
     timeout?: number;

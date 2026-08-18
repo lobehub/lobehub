@@ -17,7 +17,6 @@
     "build:run-unpack": "electron .",
     "db:generate:local": "drizzle-kit generate --config drizzle.local.config.ts",
     "dev": "node scripts/dev.mjs",
-    "dev:react-devtools": "cross-env DESKTOP_REACT_DEVTOOLS=1 npm run dev",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run dev",
     "fix:electron": "node scripts/fix-electron-runtime.mjs",
     "format": "prettier --write ",
@@ -49,13 +48,13 @@
   "dependencies": {
     "@lobehub/fluent-emoji": "^4.1.0",
     "@lydell/node-pty": "1.2.0-beta.12",
-    "@napi-rs/canvas": "^0.1.100",
     "electron-log": "^5.4.4",
     "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
     "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.66",
     "@base-ui/react": "^1.6.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
@@ -67,6 +66,7 @@
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
@@ -127,7 +127,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@napi-rs/canvas",
       "electron",
       "electron-builder",
       "node-mac-permissions"

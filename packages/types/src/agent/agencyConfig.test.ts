@@ -4,19 +4,55 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
-  codexModelSupportsFastSpeed,
-  codexModelSupportsReasoningEffort,
-  getCodexReasoningEffortLevels,
-  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
+} from './agencyConfig';
+import {
+  AMP_AGENT_MODES,
+  codexModelSupportsFastSpeed,
+  getCodexReasoningEffortLevels,
+  HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  resolveAmpAgentMode,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
-} from './agencyConfig';
+} from './heteroSelectorCapabilities';
+
+describe('normalizeHeterogeneousProviderConfig', () => {
+  it('recovers a legacy adapterType before considering the command', () => {
+    const legacyConfig = {
+      adapterType: 'codex',
+      command: 'claude',
+    } as unknown as HeterogeneousProviderConfig;
+
+    expect(normalizeHeterogeneousProviderConfig(legacyConfig)).toEqual({
+      command: 'claude',
+      type: 'codex',
+    });
+  });
+
+  it('infers legacy Claude Code and Codex identities from their commands', () => {
+    const legacyClaudeConfig = {
+      command: '/usr/local/bin/custom-claude',
+    } as unknown as HeterogeneousProviderConfig;
+    const legacyCodexConfig = {
+      command: '/usr/local/bin/custom-codex',
+    } as unknown as HeterogeneousProviderConfig;
+
+    expect(normalizeHeterogeneousProviderConfig(legacyClaudeConfig).type).toBe('claude-code');
+    expect(normalizeHeterogeneousProviderConfig(legacyCodexConfig).type).toBe('codex');
+  });
+
+  it('preserves the legacy Claude Code default when no identity can be recovered', () => {
+    const legacyConfig = { command: 'custom-agent' } as unknown as HeterogeneousProviderConfig;
+
+    expect(normalizeHeterogeneousProviderConfig(legacyConfig).type).toBe('claude-code');
+  });
+});
 
 describe('pruneWorkingDirByDeviceDeletes', () => {
   it('deletes keys whose patch value is undefined', () => {
@@ -72,11 +108,159 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
-  it('passes AMP native args through direct spawns and encodes them for lh hetero exec', () => {
+  it('resolves Amp mode from native args before the structured field', () => {
+    expect(resolveAmpAgentMode(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+    expect(resolveAmpAgentMode({ mode: 'high' })).toBe('high');
+    expect(resolveAmpAgentMode({ args: ['--mode=ultra'], mode: 'low' })).toBe('ultra');
+  });
+
+  it.each(AMP_AGENT_MODES)(
+    'forwards structured Amp mode %s through direct and legacy-compatible device paths',
+    (mode) => {
+      const provider: HeterogeneousProviderConfig = { mode, type: 'amp' };
+
+      expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', mode]);
+      expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', `--agent-arg=${mode}`]);
+    },
+  );
+
+  it('does not override Amp mode when Default is selected', () => {
+    const provider: HeterogeneousProviderConfig = {
+      mode: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      type: 'amp',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toBeUndefined();
+    expect(buildHeteroExecArgs(provider)).toBeUndefined();
+  });
+
+  it('keeps raw Amp args compatible with direct spawns and lh hetero exec', () => {
     const provider: HeterogeneousProviderConfig = { args: ['--mode', 'high'], type: 'amp' };
 
     expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', 'high']);
     expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', '--agent-arg=high']);
+  });
+
+  it('forwards Cursor native args and configured model without duplicating --model', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--mode', 'plan'],
+      model: 'sonnet-4-thinking',
+      type: 'cursor',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--mode',
+      'plan',
+      '--model',
+      'sonnet-4-thinking',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--mode',
+      '--agent-arg=plan',
+      '--model',
+      'sonnet-4-thinking',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--model', 'gpt-5'],
+        model: 'sonnet-4-thinking',
+        type: 'cursor',
+      }),
+    ).toEqual(['--model', 'gpt-5']);
+  });
+
+  it('keeps TRAE model selection in the wrapper instead of native process arguments', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--feature', 'test'],
+      effort: 'high',
+      model: 'ignored-selector',
+      type: 'trae',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--feature', 'test']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+      '--model',
+      'ignored-selector',
+    ]);
+  });
+
+  it('forwards Qoder native args, model, and reasoning effort', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--verbose'],
+      effort: 'high',
+      model: 'qoder-model',
+      type: 'qoder',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--verbose',
+      '--model',
+      'qoder-model',
+      '--reasoning-effort',
+      'high',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--verbose',
+      '--model',
+      'qoder-model',
+      '--effort',
+      'high',
+    ]);
+  });
+
+  it('forwards Kimi Code native args and an explicit model through both spawn paths', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--verbose'],
+      effort: 'high',
+      model: 'kimi-for-coding',
+      type: 'kimi-code',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--verbose', '--model', 'kimi-for-coding']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--verbose',
+      '--model',
+      'kimi-for-coding',
+    ]);
+  });
+
+  it('preserves Qoder model and reasoning effort from native args without injecting duplicates', () => {
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-m', 'native-model'],
+        model: 'selector-model',
+        type: 'qoder',
+      }),
+    ).toEqual(['-m', 'native-model']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--model=native-model'],
+        model: 'selector-model',
+        type: 'qoder',
+      }),
+    ).toEqual(['--agent-arg=--model=native-model']);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--reasoning-effort', 'max'],
+        effort: 'high',
+        type: 'qoder',
+      }),
+    ).toEqual(['--reasoning-effort', 'max']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--reasoning-effort=max'],
+        effort: 'high',
+        type: 'qoder',
+      }),
+    ).toEqual(['--agent-arg=--reasoning-effort=max']);
+    expect(
+      buildHeteroSpawnArgs({
+        model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+        type: 'qoder',
+      }),
+    ).toBeUndefined();
   });
 
   it('forwards OpenCode native args and an explicit provider/model selection', () => {
@@ -155,6 +339,37 @@ describe('buildHeteroSpawnArgs', () => {
     ).toBeUndefined();
   });
 
+  it('forwards Pi native args and an explicit provider/model selection', () => {
+    const provider = {
+      args: ['--offline'],
+      effort: 'high',
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--offline',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+    ]);
+  });
+
+  it('does not duplicate a Pi model already present in native args', () => {
+    const provider = {
+      args: ['--model=google/gemini-2.5-pro'],
+      model: 'anthropic/claude-sonnet-4-5',
+      type: 'pi',
+    } satisfies HeterogeneousProviderConfig;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model=google/gemini-2.5-pro']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--model=google/gemini-2.5-pro']);
+  });
+
   it('appends --model and --effort for claude-code', () => {
     expect(buildHeteroSpawnArgs({ type: 'claude-code', model: 'opus', effort: 'high' })).toEqual([
       '--model',
@@ -162,6 +377,13 @@ describe('buildHeteroSpawnArgs', () => {
       '--effort',
       'high',
     ]);
+  });
+
+  it('appends CodeBuddy model and effort using its Claude-compatible CLI flags', () => {
+    const provider = { effort: 'high', model: 'gpt-5.4', type: 'codebuddy' } as const;
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model', 'gpt-5.4', '--effort', 'high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--model', 'gpt-5.4', '--effort', 'high']);
   });
 
   it('preserves existing args and appends after them', () => {
@@ -336,14 +558,6 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
   });
 
-  it('reports model-specific Max and Ultra support', () => {
-    expect(codexModelSupportsReasoningEffort('gpt-5.6', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-sol', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-terra', 'ultra')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'max')).toBe(true);
-    expect(codexModelSupportsReasoningEffort('gpt-5.6-luna', 'ultra')).toBe(false);
-  });
-
   it('uses conservative common levels for old, unknown, and default models', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);
@@ -437,6 +651,18 @@ describe('codex speed mode', () => {
 });
 
 describe('resolveAgencyConfig', () => {
+  it('normalizes a legacy persisted heterogeneous provider before applying overrides', () => {
+    const shared = {
+      executionTarget: 'device',
+      heterogeneousProvider: { command: 'codex' },
+    } as unknown as Parameters<typeof resolveAgencyConfig>[0];
+
+    expect(resolveAgencyConfig(shared, { executionTarget: 'local' })).toEqual({
+      executionTarget: 'local',
+      heterogeneousProvider: { command: 'codex', type: 'codex' },
+    });
+  });
+
   it('ignores a member override when the shared execution target is fixed', () => {
     const shared = {
       boundDeviceId: 'fixed-device',

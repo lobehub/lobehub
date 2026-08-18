@@ -10,6 +10,8 @@ import { createVerifierAgentRunner } from './agentVerifier';
 import { VerifyExecutorService } from './executor';
 import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
+import { VERIFY_ABANDONED_MS } from './staleness';
+import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-lifecycle');
 const MAX_TASK_DOCUMENT_CHARS = 80_000;
@@ -82,9 +84,20 @@ export const runVerifyOnCompletion = async (
       params.operationId,
     );
 
-    // Opt-in gate: only runs with a confirmed plan that hasn't been verified yet.
+    // Opt-in gate: only runs with a confirmed plan.
     if (!run?.plan?.length || !run.planConfirmedAt) return;
-    if (run.status !== 'planned') return;
+
+    // Then claim it. Not a `status !== 'planned'` read: that let two completions
+    // landing together both start judging, and — the worse half — permanently
+    // shut the gate behind an attempt that entered `verifying` and then died,
+    // since every later attempt read the status it had already written. The
+    // claim is one conditional UPDATE, so exactly one caller proceeds and an
+    // abandoned attempt is re-enterable.
+    const claimed = await new VerifyStatusService(db, userId, workspaceId).claimVerifying(
+      params.operationId,
+      new Date(Date.now() - VERIFY_ABANDONED_MS),
+    );
+    if (!claimed) return;
 
     const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
     if (!op) {

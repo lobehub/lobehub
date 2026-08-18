@@ -9,12 +9,15 @@ export interface SpawnHeteroAgentRunParams {
   agentType: string;
   /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
+  assistantMessageId?: string;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
   jwt: string;
   operationId: string;
   prompt: string;
+  /** System context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   serverUrl: string;
   systemContext?: string;
@@ -54,12 +57,14 @@ export function spawnHeteroAgentRun(
 ): Promise<AgentRunAckResult> {
   const {
     agentType,
+    assistantMessageId,
     args: extraArgs,
     cwd,
     imageList,
     jwt,
     operationId,
     prompt,
+    resumeFallbackSystemContext,
     resumeSessionId,
     serverUrl,
     systemContext,
@@ -93,7 +98,12 @@ export function spawnHeteroAgentRun(
   // array: context block first, then the user's prompt, then images — mirrors
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
-  const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+  const stdinPayload = buildHeteroExecStdinPayload({
+    imageList,
+    prompt,
+    resumeFallbackSystemContext,
+    systemContext,
+  });
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;
@@ -107,6 +117,7 @@ export function spawnHeteroAgentRun(
       cwd: workDir,
       env: {
         ...process.env,
+        ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
         LOBEHUB_JWT: jwt,
         LOBEHUB_SERVER: serverUrl,
       },

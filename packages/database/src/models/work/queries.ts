@@ -9,6 +9,7 @@ import {
   type WorkVersionEventItem,
   type WorkVersionEventMap,
   type WorkVersionItem,
+  type WorkVisibility,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, lt, or } from 'drizzle-orm';
@@ -260,9 +261,13 @@ export interface ListByWorkspaceParams {
   /** Opt-in gate for the `file` work type; see {@link resolveAllowedWorkTypes}. */
   includeFileWorks?: boolean;
   limit?: number;
+  /** Narrow results to Works first produced by one agent. */
+  originAgentId?: string | null;
   /** Narrow the `external` type to a single skill provider's resource types. */
   provider?: WorkSkillProvider | null;
   type?: WorkType | null;
+  /** Narrow the Resources gallery to Private or Workspace rows. */
+  visibility?: WorkVisibility;
 }
 
 // Not exported: only used as this module's own return-type annotation. The
@@ -316,6 +321,8 @@ export const listByWorkspace = async (
     inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
   ];
   if (params.type) filters.push(eq(works.type, params.type));
+  if (params.originAgentId) filters.push(eq(works.originAgentId, params.originAgentId));
+  if (ctx.workspaceId && params.visibility) filters.push(eq(works.visibility, params.visibility));
   // User-visible gallery tabs stay per-provider (Linear / GitHub) but filter by
   // provider — its resource types — over the unified `external` Work type.
   if (params.provider) {

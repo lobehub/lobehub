@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentStore } from '@/store/agent';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
+import { getDraft, saveDraft } from '../draftStorage';
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
 
@@ -52,6 +53,46 @@ describe('ChatInput store actions', () => {
     });
   });
 
+  it('drops the stored draft once the send handler clears the composer', () => {
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
+    };
+    saveDraft('main_agt_a_tpc_1', { text: 'Hello' });
+    const store = createStore({
+      draftKey: 'main_agt_a_tpc_1',
+      editor: editor as unknown as IEditor,
+      onSend: ({ clearContent }) => {
+        clearContent();
+      },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(getDraft('main_agt_a_tpc_1')).toBeUndefined();
+  });
+
+  it('keeps the stored draft when the send handler declines to clear the composer', () => {
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
+    };
+    saveDraft('main_agt_a_tpc_1', { text: 'Hello' });
+    const store = createStore({
+      draftKey: 'main_agt_a_tpc_1',
+      editor: editor as unknown as IEditor,
+      // a scheduled send that the server rejects leaves the text in the
+      // composer, so the draft behind it must survive
+      onSend: () => {},
+    });
+
+    store.getState().handleSendButton();
+
+    expect(getDraft('main_agt_a_tpc_1')).toEqual({ text: 'Hello' });
+  });
+
   it('records sent input in the active agent history when no agent id is provided', () => {
     useAgentStore.setState({ activeAgentId: 'active-agent' });
 
@@ -73,6 +114,31 @@ describe('ChatInput store actions', () => {
       markdown: 'Hello',
     });
     expect(getInputHistory()).toEqual([]);
+  });
+
+  it('sends exactly what the document serializes to', () => {
+    // The composer no longer rewrites the text on the way out: markers like the
+    // goal chip are nodes in the document, so what is sent is what is shown.
+    const onSend = vi.fn(({ clearContent, getMarkdownContent }) => {
+      expect(getMarkdownContent()).toBe('/goal Ship the homepage');
+      clearContent();
+    });
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) =>
+        type === 'markdown' ? '/goal Ship the homepage' : { root: {} },
+      ),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(editor.cleanDocument).toHaveBeenCalledOnce();
   });
 
   it('does not record history when the input history feature is disabled', () => {
@@ -129,6 +195,65 @@ describe('ChatInput store actions', () => {
     store.getState().handleSendButton();
 
     expect(dispatchCommand).not.toHaveBeenCalled();
+  });
+
+  // Regression: sendButtonProps.disabled mirrors editor content through the
+  // editor's debounced onChange, so a fast type→Enter arrives while the
+  // mirror still reads "empty" and used to be silently dropped.
+  it('sends via resolveSendBlocked even when the stale disabled mirror says blocked', () => {
+    const onSend = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+      resolveSendBlocked: () => false,
+      sendButtonProps: { disabled: true, generating: false, onStop: vi.fn() },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).toHaveBeenCalledOnce();
+  });
+
+  it('blocks the send when resolveSendBlocked reports blocked', () => {
+    const onSend = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+      resolveSendBlocked: () => true,
+      sendButtonProps: { disabled: false, generating: false, onStop: vi.fn() },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps gating on sendButtonProps.disabled when no resolver is provided', () => {
+    const onSend = vi.fn();
+    const editor = {
+      cleanDocument: vi.fn(),
+      focus: vi.fn(),
+      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+    };
+    const store = createStore({
+      editor: editor as unknown as IEditor,
+      onSend,
+      sendButtonProps: { disabled: true, generating: false, onStop: vi.fn() },
+    });
+
+    store.getState().handleSendButton();
+
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it('does not record history when no send handler is configured', () => {

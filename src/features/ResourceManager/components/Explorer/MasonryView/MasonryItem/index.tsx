@@ -3,17 +3,18 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import { Checkbox, stopPropagation } from '@lobehub/ui';
+import { stopPropagation } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { showContextMenu } from '@/libs/contextMenu';
 import {
   getTransparentDragImage,
   useDragActive,
   useSetCurrentDrag,
-} from '@/routes/(main)/resource/features/DndContextWrapper';
+} from '@/features/ResourceManager/DndContextWrapper';
+import { showContextMenu } from '@/libs/contextMenu';
 import { documentService } from '@/services/document';
 import { getChunkTargetId, useFileStore } from '@/store/file';
 import { type FileListItem } from '@/types/files';
@@ -21,10 +22,13 @@ import { type FileListItem } from '@/types/files';
 import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import AudioFileItem from './AudioFileItem';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
 import MarkdownFileItem from './MarkdownFileItem';
 import NoteFileItem from './NoteFileItem';
+import VideoFileItem from './VideoFileItem';
+import WebpageFileItem from './WebpageFileItem';
 
 // Image file types
 const IMAGE_TYPES = new Set([
@@ -195,6 +199,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     embeddingStatus,
     finishEmbedding,
     chunkCount,
+    content,
     url,
     name,
     fileType,
@@ -226,15 +231,19 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     // Memoize computed values that don't change
     const computedValues = useMemo(
       () => ({
+        isAudio: !!fileType?.startsWith('audio'),
         isFolder: fileType === CUSTOM_FOLDER_FILE_TYPE,
         isImage: fileType && IMAGE_TYPES.has(fileType),
         isMarkdown: isMarkdownFile(name, fileType),
         isPage: isCustomPage(fileType, name),
+        isVideo: !!fileType?.startsWith('video'),
+        // web clippings: article documents plus raw html captures
+        isWebpage: fileType === 'article' || !!fileType?.startsWith('text/html'),
       }),
       [fileType, name],
     );
 
-    const { isImage, isMarkdown, isPage, isFolder } = computedValues;
+    const { isAudio, isImage, isMarkdown, isPage, isFolder, isVideo, isWebpage } = computedValues;
 
     // Use shared click handler hook
     const handleItemClick = useFileItemClick({
@@ -435,12 +444,27 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         <div
           className={cx(
             styles.content,
-            !isImage && !isMarkdown && !isPage && styles.contentWithPadding,
+            !isImage &&
+              !isMarkdown &&
+              !isPage &&
+              !isVideo &&
+              !isAudio &&
+              !isWebpage &&
+              styles.contentWithPadding,
           )}
           onClick={handleItemClick}
         >
           {(() => {
             switch (true) {
+              case isWebpage: {
+                return <WebpageFileItem content={content} name={name} url={url} />;
+              }
+              case isVideo && !!url: {
+                return <VideoFileItem isInView={isInView} name={name} size={size} url={url} />;
+              }
+              case isAudio && !!url: {
+                return <AudioFileItem isInView={isInView} name={name} size={size} url={url} />;
+              }
               case isImage && !!url: {
                 return (
                   <ImageFileItem
@@ -453,6 +477,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
                     finishEmbedding={finishEmbedding}
                     id={chunkTargetId}
                     isInView={isInView}
+                    metadata={metadata}
                     name={name}
                     size={size}
                     url={url}

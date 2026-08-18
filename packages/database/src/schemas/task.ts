@@ -16,6 +16,7 @@ import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { agentCronJobs } from './agentCronJob';
 import { documents } from './file';
+import { projects } from './project';
 import { topics } from './topic';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -38,6 +39,7 @@ export const tasks = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
     createdByAgentId: text('created_by_agent_id').references(() => agents.id, {
       onDelete: 'set null',
     }),
@@ -121,6 +123,7 @@ export const tasks = pgTable(
     index('tasks_automation_mode_idx').on(t.automationMode),
     index('tasks_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
     index('tasks_workspace_id_idx').on(t.workspaceId),
+    index('tasks_project_id_status_idx').on(t.projectId, t.status),
     index('tasks_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.createdByUserId),
     uniqueIndex('tasks_identifier_workspace_id_unique')
       .on(t.workspaceId, t.identifier)
@@ -239,7 +242,7 @@ export const taskTopics = pgTable(
     // 'schedule' (cron tick) or 'heartbeat' (interval tick). Null for legacy
     // rows created before this column existed. Used so the maxExecutions quota
     // counts only automation ticks, not manual runs.
-    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat'>(),
+    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat' | 'goal'>(),
 
     // Handoff (populated after topic completes via LLM summarization)
     // { title, summary, keyFindings: string[], nextAction }

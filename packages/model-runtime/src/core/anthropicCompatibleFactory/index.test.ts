@@ -2,6 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import {
   createAnthropicCompatibleRuntime,
   createDefaultAnthropicClient,
@@ -213,10 +214,217 @@ describe('createAnthropicCompatibleRuntime', () => {
     expect(createClient.mock.calls[0][0]).not.toHaveProperty('modelIdMapping');
   });
 
+  it('should retain the exact provider request and raw streaming response diagnostics', async () => {
+    const rawEvents = [
+      {
+        message: {
+          content: [],
+          id: 'msg_deepseek_empty',
+          model: 'deepseek-v4-pro',
+          role: 'assistant',
+          stop_reason: null,
+          stop_sequence: null,
+          type: 'message',
+          usage: { input_tokens: 206_384, output_tokens: 0 },
+        },
+        type: 'message_start',
+      },
+      {
+        content_block: { signature: 'provider-signature', thinking: ' ', type: 'thinking' },
+        index: 0,
+        type: 'content_block_start',
+      },
+      { index: 0, type: 'content_block_stop' },
+      {
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        type: 'message_delta',
+        usage: { input_tokens: 206_384, output_tokens: 1 },
+      },
+      { type: 'message_stop' },
+    ] as unknown as Anthropic.MessageStreamEvent[];
+    const rawResponseBody = rawEvents.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
+    const rawStream = {
+      async *[Symbol.asyncIterator]() {
+        for (const event of rawEvents) yield event;
+      },
+    };
+    const messagesCreate = vi.fn(() => ({
+      withResponse: vi.fn().mockResolvedValue({
+        data: rawStream,
+        request_id: 'req_deepseek_empty',
+        response: new Response(rawResponseBody, {
+          headers: {
+            'cf-ray': 'ray-1',
+            'content-type': 'text/event-stream',
+            'x-request-id': 'req-header-1',
+          },
+          status: 200,
+        }),
+      }),
+    }));
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 4096,
+          messages: [{ content: 'Question', role: 'user' }],
+          model: payload.model,
+          thinking: { budget_tokens: 2048, type: 'enabled' },
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://api.deepseek.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({
+      apiKey: 'test-key',
+      baseURL: 'https://api.deepseek.com/anthropic',
+    });
+    const diagnostics: ModelRuntimeDiagnostics = {};
+
+    const response = await runtime.chat(
+      {
+        messages: [{ content: 'Question', role: 'user' }],
+        model: 'deepseek-v4-pro',
+        stream: true,
+      },
+      { diagnostics, user: 'user-1' },
+    );
+    await response.text();
+
+    expect(diagnostics.providerRequest).toEqual(
+      expect.objectContaining({
+        apiMode: 'messages',
+        endpoint: expect.stringMatching(/\/anthropic$/),
+        payload: expect.objectContaining({
+          max_tokens: 4096,
+          messages: [{ content: 'Question', role: 'user' }],
+          metadata: { user_id: 'user-1' },
+          model: 'deepseek-v4-pro',
+          stream: true,
+        }),
+        sentAt: expect.any(Number),
+      }),
+    );
+    expect(diagnostics.providerResponse).toEqual(
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        eventCount: 5,
+        eventCounts: expect.objectContaining({
+          'content_block_start:thinking': 1,
+          'message_delta': 1,
+          'message_stop': 1,
+        }),
+        firstEventAt: expect.any(Number),
+        hasNonWhitespaceText: false,
+        hasNonWhitespaceThinking: false,
+        headers: {
+          'cf-ray': 'ray-1',
+          'content-type': 'text/event-stream',
+          'x-request-id': 'req-header-1',
+        },
+        messageId: 'msg_deepseek_empty',
+        model: 'deepseek-v4-pro',
+        rawEvents,
+        rawResponse: {
+          body: rawResponseBody,
+          byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+          status: 'captured',
+        },
+        requestId: 'req_deepseek_empty',
+        responseReceivedAt: expect.any(Number),
+        signatureChars: 18,
+        status: 200,
+        stopReason: 'end_turn',
+        terminalEventReceived: true,
+        thinkingChars: 1,
+        toolUseCount: 0,
+        usage: { input_tokens: 206_384, output_tokens: 1 },
+      }),
+    );
+  });
+
+  it('should observe provider diagnostics from a custom ReadableStream response', async () => {
+    const rawEvents = [
+      {
+        message: {
+          content: [],
+          id: 'msg_readable_stream',
+          model: 'custom-model',
+          role: 'assistant',
+          stop_reason: null,
+          stop_sequence: null,
+          type: 'message',
+          usage: { input_tokens: 12, output_tokens: 0 },
+        },
+        type: 'message_start',
+      },
+      {
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        type: 'message_delta',
+        usage: { input_tokens: 12, output_tokens: 0 },
+      },
+      { type: 'message_stop' },
+    ] as unknown as Anthropic.MessageStreamEvent[];
+    const rawStream = new ReadableStream<Anthropic.MessageStreamEvent>({
+      start(controller) {
+        for (const event of rawEvents) controller.enqueue(event);
+        controller.close();
+      },
+    });
+    const messagesCreate = vi.fn(() => ({
+      withResponse: vi.fn().mockResolvedValue({ data: rawStream }),
+    }));
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [{ content: 'Question', role: 'user' }],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://example.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+    const diagnostics: ModelRuntimeDiagnostics = {};
+
+    const response = await runtime.chat(
+      {
+        messages: [{ content: 'Question', role: 'user' }],
+        model: 'custom-model',
+        stream: true,
+      },
+      { diagnostics },
+    );
+    await response.text();
+
+    expect(diagnostics.providerResponse).toEqual(
+      expect.objectContaining({
+        completedAt: expect.any(Number),
+        eventCount: 3,
+        messageId: 'msg_readable_stream',
+        rawEvents,
+        stopReason: 'end_turn',
+        terminalEventReceived: true,
+      }),
+    );
+  });
+
   it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
     // The prefill strip inside handlePayload sees the logical id; when the
     // mapping only later resolves to a Claude 4.6+/5 upstream id, chat() must
-    // re-strip against the model actually sent (LOBE-12572).
+    // re-strip against the model actually sent.
     const messagesCreate = vi.fn().mockResolvedValue({ content: [] });
     const Runtime = createAnthropicCompatibleRuntime({
       chatCompletion: {

@@ -1,18 +1,20 @@
 import { resolveCCSubagentType } from '@lobechat/builtin-tool-claude-code/client';
-import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ListTree } from 'lucide-react';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import { LOADING_FLAT } from '@/const/message';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors } from '@/store/chat/selectors';
 import { oneLineEllipsis } from '@/styles';
 
 const Active = memo(() => {
   const currentThread = useChatStore(portalThreadSelectors.portalCurrentThread, isEqual);
+  const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(currentThread?.agentId || ''));
 
   if (!currentThread) return null;
 
@@ -23,7 +25,7 @@ const Active = memo(() => {
 
   return (
     <Flexbox horizontal align={'center'} gap={8} style={{ marginInlineStart: 4 }}>
-      <Icon color={cssVar.colorTextSecondary} icon={ListTree} size={18} />
+      <Avatar {...agentMeta} size={24} />
       <Text
         className={oneLineEllipsis}
         ellipsis={true}

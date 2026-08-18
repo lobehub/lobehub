@@ -1,13 +1,18 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
-import type { NewAgent } from '@/database/schemas';
+import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import {
+  projectPublicAgent,
+  projectPublicFile,
+  projectPublicKnowledgeBase,
+} from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   AgentDeleteRequest,
@@ -61,7 +66,7 @@ export class AgentService extends BaseService {
       this.log('info', `found ${agentsList.length} agents`);
 
       return {
-        agents: agentsList,
+        agents: agentsList.map(projectPublicAgent),
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
@@ -82,6 +87,7 @@ export class AgentService extends BaseService {
         // Prepare creation data
         const newAgentData: NewAgent = {
           accessedAt: new Date(),
+          agencyConfig: request.agencyConfig || null,
           avatar: request.avatar || null,
           chatConfig: request.chatConfig || null,
           createdAt: new Date(),
@@ -104,7 +110,7 @@ export class AgentService extends BaseService {
           slug: createdAgent.slug,
         });
 
-        return createdAgent;
+        return projectPublicAgent(createdAgent);
       });
     } catch (error) {
       this.handleServiceError(error, 'create agent');
@@ -149,6 +155,9 @@ export class AgentService extends BaseService {
         // Only update fields actually provided in the request to avoid overwriting existing values with undefined
         const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
+        if (request.agencyConfig !== undefined) {
+          updateData.agencyConfig = request.agencyConfig ?? null;
+        }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
         if (request.chatConfig !== undefined) updateData.chatConfig = request.chatConfig ?? null;
         if (request.description !== undefined) updateData.description = request.description ?? null;
@@ -185,7 +194,7 @@ export class AgentService extends BaseService {
           id: updatedAgent.id,
           slug: updatedAgent.slug,
         });
-        return updatedAgent;
+        return projectPublicAgent(updatedAgent);
       });
     } catch (error) {
       this.handleServiceError(error, 'update agent');
@@ -292,7 +301,21 @@ export class AgentService extends BaseService {
         return null;
       }
 
-      return agent as AgentDetailResponse;
+      return {
+        ...projectPublicAgent(agent),
+        files: agent.files
+          .filter((file) => file.id)
+          .map((file) => ({
+            ...projectPublicFile(file as FileItem),
+            enabled: file.enabled,
+          })),
+        knowledgeBases: agent.knowledgeBases
+          .filter((knowledgeBase) => knowledgeBase.id)
+          .map((knowledgeBase) => ({
+            ...projectPublicKnowledgeBase(knowledgeBase as KnowledgeBaseItem),
+            enabled: knowledgeBase.enabled,
+          })),
+      };
     } catch (error) {
       this.handleServiceError(error, 'get agent details');
     }

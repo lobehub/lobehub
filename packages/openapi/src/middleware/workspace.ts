@@ -37,6 +37,35 @@ const resolveWorkspaceId = (c: Context): string | undefined => {
   return apiKeyWorkspaceId;
 };
 
+/**
+ * Built-in workspace roles, lowest to highest. `workspace_members.role` is the
+ * single source of truth, so ordering here is the whole role model.
+ */
+const WORKSPACE_ROLE_ORDER = ['viewer', 'member', 'admin', 'owner'];
+
+const hasMinWorkspaceRole = (role: string | undefined, minRole: string) =>
+  !!role && WORKSPACE_ROLE_ORDER.indexOf(role) >= WORKSPACE_ROLE_ORDER.indexOf(minRole);
+
+/**
+ * Require at least `minRole` for workspace-scoped requests; personal requests
+ * pass through untouched.
+ *
+ * `workspaceAuthMiddleware` only enforces the admin role for `apikey` auth, so
+ * without this an OIDC/session-authenticated member could reach routes whose
+ * models use a workspace-wide (not row-owner) predicate. Mirrors the tRPC
+ * `requireWorkspaceRoleWhenScoped` guard so both transports gate identically.
+ */
+export const requireWorkspaceRoleWhenScoped =
+  (minRole: 'admin' | 'owner') => async (c: Context, next: Next) => {
+    if (!c.get('workspaceId')) return next();
+
+    if (!hasMinWorkspaceRole(c.get('workspaceRole'), minRole)) {
+      throw new HTTPException(403, { message: `Requires ${minRole} role or higher` });
+    }
+
+    return next();
+  };
+
 export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
   const workspaceId = resolveWorkspaceId(c);
 
@@ -81,22 +110,10 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
     });
   }
 
-  if (c.get('authType') === 'apikey') {
-    // `workspace_members.role` is the single source of truth for built-in
-    // workspace roles.
-    const isWorkspaceAdmin = membership.role === 'owner' || membership.role === 'admin';
-
-    if (!isWorkspaceAdmin) {
-      throw new HTTPException(403, {
-        message: 'Workspace API Key requires an admin account',
-      });
-    }
-
-    if (!(await canUseWorkspaceApiKeys(workspaceId))) {
-      throw new HTTPException(403, {
-        message: 'Workspace API Key access is not available',
-      });
-    }
+  if (c.get('authType') === 'apikey' && !(await canUseWorkspaceApiKeys(workspaceId))) {
+    throw new HTTPException(403, {
+      message: 'Workspace API Key access is not available',
+    });
   }
 
   c.set('workspaceId', workspaceId);

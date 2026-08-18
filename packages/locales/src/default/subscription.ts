@@ -426,7 +426,6 @@ export default {
   'plans.btn.noAction': 'Plan Locked',
   'plans.btn.payment': 'Purchase',
   'plans.btn.paymentDesc': 'Supports credit card / Alipay / WeChat Pay',
-  'plans.btn.paymentDescForZarinpal': 'Supports credit card',
   'plans.btn.soon': 'Coming Soon',
   'plans.changePlan': 'Choose Plan',
   'plans.cloud.history': 'Unlimited conversation history',
@@ -451,6 +450,7 @@ export default {
   'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
   'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
   'plans.restoreSubscription': 'Restore Subscription',
+  'plans.restoreSubscriptionError': 'Could not restore your subscription',
   'plans.restoreSubscriptionSuccess': 'Subscription has been restored',
   'plans.pendingDowngrade': 'Pending Downgrade',
   'plans.embeddingStorage.embeddings': 'entries',
@@ -554,6 +554,9 @@ export default {
   'plansModal.fileStorageLimit.desc':
     'Your file storage is full. Upgrade to keep uploading, or delete unused files on the <1>Resources page</1> to free up space.',
   'plansModal.fileStorageLimit.title': 'Storage limit reached',
+  'plansModal.messengerWechat.desc':
+    'The WeChat System Bot is available on paid personal plans. Upgrade to connect and use it.',
+  'plansModal.messengerWechat.title': 'Connect WeChat after upgrading',
   'plansModal.modelAccess.desc':
     'This model is available on paid plans. Upgrade to use the full model lineup.',
   'plansModal.modelAccess.title': 'Unlock all models',
@@ -738,11 +741,4 @@ export default {
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
   'usage.remaining': 'Remaining',
-  'zarinpal.infoModal.desc':
-    'Due to policy requirements, please complete the following personal information before placing an order:',
-  'zarinpal.infoModal.phone.label': 'Phone Number',
-  'zarinpal.infoModal.phone.placeholder': 'Please enter phone number',
-  'zarinpal.infoModal.phone.rule': 'Please enter a valid phone number',
-  'zarinpal.infoModal.submit': 'Purchase',
-  'zarinpal.infoModal.title': 'Fill in Required Information',
 };

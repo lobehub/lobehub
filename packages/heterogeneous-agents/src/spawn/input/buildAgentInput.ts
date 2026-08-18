@@ -24,7 +24,7 @@ export interface BuildAgentInputOptions extends NormalizeImageOptions {
  *
  * `args` is appended to the agent's CLI argv (e.g. Codex `--image <path>`
  * pairs); `stdin` is the payload written to the child's stdin (stream-json
- * for Amp / Claude Code, raw text for Codex).
+ * for Amp / Claude Code / CodeBuddy, raw text for Codex).
  */
 export interface AgentInputPlan {
   args: string[];
@@ -46,7 +46,14 @@ const collectText = (blocks: AgentContentBlock[]): string =>
     .filter((t) => t.length > 0)
     .join('\n\n');
 
-const buildClaudeCodeStdin = async (
+const buildCursorInput = (blocks: AgentContentBlock[]): AgentInputPlan => {
+  if (blocks.some(isImageBlock)) {
+    throw new Error('Cursor CLI does not support image input.');
+  }
+  return { args: [], stdin: collectText(blocks) };
+};
+
+const buildClaudeCompatibleStdin = async (
   blocks: AgentContentBlock[],
   options: BuildAgentInputOptions,
 ): Promise<AgentInputPlan> => {
@@ -132,14 +139,55 @@ const buildOpenCodeInput = async (
   };
 };
 
+const buildPiInput = async (
+  blocks: AgentContentBlock[],
+  options: BuildAgentInputOptions,
+): Promise<AgentInputPlan> => {
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
+  return {
+    args: imagePaths.map((imagePath) => `@${imagePath}`),
+    stdin: collectText(blocks),
+  };
+};
+
+const buildKimiCodeInput = (blocks: AgentContentBlock[]): AgentInputPlan => {
+  if (blocks.some(isImageBlock)) {
+    throw new Error('Kimi Code does not support image attachments in one-shot prompt mode.');
+  }
+  return { args: ['--prompt', collectText(blocks)], stdin: '' };
+};
+
+const buildQoderInput = async (
+  blocks: AgentContentBlock[],
+  options: BuildAgentInputOptions,
+): Promise<AgentInputPlan> => {
+  const imagePaths = await resolvePathInputImagePaths(blocks, options);
+  const text = collectText(blocks);
+
+  return {
+    args: imagePaths.flatMap((imagePath) => ['--attachment', imagePath]),
+    stdin: `${JSON.stringify({
+      message: {
+        content: text ? [{ text, type: 'text' }] : [],
+        role: 'user',
+      },
+      parent_tool_use_id: null,
+      type: 'user',
+    })}\n`,
+  };
+};
+
 /**
  * Convert a unified `AgentPromptInput` into the per-agent stdin payload + any
  * extra CLI args required to attach images. The single source of truth for
  * how each external agent CLI receives multimodal input.
  *
- * - `amp` / `claude-code`: stream-json on stdin with text + base64 image content blocks
+ * - `amp` / `claude-code` / `codebuddy`: stream-json on stdin with text + base64 image content blocks
  * - `codex`: raw text on stdin + repeatable `--image <path>` flags
+ * - `cursor`: raw text passed as a positional argument; images are unsupported
  * - `opencode`: raw text on stdin + repeatable `--file <path>` flags
+ * - `pi`: raw text on stdin + repeatable `@<path>` arguments
+ * - `qoder`: stream-json text on stdin + repeatable `--attachment <path>` flags
  *
  * Path-mode agents materialize URL / base64 images via `materializeImageToPath`
  * into `imageMaterializeDir` (defaults to `cacheDir` then `os.tmpdir()`).
@@ -153,14 +201,27 @@ export const buildAgentInput = async (
 
   switch (agentType) {
     case 'amp':
-    case 'claude-code': {
-      return buildClaudeCodeStdin(blocks, options);
+    case 'claude-code':
+    case 'codebuddy': {
+      return buildClaudeCompatibleStdin(blocks, options);
     }
     case 'codex': {
       return buildCodexInput(blocks, options);
     }
+    case 'cursor': {
+      return buildCursorInput(blocks);
+    }
+    case 'kimi-code': {
+      return buildKimiCodeInput(blocks);
+    }
     case 'opencode': {
       return buildOpenCodeInput(blocks, options);
+    }
+    case 'pi': {
+      return buildPiInput(blocks, options);
+    }
+    case 'qoder': {
+      return buildQoderInput(blocks, options);
     }
     default: {
       throw new Error(`buildAgentInput: unsupported agent type "${agentType}"`);

@@ -5,8 +5,9 @@
  * whether a target agent is fit for a job — typically "can this agent fix a bug
  * in a real codebase?". For a normal model-backed agent the answer lives in
  * `model` / `provider` / `plugins`. For a **heterogeneous** agent (an external
- * CLI/runtime such as Claude Code, Codex, or OpenCode) those fields are misleading: the
- * agent brings its own toolset and ignores the plugin list, so we must instead
+ * CLI/runtime such as Claude Code, CodeBuddy, Codex, OpenCode, Pi, or Qoder)
+ * those fields are misleading: the agent brings its own toolset and ignores
+ * the plugin list, so we must instead
  * describe what the external runtime is and what it can do.
  *
  * This module maps a `LobeAgentAgencyConfig` into a compact, LLM-facing runtime
@@ -54,11 +55,32 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Claude Code',
     kind: 'cli',
   },
+  'codebuddy': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "CodeBuddy — Tencent's autonomous CLI coding agent. It can read, edit and write files, run shell commands and tests, search a working directory, and complete multi-step software-engineering tasks with its own built-in tools and model.",
+    displayName: 'CodeBuddy',
+    kind: 'cli',
+  },
   'codex': {
     capabilities: CODING_CAPABILITIES,
     description:
       "Codex — OpenAI's autonomous CLI coding agent. It has full access to a working directory: it can read, edit and write files, run shell commands and tests, and complete multi-step software-engineering tasks autonomously. It does NOT use the chat `plugins`/`model` settings — it runs its own built-in toolset and model.",
     displayName: 'Codex',
+    kind: 'cli',
+  },
+  'cursor': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Cursor — an autonomous CLI coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Cursor',
+    kind: 'cli',
+  },
+  'grok-build': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Grok Build — xAI's autonomous coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'Grok Build',
     kind: 'cli',
   },
   'hermes': {
@@ -67,6 +89,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
       'Hermes — a remote autonomous agent runtime that runs on a connected device and can read, edit and write files and run commands in its workspace.',
     displayName: 'Hermes',
     kind: 'remote',
+  },
+  'kimi-code': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Kimi Code — Moonshot AI’s autonomous terminal coding agent with filesystem and shell access.',
+    displayName: 'Kimi Code',
+    kind: 'cli',
   },
   'opencode': {
     capabilities: CODING_CAPABILITIES,
@@ -81,6 +110,27 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
       'OpenClaw — a remote autonomous agent platform. It runs on a connected device with full filesystem and shell access to its workspace.',
     displayName: 'OpenClaw',
     kind: 'remote',
+  },
+  'pi': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Pi — a minimal, extensible terminal coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Pi',
+    kind: 'cli',
+  },
+  'qoder': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Qoder — an autonomous terminal coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
+    displayName: 'Qoder',
+    kind: 'cli',
+  },
+  'trae': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'TRAE CLI — the TRAE Enterprise coding agent CLI. It can read and edit files, run commands, and complete multi-step software-engineering tasks in a working directory.',
+    displayName: 'TRAE CLI',
+    kind: 'cli',
   },
 };
 

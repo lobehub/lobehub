@@ -891,12 +891,14 @@ function bindGatewayClientHandlers(client: GatewayClient, ctx: GatewayHandlerCon
       const ack = await spawnHeteroAgentRun(
         {
           agentType: request.agentType,
+          assistantMessageId: request.assistantMessageId,
           args: request.args,
           cwd: request.cwd,
           imageList: request.imageList,
           jwt: request.jwt,
           operationId: request.operationId,
           prompt: request.prompt,
+          resumeFallbackSystemContext: request.resumeFallbackSystemContext,
           resumeSessionId: request.resumeSessionId,
           serverUrl: getServerUrl(),
           systemContext: request.systemContext,

@@ -46,6 +46,7 @@ vi.mock('@/store/chat/slices/operation/selectors', () => ({
   operationSelectors: {
     getOperationById: () => () => undefined,
     isMessageProcessing: () => () => false,
+    isMessageRegenerating: () => () => false,
   },
 }));
 
@@ -120,7 +121,6 @@ vi.mock('@/store/chat', () => ({
       deleteMessage: (...args: any[]) => mockChatDeleteMessage(...(args as [])),
       executeGatewayAgent: (...args: any[]) => mockExecuteGatewayAgent(...(args as [])),
       failOperation: noop,
-      internal_updateTopicLoading: noop,
       isGatewayModeEnabled: () => false,
       refreshMessages: vi.fn(async () => {}),
       startOperation: vi.fn(() => ({ operationId: 'op-id' })),

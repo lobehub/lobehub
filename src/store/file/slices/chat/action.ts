@@ -4,7 +4,6 @@ import { toast } from '@lobehub/ui/base-ui';
 import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
-import { notification } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
@@ -70,15 +69,30 @@ export class FileActionImpl {
     this.#get = get;
   }
 
-  addChatContextSelection = (context: ChatContextContent): void => {
-    const current = this.#get().chatContextSelections;
-    const next = [context, ...current.filter((item) => item.id !== context.id)];
+  addChatContextSelection = ({
+    contextKey,
+    selection,
+  }: {
+    contextKey: string;
+    selection: ChatContextContent;
+  }): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const current = currentMap[contextKey] ?? [];
+    const next = [selection, ...current.filter((item) => item.id !== selection.id)];
 
-    this.#set({ chatContextSelections: next }, false, n('addChatContextSelection'));
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('addChatContextSelection'),
+    );
   };
 
-  clearChatContextSelections = (): void => {
-    this.#set({ chatContextSelections: [] }, false, n('clearChatContextSelections'));
+  clearChatContextSelections = (contextKey: string): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    if (!(contextKey in currentMap)) return;
+
+    const { [contextKey]: _removed, ...nextMap } = currentMap;
+    this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
   clearChatUploadFileList = (): void => {
@@ -92,9 +106,61 @@ export class FileActionImpl {
     this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
   };
 
-  removeChatContextSelection = (id: string): void => {
-    const next = this.#get().chatContextSelections.filter((item) => item.id !== id);
-    this.#set({ chatContextSelections: next }, false, n('removeChatContextSelection'));
+  moveChatContextSelections = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const source = currentMap[fromContextKey];
+    if (!source || source.length === 0) return;
+
+    const sourceIds = new Set(source.map((item) => item.id));
+    const target = currentMap[toContextKey] ?? [];
+    const nextTarget = [...source, ...target.filter((item) => !sourceIds.has(item.id))];
+    const { [fromContextKey]: _removed, ...nextMap } = currentMap;
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...nextMap, [toContextKey]: nextTarget } },
+      false,
+      n('moveChatContextSelections'),
+    );
+  };
+
+  removeChatContextSelection = ({ contextKey, id }: { contextKey: string; id: string }): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const current = currentMap[contextKey];
+    if (!current) return;
+
+    const next = current.filter((item) => item.id !== id);
+    if (next.length === 0) {
+      const { [contextKey]: _removed, ...nextMap } = currentMap;
+      this.#set(
+        { chatContextSelectionsByContext: nextMap },
+        false,
+        n('removeChatContextSelection'),
+      );
+      return;
+    }
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('removeChatContextSelection'),
+    );
+  };
+
+  restoreChatContextSelections = (contextKey: string, selections: ChatContextContent[]): void => {
+    if (selections.length === 0) return;
+
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const restoredIds = new Set(selections.map((item) => item.id));
+    const current = currentMap[contextKey] ?? [];
+    const next = [...selections, ...current.filter((item) => !restoredIds.has(item.id))];
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('restoreChatContextSelections'),
+    );
   };
 
   removeChatUploadFile = async (id: string): Promise<void> => {
@@ -109,6 +175,15 @@ export class FileActionImpl {
     if (skipRemoveFile) return;
 
     await fileService.removeFile(id);
+  };
+
+  retryChatUploadFile = async (id: string): Promise<void> => {
+    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
+    const item = chatUploadFileList.find((file) => file.id === id);
+    if (!item?.agentId) return;
+
+    dispatchChatUploadFileList({ id, type: 'removeFile' });
+    await this.uploadChatFiles([item.file], item.agentId);
   };
 
   startAsyncTask = async (
@@ -202,7 +277,14 @@ export class FileActionImpl {
           base64Url = `data:${file.type};base64,${base64}`;
         }
 
-        return { base64Url, file, id: file.name, previewUrl, status: 'pending' } as UploadFileItem;
+        return {
+          agentId,
+          base64Url,
+          file,
+          id: file.name,
+          previewUrl,
+          status: 'pending',
+        } as UploadFileItem;
       }),
     );
 
@@ -218,14 +300,19 @@ export class FileActionImpl {
           onStatusUpdate: dispatchChatUploadFileList,
         });
       } catch (error) {
-        // skip `UNAUTHORIZED` error
-        if (getErrorMessage(error) !== 'UNAUTHORIZED')
-          notification.error({
-            description: getUploadErrorDescription(error),
-            message: t('upload.uploadFailed', { ns: 'error' }),
+        if (getErrorMessage(error) === 'UNAUTHORIZED') {
+          dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+        } else {
+          dispatchChatUploadFileList({
+            id: file.name,
+            type: 'updateFile',
+            value: {
+              error: getUploadErrorDescription(error),
+              status: 'error',
+              uploadState: undefined,
+            },
           });
-
-        dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+        }
       }
 
       if (!fileResult) return;

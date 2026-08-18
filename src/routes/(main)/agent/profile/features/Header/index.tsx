@@ -7,7 +7,6 @@ import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
-  BarChart3,
   BotMessageSquareIcon,
   Download,
   MoreHorizontal,
@@ -20,11 +19,13 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -37,6 +38,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 import { openAgentSettingsModal } from '../AgentSettings';
@@ -45,10 +47,7 @@ import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
-type HeaderTranslation = TFunction<
-  readonly ['setting', 'chat', 'file', 'common', 'spend'],
-  undefined
->;
+type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -100,7 +99,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'spend']);
+  const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
 
@@ -162,7 +161,12 @@ const Header = memo(() => {
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        await removeAgent(activeAgentId);
+        try {
+          await removeAgent(activeAgentId);
+        } catch (error) {
+          toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
+          return;
+        }
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
@@ -230,6 +234,8 @@ const Header = memo(() => {
 
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
+  // Ownership handover to a workspace member — separate from the scope moves.
+  const transferToMemberItem = useAgentTransferToMemberMenuItem(activeAgentId ?? undefined, meta);
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
   useEffect(
@@ -255,14 +261,6 @@ const Header = memo(() => {
           if (!canConfigure) return;
           settingsModalRef.current?.close();
           settingsModalRef.current = openAgentSettingsModal();
-        },
-      },
-      {
-        icon: <Icon icon={BarChart3} />,
-        key: 'usage-stats',
-        label: t('usageStats.entry', { ns: 'spend' }),
-        onClick: () => {
-          if (activeAgentId) navigate(`/agent/${activeAgentId}/statistics`);
         },
       },
       showPermissionPageEntry
@@ -296,8 +294,11 @@ const Header = memo(() => {
       },
       importMenuItem ? { type: 'divider' as const } : null,
       importMenuItem,
-      businessTransferMenuItems.length > 0 ? { type: 'divider' as const } : null,
+      businessTransferMenuItems.length > 0 || transferToMemberItem
+        ? { type: 'divider' as const }
+        : null,
       ...businessTransferMenuItems,
+      transferToMemberItem,
       canManage ? { type: 'divider' as const } : null,
       canManage
         ? {
@@ -350,24 +351,12 @@ const Header = memo(() => {
     t,
     importMenuItem,
     transferMenuItems,
+    transferToMemberItem,
   ]);
 
   return (
     <NavHeader
-      left={
-        <Flexbox horizontal align={'center'} gap={8}>
-          {activeAgentId && (
-            <AgentBreadcrumb agentId={activeAgentId} title={t('tab.profile', { ns: 'chat' })} />
-          )}
-          <AgentStatusTag />
-          <AgentVersionReviewTag />
-          <AgentForkTag />
-          <AccessLevelTag
-            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
-            resourceType={'agent'}
-          />
-        </Flexbox>
-      }
+      style={{ position: 'relative' }}
       right={
         <Flexbox horizontal align={'center'} gap={4}>
           <DropdownMenu items={menuItems}>
@@ -383,12 +372,33 @@ const Header = memo(() => {
           )}
         </Flexbox>
       }
+      // `relative` anchors the absolutely-centered switcher below.
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {/* No section title — the Segmented beside it names the current tab. */}
+          {activeAgentId && <AgentBreadcrumb agentId={activeAgentId} />}
+          <AgentStatusTag />
+          <AgentVersionReviewTag />
+          <AgentForkTag />
+          <AccessLevelTag
+            resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
+            resourceType={'agent'}
+          />
+        </Flexbox>
+      }
       styles={{
+        // Center the switcher on the *header* midpoint, not within the leftover
+        // flex track between the left/right slots — those slots differ in width,
+        // so flex centering leaves unequal gaps (it reads as space-between, not
+        // centered). Absolute + translateX(-50%) makes the two gaps equal.
+        center: AGENT_PROFILE_TABS_CENTER_STYLE,
         left: {
           paddingInlineStart: 8,
         },
       }}
-    />
+    >
+      {activeAgentId && <AgentProfileTabs active={'profile'} agentId={activeAgentId} />}
+    </NavHeader>
   );
 });
 

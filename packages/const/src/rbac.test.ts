@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   legacyRoleToWorkspaceRole,
+  PERSONAL_DEFAULT_PERMISSIONS,
   WORKSPACE_ROLE_PERMISSIONS,
   WORKSPACE_SYSTEM_ROLES,
 } from './rbac';
@@ -46,11 +47,58 @@ describe('workspace built-in roles', () => {
     expect(admin).not.toContain('agent:delete:all');
   });
 
-  it('keeps every non-Agent content resource owner-scoped for Admin', () => {
+  // Knowledge-base curation mirrors the Agent rule: `KNOWLEDGE_BASE_UPDATE:all`
+  // powers the resource-permission manage/browse bypass on restricted KBs,
+  // while row-level mutations stay creator/owner-gated by
+  // `assertWorkspaceRowManageable`.
+  it('keeps non-curated content resources owner-scoped for Admin', () => {
     const admin = WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.ADMIN];
 
-    for (const code of ['document:update:all', 'knowledge_base:update:all', 'file:update:all']) {
+    expect(admin).toContain('knowledge_base:update:all');
+    expect(admin).not.toContain('knowledge_base:update:owner');
+    expect(admin).not.toContain('knowledge_base:delete:all');
+
+    for (const code of ['document:update:all', 'file:update:all']) {
       expect(admin).not.toContain(code);
+    }
+  });
+});
+
+describe('personal default permissions', () => {
+  it('grants only :owner codes plus the shared-registry :all resources', () => {
+    for (const code of PERSONAL_DEFAULT_PERMISSIONS) {
+      const [resource, , scope] = [code.split(':')[0], code.split(':')[1], code.split(':')[2]];
+      if (scope === 'all') {
+        // the only :all grants are user_id-bound shared registries
+        expect(['agent_label', 'session_group']).toContain(resource);
+      } else {
+        expect(scope).toBe('owner');
+      }
+    }
+  });
+
+  it('never grants admin or workspace domains', () => {
+    for (const code of PERSONAL_DEFAULT_PERMISSIONS) {
+      expect(code.startsWith('rbac:')).toBe(false);
+      expect(code.startsWith('workspace')).toBe(false);
+    }
+    expect(PERSONAL_DEFAULT_PERMISSIONS).not.toContain('user:create:all');
+    expect(PERSONAL_DEFAULT_PERMISSIONS).not.toContain('user:delete:all');
+  });
+
+  it('covers the content actions the OpenAPI surface gates on', () => {
+    for (const code of [
+      'agent:read:owner',
+      'session:read:owner',
+      'message:create:owner',
+      'topic:read:owner',
+      'file:upload:owner',
+      'knowledge_base:read:owner',
+      'ai_model:read:owner',
+      'ai_model:invoke:owner',
+      'translation:create:owner',
+    ]) {
+      expect(PERSONAL_DEFAULT_PERMISSIONS).toContain(code);
     }
   });
 });

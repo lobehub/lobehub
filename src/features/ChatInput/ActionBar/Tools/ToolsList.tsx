@@ -3,11 +3,10 @@ import { Flexbox, Icon, Popover, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactNode } from 'react';
-import { Fragment, isValidElement, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, isValidElement, memo } from 'react';
 
+import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useScrollSignal } from './ScrollSignalContext';
-
-const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 
 export const toolsListStyles = createStaticStyles(({ css }) => ({
   groupLabel: css`
@@ -76,39 +75,11 @@ const RegularItem = memo<{
   index: number;
   item: ToolItemData;
 }>(({ detailPopoverDisabled, item, index }) => {
-  const [open, setOpen] = useState(false);
-  const suppressUntilRef = useRef(0);
+  const { close, onOpenChange, open } = useDetailPopoverState(detailPopoverDisabled);
 
   // Close hover popover whenever the surrounding list scrolls — avoids the
   // detail panel hovering in mid-air after its anchor row has moved away.
-  useScrollSignal(
-    useCallback(() => {
-      setOpen(false);
-    }, []),
-  );
-
-  // Close hover popover when a policy menu (or other consumer) signals it —
-  // prevents the detail panel from overlapping the policy menu opened from the "..." button.
-  useEffect(() => {
-    const close = () => {
-      suppressUntilRef.current = Date.now() + 600;
-      setOpen(false);
-    };
-    window.addEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
-    return () => window.removeEventListener(CLOSE_TOOL_DETAIL_POPOVER_EVENT, close);
-  }, []);
-
-  useEffect(() => {
-    if (detailPopoverDisabled) setOpen(false);
-  }, [detailPopoverDisabled]);
-
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (nextOpen && (detailPopoverDisabled || Date.now() < suppressUntilRef.current)) return;
-      setOpen(nextOpen);
-    },
-    [detailPopoverDisabled],
-  );
+  useScrollSignal(close);
 
   const iconNode = item.icon ? (
     isValidElement(item.icon) ? (
@@ -134,6 +105,9 @@ const RegularItem = memo<{
 
   if (!item.popoverContent) return row;
 
+  // The detail card is a hover information surface: keep it inert
+  // (pointer-events: none) so a press can never land on the portal'd card and
+  // be read as an outside press that dismisses the surrounding popover.
   return (
     <Popover
       arrow={false}
@@ -143,8 +117,8 @@ const RegularItem = memo<{
       open={open}
       placement={'rightTop'}
       positionerProps={{ sideOffset: 8 }}
-      styles={{ content: { padding: 0 } }}
-      onOpenChange={handleOpenChange}
+      styles={{ content: { padding: 0 }, root: { pointerEvents: 'none' } }}
+      onOpenChange={onOpenChange}
     >
       {row}
     </Popover>

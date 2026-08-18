@@ -1,21 +1,23 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
+import { AgentMigrationBadge, useAgentTransferJob } from '@/features/AgentTransferMigration';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import NavHeader from '@/features/NavHeader';
 import OpenInAppButton from '@/features/OpenInAppButton';
 import TopicCommentButton from '@/features/TopicComment/TopicCommentButton';
+import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
 
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
+import TerminalPanelToggle from './TerminalPanelToggle';
 import WorkingPanelToggle from './WorkingPanelToggle';
 
 // Below this column width the header is a solid in-flow bar with a bottom
@@ -75,9 +77,43 @@ const headerStyles = createStaticStyles(({ css }) => ({
       pointer-events: auto;
       overflow: visible;
 
-      /* Hug the title pill so the transparent middle stays click-through */
+      /* Hug the title pill so the transparent middle stays click-through;
+         kept narrow so the floating pill covers less of the stream below */
       flex-grow: 0;
-      max-width: 300px;
+      max-width: 220px;
+    }
+  `,
+  // Migration chip, narrow/solid mode: in-flow at the head of the right-hand
+  // action group, so it reads as a status alongside the actions and can never
+  // collide with the (uncapped) title. Hidden once the header switches to
+  // floating mode (the centered overlay takes over).
+  migrationChipInline: css`
+    flex-shrink: 0;
+
+    ${FLOATING_HEADER_QUERY} {
+      display: none;
+    }
+  `,
+  // Migration chip, wide/floating mode: centered against the whole header row
+  // (not the leftover space between slots, which skews with title width). The
+  // wrapper is click-through; the chip re-enables its own pointer events.
+  // Collisions can't happen here — the floating title pill is capped narrow.
+  migrationChipOverlay: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 11;
+    inset-block-start: 0;
+    inset-inline: 0;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    height: 44px;
+
+    ${FLOATING_HEADER_QUERY} {
+      display: flex;
     }
   `,
   slotRight: css`
@@ -91,18 +127,24 @@ const headerStyles = createStaticStyles(({ css }) => ({
 }));
 
 const Header = memo(() => {
-  const agentId = useChatStore((s) => s.activeAgentId);
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s)
-      : undefined,
+  const { agentId, topicId } = useAgentContext();
+  // No home/desktop fallback: the IDE button should only show up once the user
+  // explicitly picked a working directory (topic / agent / device default).
+  const workingDirectory = useEffectiveWorkingDirectory(agentId || undefined, {
+    homeFallback: false,
+    topicId,
+  });
+  const splitView = useElectronStore((s) => s.splitView);
+  const agentMeta = useAgentStore((s) =>
+    agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
   );
   const isLocalSystemEnabled = useAgentStore((s) =>
     agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
   );
-  const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory || '';
+
+  // History-backfill chip in the center slot; the hook shares one SWR key with
+  // the rest of the migration UI, so this adds no extra polling.
+  const { data: transferJob } = useAgentTransferJob({ agentId });
 
   return (
     <div className={headerStyles.container}>
@@ -115,15 +157,32 @@ const Header = memo(() => {
             className={headerStyles.leftContent}
             gap={4}
           >
+            {splitView && agentMeta && (
+              <Avatar
+                alt={agentMeta.title}
+                avatar={agentMeta.avatar}
+                background={agentMeta.backgroundColor}
+                shape={'square'}
+                size={24}
+                style={{ flex: 'none', marginInlineStart: 8 }}
+                title={agentMeta.title}
+              />
+            )}
             <Tags />
             <HeaderActions />
           </Flexbox>
         }
         right={
           <Flexbox horizontal align={'center'} className={headerStyles.rightContent} gap={4}>
-            {isLocalSystemEnabled && (
-              <OpenInAppButton workingDirectory={effectiveWorkingDirectory} />
+            {transferJob && agentId && (
+              <div className={headerStyles.migrationChipInline}>
+                <AgentMigrationBadge agentId={agentId} />
+              </div>
             )}
+            {isLocalSystemEnabled && workingDirectory && (
+              <OpenInAppButton workingDirectory={workingDirectory} />
+            )}
+            <TerminalPanelToggle />
             <TopicCommentButton />
             <ShareButton />
             <WorkingPanelToggle />
@@ -134,6 +193,11 @@ const Header = memo(() => {
           right: headerStyles.slotRight,
         }}
       />
+      {transferJob && agentId && (
+        <div className={headerStyles.migrationChipOverlay}>
+          <AgentMigrationBadge agentId={agentId} />
+        </div>
+      )}
     </div>
   );
 });

@@ -18,7 +18,13 @@ export type HeartbeatTickOutcome =
   { ran: true; taskIdentifier: string } | { ran: false; reason: HeartbeatTickSkipReason };
 
 export type HeartbeatTickSkipReason =
-  'human-waiting' | 'in-flight' | 'mode-changed' | 'no-interval' | 'not-found' | 'terminal';
+  | 'human-waiting'
+  | 'in-flight'
+  | 'mode-changed'
+  | 'no-interval'
+  | 'not-found'
+  | 'stale-tick'
+  | 'terminal';
 
 /**
  * Run a heartbeat tick — invoked by both the LocalScheduler `setTimeout`
@@ -31,6 +37,7 @@ export type HeartbeatTickSkipReason =
 export async function runHeartbeatTick(
   taskId: string,
   userId: string,
+  tickToken?: string,
 ): Promise<HeartbeatTickOutcome> {
   const db = await getServerDB();
 
@@ -44,6 +51,12 @@ export async function runHeartbeatTick(
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
+  }
+  const activeTickToken = (task.context as { scheduler?: { tickToken?: string } } | null)?.scheduler
+    ?.tickToken;
+  if (activeTickToken && activeTickToken !== tickToken) {
+    log('skip task=%s reason=stale-tick', taskId);
+    return { ran: false, reason: 'stale-tick' };
   }
   if (task.automationMode !== 'heartbeat') {
     log('skip task=%s reason=mode-changed (mode=%s)', taskId, task.automationMode);
@@ -86,6 +99,6 @@ export async function runHeartbeatTick(
 // callback. Importing this module from anywhere in the server bundle (the
 // heartbeat-tick handler is the natural place) ensures local-mode heartbeat
 // loops actually fire.
-setTaskSchedulerExecutionCallback(async (taskId, userId) => {
-  await runHeartbeatTick(taskId, userId);
+setTaskSchedulerExecutionCallback(async (taskId, userId, tickToken) => {
+  await runHeartbeatTick(taskId, userId, tickToken);
 });

@@ -1,11 +1,18 @@
 import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = '2';
+export const VERIFY_PLAN_PROMPT_VERSION = '3';
 /** Bump when the judge prompt meaningfully changes. */
 export const VERIFY_JUDGE_PROMPT_VERSION = '2';
 /** Bump when the report prompt meaningfully changes. */
 export const VERIFY_REPORT_PROMPT_VERSION = '1';
+/**
+ * Bump when the review-prediction prompt meaningfully changes. Doubles as part
+ * of the uniqueness key on `verify_review_predictions`, so a bump makes the next
+ * run write a NEW opinion instead of overwriting the old one — which is what
+ * keeps two prompt versions comparable on the same checks.
+ */
+export const REVIEW_PREDICT_PROMPT_VERSION = '1';
 
 export interface PlanPromptInput {
   /** Optional run context (agent role, repo, constraints). */
@@ -27,7 +34,9 @@ export const buildPlanPrompt = ({
     'Given the run goal, propose a concise set of verification criteria — each a single pass/fail standard that determines whether the delivered work satisfies the user’s explicit requirements.',
     'Guidelines:',
     `- Propose at most ${maxCriteria} criteria. Fewer, sharper criteria are better than many vague ones.`,
+    '- Every criterion must be an outcome the USER can judge — what the delivery does, shows, or produces. Never propose the repo’s own programmatic gates as criteria: unit / integration / regression tests, test suites, coverage, type-checks, lint, or a clean build. Those are preconditions of shipping, not acceptance items, and they are dropped before the acceptance page renders.',
     '- First enumerate every deliverable and artifact needed to prove the criterion. Put each one in requiredEvidence with its type, semantic modality, source scope, and a concrete capture hint. Use [] only when the final text answer alone is sufficient.',
+    '- requiredEvidence types: screenshot / gif / video for what the user sees, audio for a delivered sound (TTS output, a voice reply, an alert tone), text / markdown / dom_snapshot / transcript otherwise. A deliverable the user listens to needs audio evidence — describing it in prose does not prove it.',
     '- Choose verifierType: "llm" only when all required evidence is inline text, or a single image modality that a multimodal judge can directly inspect. Choose "agent" whenever evidence spans multiple modalities/files, requires opening a document or attachment, exceeds a normal prompt, or needs active investigation. Choose "program" only for strictly deterministic command checks.',
     '- Set required=true when failing the criterion must block delivery; false for nice-to-have improvements.',
     '- Set onFail="auto_repair" when a failure can be fixed by re-running the agent with guidance; otherwise "manual".',
@@ -186,6 +195,93 @@ export const buildReportPrompt = ({
     `\n## Per-criterion results\n${itemBlock}`,
     `\n## Deliverable\n${deliverable}`,
   ].join('\n');
+
+  return { system, user };
+};
+
+// ============================================
+// Review prediction — a second opinion on a check the verifier already judged
+// ============================================
+
+export interface ReviewPredictPromptInput {
+  /** The check's detailed rule body, when the criterion has one. */
+  instruction?: string;
+  /** The acceptance's one-sentence requirement — the scope test for `new-idea`. */
+  requirement?: string;
+  /** Where the check was exercised (`web` / `desktop` / …). */
+  surface?: string;
+  /** The check being re-judged. */
+  title: string;
+  /** The verifier's own reasoning, so the reviewer can attack it rather than repeat it. */
+  toulmin?: { evidence?: string; reasoning?: string };
+  /** The verifier's claim. Almost always `passed` — that is the point. */
+  verdict?: string;
+  /** Captions for the attached artifacts, indexed to match the image order. */
+  visuals: string[];
+}
+
+/**
+ * The offline baseline (187 real samples across kimi-k3,
+ * gemini-3.6-flash and gemini-3.1-pro) shaped every rule below. Two findings did
+ * most of the shaping:
+ *
+ *  1. The models perceived defects correctly and then FORGAVE them — "仅约 17px
+ *     的轻微右偏,在可接受容差内" against a human "这个不在图片中间哎". Adding an
+ *     explicit zero-tolerance rule recovered every one of those. Hence the
+ *     hard ban on hedging vocabulary rather than a polite "be strict".
+ *  2. Of the checks all three models let through, roughly three quarters were
+ *     cases where the human was answering a different question — proposing new
+ *     design, or objecting that the evidence was insufficient. Those are NOT
+ *     this prompt's job (the UI routes them to their own intents), so the rules
+ *     below deliberately scope the model to "does the evidence show THIS check
+ *     satisfied" and tell it to pass anything it cannot judge from the frame.
+ */
+export const buildReviewPredictPrompt = (input: ReviewPredictPromptInput) => {
+  const system = [
+    'You audit whether a delivery really satisfies ONE acceptance check, by looking at the screenshots captured during verification.',
+    '',
+    'An automated verifier already judged this check. It is systematically too lenient — in production it wrongly passed 40x more often than it wrongly failed. Your job is to independently re-judge, not to restate its conclusion.',
+    '',
+    '## Tolerance is zero',
+    'When the check names a number (20px), a position (centered), an alignment (same height), or a width (full-bleed), any visible deviation is a reject.',
+    'Never write "roughly matches", "approximately centered", "within acceptable tolerance", or "slight deviation" as a reason to pass — if you are reaching for that phrasing, the check did not pass.',
+    'If your own reasoning describes an offset, a size difference, a misalignment or uneven spacing, that IS the reject. Do not then argue it away.',
+    '"Looks about right" is not a pass. Being unable to see any difference is.',
+    '',
+    '## Stay inside this check',
+    'Judge only the check quoted below. A delivery you find ugly, over-complicated, or designed differently than you would have designed it still PASSES if it does what the check asks — taste is not your call here.',
+    'Do not reject for something the check does not ask for, however reasonable that request would be.',
+    '',
+    '## Only what the frame shows',
+    'Judge from what is visible in the attached images. Scroll behaviour, hover states, navigation results and anything that needs a second moment in time cannot be judged from a still — if the check depends on one of those, accept and say the frame cannot show it.',
+    'Missing evidence is not a reject. It is the one case where you accept despite being unsure, and lower confidence to say so.',
+    '',
+    '## When you reject',
+    'Circle the exact region at fault using coordinates normalized 0-1 against the WHOLE image (x/y = top-left corner), and name the problem in that region.',
+    'Write `comment` as one sentence a developer can act on. State what is wrong and where — not "the layout has issues".',
+    '',
+    'Answer in the language the check is written in. Set confidence honestly: it is read as a number, not as reassurance.',
+  ].join('\n');
+
+  const visualBlock = input.visuals.length
+    ? input.visuals
+        .map((caption, index) => `  [image ${index}] ${caption || '(untitled)'}`)
+        .join('\n')
+    : '  (none)';
+
+  const user = [
+    `## The check\n${input.title}`,
+    input.instruction ? `\n### How it should be judged\n${input.instruction}` : '',
+    input.requirement ? `\n## What this delivery as a whole promised\n${input.requirement}` : '',
+    input.surface ? `\nSurface under test: ${input.surface}` : '',
+    input.verdict ? `\n## The automated verifier said: ${input.verdict}` : '',
+    input.toulmin?.reasoning ? `Its reasoning: ${input.toulmin.reasoning}` : '',
+    input.toulmin?.evidence ? `What it cited: ${input.toulmin.evidence}` : '',
+    `\n## Attached evidence\n${visualBlock}`,
+    '\nRe-judge the check against these images.',
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   return { system, user };
 };

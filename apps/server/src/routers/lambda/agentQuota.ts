@@ -180,6 +180,33 @@ export const agentQuotaRouter = router({
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => ctx.quotaService.listLatestReadings(input.accountId)),
 
+  /**
+   * Full reading time series (oldest first) for the usage calendar's daily
+   * burn heat and per-window burn-down curve.
+   */
+  listSnapshots: quotaProcedure
+    .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
+    .query(async ({ ctx, input }) =>
+      ctx.quotaService.listSnapshotSeries(
+        input.accountId,
+        new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
+      ),
+    ),
+
+  /**
+   * Per-turn token + cost spend (oldest first) for the usage calendar. Kept
+   * separate from `listSnapshots`: utilization is the provider's authority on
+   * "how much quota is left", the ledger is ours on "what it was spent on".
+   */
+  listUsageTurns: quotaProcedure
+    .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
+    .query(async ({ ctx, input }) =>
+      ctx.quotaService.listUsageTurns(
+        input.accountId,
+        new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
+      ),
+    ),
+
   // ── load balancing ───────────────────────────────────────────────────────
   resolveAccountLoads: quotaProcedure
     .input(z.object({ accountIds: z.array(z.string()) }))

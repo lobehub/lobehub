@@ -34,11 +34,11 @@ vi.mock('@/hooks/useOnboardingAgentTemplates', () => ({
   useOnboardingAgentTemplates: vi.fn(),
 }));
 
-vi.mock('@/routes/onboarding/_layout', () => ({
+vi.mock('@/features/Onboarding/Layout', () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('@/routes/onboarding/features/AgentPickerStep', () => ({
+vi.mock('@/features/Onboarding/steps/AgentPickerStep', () => ({
   default: ({ onBack }: { onBack: () => void }) => (
     <div>
       AgentPickerStep
@@ -49,7 +49,7 @@ vi.mock('@/routes/onboarding/features/AgentPickerStep', () => ({
   ),
 }));
 
-vi.mock('@/routes/onboarding/features/FullNameStep', () => ({
+vi.mock('@/features/Onboarding/steps/FullNameStep', () => ({
   default: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
     <div>
       FullNameStep
@@ -63,7 +63,7 @@ vi.mock('@/routes/onboarding/features/FullNameStep', () => ({
   ),
 }));
 
-vi.mock('@/routes/onboarding/features/InterestsStep', () => ({
+vi.mock('@/features/Onboarding/steps/InterestsStep', () => ({
   default: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
     <div>
       InterestsStep
@@ -77,7 +77,7 @@ vi.mock('@/routes/onboarding/features/InterestsStep', () => ({
   ),
 }));
 
-vi.mock('@/routes/onboarding/features/ProSettingsStep', () => ({
+vi.mock('@/features/Onboarding/steps/ProSettingsStep', () => ({
   default: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
     <div>
       ProSettingsStep

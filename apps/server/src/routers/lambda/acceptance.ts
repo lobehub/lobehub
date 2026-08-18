@@ -1,7 +1,10 @@
 import {
   acceptanceCheckReviewActions,
+  acceptanceRejectIntents,
   acceptanceSubjectTypes,
   acceptanceVisibilities,
+  reviewAdjudications,
+  reviewProposalEdits,
 } from '@lobechat/const/verify';
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -12,7 +15,9 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
+import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
@@ -25,7 +30,13 @@ import {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
+  mapWithConcurrency,
+  REVIEW_PREDICT_CONCURRENCY,
+  REVIEW_PREDICT_MODEL_CONFIG,
+  shouldSurfaceProposal,
+  VerifyReviewPredictorService,
 } from '@/server/services/verify';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -147,7 +158,19 @@ export const acceptanceRouter = router({
         input.subjectType,
         input.subjectId,
       );
-      return acceptance ?? null;
+      if (!acceptance) return null;
+
+      // `delivered` alone is ambiguous for the subject's status surface: a
+      // converged delivery waiting for sign-off and a failed one waiting for a
+      // decision both land there. The latest round's verdict is what tells
+      // them apart, so ship it with the aggregate instead of forcing callers
+      // to load the whole bundle for one field.
+      const latest = await ctx.acceptanceService.latestRound(acceptance.id);
+      return {
+        ...acceptance,
+        latestRunStatus: latest?.status ?? null,
+        latestRunUserDecision: latest?.userDecision ?? null,
+      };
     }),
 
   /**
@@ -340,6 +363,18 @@ export const acceptanceRouter = router({
       };
 
       const reportsByRun = new Map(reports.map((r) => [r.verifyRunId!, r]));
+      // What each round actually spent. Owner-only: cost is the author's
+      // operating detail, not something a shared link should expose.
+      // `isOwner` already implies a signed-in viewer; the explicit id check is
+      // what narrows it for the model, which is owner-scoped by construction.
+      const usageByOperation =
+        isOwner && ctx.userId
+          ? await new AgentOperationModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined)
+              .findUsageByOperations(
+                runs.flatMap((run) => (run.operationId ? [run.operationId] : [])),
+              )
+              .catch(() => new Map<string, { cost: number; tokens: number }>())
+          : new Map<string, { cost: number; tokens: number }>();
       const rounds = runs.map((run) => {
         // `origin` points at the author's private topic/agent — never hand it
         // to a visitor holding nothing but the shared link.
@@ -362,7 +397,11 @@ export const acceptanceRouter = router({
             },
           };
         }
-        return { report: reportsByRun.get(run.id) ?? null, run: publicRun };
+        return {
+          report: reportsByRun.get(run.id) ?? null,
+          run: publicRun,
+          usage: (run.operationId ? usageByOperation.get(run.operationId) : undefined) ?? null,
+        };
       });
       const latestReport = [...rounds].reverse().find((r) => r.report)?.report ?? null;
 
@@ -372,6 +411,32 @@ export const acceptanceRouter = router({
 
       const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
       const resultsById = new Map(results.map((result) => [result.id, result]));
+
+      // Automated proposals are the reviewer's working state, not published
+      // content — a shared acceptance URL (the whole point of `public`
+      // visibility) must not show visitors "an AI thinks this is broken".
+      // Owner-only, same rule as `origin`.
+      const predictions = isOwner
+        ? await new VerifyReviewPredictionModel(
+            ctx.serverDB,
+            acceptance.userId,
+            acceptance.workspaceId ?? undefined,
+          ).listByRuns(runs.map((run) => run.id))
+        : [];
+      // Keyed by the concrete check RESULT, never by the union row's id. The
+      // union exposes `sourceCriterionId ?? checkItemId` as `check.id` so a
+      // renamed check folds across rounds — but a prediction is stored against
+      // the result it judged. Keying on the logical id silently misses every
+      // plan that uses a distinct snapshot id: generation reports success and
+      // no card ever renders.
+      const predictionByResult = new Map<string, (typeof predictions)[number]>();
+      // Newest-first from the model, so the first write per check item wins and
+      // later (older) rows are ignored.
+      for (const prediction of predictions) {
+        if (!predictionByResult.has(prediction.checkResultId)) {
+          predictionByResult.set(prediction.checkResultId, prediction);
+        }
+      }
 
       return {
         acceptance,
@@ -391,9 +456,17 @@ export const acceptanceRouter = router({
             return attachments ? { ...review, attachments } : review;
           });
           const latestAttachments = toAttachments(reviews.at(-1)?.fileIds);
+          const prediction = check.result ? predictionByResult.get(check.result.id) : undefined;
+          // A STALE review is last round's rejection carried forward as history;
+          // THIS round's result is undecided. Treating it as a current verdict
+          // hid the proposal on exactly the repair round where the reviewer has
+          // to judge again.
+          const settled = Boolean(userReview && !userReview.stale);
           return {
             ...check,
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
+            prediction:
+              prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
             reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
@@ -414,6 +487,27 @@ export const acceptanceRouter = router({
 
   /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+
+  /**
+   * Acceptance status for a known set of subjects, in one read.
+   *
+   * `list` is recency-capped and spans every subject type, so a list surface
+   * that derived per-row state from it would silently mis-read any subject
+   * pushed past the cap. This answers about exactly the subjects asked for.
+   */
+  listStatusesBySubjects: acceptanceProcedure
+    .input(
+      z.object({
+        subjectIds: z.array(z.string()).max(200),
+        subjectType: subjectTypeSchema,
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      ctx.acceptanceService.acceptanceModel.listStatusesBySubjects(
+        input.subjectType,
+        input.subjectIds,
+      ),
+    ),
 
   /**
    * Feedback addressed to a check GROUP (business category) rather than any
@@ -493,6 +587,21 @@ export const acceptanceRouter = router({
           comment: z.string().max(2000).optional(),
           fileIds: z.array(z.string()).max(10).optional(),
           id: z.string(),
+          /**
+           * Which of the three jobs a reject is doing. Optional so older
+           * clients keep working — and left genuinely absent rather than
+           * defaulted, because guessing `unmet` here would recreate exactly the
+           * conflated label the split exists to remove.
+           */
+          rejectIntent: z.enum(acceptanceRejectIntents).optional(),
+          /** Set when the reviewer was responding to a model proposal. */
+          proposal: z
+            .object({
+              adjudication: z.enum(reviewAdjudications),
+              edit: z.enum(reviewProposalEdits).optional(),
+              predictionId: z.string(),
+            })
+            .optional(),
         })
         // A reject IS its feedback — without a note (global, on an annotated
         // region, or a screenshot attachment) the next round has nothing to act on.
@@ -510,19 +619,132 @@ export const acceptanceRouter = router({
       assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
 
       try {
-        return await ctx.acceptanceService.reviewChecks(acceptance.id, {
+        const result = await ctx.acceptanceService.reviewChecks(acceptance.id, {
           action: input.action,
           annotations: input.annotations,
           checkItemIds: input.checkItemIds,
           comment: input.comment?.trim() || undefined,
           fileIds: input.fileIds,
+          proposal: input.proposal,
+          rejectIntent: input.rejectIntent,
         });
+
+        return result;
       } catch (error) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: error instanceof Error ? error.message : 'Failed to review checks',
         });
       }
+    }),
+
+  /**
+   * Answer a model proposal without ruling on the check itself.
+   *
+   * `not-an-issue` and `misidentified` are answers to the MODEL, not to the
+   * delivery — the check stays pending and the reviewer still has to judge it.
+   * That is why this writes to the prediction row rather than going through
+   * `reviewChecks`: routing a dismissal through the review path would stamp a
+   * `user_decision` the reviewer never made.
+   *
+   * The `confirmed` case does not come here — it rides along with the reject in
+   * `reviewChecks`, where the edit diff is available.
+   */
+  adjudicateProposal: acceptanceWriteProcedure
+    .input(
+      z.object({
+        adjudication: z.enum(['not-an-issue', 'misidentified'] as const),
+        id: z.string(),
+        predictionId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      const model = new VerifyReviewPredictionModel(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      );
+      const prediction = await model.findById(input.predictionId);
+      if (!prediction) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Proposal not found' });
+      }
+
+      await model.adjudicate(prediction.id, { adjudication: input.adjudication });
+      return { success: true };
+    }),
+
+  /**
+   * Generate automated review proposals for the checks still awaiting a
+   * verdict in this acceptance.
+   *
+   * An explicit mutation rather than a side effect of `getBundle`: reading a
+   * report must not spend model budget, and the reviewer needs to be able to
+   * ask for proposals again after a new round lands.
+   */
+  predictReviews: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      const { results, runs } = await ctx.acceptanceService.loadRounds(acceptance.id);
+      const resultsByRun = new Map<string, typeof results>();
+      for (const result of results) {
+        const bucket = resultsByRun.get(result.verifyRunId!) ?? [];
+        bucket.push(result);
+        resultsByRun.set(result.verifyRunId!, bucket);
+      }
+      const checks = buildAcceptanceCheckUnion(
+        runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+      );
+
+      // Pinned, never the verifier's own model: the predictor reads screenshots,
+      // and a text-only verifier model silently judges frames it cannot see.
+      const modelConfig = REVIEW_PREDICT_MODEL_CONFIG;
+
+      const predictor = new VerifyReviewPredictorService(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+      );
+
+      // Only checks the reviewer has not already ruled on. Re-judging a settled
+      // check spends budget to argue with a decision that is already made.
+      const pending = checks.filter((check) => check.result && !check.result.userDecision);
+
+      // Dispatched AFTER the response, with a ceiling on how many model calls
+      // are open at once.
+      //
+      // Awaiting the fan-out inline could not survive real data: each check is
+      // a 10-25s multimodal generation, so a thirty-check acceptance ran well
+      // past any gateway timeout and the reviewer lost every proposal the run
+      // had already paid for. The ceiling is the other half — an unbounded
+      // `Promise.all` opened one generation per check simultaneously, which is
+      // how a single click turns into a provider rate-limit burst.
+      //
+      // The client polls the bundle for the cards to appear; a failed
+      // individual prediction is recorded as an `errored` row inside `predict`
+      // rather than thrown, so one bad check cannot abort its neighbours.
+      after(async () => {
+        try {
+          await mapWithConcurrency(pending, REVIEW_PREDICT_CONCURRENCY, (check) =>
+            predictor.predict({
+              checkResultId: check.result!.id,
+              instructionDocumentId: check.planItem?.documentId,
+              modelConfig,
+              requirement: acceptance.requirement,
+              surface: check.surface,
+            }),
+          );
+        } catch (error) {
+          console.error('[acceptance] review prediction batch failed', error);
+        }
+      });
+
+      return { queued: pending.length };
     }),
 
   /**

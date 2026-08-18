@@ -100,17 +100,15 @@ const FileListItemActions = ({
       {!isFolder &&
         !isPage &&
         (isCreatingFileParseTask || isNull(chunkingStatus) || !chunkingStatus ? (
-          canEditResources && (
+          // Unsupported file types simply hide the entry instead of surfacing a
+          // permanently disabled button.
+          canEditResources &&
+          isSupportedForChunking && (
             <div
               className={isCreatingFileParseTask ? undefined : styles.hover}
-              title={t(
-                isSupportedForChunking
-                  ? 'FileManager.actions.chunkingTooltip'
-                  : 'FileManager.actions.chunkingUnsupported',
-              )}
+              title={t('FileManager.actions.chunkingTooltip')}
             >
               <Button
-                disabled={!isSupportedForChunking}
                 icon={FileBoxIcon}
                 loading={isCreatingFileParseTask}
                 size={'small'}

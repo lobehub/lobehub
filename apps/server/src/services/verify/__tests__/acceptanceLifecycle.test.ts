@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   taskResolveVerifyConfig: vi.fn(),
 }));
 
+vi.mock('../goalLoop', () => ({
+  maybeContinueGoalLoop: vi.fn().mockResolvedValue('spawn-failed'),
+  syncGoalToolState: vi.fn(),
+}));
 vi.mock('../acceptanceService', () => ({
   AcceptanceService: vi.fn(() => ({
     acceptanceModel: { update: mocks.acceptanceUpdate },

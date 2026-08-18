@@ -24,21 +24,16 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ conversationKey, messageId }) 
     [childIdsKey, conversationKey, messageId],
   );
   const chips = useFollowUpActionStore(selector);
-  const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
-  const editor = useConversationStore((s) => s.editor);
+  const fillInputMessage = useConversationStore((s) => s.fillInputMessage);
   const isGenerating = useConversationStore(
     messageStateSelectors.isAssistantGroupItemGenerating(messageId),
   );
 
   const handleClick = useCallback(
     (chip: FollowUpChip) => {
-      updateInputMessage('');
-      editor?.setDocument('text', '');
-      updateInputMessage(chip.message);
-      editor?.setDocument('text', chip.message);
-      editor?.focus();
+      fillInputMessage(chip.message);
     },
-    [updateInputMessage, editor],
+    [fillInputMessage],
   );
 
   if (chips.length === 0 || isGenerating) return null;

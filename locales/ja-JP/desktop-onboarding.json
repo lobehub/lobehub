@@ -1,8 +1,6 @@
 {
   "authResult.failed.desc": "もう一度お試しいただくか、別のログイン方法に切り替えてください",
   "authResult.failed.title": "認証に失敗しました",
-  "authResult.success.desc": "下の「開始」ボタンをクリックして、LobeHub Desktop のご利用を続けてください",
-  "authResult.success.title": "認証に成功しました",
   "back": "戻る",
   "navigation.next": "続行",
   "next": "次へ",
@@ -61,6 +59,7 @@
   "screen5.actions.cancel": "キャンセル",
   "screen5.actions.connectToServer": "サーバーに接続",
   "screen5.actions.connecting": "接続中...",
+  "screen5.actions.done": "完了",
   "screen5.actions.signInCloud": "LobeHub Cloud にサインイン",
   "screen5.actions.signOut": "サインアウト",
   "screen5.actions.signingIn": "サインイン中...",
@@ -81,6 +80,10 @@
   "screen5.methods.selfhost.name": "セルフホストインスタンス",
   "screen5.navigation.next": "はじめに",
   "screen5.selfhost.endpointPlaceholder": "サーバーのURLを入力（例：https://your-server.com）",
+  "screen5.status.cloud.title": "LobeHubクラウドに接続済み",
+  "screen5.status.description": "エージェント、グループ、設定、コンテキストがすべてのデバイス間で同期されています。",
+  "screen5.status.selfhost.description": "エージェント、グループ、設定、コンテキストを{{url}}と同期しています。",
+  "screen5.status.selfhost.title": "独自のサーバーに接続済み",
   "screen5.title": "デバイス間で同期するにはサインイン",
   "screen5.title2": "すべてのデータをどこでも同期",
   "screen5.title3": "データは常にあなたの管理下にあります"

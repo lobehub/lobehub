@@ -7,8 +7,8 @@ import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import type { ResourceListVisibilityFilter } from '@/routes/(main)/resource/features/store/initialState';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import type { ResourceListVisibilityFilter } from '@/features/ResourceManager/store/initialState';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {

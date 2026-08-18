@@ -1,28 +1,12 @@
-import path from 'node:path';
-
 import type {
   BaseFileSearch,
-  EditFileParams,
-  GetCommandOutputParams,
   GlobFilesParams,
-  GrepContentParams,
-  KillCommandParams,
-  ListFilesParams,
-  ReadFileParams,
-  RunCommandParams,
   SearchFilesParams,
-  WriteFileParams,
 } from '@lobechat/local-file-shell';
 import { createFileSearchModule } from '@lobechat/local-file-shell';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
-import {
-  editLocalFile,
-  grepContent,
-  listLocalFiles,
-  readLocalFile,
-  writeLocalFile,
-} from './file';
+import { editLocalFile, grepContent, listLocalFiles, readLocalFile, writeLocalFile } from './file';
 import { getCommandOutput, killCommand, runCommand } from './shell';
 
 /**
@@ -84,37 +68,14 @@ const localSystemService: ILocalSystemService = {
 const runtime = new LocalSystemExecutionRuntime(localSystemService);
 
 /**
- * Legacy API name aliases used by older gateway versions. Normalized to the
- * current tool names before dispatch.
- */
-const LEGACY_API_ALIASES: Record<string, string> = {
-  editLocalFile: 'editFile',
-  globLocalFiles: 'globFiles',
-  listLocalFiles: 'listFiles',
-  readLocalFile: 'readFile',
-  searchLocalFiles: 'searchFiles',
-  writeLocalFile: 'writeFile',
-};
-
-/**
- * Resolve a relative path against a scope (CWD). Mirrors the desktop gateway's
- * inline copy of the renderer-side `resolveArgsWithScope` helper so the CLI and
- * desktop produce identical scoping for search/grep tools.
- */
-const resolveArgsWithScope = <T extends { scope?: string }>(args: T, pathField: string): T => {
-  const scope = args.scope;
-  const bag = args as Record<PropertyKey, unknown>;
-  const currentPath = typeof bag[pathField] === 'string' ? (bag[pathField] as string) : undefined;
-  if (!scope) return args;
-  if (!currentPath) return { ...args, [pathField]: scope };
-  if (path.isAbsolute(currentPath)) return args;
-  return { ...args, [pathField]: path.join(scope, currentPath) };
-};
-
-/**
  * Route file/shell tool calls through `LocalSystemExecutionRuntime` so the
  * result carries structured `state` (for client renders) and `content` is the
  * formatted prompt text — matching the desktop gateway path (PR #15114).
+ *
+ * The runtime's `executeToolCall` owns legacy alias normalization, IPC field
+ * mapping, and cwd/scope forwarding — the server runtime injects the
+ * device-bound `cwd`/`scope` into `args` before dispatch, and they now ride
+ * through to the local-file-shell functions instead of being dropped.
  *
  * Returns `null` when `apiName` is not a local-system tool, so the caller can
  * fall back to CLI-only tools (platform agents).
@@ -123,96 +84,8 @@ export async function runLocalSystemTool(
   apiName: string,
   args: Record<string, any>,
 ): Promise<LocalSystemToolOutput | null> {
-  const normalized = LEGACY_API_ALIASES[apiName] ?? apiName;
-
-  switch (normalized) {
-    case 'listFiles': {
-      const p = args as ListFilesParams;
-      return runtime.listFiles({
-        directoryPath: p.path,
-        limit: p.limit,
-        sortBy: p.sortBy,
-        sortOrder: p.sortOrder,
-      } as never);
-    }
-
-    case 'readFile': {
-      const p = args as ReadFileParams;
-      return runtime.readFile({
-        endLine: p.loc?.[1],
-        path: p.path,
-        startLine: p.loc?.[0],
-      });
-    }
-
-    case 'writeFile': {
-      return runtime.writeFile(args as WriteFileParams);
-    }
-
-    case 'editFile': {
-      const p = args as EditFileParams;
-      return runtime.editFile({
-        all: p.replace_all,
-        path: p.file_path,
-        replace: p.new_string,
-        search: p.old_string,
-      });
-    }
-
-    case 'searchFiles': {
-      const resolved = resolveArgsWithScope(
-        args as SearchFilesParams & { scope?: string },
-        'directory',
-      );
-      return runtime.searchFiles({
-        ...resolved,
-        directory: resolved.directory || '',
-        limit: normalizeLimit(resolved.limit),
-      } as never);
-    }
-
-    case 'grepContent': {
-      const resolved = resolveArgsWithScope(args as GrepContentParams, 'path');
-      return runtime.grepContent(resolved as never);
-    }
-
-    case 'globFiles': {
-      const p = args as GlobFilesParams;
-      // Honor both `scope` (current manifest) and the `cwd` legacy alias.
-      return runtime.globFiles({
-        directory: p.scope ?? p.cwd,
-        limit: normalizeLimit(p.limit),
-        pattern: p.pattern,
-      });
-    }
-
-    case 'runCommand': {
-      // ComputerRuntime's RunCommandState reads `args.background`; the manifest
-      // exposes `run_in_background`. Without this normalize the state would
-      // always show foreground even for background commands.
-      const p = args as RunCommandParams;
-      return runtime.runCommand({ ...p, background: p.run_in_background } as never);
-    }
-
-    case 'getCommandOutput': {
-      // Forward `timeout` (gateway per-call budget, injected into args by
-      // executeToolCall) so polling a running command honors it instead of the
-      // service's default wait. The runtime carries it through to getOutput.
-      const p = args as GetCommandOutputParams;
-      return runtime.getCommandOutput({
-        commandId: p.shell_id,
-        filter: p.filter,
-        timeout: p.timeout,
-      } as never);
-    }
-
-    case 'killCommand': {
-      const p = args as KillCommandParams;
-      return runtime.killCommand({ commandId: p.shell_id });
-    }
-
-    default: {
-      return null;
-    }
-  }
+  // `trustArgsCwd` — args reach the CLI only after the server runtime has
+  // stripped any inbound `cwd` and re-injected the device-bound one, so the
+  // `cwd` in `args` here is server-controlled rather than model-chosen.
+  return runtime.executeToolCall(apiName, args, { trustArgsCwd: true });
 }

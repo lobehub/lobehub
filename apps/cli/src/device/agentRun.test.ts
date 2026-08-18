@@ -18,6 +18,7 @@ const makeFakeChild = () => {
 
 const baseParams = {
   agentType: 'claudeCode',
+  assistantMessageId: 'asst',
   jwt: 'jwt',
   operationId: 'op',
   prompt: 'hi',
@@ -67,6 +68,7 @@ describe('spawnHeteroAgentRun', () => {
     expect(opts).toMatchObject({
       cwd: '/work/dir',
       env: expect.objectContaining({
+        LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst',
         LOBEHUB_JWT: 'jwt-token',
         LOBEHUB_SERVER: 'https://app.lobehub.com',
       }),
@@ -133,6 +135,34 @@ describe('spawnHeteroAgentRun', () => {
         { text: 'workspace rules', type: 'text' },
         { text: 'do it', type: 'text' },
       ]),
+    );
+  });
+
+  it('sends recovery history only in the resume fallback prompt', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      prompt: 'continue',
+      resumeFallbackSystemContext: 'workspace rules\n\nprevious conversation',
+      resumeSessionId: 'session-1',
+      systemContext: 'workspace rules',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(child.stdin.write).toHaveBeenCalledWith(
+      JSON.stringify({
+        content: [
+          { text: 'workspace rules', type: 'text' },
+          { text: 'continue', type: 'text' },
+        ],
+        resumeFallback: [
+          { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+          { text: 'continue', type: 'text' },
+        ],
+      }),
     );
   });
 

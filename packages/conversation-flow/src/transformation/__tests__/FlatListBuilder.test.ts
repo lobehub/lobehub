@@ -66,6 +66,178 @@ describe('FlatListBuilder', () => {
       expect(result[1].id).toBe('msg-2');
     });
 
+    it('should hide cross-agent dispatch user envelope while preserving target reply', () => {
+      const messages: Message[] = [
+        {
+          agentId: 'parent-agent',
+          content: '@Target please handle this',
+          createdAt: 0,
+          id: 'user-parent',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'parent-agent',
+          content: '',
+          createdAt: 1,
+          id: 'assistant-parent',
+          parentId: 'user-parent',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'callAgent',
+              arguments: '{"agentId":"target-agent"}',
+              id: 'call-agent-1',
+              identifier: 'lobe-agent-management',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'Called agent "target-agent" to respond.',
+          createdAt: 2,
+          id: 'tool-call-agent',
+          parentId: 'assistant-parent',
+          role: 'tool',
+          tool_call_id: 'call-agent-1',
+          updatedAt: 2,
+        },
+        {
+          agentId: 'target-agent',
+          content: '@Target please handle this',
+          createdAt: 3,
+          id: 'user-dispatch-envelope',
+          metadata: { agentDispatch: { kind: 'callAgent', visibility: 'internal' } },
+          parentId: 'assistant-parent',
+          role: 'user',
+          updatedAt: 3,
+        },
+        {
+          agentId: 'target-agent',
+          content: 'Target result',
+          createdAt: 4,
+          id: 'assistant-target',
+          parentId: 'user-dispatch-envelope',
+          role: 'assistant',
+          updatedAt: 4,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      expect(result.map((message) => message.id)).toEqual([
+        'user-parent',
+        'assistant-parent',
+        'assistant-target',
+      ]);
+      expect(result.filter((message) => message.role === 'user')).toHaveLength(1);
+      expect(result.at(-1)).toMatchObject({
+        agentId: 'target-agent',
+        content: 'Target result',
+        role: 'assistant',
+      });
+    });
+
+    it('should not hide an unmarked cross-agent user turn', () => {
+      const messages: Message[] = [
+        {
+          agentId: 'parent-agent',
+          content: 'Parent answer',
+          createdAt: 0,
+          id: 'assistant-parent',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'target-agent',
+          content: 'A real user-authored turn',
+          createdAt: 1,
+          id: 'user-cross-agent',
+          parentId: 'assistant-parent',
+          role: 'user',
+          updatedAt: 1,
+        },
+      ];
+
+      const result = createBuilder(messages).flatten(messages);
+
+      expect(result.map((message) => message.id)).toEqual(['assistant-parent', 'user-cross-agent']);
+    });
+
+    it('should keep a normal same-agent follow-up user message visible', () => {
+      const messages: Message[] = [
+        {
+          agentId: 'agent-a',
+          content: 'First question',
+          createdAt: 0,
+          id: 'user-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'agent-a',
+          content: 'First answer',
+          createdAt: 1,
+          id: 'assistant-1',
+          parentId: 'user-1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          agentId: 'agent-a',
+          content: 'Follow-up question',
+          createdAt: 2,
+          id: 'user-2',
+          parentId: 'assistant-1',
+          role: 'user',
+          updatedAt: 2,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      expect(result.map((message) => message.id)).toEqual(['user-1', 'assistant-1', 'user-2']);
+    });
+
+    it('should keep a user follow-up after a direct cross-agent reply visible', () => {
+      const messages: Message[] = [
+        {
+          agentId: 'conversation-owner',
+          content: '@Target first question',
+          createdAt: 0,
+          id: 'user-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'target-agent',
+          content: 'Direct answer',
+          createdAt: 1,
+          id: 'assistant-1',
+          parentId: 'user-1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          agentId: 'conversation-owner',
+          content: 'Follow-up question',
+          createdAt: 2,
+          id: 'user-2',
+          parentId: 'assistant-1',
+          role: 'user',
+          updatedAt: 2,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      expect(result.map((message) => message.id)).toEqual(['user-1', 'assistant-1', 'user-2']);
+    });
+
     it('should create assistant group virtual message', () => {
       const messages: Message[] = [
         {

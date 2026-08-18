@@ -21,6 +21,33 @@ describe('resolveAgentTopicGroupMode', () => {
     ).toBe('byProject');
   });
 
+  it.each(['amp', 'codebuddy', 'opencode', 'pi', 'qoder', 'trae'] as const)(
+    'defaults %s agents to project grouping',
+    (agentType) => {
+      expect(
+        resolveAgentTopicGroupMode({
+          agentType,
+          globalMode: 'byTime',
+        }),
+      ).toBe('byProject');
+    },
+  );
+
+  it('keeps remote heterogeneous agents on the global default grouping', () => {
+    expect(
+      resolveAgentTopicGroupMode({
+        agentType: 'openclaw',
+        globalMode: 'byTime',
+      }),
+    ).toBe('byTime');
+    expect(
+      resolveAgentTopicGroupMode({
+        agentType: 'hermes',
+        globalMode: 'flat',
+      }),
+    ).toBe('flat');
+  });
+
   it('keeps normal agents on the global default grouping', () => {
     expect(resolveAgentTopicGroupMode({ globalMode: 'byTime' })).toBe('byTime');
   });

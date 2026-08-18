@@ -1,4 +1,9 @@
 import type { ModelTokensUsage } from '@lobechat/types';
+import {
+  type AudioTokenEstimateSource,
+  estimateAudioInputTokens,
+  normalizeAudioTokensPerSecond,
+} from '@lobechat/utils/audio';
 import type { Pricing, PricingUnitName } from 'model-bank';
 import { estimateTokenCount } from 'tokenx';
 
@@ -12,6 +17,10 @@ const OUTPUT_INPUT_RATIO = 0.5;
 const OUTPUT_TOKEN_CAP = 8192;
 
 export interface ChatInputTokenEstimate {
+  audioDurationItemCount: number;
+  audioFallbackItemCount: number;
+  audioTokenEstimateSource: AudioTokenEstimateSource;
+  audioTokens: number;
   imageTokens: number;
   textTokens: number;
   totalTokens: number;
@@ -19,6 +28,14 @@ export interface ChatInputTokenEstimate {
 }
 
 export interface EstimateOpenAIChatInputTokensOptions {
+  /**
+   * Conservative per-audio fallback used when duration or the model rate is unavailable.
+   */
+  audioTokenEstimate?: number;
+  /**
+   * Positive model-specific audio input token rate for duration-based estimates.
+   */
+  audioTokensPerSecond?: number;
   /**
    * Conservative token estimate for each image input when exact image accounting is unavailable.
    */
@@ -61,6 +78,9 @@ export interface EstimateChatCostFromTokensInput {
  * not be treated as the authoritative charged amount.
  */
 export interface ChatCostEstimate extends PricingComputationResult {
+  audioDurationItemCount?: number;
+  audioFallbackItemCount?: number;
+  audioTokenEstimateSource?: AudioTokenEstimateSource;
   estimatedCost: number;
   estimatedOutputTokens: number;
   inputAudioTokens: number;
@@ -115,6 +135,7 @@ export function estimateOpenAIChatInputTokens(
 ): ChatInputTokenEstimate {
   const imageTokenEstimate = options.imageTokenEstimate ?? DEFAULT_IMAGE_INPUT_TOKEN_ESTIMATE;
   const videoTokenEstimate = options.videoTokenEstimate ?? DEFAULT_VIDEO_INPUT_TOKEN_ESTIMATE;
+  const audioParts: Array<{ durationMs?: unknown }> = [];
   let textTokens = 0;
   let imageTokens = 0;
   let videoTokens = 0;
@@ -152,16 +173,29 @@ export function estimateOpenAIChatInputTokens(
         continue;
       }
 
+      if (part.type === 'audio_url') {
+        audioParts.push(part.audio_url);
+        continue;
+      }
+
       textTokens += estimateSerializableTokens(part);
     }
   }
 
   textTokens += estimateSerializableTokens(options.tools);
+  const audioEstimate = estimateAudioInputTokens(audioParts, {
+    fallbackTokensPerItem: options.audioTokenEstimate,
+    tokensPerSecond: options.audioTokensPerSecond,
+  });
 
   return {
+    audioDurationItemCount: audioEstimate.durationItemCount,
+    audioFallbackItemCount: audioEstimate.fallbackItemCount,
+    audioTokenEstimateSource: audioEstimate.source,
+    audioTokens: audioEstimate.tokens,
     imageTokens,
     textTokens,
-    totalTokens: textTokens + imageTokens + videoTokens,
+    totalTokens: textTokens + imageTokens + audioEstimate.tokens + videoTokens,
     videoTokens,
   };
 }
@@ -233,6 +267,8 @@ export function estimateChatCostFromMessages(
   options: EstimateChatCostFromMessagesOptions = {},
 ): ChatCostEstimate | undefined {
   const {
+    audioTokenEstimate,
+    audioTokensPerSecond,
     tools,
     imageTokenEstimate,
     lookupParams,
@@ -240,15 +276,21 @@ export function estimateChatCostFromMessages(
     usdToCnyRate,
     videoTokenEstimate,
   } = options;
+  const effectiveAudioTokensPerSecond =
+    normalizeAudioTokensPerSecond(audioTokensPerSecond) ??
+    normalizeAudioTokensPerSecond(pricing?.audioTokensPerSecond);
   const inputTokens = estimateOpenAIChatInputTokens(messages, {
+    audioTokenEstimate,
+    audioTokensPerSecond: effectiveAudioTokensPerSecond,
     imageTokenEstimate,
     tools,
     videoTokenEstimate,
   });
 
-  return estimateChatCostFromTokens(
+  const estimate = estimateChatCostFromTokens(
     pricing,
     {
+      audioTokens: inputTokens.audioTokens,
       imageTokens: inputTokens.imageTokens,
       maxOutputTokens,
       textTokens: inputTokens.textTokens,
@@ -256,4 +298,13 @@ export function estimateChatCostFromMessages(
     },
     { lookupParams, usdToCnyRate },
   );
+
+  if (!estimate) return undefined;
+
+  return {
+    ...estimate,
+    audioDurationItemCount: inputTokens.audioDurationItemCount,
+    audioFallbackItemCount: inputTokens.audioFallbackItemCount,
+    audioTokenEstimateSource: inputTokens.audioTokenEstimateSource,
+  };
 }

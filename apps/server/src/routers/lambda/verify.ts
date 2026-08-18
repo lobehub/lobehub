@@ -5,6 +5,7 @@ import {
   verifySurfaces,
   verifyVisibilities,
 } from '@lobechat/const/verify';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type {
   VerifyCheckItem,
   VerifyCheckResultMetadata,
@@ -37,6 +38,7 @@ import {
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import {
   AcceptanceService,
   createEvidenceFileResolver,
@@ -83,6 +85,7 @@ const evidenceTypeSchema = z.enum([
   'screenshot',
   'gif',
   'video',
+  'audio',
   'text',
   'markdown',
   'dom_snapshot',
@@ -488,7 +491,26 @@ export const verifyRouter = router({
         modelConfig: modelConfigSchema,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateCriteria(input)),
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.planGenerator.generateCriteria(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          // Runtime errors are plain payloads, so tRPC normalizes them into an Error cause.
+          // Mark the normalized cause that the shared handler actually receives.
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
 
   /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
   createCriteria: verifyWriteProcedure

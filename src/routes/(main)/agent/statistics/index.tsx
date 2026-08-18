@@ -1,14 +1,14 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { Suspense } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import AgentUsage from '@/features/AgentUsage';
 
-const AgentStatisticsPage = memo(() => (
-  <Suspense fallback={<Loading debugId="AgentUsage" />}>
+const AgentStatisticsPage = () => (
+  <Suspense fallback={<SurfaceSkeleton variant={'grid'} />}>
     <AgentUsage />
   </Suspense>
-));
+);
 
 export default AgentStatisticsPage;

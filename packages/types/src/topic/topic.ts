@@ -21,7 +21,7 @@ export type TopicSortBy = 'createdAt' | 'updatedAt';
  * Server-side ordering for the topic list query.
  * - `updatedAt` (default): favorites first, then most-recently-updated.
  * - `status`: favorites first, then by status priority
- *   (waitingForHuman → running → active → paused → failed → completed →
+ *   (waitingForHuman → running → active → failed → completed →
  *   archived), then most-recently-updated within each status. Backs the
  *   sidebar "group by status" mode so the highest-priority topics stay on the
  *   first page regardless of pagination.
@@ -111,9 +111,38 @@ export interface OnboardingSessionSnapshot {
 }
 
 export interface ChatTopicMetadata {
+  /** Watermark written by the background topic-summary workflow. */
+  autoSummary?: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: string;
+    summarizedAt: string;
+    version: number;
+  };
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
+  /**
+   * The agent whose Profile page this Agent Builder conversation was started
+   * from (mirrors `ExecAgentAppContext.editingAgentId`).
+   *
+   * Recorded for the same reason as {@link editingGroupId} — see there.
+   */
+  editingAgentId?: string;
+  /**
+   * The group whose Profile page this Group Agent Builder conversation was
+   * started from (mirrors `ExecAgentAppContext.editingGroupId`).
+   *
+   * Builder panels run on one builtin agent shared by every target, and their
+   * topics carry no `groupId` / `sessionId` on purpose — those columns would
+   * pull the builder's side-conversation into the target's own chat read path.
+   * So nothing else in the row records what the conversation was configuring.
+   *
+   * Showing the builder's full build history in one list is intentional, so
+   * nothing filters on this today. It is captured because it can only be
+   * captured now: the association exists solely at run time, and a topic
+   * written without it can never be attributed afterwards.
+   */
+  editingGroupId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -185,6 +214,14 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    /** Device selected for a notify-based platform task. */
+    deviceId?: string;
+    /** Personal-device owner used to route dispatch and cancellation through the same principal. */
+    deviceUserId?: string;
+    /** Workspace principal used for a workspace-enrolled device. */
+    deviceWorkspaceId?: string;
+    /** Notify-based platform type used to select the cancellation protocol. */
+    heteroType?: string;
     /**
      * Serialized lifecycle hooks (onComplete / onError) registered for this run.
      *
@@ -210,6 +247,17 @@ export interface ChatTopicMetadata {
    * `runningOperation`); every reader treats a nullish value as "not scheduled".
    */
   scheduledRun?: TopicScheduledRun | null;
+  /**
+   * Short-lived ownership marker used while a task result is being appended
+   * and its continuation is being dispatched. Callback deliveries acquire
+   * this only when `runningOperation` is empty, which serializes callback
+   * bursts behind the foreground turn without holding a database transaction
+   * open while the agent operation starts.
+   */
+  taskCallbackReservation?: {
+    messageId: string;
+    reservedAt: string;
+  } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
@@ -428,10 +476,21 @@ export const chatTopicMetadataUpdateSchema = z.object({
   runningOperation: z
     .object({
       assistantMessageId: z.string(),
+      deviceId: z.string().optional(),
+      deviceUserId: z.string().optional(),
+      deviceWorkspaceId: z.string().optional(),
+      heteroType: z.string().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
       scope: z.string().optional(),
       threadId: z.string().nullish(),
+    })
+    .nullable()
+    .optional(),
+  taskCallbackReservation: z
+    .object({
+      messageId: z.string(),
+      reservedAt: z.string(),
     })
     .nullable()
     .optional(),
@@ -458,7 +517,6 @@ export interface ChatTopicSummary {
 export const TOPIC_STATUSES = [
   'active',
   'running',
-  'paused',
   'waitingForHuman',
   'scheduled',
   'failed',
@@ -563,6 +621,12 @@ export interface CreateTopicParams {
 export interface QueryTopicParams {
   agentId?: string | null;
   current?: number;
+  /**
+   * Scope an `agentId` query to the builder conversations that configured one
+   * target — see `ChatTopicMetadata.editingGroupId`. Ignored without `agentId`.
+   */
+  editingAgentId?: string | null;
+  editingGroupId?: string | null;
   /**
    * Exclude topics by status (e.g. ['completed'])
    */

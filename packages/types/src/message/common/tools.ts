@@ -6,11 +6,18 @@ import type { LobeToolRenderType } from '../../tool';
 // ToolIntervention must be defined first to avoid circular dependency
 export interface ToolIntervention {
   rejectedReason?: string;
+  /**
+   * The user skipped the interaction (e.g. AskUserQuestion) rather than
+   * rejecting the tool call — still `status: 'rejected'` for the runtime, but
+   * the UI renders a neutral "skipped" state instead of a rejection warning.
+   */
+  skipped?: boolean;
   status?: 'pending' | 'approved' | 'rejected' | 'aborted' | 'none';
 }
 
 export const ToolInterventionSchema = z.object({
   rejectedReason: z.string().optional(),
+  skipped: z.boolean().optional(),
   status: z.enum(['pending', 'approved', 'rejected', 'aborted', 'none']).optional(),
 });
 

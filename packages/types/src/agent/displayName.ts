@@ -43,3 +43,19 @@ export function agentDisplayName(
 ): string | undefined {
   return firstNonBlank(agent?.name, agent?.title, fallback);
 }
+
+/**
+ * Resolve the supporting label shown beside an agent's primary name: its role.
+ *
+ * Only an agent with a personal name has one — an agent without a name already
+ * renders its title as the primary label, so repeating it would be noise. This
+ * is deliberately uniform across every kind of agent, including runtime-backed
+ * (heterogeneous) ones: they show their own role rather than their runtime.
+ */
+export const agentSecondaryDisplayName = (
+  agent: AgentNameFields | null | undefined,
+): string | undefined => {
+  const role = firstNonBlank(agent?.name) ? firstNonBlank(agent?.title) : undefined;
+
+  return role === agentDisplayName(agent) ? undefined : role;
+};

@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { AmpAdapter, ClaudeCodeAdapter, CodexAdapter, OpenCodeAdapter } from './adapters';
-import { createAdapter, listAgentTypes } from './registry';
+import {
+  AmpAdapter,
+  ClaudeCodeAdapter,
+  CodeBuddyAdapter,
+  CodexAdapter,
+  CursorAdapter,
+  GrokBuildAdapter,
+  KimiCodeAdapter,
+  OpenCodeAdapter,
+  PiAdapter,
+  QoderAdapter,
+  TraeAcpAdapter,
+} from './adapters';
+import { HETEROGENEOUS_AGENT_CONFIGS } from './config';
+import { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 
 describe('registry', () => {
   describe('createAdapter', () => {
@@ -15,13 +28,41 @@ describe('registry', () => {
       expect(adapter).toBeInstanceOf(ClaudeCodeAdapter);
     });
 
+    it('creates a CodeBuddyAdapter for "codebuddy"', () => {
+      expect(createAdapter('codebuddy')).toBeInstanceOf(CodeBuddyAdapter);
+    });
+
     it('creates a CodexAdapter for "codex"', () => {
       const adapter = createAdapter('codex');
       expect(adapter).toBeInstanceOf(CodexAdapter);
     });
 
+    it('creates a KimiCodeAdapter for "kimi-code"', () => {
+      expect(createAdapter('kimi-code')).toBeInstanceOf(KimiCodeAdapter);
+    });
+
+    it('creates a CursorAdapter for "cursor"', () => {
+      expect(createAdapter('cursor')).toBeInstanceOf(CursorAdapter);
+    });
+
+    it('creates a GrokBuildAdapter for "grok-build"', () => {
+      expect(createAdapter('grok-build')).toBeInstanceOf(GrokBuildAdapter);
+    });
+
     it('creates an OpenCodeAdapter for "opencode"', () => {
       expect(createAdapter('opencode')).toBeInstanceOf(OpenCodeAdapter);
+    });
+
+    it('creates a PiAdapter for "pi"', () => {
+      expect(createAdapter('pi')).toBeInstanceOf(PiAdapter);
+    });
+
+    it('creates a QoderAdapter for "qoder"', () => {
+      expect(createAdapter('qoder')).toBeInstanceOf(QoderAdapter);
+    });
+
+    it('creates a TraeAcpAdapter for "trae"', () => {
+      expect(createAdapter('trae')).toBeInstanceOf(TraeAcpAdapter);
     });
 
     it('throws for unknown agent type', () => {
@@ -30,12 +71,11 @@ describe('registry', () => {
   });
 
   describe('listAgentTypes', () => {
-    it('includes every local CLI adapter', () => {
-      const types = listAgentTypes();
-      expect(types).toContain('amp');
-      expect(types).toContain('claude-code');
-      expect(types).toContain('codex');
-      expect(types).toContain('opencode');
+    it('registers exactly one local adapter for every descriptor', () => {
+      expect(listLocalAgentTypes().toSorted()).toEqual(
+        HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type).toSorted(),
+      );
+      expect(listAgentTypes()).toContain('claude-code-sdk');
     });
   });
 });

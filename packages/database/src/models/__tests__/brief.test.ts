@@ -283,6 +283,97 @@ describe('BriefModel', () => {
     });
   });
 
+  describe('listNewsEnriched', () => {
+    const day = (iso: string) => new Date(iso);
+
+    it('should return only news-type briefs created within [startAt, endAt), keeping resolved ones', async () => {
+      const model = new BriefModel(serverDB, userId);
+
+      const inRangeResolved = await model.create({
+        createdAt: day('2026-08-05T10:00:00Z'),
+        summary: 'In range, already read',
+        title: 'Resolved result',
+        type: 'result',
+      });
+      await model.resolve(inRangeResolved.id, { action: 'read' });
+      await model.create({
+        createdAt: day('2026-08-05T00:00:00Z'),
+        summary: 'In range at the exact day start',
+        title: 'Boundary insight',
+        type: 'insight',
+      });
+      // Excluded: not a news type, even though it's in range.
+      await model.create({
+        createdAt: day('2026-08-05T12:00:00Z'),
+        summary: 'Actionable',
+        title: 'Decision',
+        type: 'decision',
+      });
+      // Excluded: created the day before — the exact bug this feed fixes,
+      // old unresolved reports leaking into "today".
+      await model.create({
+        createdAt: day('2026-08-04T23:59:59Z'),
+        summary: 'Yesterday',
+        title: 'Old insight',
+        type: 'insight',
+      });
+      // Excluded: created exactly at endAt (exclusive upper bound).
+      await model.create({
+        createdAt: day('2026-08-06T00:00:00Z'),
+        summary: 'Tomorrow',
+        title: 'Next-day insight',
+        type: 'insight',
+      });
+      // Excluded: another user's brief on the same day.
+      await new BriefModel(serverDB, userId2).create({
+        createdAt: day('2026-08-05T10:00:00Z'),
+        summary: 'Not mine',
+        title: 'Foreign insight',
+        type: 'insight',
+      });
+
+      const rows = await model.listNewsEnriched({
+        endAt: day('2026-08-06T00:00:00Z'),
+        startAt: day('2026-08-05T00:00:00Z'),
+      });
+
+      expect(rows.map((r) => r.brief.title)).toEqual(['Resolved result', 'Boundary insight']);
+      expect(rows[0].brief.resolvedAt).not.toBeNull();
+    });
+  });
+
+  describe('hasNewsBefore', () => {
+    it('should only count own news-type briefs created strictly before the date', async () => {
+      const model = new BriefModel(serverDB, userId);
+      const cutoff = new Date('2026-08-05T00:00:00Z');
+
+      expect(await model.hasNewsBefore(cutoff)).toBe(false);
+
+      // Non-news and foreign briefs must not light the pager's "older" arrow.
+      await model.create({
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+        summary: 'Old decision',
+        title: 'Decision',
+        type: 'decision',
+      });
+      await new BriefModel(serverDB, userId2).create({
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+        summary: 'Foreign',
+        title: 'Foreign insight',
+        type: 'insight',
+      });
+      expect(await model.hasNewsBefore(cutoff)).toBe(false);
+
+      await model.create({
+        createdAt: new Date('2026-08-04T23:59:59Z'),
+        summary: 'Older news',
+        title: 'Old insight',
+        type: 'insight',
+      });
+      expect(await model.hasNewsBefore(cutoff)).toBe(true);
+    });
+  });
+
   describe('listUnresolvedByAgentAndTrigger', () => {
     /**
      * @example

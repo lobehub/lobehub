@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -18,6 +18,7 @@ import ByProjectMode from '../TopicListContent/ByProjectMode';
 import ByStatusMode from '../TopicListContent/ByStatusMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
+import TopicListSkeleton from './TopicListSkeleton';
 
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');
@@ -36,8 +37,13 @@ const TopicList = memo(() => {
 
   useFetchChatTopics();
 
+  // Route transitions must paint instantly: the mount commit shows a skeleton
+  // frame and the real list renders in a deferred (interruptible) follow-up
+  // pass, off the navigation's critical path.
+  const listReady = useDeferredMount();
+
   // Show skeleton when current session's topic data is not yet loaded
-  if (isUndefinedTopics) return <SkeletonList />;
+  if (isUndefinedTopics || !listReady) return <TopicListSkeleton />;
 
   return (
     <>

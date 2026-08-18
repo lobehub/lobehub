@@ -109,6 +109,8 @@ vi.mock('@/database/models/connectorTool', () => ({
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
   })),
 }));
@@ -181,6 +183,16 @@ const operationSkillSetArg = () =>
     | {
         enabledPluginIds: string[];
         skills: Array<{ content?: string; identifier: string; name: string }>;
+      }
+    | undefined;
+
+const toolsEngineConfigArg = () =>
+  mockCreateServerAgentToolsEngine.mock.calls[0][1] as
+    | {
+        agentConfig: {
+          chatConfig?: { toolMode?: string };
+          plugins: string[];
+        };
       }
     | undefined;
 
@@ -295,6 +307,49 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(skillById('db-skill-pinned')?.content).toBeUndefined();
     expect(skillById('db-skill-auto')?.content).toBeUndefined();
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
+  });
+
+  it('enables the goal tool for a direct server /goal prompt', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: '/goal ship it' } as any);
+
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('lobe-goal');
+    expect(operationSkillSetArg()?.enabledPluginIds).not.toContain('lobe-task');
+    expect(toolsEngineConfigArg()?.agentConfig).toEqual({
+      chatConfig: { toolMode: 'custom' },
+      plugins: ['lobe-goal'],
+    });
+  });
+
+  it('isolates a direct server /goal prompt from pinned and selected tools', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: { toolMode: 'agent' },
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: ['lobe-agent', 'pinned-tool'],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: '/goal ship it',
+      selectedToolIds: ['selected-tool'],
+    } as any);
+
+    expect(operationSkillSetArg()?.enabledPluginIds).toEqual(['lobe-goal']);
+    expect(toolsEngineConfigArg()?.agentConfig).toEqual({
+      chatConfig: { toolMode: 'custom' },
+      plugins: ['lobe-goal'],
+    });
   });
 
   it('does not eager-inject an auto skill whose identifier collides with a turn-scoped tool id', async () => {

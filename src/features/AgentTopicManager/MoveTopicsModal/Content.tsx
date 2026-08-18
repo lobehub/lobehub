@@ -148,6 +148,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
             {filteredAgents.map((agent) => (
               <AgentItem
                 active={false}
+                agent={agent}
                 agentId={agent.id}
                 agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
                 avatar={agent.avatar}

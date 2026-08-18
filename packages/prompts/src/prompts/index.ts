@@ -1,3 +1,4 @@
+export * from './agentArtwork';
 export * from './agentBuilder';
 export * from './agentDocuments';
 export * from './agentGroup';

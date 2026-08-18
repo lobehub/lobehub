@@ -47,6 +47,7 @@ export type WorkspaceAuditAction =
   | 'credential.deleted'
   | 'credential.tested'
   | 'api_key.created'
+  | 'api_key.updated'
   | 'api_key.renamed'
   | 'api_key.rotated'
   | 'api_key.revoked'

@@ -1,7 +1,10 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  entityIdPattern,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
@@ -19,12 +22,14 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { agentOperations, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
@@ -197,10 +202,13 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        conversationAgentId: z.string().optional(),
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
         editingAgentId: z.string().optional(),
+        /** The group being edited when scope is 'group_agent_builder' (not a group chat turn). */
+        editingGroupId: z.string().optional(),
         groupId: z.string().nullish(),
         initialTopicMetadata: z
           .object({
@@ -224,14 +232,32 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Client-minted ids for the rows this run creates, honoured verbatim —
+     * the gateway counterpart of `sendMessageInServer`'s `newTopic.id` /
+     * `newUserMessage.id` / `newAssistantMessage.id`. Validated per namespace:
+     * an unvalidated client primary key would let a caller submit look-alike
+     * ids, wrong namespaces, or strings that leak into logs and URLs.
+     */
+    clientIds: z
+      .object({
+        assistantMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+        topicId: z.string().regex(entityIdPattern('topics')).optional(),
+        userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+      })
+      .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Current desktop device hint, honored only for an effective local target */
+    localDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds: z.array(z.string()).optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
+    /** Existing gateway operation this fresh turn atomically supersedes. */
+    replacesOperationId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -425,6 +451,8 @@ const ExecSubAgentTaskSchema = z.object({
 const CreateClientTaskThreadSchema = z.object({
   /** The Agent ID to execute the task */
   agentId: z.string(),
+  /** Optional assistant placeholder for transports that stream into an existing row. */
+  assistantMessage: z.object({ provider: z.string() }).optional(),
   /** The Group ID (optional, only for Group mode) */
   groupId: z.string().optional(),
   /** Initial user message content (task instruction) */
@@ -490,9 +518,9 @@ const InterruptTaskSchema = z
     /** Thread ID */
     threadId: z.string().optional(),
     /**
-     * Topic ID — required to cancel remote hetero tasks (openclaw / hermes).
+     * Topic ID — used to cancel device-backed heterogeneous agent tasks.
      * When provided and the topic's runningOperation has a deviceId, the server
-     * will dispatch a cancelHeteroTask tool call to kill the remote process.
+     * will dispatch a cancelHeteroTask tool call to kill the device process.
      */
     topicId: z.string().optional(),
   })
@@ -539,7 +567,18 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: z.enum([
+    'amp',
+    'claude-code',
+    'codebuddy',
+    'codex',
+    'cursor',
+    'kimi-code',
+    'opencode',
+    'pi',
+    'qoder',
+    'trae',
+  ]),
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -556,7 +595,23 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: z.enum([
+    'amp',
+    'claude-code',
+    'codebuddy',
+    'codex',
+    'cursor',
+    'kimi-code',
+    'opencode',
+    'pi',
+    'qoder',
+    'trae',
+  ]),
+  /** Initial assistant placeholder forwarded by the producer. Unlike the live
+   * ingest path, finish may arrive after gateway session completion has already
+   * cleared topic.metadata.runningOperation, so this is the durable fallback
+   * anchor for projecting a terminal error onto the assistant turn. */
+  assistantMessageId: z.string().min(1).optional(),
   error: z
     .object({
       /**
@@ -612,12 +667,28 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
 
+  // Read market accessToken from user_settings.market so server-side agent runtime
+  // can authenticate with the Market API for creds operations.
+  let marketAccessToken: string | undefined;
+  try {
+    const userModel = new UserModel(ctx.serverDB!, ctx.userId);
+    const settings = await userModel.getUserSettings();
+    marketAccessToken = (settings?.market as any)?.accessToken;
+  } catch {
+    // non-fatal — MarketService will fall back to trustedClientToken
+  }
+
   return opts.next({
     ctx: {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        marketAccessToken,
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
@@ -761,7 +832,8 @@ export const aiAgentRouter = router({
   createClientTaskThread: aiAgentWriteProcedure
     .input(CreateClientTaskThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId } = input;
+      const { agentId, assistantMessage, groupId, instruction, parentMessageId, title, topicId } =
+        input;
 
       log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -816,6 +888,19 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
+        const assistantMessageRecord = assistantMessage
+          ? await ctx.messageModel.create({
+              agentId,
+              content: LOADING_FLAT,
+              groupId,
+              parentId: userMessage.id,
+              provider: assistantMessage.provider,
+              role: 'assistant',
+              threadId: thread.id,
+              topicId,
+            })
+          : undefined;
+
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
           postProcessUrl: createUiMessageFileUrlResolver(),
@@ -836,6 +921,7 @@ export const aiAgentRouter = router({
 
         // 4. Return Thread, userMessageId, threadMessages and messages
         return {
+          assistantMessageId: assistantMessageRecord?.id,
           messages,
           startedAt,
           success: true,
@@ -866,6 +952,7 @@ export const aiAgentRouter = router({
       appContext,
       autoStart = true,
       deviceId,
+      localDeviceId,
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
@@ -908,12 +995,14 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        clientIds: input.clientIds,
         // Propagate the originating request's client IP / user agent into the run
         // so downstream LLM-call metadata can carry them for auditing and spend
         // attribution. These are server-derived from the tRPC context and are
         // intentionally not part of the client-passable input schema.
         clientIp: ctx.clientIp ?? undefined,
         deviceId,
+        localDeviceId,
         existingMessageIds,
         fileIds,
         mentionedAgents,
@@ -936,6 +1025,17 @@ export const aiAgentRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
       }
 
       throw new TRPCError({
@@ -1651,7 +1751,7 @@ export const aiAgentRouter = router({
    * CLI's own end-event was lost mid-flight.
    */
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
-    const { agentType, error, operationId, result, sessionId, topicId } = input;
+    const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
@@ -1684,6 +1784,7 @@ export const aiAgentRouter = router({
       // here anymore; this is just the server-to-server ack endpoint.
       await heteroService.heteroFinish({
         agentType,
+        assistantMessageId,
         error,
         operationId,
         result,

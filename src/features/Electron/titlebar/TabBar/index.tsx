@@ -27,6 +27,8 @@ import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
@@ -59,7 +61,9 @@ const TabBar = () => {
   const { allowed: canCreate, reason } = usePermission('create_content');
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
-  const activateTab = useElectronStore((s) => s.activateTab);
+  const splitView = useElectronStore((s) => s.splitView);
+  const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
+  const switchTab = useElectronStore((s) => s.switchTab);
   const addNewTab = useElectronStore((s) => s.addNewTab);
   const removeTab = useElectronStore((s) => s.removeTab);
   const closeOtherTabs = useElectronStore((s) => s.closeOtherTabs);
@@ -68,6 +72,8 @@ const TabBar = () => {
   const reorderTabs = useElectronStore((s) => s.reorderTabs);
   const pinTab = useElectronStore((s) => s.pinTab);
   const unpinTab = useElectronStore((s) => s.unpinTab);
+  const closeSplitView = useElectronStore((s) => s.closeSplitView);
+  const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
 
   const sensors = useSensors(
     // Require a small drag distance so a plain click still activates the tab.
@@ -142,9 +148,9 @@ const TabBar = () => {
 
   const handleActivate = useCallback(
     (id: string) => {
-      activateTab(id);
+      switchTab(id);
     },
-    [activateTab],
+    [switchTab],
   );
 
   const handleClose = useCallback(
@@ -246,15 +252,22 @@ const TabBar = () => {
                   item={tab}
                   key={placement.id}
                   pinnedCount={pinnedTabs.length}
+                  splitViewEnabled={splitViewEnabled}
                   tier={resolveTabTier(placement.width)}
                   totalCount={tabs.length}
                   width={placement.width}
                   x={placement.x}
+                  isSplitVisible={
+                    splitView?.primaryTabId === placement.id ||
+                    splitView?.secondaryTabId === placement.id
+                  }
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onCloseLeft={handleCloseLeft}
                   onCloseOthers={handleCloseOthers}
                   onCloseRight={handleCloseRight}
+                  onCloseSplitView={closeSplitView}
+                  onOpenInSplitView={openTabInSplitView}
                   onTogglePin={handleTogglePin}
                 />
               );

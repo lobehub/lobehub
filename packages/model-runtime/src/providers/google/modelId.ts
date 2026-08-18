@@ -50,7 +50,10 @@ const NANO_BANANA_MODEL_ALIASES = new Set([
 
 // These models need the explicit image/web searchTypes payload when googleSearch is enabled.
 // Other search-capable models use the plain `{ googleSearch: {} }` shape.
-const IMAGE_SEARCH_TYPES_MODELS = new Set(['gemini-3.1-flash-image-preview']);
+const IMAGE_SEARCH_TYPES_MODELS = new Set([
+  'gemini-3.1-flash-image',
+  'gemini-3.1-flash-image-preview',
+]);
 
 // Models verified to reject systemInstruction/thinkingConfig. Other cases are derived below
 // only when the model-id shape is stable enough to avoid a release-time code change.

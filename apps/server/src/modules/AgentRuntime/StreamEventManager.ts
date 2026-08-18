@@ -55,6 +55,7 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
  *   via the local `HookContext` channel, not via the stream.
  * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
  *   — operation-level snapshot; back-compat copies of one struct.
+ * - `expertise` — immutable operation-level snapshot retained in working state.
  *
  * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
  * keep the two lists in sync if either set changes.
@@ -64,6 +65,7 @@ const stripStateForStream = <T extends Record<string, any>>(
 ): T | undefined => {
   if (!state) return state;
   const {
+    expertise: _expertise,
     messages: _messages,
     operationToolSet: _operationToolSet,
     toolManifestMap: _toolManifestMap,
@@ -76,8 +78,8 @@ const stripStateForStream = <T extends Record<string, any>>(
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * If the event `data` carries a `finalState`, strip `messages` + the
- * tool-set group off it (see `stripStateForStream` for the rationale).
+ * If the event `data` carries a `finalState`, strip `expertise`, `messages`,
+ * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
  * Centralizing the strip here means new callers — including direct
  * `publishStreamEvent` users (e.g. `RuntimeExecutors`, the per-step
@@ -145,6 +147,30 @@ export class StreamEventManager {
       throw new Error('Redis is not available. Please configure REDIS_URL environment variable.');
     }
     this.redis = redisClient;
+  }
+
+  /**
+   * Run blocking reads on a short-lived duplicated connection. ioredis
+   * executes commands on one connection strictly in order, so an
+   * `XREAD BLOCK` issued on the shared client parks the connection for up to
+   * the block timeout and every concurrent command (XADD / EXPIRE, plus any
+   * other module sharing the client) queues behind it — with an SSE
+   * subscriber attached, each publish paid up to ~1s, serializing streaming
+   * into a chunk-per-second drip.
+   *
+   * The connection is scoped to the read rather than the instance: managers
+   * are constructed per request (`createStreamEventManager()`) and most
+   * callers never `disconnect()`, so an instance-held duplicate would leak a
+   * socket per request. Scoping also lets concurrent blocking readers block
+   * independently instead of queueing on one shared blocking connection.
+   */
+  private async withBlockingConnection<T>(fn: (conn: Redis) => Promise<T>): Promise<T> {
+    const conn = this.redis.duplicate();
+    try {
+      return await fn(conn);
+    } finally {
+      conn.disconnect();
+    }
   }
 
   /**
@@ -283,78 +309,81 @@ export class StreamEventManager {
 
     log('Starting subscription for operation %s from %s', operationId, lastEventId);
 
-    while (!signal?.aborted) {
-      try {
-        const xreadStart = Date.now();
-        const results = await this.redis.xread(
-          'BLOCK',
-          1000, // 1 second timeout
-          'STREAMS',
-          streamKey,
-          currentLastId,
-        );
-        const xreadEnd = Date.now();
+    // One dedicated connection for the whole subscription loop.
+    await this.withBlockingConnection(async (conn) => {
+      while (!signal?.aborted) {
+        try {
+          const xreadStart = Date.now();
+          const results = await conn.xread(
+            'BLOCK',
+            1000, // 1 second timeout
+            'STREAMS',
+            streamKey,
+            currentLastId,
+          );
+          const xreadEnd = Date.now();
 
-        if (results && results.length > 0) {
-          const [, messages] = results[0];
-          const events: StreamEvent[] = [];
+          if (results && results.length > 0) {
+            const [, messages] = results[0];
+            const events: StreamEvent[] = [];
 
-          for (const [id, fields] of messages) {
-            const eventData: any = {};
+            for (const [id, fields] of messages) {
+              const eventData: any = {};
 
-            // Parse Redis Stream fields
-            for (let i = 0; i < fields.length; i += 2) {
-              const key = fields[i];
-              const value = fields[i + 1];
+              // Parse Redis Stream fields
+              for (let i = 0; i < fields.length; i += 2) {
+                const key = fields[i];
+                const value = fields[i + 1];
 
-              if (key === 'data') {
-                eventData[key] = JSON.parse(value);
-              } else if (key === 'stepIndex' || key === 'timestamp') {
-                eventData[key] = parseInt(value);
-              } else {
-                eventData[key] = value;
+                if (key === 'data') {
+                  eventData[key] = JSON.parse(value);
+                } else if (key === 'stepIndex' || key === 'timestamp') {
+                  eventData[key] = parseInt(value);
+                } else {
+                  eventData[key] = value;
+                }
               }
+
+              events.push({
+                ...eventData,
+                id, // Redis Stream event ID
+              } as StreamEvent);
+
+              currentLastId = id;
             }
 
-            events.push({
-              ...eventData,
-              id, // Redis Stream event ID
-            } as StreamEvent);
-
-            currentLastId = id;
-          }
-
-          if (events.length > 0) {
-            const now = Date.now();
-            // Calculate latency from event publication to read
-            for (const event of events) {
-              const latency = now - event.timestamp;
-              timing(
-                '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
-                operationId,
-                event.stepIndex,
-                event.type,
-                event.timestamp,
-                now,
-                latency,
-                xreadEnd - xreadStart,
-              );
+            if (events.length > 0) {
+              const now = Date.now();
+              // Calculate latency from event publication to read
+              for (const event of events) {
+                const latency = now - event.timestamp;
+                timing(
+                  '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
+                  operationId,
+                  event.stepIndex,
+                  event.type,
+                  event.timestamp,
+                  now,
+                  latency,
+                  xreadEnd - xreadStart,
+                );
+              }
+              onEvents(events);
             }
-            onEvents(events);
           }
-        }
-      } catch (error) {
-        if (signal?.aborted) {
-          break;
-        }
+        } catch (error) {
+          if (signal?.aborted) {
+            break;
+          }
 
-        console.error('[StreamEventManager] Stream subscription error:', error);
-        // Retry after brief delay
-        await new Promise((resolve) => {
-          setTimeout(resolve, 1000);
-        });
+          console.error('[StreamEventManager] Stream subscription error:', error);
+          // Retry after brief delay
+          await new Promise((resolve) => {
+            setTimeout(resolve, 1000);
+          });
+        }
       }
-    }
+    });
 
     log('Subscription ended for operation %s', operationId);
   }
@@ -391,7 +420,9 @@ export class StreamEventManager {
       fromId = tail.length > 0 ? tail[0][0] : '0';
     }
 
-    const results = await this.redis.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId);
+    const results = await this.withBlockingConnection((conn) =>
+      conn.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId),
+    );
     if (!results || results.length === 0) return { events: [], lastEventId: fromId };
 
     const [, messages] = results[0];

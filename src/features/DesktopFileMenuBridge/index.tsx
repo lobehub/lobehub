@@ -4,8 +4,8 @@ import { AGENT_CHAT_URL } from '@lobechat/const';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback } from 'react';
 
+import { useCreateMenuItems } from '@/features/HomeSidebar/hooks/useCreateMenuItems';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks/useCreateMenuItems';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

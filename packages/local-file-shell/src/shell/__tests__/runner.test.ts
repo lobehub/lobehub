@@ -143,6 +143,10 @@ describe('runCommand', () => {
 
       expect(result).toMatchObject({ exit_code: 0, success: true });
       expect(fs.readFileSync(target, 'utf8')).toBe('sandbox-disabled');
+      // An unsandboxed run must not look sandboxed to anything reading the
+      // result — that field is the only observable difference between "fenced"
+      // and "the request said fenced".
+      expect(result.sandboxed).toBeUndefined();
     });
 
     it.skipIf(process.platform !== 'darwin')(

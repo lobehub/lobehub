@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentDisplayName } from './displayName';
+import { agentDisplayName, agentSecondaryDisplayName } from './displayName';
 
 describe('agentDisplayName', () => {
   it('prefers the personal name over the role', () => {
@@ -27,5 +27,28 @@ describe('agentDisplayName', () => {
   it('returns undefined without a fallback when nothing is set', () => {
     expect(agentDisplayName({})).toBeUndefined();
     expect(agentDisplayName(undefined)).toBeUndefined();
+  });
+});
+
+describe('agentSecondaryDisplayName', () => {
+  it('shows the role of a named agent', () => {
+    expect(agentSecondaryDisplayName({ name: 'Alice', title: 'Health Assistant' })).toBe(
+      'Health Assistant',
+    );
+  });
+
+  it('treats a heterogeneous agent like any other — its role, not its runtime', () => {
+    expect(agentSecondaryDisplayName({ name: '陆令言', title: 'default' })).toBe('default');
+  });
+
+  it('shows nothing when the title is already the primary label', () => {
+    expect(agentSecondaryDisplayName({ title: 'Health Assistant' })).toBeUndefined();
+    expect(agentSecondaryDisplayName({ name: '  ', title: 'Pi' })).toBeUndefined();
+  });
+
+  it('treats a blank role as absent', () => {
+    expect(agentSecondaryDisplayName({ name: 'Alice', title: '   ' })).toBeUndefined();
+    expect(agentSecondaryDisplayName({ name: 'Alice' })).toBeUndefined();
+    expect(agentSecondaryDisplayName(null)).toBeUndefined();
   });
 });

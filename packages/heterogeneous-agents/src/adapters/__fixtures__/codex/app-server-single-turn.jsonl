@@ -1,0 +1,14 @@
+{"method":"turn/started","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"itemsView":"full","status":"inProgress","error":null,"startedAt":1,"completedAt":null,"durationMs":null}}}
+{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"thread-1","turnId":"turn-1","itemId":"reasoning-1","summaryIndex":0,"delta":"Inspecting the workspace"}}
+{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","completedAtMs":2,"item":{"type":"reasoning","id":"reasoning-1","summary":["Inspecting the workspace"],"content":[]}}}
+{"method":"item/started","params":{"threadId":"thread-1","turnId":"turn-1","startedAtMs":3,"item":{"type":"commandExecution","id":"command-1","command":"pwd","aggregatedOutput":null,"exitCode":null,"durationMs":null,"status":"inProgress"}}}
+{"method":"item/commandExecution/outputDelta","params":{"threadId":"thread-1","turnId":"turn-1","itemId":"command-1","delta":"/work"}}
+{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","completedAtMs":4,"item":{"type":"commandExecution","id":"command-1","command":"pwd","aggregatedOutput":"/workspace\n","exitCode":0,"durationMs":1,"status":"completed"}}}
+{"method":"item/started","params":{"threadId":"thread-1","turnId":"turn-1","startedAtMs":5,"item":{"type":"mcpToolCall","id":"mcp-1","server":"docs","tool":"lookup","status":"inProgress","arguments":{"query":"Codex"},"result":null,"error":null}}}
+{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","completedAtMs":6,"item":{"type":"mcpToolCall","id":"mcp-1","server":"docs","tool":"lookup","status":"completed","arguments":{"query":"Codex"},"result":{"content":[{"type":"text","text":"Found docs"}],"structuredContent":null,"_meta":null},"error":null}}}
+{"method":"turn/plan/updated","params":{"threadId":"thread-1","turnId":"turn-1","explanation":null,"plan":[{"step":"Inspect","status":"completed"},{"step":"Answer","status":"inProgress"}]}}
+{"method":"item/agentMessage/delta","params":{"threadId":"thread-1","turnId":"turn-1","itemId":"message-1","delta":"Done."}}
+{"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","completedAtMs":7,"item":{"type":"agentMessage","id":"message-1","text":"Done.","phase":"final_answer","memoryCitation":null}}}
+{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-1","turnId":"turn-1","tokenUsage":{"total":{"totalTokens":17,"inputTokens":10,"cachedInputTokens":2,"cacheWriteInputTokens":0,"outputTokens":7,"reasoningOutputTokens":3},"last":{"totalTokens":17,"inputTokens":10,"cachedInputTokens":2,"cacheWriteInputTokens":0,"outputTokens":7,"reasoningOutputTokens":3},"modelContextWindow":200000}}}
+{"method":"future/notification","params":{"threadId":"thread-1","value":true}}
+{"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"itemsView":"full","status":"completed","error":null,"startedAt":1,"completedAt":2,"durationMs":1000}}}

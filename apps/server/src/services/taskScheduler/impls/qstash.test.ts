@@ -36,12 +36,13 @@ describe('QStashTaskScheduler', () => {
       const id = await scheduler.scheduleNextTopic({
         delay: 60,
         taskId: 'task-1',
+        tickToken: 'generation-1',
         userId: 'user-1',
       });
 
       expect(id).toBe('msg-abc');
       expect(publishJSON).toHaveBeenCalledWith({
-        body: { taskId: 'task-1', userId: 'user-1' },
+        body: { taskId: 'task-1', tickToken: 'generation-1', userId: 'user-1' },
         delay: 60,
         url: 'https://app.example.com/api/workflows/task/heartbeat-tick',
       });

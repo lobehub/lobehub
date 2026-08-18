@@ -69,6 +69,7 @@ describe('modelId', () => {
       ['gemini-3.5-flash', false],
       ['gemini-3.5-flash-lite', true],
       ['gemini-3.6-flash', true],
+      ['gemini-3.7-flash', true],
       ['gemini-flash-latest', true],
       ['gemini-flash-lite-latest', true],
       ['google/gemini-4-flash', true],
@@ -109,6 +110,7 @@ describe('modelId', () => {
     });
 
     it('keeps the imageSearch payload exception narrow', () => {
+      expect(shouldUseGoogleImageSearchTypes('gemini-3.1-flash-image')).toBe(true);
       expect(shouldUseGoogleImageSearchTypes('gemini-3.1-flash-image-preview')).toBe(true);
       expect(shouldUseGoogleImageSearchTypes('gemini-3.5-pro-image-preview')).toBe(false);
     });

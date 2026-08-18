@@ -31,7 +31,7 @@ Execution outputs remain in the round directory's `assets/`. See
 `scripts/fixture.mjs` and the skill's fixture workflow.
 
 **`result.json` is the report — `report.md` is just its tail.** The published
-verify page (`/verify/<id>`) renders itself from `result.json`: one line of
+acceptance page renders itself from `result.json`: one line of
 provenance (PR / branch / commit / date / surfaces), the overall conclusion from
 `summary.conclusion` directly under the title, and the check list from `plan[]`
 paired with `cases[]`. So `report.md` must NOT repeat the scope block or a case
@@ -54,6 +54,25 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
 2. **Collect evidence as you test** — every asserted behavior gets one evidence
    item in `$DIR/assets/`:
+
+   - Structured data (metrics, time series, before/after model or benchmark
+     comparisons, distributions, matrices, and tables): **use native Acceptance
+     visualizations by default.** Put review-sized values in the case's
+     `datasets[]`, declare their presentation in `visualizations[]`, and attach
+     the raw CSV/JSON, benchmark output, trace, profile, or vectors as
+     `evidence`. The structured view is the reviewer-facing decision aid; the raw
+     artifact is the audit trail.
+
+     Do **not** generate a PNG/GIF of data that `metric-comparison`, `line-chart`,
+     `bar-chart`, `scatter-plot`, `heatmap`, or `table` can faithfully express.
+     A static chart discards machine-readable values, accessibility, theme
+     adaptation, and consistent comparison semantics. Generate a static chart
+     only when no supported renderer can represent the result, and state that
+     limitation in the case observation. Do not merely upload a CSV and expect
+     the page to infer a chart: define both `datasets[]` and
+     `visualizations[]` explicitly. See
+     [Structured visualizations](#structured-visualizations) for the schema.
+
    - UI (static state): `agent-browser screenshot` or `capture-app-window.sh`, then
      **verify the screenshot with the Read tool before citing it** — never cite an
      image you haven't looked at.
@@ -72,7 +91,11 @@ table — those double up on the page. It carries only the non-duplicate narrati
      wait $GIF_PID
      ```
 
-     Verify at least the first/last frames visually (Read the GIF) before citing.
+     Keep source resolution unless file size requires an explicit `GIF_WIDTH`.
+     The recorder uses per-frame palettes without dithering so neutral loading
+     surfaces do not acquire colored noise. Verify the first, middle, and final
+     frames visually at readable size before citing; reject blurred text, noisy
+     grays, or lost one-pixel borders.
 
    - UI (before/after comparison): capture and visually verify both original
      screenshots. Do not compose them into a new image. In the case's `evidence`
@@ -100,7 +123,7 @@ table — those double up on the page. It carries only the non-duplicate narrati
      usual slip, and it does not pair: `role` is read from inside `comparison`,
      never from the evidence item itself.
 
-     The verify page renders a complete pair with each screenshot under its own
+     The acceptance page renders a complete pair with each screenshot under its own
      tinted band — red for `before`, green for `after`. A group contains exactly one
      `before` and one `after`, and **both halves need the same string `id`**; a half
      without an `id` can never pair. Incomplete groups render as ordinary evidence.
@@ -119,6 +142,23 @@ table — those double up on the page. It carries only the non-duplicate narrati
        where the before/after contrast is actually _stated_: put the measured delta
        on each side, so the two captions read as a comparison rather than repeating
        the case title.
+
+   - Audio (a deliverable the user **hears** — TTS output, a voice reply, an
+     alert tone): attach the clip itself as `audio` evidence. The acceptance page
+     renders a player, so the reviewer can listen; prose about a sound, or a
+     screenshot of a waveform, proves nothing. `mp3` / `wav` / `m4a` / `aac` /
+     `flac` / `ogg` / `opus` are typed as `audio` from the extension.
+
+     Verify the clip before citing it — confirm it is non-silent and carries the
+     expected content (duration plus a transcription or spectral check); an empty
+     or truncated file is indistinguishable from a good one in a file listing.
+     Pair it with a short text artifact when the claim is about _what was said_
+     (input text, voice/model, measured duration): the player proves it plays,
+     the text makes it auditable.
+
+     A screen recording with system audio is the fallback for "the UI plays it at
+     the right moment"; for "the output is correct", attach the file the feature
+     produced.
 
    - CLI: use the dual-text evidence format below. Preserve the exact command +
      trimmed output (`<cli> <command> | tee "$DIR/assets/x-execution.txt"`) in
@@ -188,6 +228,11 @@ from the current one.
    never produces a case renders as **未执行** rather than vanishing, so cut coverage
    in the open.
 
+   **HARD RULE: no programmatic gates in the plan.** Tests / type-check / lint /
+   build are never plan items — ingest drops them and a gates-only round fails
+   to publish. See
+   [what is NOT an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
+
 4. **Fill `result.json` as you go** — it is the report. Each tested behavior is one
    entry in `cases[]` (`{ id, name, result, observation, evidence }`), where
    `evidence` is a path under `assets/`. Set the scope fields (`scenario`, `branch`,
@@ -204,7 +249,7 @@ from the current one.
    the final chat reply.
 
 6. **Publish** (SKILL.md Step 6) — upload the finished session so it's viewable on
-   the verify platform, not just on disk. **Publish to PRODUCTION defaults with the
+   LobeHub Acceptance, not just on disk. **Publish to PRODUCTION defaults with the
    user's real login, NOT a local-dev CLI override** — strip the local dev overrides
    so `lh` uses its production defaults. Clearing an override profile looks like:
 
@@ -216,8 +261,9 @@ from the current one.
    This creates a new immutable verification run, attaches it to the required
    subject acceptance, uploads the cases, evidence, and report body, then prints
    `/acceptance/<acceptanceId>` plus its `?r=<roundIndex>` round-snapshot form.
-   Include the full production acceptance link (never a `/verify/<id>` one) in the
-   final reply alongside the local report dir — with whitespace after the URL, so
+   Include only the full production acceptance link in the final reply. Never
+   expose local paths, local file links, or internal run-page paths. Leave
+   whitespace after the URL, so
    an autolinker can't swallow adjacent CJK punctuation into the href. See SKILL.md →
    Step 6 for why production defaults (a localhost URL isn't shareable and a local
    stub storage fails file-evidence uploads), the production login check, and the
@@ -386,10 +432,10 @@ you cut it is not.
 Two of its fields are a **closed vocabulary**, because the pipeline acts on them —
 they are not labels:
 
-| field              | values                                                                       | what it does                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                              | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
-| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `text` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| field              | values                                                                                                | what it does                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`         | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence` | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
 
 An out-of-vocabulary value in either fails the ingest — an unrecognized medium
 would silently gate on nothing, which is worse than no gate at all.
@@ -397,6 +443,38 @@ would silently gate on nothing, which is worse than no gate at all.
 `method` (how you would exercise it) and `expected` (what would make it pass) stay
 **free prose** — they carry intent no enum can, and both render under the check on
 the page next to the outcome.
+
+### HARD RULE — what is NOT an acceptance check
+
+A check is something a **person decides about the delivery**. The repo's own
+automated gates are not that, and on the page they are actively harmful: twenty
+green "unit tests pass" rows bury the two checks that actually needed someone to
+look.
+
+**These MUST NOT appear in `plan[]` / `cases[]`, under any phrasing:**
+
+| Not a check                                                | Where it belongs                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| Unit / integration / regression / snapshot tests, coverage | one line in `report.md` → **Verification**           |
+| `type-check`, `tsc`, `eslint`, lint, format, a clean build | same — a precondition of shipping, not a deliverable |
+| "the suite is green", "CI passes"                          | same                                                 |
+
+This is enforced, not advisory. `acceptance run ingest` **drops every matching
+item** — matched on title, category, AND `method`, so "run `bun run test`"
+inside `method` under a product-sounding title still matches — warns with the
+dropped ids, and recounts `summary` from the checks that remain. A round
+consisting **only** of such checks **fails to publish**. Apply the rule at plan
+time (Phase 1 case selection gate), before any case runs: a gate written as a
+check is a round spent proving something nobody accepts. Run the gates as your
+own diligence — report them as one line of narrative.
+
+The line is the _subject_ of the check, not who judged it: a CLI behavior check
+asserted by a command is a good acceptance item (`verifier: "program"`);
+"`bun run test` is green" is not.
+
+**What IS a check:** what the user sees, hears, reads, or receives — a rendered
+screen, a produced file, a response shape a client depends on, an audio clip that
+actually plays, a failure state that recovers.
 
 A plan item may also carry a per-item `surface` (same closed set as the run-level
 `surfaces`; `electron` normalizes to `desktop`). It says which product surface THIS
@@ -456,6 +534,100 @@ For comparable metrics, only publish before/after values produced by the same
 harness, fixture, environment, warm-up policy, statistic, and sample window. If
 those differ, use separate series or mark the case uncertain instead of presenting
 a misleading delta.
+
+Every visualization requires unique non-empty `id`, `type`, `dataset`, and
+`version: 1`; `dataset` must reference a declared dataset id. `title` and
+`context` are optional non-empty strings. Every encoding field name below must
+reference a field declared by that dataset.
+
+| Renderer            | Required encoding                                              | Optional encoding                                                                         |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `metric-comparison` | `label`, `before`, `after`                                     | `beforeSamples`, `afterSamples`, `direction`, `statistic`, `target`, `unit`               |
+| `line-chart`        | `x`, non-empty `series[]`; each series requires `field`        | series `label`, series `style` (`muted` \| `primary` \| `accent`), `xLabel`, `yLabel`     |
+| `bar-chart`         | `category`, non-empty `series[]`; each series requires `field` | series `label`, `valueLabel`                                                              |
+| `scatter-plot`      | `x`, `y`                                                       | `color`, `label`, `xLabel`, `yLabel`                                                      |
+| `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
+| `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
+
+Minimal valid encoding examples (replace every field-name string with a key
+declared in the referenced dataset):
+
+```json
+[
+  {
+    "id": "quality-delta",
+    "type": "metric-comparison",
+    "version": 1,
+    "dataset": "metrics",
+    "encoding": { "label": "metric", "before": "baseline", "after": "candidate" }
+  },
+  {
+    "id": "loss-over-time",
+    "type": "line-chart",
+    "version": 1,
+    "dataset": "training",
+    "encoding": {
+      "x": "step",
+      "series": [
+        { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
+        { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
+      ],
+      "xLabel": "Step",
+      "yLabel": "Loss"
+    }
+  },
+  {
+    "id": "scores-by-model",
+    "type": "bar-chart",
+    "version": 1,
+    "dataset": "scores",
+    "encoding": {
+      "category": "model",
+      "series": [{ "field": "score", "label": "Score" }],
+      "valueLabel": "Accuracy"
+    }
+  },
+  {
+    "id": "latency-quality",
+    "type": "scatter-plot",
+    "version": 1,
+    "dataset": "runs",
+    "encoding": {
+      "x": "latency",
+      "y": "quality",
+      "color": "model",
+      "label": "run",
+      "xLabel": "Latency (ms)",
+      "yLabel": "Quality"
+    }
+  },
+  {
+    "id": "error-matrix",
+    "type": "heatmap",
+    "version": 1,
+    "dataset": "errors",
+    "encoding": { "x": "predicted", "y": "actual", "value": "count" }
+  },
+  {
+    "id": "benchmark-table",
+    "type": "table",
+    "version": 1,
+    "dataset": "benchmarks",
+    "encoding": {
+      "columns": ["model", "latency", "score"],
+      "highlights": [
+        { "field": "latency", "mode": "min" },
+        { "field": "score", "mode": "max" }
+      ]
+    }
+  }
+]
+```
+
+Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
+`temporal`; field keys and dataset/view ids must be unique. Rows may contain only
+declared keys with string, number, boolean, or null values. The combined inline
+row limit is 10,000.
 
 `pullRequest` is optional: when absent, the ingest asks `gh` for the PR of `branch`
 and fills it in. Write it explicitly only when the report verifies a PR that isn't

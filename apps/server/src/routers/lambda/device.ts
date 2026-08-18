@@ -143,11 +143,16 @@ export const deviceRouter = router({
       z.object({
         deviceId: z.string(),
         platform: remotePlatformEnum,
+        scope: z.enum(['personal', 'workspace']).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.executeToolCall(
-        { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        {
+          deviceId: input.deviceId,
+          userId: ctx.userId,
+          workspaceId: input.scope === 'personal' ? undefined : ctx.workspaceId,
+        },
         {
           apiName: 'checkPlatformCapability',
           arguments: JSON.stringify({ platform: input.platform }),
@@ -293,19 +298,21 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
-  /** Query OpenCode's model catalog on the device that will execute the agent. */
+  /** Query a heterogeneous CLI's model catalog on the device that will execute the agent. */
   listHeterogeneousAgentModels: deviceProcedure
     .input(
       z.object({
+        args: z.array(z.string()).optional(),
         command: z.string().optional(),
         cwd: z.string().optional(),
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
-        type: z.literal('opencode'),
+        type: z.enum(['codebuddy', 'cursor', 'opencode', 'pi', 'qoder', 'trae']),
       }),
     )
     .query(async ({ ctx, input }) =>
       deviceGateway.listHeterogeneousAgentModels({
+        args: input.args,
         command: input.command,
         cwd: input.cwd,
         deviceId: input.deviceId,

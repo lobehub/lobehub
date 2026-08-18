@@ -7,6 +7,8 @@ import { router } from '@/libs/trpc/lambda';
 import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
 
+import { getRestrictedKnowledgeBaseIds } from './_helpers/knowledgeBaseAccess';
+
 const MARKETPLACE_SEARCH_TYPES = new Set(['communityAgent', 'mcp', 'plugin']);
 
 /**
@@ -121,7 +123,17 @@ export const searchRouter = router({
           'knowledgeBase',
         ].includes(type)
       ) {
-        searchPromises.push(ctx.searchRepo.search(input));
+        // Restricted (member No-access) KBs and their linked files/folders/
+        // pages must not be discoverable through unified search either —
+        // mirror the library-list filter. Only the KB-adjacent types consume
+        // the exclusion, so other typed searches skip the extra lookups on
+        // this debounced search-as-you-type path.
+        const needsKbExclusion =
+          !type || ['file', 'folder', 'knowledgeBase', 'page'].includes(type);
+        const excludeKnowledgeBaseIds = needsKbExclusion
+          ? await getRestrictedKnowledgeBaseIds(ctx)
+          : [];
+        searchPromises.push(ctx.searchRepo.search({ ...input, excludeKnowledgeBaseIds }));
       }
 
       // Marketplace searches: see `includeMarketplace` on the input schema —

@@ -1,4 +1,4 @@
-import { gptImage2Schema } from '../const/imageParameters';
+import { gptImage2Schema, nanoBanana2LiteParameters } from '../const/imageParameters';
 import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 const aihubmixChatModels: AIChatModelCard[] = [
@@ -1843,6 +1843,25 @@ const aihubmixChatModels: AIChatModelCard[] = [
 ];
 
 const aihubmixImageModels: AIImageModelCard[] = [
+  {
+    description:
+      "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's fastest and most cost-efficient image generation model, built for high-volume generation and editing.",
+    displayName: 'Nano Banana 2 Lite',
+    enabled: true,
+    id: 'gemini-3.1-flash-lite-image:image',
+    parameters: nanoBanana2LiteParameters,
+    pricing: {
+      approximatePricePerImage: 0.034,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-30',
+    type: 'image',
+  },
   {
     description:
       "OpenAI's next-generation multimodal image model with native reasoning, up to 4K resolution, near-perfect text rendering, and high-fidelity multilingual support.",

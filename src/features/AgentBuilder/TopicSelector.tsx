@@ -86,8 +86,13 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   return (
     <NavHeader
       showTogglePanelButton={false}
+      styles={{ right: { flex: 'none' } }}
       left={
-        activeTopic?.title ? <span className={styles.title}>{activeTopic.title}</span> : undefined
+        activeTopic?.title ? (
+          <span className={styles.title} title={activeTopic.title}>
+            {activeTopic.title}
+          </span>
+        ) : undefined
       }
       right={
         <>
@@ -108,7 +113,11 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
             popupProps={{ style: { maxHeight: 400, minWidth: 280, overflowY: 'auto' } }}
             triggerProps={{ disabled: disabled || isEmpty }}
           >
-            <ActionIcon disabled={disabled || isEmpty} icon={Clock3Icon} />
+            <ActionIcon
+              disabled={disabled || isEmpty}
+              icon={Clock3Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            />
           </DropdownMenu>
         </>
       }
