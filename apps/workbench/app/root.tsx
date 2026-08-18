@@ -107,6 +107,9 @@ export const ErrorBoundary = () => {
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) notifyChunkError();
 
+  const detail =
+    error instanceof Error ? `${error.message}\n\n${error.stack ?? ''}` : JSON.stringify(error);
+
   return (
     <div
       style={{
@@ -130,6 +133,21 @@ export const ErrorBoundary = () => {
           Back
         </button>
       </div>
+      <pre
+        style={{
+          background: 'rgba(125, 125, 125, 0.1)',
+          borderRadius: 8,
+          fontSize: 12,
+          maxHeight: '40dvh',
+          maxWidth: 720,
+          overflow: 'auto',
+          padding: 12,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}
+      >
+        {detail}
+      </pre>
     </div>
   );
 };
