@@ -282,22 +282,6 @@ export class HeterogeneousAgentService {
       topicId,
     });
 
-    // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
-    // down even if the CLI stream missed it (process killed mid-flight,
-    // network drop on last batch). Idempotent on the renderer side: the
-    // gateway event handler latches `terminalState` on first end-event.
-    await this.streamEventManager.publishStreamEvent(operationId, {
-      data: {
-        agentType,
-        error,
-        operationId,
-        reason: result,
-        sessionId,
-      },
-      stepIndex: 0,
-      type: 'agent_runtime_end',
-    });
-
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
     // (onTopicComplete → task done/failed) and any IM bot completion callback
@@ -312,34 +296,49 @@ export class HeterogeneousAgentService {
     // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
     // branch — and suppresses a spurious bot "stopped" message before the real
     // result lands.)
-    if (result === 'cancelled') return;
-
     let serializedHooks: SerializedHook[] | undefined;
-    let assistantMessageId: string | undefined;
+    let assistantMessageId = seedAssistantMessageId;
     let isolationThreadId: string | undefined;
-    try {
-      const topic = await this.topicModel.findById(topicId);
-      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
-      isolationThreadId = topic?.metadata?.runningOperation?.threadId ?? undefined;
-      // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
-      // on every step boundary, so it refers to the LAST assistant message with
-      // the complete final content.  Fall back to the initial placeholder id
-      // recorded in runningOperation if the pointer is absent or belongs to a
-      // different operation (shouldn't happen, but defensive).
-      const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
-      assistantMessageId =
-        currentMsgRef?.operationId === operationId
-          ? currentMsgRef.msgId
-          : topic?.metadata?.runningOperation?.assistantMessageId;
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
-      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
-      // topic off `running`. Guarded in the model: an attached client's own
-      // terminal write ('active'/'unread') is never clobbered.
-      await this.topicModel.settleRunningStatus(topicId);
-    } catch (err) {
-      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
+    if (result !== 'cancelled') {
+      try {
+        const settled = await this.topicModel.settleRunningOperation(topicId, operationId);
+        if (settled.status === 'conflict') {
+          log(
+            'heteroFinish: ignore stale finish topic=%s op=%s; current operation is %s',
+            topicId,
+            operationId,
+            settled.activeOperationId,
+          );
+          return;
+        }
+
+        assistantMessageId = settled.assistantMessageId ?? assistantMessageId;
+        if (settled.status === 'settled') {
+          serializedHooks = settled.hooks as SerializedHook[] | undefined;
+          isolationThreadId = settled.threadId;
+        }
+      } catch (err) {
+        log('heteroFinish: failed to settle runningOperation (non-fatal): %O', err);
+      }
     }
+
+    // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
+    // if the CLI stream missed it (process killed mid-flight, network drop on
+    // last batch). A stale finish that conflicts with a newer operation returns
+    // above instead of projecting the old terminal state into the active run.
+    await this.streamEventManager.publishStreamEvent(operationId, {
+      data: {
+        agentType,
+        error,
+        operationId,
+        reason: result,
+        sessionId,
+      },
+      stepIndex: 0,
+      type: 'agent_runtime_end',
+    });
+
+    if (result === 'cancelled') return;
 
     // The owning agentId is authoritatively encoded in the operationId
     // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved

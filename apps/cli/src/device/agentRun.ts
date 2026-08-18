@@ -22,6 +22,8 @@ export interface SpawnHeteroAgentRunParams {
   serverUrl: string;
   systemContext?: string;
   topicId: string;
+  /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
+  workspaceId?: string;
 }
 
 export interface AgentRunAckResult {
@@ -69,6 +71,7 @@ export function spawnHeteroAgentRun(
     serverUrl,
     systemContext,
     topicId,
+    workspaceId,
   } = params;
   const workDir = cwd ?? process.cwd();
 
@@ -120,6 +123,7 @@ export function spawnHeteroAgentRun(
         ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
         LOBEHUB_JWT: jwt,
         LOBEHUB_SERVER: serverUrl,
+        ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
       },
       stdio: ['pipe', 'inherit', 'inherit'],
     });

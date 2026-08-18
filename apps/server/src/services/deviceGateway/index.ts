@@ -1289,6 +1289,8 @@ export class DeviceGateway {
     topicId: string;
     userId: string;
     workspaceId?: string;
+    /** Topic/run workspace forwarded to the device for hetero ingest. */
+    ingestWorkspaceId?: string;
   }): Promise<{ error?: string; success: boolean }> {
     const client = this.getClient();
     if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
