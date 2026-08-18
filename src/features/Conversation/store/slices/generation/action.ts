@@ -997,19 +997,22 @@ export const generationSlice: StateCreator<
     // tool/provider error on a grouped reply is not resumable this way.
     if (!isHeterogeneousAgentStatusGuideError(erroredStep.error?.body)) return;
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const executionContext = getRetryHeterogeneousExecutionContext(
+      getRetryExecutionContext(erroredStep, context),
+    );
+    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(executionContext.agentId);
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
-      isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
+      isGatewayMode: chatStore.isGatewayModeEnabled(executionContext.agentId),
       isWorkspaceAgent: workspaceScoped,
     });
-    const agentId = context.agentId;
+    const agentId = executionContext.agentId;
 
     const resumeSessionId = agentId
-      ? resolveHeteroRunContext(chatStore, context, agentId).resumeSessionId
+      ? resolveHeteroRunContext(chatStore, executionContext, agentId).resumeSessionId
       : undefined;
 
     // Nothing to continue from: the failed step IS the group's head (the run
@@ -1044,7 +1047,7 @@ export const generationSlice: StateCreator<
     }
 
     const { operationId } = chatStore.startOperation({
-      context: { ...context, messageId: groupMessageId },
+      context: { ...executionContext, messageId: groupMessageId },
       type: 'regenerate',
     });
 
@@ -1056,7 +1059,7 @@ export const generationSlice: StateCreator<
       // steps inside the same assistantGroup, so the bubble grows instead of
       // being replaced.
       await runHeterogeneousFromExistingMessage(chatStore, {
-        context,
+        context: executionContext,
         heterogeneousProvider,
         parentMessageId: continueParentId,
         parentOperationId: operationId,

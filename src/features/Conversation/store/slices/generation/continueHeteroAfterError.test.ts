@@ -198,6 +198,65 @@ describe('continueHeteroAfterError', () => {
     expect(executorParams().message).not.toBe(USER_MESSAGE.content);
   });
 
+  it('continues a heterogeneous group member with its own execution identity', async () => {
+    const store = createStore({
+      context: { ...CONTEXT, agentId: 'supervisor-agent', groupId: 'group-1', scope: 'group' },
+    });
+    act(() => {
+      store.setState({
+        dbMessages: [
+          USER_MESSAGE,
+          { content: '', id: 'step-1', parentId: 'user-1', role: 'assistant' },
+          { content: '', id: 'step-2', parentId: 'step-1', role: 'assistant' },
+        ],
+        displayMessages: [
+          USER_MESSAGE,
+          {
+            children: [
+              {
+                agentId: 'member-agent',
+                content: 'looking',
+                id: 'step-1',
+                metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+                tools: [{ id: 'call-1' }],
+              },
+              {
+                agentId: 'member-agent',
+                content: '',
+                error: HETERO_RATE_LIMIT,
+                id: 'step-2',
+                metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+                tools: [{ id: 'call-2' }],
+              },
+            ],
+            content: '',
+            id: 'step-1',
+            parentId: 'user-1',
+            role: 'assistantGroup',
+          },
+        ],
+      } as any);
+    });
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(mockCreateMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'member-agent',
+        groupId: 'group-1',
+        metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+      }),
+    );
+    expect(executorParams().context).toMatchObject({
+      agentId: 'member-agent',
+      groupId: 'group-1',
+      orchestrationRole: 'member',
+      subAgentId: 'member-agent',
+    });
+  });
+
   it('drops an error-only tail step and chains the continuation onto its parent', async () => {
     // The terminal-error echo suppressor cleared the step's content, so it has
     // nothing to render — keeping it would leave an empty block in the bubble.
