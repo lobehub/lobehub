@@ -20,10 +20,24 @@ const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.
  * (`DEFAULT_INBOX_AVATAR` is the precedent). That keeps the default build
  * byte-identical; a distribution that sets a logo also stops the consent page
  * fetching an image from a CDN a private deployment may not reach.
+ *
+ * `logo_uri` must be an ABSOLUTE http(s) URI — oidc-provider validates client
+ * metadata at registration and rejects the whole client with
+ * `invalid_client_metadata: logo_uri must be a web uri`, which fails every
+ * authorization request before any screen renders. `BRANDING_LOGO_URL` is a
+ * site-relative path in the usual case (it is served from this deployment's own
+ * `public/`), so it has to be joined onto the app's origin here rather than
+ * passed through.
  */
+const absoluteLogoUri = (defaultLogoUri: string): string => {
+  if (!BRANDING_LOGO_URL) return defaultLogoUri;
+  if (/^https?:\/\//.test(BRANDING_LOGO_URL)) return BRANDING_LOGO_URL;
+  return urlJoin(appEnv.APP_URL!, BRANDING_LOGO_URL);
+};
+
 const clientDisplay = (suffix: string, defaultLogoUri: string) => ({
   client_name: `${BRANDING_NAME} ${suffix}`,
-  logo_uri: BRANDING_LOGO_URL || defaultLogoUri,
+  logo_uri: absoluteLogoUri(defaultLogoUri),
 });
 
 /**
