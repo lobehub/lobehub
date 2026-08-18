@@ -13,9 +13,10 @@ import { useTranslation } from 'react-i18next';
 
 import { type VersionResponseData } from '@/app/(backend)/api/version/route';
 import { ProductLogo } from '@/components/Branding';
-import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
+import { CHANGELOG_PATH, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global';
@@ -128,11 +129,11 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     if (!isDesktop) {
       if (hasNewVersion) {
         return (
-          <a href={MANUAL_UPGRADE_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
+          <WorkspaceLink escape style={{ flex: 1 }} to={CHANGELOG_PATH}>
             <Button block={mobile} type={'primary'}>
               {t('upgradeVersion.action')}
             </Button>
-          </a>
+          </WorkspaceLink>
         );
       }
       // A failed update check must not read as "up to date" — offer a retry.
@@ -258,9 +259,9 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         </Flexbox>
       </Flexbox>
       <Flexbox horizontal flex={mobile ? 1 : undefined} gap={8}>
-        <a href={CHANGELOG_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
+        <WorkspaceLink escape style={{ flex: 1 }} to={CHANGELOG_PATH}>
           <Button block={mobile}>{t('changelog')}</Button>
-        </a>
+        </WorkspaceLink>
         {renderUpdateButton()}
       </Flexbox>
     </Flexbox>

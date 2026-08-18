@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  FileClockIcon,
   FilePenIcon,
   Image,
   LibraryBigIcon,
@@ -786,6 +787,32 @@ export const sharedMainAreaChildren: RouteObject[] = [
     ),
     errorElement: <ErrorBoundary />,
     path: 'page',
+  },
+
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/changelog'), 'Desktop > Changelog', {
+          preloadId: 'changelog',
+        }),
+        handle: {
+          meta: routeMeta({ icon: FileClockIcon, titleKey: 'navigation.changelog' }),
+        },
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/changelog/[id]'),
+          'Desktop > Changelog > Detail',
+        ),
+        handle: {
+          meta: routeMeta({ icon: FileClockIcon, titleKey: 'navigation.changelog' }),
+        },
+        path: ':id',
+      },
+    ],
+    errorElement: <ErrorBoundary />,
+    path: 'changelog',
   },
 ];
 

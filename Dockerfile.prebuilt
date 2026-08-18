@@ -19,6 +19,7 @@ COPY public/_spa ./public/_spa
 COPY public/_spa-auth ./public/_spa-auth
 COPY public/_spa-workbench ./public/_spa-workbench
 COPY packages/database/migrations ./migrations
+COPY docs/changelog ./docs/changelog
 COPY scripts/migrateServerDB/docker.cjs ./docker.cjs
 COPY scripts/migrateServerDB/errorHint.js ./errorHint.js
 COPY scripts/serverLauncher/startServer.js ./startServer.js

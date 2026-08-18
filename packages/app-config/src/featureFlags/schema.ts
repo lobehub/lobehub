@@ -79,7 +79,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   ai_image: true,
 
-  check_updates: true,
+  // Aico is shipped via CI/CD; comparing package.json to @lobehub/chat on npm
+  // always looks "behind" even on a freshly deployed image.
+  check_updates: false,
   welcome_suggest: true,
   token_counter: true,
 

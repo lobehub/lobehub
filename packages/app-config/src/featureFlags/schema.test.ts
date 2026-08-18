@@ -135,6 +135,12 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableOnboardingV2).toBe(false);
   });
 
+  it('should disable npm update checks by default', () => {
+    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
+
+    expect(mappedState.enableCheckUpdates).toBe(false);
+  });
+
   it('should map the onboarding v2 allowlist flag by user ID', () => {
     const config = {
       onboarding_v2: ['user-123'],
