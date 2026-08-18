@@ -459,6 +459,20 @@ Hard rules worth front-loading:
 - **Visual evidence lives in `result.json`, NOT in `report.md`.** Attach each
   screenshot/GIF to its case via `cases[].evidence`; the page renders it next to
   the check. Do NOT embed images/GIFs in `report.md`.
+- **Structured data uses native Acceptance visualizations by default (hard
+  rule).** When a result contains metrics, time series, before/after model or
+  benchmark comparisons, distributions, matrices, or tabular data, encode the
+  review-sized values in `cases[].datasets` and declare the corresponding view
+  in `cases[].visualizations`. Keep the raw CSV/JSON, benchmark output, trace,
+  profile, or vectors in `evidence` so the chart remains auditable. Do NOT render
+  those values into a PNG/GIF yourself when a supported native renderer can
+  express them; static generated charts lose structured values, accessibility,
+  theme adaptation, and consistent comparison semantics. Generate a static
+  chart only when none of the supported renderers can faithfully represent the
+  result, and explain that limitation in the case observation. Supported views:
+  `metric-comparison`, `line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and
+  `table`. See
+  [references/report.md](./references/report.md#structured-visualizations).
 - **Non-visual behavioral claims use dual text evidence.** Attach two separate
   text artifacts to the same case: a reviewer-facing **reasoning** document and
   an audit-facing **execution** document. The reasoning artifact explains the

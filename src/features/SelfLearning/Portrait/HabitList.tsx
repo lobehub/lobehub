@@ -125,7 +125,7 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
   const lessonPath = urlJoin(
     '/agent',
     agentId,
-    'self-learning',
+    'self-evolving',
     habit.domainId,
     'experience',
     habit.id,

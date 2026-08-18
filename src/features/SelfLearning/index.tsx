@@ -4,13 +4,7 @@ import { ActionIcon, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/
 import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import {
-  GraduationCapIcon,
-  HistoryIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  Trash2Icon,
-} from 'lucide-react';
+import { DnaIcon, HistoryIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -26,7 +20,6 @@ import type { ExpertiseDomainItem } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 
-import { openCreateDomainModal } from './CreateDomainModal';
 import { countTiers, habitTier } from './helpers';
 import { useExpertiseOverview, useHistoryCount } from './hooks';
 import AnchorCard from './Portrait/AnchorCard';
@@ -172,7 +165,7 @@ const SelfLearning = memo(() => {
 
   const openCreate = () => {
     if (!activeAgentId) return;
-    openCreateDomainModal({ agentId: activeAgentId, onCreated: () => void mutate() });
+    navigate(urlJoin('/agent', activeAgentId, 'self-evolving/new'));
   };
 
   // Dropping a direction takes its habits and practice history with it — say so before asking.
@@ -191,7 +184,7 @@ const SelfLearning = memo(() => {
           toast.success(t('domain.deleted'));
           await mutate();
           if (domainId && activeAgentId)
-            navigate(urlJoin('/agent', activeAgentId, 'self-learning'));
+            navigate(urlJoin('/agent', activeAgentId, 'self-evolving'));
         } catch {
           toast.error(t('domain.deleteFailed'));
         }
@@ -240,7 +233,7 @@ const SelfLearning = memo(() => {
               extraItems={current ? [current.title] : undefined}
               title={
                 domainId && current ? (
-                  <Link to={urlJoin('/agent', activeAgentId, 'self-learning')}>{t('title')}</Link>
+                  <Link to={urlJoin('/agent', activeAgentId, 'self-evolving')}>{t('title')}</Link>
                 ) : (
                   t('title')
                 )
@@ -287,7 +280,7 @@ const SelfLearning = memo(() => {
                 <Empty
                   description={t('empty.desc')}
                   descriptionProps={{ fontSize: 13 }}
-                  icon={GraduationCapIcon}
+                  icon={DnaIcon}
                   style={{ maxWidth: 420 }}
                   title={t('empty.title')}
                   action={
@@ -359,7 +352,7 @@ const SelfLearning = memo(() => {
                   habits={habits}
                   viewAllPath={
                     current
-                      ? urlJoin('/agent', activeAgentId, 'self-learning', current.id, 'experience')
+                      ? urlJoin('/agent', activeAgentId, 'self-evolving', current.id, 'experience')
                       : undefined
                   }
                   onChanged={() => void mutate()}
@@ -373,7 +366,7 @@ const SelfLearning = memo(() => {
                   domains={allDomains}
                   onOpen={(id) => {
                     if (!activeAgentId) return;
-                    navigate(urlJoin('/agent', activeAgentId, 'self-learning', id));
+                    navigate(urlJoin('/agent', activeAgentId, 'self-evolving', id));
                   }}
                 />
               )}

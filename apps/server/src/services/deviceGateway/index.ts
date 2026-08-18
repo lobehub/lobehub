@@ -1283,6 +1283,7 @@ export class DeviceGateway {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
     topicId: string;

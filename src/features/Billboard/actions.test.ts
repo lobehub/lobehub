@@ -1,4 +1,5 @@
 import type * as LobechatConst from '@lobechat/const';
+import { OFFICIAL_URL } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -59,9 +60,12 @@ const restoreDesktopMock = () => {
   vi.resetModules();
 };
 
+const originalHref = window.location.href;
+
 beforeEach(() => {
   vi.clearAllMocks();
   electronState.dataSyncConfig = { storageMode: 'cloud' };
+  window.location.href = originalHref;
 });
 
 describe('isBillboardAction', () => {
@@ -86,10 +90,20 @@ describe('isBillboardAction', () => {
 });
 
 describe('resolveBillboardAction', () => {
-  it('should resolve every registered action on web', () => {
+  it('should resolve every registered action on official web', () => {
+    window.location.href = OFFICIAL_URL;
+
     for (const action of BILLBOARD_ACTIONS) {
       expect(resolveBillboardAction(action)).toBe(action);
     }
+  });
+
+  it('should not resolve resetOnboarding on a self-hosted web origin', () => {
+    window.location.href = 'https://chat.example.com/';
+
+    expect(resolveBillboardAction('resetOnboarding')).toBeNull();
+    expect(resolveBillboardAction('openChangelog')).toBe('openChangelog');
+    expect(resolveBillboardAction('openFeedback')).toBe('openFeedback');
   });
 
   it('should return null for unknown values so the CTA falls back to linkUrl', () => {

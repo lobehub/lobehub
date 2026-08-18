@@ -37,7 +37,7 @@ vi.mock('@lobehub/ui/icons', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  GraduationCapIcon: () => null,
+  DnaIcon: () => null,
   ListTodoIcon: () => null,
   MessageSquarePlusIcon: () => null,
   MessagesSquareIcon: () => null,
@@ -270,7 +270,7 @@ describe('Agent sidebar header nav', () => {
     fireEvent.click(screen.getByRole('button', { name: 'title' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
-    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/self-learning');
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/self-evolving');
   });
 
   // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
@@ -285,7 +285,7 @@ describe('Agent sidebar header nav', () => {
   });
 
   it('keeps the self-learning entry active on its own route', () => {
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-learning');
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving');
 
     render(<Nav />);
 

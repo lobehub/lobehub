@@ -2,6 +2,7 @@
 
 import {
   BrainCircuit,
+  Download,
   FilePenIcon,
   FilesIcon,
   FileText,
@@ -24,6 +25,7 @@ import {
   BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
+import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import GoalSkeleton from '@/components/Skeleton/Goal';
@@ -231,7 +233,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Self Learning',
             ),
             handle: { meta: agentSelfLearningRouteMeta },
-            path: 'self-learning',
+            path: 'self-evolving',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/new'),
+              'Desktop > Chat > Self Learning > Create',
+            ),
+            handle: { meta: agentSelfLearningRouteMeta },
+            path: 'self-evolving/new',
           },
           // 单个方向的成长画像。做成路由而不是页内状态，深链才打得开。
           {
@@ -275,7 +285,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 path: 'rules/:lessonId',
               },
             ],
-            path: 'self-learning/:domainId',
+            path: 'self-evolving/:domainId',
+          },
+          // Legacy `/self-learning` deep-links keep their remaining path when redirected.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/agent/self-learning/legacy'),
+              'Desktop > Chat > Legacy Self Learning Redirect',
+            ),
+            path: 'self-learning/*',
           },
           {
             element: dynamicElement(
@@ -1007,6 +1025,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
 const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): RouteObject[] => [
   ...sharedMainAreaChildren,
+
+  // Apps page (personal-only — never mirrored under /:workspaceSlug)
+  {
+    element: dynamicElement(() => import('@/routes/(main)/apps'), 'Desktop > Apps', {
+      fallback: <AppsSkeleton />,
+    }),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.apps' }) },
+    path: 'apps',
+  },
 
   // Settings routes (personal-only — never mirrored under /:workspaceSlug)
   {

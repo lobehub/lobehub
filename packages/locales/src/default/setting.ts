@@ -594,6 +594,23 @@ export default {
   'devices.visibilityTabs.private': 'Private',
   'devices.visibilityTabs.workspace': 'Workspace',
   'devices.workingDirectory': 'Working dir: {{path}}',
+  'apps.cli.copied': 'Copied',
+  'apps.cli.copy': 'Copy install command',
+  'apps.cli.desc': 'Scripts, devices, and headless work from the command line.',
+  'apps.cli.title': 'CLI',
+  'apps.desktop.cta': 'Get desktop app',
+  'apps.desktop.desc': 'Local files, system tools, and focused work on this machine.',
+  'apps.desktop.inUse': 'In use',
+  'apps.desktop.inUseDesc': "You're already in the desktop app.",
+  'apps.desktop.title': 'Desktop',
+  'apps.kicker': 'Ways',
+  'apps.messenger.cta': 'Set up Messenger',
+  'apps.messenger.desc': 'Talk to LobeHub in Discord, Feishu, Slack, and the rest.',
+  'apps.messenger.title': 'Messenger',
+  'apps.mobile.cta': 'Get mobile app',
+  'apps.mobile.desc': 'Start conversations from your phone when you leave the computer.',
+  'apps.mobile.title': 'Mobile',
+  'apps.title': 'Discover more ways to use LobeHub',
   'checkingPermissions': 'Checking permissions...',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
@@ -1440,6 +1457,9 @@ When I am ___, I need ___
   'systemAgent.agentMeta.modelDesc':
     'Model used to generate names, descriptions, avatars, and tags',
   'systemAgent.agentMeta.title': 'Profile Generation',
+  'systemAgent.expertise.modelDesc':
+    'Model used to draft expertise domains and extract reusable experience from conversations.',
+  'systemAgent.expertise.title': 'Agent Self-Evolution',
   'systemAgent.customPrompt.addPrompt': 'Add Custom Prompt',
   'systemAgent.customPrompt.desc':
     'Once filled out, the system agent will use the custom prompt when generating content',
@@ -2445,12 +2465,20 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.groupImpact.untitledAgent': 'Untitled agent',
   'workspace.general.transferAgents.modal.groupImpact.untitledGroup': 'Untitled group',
   'workspace.general.transferAgents.modal.loadFailed': 'Failed to load agents',
+  'workspace.general.transferAgents.modal.memberDesc':
+    'Hands ownership to this member. They must accept before anything changes; settings and everyone’s conversations stay untouched.',
+  'workspace.general.transferAgents.modal.memberGroup': 'Workspace members',
   'workspace.general.transferAgents.modal.moveAgent': 'Move Agent',
   'workspace.general.transferAgents.modal.moveAgentDesc':
     'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, file and knowledge base links, scheduled jobs, and related tasks. Custom plugins may not be available and multi-agent group associations will be removed.',
   'workspace.general.transferAgents.modal.moveTitle': 'Move',
   'workspace.general.transferAgents.modal.noAgents': 'No agents in this workspace',
+  'workspace.general.transferAgents.modal.requestSent': 'Transfer request sent',
+  'workspace.general.transferAgents.modal.requestSentDesc':
+    'Waiting for {{target}} to accept. Nothing changes until they do — you can withdraw the request from Notifications.',
   'workspace.general.transferAgents.modal.selectAgents': 'Select Agents to move to {{target}}.',
+  'workspace.general.transferAgents.modal.sendRequest': 'Send transfer request',
+  'workspace.general.transferAgents.modal.sendRequestCount': 'Send {{count}} transfer request(s)',
   'workspace.general.transferAgents.modal.selectPlaceholder':
     'Select workspace or personal account...',
   'workspace.general.transferAgents.modal.selectTarget':

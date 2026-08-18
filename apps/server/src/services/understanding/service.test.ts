@@ -768,7 +768,14 @@ describe('UnderstandingService', () => {
         schema: UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       }),
-      { metadata: { trigger: RequestTrigger.Onboarding } },
+      expect.objectContaining({
+        metadata: { trigger: RequestTrigger.Onboarding },
+        tracing: {
+          promptVersion: 'v1',
+          scenario: 'understanding_analysis',
+          schemaName: 'understanding_batch_analysis',
+        },
+      }),
     );
     const writerInput = harness.generateObject.mock.calls[0][0];
     expect(writerInput.messages[0].content).toContain('every user-visible string value in zh-CN');
@@ -840,7 +847,14 @@ describe('UnderstandingService', () => {
       expect.objectContaining({
         schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
       }),
-      { metadata: { trigger: RequestTrigger.Onboarding } },
+      expect.objectContaining({
+        metadata: { trigger: RequestTrigger.Onboarding },
+        tracing: {
+          promptVersion: 'v1',
+          scenario: 'understanding_detailed_persona',
+          schemaName: 'understanding_detailed_persona',
+        },
+      }),
     );
     const writerInput = harness.generateObject.mock.calls[0][0];
     expect(writerInput.messages[0].content).toContain('TEST_INTEREST_TITLE');

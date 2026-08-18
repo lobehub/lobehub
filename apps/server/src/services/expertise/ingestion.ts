@@ -10,21 +10,24 @@ import {
   messages,
   topics,
 } from '@lobechat/database/schemas';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
+import {
+  chainExpertiseTopicIngestion,
+  EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
+  EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
+import { resolveExpertiseModelConfig } from './modelConfig';
+
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
-const PROMPT_VERSION = 'expertise-ingestion-v1';
-
 const AnalysisSchema = z.object({
   domains: z.array(
     z.object({
@@ -45,46 +48,6 @@ const AnalysisSchema = z.object({
     }),
   ),
 });
-
-const ANALYSIS_JSON_SCHEMA: GenerateObjectSchema = {
-  name: 'expertise_topic_ingestion',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      domains: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            domainId: { type: 'string' },
-            matches: { type: 'boolean' },
-            observations: {
-              items: {
-                additionalProperties: false,
-                properties: {
-                  existingCode: { type: ['string', 'null'] },
-                  example: { type: 'string' },
-                  layer: { type: ['string', 'null'] },
-                  outcome: { enum: ['pass', 'violation'], type: 'string' },
-                  reasoning: { type: 'string' },
-                  title: { type: 'string' },
-                },
-                required: ['existingCode', 'example', 'layer', 'outcome', 'reasoning', 'title'],
-                type: 'object',
-              },
-              maxItems: 8,
-              type: 'array',
-            },
-          },
-          required: ['domainId', 'matches', 'observations'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-    },
-    required: ['domains'],
-    type: 'object',
-  },
-};
 
 interface ExpertiseCompletionInput {
   agentId: string;
@@ -265,9 +228,7 @@ export class ExpertiseIngestionService {
     const context = topicContext.serializedContext.slice(-MAX_CONTEXT_CHARS);
     if (!context.trim()) return { ingested: 0, reason: 'empty-context' } as const;
 
-    const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
-    const modelConfig = await agentModel.getAgentModelConfig(input.agentId);
-    if (!modelConfig) return { ingested: 0, reason: 'no-model' } as const;
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
 
     const domains = await Promise.all(
       bound.map(async ({ domain }) => ({
@@ -287,27 +248,17 @@ export class ExpertiseIngestionService {
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          {
-            content:
-              'You maintain evidence-backed expertise from real conversations. First apply each domainFilter and outOfScope literally. If a conversation does not match, return matches=false and no observations. For a match, map concrete evidence to an existing lesson when its judgment is the same; otherwise propose one reusable lesson. Do not turn implementation trivia or a one-off fact into a lesson. Use only declared layer keys. Keep evidence short and grounded in the supplied conversation.',
-            role: 'system',
-          },
-          {
-            content: `DOMAINS\n${JSON.stringify(domains)}\n\nTOPIC CONTEXT (bounded at this completed turn)\n${context}`,
-            role: 'user',
-          },
-        ],
+        ...chainExpertiseTopicIngestion({ context, domains }),
         ...modelConfig,
-        schema: ANALYSIS_JSON_SCHEMA,
+        schema: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
       },
       {
         metadata: { trigger: 'expertise_topic_ingestion' },
         tracing: {
           agentId: input.agentId,
-          promptVersion: PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.TopicAutoSummary,
-          schemaName: ANALYSIS_JSON_SCHEMA.name,
+          promptVersion: EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.ExpertiseTopicIngestion,
+          schemaName: EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA.name,
           topicId: input.topicId,
         },
       },

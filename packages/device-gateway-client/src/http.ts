@@ -210,6 +210,7 @@ export class GatewayHttpClient {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
     timeout?: number;

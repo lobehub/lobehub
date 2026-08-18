@@ -12,6 +12,7 @@ const workspaceAuthHits = vi.hoisted(() => ({ compat: 0, roles: [] as string[] }
 vi.mock('@/database/models/expertise', () => ({ ExpertiseModel: vi.fn() }));
 vi.mock('@/server/services/expertise/domain', () => ({
   DomainDraftSchema: { extend: () => ({ parse: (v: unknown) => v }) },
+  EditableDomainDraftSchema: { optional: () => ({ parse: (v: unknown) => v }) },
   ExpertiseDomainService: vi.fn(),
 }));
 vi.mock('@/server/services/expertise/ingestion', () => ({

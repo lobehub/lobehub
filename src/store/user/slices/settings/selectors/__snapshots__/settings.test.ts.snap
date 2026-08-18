@@ -55,6 +55,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "deepseek",
   },
   "enableAutoReply": true,
+  "expertise": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
   "followUpAction": {
     "enabled": false,
     "model": "gpt-5.6-luna",

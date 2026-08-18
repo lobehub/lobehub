@@ -61,7 +61,7 @@ const assertWindowsCommandLineFits = ({ args, command }: CliSpawnPlan): void => 
   );
 };
 
-const isPathLikeCommand = (command: string) =>
+export const isPathLikeCommand = (command: string) =>
   path.win32.isAbsolute(command) || path.posix.isAbsolute(command) || /[\\/]/.test(command);
 
 const fileExists = async (filePath: string): Promise<boolean> => {

@@ -31,6 +31,9 @@ export const countTiers = (habits: ExpertiseHabit[]): TierCounts => {
   return c;
 };
 
+/** User-facing layer labels stay sequential; domain layer keys are internal identifiers. */
+export const layerLabel = (index: number) => `L${index + 1}`;
+
 /** 一层 / 一个方向的一句话评语，从分档数推出来。 */
 export type ProfileWord = 'fresh' | 'mostlyStable' | 'stable' | 'unstable' | 'weak';
 

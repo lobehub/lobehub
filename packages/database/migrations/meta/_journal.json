@@ -1008,6 +1008,13 @@
       "when": 1786847279485,
       "tag": "0143_resource_transfer_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786968214710,
+      "tag": "0144_notifications_add_metadata_column",
+      "breakpoints": true
     }
   ],
   "version": "6"

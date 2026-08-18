@@ -11,6 +11,7 @@ import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
+import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { EditingIndicator, type EditLockClient, useEditLock } from '@/features/EditLock';
 import { EditorCanvas } from '@/features/EditorCanvas';
@@ -54,6 +55,7 @@ const GroupProfile = memo(() => {
   // tabs, so navigate without carrying the query over (unlike `router.push`).
   const navigate = useWorkspaceAwareNavigate();
   const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
+  const transferToMemberItem = useAgentGroupTransferToMemberMenuItem(groupId ?? undefined);
   // A workspace member whose General access on this group is view/use level
   // can't edit it (defaults permissive while loading — server enforces).
   const { canEditResource } = useResourceAccess(
@@ -86,10 +88,21 @@ const GroupProfile = memo(() => {
 
     return [
       permissionMenuItem,
-      permissionMenuItem && transferMenuItems?.length ? ({ type: 'divider' } as const) : null,
+      permissionMenuItem && (transferMenuItems?.length || transferToMemberItem)
+        ? ({ type: 'divider' } as const)
+        : null,
       ...(transferMenuItems ?? []),
+      transferToMemberItem,
     ].filter(Boolean);
-  }, [canEdit, groupId, navigate, showPermissionPageEntry, t, transferMenuItems]);
+  }, [
+    canEdit,
+    groupId,
+    navigate,
+    showPermissionPageEntry,
+    t,
+    transferMenuItems,
+    transferToMemberItem,
+  ]);
 
   const settingsModalRef = useRef<ModalInstance | null>(null);
   useEffect(

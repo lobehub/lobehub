@@ -93,11 +93,15 @@ supersedes? }`.
    plan a programmatic gate (tests / type-check / lint / build) as a check —
    ingest drops them, and a gates-only round fails to publish. See
    [what is not an acceptance check](#hard-rule--what-is-not-an-acceptance-check).
-2. **Collect evidence into `assets/` as you test.** Screenshots/charts must be
+2. **Collect evidence into `assets/` as you test.** Screenshots must be
    **visually verified with the Read tool before being cited** — never cite an
-   image you haven't looked at. Numeric results worth seeing (loss curves,
-   latency distributions) should ship as a rendered chart image, not only a
-   table of digits.
+   image you haven't looked at. For metrics, time series, model or benchmark
+   comparisons, distributions, matrices, and tables, use native Acceptance
+   structured visualizations: put review-sized values in `cases[].datasets`,
+   declare the view in `cases[].visualizations`, and retain the raw CSV/JSON,
+   benchmark output, trace, profile, or vectors in `evidence`. Do not generate a
+   PNG/GIF when a supported renderer can faithfully express the data. See
+   [Structured visualizations](#structured-visualizations).
 3. **Fill `cases[]` as you go** — one entry per tested behavior
    (`{ id, name, category, surface, status, observation, evidence }`), reusing
    the plan item's `id`. `status`: `pass` / `fail` / `blocked` (couldn't run —
@@ -141,6 +145,40 @@ supersedes? }`.
       "status": "pass",
       "observation": "root returned 3 nested children, depth 2",
       "evidence": ["assets/task-tree.txt"]
+    },
+    {
+      "id": "2",
+      "category": "Model quality",
+      "name": "candidate model improves average precision",
+      "surface": "cli",
+      "status": "pass",
+      "observation": "average precision improved from 0.742 to 0.796",
+      "evidence": ["assets/evaluation.json"],
+      "datasets": [
+        {
+          "id": "model-metrics",
+          "fields": [
+            { "key": "metric", "type": "string" },
+            { "key": "baseline", "type": "number" },
+            { "key": "candidate", "type": "number" }
+          ],
+          "rows": [{ "metric": "Average precision", "baseline": 0.742, "candidate": 0.796 }]
+        }
+      ],
+      "visualizations": [
+        {
+          "id": "model-comparison",
+          "type": "metric-comparison",
+          "version": 1,
+          "dataset": "model-metrics",
+          "title": "Model quality comparison",
+          "encoding": {
+            "label": "metric",
+            "before": "baseline",
+            "after": "candidate"
+          }
+        }
+      ]
     }
   ],
   "createdAt": "2026-06-11T15:30:00+08:00",
@@ -173,6 +211,119 @@ Optional fields: `branch` / `commit` / `pullRequest` (provenance line; when
 `branch` is set without `pullRequest`, ingest asks `gh` for the PR),
 `summary.score` (0–100, only when the verdict has a subjective component),
 `subject` (usually passed via `--subject` instead).
+
+### Structured visualizations
+
+A case containing reviewable structured data should provide `datasets[]` plus
+`visualizations[]`. Supported version-1 renderers are `metric-comparison`,
+`line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and `table`. Each
+visualization references one dataset by `id` and maps declared fields through
+`encoding`.
+
+Inline datasets use declared `fields[]` and object `rows[]`; keep them to a
+review-sized summary. Retain raw benchmark results, CSV/JSON, traces, profiles,
+and vectors in `evidence`: the visualization is a decision aid, not a replacement
+for the audit trail. Do not merely upload a data file and expect Acceptance to
+infer a chart; declare both the dataset and visualization explicitly.
+
+Native renderers are the default because they preserve machine-readable values,
+accessibility, theme adaptation, and consistent comparison semantics. Generate a
+static chart only when none of the supported renderers can faithfully represent
+the result, and explain that limitation in the case observation.
+
+Every visualization requires unique non-empty `id`, `type`, `dataset`, and
+`version: 1`; `dataset` must reference a declared dataset id. `title` and
+`context` are optional non-empty strings. Every encoding field name below must
+reference a field declared by that dataset.
+
+| Renderer            | Required encoding                                              | Optional encoding                                                                         |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `metric-comparison` | `label`, `before`, `after`                                     | `beforeSamples`, `afterSamples`, `direction`, `statistic`, `target`, `unit`               |
+| `line-chart`        | `x`, non-empty `series[]`; each series requires `field`        | series `label`, series `style` (`muted` \| `primary` \| `accent`), `xLabel`, `yLabel`     |
+| `bar-chart`         | `category`, non-empty `series[]`; each series requires `field` | series `label`, `valueLabel`                                                              |
+| `scatter-plot`      | `x`, `y`                                                       | `color`, `label`, `xLabel`, `yLabel`                                                      |
+| `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
+| `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
+
+Minimal valid encoding examples (replace every field-name string with a key
+declared in the referenced dataset):
+
+```json
+[
+  {
+    "id": "quality-delta",
+    "type": "metric-comparison",
+    "version": 1,
+    "dataset": "metrics",
+    "encoding": { "label": "metric", "before": "baseline", "after": "candidate" }
+  },
+  {
+    "id": "loss-over-time",
+    "type": "line-chart",
+    "version": 1,
+    "dataset": "training",
+    "encoding": {
+      "x": "step",
+      "series": [
+        { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
+        { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
+      ],
+      "xLabel": "Step",
+      "yLabel": "Loss"
+    }
+  },
+  {
+    "id": "scores-by-model",
+    "type": "bar-chart",
+    "version": 1,
+    "dataset": "scores",
+    "encoding": {
+      "category": "model",
+      "series": [{ "field": "score", "label": "Score" }],
+      "valueLabel": "Accuracy"
+    }
+  },
+  {
+    "id": "latency-quality",
+    "type": "scatter-plot",
+    "version": 1,
+    "dataset": "runs",
+    "encoding": {
+      "x": "latency",
+      "y": "quality",
+      "color": "model",
+      "label": "run",
+      "xLabel": "Latency (ms)",
+      "yLabel": "Quality"
+    }
+  },
+  {
+    "id": "error-matrix",
+    "type": "heatmap",
+    "version": 1,
+    "dataset": "errors",
+    "encoding": { "x": "predicted", "y": "actual", "value": "count" }
+  },
+  {
+    "id": "benchmark-table",
+    "type": "table",
+    "version": 1,
+    "dataset": "benchmarks",
+    "encoding": {
+      "columns": ["model", "latency", "score"],
+      "highlights": [
+        { "field": "latency", "mode": "min" },
+        { "field": "score", "mode": "max" }
+      ]
+    }
+  }
+]
+```
+
+Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
+`temporal`; field keys and dataset/view ids must be unique. Rows may contain only
+declared keys with string, number, boolean, or null values. The combined inline
+row limit is 10,000.
 
 ### Closed vocabularies — the pipeline acts on these, they are not labels
 
