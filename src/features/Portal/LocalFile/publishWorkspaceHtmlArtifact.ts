@@ -1,13 +1,12 @@
 import { ARTIFACT_TAG } from '@lobechat/const';
 import { escapeXmlAttr } from '@lobechat/prompts';
 
+import { hostedPath, packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
 import type {
   WorkspaceHtmlArtifactFile,
   WorkspaceHtmlArtifactPublishInput,
   WorkspaceHtmlArtifactPublishResult,
-} from '@/business/client/features/WorkspaceHtmlArtifactPublish';
-
-import { hostedPath, packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
+} from './workspaceHtmlArtifact';
 
 export const wrapWorkspaceHtmlArtifact = ({
   html,
