@@ -19,6 +19,7 @@ import type {
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
+import { useDeviceStore } from '@/store/device';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { getSessionStoreState } from '@/store/session';
 import * as toolStoreModule from '@/store/tool';
@@ -1728,6 +1729,257 @@ describe('ConversationLifecycle actions', () => {
           resolveGateway();
           await sendPromise;
         });
+      });
+
+      // A native (non-hetero) agent bound to a device resolves its cwd for the
+      // run (tools, {{workingDirectory}}) but used to leave the new topic
+      // unbound — By Project filed every such conversation under "No directory",
+      // and later turns re-resolved the agent-level default, so changing the
+      // agent's directory silently moved old topics to another project.
+      it('should bind a new gateway topic to a native agent device working directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        const sourcePath = '/repo/lobehub';
+        const worktreePath = '/repo/lobehub/.worktrees/feat';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: {
+                [deviceId]: {
+                  git: { activeWorktree: worktreePath },
+                  path: sourcePath,
+                  repoType: 'github',
+                },
+              },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        let resolveGateway!: () => void;
+        const gatewayPromise = new Promise<any>((resolve) => {
+          resolveGateway = () =>
+            resolve({
+              assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              operationId: 'gateway-op-cwd',
+              topicId: TEST_IDS.NEW_TOPIC_ID,
+              userMessageId: TEST_IDS.USER_MESSAGE_ID,
+            });
+        });
+        const executeGatewayAgentSpy = vi.fn().mockReturnValue(gatewayPromise);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Bind me to the project',
+          });
+        });
+
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
+
+        // `workingDirectory` is the EFFECTIVE path (the checked-out worktree the
+        // run executes in); the config keeps the SOURCE repo, which is what
+        // By-Project groups on.
+        const expectedMetadata = {
+          workingDirectory: worktreePath,
+          workingDirectoryConfig: {
+            git: { activeWorktree: worktreePath },
+            path: sourcePath,
+            repoType: 'github',
+          },
+        };
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
+          expect.objectContaining({ metadata: expectedMetadata }),
+        );
+        // Rides along to the server, which owns the real topic row.
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({ metadata: expectedMetadata }),
+          }),
+        );
+
+        await act(async () => {
+          resolveGateway();
+          await sendPromise;
+        });
+      });
+
+      it('should fall back to the bound device default cwd when the agent has no pick', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: { boundDeviceId: deviceId, executionTarget: 'device' },
+          },
+        });
+        act(() => {
+          useDeviceStore.setState({
+            devices: [{ defaultCwd: '/repo/default', deviceId, name: 'Mac' }] as any,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-default-cwd',
+          topicId: TEST_IDS.NEW_TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Use the device default',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({
+              metadata: {
+                workingDirectory: '/repo/default',
+                workingDirectoryConfig: { path: '/repo/default' },
+              },
+            }),
+          }),
+        );
+      });
+
+      // Client mode creates the topic itself (`sendMessageInServer`), so nothing
+      // downstream would ever write the cwd back — the metadata has to ride on
+      // the create call.
+      it('should bind a client-runtime new topic to the resolved working directory', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: { [deviceId]: { path: '/repo/lobehub' } },
+            },
+          },
+        });
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            topics: [],
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        const { result } = renderHook(() => useChatStore());
+        act(() => {
+          useChatStore.setState({ isGatewayModeEnabled: () => false });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: null },
+            message: 'Bind me too',
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({
+              metadata: {
+                workingDirectory: '/repo/lobehub',
+                workingDirectoryConfig: { path: '/repo/lobehub' },
+              },
+            }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('should leave a plain-chat agent topic unbound', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: { [deviceId]: { path: '/repo/lobehub' } },
+            },
+            // No execution environment at all — a directory would be noise, and
+            // By Project would file plain chats under a project they never used.
+            chatConfig: { ...createMockAgentConfig().chatConfig, enableAgentMode: false },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-chat',
+          topicId: TEST_IDS.NEW_TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Just chatting',
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.not.objectContaining({ metadata: expect.anything() }),
+          }),
+        );
       });
 
       it('should rollback an optimistic topic if the create response resolves without a topic id', async () => {

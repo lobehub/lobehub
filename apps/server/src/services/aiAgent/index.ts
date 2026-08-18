@@ -76,6 +76,7 @@ import type {
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
   UserInterventionConfig,
+  WorkingDirConfig,
   WorkspaceInitResult,
 } from '@lobechat/types';
 import {
@@ -197,10 +198,7 @@ import {
 } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
 import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
-import {
-  resolveDeviceWorkingDirectory,
-  resolveDeviceWorkingDirectoryConfig,
-} from './resolveDeviceWorkingDirectory';
+import { resolveDeviceWorkingDirectoryConfig } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
 import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
@@ -562,6 +560,18 @@ interface InternalExecAgentParams extends ExecAgentParams {
  */
 interface ResolvedWorkspaceInit {
   boundCwd?: string;
+  /**
+   * The full config behind {@link boundCwd} (source path + repoType + the
+   * active worktree). Callers persist THIS onto the topic, not the flat path:
+   * project grouping keys off `config.path` (the source repo), so a run inside
+   * a linked worktree must still file under its repo.
+   */
+  boundCwdConfig?: WorkingDirConfig;
+  /**
+   * The cwd the topic was ALREADY pinned to, so a caller can tell a first-time
+   * binding from a no-op rewrite without re-reading the topic row.
+   */
+  topicWorkingDirectory?: string;
   workspace: WorkspaceInitResult;
 }
 
@@ -871,14 +881,17 @@ export class AiAgentService {
       // caller so the system prompt's {{workingDirectory}} reflects the same
       // bound directory the workspace scan used.
       const topic = await this.topicModel.findById(topicId);
-      const boundCwd = resolveDeviceWorkingDirectory({
+      const topicWorkingDirectory = topic?.metadata?.workingDirectory;
+      const boundCwdConfig = resolveDeviceWorkingDirectoryConfig({
         deviceDefaultCwd: device.defaultCwd,
         deviceId: activeDeviceId,
-        topicWorkingDirectory: topic?.metadata?.workingDirectory,
+        topicWorkingDirectory,
         topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
         workingDirByDevice: agencyConfig?.workingDirByDevice,
       });
+      const boundCwd = getWorkingDirEffectivePath(boundCwdConfig);
       if (!boundCwd) return { workspace: empty };
+      const resolved = { boundCwd, boundCwdConfig, topicWorkingDirectory };
 
       const workingDirs = device.workingDirs ?? [];
       const cached = workingDirs.find(
@@ -887,7 +900,7 @@ export class AiAgentService {
 
       if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
         log('execAgent: reusing cached workspace init for %s', boundCwd);
-        return { boundCwd, workspace: cached.workspace };
+        return { ...resolved, workspace: cached.workspace };
       }
 
       const scanned = await deviceGateway.initWorkspace({
@@ -901,9 +914,9 @@ export class AiAgentService {
         // cache rather than dropping the project's skills + instructions.
         if (cached?.workspace) {
           log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
-          return { boundCwd, workspace: cached.workspace };
+          return { ...resolved, workspace: cached.workspace };
         }
-        return { boundCwd, workspace: empty };
+        return { ...resolved, workspace: empty };
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
@@ -930,10 +943,48 @@ export class AiAgentService {
       }
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
-      return { boundCwd, workspace: scanned };
+      return { ...resolved, workspace: scanned };
     } catch (error) {
       log('execAgent: resolveWorkspaceInit failed: %O', error);
       return { workspace: empty };
+    }
+  }
+
+  /**
+   * Pin a topic to the directory its run actually executes in.
+   *
+   * A topic created by a device-bound run starts with no cwd of its own: the
+   * directory was only ever recorded at agent level
+   * (`agencyConfig.workingDirByDevice`) or on the device (`defaultCwd`). Without
+   * this write the topic stays unbound — By-Project grouping files it under "No
+   * directory", and every later turn re-resolves from the agent config, so
+   * changing the agent's directory silently moves an old conversation to a new
+   * project (and makes hetero `--resume` unsafe).
+   *
+   * Shared by BOTH execution paths — hetero device dispatch and the normal
+   * agent runtime — so a native agent bound to a device gets the same binding a
+   * CLI agent does. Purely additive: a topic that already carries a cwd (the
+   * client resolved one and sent it as `initialTopicMetadata`, or an earlier
+   * turn bound it) is never rewritten, so the historical pin always wins.
+   */
+  private async bindTopicWorkingDirectory(params: {
+    config?: WorkingDirConfig;
+    currentWorkingDirectory?: string;
+    topicId: string;
+  }): Promise<void> {
+    const { config, currentWorkingDirectory, topicId } = params;
+    if (currentWorkingDirectory || !config) return;
+    const path = getWorkingDirEffectivePath(config);
+    if (!path) return;
+
+    try {
+      await this.topicModel.updateMetadata(topicId, {
+        workingDirectory: path,
+        workingDirectoryConfig: config,
+      });
+    } catch (err) {
+      // Metadata bookkeeping must never fail a run that is otherwise fine.
+      log('execAgent: bindTopicWorkingDirectory failed (non-fatal): %O', err);
     }
   }
 
@@ -1943,7 +1994,6 @@ export class AiAgentService {
 
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
-    const isNewTopic = !topicId;
     const isFixedExecutionTargetSelection =
       !!this.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
     const isFixedDeviceTarget =
@@ -2817,16 +2867,15 @@ export class AiAgentService {
           });
           const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
 
-          // A brand-new topic has no pinned cwd yet: the directory was only
+          // An unbound topic has no pinned cwd yet: the directory was only
           // recorded at agent level (`workingDirByDevice`) when no topic existed.
           // Persist the resolved cwd onto the topic so the sidebar groups it
           // under the right project and the next turn reuses the same directory.
-          if (isNewTopic && deviceCwd && deviceCwd !== topic?.metadata?.workingDirectory) {
-            await this.topicModel.updateMetadata(topicId, {
-              workingDirectory: deviceCwd,
-              ...(deviceCwdConfig ? { workingDirectoryConfig: deviceCwdConfig } : {}),
-            });
-          }
+          await this.bindTopicWorkingDirectory({
+            config: deviceCwdConfig,
+            currentWorkingDirectory: topic?.metadata?.workingDirectory,
+            topicId,
+          });
 
           // Build only device-relevant context instead of reusing the cloud-sandbox one
           // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
@@ -4493,6 +4542,41 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
+    // Project skills + the root AGENTS.md are discovered server-side by
+    // scanning the device's bound project directory ("workspace init"), cached
+    // on `devices.workingDirs` and reused within the TTL. Skills surface in
+    // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
+    // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
+    // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
+    // path) flows through; the directory tree is enumerated lazily, keeping the
+    // op-param payload small.
+    const workspaceInit = await this.resolveWorkspaceInit({
+      activeDeviceId,
+      agencyConfig: agentConfig.agencyConfig ?? undefined,
+      topicId,
+    });
+
+    // Feed the bound directory (resolved from the persisted device row) into
+    // the local-system tool's {{workingDirectory}} placeholder — the channel
+    // the model uses to know where it is and reach for absolute paths — and,
+    // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
+    // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
+    // existing deviceSystemInfo plumbing (computeDeviceContext).
+    if (workspaceInit.boundCwd) {
+      deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
+    }
+
+    // Bind the topic to that very directory. A native (non-hetero) agent
+    // routed to a device used to resolve its cwd here for the prompt and the
+    // tools, but never write it back — so its topics stayed unbound while the
+    // run itself executed in the right place. Awaited (not fire-and-forget):
+    // the tool layer reads the topic's cwd on the same run.
+    await this.bindTopicWorkingDirectory({
+      config: workspaceInit.boundCwdConfig,
+      currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
+      topicId,
+    });
+
     // 18. Build OperationSkillSet via SkillEngine
     // Combines builtin skills + user DB skills + agent-document skill bundles,
     // filters by platform via enableChecker, and pairs with agent's enabled
@@ -4558,30 +4642,6 @@ export class AiAgentService {
         identifier: skill.identifier,
         name: skill.name,
       }));
-
-      // Project skills + the root AGENTS.md are discovered server-side by
-      // scanning the device's bound project directory ("workspace init"), cached
-      // on `devices.workingDirs` and reused within the TTL. Skills surface in
-      // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
-      // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
-      // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
-      // path) flows through; the directory tree is enumerated lazily, keeping the
-      // op-param payload small.
-      const workspaceInit = await this.resolveWorkspaceInit({
-        activeDeviceId,
-        agencyConfig: agentConfig.agencyConfig ?? undefined,
-        topicId,
-      });
-
-      // Feed the bound directory (resolved from the persisted device row) into
-      // the local-system tool's {{workingDirectory}} placeholder — the channel
-      // the model uses to know where it is and reach for absolute paths — and,
-      // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
-      // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
-      // existing deviceSystemInfo plumbing (computeDeviceContext).
-      if (workspaceInit.boundCwd) {
-        deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
-      }
 
       const projectMetas = workspaceInit.workspace.skills.map((s) => ({
         description: s.description ?? '',
