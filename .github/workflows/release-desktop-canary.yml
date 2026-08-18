@@ -16,10 +16,9 @@ name: Release Desktop Canary
 #   例: 当前 tag v2.1.28 → v2.1.29-canary.1, 下次 → v2.1.29-canary.2
 # ============================================
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  push:
-    branches:
-      - canary
   workflow_dispatch:
     inputs:
       force:

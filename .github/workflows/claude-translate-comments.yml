@@ -1,10 +1,9 @@
 name: Claude Translate Non-English Comments
 # Automatically detect and translate non-English comments to English in codebase
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  schedule:
-    # Run daily at 02:00 UTC (10:00 Beijing Time)
-    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       target_module:

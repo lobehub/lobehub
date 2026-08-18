@@ -4,12 +4,9 @@ permissions:
   contents: read
   id-token: write
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  push:
-    branches:
-      - canary
-    paths:
-      - packages/model-bank/**
   workflow_dispatch: {}
 
 concurrency:

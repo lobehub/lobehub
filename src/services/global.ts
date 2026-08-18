@@ -24,34 +24,35 @@ class GlobalService extends BusinessGlobalService {
   };
 
   /**
-   * get server version from /api/version
-   * @returns version string if available, null only if server returns 404 (API doesn't exist on old server)
-   * @throws Error for other failures (network errors, 500s, etc.) to allow SWR retry
+   * Resolve origin for /api/version.
+   * - Desktop: remote server URL when connected
+   * - Web (self-hosted): same origin (relative fetch)
    */
-  getServerVersion = async (): Promise<string | null> => {
-    const origin = (() => {
-      if (isDesktop) {
-        const remoteServerUrl = electronSyncSelectors.remoteServerUrl(getElectronStoreState());
-        if (!remoteServerUrl) return undefined;
+  #versionApiOrigin = (): string | undefined => {
+    if (isDesktop) {
+      const remoteServerUrl = electronSyncSelectors.remoteServerUrl(getElectronStoreState());
+      if (!remoteServerUrl) return undefined;
 
-        try {
-          return new URL(remoteServerUrl).origin;
-        } catch {
-          // fallback: use as-is; URL construction below will throw if invalid
-          return remoteServerUrl;
-        }
+      try {
+        return new URL(remoteServerUrl).origin;
+      } catch {
+        return remoteServerUrl;
       }
+    }
 
-      return undefined;
-    })();
+    return undefined;
+  };
 
-    if (!origin) return null;
+  /**
+   * Full build metadata from /api/version (web + desktop-with-remote).
+   */
+  getBuildInfo = async (): Promise<VersionResponseData | null> => {
+    const origin = this.#versionApiOrigin();
+    if (isDesktop && !origin) return null;
 
-    const url = new URL(SERVER_VERSION_URL, origin).toString();
+    const url = origin ? new URL(SERVER_VERSION_URL, origin).toString() : SERVER_VERSION_URL;
     const res = await fetch(url);
 
-    // Only treat 404 as "server doesn't support version API"
-    // Other errors (500, network issues) should throw to allow retry
     if (res.status === 404) {
       return null;
     }
@@ -60,9 +61,20 @@ class GlobalService extends BusinessGlobalService {
       throw new Error(`Failed to fetch server version: ${res.status}`);
     }
 
-    const data: VersionResponseData = await res.json();
+    return (await res.json()) as VersionResponseData;
+  };
 
-    return data.version;
+  /**
+   * get server version from /api/version
+   * @returns version string if available, null only if server returns 404 (API doesn't exist on old server)
+   * @throws Error for other failures (network errors, 500s, etc.) to allow SWR retry
+   */
+  getServerVersion = async (): Promise<string | null> => {
+    // Preserve prior desktop-only behavior for mismatch alerts
+    if (!isDesktop) return null;
+
+    const data = await this.getBuildInfo();
+    return data?.version ?? null;
   };
 
   getGlobalConfig = async (): Promise<GlobalRuntimeConfig> => {

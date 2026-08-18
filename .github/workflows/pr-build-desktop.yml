@@ -1,8 +1,9 @@
 name: Desktop PR Build
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  pull_request:
-    types: [synchronize, labeled, unlabeled] # PR 更新或标签变化时触发
+  workflow_dispatch: {}
 
 # 确保同一 PR 同一时间只运行一个相同的 workflow，取消正在进行的旧的运行
 concurrency:

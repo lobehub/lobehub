@@ -93,6 +93,16 @@ RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
 # run build standalone for docker version
 RUN npm run build:docker
 
+# Next 16 + pnpm standalone omits @swc/helpers; the server then crashes with
+# MODULE_NOT_FOUND .../next@.../node_modules/@swc/helpers/esm/_interop_require_default.js
+RUN set -eux; \
+    helper_src="$(find /app/node_modules/.pnpm -maxdepth 1 -type d -name '@swc+helpers@*' | head -1)"; \
+    test -n "${helper_src}"; \
+    next_dir="$(find /app/.next/standalone/node_modules/.pnpm -maxdepth 1 -type d -name 'next@*' | head -1)"; \
+    test -n "${next_dir}"; \
+    mkdir -p "${next_dir}/node_modules/@swc/helpers"; \
+    cp -a "${helper_src}/node_modules/@swc/helpers/." "${next_dir}/node_modules/@swc/helpers/"
+
 ## Application image, copy all the files for production
 FROM busybox:latest AS app
 
@@ -143,6 +153,18 @@ ENV MIDDLEWARE_REWRITE_THROUGH_LOCAL="1"
 # set hostname to localhost
 ENV HOSTNAME="0.0.0.0" \
     PORT="3210"
+
+# Panachat deploy metadata (injected by CI build-args; shown on Settings → About)
+ARG GIT_SHA=""
+ARG SHA=""
+ARG PANACHAT_CHANNEL=""
+ARG PANACHAT_VERSION=""
+ARG BUILD_TIME=""
+ENV GIT_SHA="${GIT_SHA}" \
+    SHA="${SHA}" \
+    PANACHAT_CHANNEL="${PANACHAT_CHANNEL}" \
+    PANACHAT_VERSION="${PANACHAT_VERSION}" \
+    BUILD_TIME="${BUILD_TIME}"
 
 # General Variables
 ENV APP_URL="" \

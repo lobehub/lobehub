@@ -1,6 +1,9 @@
 name: Test CI
 
-on: [push, pull_request]
+# Aico: not used (upstream LobeHub CI; Panachat ships via deploy-canary/preview).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
+on:
+  workflow_dispatch: {}
 
 permissions:
   actions: write

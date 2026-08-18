@@ -5,10 +5,10 @@ permissions:
   issues: write
   actions: write
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  schedule:
-    - cron: '0 */6 * * *' # every 6 hours
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   sync_latest_from_upstream:
