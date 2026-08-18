@@ -231,6 +231,100 @@ accessibility, theme adaptation, and consistent comparison semantics. Generate a
 static chart only when none of the supported renderers can faithfully represent
 the result, and explain that limitation in the case observation.
 
+Every visualization requires unique non-empty `id`, `type`, `dataset`, and
+`version: 1`; `dataset` must reference a declared dataset id. `title` and
+`context` are optional non-empty strings. Every encoding field name below must
+reference a field declared by that dataset.
+
+| Renderer            | Required encoding                                              | Optional encoding                                                                         |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `metric-comparison` | `label`, `before`, `after`                                     | `beforeSamples`, `afterSamples`, `direction`, `statistic`, `target`, `unit`               |
+| `line-chart`        | `x`, non-empty `series[]`; each series requires `field`        | series `label`, series `style` (`muted` \| `primary` \| `accent`), `xLabel`, `yLabel`     |
+| `bar-chart`         | `category`, non-empty `series[]`; each series requires `field` | series `label`, `valueLabel`                                                              |
+| `scatter-plot`      | `x`, `y`                                                       | `color`, `label`, `xLabel`, `yLabel`                                                      |
+| `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
+| `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
+
+Minimal valid encoding examples (replace every field-name string with a key
+declared in the referenced dataset):
+
+```json
+[
+  {
+    "id": "quality-delta",
+    "type": "metric-comparison",
+    "version": 1,
+    "dataset": "metrics",
+    "encoding": { "label": "metric", "before": "baseline", "after": "candidate" }
+  },
+  {
+    "id": "loss-over-time",
+    "type": "line-chart",
+    "version": 1,
+    "dataset": "training",
+    "encoding": {
+      "x": "step",
+      "series": [
+        { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
+        { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
+      ],
+      "xLabel": "Step",
+      "yLabel": "Loss"
+    }
+  },
+  {
+    "id": "scores-by-model",
+    "type": "bar-chart",
+    "version": 1,
+    "dataset": "scores",
+    "encoding": {
+      "category": "model",
+      "series": [{ "field": "score", "label": "Score" }],
+      "valueLabel": "Accuracy"
+    }
+  },
+  {
+    "id": "latency-quality",
+    "type": "scatter-plot",
+    "version": 1,
+    "dataset": "runs",
+    "encoding": {
+      "x": "latency",
+      "y": "quality",
+      "color": "model",
+      "label": "run",
+      "xLabel": "Latency (ms)",
+      "yLabel": "Quality"
+    }
+  },
+  {
+    "id": "error-matrix",
+    "type": "heatmap",
+    "version": 1,
+    "dataset": "errors",
+    "encoding": { "x": "predicted", "y": "actual", "value": "count" }
+  },
+  {
+    "id": "benchmark-table",
+    "type": "table",
+    "version": 1,
+    "dataset": "benchmarks",
+    "encoding": {
+      "columns": ["model", "latency", "score"],
+      "highlights": [
+        { "field": "latency", "mode": "min" },
+        { "field": "score", "mode": "max" }
+      ]
+    }
+  }
+]
+```
+
+Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
+`temporal`; field keys and dataset/view ids must be unique. Rows may contain only
+declared keys with string, number, boolean, or null values. The combined inline
+row limit is 10,000.
+
 ### Closed vocabularies — the pipeline acts on these, they are not labels
 
 | field                           | values                                                                                                | what it does                                                                                                         |
