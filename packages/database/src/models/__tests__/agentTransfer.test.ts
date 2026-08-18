@@ -14,6 +14,8 @@ import {
   chatGroups,
   chatGroupsAgents,
   documents,
+  expertiseBindings,
+  expertiseInsights,
   files,
   knowledgeBases,
   messages,
@@ -33,6 +35,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
@@ -143,6 +146,53 @@ describe('AgentModel.transferAgent', () => {
       .from(agentsToSessions)
       .where(eq(agentsToSessions.agentId, agent.id));
     expect(link.workspaceId).toBe(wsId1);
+  });
+
+  it('should transfer agent-owned expertise and its learned content', async () => {
+    const agentModel = new AgentModel(serverDB, userId);
+    const agent = await agentModel.create({ title: 'Learning Agent' });
+    const expertiseModel = new ExpertiseModel(serverDB, userId);
+    const domainId = await expertiseModel.createDomain({
+      agentId: agent.id,
+      brief: 'Improve incident response',
+      domainFilter: 'I practice when I investigate production incidents.',
+      title: 'Incident response',
+    });
+    await expertiseModel.teachLesson({
+      domainId,
+      text: 'I verify the blast radius before changing production systems.',
+    });
+    const [insight] = await serverDB
+      .insert(expertiseInsights)
+      .values({
+        body: 'The same diagnostic gap appears repeatedly.',
+        domainId,
+        headline: 'Recurring diagnostic gap',
+        kind: 'repeated-mistake',
+        userId,
+      })
+      .returning({ id: expertiseInsights.id });
+
+    await agentModel.transferAgent(agent.id, wsId1, userId);
+
+    const transferredExpertise = new ExpertiseModel(serverDB, userId, wsId1);
+    const [domain, lessons, binding, transferredInsight] = await Promise.all([
+      transferredExpertise.findDomain(domainId),
+      transferredExpertise.listLessons(domainId),
+      serverDB
+        .select({ workspaceId: expertiseBindings.workspaceId })
+        .from(expertiseBindings)
+        .where(eq(expertiseBindings.domainId, domainId)),
+      serverDB
+        .select({ workspaceId: expertiseInsights.workspaceId })
+        .from(expertiseInsights)
+        .where(eq(expertiseInsights.id, insight.id)),
+    ]);
+
+    expect(domain?.workspaceId).toBe(wsId1);
+    expect(lessons).toHaveLength(1);
+    expect(binding[0].workspaceId).toBe(wsId1);
+    expect(transferredInsight[0].workspaceId).toBe(wsId1);
   });
 
   it('should clear stale session group references on transfer', async () => {
