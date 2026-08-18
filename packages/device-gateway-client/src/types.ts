@@ -240,8 +240,8 @@ export interface AgentRunRequestMessage {
   /**
    * Full system context used only when native resume fails and the device CLI
    * retries with a fresh session. Optional for compatibility with older
-   * servers and devices. Self-hosted gateways must forward this optional field;
-   * older gateways safely degrade to a fresh retry without recovery history.
+   * servers and devices. The gateway relay must preserve this optional field;
+   * older deployments safely degrade to a fresh retry without recovery history.
    */
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
