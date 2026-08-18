@@ -22,9 +22,7 @@ const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTe
 
 const RecentListItem = memo<RecentItem>((item) => {
   const { title, type, agentId, id, metadata, status } = item;
-  const group = useAgentGroupStore((s) =>
-    item.groupId ? s.groupMap[item.groupId] : undefined,
-  );
+  const group = useAgentGroupStore((s) => (item.groupId ? s.groupMap[item.groupId] : undefined));
   const IconComponent = TYPE_ICON_MAP[type] || FileTextIcon;
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
