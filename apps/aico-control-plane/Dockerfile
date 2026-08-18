@@ -1,3 +1,8 @@
+# syntax=docker/dockerfile:1
+# Dummy AUTH_SECRET / KEY_VAULTS_SECRET satisfy Next/env checks at build time
+# only; they are not production secrets. BuildKit still flags the names.
+# check=skip=SecretsUsedInArgOrEnv
+
 # Panachat control-plane image (operator UI + Hono on :3020).
 # Build from repo root:
 #   docker build -f apps/aico-control-plane/Dockerfile -t panachat-control-plane .
