@@ -2,6 +2,7 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
 import { createVisualFileRef } from '@lobechat/const/visualRef';
+import type { FetchSSEOptions } from '@lobechat/fetch-sse';
 import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { act } from '@testing-library/react';
@@ -9,6 +10,7 @@ import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import type * as AicoBillingModule from '@/features/AicoBilling';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
@@ -48,6 +50,8 @@ vi.hoisted(() => {
 const mockCreateHeaderWithAuth = vi.hoisted(() =>
   vi.fn(async ({ headers }: { headers: Record<string, string> }) => headers),
 );
+const mockAssertAicoBillingAllowsChat = vi.hoisted(() => vi.fn());
+const mockRefreshAicoBillingBalance = vi.hoisted(() => vi.fn());
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
@@ -125,6 +129,8 @@ afterEach(() => {
 beforeEach(async () => {
   // Reset all mocks
   vi.clearAllMocks();
+  mockAssertAicoBillingAllowsChat.mockResolvedValue(undefined);
+  mockRefreshAicoBillingBalance.mockResolvedValue(undefined);
   // 清除所有模块的缓存
   vi.resetModules();
 
@@ -160,6 +166,15 @@ vi.mock('../_auth', () => ({
 vi.mock('@/helpers/isCanUseFC', () => ({
   isCanUseFC: vi.fn(() => true), // Default to true, tests can override
 }));
+
+vi.mock('@/features/AicoBilling', async (importOriginal) => {
+  const actual = await importOriginal<typeof AicoBillingModule>();
+  return {
+    ...actual,
+    assertAicoBillingAllowsChat: mockAssertAicoBillingAllowsChat,
+    refreshAicoBillingBalance: mockRefreshAicoBillingBalance,
+  };
+});
 
 describe('ChatService', () => {
   describe('createAssistantMessage', () => {
@@ -1753,6 +1768,33 @@ describe('ChatService', () => {
       const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
       expect(payload).not.toHaveProperty('requestTrigger');
       expect(payload).not.toHaveProperty('metadata');
+    });
+
+    it('updates a managed wallet immediately with the final stream cost', async () => {
+      const billingContext = { source: 'personal' as const };
+      const onFinish = vi.fn();
+      mockAssertAicoBillingAllowsChat.mockResolvedValueOnce(billingContext);
+      mockFetchSSE.mockImplementationOnce(async (_url: string, fetchOptions: FetchSSEOptions) => {
+        await fetchOptions.onFinish?.('done', {
+          type: 'done',
+          usage: { cost: 0.25, totalTokens: 10 },
+        });
+        return new Response('mock response');
+      });
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'managed-model', provider: 'aico' },
+        { onFinish },
+      );
+
+      expect(onFinish).toHaveBeenCalled();
+      expect(mockRefreshAicoBillingBalance).toHaveBeenCalledWith({
+        billingContext,
+        costUsd: 0.25,
+      });
+      expect(JSON.parse(mockFetchSSE.mock.calls[0][1].body)).toMatchObject({
+        aicoBilling: billingContext,
+      });
     });
 
     it('should make a POST request with chatCompletion apiMode in non-openai provider payload', async () => {

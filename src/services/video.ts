@@ -10,7 +10,7 @@ export class AiVideoService {
     log('Creating video with payload: %O', payload);
 
     try {
-      const { AICO_BILLING_SOURCES_SWR_KEY, assertAicoBillingAllowsChat } =
+      const { assertAicoBillingAllowsChat, refreshAicoBillingBalance } =
         await import('@/features/AicoBilling');
       const aicoBilling = await assertAicoBillingAllowsChat(payload.provider);
       const requestPayload = aicoBilling ? { ...payload, aicoBilling } : payload;
@@ -23,9 +23,7 @@ export class AiVideoService {
       });
 
       if (aicoBilling) {
-        const { mutate: globalMutate } = await import('@/libs/swr');
-        void globalMutate(AICO_BILLING_SOURCES_SWR_KEY);
-        void globalMutate('aico-my-wallet');
+        void refreshAicoBillingBalance();
       }
 
       return result;

@@ -5,6 +5,7 @@ import { useCallback, useEffect } from 'react';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 
+import { AICO_BILLING_SOURCES_SWR_KEY } from './cacheKeys';
 import { useAicoBillingStore } from './store';
 import {
   type AicoBillingContext,
@@ -13,8 +14,6 @@ import {
   isSameBillingContext,
   preferenceToBillingContext,
 } from './types';
-
-export const AICO_BILLING_SOURCES_SWR_KEY = 'aico-billing-sources';
 
 export const useAicoBillingSources = () => {
   const context = useAicoBillingStore((s) => s.context);
