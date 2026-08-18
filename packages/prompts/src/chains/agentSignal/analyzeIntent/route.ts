@@ -1,5 +1,3 @@
-import type { OpenAIChatMessage } from '@lobechat/types';
-
 import {
   AGENT_SIGNAL_ANALYZE_INTENT_ROUTE_SYSTEM_ROLE,
   createAgentSignalAnalyzeIntentRoutePrompt,
@@ -68,7 +66,7 @@ export const chainAgentSignalAnalyzeIntentRoute = (input: {
   reason: string;
   result: 'neutral' | 'not_satisfied' | 'satisfied';
   serializedContext?: string;
-}): { messages: OpenAIChatMessage[] } => {
+}): { messages: Array<{ content: string; role: 'system' | 'user' }> } => {
   return {
     messages: [
       {

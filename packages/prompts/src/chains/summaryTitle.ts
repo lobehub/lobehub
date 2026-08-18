@@ -18,7 +18,7 @@ export const TOPIC_TITLE_JSON_SCHEMA = {
 export const chainSummaryTitle = (
   messages: (UIChatMessage | OpenAIChatMessage)[],
   locale: string,
-): { messages: OpenAIChatMessage[] } => {
+): { messages: Array<{ content: string; role: 'system' | 'user' }> } => {
   const conversationText = messages
     .map((message) => `<${message.role}>\n${String(message.content ?? '')}\n</${message.role}>`)
     .join('\n');

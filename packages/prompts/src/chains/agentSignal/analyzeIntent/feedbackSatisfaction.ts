@@ -1,5 +1,3 @@
-import type { OpenAIChatMessage } from '@lobechat/types';
-
 import {
   AGENT_SIGNAL_ANALYZE_INTENT_FEEDBACK_SATISFACTION_SYSTEM_ROLE,
   createAgentSignalAnalyzeIntentFeedbackSatisfactionPrompt,
@@ -50,7 +48,7 @@ export const AGENT_SIGNAL_FEEDBACK_SATISFACTION_JSON_SCHEMA = {
 export const chainAgentSignalAnalyzeIntentFeedbackSatisfaction = (input: {
   message: string;
   serializedContext?: string;
-}): { messages: OpenAIChatMessage[] } => {
+}): { messages: Array<{ content: string; role: 'system' | 'user' }> } => {
   return {
     messages: [
       {
