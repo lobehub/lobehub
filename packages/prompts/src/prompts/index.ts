@@ -8,6 +8,7 @@ export * from './botPlatformContext';
 export * from './chatMessages';
 export * from './compressContext';
 export * from './discordContext';
+export * from './expertise';
 export * from './files';
 export * from './fileSystem';
 export * from './groupChat';
