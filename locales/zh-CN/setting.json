@@ -599,6 +599,7 @@
   "notification.im.title": "IM 通知",
   "notification.inbox.desc": "在应用内收件箱中显示通知",
   "notification.inbox.title": "站内通知",
+  "notification.item.agent_cron_job_completed": "计划任务成功",
   "notification.item.agent_cron_job_failed": "计划任务失败",
   "notification.item.agent_run_completed": "Agent 任务完成",
   "notification.item.credit_balance_low": "积分余额即将用尽",
