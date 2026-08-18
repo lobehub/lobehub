@@ -7,8 +7,10 @@ import {
   knowledgeBases,
   projectCompletionReviews,
   projects,
+  projectWorks,
   tasks,
   users,
+  works,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -230,9 +232,22 @@ describe('ProjectModel', () => {
       .insert(knowledgeBases)
       .values({ name: 'Foreign KB', userId: otherUserId })
       .returning();
+    const [foreignWork] = await serverDB
+      .insert(works)
+      .values({
+        resourceId: 'foreign-work',
+        resourceType: 'github_issue',
+        toolIdentifier: 'github',
+        toolName: 'create_issue',
+        type: 'external',
+        userId: otherUserId,
+        visibility: 'private',
+      })
+      .returning();
 
     expect(await model.listAgents(foreignProject.id)).toBeNull();
     expect(await model.listKnowledgeBases(foreignProject.id)).toBeNull();
+    expect(await model.listWorks(foreignProject.id)).toBeNull();
     expect(await model.listTasks(foreignProject.id)).toBeNull();
     expect(await model.listCompletionReviews(foreignProject.id)).toBeNull();
     expect(await model.addAgent(foreignProject.id, { agentId: 'missing' })).toBeNull();
@@ -241,11 +256,52 @@ describe('ProjectModel', () => {
     ).toBeNull();
     expect(await model.removeAgent(foreignProject.id, 'missing')).toBe(false);
     expect(await model.removeKnowledgeBase(foreignProject.id, foreignKnowledgeBase.id)).toBe(false);
+    expect(await model.addWork(foreignProject.id, { workId: 'missing' })).toBeNull();
+    expect(await model.removeWork(foreignProject.id, 'missing')).toBe(false);
 
     const project = await createProject(model, { name: 'Local' });
     await expect(
       model.addKnowledgeBase(project.id, { knowledgeBaseId: foreignKnowledgeBase.id }),
     ).rejects.toThrow('Knowledge base not found');
+    await expect(model.addWork(project.id, { workId: foreignWork.id })).rejects.toThrow(
+      'Work not found',
+    );
+  });
+
+  it('associates one durable Work with multiple projects without changing Work ownership', async () => {
+    const firstProject = await createProject(model, { name: 'First Work Project' });
+    const secondProject = await createProject(model, { name: 'Second Work Project' });
+    const [work] = await serverDB
+      .insert(works)
+      .values({
+        resourceId: 'lobehub/lobehub#1',
+        resourceType: 'github_pull_request',
+        toolIdentifier: 'github',
+        toolName: 'create_pull_request',
+        type: 'external',
+        userId,
+        visibility: 'private',
+      })
+      .returning();
+
+    await model.addWork(firstProject.id, { sortOrder: 2, workId: work.id });
+    await model.addWork(secondProject.id, { workId: work.id });
+    await model.addWork(firstProject.id, { sortOrder: 1, workId: work.id });
+
+    expect(await model.listWorks(firstProject.id)).toEqual([
+      expect.objectContaining({
+        binding: expect.objectContaining({ sortOrder: 1 }),
+        work: expect.objectContaining({ id: work.id }),
+      }),
+    ]);
+    expect(
+      await serverDB.select().from(projectWorks).where(eq(projectWorks.workId, work.id)),
+    ).toHaveLength(2);
+
+    expect(await model.removeWork(firstProject.id, work.id)).toBe(true);
+    expect(await model.removeWork(firstProject.id, work.id)).toBe(false);
+    expect(await model.listWorks(secondProject.id)).toHaveLength(1);
+    expect(await serverDB.select().from(works).where(eq(works.id, work.id))).toHaveLength(1);
   });
 
   it('moves a task subtree into a project', async () => {

@@ -1022,6 +1022,13 @@
       "when": 1787141104502,
       "tag": "0145_agents_add_identity_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1787188183549,
+      "tag": "0146_acceptance_project_association",
+      "breakpoints": true
     }
   ],
   "version": "6"
