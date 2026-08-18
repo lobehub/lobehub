@@ -209,6 +209,7 @@ export const readWorkspaceAsset = async ({
     });
     const fromPreview = await previewToBytes(preview);
     if (fromPreview) {
+      if (!fromPreview.ok) return fromPreview;
       return {
         ...fromPreview,
         contentType: resolveWorkspaceAssetContentType(path, fromPreview.contentType),

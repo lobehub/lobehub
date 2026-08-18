@@ -184,6 +184,59 @@ describe('gatherWorkspaceHtmlArtifact', () => {
     ]);
   });
 
+  it('stops reading as soon as the file count limit is exceeded', async () => {
+    const refs = Array.from({ length: 80 }, (_, index) => `<img src="a${index}.png">`).join('');
+    let reads = 0;
+
+    const result = await gatherWorkspaceHtmlArtifact({
+      htmlContent: `<html>${refs}</html>`,
+      htmlFilePath: '/project/index.html',
+      readAsset: async () => {
+        reads += 1;
+        return { bytes: new Uint8Array([1]), contentType: 'image/png', ok: true };
+      },
+      workingDirectory: '/project',
+    });
+
+    expect(result.blocked).toBe('too-many');
+    expect(reads).toBeLessThan(80);
+  });
+
+  it('stops reading as soon as the total byte limit is exceeded', async () => {
+    const refs = Array.from({ length: 4 }, (_, index) => `<img src="b${index}.png">`).join('');
+    let reads = 0;
+
+    const result = await gatherWorkspaceHtmlArtifact({
+      htmlContent: `<html>${refs}</html>`,
+      htmlFilePath: '/project/index.html',
+      readAsset: async () => {
+        reads += 1;
+        return { bytes: new Uint8Array(9 * 1024 * 1024), contentType: 'image/png', ok: true };
+      },
+      workingDirectory: '/project',
+    });
+
+    expect(result.blocked).toBe('too-large');
+    expect(reads).toBe(3);
+  });
+
+  it('reads a file once when it is referenced through several spellings', async () => {
+    const readPaths: string[] = [];
+
+    const result = await gatherWorkspaceHtmlArtifact({
+      htmlContent: '<html><img src="logo.png"><img src="./logo.png"></html>',
+      htmlFilePath: '/project/index.html',
+      readAsset: async (absolutePath) => {
+        readPaths.push(absolutePath);
+        return { bytes: new Uint8Array([1]), contentType: 'image/png', ok: true };
+      },
+      workingDirectory: '/project',
+    });
+
+    expect(readPaths).toEqual(['/project/logo.png']);
+    expect(result.files.map((file) => file.path).sort()).toEqual(['index.html', 'logo.png']);
+  });
+
   it('keeps remote urls out of the file set and lists them separately', async () => {
     const result = await gatherWorkspaceHtmlArtifact({
       htmlContent: `

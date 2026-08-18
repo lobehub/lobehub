@@ -174,6 +174,14 @@ vi.mock('@/services/projectFile', () => ({
   },
 }));
 
+vi.mock('@/business/client/features/WorkspaceHtmlArtifactPublish', () => ({
+  useWorkspaceHtmlArtifactPublish: () => ({
+    available: true,
+    getExisting: async () => null,
+    publish: async () => ({}),
+  }),
+}));
+
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({

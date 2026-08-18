@@ -3,7 +3,7 @@ import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLinkIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { createContext, use, useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceHtmlArtifactPublish } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
@@ -12,7 +12,12 @@ import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import { createWorkspaceHtmlArtifactIdentifier } from './collectHtmlLocalResources';
+import {
+  createWorkspaceHtmlArtifactIdentifier,
+  toWorkspaceAbsolutePath,
+  toWorkspaceRelativePath,
+} from './collectHtmlLocalResources';
+import type { GatheredWorkspaceHtmlArtifact } from './gatherWorkspaceHtmlArtifact';
 import {
   notifyWorkspaceHtmlPublishBlocked,
   prepareWorkspaceHtmlPublish,
@@ -59,15 +64,11 @@ const liveBarStyles = createStaticStyles(({ css }) => ({
 
 const PublishHtmlArtifactContext = createContext<PublishHtmlArtifactModel | null>(null);
 
-const relativeHtmlPath = (filePath: string, workingDirectory: string) => {
-  const target = filePath.replaceAll('\\', '/');
-  const root = workingDirectory.replaceAll('\\', '/').replace(/\/$/u, '');
-  if (target === root) return filePath.split(/[/\\]/).at(-1) ?? filePath;
-  if (target.startsWith(`${root}/`)) return target.slice(root.length + 1);
-  return filePath.split(/[/\\]/).at(-1) ?? filePath;
-};
+const relativeHtmlPath = (filePath: string, workingDirectory: string) =>
+  toWorkspaceRelativePath(toWorkspaceAbsolutePath(filePath, workingDirectory), workingDirectory) ||
+  (filePath.split(/[/\\]/).at(-1) ?? filePath);
 
-const usePublishHtmlArtifactModel = ({
+export const usePublishHtmlArtifactModel = ({
   content,
   deviceId,
   filePath,
@@ -89,12 +90,16 @@ const usePublishHtmlArtifactModel = ({
     [filePath, workingDirectory],
   );
 
+  const scopeKey = `${topicId ?? ''}:${identifier}`;
+  const scopeRef = useRef(scopeKey);
   useEffect(() => {
-    if (!available || !enabled || !isHtml || !topicId) {
-      setHasExisting(false);
-      setPublicUrl(undefined);
-      return;
-    }
+    scopeRef.current = scopeKey;
+  }, [scopeKey]);
+
+  useEffect(() => {
+    setHasExisting(false);
+    setPublicUrl(undefined);
+    if (!available || !enabled || !isHtml || !topicId) return;
 
     let cancelled = false;
     void getExisting({ identifier, topicId }).then((existing) => {
@@ -109,9 +114,10 @@ const usePublishHtmlArtifactModel = ({
   }, [available, enabled, getExisting, identifier, isHtml, topicId]);
 
   const runPublish = useCallback(
-    async (gathered: Awaited<ReturnType<typeof gatherWorkspaceHtmlArtifact>>) => {
+    async (gathered: GatheredWorkspaceHtmlArtifact) => {
       if (!topicId) return;
 
+      const requestScope = scopeRef.current;
       setBusy('publishing');
       try {
         const result = await publish({
@@ -123,9 +129,12 @@ const usePublishHtmlArtifactModel = ({
           topicId,
         });
 
+        toast.success(t('workingPanel.localFile.publish.success'));
+        // Publishing may outlive a file/topic switch under the same provider;
+        // a completion for a previous scope must not label the current file.
+        if (scopeRef.current !== requestScope) return;
         setHasExisting(true);
         if (result.publicUrl) setPublicUrl(result.publicUrl);
-        toast.success(t('workingPanel.localFile.publish.success'));
       } catch (error) {
         toast.error(
           error instanceof Error && error.message === 'unresolved-local-assets'

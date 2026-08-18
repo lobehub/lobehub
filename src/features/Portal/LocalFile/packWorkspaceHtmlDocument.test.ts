@@ -116,6 +116,56 @@ describe('packWorkspaceHtmlDocument', () => {
     expect(packed.sidecars).toEqual([]);
   });
 
+  it('rewrites refs that resolve through a local base element', () => {
+    const packed = packWorkspaceHtmlDocument({
+      entryPath: 'pages/index.html',
+      files: [
+        {
+          content: '<html><base href="../shared/"><img src="logo.png"></html>',
+          contentType: 'text/html',
+          encoding: 'utf8',
+          path: 'pages/index.html',
+        },
+        {
+          content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
+          contentType: 'image/png',
+          encoding: 'base64',
+          path: 'shared/logo.png',
+        },
+      ],
+    });
+
+    expect(packed.html).toContain('data:image/png;base64,AQID');
+    expect(packed.html).not.toContain('src="logo.png"');
+    expect(packed.unresolvedHrefs).toEqual([]);
+    expect(packed.inlinedPaths).toEqual(['shared/logo.png']);
+  });
+
+  it('rewrites every spelling of the same inlined file', () => {
+    const packed = packWorkspaceHtmlDocument({
+      entryPath: 'index.html',
+      files: [
+        {
+          content: '<html><img src="dot.png"><img src="./dot.png"></html>',
+          contentType: 'text/html',
+          encoding: 'utf8',
+          path: 'index.html',
+        },
+        {
+          content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
+          contentType: 'image/png',
+          encoding: 'base64',
+          path: 'dot.png',
+        },
+      ],
+    });
+
+    expect(packed.html).not.toContain('src="dot.png"');
+    expect(packed.html).not.toContain('src="./dot.png"');
+    expect(packed.unresolvedHrefs).toEqual([]);
+    expect(packed.inlinedPaths).toEqual(['dot.png']);
+  });
+
   it('keeps files over the inline limit as uploaded sidecars', () => {
     const largePng = globalThis.btoa('x'.repeat(WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES + 8));
     const packed = packWorkspaceHtmlDocument({

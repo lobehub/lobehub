@@ -108,7 +108,7 @@ describe('collectLocalResourceRefs', () => {
     ]);
   });
 
-  it('treats relative refs as remote when html has an absolute base', () => {
+  it('treats every ref as remote when html has an absolute base', () => {
     const result = collectLocalResourceRefs({
       content: `
         <base href="https://cdn.example.com/app/">
@@ -120,10 +120,9 @@ describe('collectLocalResourceRefs', () => {
       workingDirectory,
     });
 
-    expect(result.refs).toEqual([
-      { absolutePath: '/project/assets/local.css', href: '/assets/local.css' },
-    ]);
+    expect(result.refs).toEqual([]);
     expect(result.skipped).toContainEqual({ href: 'app.css', reason: 'remote' });
+    expect(result.skipped).toContainEqual({ href: '/assets/local.css', reason: 'remote' });
   });
 
   it('resolves a relative base against the html file', () => {
@@ -179,15 +178,18 @@ describe('collectLocalResourceRefs', () => {
     expect(result.skipped).toEqual([]);
   });
 
-  it('dedupes the same file referenced twice', () => {
+  it('dedupes identical refs but keeps every spelling of the same file', () => {
     const result = collectLocalResourceRefs({
-      content: '<img src="logo.png"><img src="./logo.png">',
+      content: '<img src="logo.png"><img src="logo.png"><img src="./logo.png">',
       sourceKind: 'html',
       sourcePath: htmlFilePath,
       workingDirectory,
     });
 
-    expect(result.refs).toEqual([{ absolutePath: '/project/pages/logo.png', href: 'logo.png' }]);
+    expect(result.refs).toEqual([
+      { absolutePath: '/project/pages/logo.png', href: 'logo.png' },
+      { absolutePath: '/project/pages/logo.png', href: './logo.png' },
+    ]);
   });
 });
 

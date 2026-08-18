@@ -118,9 +118,22 @@ export const gatherWorkspaceHtmlArtifact = async ({
     text?: string;
   }> = [];
 
-  while (walkQueue.length > 0) {
+  const htmlBytes = new TextEncoder().encode(htmlContent);
+  let totalBytes = htmlBytes.byteLength;
+  let blocked: GatheredWorkspaceHtmlArtifact['blocked'] =
+    totalBytes > WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES ? 'too-large' : undefined;
+
+  const registerAsset = (asset: (typeof resolvedAssets)[number]) => {
+    resolvedAssets.push(asset);
+    totalBytes += asset.bytes.byteLength;
+    if (resolvedAssets.length + 1 > WORKSPACE_HTML_ARTIFACT_MAX_FILES) blocked = 'too-many';
+    else if (totalBytes > WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES) blocked = 'too-large';
+  };
+
+  while (!blocked && walkQueue.length > 0) {
     const walkRef = walkQueue.shift();
     if (!walkRef) break;
+    if (handled.has(walkRef.absolutePath)) continue;
     handled.add(walkRef.absolutePath);
 
     const asset = await readAsset(walkRef.absolutePath);
@@ -136,7 +149,7 @@ export const gatherWorkspaceHtmlArtifact = async ({
         ? new TextDecoder().decode(asset.bytes)
         : undefined);
 
-    resolvedAssets.push({
+    registerAsset({
       absolutePath: walkRef.absolutePath,
       bytes: asset.bytes,
       contentType: asset.contentType,
@@ -163,6 +176,7 @@ export const gatherWorkspaceHtmlArtifact = async ({
   }
 
   for (const ref of pending) {
+    if (blocked) break;
     if (handled.has(ref.absolutePath)) continue;
     handled.add(ref.absolutePath);
 
@@ -173,7 +187,7 @@ export const gatherWorkspaceHtmlArtifact = async ({
       continue;
     }
 
-    resolvedAssets.push({
+    registerAsset({
       absolutePath: ref.absolutePath,
       bytes: asset.bytes,
       contentType: asset.contentType,
@@ -181,7 +195,6 @@ export const gatherWorkspaceHtmlArtifact = async ({
     });
   }
 
-  const htmlBytes = new TextEncoder().encode(htmlContent);
   const siteRoot = lowestCommonAncestorDirectory(
     [absoluteHtmlPath, ...resolvedAssets.map((asset) => asset.absolutePath)],
     workingDirectory,
@@ -190,26 +203,19 @@ export const gatherWorkspaceHtmlArtifact = async ({
   const relativeHtmlPath = toWorkspaceRelativePath(absoluteHtmlPath, workingDirectory);
   const filename = htmlFilePath.split(/[/\\]/).at(-1) || 'index.html';
 
-  const files: WorkspaceHtmlArtifactFile[] = [
-    toArtifactFile(entryPath, 'text/html', htmlBytes, htmlContent),
-    ...resolvedAssets.map((asset) =>
-      toArtifactFile(
-        toWorkspaceRelativePath(asset.absolutePath, siteRoot),
-        asset.contentType,
-        asset.bytes,
-        asset.text,
-      ),
-    ),
-  ];
-
-  const totalBytes =
-    htmlBytes.byteLength + resolvedAssets.reduce((sum, asset) => sum + asset.bytes.byteLength, 0);
-  const blocked =
-    files.length > WORKSPACE_HTML_ARTIFACT_MAX_FILES
-      ? 'too-many'
-      : totalBytes > WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES
-        ? 'too-large'
-        : undefined;
+  const files: WorkspaceHtmlArtifactFile[] = blocked
+    ? []
+    : [
+        toArtifactFile(entryPath, 'text/html', htmlBytes, htmlContent),
+        ...resolvedAssets.map((asset) =>
+          toArtifactFile(
+            toWorkspaceRelativePath(asset.absolutePath, siteRoot),
+            asset.contentType,
+            asset.bytes,
+            asset.text,
+          ),
+        ),
+      ];
 
   return {
     blocked,

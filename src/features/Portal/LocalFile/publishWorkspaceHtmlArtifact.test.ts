@@ -7,7 +7,16 @@ import {
 
 describe('publishWorkspaceHtmlArtifact', () => {
   it('packs files, persists a closed html artifact, then publishes that message', async () => {
-    const createMessage = vi.fn(async () => ({ id: 'msg_1' }));
+    const createMessage = vi.fn(
+      async (_params: {
+        agentId: string;
+        content: string;
+        role: 'assistant';
+        topicId: string;
+      }) => ({
+        id: 'msg_1',
+      }),
+    );
     const publishArtifact = vi.fn(async () => ({
       latestRevisionNumber: 2,
       publicUrl: 'https://example.lobehub.com/page',
@@ -42,7 +51,7 @@ describe('publishWorkspaceHtmlArtifact', () => {
       publicUrl: 'https://example.lobehub.com/page',
       revision: 2,
     });
-    const content = createMessage.mock.calls[0][0].content;
+    const content = createMessage.mock.calls[0]?.[0]?.content ?? '';
     expect(createMessage).toHaveBeenCalledWith({
       agentId: 'agt_1',
       content,

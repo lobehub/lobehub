@@ -106,7 +106,14 @@ const pushRef = (
     return;
   }
 
-  if (result.refs.some((ref) => ref.absolutePath === resolved.absolutePath)) return;
+  // Dedupe by (path, href) pair: every distinct spelling of the same file must
+  // survive so packing can rewrite each token, not just the first one.
+  if (
+    result.refs.some(
+      (ref) => ref.absolutePath === resolved.absolutePath && ref.href === resolved.href,
+    )
+  )
+    return;
 
   result.refs.push({ absolutePath: resolved.absolutePath, href: resolved.href });
 };
@@ -431,52 +438,29 @@ export const collectLocalResourceRefs = ({
 
   const resourceBase = resolveHtmlResourceBasePath(content, sourcePath, workingDirectory);
 
+  const pushHtmlRef = (href: string) => {
+    const resolved = resolveLocalResourceHref({
+      href,
+      sourcePath: resourceBase.sourcePath,
+      workingDirectory,
+    });
+
+    // An absolute <base href> makes every non-fragment URL resolve against the
+    // remote origin — including root-relative ones like /assets/app.css.
+    if (resourceBase.remote && resolved.kind !== 'empty') {
+      result.skipped.push({ href, reason: 'remote' });
+      return;
+    }
+
+    pushRef(result, resolved);
+  };
+
   walkHtmlTags(content, (tagName, tagText) => {
     if (!HTML_RESOURCE_TAGS.has(tagName)) return;
-
-    const hrefs = collectTagAttributeHrefs(tagText);
-    for (const href of hrefs) {
-      if (
-        resourceBase.remote &&
-        !href.startsWith('/') &&
-        !/^[a-z][a-z\d+.-]*:/i.test(href) &&
-        !href.startsWith('//')
-      ) {
-        result.skipped.push({ href, reason: 'remote' });
-        continue;
-      }
-
-      pushRef(
-        result,
-        resolveLocalResourceHref({
-          href,
-          sourcePath: resourceBase.sourcePath,
-          workingDirectory,
-        }),
-      );
-    }
+    for (const href of collectTagAttributeHrefs(tagText)) pushHtmlRef(href);
   });
 
-  for (const href of collectInlineStyleHrefs(content)) {
-    if (
-      resourceBase.remote &&
-      !href.startsWith('/') &&
-      !/^[a-z][a-z\d+.-]*:/i.test(href) &&
-      !href.startsWith('//')
-    ) {
-      result.skipped.push({ href, reason: 'remote' });
-      continue;
-    }
-
-    pushRef(
-      result,
-      resolveLocalResourceHref({
-        href,
-        sourcePath: resourceBase.sourcePath,
-        workingDirectory,
-      }),
-    );
-  }
+  for (const href of collectInlineStyleHrefs(content)) pushHtmlRef(href);
 
   return result;
 };

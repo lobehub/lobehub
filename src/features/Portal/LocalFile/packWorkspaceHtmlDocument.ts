@@ -210,7 +210,12 @@ export const packWorkspaceHtmlDocument = ({
   let packed = html;
   const unresolvedHrefs: string[] = [];
   for (const ref of collected.refs) {
-    const replacement = rewriteHref(ref.href, entry.path);
+    // Collection already resolved <base href>, so reuse its absolute path
+    // instead of re-resolving the href against the entry directory.
+    const target = normalizePath(toWorkspaceRelativePath(ref.absolutePath, SITE_ROOT));
+    const replacement = fileMap.has(target)
+      ? (fileToDataUri(target) ?? hostedPath(target))
+      : undefined;
     if (!replacement) {
       unresolvedHrefs.push(ref.href);
       continue;
