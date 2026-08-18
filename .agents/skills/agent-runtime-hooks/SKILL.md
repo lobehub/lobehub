@@ -76,7 +76,7 @@ await aiAgentService.execAgent({ agentId, prompt, hooks });
 
 **`beforeStep`** — Before each step. `event: AgentHookEvent`
 **`afterStep`** — After each step. `event: AgentHookEvent` (content, toolsCalling, totalCost, etc.)
-**`onComplete`** — Terminal state. `event: AgentHookEvent` (reason: done/error/interrupted/max_steps/cost_limit)
+**`onComplete`** — Terminal state. `event: AgentHookEvent` (reason: done/error/interrupted/max\_steps/cost\_limit)
 **`onError`** — Error occurred. `event: AgentHookEvent` (errorMessage, errorDetail)
 
 ### Tool Call Level
@@ -203,6 +203,17 @@ Note: CallAgent hooks require `parentOperationId` in `ExecSubAgentTaskParams`.
 - **Local only**: `beforeToolCall` mock only works in local mode (in-memory hooks). Webhook mode does not support mocking.
 - **Scoped per operation**: Auto-cleaned via `hookDispatcher.unregister()` on completion.
 - **Sandbox/MCP**: No separate hooks — they go through `executeTool`, so `beforeToolCall`/`afterToolCall` cover them. Use `event.identifier` to filter.
+
+## LLM Generation Tracing
+
+Treat `scenario` as the stable product-workflow partition key, not as a label for a shared prompt, schema, model, or helper.
+
+- Check `packages/const/src/llmGenerationTracing.ts` before adding a generation call.
+- Reuse a scenario only when the call belongs to the same user-visible workflow and lifecycle stage.
+- Add a new `TRACING_SCENARIOS` entry when the business action differs, even if it reuses the same prompt or JSON schema. For example, editable `createGoal` criteria drafting and run-time verify-plan generation require separate scenarios.
+- Never borrow a nearby scenario as a placeholder. It corrupts latency, cost, success-rate, and quality dashboards for both workflows.
+- Keep `promptVersion` next to the prompt it versions and pass `schemaName` for structured generation.
+- Add a regression assertion on the emitted tracing options whenever introducing or correcting a scenario.
 
 ## Real-World Example: agent-evals
 

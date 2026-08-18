@@ -164,10 +164,10 @@ export class VerifyPlanGeneratorService {
   /**
    * Config-time AI generation: turn a one-sentence acceptance requirement into a
    * set of proposed criteria for the user to review/edit before saving. Runs the
-   * SAME traced generation as the run-time plan path (`buildPlanPrompt` +
-   * `GENERATED_CRITERIA_JSON_SCHEMA` + `TRACING_SCENARIOS.VerifyPlanGen`), so each
-   * call lands in `llm_generation_tracing` for later precision work. Returns
-   * drafts only — nothing is persisted and no operation is required.
+   * same prompt and schema as the run-time plan path, but uses its own tracing
+   * scenario because drafting criteria in createGoal is a distinct product
+   * workflow from generating a frozen execution plan. Returns drafts only —
+   * nothing is persisted and no operation is required.
    */
   async generateCriteria(params: {
     context?: string;
@@ -197,7 +197,7 @@ export class VerifyPlanGeneratorService {
       {
         tracing: {
           promptVersion: VERIFY_PLAN_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.VerifyPlanGen,
+          scenario: TRACING_SCENARIOS.GoalCriteriaGen,
           schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
         } satisfies TracingOptions,
       },
