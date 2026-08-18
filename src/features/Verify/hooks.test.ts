@@ -83,6 +83,46 @@ describe('Verify data hooks', () => {
     expect(getAcceptanceBySubjectRefreshInterval({ id: 'a1', status: 'closed' })).toBe(0);
   });
 
+  it('stops polling once a previously-seen acceptance is removed, instead of treating it as still discovering', () => {
+    // Never seen: keep discovering fast — this is the pre-existing behaviour.
+    expect(getAcceptanceBySubjectRefreshInterval(undefined, false)).toBe(2000);
+    expect(getAcceptanceBySubjectRefreshInterval(null, false)).toBe(2000);
+    // Seen once, now null: the aggregate existed and was deleted (e.g. via
+    // "Remove acceptance"). The endpoint cannot tell this apart from
+    // "never created" — the caller-supplied flag is what breaks the tie.
+    expect(getAcceptanceBySubjectRefreshInterval(undefined, true)).toBe(0);
+    expect(getAcceptanceBySubjectRefreshInterval(null, true)).toBe(0);
+  });
+
+  it('flips useAcceptanceBySubject to stop polling after the aggregate is removed', async () => {
+    const getAcceptanceBySubject = vi.spyOn(verifyService, 'getAcceptanceBySubject');
+    getAcceptanceBySubject.mockResolvedValueOnce({
+      id: 'acceptance-1',
+      status: 'verifying',
+    } as never);
+
+    const { rerender, result } = renderHook(
+      ({ subjectId }: { subjectId: string | null }) => useAcceptanceBySubject('task', subjectId),
+      { initialProps: { subjectId: 'T-231' }, wrapper: createSWRWrapper(new Map()) },
+    );
+
+    await waitFor(() =>
+      expect(result.current.data).toEqual({ id: 'acceptance-1', status: 'verifying' }),
+    );
+
+    // The task's acceptance config was removed server-side: the endpoint now
+    // reports null for the same subject, same shape as "never created".
+    getAcceptanceBySubject.mockResolvedValue(null);
+    await result.current.mutate();
+    await waitFor(() => expect(result.current.data).toBeNull());
+
+    // A different subject that has never had an aggregate must still poll
+    // fast — the sticky flag is per-subject, not global.
+    getAcceptanceBySubject.mockResolvedValue(null);
+    rerender({ subjectId: 'T-999' });
+    await waitFor(() => expect(result.current.data).toBeUndefined());
+  });
+
   it('does not request rubrics while rubric authoring is inactive', async () => {
     const listRubrics = vi.spyOn(verifyService, 'listRubrics').mockResolvedValue([]);
 
