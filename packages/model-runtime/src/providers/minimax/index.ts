@@ -16,6 +16,7 @@ import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProper
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { createMiniMaxImage } from './createImage';
+import { createMiniMaxSpeech } from './createSpeech';
 import { createMiniMaxVideo } from './createVideo';
 
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com/v1';
@@ -371,6 +372,7 @@ export const openAIParams = {
     });
   },
   provider: ModelProvider.Minimax,
+  textToSpeech: createMiniMaxSpeech,
 } satisfies OpenAICompatibleFactoryOptions;
 
 export const LobeMinimaxOpenAI = createOpenAICompatibleRuntime(openAIParams);

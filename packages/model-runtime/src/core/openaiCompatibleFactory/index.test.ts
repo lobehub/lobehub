@@ -4231,4 +4231,62 @@ describe('LobeOpenAICompatibleFactory', () => {
       await expect(instance.transcribe!({ file, model: 'whisper-1' })).rejects.toBeDefined();
     });
   });
+
+  describe('textToSpeech', () => {
+    const speechPayload = { input: 'hello world', model: 'tts-1', voice: 'alloy' };
+
+    it('should synthesize speech through the OpenAI-compatible endpoint by default', async () => {
+      const speechMock = vi
+        .spyOn(instance['client'].audio.speech, 'create')
+        .mockResolvedValue({ arrayBuffer: async () => new ArrayBuffer(8) } as any);
+
+      const result = await instance.textToSpeech!(speechPayload);
+
+      expect(speechMock).toHaveBeenCalledWith(
+        expect.objectContaining(speechPayload),
+        expect.anything(),
+      );
+      expect(result!.byteLength).toBe(8);
+    });
+
+    it('should use the custom textToSpeech implementation when provided', async () => {
+      const customBuffer = new ArrayBuffer(4);
+      const customTextToSpeech = vi.fn().mockResolvedValue(customBuffer);
+      const LobeCustomSpeechProvider = createOpenAICompatibleRuntime({
+        baseURL: 'https://api.example.com/v1',
+        provider: ModelProvider.Groq,
+        textToSpeech: customTextToSpeech,
+      });
+      const customInstance = new LobeCustomSpeechProvider({ apiKey: 'test' });
+      const speechSpy = vi.spyOn(customInstance['client'].audio.speech, 'create');
+      const requestOptions = { headers: { 'X-Trace': 'trace-1' } };
+
+      const result = await customInstance.textToSpeech!(speechPayload, requestOptions);
+
+      expect(result).toBe(customBuffer);
+      expect(speechSpy).not.toHaveBeenCalled();
+      expect(customTextToSpeech).toHaveBeenCalledWith(
+        speechPayload,
+        expect.objectContaining({
+          apiKey: 'test',
+          baseURL: 'https://api.example.com/v1',
+          provider: ModelProvider.Groq,
+        }),
+        requestOptions,
+      );
+    });
+
+    it('should wrap errors thrown by the custom textToSpeech implementation', async () => {
+      const LobeCustomSpeechProvider = createOpenAICompatibleRuntime({
+        baseURL: 'https://api.example.com/v1',
+        provider: ModelProvider.Groq,
+        textToSpeech: vi.fn().mockRejectedValue(new Error('speech boom')),
+      });
+      const customInstance = new LobeCustomSpeechProvider({ apiKey: 'test' });
+
+      await expect(customInstance.textToSpeech!(speechPayload)).rejects.toEqual(
+        expect.objectContaining({ provider: ModelProvider.Groq }),
+      );
+    });
+  });
 });
