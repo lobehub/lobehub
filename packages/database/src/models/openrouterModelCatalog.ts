@@ -127,8 +127,8 @@ export class OpenRouterModelCatalogModel {
         contextWindowTokens: row.contextWindowTokens ?? undefined,
         description: row.description ?? undefined,
         displayName: isAuto ? OPENROUTER_AUTO_DISPLAY_NAME : (row.displayName ?? undefined),
-        // Platform default: Auto + latest 4 chat / openai|anthropic|google.
-        // Per-user overrides live in `ai_models` and win at merge time.
+        // Platform default: Auto + latest 4 chat / openai|anthropic|google
+        // + every image/video generator. Per-user overrides live in `ai_models`.
         enabled: defaultEnabled.has(row.id),
         id: row.id,
         pricing: (row.pricing ?? undefined) as Pricing | undefined,
@@ -158,7 +158,7 @@ export class OpenRouterModelCatalogModel {
 
   /**
    * Recompute and persist `enabled` flags from the current catalog rows
-   * (latest 4 chat models per openai / anthropic / google).
+   * (latest 4 chat models per openai / anthropic / google, plus all image/video).
    */
   reseedDefaultEnabledFlags = async (): Promise<number> => {
     const rows = await this.db

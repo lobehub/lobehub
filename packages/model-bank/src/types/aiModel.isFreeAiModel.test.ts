@@ -22,4 +22,21 @@ describe('isFreeAiModel', () => {
   it('returns false for paid models', () => {
     expect(isFreeAiModel({ displayName: 'GPT-4o', id: 'openai/gpt-4o' })).toBe(false);
   });
+
+  it('does not treat image or video generators as free even with (free) stamps', () => {
+    expect(
+      isFreeAiModel({
+        displayName: 'Flux 2 (free)',
+        id: 'black-forest-labs/flux-2',
+        type: 'image',
+      }),
+    ).toBe(false);
+    expect(
+      isFreeAiModel({
+        displayName: 'Veo 3 (free)',
+        id: 'google/veo-3',
+        type: 'video',
+      }),
+    ).toBe(false);
+  });
 });

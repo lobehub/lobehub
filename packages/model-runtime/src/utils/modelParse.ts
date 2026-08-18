@@ -6,8 +6,9 @@ import type {
   AiModelType,
   ExtendParamsType,
   LobeDefaultAiModelListItem,
+  Pricing,
 } from 'model-bank';
-import { AiModelTypeSchema, ModelProvider } from 'model-bank';
+import { AiModelTypeSchema, DEFAULT_VIDEO_GENERATION_PARAMS, ModelProvider } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
 import { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
@@ -567,15 +568,27 @@ const processModelCard = (
   const mergedSettings = mergeSettings(model.settings, knownModel?.settings, options);
 
   const formatPricing = (pricing?: {
+    approximatePricePerImage?: number;
+    approximatePricePerVideo?: number;
     cachedInput?: number;
+    currency?: Pricing['currency'];
     input?: number;
     output?: number;
-    units?: any[];
+    units?: Pricing['units'];
     writeCacheInput?: number;
-  }) => {
+  }): Pricing | undefined => {
     if (!pricing || typeof pricing !== 'object') return undefined;
     if (Array.isArray(pricing.units)) {
-      return { units: pricing.units };
+      return {
+        ...(typeof pricing.approximatePricePerImage === 'number' && {
+          approximatePricePerImage: pricing.approximatePricePerImage,
+        }),
+        ...(typeof pricing.approximatePricePerVideo === 'number' && {
+          approximatePricePerVideo: pricing.approximatePricePerVideo,
+        }),
+        ...(pricing.currency && { currency: pricing.currency }),
+        units: pricing.units,
+      };
     }
     const { input, output, cachedInput, writeCacheInput } = pricing;
     if (
@@ -619,8 +632,23 @@ const processModelCard = (
         unit: 'millionTokens' as const,
       });
     }
-    return { units };
+    return { ...(pricing.currency && { currency: pricing.currency }), units };
   };
+
+  const mergePricing = (remote?: Pricing, known?: Pricing): Pricing | undefined => {
+    if (!remote) return known;
+    if (!known) return remote;
+
+    const remoteUnitNames = new Set(remote.units.map((unit) => unit.name));
+    return {
+      approximatePricePerImage: remote.approximatePricePerImage ?? known.approximatePricePerImage,
+      approximatePricePerVideo: remote.approximatePricePerVideo ?? known.approximatePricePerVideo,
+      currency: remote.currency ?? known.currency,
+      units: [...known.units.filter((unit) => !remoteUnitNames.has(unit.name)), ...remote.units],
+    };
+  };
+
+  const pricing = mergePricing(formatPricing(model.pricing), formatPricing(knownModel?.pricing));
 
   return {
     contextWindowTokens: model.contextWindowTokens ?? knownModel?.contextWindowTokens ?? undefined,
@@ -640,7 +668,7 @@ const processModelCard = (
       ((isKeywordListMatch(model.id.toLowerCase(), imageOutputKeywords) && !isExcludedModel) ||
         false),
     maxOutput: model.maxOutput ?? knownModel?.maxOutput ?? undefined,
-    pricing: formatPricing(model?.pricing) ?? undefined,
+    pricing,
     reasoning:
       model.reasoning ??
       knownModel?.abilities?.reasoning ??
@@ -652,9 +680,12 @@ const processModelCard = (
       knownModel?.abilities?.search ??
       ((isKeywordListMatch(model.id.toLowerCase(), searchKeywords) && !isExcludedModel) || false),
     type: modelType,
-    // current, only image model use the parameters field
+    // Image and video Create both require a Zod-valid parameters schema.
     ...(modelType === 'image' && {
       parameters: model.parameters ?? knownModel?.parameters,
+    }),
+    ...(modelType === 'video' && {
+      parameters: model.parameters ?? knownModel?.parameters ?? DEFAULT_VIDEO_GENERATION_PARAMS,
     }),
     ...(mergedSettings ? { settings: mergedSettings } : {}),
     video:
@@ -676,7 +707,7 @@ const processModelCard = (
  * @returns Processed model card list
  */
 export const processModelList = async (
-  modelList: Array<{ id: string }>,
+  modelList: Array<{ [key: string]: unknown; id: string }>,
   config: ModelProcessorConfig,
   provider?: ModelProviderKey,
 ): Promise<ChatModelCard[]> => {
@@ -733,7 +764,7 @@ export const processModelList = async (
  * @returns Processed model card list
  */
 export const processMultiProviderModelList = async (
-  modelList: Array<{ id: string }>,
+  modelList: Array<{ [key: string]: unknown; id: string }>,
   providerid?: ModelProviderKey,
 ): Promise<ChatModelCard[]> => {
   const { loadModels } =

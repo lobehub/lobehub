@@ -68,14 +68,14 @@ describe('OpenRouterModelCatalogSyncService', () => {
           type: 'chat',
         }),
         expect.objectContaining({
-          displayName: 'Auto',
+          abilities: expect.objectContaining({ functionCall: true, vision: true }),
           enabled: true,
           id: 'openrouter/auto',
           type: 'chat',
         }),
         expect.objectContaining({
           displayName: 'Nano Banana 2',
-          enabled: false,
+          enabled: true,
           id: 'google/gemini-3.1-flash-image-preview:image',
           parameters: { prompt: { default: '' } },
           type: 'image',

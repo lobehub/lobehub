@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_VIDEO_GENERATION_PARAMS,
   extractVideoDefaultValues,
   MAX_VIDEO_SEED,
   PRESET_VIDEO_ASPECT_RATIOS,
   PRESET_VIDEO_RESOLUTIONS,
+  resolveVideoModelParamsSchema,
   type RuntimeVideoGenParams,
   validateVideoModelParamsSchema,
   VideoModelParamsMetaSchema,
@@ -70,6 +72,24 @@ describe('video standard-parameters', () => {
       };
 
       expect(() => VideoModelParamsMetaSchema.parse(invalidSchema)).toThrow();
+    });
+  });
+
+  describe('DEFAULT_VIDEO_GENERATION_PARAMS', () => {
+    it('is a valid Video Create schema', () => {
+      expect(() => VideoModelParamsMetaSchema.parse(DEFAULT_VIDEO_GENERATION_PARAMS)).not.toThrow();
+    });
+  });
+
+  describe('resolveVideoModelParamsSchema', () => {
+    it('returns a valid default when the card has no parameters', () => {
+      expect(resolveVideoModelParamsSchema(undefined)).toEqual(DEFAULT_VIDEO_GENERATION_PARAMS);
+      expect(resolveVideoModelParamsSchema({})).toEqual(DEFAULT_VIDEO_GENERATION_PARAMS);
+    });
+
+    it('keeps a valid schema', () => {
+      const schema: VideoModelParamsSchema = { prompt: { default: 'hi' } };
+      expect(resolveVideoModelParamsSchema(schema)).toEqual(schema);
     });
   });
 

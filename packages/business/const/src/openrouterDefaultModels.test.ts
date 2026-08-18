@@ -51,6 +51,21 @@ describe('computeDefaultEnabledOpenRouterModelIds', () => {
     expect(enabled.has('google/gemini-3.1-flash-image-preview:image')).toBe(true);
     expect(enabled.has('google/gemini-2.5-flash-image:image')).toBe(true);
   });
+
+  it('enables every catalog image and video generator, not only Nano Banana', () => {
+    const enabled = computeDefaultEnabledOpenRouterModelIds([
+      { id: 'openai/gpt-4o', releasedAt: '2025-01-01', type: 'chat' },
+      { id: 'black-forest-labs/flux-2', type: 'image' },
+      { id: 'openai/gpt-image-1:image', type: 'image' },
+      { id: 'google/veo-3', type: 'video' },
+      { id: 'deepseek/deepseek-chat', releasedAt: '2026-01-01', type: 'chat' },
+    ]);
+
+    expect(enabled.has('black-forest-labs/flux-2')).toBe(true);
+    expect(enabled.has('openai/gpt-image-1:image')).toBe(true);
+    expect(enabled.has('google/veo-3')).toBe(true);
+    expect(enabled.has('deepseek/deepseek-chat')).toBe(false);
+  });
 });
 
 describe('pickPreferredDefaultOpenRouterModelId', () => {

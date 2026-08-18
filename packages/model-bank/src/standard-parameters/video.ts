@@ -193,10 +193,37 @@ export type RuntimeVideoGenParams = Pick<_StandardVideoGenerationParameters, 'pr
 export type RuntimeVideoGenParamsKeys = keyof RuntimeVideoGenParams;
 export type RuntimeVideoGenParamsValue = RuntimeVideoGenParams[RuntimeVideoGenParamsKeys];
 
+/**
+ * Default Video Create controls when a provider card has no parameter schema.
+ * Must stay valid for {@link VideoModelParamsMetaSchema} — a missing/invalid
+ * schema previously crashed Create Video on model select.
+ */
+export const DEFAULT_VIDEO_GENERATION_PARAMS = {
+  aspectRatio: {
+    default: '16:9',
+    enum: ['16:9', '9:16', '1:1'],
+  },
+  duration: { default: 5, max: 15, min: 1 },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  resolution: {
+    default: '720p',
+    enum: ['720p', '1080p'],
+  },
+} as const satisfies VideoModelParamsSchema;
+
 export function validateVideoModelParamsSchema(
   paramsSchema: unknown,
 ): VideoModelParamsOutputSchema {
   return VideoModelParamsMetaSchema.parse(paramsSchema);
+}
+
+/** Coerce missing or invalid video param cards onto a schema Create Video can parse. */
+export function resolveVideoModelParamsSchema(paramsSchema: unknown): VideoModelParamsSchema {
+  if (VideoModelParamsMetaSchema.safeParse(paramsSchema).success) {
+    return paramsSchema as VideoModelParamsSchema;
+  }
+  return DEFAULT_VIDEO_GENERATION_PARAMS;
 }
 
 /**
