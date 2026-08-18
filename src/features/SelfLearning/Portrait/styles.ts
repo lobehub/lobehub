@@ -11,13 +11,51 @@ export const portraitStyles = createStaticStyles(({ css }) => ({
   bar: css`
     overflow: hidden;
     display: flex;
-    flex: none;
 
-    width: 120px;
+    width: 100%;
     height: 5px;
     border-radius: 3px;
 
     background: ${cssVar.colorFillSecondary};
+  `,
+  profileCounts: css`
+    min-width: 0;
+    text-align: end;
+    white-space: nowrap;
+  `,
+  profileKey: css`
+    flex: none;
+    width: 32px;
+    font-family: ${cssVar.fontFamilyCode};
+    white-space: nowrap;
+  `,
+  profileProgress: css`
+    width: 100%;
+    min-width: 120px;
+  `,
+  profileRow: css`
+    display: grid;
+    grid-template-columns: minmax(220px, 1.15fr) minmax(180px, 1fr) 84px minmax(220px, auto);
+    gap: 20px;
+    align-items: center;
+
+    padding-block: 14px;
+    padding-inline: 18px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    @media (width <= 1100px) {
+      grid-template-columns: minmax(200px, 1fr) minmax(140px, 1fr) 84px;
+
+      & > :last-child {
+        grid-column: 2 / -1;
+        text-align: start;
+      }
+    }
+  `,
+  profileTitle: css`
+    padding-block: 14px 10px;
+    padding-inline: 18px;
+    font-size: 12px;
   `,
   dot: css`
     display: inline-block;

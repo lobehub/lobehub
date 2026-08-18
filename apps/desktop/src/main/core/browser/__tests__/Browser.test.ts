@@ -353,6 +353,32 @@ describe('Browser', () => {
       );
     });
 
+    it('should prefer the requested initial size when state restoration is disabled', () => {
+      mockStoreManagerGet.mockImplementation((key: string) => {
+        if (key === 'windowSize_test-window') {
+          return { height: 700, width: 900 };
+        }
+        return undefined;
+      });
+
+      new Browser(
+        {
+          ...defaultOptions,
+          height: 954,
+          restoreWindowState: false,
+          width: 1432,
+        },
+        mockApp,
+      );
+
+      expect(MockBrowserWindow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          height: 954,
+          width: 1432,
+        }),
+      );
+    });
+
     it('should restore window position from store and clamp within display', () => {
       mockStoreManagerGet.mockImplementation((key: string) => {
         if (key === 'windowSize_test-window') {

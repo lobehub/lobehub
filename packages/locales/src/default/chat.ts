@@ -2279,6 +2279,39 @@ export default {
   'workingPanel.localFile.preview.reload': 'Reload preview',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.preview.source': 'Source',
+  'workingPanel.localFile.publish.action': 'Publish',
+  'workingPanel.localFile.publish.confirmTitle': 'Before you publish this page',
+  'workingPanel.localFile.publish.details': 'What will be published',
+  'workingPanel.localFile.publish.dynamic': 'Files loaded later by scripts will not be included.',
+  'workingPanel.localFile.publish.failed': "Couldn't publish this page",
+  'workingPanel.localFile.publish.files_one':
+    'This page includes {{count}} local file. It will be published together with the HTML.',
+  'workingPanel.localFile.publish.files_other':
+    'This page includes {{count}} local files. They will be published together with the HTML.',
+  'workingPanel.localFile.publish.inline_one':
+    '1 small file (under {{limit}}) is inlined into the HTML.',
+  'workingPanel.localFile.publish.inline_other':
+    '{{count}} small files (under {{limit}}) are inlined into the HTML.',
+  'workingPanel.localFile.publish.live': 'Live',
+  'workingPanel.localFile.publish.upload_one': '1 larger file will be uploaded with the page.',
+  'workingPanel.localFile.publish.upload_other':
+    '{{count}} larger files will be uploaded with the page.',
+  'workingPanel.localFile.publish.missing': 'Missing files will not be included: {{list}}',
+  'workingPanel.localFile.publish.noLocalFiles': 'This page has no local files besides the HTML.',
+  'workingPanel.localFile.publish.noTopic': 'Open a topic to publish this page',
+  'workingPanel.localFile.publish.note': 'You can unpublish it at any time.',
+  'workingPanel.localFile.publish.oversized': 'These files are too large to publish: {{list}}',
+  'workingPanel.localFile.publish.remotes':
+    'These remote URLs stay as they are. After publish they still load from the original hosts.',
+  'workingPanel.localFile.publish.scanning': 'Preparing this page…',
+  'workingPanel.localFile.publish.privacy':
+    'Anyone with the link can open this page. Before publishing, make sure it does not contain anything you would rather keep private, such as credentials, API keys, personal information, uploaded files, or images.',
+  'workingPanel.localFile.publish.success': 'Published',
+  'workingPanel.localFile.publish.tooLarge': 'This page is too large to publish ({{size}} bytes).',
+  'workingPanel.localFile.publish.tooMany': 'This page references too many local files to publish.',
+  'workingPanel.localFile.publish.unresolvedLocals':
+    'This page still points at local files that were not packed, so those assets would break after publish.',
+  'workingPanel.localFile.publish.version': 'Publish this version',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
   'workingPanel.skills.actions.comingSoon': 'Coming soon',
   'workingPanel.skills.actions.delete': 'Delete',

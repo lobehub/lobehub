@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGlobalStore } from '@/store/global';
 import { initialState } from '@/store/global/initialState';
+import { useUserStore } from '@/store/user';
 
 import Files from '../index';
 
@@ -173,9 +174,21 @@ vi.mock('@/services/projectFile', () => ({
   },
 }));
 
+vi.mock('@/business/client/features/WorkspaceHtmlArtifactPublish', () => ({
+  useWorkspaceHtmlArtifactPublish: () => ({
+    available: true,
+    getExisting: async () => null,
+    publish: async () => ({}),
+  }),
+}));
+
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ openLocalFile: openLocalFileMock }),
+    selector({
+      activeAgentId: 'agt_1',
+      activeTopicId: 'tpc_1',
+      openLocalFile: openLocalFileMock,
+    }),
 }));
 
 const messageSpy = vi.hoisted(() => ({ warning: vi.fn() }));
@@ -322,6 +335,78 @@ describe('Files — reveal request integration', () => {
     expect(getContextMenuItems(ignoredNode).map((item) => item.key)).not.toContain(
       'show-in-review',
     );
+  });
+
+  it('adds a publish action only for HTML files when artifact deployment is enabled', () => {
+    const previousLab = useUserStore.getState().preference.lab;
+    useUserStore.setState({
+      preference: {
+        ...useUserStore.getState().preference,
+        lab: { ...previousLab, enableArtifactDeployment: true },
+      },
+    });
+
+    try {
+      render(<Files workingDirectory="/repo" />);
+
+      const getContextMenuItems = explorerTreeProps.current?.getContextMenuItems as (
+        node: unknown,
+      ) => { key: string }[];
+
+      expect(
+        getContextMenuItems({
+          data: {
+            isDirectory: false,
+            name: 'index.html',
+            path: '/repo/index.html',
+            relativePath: 'index.html',
+          },
+          id: 'index.html',
+          isFolder: false,
+        }).map((item) => item.key),
+      ).toEqual([
+        'open',
+        'publish',
+        'divider-reveal',
+        'show-in-system',
+        'divider-copy',
+        'copy-absolute-path',
+        'copy-relative-path',
+      ]);
+
+      expect(
+        getContextMenuItems({
+          data: {
+            isDirectory: false,
+            name: 'root.ts',
+            path: '/repo/root.ts',
+            relativePath: 'root.ts',
+          },
+          id: 'root.ts',
+          isFolder: false,
+        }).map((item) => item.key),
+      ).not.toContain('publish');
+
+      expect(
+        getContextMenuItems({
+          data: {
+            isDirectory: true,
+            name: 'site.html',
+            path: '/repo/site.html',
+            relativePath: 'site.html/',
+          },
+          id: 'site.html/',
+          isFolder: true,
+        }).map((item) => item.key),
+      ).not.toContain('publish');
+    } finally {
+      useUserStore.setState({
+        preference: {
+          ...useUserStore.getState().preference,
+          lab: previousLab,
+        },
+      });
+    }
   });
 
   it('opens file previews with the indexed project root as the approved workspace root', () => {

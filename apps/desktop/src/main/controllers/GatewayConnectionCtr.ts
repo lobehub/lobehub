@@ -285,6 +285,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         jwt,
         operationId: request.operationId,
         prompt: request.prompt,
+        resumeFallbackSystemContext: request.resumeFallbackSystemContext,
         resumeSessionId: request.resumeSessionId,
         serverUrl,
         systemContext: request.systemContext,

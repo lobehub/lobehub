@@ -988,16 +988,20 @@ export const verifyKeys = {
 
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
+  navigationCounts: def('inbox:navigationCounts', (workspaceId: string | null) => [
+    'inbox:navigationCounts',
+    workspaceId,
+  ]),
   notifications: def(
     'inbox:notifications',
     // Keyed by context: the server scopes the inbox to the active workspace
     // (null = personal), so cached pages must never be reused across contexts.
-    (workspaceId: string | null, cursor: string | undefined, unreadOnly: boolean | undefined) => [
-      'inbox:notifications',
-      workspaceId,
-      cursor,
-      unreadOnly,
-    ],
+    (
+      workspaceId: string | null,
+      cursor: string | undefined,
+      category: string | undefined,
+      isRead: boolean | undefined,
+    ) => ['inbox:notifications', workspaceId, cursor, category, isRead],
   ),
   unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
     'inbox:unreadCount',
