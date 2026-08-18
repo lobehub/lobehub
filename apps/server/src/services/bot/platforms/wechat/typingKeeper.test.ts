@@ -21,12 +21,19 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: vi.fn(() => null),
 }));
 
-/** Fake redis covering only what peekWindow touches. */
-const makeRedis = (hashes: Record<string, Record<string, string>> = {}) =>
+/**
+ * Fake redis covering what peekWindow and the active-mode gate touch. The
+ * poller records `host` once it owns WeChat — that is the steady state these
+ * tests run in unless a case overrides `strings`.
+ */
+const makeRedis = (
+  hashes: Record<string, Record<string, string>> = {},
+  strings: Record<string, string> = { 'wechat:poller:active-mode': 'host' },
+) =>
   ({
     del: vi.fn(async () => 0),
     expire: vi.fn(async () => 1),
-    get: vi.fn(async () => null),
+    get: vi.fn(async (key: string) => strings[key] ?? null),
     hgetall: vi.fn(async (key: string) => hashes[key] ?? null),
     hincrby: vi.fn(async () => 0),
     hset: vi.fn(async () => 1),
@@ -52,12 +59,10 @@ const credentials = async () => ({ botToken: 'token-1' });
 
 describe('startWechatTypingKeeper', () => {
   beforeEach(() => {
-    process.env.WECHAT_GATEWAY_HOST_ENABLED = '1';
     vi.useFakeTimers();
   });
 
   afterEach(() => {
-    delete process.env.WECHAT_GATEWAY_HOST_ENABLED;
     vi.useRealTimers();
   });
 
@@ -121,11 +126,9 @@ describe('startWechatTypingKeeper', () => {
   });
 
   it('is a no-op while the gateway still manages wechat', async () => {
-    process.env.WECHAT_GATEWAY_HOST_ENABLED = '0';
     const startTyping = vi.fn(async () => {});
-    const redis = makeRedis({
-      [wechatWindowKey('app-1', 'wx-user-1')]: { token: 'ctx-9' },
-    });
+    // No active-mode record = pre-migration reality: the gateway owns WeChat.
+    const redis = makeRedis({ [wechatWindowKey('app-1', 'wx-user-1')]: { token: 'ctx-9' } }, {});
     const stop = await startWechatTypingKeeper(botContext(), {
       createApiClient: () => ({ startTyping }),
       redis,

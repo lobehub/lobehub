@@ -14,7 +14,7 @@ import { createAbortError, isAbortError } from '@/server/services/agentRuntime/a
 import { AiAgentService } from '@/server/services/aiAgent';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
-import { isWechatGatewayHostEnabled } from '@/server/services/gateway/wechatPoll/config';
+import { isWechatHostRuntimeActive } from '@/server/services/gateway/wechatPoll/mode';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -811,7 +811,7 @@ export class AgentBridgeService {
       if (botContext?.platformThreadId && botContext?.applicationId) {
         const platform = botContext.platformThreadId.split(':')[0];
         try {
-          if (platform === 'wechat' && isWechatGatewayHostEnabled()) {
+          if (platform === 'wechat' && (await isWechatHostRuntimeActive())) {
             // Another host owns WeChat's connections, so there is no gateway
             // object left to drive typing. The step executor keeps it alive
             // directly (see startWechatTypingKeeper); registering here would

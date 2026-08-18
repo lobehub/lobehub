@@ -5,7 +5,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { isWechatGatewayHostEnabled } from '@/server/services/gateway/wechatPoll/config';
+import { isWechatHostRuntimeActive } from '@/server/services/gateway/wechatPoll/mode';
 import { getInstallationStore } from '@/server/services/messenger/installations';
 import type { ChatTopicBotContext } from '@/types/topic';
 
@@ -88,9 +88,6 @@ export const startWechatTypingKeeper = async (
   try {
     if (!botContext?.platformThreadId?.startsWith('wechat:')) return NOOP;
     if (!botContext.applicationId) return NOOP;
-    // While the gateway still manages WeChat, its connection object drives
-    // typing from the message stream it owns; pulsing here too would double up.
-    if (!isWechatGatewayHostEnabled()) return NOOP;
 
     // platformThreadId format: wechat:{type}:{userId} (userId may contain colons)
     const wechatUserId = botContext.platformThreadId.split(':').slice(2).join(':');
@@ -101,6 +98,11 @@ export const startWechatTypingKeeper = async (
         ? deps.redis
         : (getAgentRuntimeRedisClient() as unknown as WechatWindowRedis | null);
     if (!redis) return NOOP;
+
+    // While the gateway still owns WeChat (recorded actual mode), its
+    // connection object drives typing from the message stream it owns;
+    // pulsing here too would double up.
+    if (!(await isWechatHostRuntimeActive(redis))) return NOOP;
 
     const window = await peekWindow(redis, botContext.applicationId, wechatUserId);
     const contextToken = window?.token;

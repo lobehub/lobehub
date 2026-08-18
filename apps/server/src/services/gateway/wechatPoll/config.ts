@@ -14,6 +14,12 @@
 export type WechatPollerMode = 'gateway' | 'host';
 
 /**
+ * The DESIRED mode, read ONLY by the resident poller host — it is the single
+ * operational switch. Everything outside the poller (gateway sync, connection
+ * lifecycle routing, typing) follows the recorded ACTUAL mode instead (see
+ * `isWechatHostRuntimeActive` in mode.ts), which the poller flips only after
+ * a completed transition — so no other deployment needs this env var.
+ *
  * Read at call time (not module init) so tests and runtime flips both work.
  * Boolean by design, matching the `MESSAGE_GATEWAY_ENABLED` convention: unset
  * or `0` keeps the existing host, an explicit `1` opts into this poller.

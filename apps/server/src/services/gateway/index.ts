@@ -36,7 +36,7 @@ import {
   type MessageGatewayConnectionStatus,
 } from './MessageGatewayClient';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
-import { isWechatGatewayHostEnabled } from './wechatPoll/config';
+import { isWechatHostRuntimeActive } from './wechatPoll/mode';
 
 /**
  * Per-user messenger gateway connections live on the gateway as webhook-mode
@@ -164,9 +164,14 @@ const isVercel = !!process.env.VERCEL_ENV;
  * the sync never connects it and any connection the gateway still holds falls
  * into the stale diff and is torn down; start/stop client calls likewise fall
  * back to the local connection lifecycle instead of the gateway API.
+ *
+ * Follows the recorded ACTUAL mode (flipped by the poller host only after a
+ * completed drain), not the poller's desired-mode env — so this side can never
+ * release WeChat before the other host has actually taken it over, and the
+ * whole switch is one env var on one deployment.
  */
-const resolveUnmanagedPlatforms = (): Set<string> =>
-  isWechatGatewayHostEnabled() ? new Set(['wechat']) : new Set<string>();
+const resolveUnmanagedPlatforms = async (): Promise<Set<string>> =>
+  (await isWechatHostRuntimeActive()) ? new Set(['wechat']) : new Set<string>();
 
 export class GatewayService {
   /**
@@ -412,7 +417,7 @@ export class GatewayService {
     const desired = new Map<string, DesiredGatewayConnection>();
     let desiredComplete = true;
     const gated = new Set<string>();
-    const unmanaged = resolveUnmanagedPlatforms();
+    const unmanaged = await resolveUnmanagedPlatforms();
 
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
@@ -671,7 +676,7 @@ export class GatewayService {
     // Unmanaged platforms never go through the gateway API — they fall
     // through to the local lifecycle below (on Vercel: the connect queue,
     // which whatever runs their connections consumes).
-    if (this.useMessageGateway && !resolveUnmanagedPlatforms().has(platform)) {
+    if (this.useMessageGateway && !(await resolveUnmanagedPlatforms()).has(platform)) {
       return this.startClientViaGateway(platform, applicationId, userId);
     }
 
@@ -833,7 +838,7 @@ export class GatewayService {
   async stopClient(platform: string, applicationId: string, userId?: string): Promise<void> {
     // Mirror startClient: unmanaged platforms use the local lifecycle
     // (queue cleanup + runtime status) instead of the gateway API.
-    if (this.useMessageGateway && !resolveUnmanagedPlatforms().has(platform)) {
+    if (this.useMessageGateway && !(await resolveUnmanagedPlatforms()).has(platform)) {
       return this.stopClientViaGateway(platform, applicationId);
     }
 

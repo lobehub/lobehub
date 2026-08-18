@@ -1,17 +1,22 @@
 import type Redis from 'ioredis';
 
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+
 import type { WechatPollerMode } from './config';
 import { acquireKeyLock, releaseKeyLock } from './lease';
 
 /**
  * The mode state machine's durable half (LOBE-12811).
  *
- * The env flag (`WECHAT_GATEWAY_HOST_ENABLED`) expresses the DESIRED mode;
- * this Redis key records the mode that is ACTUALLY in effect. Every service
- * tick compares the two and, on mismatch, performs the transition (drain the
- * gateway side, or rebuild it via sync) under the transition lock — which is
- * what makes "flip one env var, wait a minute" a complete migration or
- * rollback with no manual steps and no double-polling window.
+ * The env flag (`WECHAT_GATEWAY_HOST_ENABLED`) expresses the DESIRED mode and
+ * is read ONLY by the resident poller host; this Redis key records the mode
+ * that is ACTUALLY in effect and is what everything else follows (gateway
+ * sync, connection lifecycle routing, typing) — see
+ * {@link isWechatHostRuntimeActive}. Every service tick compares the two and,
+ * on mismatch, performs the transition (drain the gateway side, or rebuild it
+ * via sync) under the transition lock — which is what makes "flip one env var
+ * on one deployment, wait a minute" a complete migration or rollback with no
+ * manual steps and no double-polling window.
  *
  * The record is only advanced AFTER the transition's actions succeed, so a
  * half-finished transition is retried in full on the next tick (both drain
@@ -38,3 +43,31 @@ export const acquireTransitionLock = (redis: Redis, holder: string): Promise<boo
 
 export const releaseTransitionLock = (redis: Redis, holder: string): Promise<void> =>
   releaseKeyLock(redis, TRANSITION_LOCK_KEY, holder);
+
+/** Minimal read surface — callers hold differently-typed redis clients. */
+interface ActiveModeReader {
+  get: (key: string) => Promise<string | null>;
+}
+
+/**
+ * Whether the resident host is the ACTIVE owner of WeChat connections right
+ * now. This is the single switch the rest of the system consumes: it follows
+ * the recorded actual mode, which the poller only flips after a completed
+ * drain, so consumers can never run ahead of the transition. The env flag is
+ * deliberately NOT read here — it lives on the poller host alone.
+ *
+ * Fails toward `false` (an unreadable record must not sever the incumbent
+ * gateway's ownership, which is the pre-migration reality).
+ */
+export const isWechatHostRuntimeActive = async (
+  redis?: ActiveModeReader | null,
+): Promise<boolean> => {
+  const client =
+    redis !== undefined ? redis : (getAgentRuntimeRedisClient() as ActiveModeReader | null);
+  if (!client) return false;
+  try {
+    return (await client.get(ACTIVE_MODE_KEY)) === 'host';
+  } catch {
+    return false;
+  }
+};

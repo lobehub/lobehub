@@ -123,6 +123,22 @@ const defaultRunGatewaySync = async (): Promise<void> => {
   await new GatewayService().ensureRunning();
 };
 
+/** Best-effort follow-up drain after a migration — see the caller's comment. */
+const redrainPreviousHost = async (
+  gatewayClient: GatewayDrainClient,
+  loadProviders: () => Promise<DecryptedBotProvider[]>,
+): Promise<void> => {
+  try {
+    if (!gatewayClient.isConfigured) return;
+    const providers = await loadProviders();
+    if (providers.length === 0) return;
+    await Promise.allSettled(providers.map((provider) => gatewayClient.disconnect(provider.id)));
+    log('post-migration re-drain: %d connections', providers.length);
+  } catch (err: any) {
+    log('post-migration re-drain failed: %s', err?.message);
+  }
+};
+
 const isEligible = async (
   provider: DecryptedBotProvider,
   redis: WechatPollStateRedis,
@@ -286,6 +302,7 @@ export const runWechatPollShard = async (
   }
 
   const loadProviders = options.loadProviders ?? defaultLoadProviders;
+  const gatewayClient = options.gatewayClient ?? getMessageGatewayClient();
 
   let transition: 'migration' | undefined;
   if (recorded !== 'host') {
@@ -293,7 +310,7 @@ export const runWechatPollShard = async (
       redis,
       workerId,
       await loadProviders(),
-      options.gatewayClient ?? getMessageGatewayClient(),
+      gatewayClient,
     );
     if (!migrated) return { role: 'skipped', skippedReason: 'transition-pending' };
     transition = 'migration';
@@ -316,6 +333,7 @@ export const runWechatPollShard = async (
   const waitUntil = (task: Promise<any>) => {
     tasks.push(task.catch(() => {}));
   };
+  let redrainPending = transition === 'migration';
 
   // Don't pay a readiness probe (seconds) for a window we cannot outlive — the
   // next window picks the bot up as an ordinary member anyway. Capped at half
@@ -385,6 +403,16 @@ export const runWechatPollShard = async (
       if (!(await renewLease(redis, shard, workerId).catch(() => false))) {
         log('shard=%d lost lease, stopping early', shard);
         break;
+      }
+
+      // A gateway sync that was already in flight when the migration flipped
+      // the record may have reconnected WeChat on the previous host moments
+      // after the drain. One follow-up drain on the first supervision tick
+      // closes that window (disconnect is idempotent and cheap); the sync's
+      // own stale cleanup remains the long-tail backstop.
+      if (redrainPending) {
+        redrainPending = false;
+        await redrainPreviousHost(gatewayClient, loadProviders);
       }
 
       await consumeConnectQueue(shard, shardCount, pollStateRedis, startBot, loadProviders);

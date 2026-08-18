@@ -433,6 +433,36 @@ describe('wechat poll shard runner', () => {
     expect([a.role, b.role].sort()).toEqual(['skipped', 'worker']);
   });
 
+  it('re-drains the previous host on the first supervision tick after migration', async () => {
+    redis.store.delete(ACTIVE_MODE_KEY);
+    process.env.WECHAT_POLL_SHARD_COUNT = '1';
+    const gatewayClient = { disconnect: vi.fn(async () => {}), isConfigured: true };
+
+    vi.useFakeTimers();
+    try {
+      const runPromise = runWechatPollShard(0, {
+        createClient: () => makeFakeClient(),
+        durationMs: 45_000,
+        gatewayClient,
+        loadProviders: async () => [makeProvider('a'), makeProvider('b')],
+        redis: redis as never,
+      });
+
+      await vi.advanceTimersByTimeAsync(1); // transition drain done, worker up
+      expect(gatewayClient.disconnect).toHaveBeenCalledTimes(2);
+
+      // A gateway sync in flight when the record flipped may have reconnected
+      // the old host; the first supervision tick drains once more to cover it.
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(gatewayClient.disconnect).toHaveBeenCalledTimes(4);
+
+      await vi.advanceTimersByTimeAsync(20_000);
+      await runPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rollback transition rebuilds via sync and flips the record', async () => {
     process.env.WECHAT_GATEWAY_HOST_ENABLED = '0'; // expected gateway, recorded host
     const runGatewaySync = vi.fn(async () => {});
