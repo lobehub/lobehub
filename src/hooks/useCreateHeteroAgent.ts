@@ -2,8 +2,11 @@ import { type HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-age
 import { useCallback } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { isHeterogeneousAgentTypeEnabled } from '@/helpers/experimentalHeterogeneousAgents';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 export interface CreateHeteroAgentOptions {
   groupId?: string;
@@ -27,6 +30,14 @@ export const useCreateHeteroAgent = () => {
 
   return useCallback(
     async (definition: HeterogeneousAgentClientConfig, options?: CreateHeteroAgentOptions) => {
+      if (
+        !isHeterogeneousAgentTypeEnabled(definition.type, {
+          enableMinimaxCode: labPreferSelectors.enableMinimaxCode(useUserStore.getState()),
+        })
+      ) {
+        throw new Error('MiniMax Code is experimental. Enable it in Settings → Labs first.');
+      }
+
       const result = await storeCreateAgent({
         config: {
           agencyConfig: {

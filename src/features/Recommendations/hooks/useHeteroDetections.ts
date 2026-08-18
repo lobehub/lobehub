@@ -3,8 +3,11 @@ import type { BinaryStatus } from '@lobechat/electron-client-ipc';
 import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
 import useSWR from 'swr';
 
+import { isHeterogeneousAgentTypeEnabled } from '@/helpers/experimentalHeterogeneousAgents';
 import { recommendationsKeys } from '@/libs/swr/keys';
 import { binaryService } from '@/services/electron/binary';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import type { HeteroDetectionMap } from '../actions/types';
 
@@ -16,11 +19,15 @@ import type { HeteroDetectionMap } from '../actions/types';
  * subsequent calls are cheap; we still wrap in SWR to dedupe across components.
  */
 export const useHeteroDetections = (): HeteroDetectionMap => {
+  const enableMinimaxCode = useUserStore(labPreferSelectors.enableMinimaxCode);
   const { data } = useSWR(
-    isDesktop ? recommendationsKeys.heteroDetections() : null,
+    isDesktop ? recommendationsKeys.heteroDetections(enableMinimaxCode) : null,
     async () => {
+      const enabled = labPreferSelectors.enableMinimaxCode(useUserStore.getState());
       const entries = await Promise.all(
-        HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map(async (config) => {
+        HETEROGENEOUS_AGENT_CLIENT_CONFIGS.filter((config) =>
+          isHeterogeneousAgentTypeEnabled(config.type, { enableMinimaxCode: enabled }),
+        ).map(async (config) => {
           try {
             const status = await binaryService.detectHeterogeneousAgentCommand({
               agentType: config.type,

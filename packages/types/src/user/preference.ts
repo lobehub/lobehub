@@ -178,6 +178,10 @@ export const UserLabSchema = z.object({
    */
   enableHeteroSessionImport: z.boolean().optional(),
   /**
+   * expose the experimental MiniMax Code heterogeneous provider (desktop only)
+   */
+  enableMinimaxCode: z.boolean().optional(),
+  /**
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),

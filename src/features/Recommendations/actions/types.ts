@@ -14,6 +14,7 @@ export interface ActionContext {
     definition: HeterogeneousAgentClientConfig,
     options?: CreateHeteroAgentOptions,
   ) => Promise<void>;
+  enableMinimaxCode?: boolean;
   /** Pre-fetched detection results for all hetero CLI types. Empty on web. */
   heteroDetections: HeteroDetectionMap;
   isDesktop: boolean;

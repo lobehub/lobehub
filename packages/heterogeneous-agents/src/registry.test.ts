@@ -9,6 +9,7 @@ import {
   CursorAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
+  MinimaxCodeAcpAdapter,
   OpenCodeAdapter,
   PiAdapter,
   QoderAdapter,
@@ -40,6 +41,10 @@ describe('registry', () => {
 
     it('creates a KimiCodeAdapter for "kimi-code"', () => {
       expect(createAdapter('kimi-code')).toBeInstanceOf(KimiCodeAdapter);
+    });
+
+    it('creates a MinimaxCodeAcpAdapter for "minimax-code"', () => {
+      expect(createAdapter('minimax-code')).toBeInstanceOf(MinimaxCodeAcpAdapter);
     });
 
     it('creates a CursorAdapter for "cursor"', () => {

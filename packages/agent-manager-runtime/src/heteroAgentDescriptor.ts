@@ -97,6 +97,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     displayName: 'Kimi Code',
     kind: 'cli',
   },
+  'minimax-code': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'MiniMax Code — MiniMax’s experimental autonomous coding CLI. It talks ACP over stdio, can read and edit files, run commands, and complete multi-step software-engineering tasks in a working directory.',
+    displayName: 'MiniMax Code',
+    kind: 'cli',
+  },
   'opencode': {
     capabilities: CODING_CAPABILITIES,
     description:

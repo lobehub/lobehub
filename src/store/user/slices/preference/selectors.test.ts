@@ -125,5 +125,17 @@ describe('preferenceSelectors', () => {
 
       expect(labPreferSelectors.enableOAuthApps(store)).toBe(true);
     });
+
+    it('keeps MiniMax Code hidden by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableMinimaxCode(store)).toBe(false);
+    });
+
+    it('returns the configured MiniMax Code preference', () => {
+      store.preference.lab = { enableMinimaxCode: true };
+
+      expect(labPreferSelectors.enableMinimaxCode(store)).toBe(true);
+    });
   });
 });

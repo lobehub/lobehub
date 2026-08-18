@@ -4,8 +4,10 @@ import { useCallback, useRef, useState } from 'react';
 
 import { deviceService } from '@/services/device';
 import { binaryService } from '@/services/electron/binary';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
-import { CONNECTABLE_PROVIDERS } from './providers';
+import { getConnectableProviders } from './providers';
 
 /**
  * Where the wizard scans for installed agents: the local desktop machine
@@ -26,9 +28,11 @@ const IDLE: AgentScanState = { agents: null, status: 'idle' };
  * Although OpenClaw and Hermes use the gateway execution path, they are installed
  * on and selected from this machine just like the coding-agent CLIs.
  */
-export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
+export const scanLocal = async (
+  providers = getConnectableProviders(),
+): Promise<HeterogeneousAgentScanMap> => {
   const entries = await Promise.all(
-    CONNECTABLE_PROVIDERS.map(async (provider) => {
+    providers.map(async (provider) => {
       try {
         const status = await binaryService.detectHeterogeneousAgentCommand({
           agentType: provider.type,
@@ -46,34 +50,43 @@ export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
 export const useAgentScan = () => {
   const [state, setState] = useState<AgentScanState>(IDLE);
   const seqRef = useRef(0);
+  const enableMinimaxCode = useUserStore(labPreferSelectors.enableMinimaxCode);
 
-  const scan = useCallback(async (target: ScanTarget) => {
-    const seq = ++seqRef.current;
-    setState({ agents: null, status: 'scanning' });
+  const scan = useCallback(
+    async (target: ScanTarget) => {
+      const seq = ++seqRef.current;
+      setState({ agents: null, status: 'scanning' });
 
-    try {
-      let agents: HeterogeneousAgentScanMap;
-      if (target.kind === 'local') {
-        agents = await scanLocal();
-      } else {
-        const result = await deviceService.scanAgents({ deviceId: target.device.deviceId });
-        if (result.error) {
-          if (seq === seqRef.current)
-            setState({ agents: null, error: result.error, status: 'error' });
-          return;
+      try {
+        let agents: HeterogeneousAgentScanMap;
+        if (target.kind === 'local') {
+          agents = await scanLocal(getConnectableProviders({ enableMinimaxCode }));
+        } else {
+          const result = await deviceService.scanAgents({ deviceId: target.device.deviceId });
+          if (result.error) {
+            if (seq === seqRef.current)
+              setState({ agents: null, error: result.error, status: 'error' });
+            return;
+          }
+          const allowed = new Set(
+            getConnectableProviders({ enableMinimaxCode }).map((provider) => provider.type),
+          );
+          agents = Object.fromEntries(
+            Object.entries(result.agents).filter(([type]) => allowed.has(type as never)),
+          );
         }
-        agents = result.agents;
+        if (seq === seqRef.current) setState({ agents, status: 'success' });
+      } catch (error) {
+        if (seq === seqRef.current)
+          setState({
+            agents: null,
+            error: error instanceof Error ? error.message : String(error),
+            status: 'error',
+          });
       }
-      if (seq === seqRef.current) setState({ agents, status: 'success' });
-    } catch (error) {
-      if (seq === seqRef.current)
-        setState({
-          agents: null,
-          error: error instanceof Error ? error.message : String(error),
-          status: 'error',
-        });
-    }
-  }, []);
+    },
+    [enableMinimaxCode],
+  );
 
   const reset = useCallback(() => {
     seqRef.current += 1;

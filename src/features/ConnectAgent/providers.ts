@@ -17,6 +17,7 @@ import {
   Grok,
   HermesAgent,
   Kimi,
+  Minimax,
   OpenClaw,
   OpenCode,
   Pi,
@@ -42,6 +43,7 @@ export interface ConnectableProvider {
     | typeof Grok
     | typeof HermesAgent
     | typeof Kimi
+    | typeof Minimax
     | typeof OpenClaw
     | typeof OpenCode
     | typeof Pi
@@ -75,6 +77,7 @@ const CLI_BRANDS: Record<LocalHeterogeneousAgentType, ConnectableProvider['brand
   'cursor': Cursor,
   'grok-build': Grok,
   'kimi-code': Kimi,
+  'minimax-code': Minimax,
   'opencode': OpenCode,
   'pi': Pi,
   'qoder': Qoder,
@@ -102,6 +105,11 @@ export const CONNECTABLE_PROVIDERS: ConnectableProvider[] = [
     type: config.type,
   })),
 ];
+
+export const getConnectableProviders = (labs: { enableMinimaxCode?: boolean } = {}) =>
+  CONNECTABLE_PROVIDERS.filter(
+    (provider) => provider.type !== 'minimax-code' || Boolean(labs.enableMinimaxCode),
+  );
 
 export const getConnectableProvider = (type: HeterogeneousAgentType) =>
   CONNECTABLE_PROVIDERS.find((provider) => provider.type === type);

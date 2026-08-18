@@ -345,6 +345,33 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       expect(execFileMock.mock.calls[1]![2]).toMatchObject({ env: probeEnv });
     });
 
+    it('accepts MiniMax Code when the CLI exposes the ACP runtime', async () => {
+      callExecFile('/usr/local/bin/mcode\n');
+      callExecFile('mcode 0.1.4');
+      callExecFile('Usage: mcode acp');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('minimax-code', 'mcode');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/mcode',
+        version: '0.1.4',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', '--help']);
+    });
+
+    it('rejects MiniMax Code when the ACP runtime is missing', async () => {
+      callExecFile('/usr/local/bin/mcode\n');
+      callExecFile('mcode 0.1.4');
+      callExecFileError(new Error('unknown command "acp"'));
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('minimax-code', 'mcode');
+
+      expect(status).toEqual({ available: false });
+    });
+
     it('rejects the unrelated trae-cli trajectory runner by its missing ACP capability', async () => {
       callExecFile('/usr/local/bin/traecli\n');
       callExecFile('trae-cli 0.1.0');

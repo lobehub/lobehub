@@ -134,7 +134,7 @@ const buildExtraArgs = (
   const selectorArgs =
     options.type === 'amp'
       ? [...(options.mode ? ['--mode', options.mode] : [])]
-      : options.type === 'trae'
+      : options.type === 'minimax-code' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [

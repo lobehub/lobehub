@@ -144,5 +144,11 @@ export interface HeterogeneousAgentRuntimeStatus {
   staleDeadlineAt?: number;
   state: HeterogeneousAgentRuntimeState;
   transport:
-    'acp-stdio' | 'claude-sdk' | 'cli-spawn' | 'codex-app-server' | 'cursor-acp' | 'trae-acp';
+    | 'acp-stdio'
+    | 'claude-sdk'
+    | 'cli-spawn'
+    | 'codex-app-server'
+    | 'cursor-acp'
+    | 'minimax-code-acp'
+    | 'trae-acp';
 }

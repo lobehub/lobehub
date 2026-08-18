@@ -185,6 +185,14 @@ export const kimiCliBinary: BinarySpec = {
   priority: 10,
 };
 
+/** MiniMax Code CLI, capability-checked against its ACP runtime. */
+export const minimaxCodeBinary: BinarySpec = {
+  description: 'MiniMax Code - MiniMax agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('minimax-code', 'mcode'),
+  name: 'mcode',
+  priority: 10,
+};
+
 /**
  * Aider - AI pair programming CLI
  * Generic command spec; name collision is unlikely.
@@ -206,6 +214,7 @@ export const heterogeneousCliAgentBinaries = {
   'cursor': cursorBinary,
   'grok-build': grokBuildBinary,
   'kimi-code': kimiCliBinary,
+  'minimax-code': minimaxCodeBinary,
   'opencode': opencodeBinary,
   'pi': piBinary,
   'qoder': qoderBinary,

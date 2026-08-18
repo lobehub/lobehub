@@ -16,6 +16,7 @@ import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
+import { buildMinimaxCodeAcpPrompt, MinimaxCodeAcpSession } from './minimaxCodeAcpSession';
 import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
 
 export interface SpawnAgentOptions {
@@ -564,7 +565,7 @@ const spawnCursorAcpAgent = async (
 
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
- * Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
+ * Kimi Code, MiniMax Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
  * `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
@@ -578,6 +579,7 @@ const spawnCursorAcpAgent = async (
  * failed image fetch surfaces before the child starts.
  */
 export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
+  if (options.agentType === 'minimax-code') return spawnMinimaxCodeAcpAgent(options);
   if (options.agentType === 'trae') return spawnTraeAcpAgent(options);
 
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
@@ -812,6 +814,68 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
       ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
     },
     initialModel: options.initialModel,
+    onEvents: bridge.onEvents,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  const { exit, kill } = bridge.attach(session);
+
+  return {
+    events: bridge.events,
+    exit,
+    kill,
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return session.nativeSessionId;
+    },
+    stderr: bridge.stderr,
+  };
+};
+
+/** Spawn MiniMax Code's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
+export const spawnMinimaxCodeAcpAgent = async (
+  options: SpawnAgentOptions,
+): Promise<SpawnAgentHandle> => {
+  const requestedCommand = resolveHeterogeneousAgentCommand('minimax-code', options.command);
+  const cwd = options.cwd || process.cwd();
+  if (!existsSync(cwd)) {
+    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
+      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
+      workingDirectory: cwd,
+    });
+  }
+  const command =
+    isPathLikeCommand(requestedCommand) && !path.isAbsolute(requestedCommand)
+      ? path.resolve(cwd, requestedCommand)
+      : requestedCommand;
+  const childEnv = { ...process.env, ...options.env };
+  const { detectHeterogeneousCliCommand } = await import('./resolveCliCommand');
+  const commandStatus = await detectHeterogeneousCliCommand('minimax-code', command, childEnv);
+  if (!commandStatus.available || !commandStatus.path) {
+    throw new Error(
+      `MiniMax Code command does not expose the required ACP runtime: ${requestedCommand}`,
+    );
+  }
+
+  const prompt = await buildMinimaxCodeAcpPrompt(options.prompt, options.inputOptions);
+  const bridge = createAcpSpawnBridge();
+  const session = new MinimaxCodeAcpSession({
+    args: options.extraArgs ?? [],
+    clientVersion: '1.0.0',
+    commandPath: commandStatus.path,
+    cwd,
+    env: {
+      ...childEnv,
+      ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
+    },
     onEvents: bridge.onEvents,
     onRawMessage: teeAcpRawStdout(options.onRawStdout),
     onRuntimeStatus: () => {},

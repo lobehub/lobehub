@@ -57,6 +57,7 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
   it('keeps local-only CLIs on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('minimax-code')).toBe(false);
   });
 
   it('keeps Cursor on local or connected devices', () => {

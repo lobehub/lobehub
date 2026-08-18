@@ -7,6 +7,7 @@ import { codexDriver } from './drivers/codex';
 import { cursorDriver } from './drivers/cursor';
 import { grokBuildDriver } from './drivers/grokBuild';
 import { kimiCodeDriver } from './drivers/kimiCode';
+import { minimaxCodeDriver } from './drivers/minimaxCode';
 import { opencodeDriver } from './drivers/opencode';
 import { piDriver } from './drivers/pi';
 import { qoderDriver } from './drivers/qoder';
@@ -21,6 +22,7 @@ const heterogeneousAgentDrivers = {
   'cursor': cursorDriver,
   'grok-build': grokBuildDriver,
   'kimi-code': kimiCodeDriver,
+  'minimax-code': minimaxCodeDriver,
   'opencode': opencodeDriver,
   'pi': piDriver,
   'qoder': qoderDriver,

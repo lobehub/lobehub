@@ -232,6 +232,33 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://www.npmjs.com/package/@minimax-ai/code',
+      errorMessage: 'MiniMax Code could not authenticate. Run `mcode login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'sign in to minimax',
+        'run mcode login',
+        'not logged in',
+      ],
+      signInCommand: 'mcode login',
+    },
+    defaultCommand: 'mcode',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Minimax',
+    install: {
+      commands: ['npm install -g @minimax-ai/code'],
+      docsUrl: 'https://www.npmjs.com/package/@minimax-ai/code',
+    },
+    kind: 'local-cli',
+    menuKey: 'newMinimaxCodeAgent',
+    menuLabelKey: 'newMinimaxCodeAgent',
+    resume: { supported: true },
+    title: 'MiniMax Code',
+    type: 'minimax-code',
+  },
+  {
+    auth: {
       docsUrl: 'https://opencode.ai/docs',
       errorMessage:
         'OpenCode could not authenticate. Sign in again or refresh its credentials, then retry.',

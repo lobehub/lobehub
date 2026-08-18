@@ -39,6 +39,9 @@ export default {
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
+  'features.minimaxCode.desc':
+    'Add MiniMax Code as an experimental local coding agent. It talks ACP over stdio through `mcode acp`, uses the CLI default model, and currently auto-approves tool permissions. Requires Node.js 22.19+ or 24–26 and `mcode login`.',
+  'features.minimaxCode.title': 'MiniMax Code Agent',
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',

@@ -46,6 +46,7 @@ import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { isHeterogeneousAgentTypeEnabled } from '@/helpers/experimentalHeterogeneousAgents';
 import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
@@ -466,6 +467,13 @@ export const executeHeterogeneousAgent = async (
     persistedHeterogeneousProvider,
   );
   const adapterType = heterogeneousProvider.type;
+  if (
+    !isHeterogeneousAgentTypeEnabled(adapterType, {
+      enableMinimaxCode: labPreferSelectors.enableMinimaxCode(useUserStore.getState()),
+    })
+  ) {
+    throw new Error('MiniMax Code is experimental. Enable it in Settings → Labs first.');
+  }
 
   // Which real provider account this run consumes, resolved once after spawn
   // from the FINAL env (so an agent-env override is attributed correctly, not
