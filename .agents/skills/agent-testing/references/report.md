@@ -54,6 +54,25 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
 2. **Collect evidence as you test** — every asserted behavior gets one evidence
    item in `$DIR/assets/`:
+
+   - Structured data (metrics, time series, before/after model or benchmark
+     comparisons, distributions, matrices, and tables): **use native Acceptance
+     visualizations by default.** Put review-sized values in the case's
+     `datasets[]`, declare their presentation in `visualizations[]`, and attach
+     the raw CSV/JSON, benchmark output, trace, profile, or vectors as
+     `evidence`. The structured view is the reviewer-facing decision aid; the raw
+     artifact is the audit trail.
+
+     Do **not** generate a PNG/GIF of data that `metric-comparison`, `line-chart`,
+     `bar-chart`, `scatter-plot`, `heatmap`, or `table` can faithfully express.
+     A static chart discards machine-readable values, accessibility, theme
+     adaptation, and consistent comparison semantics. Generate a static chart
+     only when no supported renderer can represent the result, and state that
+     limitation in the case observation. Do not merely upload a CSV and expect
+     the page to infer a chart: define both `datasets[]` and
+     `visualizations[]` explicitly. See
+     [Structured visualizations](#structured-visualizations) for the schema.
+
    - UI (static state): `agent-browser screenshot` or `capture-app-window.sh`, then
      **verify the screenshot with the Read tool before citing it** — never cite an
      image you haven't looked at.
