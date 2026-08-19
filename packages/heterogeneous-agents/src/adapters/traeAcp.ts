@@ -8,7 +8,18 @@ import type {
 } from '../types';
 import { AcpStreamLifecycle } from './acpCommon';
 
-const PROVIDER = 'trae';
+const DEFAULT_PROVIDER = 'trae';
+
+/**
+ * Parameterization for reusing this adapter across standard-ACP agents:
+ * `provider` stamps stream/tool events, `eventPrefix` selects the synthetic
+ * session-lifecycle payloads (`{prefix}_session` / `{prefix}_prompt_completed`
+ * / `{prefix}_error`) the owning session emits.
+ */
+export interface AcpSessionAdapterOptions {
+  eventPrefix?: string;
+  provider?: string;
+}
 
 interface TraeAcpPayload {
   [key: string]: unknown;
@@ -77,9 +88,16 @@ const toolContent = (content: unknown, fallback: unknown): string => {
   return result || stringify(fallback);
 };
 
+/**
+ * Maps the standard ACP `sessionUpdate` vocabulary into the shared event
+ * contract. TRAE is the default provider; other standard-ACP agents reuse it
+ * via {@link AcpSessionAdapterOptions}.
+ */
 export class TraeAcpAdapter implements AgentEventAdapter {
   sessionId?: string;
 
+  private readonly eventPrefix: string;
+  private readonly provider: string;
   private completedTools = new Set<string>();
   private model?: string;
   private pendingTools = new Set<string>();
@@ -87,11 +105,16 @@ export class TraeAcpAdapter implements AgentEventAdapter {
   private readonly stream = new AcpStreamLifecycle((stepIndex) => ({
     ...(this.model ? { model: this.model } : {}),
     ...(stepIndex > 0 ? { newStep: true } : {}),
-    provider: PROVIDER,
+    provider: this.provider,
     sessionId: this.sessionId,
   }));
   private terminal = false;
   private toolResultStateById = new Map<string, TraeAcpToolResultState>();
+
+  constructor(options: AcpSessionAdapterOptions = {}) {
+    this.provider = options.provider ?? DEFAULT_PROVIDER;
+    this.eventPrefix = options.eventPrefix ?? this.provider;
+  }
 
   adapt(value: unknown): HeterogeneousAgentEvent[] {
     if (!value || typeof value !== 'object' || this.terminal) return [];
@@ -100,13 +123,15 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === 'trae_session') {
+    if (raw.type === `${this.eventPrefix}_session`) {
       if (typeof raw.sessionId === 'string') this.sessionId = raw.sessionId;
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === 'trae_prompt_completed') return this.complete(raw.stopReason);
-    if (raw.type === 'trae_error') return this.fail(stringify(raw.message) || 'TRAE ACP failed');
+    if (raw.type === `${this.eventPrefix}_prompt_completed`) return this.complete(raw.stopReason);
+    if (raw.type === `${this.eventPrefix}_error`) {
+      return this.fail(stringify(raw.message) || `${this.provider} ACP failed`);
+    }
 
     switch (raw.sessionUpdate) {
       case 'agent_message_chunk': {
@@ -205,7 +230,8 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       apiName: apiName ?? 'unknown',
       arguments: stringify(raw.rawInput ?? raw.input ?? raw.parameters ?? {}),
       id,
-      identifier: PROVIDER,
+      identifier:
+        typeof raw.identifier === 'string' && raw.identifier ? raw.identifier : this.provider,
       type: 'default',
     };
     const streamEvents = this.stream.ensureStream(true);
@@ -262,7 +288,7 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       ...this.closePending(),
       ...this.stream.closeStream(),
       this.stream.event('visible_output_end', {}),
-      this.stream.event('error', { agentType: PROVIDER, error: message, message }),
+      this.stream.event('error', { agentType: this.provider, error: message, message }),
     ];
   }
 }
