@@ -184,7 +184,7 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
     if (isSavingRef.current) return;
     const next = draftTitle.trim();
     if (!next) {
-      message.error(t('verify:acceptance.workspace.renameEmpty'));
+      message.error(t('acceptance.workspace.renameEmpty'));
       setDraftTitle(title);
       setEditing(false);
       return;
@@ -199,11 +199,11 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
     try {
       await verifyService.renameAcceptance(item.id, next);
       await refresh();
-      message.success(t('verify:acceptance.workspace.renameSuccess'));
+      message.success(t('acceptance.workspace.renameSuccess'));
       setEditing(false);
     } catch (error) {
       console.error('[acceptance:rename]', error);
-      message.error(t('verify:acceptance.workspace.renameError'));
+      message.error(t('acceptance.workspace.renameError'));
     } finally {
       isSavingRef.current = false;
       setMutating(false);
@@ -215,10 +215,10 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
     try {
       await verifyService.updateAcceptanceStatus(item.id, status);
       await refresh();
-      message.success(t('verify:acceptance.workspace.statusSuccess'));
+      message.success(t('acceptance.workspace.statusSuccess'));
     } catch (error) {
       console.error('[acceptance:status]', error);
-      message.error(t('verify:acceptance.workspace.statusError'));
+      message.error(t('acceptance.workspace.statusError'));
     } finally {
       setMutating(false);
     }
@@ -229,7 +229,7 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
       return {
         icon: <Icon icon={CircleCheck} />,
         key: action,
-        label: t('verify:acceptance.workspace.actions.markAccepted'),
+        label: t('acceptance.workspace.actions.markAccepted'),
         onClick: () => void changeStatus('accepted'),
       };
     }
@@ -237,14 +237,14 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
       return {
         icon: <Icon icon={RotateCcw} />,
         key: action,
-        label: t('verify:acceptance.workspace.actions.reopen'),
+        label: t('acceptance.workspace.actions.reopen'),
         onClick: () => void changeStatus('delivered'),
       };
     }
     return {
       icon: <Icon icon={X} />,
       key: action,
-      label: t('verify:acceptance.workspace.actions.markClosed'),
+      label: t('acceptance.workspace.actions.markClosed'),
       onClick: () => void changeStatus('closed'),
     };
   });
@@ -253,7 +253,7 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
     {
       icon: <Icon icon={Pencil} />,
       key: 'rename',
-      label: t('verify:acceptance.workspace.actions.rename'),
+      label: t('acceptance.workspace.actions.rename'),
       onClick: () => {
         setDraftTitle(title);
         setEditing(true);
@@ -265,7 +265,7 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
             children: statusItems,
             icon: <Icon icon={CircleDashed} />,
             key: 'status',
-            label: t('verify:acceptance.workspace.actions.status'),
+            label: t('acceptance.workspace.actions.status'),
           },
           { type: 'divider' as const },
         ]
@@ -274,11 +274,11 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
       danger: true,
       icon: <Icon icon={Trash2} />,
       key: 'delete',
-      label: t('verify:acceptance.workspace.actions.delete'),
+      label: t('acceptance.workspace.actions.delete'),
       onClick: () => {
         confirmModal({
           cancelText: t('actions.cancel'),
-          content: t('verify:acceptance.workspace.deleteConfirmDescription', { title }),
+          content: t('acceptance.workspace.deleteConfirmDescription', { title }),
           okButtonProps: { danger: true },
           okText: t('actions.delete'),
           onOk: async () => {
@@ -286,15 +286,15 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
             try {
               await verifyService.deleteAcceptance(item.id);
               await onChanged();
-              message.success(t('verify:acceptance.workspace.deleteSuccess'));
+              message.success(t('acceptance.workspace.deleteSuccess'));
             } catch (error) {
               console.error('[acceptance:delete]', error);
-              message.error(t('verify:acceptance.workspace.deleteError'));
+              message.error(t('acceptance.workspace.deleteError'));
             } finally {
               setMutating(false);
             }
           },
-          title: t('verify:acceptance.workspace.deleteConfirmTitle'),
+          title: t('acceptance.workspace.deleteConfirmTitle'),
         });
       },
     },
@@ -363,7 +363,7 @@ const AcceptanceRow = memo<AcceptanceRowProps>(({ item, onChanged }) => {
         <ActionIcon
           icon={MoreHorizontal}
           size={'small'}
-          title={t('verify:acceptance.workspace.actions.more')}
+          title={t('acceptance.workspace.actions.more')}
         />
       </DropdownMenu>
     </div>
