@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
+import { registerWorksForOperation } from '@/server/services/workRegistration';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
-import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
 // the returned promise, so a bare vi.fn() (returning undefined) would throw
@@ -22,7 +22,7 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
 }));
 
-vi.mock('../workRegistration', () => ({
+vi.mock('@/server/services/workRegistration', () => ({
   registerWorksForOperation: vi.fn(),
 }));
 

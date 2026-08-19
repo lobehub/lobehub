@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  redeployFileWork,
-  registerWorksForOperation,
-  stateHasEntityFileEdits,
-} from './workRegistration';
+import { redeployFileWork, registerWorksForOperation } from './registerWorksForOperation';
+import { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
 
 const {
   mockFindById,

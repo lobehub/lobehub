@@ -3,6 +3,7 @@ import debug from 'debug';
 import type { MessageModel } from '@/database/models/message';
 import type { WorkModel } from '@/database/models/work';
 
+import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
 import { registerShellWorks } from './shellWorkRegistration';
 
 const log = debug('lobe-server:local-run-work-registration');
@@ -17,9 +18,6 @@ const log = debug('lobe-server:local-run-work-registration');
  * FK, so a non-operation id is safe.
  */
 const LOCAL_RUN_OPERATION_PREFIX = 'localrun';
-
-/** Mirrors the completion scan's unexecuted-intervention filter (workRegistration.ts). */
-const UNEXECUTED_INTERVENTION_STATUSES = new Set(['pending', 'rejected', 'aborted']);
 
 export interface LocalRunShellWorksResult {
   failed: number;

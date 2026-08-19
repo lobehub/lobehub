@@ -13,7 +13,7 @@ import { MessageModel } from '@/database/models/message';
 import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { registerShellWorksForLocalRun } from '@/server/services/agentRuntime/localRunWorkRegistration';
+import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

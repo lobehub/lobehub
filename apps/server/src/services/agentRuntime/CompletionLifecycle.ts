@@ -19,10 +19,10 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
 import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
+import { registerWorksForOperation } from '@/server/services/workRegistration';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
-import { registerWorksForOperation } from './workRegistration';
 
 const log = debug('lobe-server:completion-lifecycle');
 
