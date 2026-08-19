@@ -42,6 +42,21 @@ export const CLI_COMPLETION_FUNCTION = '_lobehub_completion';
 /** Directory under $HOME holding settings, credentials and daemon state. */
 export const CLI_CONFIG_DIR_NAME = '.lobehub';
 
+/**
+ * Env var the generated completion script uses to hand `__complete` the
+ * current word index.
+ *
+ * Purely internal plumbing: the completion function sets it and the CLI reads
+ * it back within the same invocation, so a user never sets or sees it
+ * directly — unlike `CLI_API_KEY_ENV_NAMES`, there is no back-compat concern
+ * for a rebranded distribution, since both sides always come from the one
+ * binary running. Still collected here rather than left as a literal in
+ * `utils/completion.ts`/`commands/completion.ts`: it is one of the strings
+ * this module's doc comment above promises are all in one place, and it was
+ * the one that got missed the first time around.
+ */
+export const CLI_COMPLETION_CWORD_ENV = 'LOBEHUB_COMP_CWORD';
+
 /** systemd unit name for `connect service`. */
 export const CLI_CONNECT_SERVICE_NAME = 'lobehub-connect.service';
 
