@@ -122,7 +122,6 @@ export default defineConfig({
   },
   define: {
     ...sharedRendererDefine({ isMobile, isElectron: false }),
-    __WORKBENCH__: 'false',
   },
   experimental: {
     bundledDev: false,

@@ -108,7 +108,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           reference.type === 'verify') &&
         shouldHardNavigateToWorkbench(reference.pathname)
       ) {
-        navigate(reference.pathname, { escape: true });
+        window.location.assign(reference.pathname);
         return;
       }
 

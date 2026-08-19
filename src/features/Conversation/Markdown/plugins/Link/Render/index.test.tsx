@@ -93,6 +93,7 @@ afterEach(() => {
   mockShowIcon = true;
   mockIsDesktop = false;
   mockEnableInAppBrowser = false;
+  vi.restoreAllMocks();
 });
 
 beforeEach(() => {
@@ -172,6 +173,8 @@ describe('Link Render — message link icon toggle', () => {
 
 describe('Link Render — internal entities', () => {
   it('hard-navigates acceptance pages into the Workbench runtime', () => {
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
+
     const { getByRole } = renderLink({
       linkHref: '/acceptance/acceptance-1',
       linkKind: 'generic',
@@ -180,7 +183,8 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.click(getByRole('link', { name: 'Acceptance' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/acceptance/acceptance-1', { escape: true });
+    expect(assign).toHaveBeenCalledWith('/acceptance/acceptance-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockOpenAcceptance).not.toHaveBeenCalled();
   });
 
@@ -221,6 +225,8 @@ describe('Link Render — internal entities', () => {
   });
 
   it('hard-navigates personal verify pages into the Workbench runtime', () => {
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
+
     const { getByRole } = renderLink({
       linkHref: '/verify/run-1',
       linkKind: 'generic',
@@ -229,7 +235,8 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.click(getByRole('link', { name: 'Verify report' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/verify/run-1', { escape: true });
+    expect(assign).toHaveBeenCalledWith('/verify/run-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockOpenVerifyReport).not.toHaveBeenCalled();
   });
 

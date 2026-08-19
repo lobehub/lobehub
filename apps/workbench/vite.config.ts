@@ -36,7 +36,6 @@ export default defineConfig({
   },
   define: {
     ...sharedRendererDefine({ isElectron: false, isMobile: true }),
-    __WORKBENCH__: 'true',
   },
   experimental: {
     bundledDev: false,
