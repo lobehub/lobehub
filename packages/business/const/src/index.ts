@@ -226,50 +226,49 @@ export const API_KEY_PREFIX = 'sk-lh-';
  * to users, so a distribution wiring the sandbox elsewhere would otherwise have
  * an assistant naming the wrong vendor with nothing in the prompt to correct it.
  */
-export const SANDBOX_INFRASTRUCTURE = 'AWS Bedrock AgentCore';
+export const SANDBOX_INFRASTRUCTURE = 'Volcengine veFaaS';
 
 /**
  * What the sandbox image actually ships, as told to the model.
  *
- * A slot because it describes one specific image. The default below is the
- * upstream `lobehubbot/python-node` image; a deployment running a different one
- * has an assistant reaching for tools that are not installed, and finding out
- * only when the command fails. Keep it to what has been verified present.
+ * A slot because it describes one specific image. The default below reflects
+ * the Volcengine veFaaS all-in-one sandbox image verified in this deployment
+ * (Ubuntu 22.04.5 LTS, Python 3.10.12, user `gem`) — a deployment running a
+ * different image has an assistant reaching for tools that are not installed,
+ * and finding out only when the command fails. Keep it to what has been
+ * verified present; anything not listed here must be pip/npm installed
+ * on demand rather than assumed.
  */
-export const SANDBOX_PREINSTALLED_SOFTWARE = `**Base Image:** lobehubbot/python-node:latest (Debian-based)
+export const SANDBOX_PREINSTALLED_SOFTWARE = `**Base Image:** Ubuntu 22.04.5 LTS (kernel 6.6.95)
+**User / Home:** \`gem\`, home directory \`/home/gem\`
 
 **Programming Languages & Runtimes:**
-- Python (with pip)
+- Python 3.10.12 (with pip)
 - Node.js (with npm)
 - Bun
 - Bash/Shell
 
 **Package Managers:**
 - pip (Python)
-- npm / pnpm (Node.js)
+- npm (Node.js) — pnpm is NOT installed
 
 **System Tools (apt):**
 - curl, wget, unzip, jq - Common utilities
 - build-essential - gcc/g++/make compilation toolchain
 - FFmpeg - Audio/video processing
-- LibreOffice - Office document processing
-- Pandoc - Document format conversion
-- poppler-utils - PDF tools (pdftotext, pdftoppm, etc.)
 - GitHub CLI (gh)
 
-**JS/TS Tools:**
-- marp-cli - Markdown to PPT/PDF presentation
-- Chromium (installed via Playwright, also used by marp-cli)
-- Playwright - Browser automation
-
 **Python Libraries (Pre-installed):**
-- Data Science/ML: numpy, pandas, scipy, scikit-learn
-- Visualization: matplotlib, plotly
-- Data Processing: pyyaml, toml, python-dotenv, Pillow, opencv-python-headless
-- File Processing: openpyxl, xlrd, python-docx, PyPDF2, reportlab
-- Async: aiofiles, anyio
-- Testing: pytest
-- Server: fastapi, uvicorn, pydantic`;
+- Data Science/ML: numpy, pandas, scipy
+- Visualization: matplotlib 3.10.7, plotly, seaborn 0.13.2
+- Data Processing: pyyaml, python-dotenv, Pillow, opencv-python-headless
+- File Processing: openpyxl, xlrd, PyPDF2
+- Async: anyio
+- Server: fastapi, uvicorn, pydantic
+
+**Fonts (system, for rendering CJK text):**
+- Noto Sans CJK, Noto Serif CJK
+- AR PL UMing, AR PL UKai`;
 
 export const OFFICIAL_PROVIDER_DISABLE_ERROR = 'The official provider cannot be disabled.';
 
