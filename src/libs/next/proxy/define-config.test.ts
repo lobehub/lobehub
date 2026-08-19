@@ -88,3 +88,24 @@ describe('defineConfig Workbench SPA rewrite', () => {
     expect(new URL(index!).pathname).toMatch(/^\/spa\/[^/]+\/agent\/agt_1\/docs$/);
   });
 });
+
+describe('defineConfig Share SPA rewrite', () => {
+  it('routes share pages through the Share SPA for every user agent', async () => {
+    const mobileTopic = await run(
+      'http://localhost:3010/share/t/topic-1?hl=en-US',
+      MOBILE_USER_AGENT,
+    );
+    const desktopTopic = await run('http://localhost:3010/share/t/topic-1?hl=en-US');
+    const desktopPage = await run('http://localhost:3010/share/page/docs_1?hl=en-US');
+
+    expect(new URL(mobileTopic!).pathname).toBe('/spa-share/en-US/share/t/topic-1');
+    expect(new URL(desktopTopic!).pathname).toBe('/spa-share/en-US/share/t/topic-1');
+    expect(new URL(desktopPage!).pathname).toBe('/spa-share/en-US/share/page/docs_1');
+  });
+
+  it('leaves non-share paths that merely start with the prefix in the main SPA', async () => {
+    const rewrite = await run('http://localhost:3010/shared-workspace/settings?hl=en-US');
+
+    expect(new URL(rewrite!).pathname).toMatch(/^\/spa\/[^/]+\/shared-workspace\/settings$/);
+  });
+});

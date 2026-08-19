@@ -1258,6 +1258,8 @@
   "sharePage.menu.goToLobeHub": "前往 LobeHub",
   "sharePage.menu.more": "更多",
   "sharePage.menu.report": "举报",
+  "sharePage.meta.pageDescription": "分享自 {{appName}} 的页面。",
+  "sharePage.meta.topicDescription": "分享自 {{appName}} 的对话。",
   "sharePage.pill.edit": "编辑",
   "sharePage.pill.openInApp": "在 {{appName}} 中打开",
   "sharePage.pill.sharedVia": "分享自 {{appName}}",

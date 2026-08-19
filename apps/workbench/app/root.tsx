@@ -16,27 +16,15 @@ import { href as themeVarsCssHref } from 'virtual:lobehub/theme-vars-css';
 
 import ErrorCapture, { type ErrorType } from '@/components/Error';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
-import { normalizeLocale } from '@/locales/resources';
+import { resolveRequestLocale } from '@/locales/requestLocale';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 import WorkbenchShell from '../src/shell';
 import { loadWorkbenchResources } from '../src/shell/createWorkbenchI18n';
 import { buildPageMeta, workbenchMetaDescription } from './lib/seo';
 
-const pickLocale = (request: Request) => {
-  const url = new URL(request.url);
-  const hl = url.searchParams.get('hl');
-  const cookie = request.headers.get('cookie') ?? '';
-  const cookieLocale = decodeURIComponent(/(?:^|;\s*)LOBE_LOCALE=([^;]*)/.exec(cookie)?.[1] ?? '');
-  const acceptLocale = request.headers.get('accept-language')?.split(',')[0]?.trim() ?? '';
-
-  const raw = hl || cookieLocale || acceptLocale || 'en-US';
-
-  return normalizeLocale(raw === 'auto' ? acceptLocale || 'en-US' : raw);
-};
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const locale = pickLocale(request);
+  const locale = resolveRequestLocale(request);
   const resources = await loadWorkbenchResources(locale);
 
   return {

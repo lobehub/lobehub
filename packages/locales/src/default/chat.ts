@@ -1318,6 +1318,8 @@ export default {
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
+  'sharePage.meta.pageDescription': 'A page shared from {{appName}}.',
+  'sharePage.meta.topicDescription': 'A conversation shared from {{appName}}.',
   'sharePage.pill.edit': 'Edit',
   'sharePage.pill.openInApp': 'Open in {{appName}}',
   'sharePage.pill.sharedVia': 'Shared via {{appName}}',

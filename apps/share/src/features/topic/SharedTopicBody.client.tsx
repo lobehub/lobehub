@@ -1,30 +1,31 @@
 'use client';
 
 import { memo } from 'react';
-import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import { ShareHero } from '@/business/client/features/ShareShell';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 
-import TopicAvatar from './features/TopicAvatar';
 import SharedMessageList from './SharedMessageList';
+import TopicAvatar from './TopicAvatar';
+import { buildTopicByline } from './topicByline';
+import { useSyncSharedTopicMeta } from './useSyncSharedTopicMeta';
 
-const ShareTopicPage = memo(() => {
-  const { id } = useParams<{ id: string }>();
+interface SharedTopicBodyProps {
+  shareId: string;
+}
 
+const SharedTopicBody = memo<SharedTopicBodyProps>(({ shareId }) => {
   const { data } = useSWR(
-    id ? shareKeys.topic(id) : null,
-    () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
+    shareKeys.topic(shareId),
+    () => lambdaClient.share.getSharedTopic.query({ shareId }),
     { revalidateOnFocus: false },
   );
 
-  if (!data) return null;
+  useSyncSharedTopicMeta(data);
 
-  const isInboxAgent = !data.groupId && data.agentMeta?.slug === 'inbox';
-  const agentOrGroupTitle =
-    data.groupMeta?.title || (isInboxAgent ? 'Lobe AI' : data.agentMeta?.title);
+  if (!data) return null;
 
   return (
     <SharedMessageList
@@ -35,7 +36,7 @@ const ShareTopicPage = memo(() => {
       headerSlot={
         <ShareHero
           avatar={<TopicAvatar data={data} size={40} />}
-          byline={agentOrGroupTitle}
+          byline={buildTopicByline(data)}
           title={data.title}
         />
       }
@@ -43,4 +44,6 @@ const ShareTopicPage = memo(() => {
   );
 });
 
-export default ShareTopicPage;
+SharedTopicBody.displayName = 'SharedTopicBody';
+
+export default SharedTopicBody;

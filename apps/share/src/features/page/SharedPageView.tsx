@@ -8,12 +8,11 @@ import useSWR from 'swr';
 import PublishedShell from '@/business/client/features/PageShare/PublishedShell';
 import ReadOnlyPageViewer from '@/business/client/features/PageShare/ReadOnlyPageViewer';
 import Loading from '@/components/Loading/BrandTextLoading';
-import { RouteMetaBridge } from '@/features/RouteMeta';
 import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
-const SharePagePage = memo(() => {
+const SharedPageView = memo(() => {
   const { id } = useParams<{ id: string }>();
   const documentId = getIdFromIdentifier(id ?? '', 'docs');
 
@@ -23,24 +22,23 @@ const SharePagePage = memo(() => {
     { revalidateOnFocus: false },
   );
 
-  if (!error && isLoading) {
+  // The SSR document already carries the page, and SWR revalidates on mount
+  // with it in cache — gating on `isLoading` alone would blank it.
+  if (!error && !data && isLoading) {
     return (
       <Center height={'100vh'}>
-        <Loading debugId="SharePagePage" />
+        <Loading debugId="SharedPageView" />
       </Center>
     );
   }
 
   return (
-    <>
-      <RouteMetaBridge />
-      <PublishedShell data={data} error={error}>
-        {data ? <ReadOnlyPageViewer data={data} /> : null}
-      </PublishedShell>
-    </>
+    <PublishedShell data={data} error={error}>
+      {data ? <ReadOnlyPageViewer data={data} /> : null}
+    </PublishedShell>
   );
 });
 
-SharePagePage.displayName = 'SharePagePage';
+SharedPageView.displayName = 'SharedPageView';
 
-export default SharePagePage;
+export default SharedPageView;

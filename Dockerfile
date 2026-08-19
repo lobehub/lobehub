@@ -67,6 +67,7 @@ COPY packages ./packages
 COPY patches ./patches
 # workspace manifests must exist before pnpm i so --filter can resolve them
 COPY apps/desktop/src/main/package.json ./apps/desktop/src/main/package.json
+COPY apps/share/package.json ./apps/share/package.json
 COPY apps/workbench/package.json ./apps/workbench/package.json
 
 RUN set -e && \
@@ -108,6 +109,7 @@ COPY --from=builder /app/.next/standalone /app/
 COPY --from=builder /app/.next/static /app/.next/static
 # Copy SPA assets (Vite build output)
 COPY --from=builder /app/public/_spa /app/public/_spa
+COPY --from=builder /app/public/_spa-share /app/public/_spa-share
 COPY --from=builder /app/public/_spa-workbench /app/public/_spa-workbench
 # Copy database migrations
 COPY --from=builder /app/packages/database/migrations /app/migrations
