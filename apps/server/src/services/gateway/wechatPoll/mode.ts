@@ -2,7 +2,7 @@ import type Redis from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 
-import type { WechatPollerMode } from './config';
+import { isWechatGatewayHostForcedOff, type WechatPollerMode } from './config';
 import { acquireKeyLock, releaseKeyLock } from './lease';
 
 /**
@@ -24,6 +24,15 @@ import { acquireKeyLock, releaseKeyLock } from './lease';
  */
 
 const ACTIVE_MODE_KEY = 'wechat:poller:active-mode';
+/**
+ * Operator fence for the disaster case (see `isWechatGatewayHostForcedOff`):
+ * while this key says `gateway`, the poller treats gateway as its desired
+ * mode regardless of its env — a live-but-unreachable host executes its own
+ * rollback instead of fighting the failback, and workers stand down within
+ * one supervision tick. Written by the gateway sync when the force env is
+ * set; can equally be SET/DELeted by hand against Redis.
+ */
+const MODE_OVERRIDE_KEY = 'wechat:poller:mode-override';
 const TRANSITION_LOCK_KEY = 'wechat:poller:transition-lock';
 /** Generous: a full 148-connection drain or a gateway sync fits well within it. */
 const TRANSITION_LOCK_TTL_MS = 120_000;
@@ -36,6 +45,14 @@ export const getActiveMode = async (redis: Redis): Promise<WechatPollerMode> => 
 
 export const setActiveMode = async (redis: Redis, mode: WechatPollerMode): Promise<void> => {
   await redis.set(ACTIVE_MODE_KEY, mode);
+};
+
+/** `gateway` when the operator fence is set; null otherwise. */
+export const getModeOverride = async (redis: Pick<Redis, 'get'>): Promise<'gateway' | null> =>
+  (await redis.get(MODE_OVERRIDE_KEY)) === 'gateway' ? 'gateway' : null;
+
+export const writeGatewayModeOverride = async (redis: Pick<Redis, 'set'>): Promise<void> => {
+  await redis.set(MODE_OVERRIDE_KEY, 'gateway');
 };
 
 export const acquireTransitionLock = (redis: Redis, holder: string): Promise<boolean> =>
@@ -62,6 +79,10 @@ interface ActiveModeReader {
 export const isWechatHostRuntimeActive = async (
   redis?: ActiveModeReader | null,
 ): Promise<boolean> => {
+  // Emergency brake: report gateway immediately, without waiting for the
+  // (possibly dead) host to flip the record.
+  if (isWechatGatewayHostForcedOff()) return false;
+
   const client =
     redis !== undefined ? redis : (getAgentRuntimeRedisClient() as ActiveModeReader | null);
   if (!client) return false;

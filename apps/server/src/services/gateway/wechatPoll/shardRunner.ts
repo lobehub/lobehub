@@ -35,7 +35,13 @@ import {
   wechatShardOf,
 } from './config';
 import { acquireLease, releaseLease, renewLease, shardLeaseKey } from './lease';
-import { acquireTransitionLock, getActiveMode, releaseTransitionLock, setActiveMode } from './mode';
+import {
+  acquireTransitionLock,
+  getActiveMode,
+  getModeOverride,
+  releaseTransitionLock,
+  setActiveMode,
+} from './mode';
 
 const log = debug('lobe-server:wechat-poll:shard');
 
@@ -291,10 +297,14 @@ export const runWechatPollShard = async (
   shard: number,
   options: RunWechatPollShardOptions = {},
 ): Promise<WechatPollShardResult> => {
-  const expected = getWechatPollerMode();
-
   const redis = options.redis !== undefined ? options.redis : getAgentRuntimeRedisClient();
   if (!redis) return { role: 'skipped', skippedReason: 'no-redis' };
+
+  // The operator fence outranks this host's own env: under it a live host
+  // executes its own rollback (or stays down) instead of fighting a manual
+  // failback — see MODE_OVERRIDE_KEY.
+  const override = await getModeOverride(redis).catch(() => null);
+  const expected = override ?? getWechatPollerMode();
 
   const workerId = `${shard}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
   const recorded = await getActiveMode(redis);
@@ -426,6 +436,11 @@ export const runWechatPollShard = async (
 
       if (!isWechatGatewayHostEnabled()) {
         log('shard=%d rollback requested, stopping worker', shard);
+        break;
+      }
+
+      if ((await getModeOverride(redis).catch(() => null)) === 'gateway') {
+        log('shard=%d operator fence set, stopping worker', shard);
         break;
       }
 

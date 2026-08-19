@@ -13,6 +13,7 @@ import {
   type DecryptedBotProvider,
 } from '@/database/models/agentBotProvider';
 import { gatewayEnv } from '@/envs/gateway';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   getInstallationStore,
@@ -36,7 +37,12 @@ import {
   type MessageGatewayConnectionStatus,
 } from './MessageGatewayClient';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
-import { isWechatHostRuntimeActive } from './wechatPoll/mode';
+import { isWechatGatewayHostForcedOff } from './wechatPoll/config';
+import {
+  isWechatHostRuntimeActive,
+  setActiveMode,
+  writeGatewayModeOverride,
+} from './wechatPoll/mode';
 
 /**
  * Per-user messenger gateway connections live on the gateway as webhook-mode
@@ -236,6 +242,20 @@ export class GatewayService {
     const client = getMessageGatewayClient();
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+    // Emergency failback (WECHAT_GATEWAY_HOST_FORCE_GATEWAY): fence the
+    // poller host in Redis FIRST so a half-alive instance stands down within
+    // one supervision tick instead of re-draining what this sync rebuilds,
+    // then align the recorded mode so the failback survives removal of the
+    // force env. The ordinary reconcile below then reconnects WeChat.
+    if (isWechatGatewayHostForcedOff()) {
+      const redis = getAgentRuntimeRedisClient();
+      if (redis) {
+        await writeGatewayModeOverride(redis).catch(() => {});
+        await setActiveMode(redis, 'gateway').catch(() => {});
+        log('Gateway sync: force-gateway set — poller fence written, active-mode=gateway');
+      }
+    }
 
     const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
       serverDB,

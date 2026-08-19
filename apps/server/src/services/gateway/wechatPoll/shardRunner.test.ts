@@ -537,6 +537,41 @@ describe('wechat poll shard runner', () => {
     }
   });
 
+  it('operator fence makes a live host run its own rollback despite its env flag', async () => {
+    // Disaster failback: env still says host, but the Redis fence outranks it.
+    redis.store.set('wechat:poller:mode-override', 'gateway');
+    const runGatewaySync = vi.fn(async () => {});
+
+    const result = await runWechatPollShard(0, { redis: redis as never, runGatewaySync });
+
+    expect(result).toEqual({ role: 'transition', transition: 'rollback' });
+    expect(runGatewaySync).toHaveBeenCalledTimes(1);
+    expect(redis.store.get(ACTIVE_MODE_KEY)).toBe('gateway');
+  });
+
+  it('worker stands down within one tick when the operator fence appears', async () => {
+    vi.useFakeTimers();
+    try {
+      const runPromise = runWechatPollShard(0, {
+        durationMs: 120_000,
+        loadProviders: async () => [],
+        redis: redis as never,
+      });
+
+      await vi.advanceTimersByTimeAsync(1); // worker up, holding the lease
+      redis.store.set('wechat:poller:mode-override', 'gateway'); // manual SET against redis
+      await vi.advanceTimersByTimeAsync(31_000); // next tick notices the fence
+      await vi.advanceTimersByTimeAsync(6000); // abort grace
+      const result = await runPromise;
+
+      expect(result.role).toBe('worker');
+      expect(result.durationMs).toBeLessThan(40_000); // exited at the tick, not the deadline
+      expect(redis.store.has('wechat:poll:lease:0')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('worker exits within one tick and releases its lease on host shutdown', async () => {
     vi.useFakeTimers();
     try {

@@ -27,6 +27,19 @@ export type WechatPollerMode = 'gateway' | 'host';
 export const isWechatGatewayHostEnabled = (): boolean =>
   process.env.WECHAT_GATEWAY_HOST_ENABLED === '1';
 
+/**
+ * EMERGENCY brake, not a second routing switch: forces WeChat back onto the
+ * gateway when the poller host is down AND its own deployment cannot be
+ * operated (the ordinary rollback — unsetting the env above — needs the host
+ * alive to execute it). Set on the main-app deployment, which is the side an
+ * operator can still reach in that scenario. While set, the runtime-active
+ * check reports gateway immediately, and the gateway sync writes a Redis
+ * mode-override fence so a half-alive host stands down instead of
+ * re-migrating. Remove it (and the fence key) once the incident is over.
+ */
+export const isWechatGatewayHostForcedOff = (): boolean =>
+  process.env.WECHAT_GATEWAY_HOST_FORCE_GATEWAY === '1';
+
 export const getWechatPollerMode = (): WechatPollerMode =>
   isWechatGatewayHostEnabled() ? 'host' : 'gateway';
 
