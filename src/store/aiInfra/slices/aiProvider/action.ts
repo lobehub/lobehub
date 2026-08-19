@@ -11,6 +11,7 @@ import type {
   ModelParamsSchema,
   Pricing,
 } from 'model-bank';
+import { resolveVideoModelParamsSchema } from 'model-bank';
 import { isAiModelVisible, isFreeAiModel } from 'model-bank/aiModel';
 import { type SWRResponse } from 'swr';
 
@@ -224,7 +225,17 @@ export const normalizeVideoModel = async (
     getModelProperty<string>(model, 'description'),
   ]);
 
-  const { approximatePrice } = resolveVideoSinglePrice(pricing);
+  const videoParameters = resolveVideoModelParamsSchema(parameters);
+  const { approximatePrice, price } = resolveVideoSinglePrice(
+    pricing,
+    videoParameters.duration?.default,
+  );
+  const normalizedPricing =
+    pricing &&
+    typeof approximatePrice === 'number' &&
+    typeof pricing.approximatePricePerVideo !== 'number'
+      ? { ...pricing, approximatePricePerVideo: approximatePrice }
+      : pricing;
 
   return {
     abilities: (model.abilities || {}) as ModelAbilities,
@@ -232,10 +243,11 @@ export const normalizeVideoModel = async (
     displayName: model.displayName ?? '',
     id: model.id,
     releasedAt: model.releasedAt,
-    ...(parameters && { parameters }),
+    parameters: videoParameters,
     ...(description && { description }),
-    ...(pricing && { pricing }),
+    ...(normalizedPricing && { pricing: normalizedPricing }),
     ...(typeof approximatePrice === 'number' && { approximatePricePerVideo: approximatePrice }),
+    ...(typeof price === 'number' && { pricePerVideo: price }),
   };
 };
 

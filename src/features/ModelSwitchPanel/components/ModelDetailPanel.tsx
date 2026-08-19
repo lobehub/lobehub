@@ -161,6 +161,14 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       : [];
     const ratedDimensions = ratingDimensions.filter((item) => item.score !== undefined);
     const hasRating = ratedDimensions.length > 0;
+    const summaryPricingGroup = pricingMode
+      ? pricingGroups.find(({ group }) => group === pricingMode)
+      : undefined;
+    const summaryPricingUnit = summaryPricingGroup
+      ? (summaryPricingGroup.units.find(
+          ({ name }) => name === (pricingMode === 'image' ? 'imageGeneration' : 'videoGeneration'),
+        ) ?? summaryPricingGroup.units[0])
+      : undefined;
 
     const description = model.description
       ? String(
@@ -350,6 +358,17 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                   !isPricingExpanded &&
                   (approximatePriceLabel ? (
                     <span className={styles.actionText}>{approximatePriceLabel}</span>
+                  ) : summaryPricingUnit ? (
+                    <Flexbox horizontal align={'center'} className={styles.actionText} gap={2}>
+                      {UNIT_ICON_MAP[summaryPricingUnit.name] && (
+                        <Icon icon={UNIT_ICON_MAP[summaryPricingUnit.name]!} size={'small'} />
+                      )}
+                      <PriceValue
+                        prefix={isCreditPricing ? '' : '$'}
+                        price={formatUnitPrice(summaryPricingUnit)}
+                        suffix={getUnitPriceSuffix(summaryPricingUnit.unit)}
+                      />
+                    </Flexbox>
                   ) : (
                     <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
                       {hasCachedInputPricing && (

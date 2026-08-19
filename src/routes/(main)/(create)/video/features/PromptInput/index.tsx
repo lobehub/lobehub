@@ -1,6 +1,5 @@
 'use client';
 
-import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, Flexbox, InputNumber, SliderWithInput, Text } from '@lobehub/ui';
 import { Switch, Tabs } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
@@ -9,6 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
+import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
@@ -562,6 +562,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 placement="topLeft"
                 pricingMode="video"
                 provider={currentProvider ?? undefined}
+                showAddModel={false}
                 onModelChange={async ({ model, provider }) => {
                   if (!canCreate) return;
 
@@ -569,7 +570,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 }}
               >
                 <ActionIcon
-                  icon={<ModelIcon model={currentModel ?? ''} size={22} />}
+                  icon={<BrandedModelIcon model={currentModel ?? ''} size={22} />}
                   size={{
                     blockSize: 36,
                     size: 20,

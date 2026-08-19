@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { render, screen } from '@testing-library/react';
 import type { ModelRating } from 'model-bank';
 import type { ReactNode } from 'react';
@@ -114,6 +115,7 @@ const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.pricing.credits.perVideo': '~ {{amount}} credits / video',
   'ModelSwitchPanel.detail.pricing.credits.image': 'credits/img',
   'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
+  'ModelSwitchPanel.detail.pricing.credits.video': 'credits/video',
   'ModelSwitchPanel.detail.pricing.group.image': 'Image',
   'ModelSwitchPanel.detail.pricing.group.text': 'Text',
   'ModelSwitchPanel.detail.pricing.input': 'Input ${{amount}}/M',
@@ -123,6 +125,7 @@ const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.pricing.unit.imageGeneration': 'Image Generation',
   'ModelSwitchPanel.detail.pricing.unit.textInput': 'Input',
   'ModelSwitchPanel.detail.pricing.unit.textOutput': 'Output',
+  'ModelSwitchPanel.detail.pricing.unit.videoGeneration': 'Video Generation',
   'ModelSwitchPanel.detail.rating': 'Benchmarks',
   'ModelSwitchPanel.detail.rating.dimension.agentic': 'Agentic',
   'ModelSwitchPanel.detail.rating.dimension.design': 'Design',
@@ -156,6 +159,16 @@ const imagePricing = {
   approximatePricePerVideo: 0.8,
   currency: 'USD',
   units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+};
+
+const videoPricing = {
+  currency: 'USD',
+  units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'video' }],
+};
+
+const videoPerSecondPricing = {
+  currency: 'USD',
+  units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
 };
 
 const emptyLookupPricing = {
@@ -205,8 +218,8 @@ describe('ModelDetailPanel pricing', () => {
     const { container } = render(
       <ModelDetailPanel
         model="test-model"
-        provider="lobehub"
-        enabledList={createEnabledList('lobehub', textPricing, {
+        provider={BRANDING_PROVIDER}
+        enabledList={createEnabledList(BRANDING_PROVIDER, textPricing, {
           description: 'Fallback model description.',
         })}
       />,
@@ -220,9 +233,9 @@ describe('ModelDetailPanel pricing', () => {
   it('renders branding provider token pricing in credits', () => {
     const { container } = render(
       <ModelDetailPanel
-        enabledList={createEnabledList('lobehub', textPricing)}
+        enabledList={createEnabledList(BRANDING_PROVIDER, textPricing)}
         model="test-model"
-        provider="lobehub"
+        provider={BRANDING_PROVIDER}
       />,
     );
 
@@ -234,9 +247,9 @@ describe('ModelDetailPanel pricing', () => {
   it('renders the original branding price without repeating the unit suffix', () => {
     const { container } = render(
       <ModelDetailPanel
-        enabledList={createEnabledList('lobehub', discountedTextPricing)}
+        enabledList={createEnabledList(BRANDING_PROVIDER, discountedTextPricing)}
         model="test-model"
-        provider="lobehub"
+        provider={BRANDING_PROVIDER}
       />,
     );
 
@@ -264,10 +277,10 @@ describe('ModelDetailPanel pricing', () => {
   it('renders branding provider image and video pricing in credits', () => {
     const imageResult = render(
       <ModelDetailPanel
-        enabledList={createEnabledList('lobehub', imagePricing)}
+        enabledList={createEnabledList(BRANDING_PROVIDER, imagePricing)}
         model="test-model"
         pricingMode="image"
-        provider="lobehub"
+        provider={BRANDING_PROVIDER}
       />,
     );
 
@@ -279,10 +292,10 @@ describe('ModelDetailPanel pricing', () => {
 
     const videoResult = render(
       <ModelDetailPanel
-        enabledList={createEnabledList('lobehub', imagePricing)}
+        enabledList={createEnabledList(BRANDING_PROVIDER, imagePricing)}
         model="test-model"
         pricingMode="video"
-        provider="lobehub"
+        provider={BRANDING_PROVIDER}
       />,
     );
 
@@ -290,12 +303,49 @@ describe('ModelDetailPanel pricing', () => {
     expect(videoResult.container).not.toHaveTextContent('$0.80');
   });
 
+  it('renders the usage unit for fixed per-video pricing', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList(BRANDING_PROVIDER, videoPricing)}
+        model="test-model"
+        pricingMode="video"
+        provider={BRANDING_PROVIDER}
+      />,
+    );
+
+    expect(container).toHaveTextContent('Video Generation');
+    expect(container).toHaveTextContent('500.0K credits/video');
+  });
+
+  it('summarizes a video-only model with its per-second usage price when collapsed', () => {
+    globalState.status.modelDetailPanelExpandedKeys = [];
+
+    try {
+      const { container } = render(
+        <ModelDetailPanel
+          enabledList={createEnabledList('openai', videoPerSecondPricing)}
+          model="test-model"
+          pricingMode="video"
+          provider="openai"
+        />,
+      );
+
+      const pricingSummary = Array.from(container.querySelectorAll('.actionText')).find((node) =>
+        node.textContent?.includes('$'),
+      );
+
+      expect(pricingSummary).toHaveTextContent('$0.10/s');
+    } finally {
+      globalState.status.modelDetailPanelExpandedKeys = ['pricing'];
+    }
+  });
+
   it('renders a placeholder for empty lookup pricing tables', () => {
     const { container } = render(
       <ModelDetailPanel
-        enabledList={createEnabledList('lobehub', emptyLookupPricing)}
+        enabledList={createEnabledList(BRANDING_PROVIDER, emptyLookupPricing)}
         model="test-model"
-        provider="lobehub"
+        provider={BRANDING_PROVIDER}
       />,
     );
 

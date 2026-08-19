@@ -175,33 +175,25 @@ export const imageRouter = router({
         }
       }
 
-      // In development, convert localhost proxy URLs to S3 URLs for async task access
-      let generationParams = params;
-      if (process.env.NODE_ENV === 'development') {
-        const updates: Record<string, unknown> = {};
+      // Generation providers fetch reference images themselves and therefore
+      // cannot authenticate to our protected `/f/:id` proxy. Resolve storage
+      // keys to temporary access URLs before dispatching, in every environment.
+      // Database records still retain only keys in `configForDatabase` above.
+      const generationUpdates: Record<string, unknown> = {};
 
-        // Handle single imageUrl: localhost/f/{id} -> S3 URL
-        if (typeof params.imageUrl === 'string' && params.imageUrl) {
-          const s3Url = await fileService.getFullFileUrl(configForDatabase.imageUrl as string);
-          if (s3Url) {
-            log('Dev: converted proxy URL to S3 URL: %s -> %s', params.imageUrl, s3Url);
-            updates.imageUrl = s3Url;
-          }
-        }
-
-        // Handle multiple imageUrls
-        if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
-          const s3Urls = await Promise.all(
-            (configForDatabase.imageUrls as string[]).map((key) => fileService.getFullFileUrl(key)),
-          );
-          log('Dev: converted proxy URLs to S3 URLs: %O', s3Urls);
-          updates.imageUrls = s3Urls;
-        }
-
-        if (Object.keys(updates).length > 0) {
-          generationParams = { ...params, ...updates };
-        }
+      if (typeof configForDatabase.imageUrl === 'string' && configForDatabase.imageUrl) {
+        const accessUrl = await fileService.getFullFileUrl(configForDatabase.imageUrl);
+        if (accessUrl) generationUpdates.imageUrl = accessUrl;
       }
+
+      if (Array.isArray(configForDatabase.imageUrls) && configForDatabase.imageUrls.length > 0) {
+        generationUpdates.imageUrls = await Promise.all(
+          configForDatabase.imageUrls.map((key) => fileService.getFullFileUrl(key)),
+        );
+      }
+
+      const generationParams =
+        Object.keys(generationUpdates).length > 0 ? { ...params, ...generationUpdates } : params;
 
       // Defensive check: ensure no full URLs enter the database
       validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
