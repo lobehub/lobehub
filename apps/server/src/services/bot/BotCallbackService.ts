@@ -6,7 +6,13 @@ import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  clearWechatTyping,
+  renewWechatTyping,
+  type WechatTypingRedis,
+} from '@/server/services/bot/platforms/wechat/typingRegistry';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { isWechatHostRuntimeActive } from '@/server/services/gateway/wechatPoll/mode';
 import {
   getInstallationStore,
   messengerConnectionIdForUser,
@@ -181,11 +187,19 @@ export class BotCallbackService {
       // (shouldContinue=false) may arrive after the completion callback
       // via async delivery (QStash), which would restart typing after stop.
       if (body.shouldContinue) {
-        this.renewGatewayTyping(connectionId, platformThreadId);
+        if (platform === 'wechat' && (await isWechatHostRuntimeActive())) {
+          this.renewHostTyping(applicationId, platformThreadId);
+        } else {
+          this.renewGatewayTyping(connectionId, platformThreadId);
+        }
       }
     } else if (type === 'completion') {
-      // Stop typing on the gateway
-      this.stopGatewayTyping(connectionId, platformThreadId);
+      // Stop typing on whichever side owns it
+      if (platform === 'wechat' && (await isWechatHostRuntimeActive())) {
+        this.clearHostTyping(applicationId, platformThreadId);
+      } else {
+        this.stopGatewayTyping(connectionId, platformThreadId);
+      }
 
       await this.handleCompletion(
         body,
@@ -685,6 +699,34 @@ export class BotCallbackService {
     client.startTyping(connectionId, platformThreadId).catch((err) => {
       log('renewGatewayTyping failed: %O', err);
     });
+  }
+
+  /**
+   * Renew the Redis typing-registry entry the inbound pipeline created —
+   * used when the resident host (not the gateway) owns WeChat. Each renewal
+   * resets the registry TTL, so typing spans the whole multi-step generation
+   * and dies within one TTL if the run crashes without completing.
+   */
+  private renewHostTyping(applicationId: string, platformThreadId: string): void {
+    const wechatUserId = platformThreadId.split(':').slice(2).join(':');
+    const redis = getAgentRuntimeRedisClient();
+    if (!wechatUserId || !redis) return;
+    renewWechatTyping(redis as unknown as WechatTypingRedis, applicationId, wechatUserId).catch(
+      (err) => {
+        log('renewHostTyping failed: %O', err);
+      },
+    );
+  }
+
+  private clearHostTyping(applicationId: string, platformThreadId: string): void {
+    const wechatUserId = platformThreadId.split(':').slice(2).join(':');
+    const redis = getAgentRuntimeRedisClient();
+    if (!wechatUserId || !redis) return;
+    clearWechatTyping(redis as unknown as WechatTypingRedis, applicationId, wechatUserId).catch(
+      (err) => {
+        log('clearHostTyping failed: %O', err);
+      },
+    );
   }
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {

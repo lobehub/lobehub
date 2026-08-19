@@ -16,6 +16,11 @@ import {
   isPollParked,
   type WechatPollStateRedis,
 } from '@/server/services/bot/platforms/wechat/pollState';
+import {
+  WECHAT_TYPING_PULSE_INTERVAL_MS,
+  type WechatTypingRedis,
+} from '@/server/services/bot/platforms/wechat/typingRegistry';
+import { runWechatTypingSweep } from '@/server/services/bot/platforms/wechat/typingSweep';
 
 import { BotConnectQueue } from '../botConnectQueue';
 import { getMessageGatewayClient } from '../MessageGatewayClient';
@@ -81,6 +86,8 @@ export interface RunWechatPollShardOptions {
    * one tick instead of waiting out the lease TTL.
    */
   shouldStop?: () => boolean;
+  /** Injectable for tests — one typing-registry sweep pass. */
+  typingSweep?: () => Promise<void>;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -335,6 +342,28 @@ export const runWechatPollShard = async (
   };
   let redrainPending = transition === 'migration';
 
+  // The resident-host equivalent of the gateway DO's typing alarm: pulse
+  // every registry entry this shard owns for the worker's whole window, so
+  // typing spans the entire generation instead of flickering per step.
+  // Overlap-guarded and never throwing — see runWechatTypingSweep.
+  const typingSweep =
+    options.typingSweep ??
+    (() =>
+      runWechatTypingSweep(
+        redis as unknown as WechatTypingRedis,
+        (applicationId) => wechatShardOf(applicationId, shardCount) === shard,
+      ));
+  let sweeping = false;
+  const typingTimer = setInterval(() => {
+    if (sweeping) return;
+    sweeping = true;
+    void typingSweep()
+      .catch(() => {})
+      .finally(() => {
+        sweeping = false;
+      });
+  }, WECHAT_TYPING_PULSE_INTERVAL_MS);
+
   // Don't pay a readiness probe (seconds) for a window we cannot outlive — the
   // next window picks the bot up as an ordinary member anyway. Capped at half
   // the window so a deliberately short one (staging, tests) still adopts its
@@ -418,6 +447,7 @@ export const runWechatPollShard = async (
       await consumeConnectQueue(shard, shardCount, pollStateRedis, startBot, loadProviders);
     }
   } finally {
+    clearInterval(typingTimer);
     // Stop before releasing the lease, so the next claimant (the service's
     // next tick, or a replacement instance) can never start polling a bot
     // this worker still holds.

@@ -338,6 +338,33 @@ describe('wechat poll shard runner', () => {
     }
   });
 
+  it('runs the typing sweep on its pulse cadence for the whole window', async () => {
+    process.env.WECHAT_POLL_SHARD_COUNT = '1';
+    vi.useFakeTimers();
+    try {
+      const typingSweep = vi.fn(async () => {});
+      const runPromise = runWechatPollShard(0, {
+        durationMs: 20_000,
+        loadProviders: async () => [],
+        redis: redis as never,
+        typingSweep,
+      });
+
+      await vi.advanceTimersByTimeAsync(12_000); // 3 pulse intervals of 4s
+      expect(typingSweep.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+      await vi.advanceTimersByTimeAsync(14_000);
+      await runPromise;
+      const atExit = typingSweep.mock.calls.length;
+
+      // The timer dies with the worker — no pulses after the window.
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(typingSweep).toHaveBeenCalledTimes(atExit);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // ─── Mode state machine ───
 
   it('migration transition drains every connection before any polling starts', async () => {

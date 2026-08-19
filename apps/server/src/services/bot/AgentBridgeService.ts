@@ -10,8 +10,13 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import {
+  requestWechatTyping,
+  type WechatTypingRedis,
+} from '@/server/services/bot/platforms/wechat/typingRegistry';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isWechatHostRuntimeActive } from '@/server/services/gateway/wechatPoll/mode';
@@ -813,10 +818,20 @@ export class AgentBridgeService {
         try {
           if (platform === 'wechat' && (await isWechatHostRuntimeActive())) {
             // Another host owns WeChat's connections, so there is no gateway
-            // object left to drive typing. The step executor keeps it alive
-            // directly (see startWechatTypingKeeper); registering here would
-            // only produce dead 400s against a torn-down connection.
-            log('executeWithWebhooks: %s is gateway-unmanaged, direct typing owns it', platform);
+            // object left to drive typing; registering there would only
+            // produce dead 400s against a torn-down connection. Register in
+            // the Redis typing registry instead — the resident host pulses
+            // it for the whole generation (renewed per step, cleared on
+            // completion), mirroring the gateway's typing contract.
+            const wechatUserId = botContext.platformThreadId.split(':').slice(2).join(':');
+            const typingRedis = getAgentRuntimeRedisClient();
+            if (wechatUserId && typingRedis) {
+              await requestWechatTyping(typingRedis as unknown as WechatTypingRedis, {
+                applicationId: botContext.applicationId,
+                installationKey: botContext.messengerInstallationKey ?? undefined,
+                wechatUserId,
+              });
+            }
           } else if (botContext.messengerInstallationKey) {
             // Messenger run: shard typing by `(platform, lobeUserId)` so each
             // user gets their own DO. Solves both the cross-conversation
