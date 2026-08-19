@@ -89,9 +89,6 @@ const execFileString = async (command: string, args: string[]): Promise<string> 
     );
   });
 
-const pickWindowsExecutable = (candidates: string[]): string | undefined =>
-  candidates.find((candidate) => WINDOWS_EXE_EXT_PATTERN.test(candidate));
-
 const pickWindowsNodeExecutable = (candidates: string[]): string | undefined =>
   candidates.find(
     (candidate) =>
@@ -255,9 +252,16 @@ const resolveWindowsBareCommand = async (
       .map((line) => line.trim())
       .filter(Boolean);
 
-    const executable = pickWindowsExecutable(candidates);
-    if (executable) return { command: executable };
-
+    // Walk candidates in PATH order — `inferWindowsNpmShimTarget` already
+    // returns a bare `.exe` as-is and unwraps a `.cmd`/`.bat`/extensionless
+    // shim via static parsing. Do NOT pre-scan for any `.exe` first: an
+    // earlier `.cmd` shim that resolves to a real target must win over a
+    // later bare `.exe`, e.g. a WinGet-installed `codex.cmd` ahead of the
+    // `WindowsApps\...` App Execution Alias stub some MSIX-packaged tools
+    // (e.g. the Codex desktop app) also add to PATH — Node's execFile/spawn
+    // throws EPERM on that stub, so picking it over an earlier working shim
+    // breaks CLI launch. Same PATH-order rule already applied to detection
+    // candidates in resolveCliCommand.ts (see #17376).
     for (const candidate of candidates) {
       const target = await inferWindowsNpmShimTarget(candidate);
       if (target) return target;
