@@ -20,7 +20,9 @@ import SWRMutateInitializer from './SWRMutateInitializer';
 
 // The sidebar pulls the global store (panel-width preference) and the list
 // panel stack — lazy so the SSR graph and anonymous visitors never load it.
-const WorkspaceSidebar = lazy(() => import('./WorkspaceSidebar'));
+const workspaceSidebarMod = () => import('./WorkspaceSidebar');
+const WorkspaceSidebar = lazy(workspaceSidebarMod);
+const HeaderBrand = lazy(() => workspaceSidebarMod().then((mod) => ({ default: mod.HeaderBrand })));
 
 // The list panel is auxiliary — a crash inside it must degrade to "no
 // sidebar", never take the report page down with it.
@@ -90,7 +92,7 @@ const WorkbenchAcceptanceDetail = memo(() => {
       }),
     { revalidateIfStale: false, revalidateOnFocus: false, revalidateOnReconnect: false },
   );
-  const showSidebar = Boolean(workspaceList) && !hasFocusedCheck;
+  const showSidebar = (Boolean(workspaceList) || import.meta.env.DEV) && !hasFocusedCheck;
 
   return (
     <Flexbox horizontal className={styles.page}>
@@ -104,7 +106,13 @@ const WorkbenchAcceptanceDetail = memo(() => {
       <Flexbox className={styles.main}>
         <SWRMutateInitializer />
         <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-          <WorkbenchBrandLink />
+          {showSidebar ? (
+            <Suspense fallback={<WorkbenchBrandLink />}>
+              <HeaderBrand />
+            </Suspense>
+          ) : (
+            <WorkbenchBrandLink />
+          )}
           <Text ellipsis strong style={{ minWidth: 0 }}>
             {data?.subject.title ?? t('acceptance.titleFallback')}
           </Text>
