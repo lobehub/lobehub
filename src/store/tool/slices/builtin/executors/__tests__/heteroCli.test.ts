@@ -5,6 +5,7 @@ import {
   codexExecutor,
   grokBuildExecutor,
   kimiCodeExecutor,
+  minimaxCodeExecutor,
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
@@ -40,6 +41,7 @@ describe('heteroCli executors', () => {
     expect(codexExecutor.identifier).toBe('codex');
     expect(grokBuildExecutor.identifier).toBe('grok-build');
     expect(kimiCodeExecutor.identifier).toBe('kimi-code');
+    expect(minimaxCodeExecutor.identifier).toBe('minimax-code');
     expect(openCodeExecutor.identifier).toBe('opencode');
     expect(piExecutor.identifier).toBe('pi');
     expect(qoderExecutor.identifier).toBe('qoder');

@@ -53,6 +53,8 @@ import {
   buildCursorAcpPrompt,
   buildGrokAcpArgs,
   buildGrokAcpPrompt,
+  buildMinimaxCodeAcpArgs,
+  buildMinimaxCodeAcpPrompt,
   buildTraeAcpArgs,
   buildTraeAcpPrompt,
   ClaudeAgentSdkSession,
@@ -65,6 +67,7 @@ import {
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
+  MinimaxCodeAcpSession,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -318,6 +321,7 @@ interface AgentSession {
   cwd?: string;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
+  minimaxCodeAcpSession?: MinimaxCodeAcpSession;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -1255,6 +1259,10 @@ export default class HeterogeneousAgentCtr {
       return this.sendPromptWithCursorAcp(params, session);
     }
 
+    if (session.agentType === 'minimax-code') {
+      return this.sendPromptWithMinimaxCodeAcp(params, session);
+    }
+
     if (session.agentType === 'trae') {
       return this.sendPromptWithTraeAcp(params, session);
     }
@@ -1876,6 +1884,96 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private async sendPromptWithMinimaxCodeAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildMinimaxCodeAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildMinimaxCodeAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+    const stderrChunks: string[] = [];
+
+    const minimaxCodeAcpSession = new MinimaxCodeAcpSession({
+      args: session.args,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.minimaxCodeAcpSession = minimaxCodeAcpSession;
+
+    try {
+      await minimaxCodeAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'minimax-code-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'minimax-code-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = stderr
+        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+            cause: error,
+          })
+        : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      if (session.minimaxCodeAcpSession === minimaxCodeAcpSession) {
+        session.minimaxCodeAcpSession = undefined;
+      }
+    }
+  }
+
   private async sendPromptWithTraeAcp(
     params: SendPromptParams,
     session: AgentSession,
@@ -2416,6 +2514,10 @@ export default class HeterogeneousAgentCtr {
       }
       return;
     }
+    if (session.minimaxCodeAcpSession) {
+      await session.minimaxCodeAcpSession.interrupt();
+      return;
+    }
     if (session.traeAcpSession) {
       await session.traeAcpSession.interrupt();
       return;
@@ -2462,6 +2564,11 @@ export default class HeterogeneousAgentCtr {
         logger.warn('Codex app-server interrupt failed while stopping the session:', error);
       }
       session.appServerSession.close();
+    }
+
+    if (session.minimaxCodeAcpSession) {
+      session.cancelledByUs = true;
+      session.minimaxCodeAcpSession.close();
     }
 
     if (session.traeAcpSession) {
@@ -2553,6 +2660,10 @@ export default class HeterogeneousAgentCtr {
         if (session.appServerSession) {
           session.cancelledByUs = true;
           session.appServerSession.close();
+        }
+        if (session.minimaxCodeAcpSession) {
+          session.cancelledByUs = true;
+          session.minimaxCodeAcpSession.close();
         }
         if (session.traeAcpSession) {
           session.cancelledByUs = true;

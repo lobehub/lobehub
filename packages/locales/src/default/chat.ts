@@ -948,6 +948,15 @@ export default {
   'kimiCodeInstallGuide.menuNotification.title': 'Kimi Code CLI not found',
   'kimiCodeInstallGuide.reason': 'LobeHub could not start Kimi Code: {{message}}',
   'kimiCodeInstallGuide.title': 'Install Kimi Code CLI',
+  'minimaxCodeInstallGuide.actions.openDocs': 'Open Install Guide',
+  'minimaxCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'minimaxCodeInstallGuide.afterInstall':
+    'After installing, run `mcode login`. MiniMax Code needs Node.js 22.19+ or 24–26 (Node 20 and 23 are not supported). Then retry your message or click Re-detect in System Tools.',
+  'minimaxCodeInstallGuide.desc':
+    'MiniMax Code needs the `mcode` CLI to run locally. Install `@minimax-ai/code` and make sure the mcode command is available in your PATH.',
+  'minimaxCodeInstallGuide.menuNotification.title': 'MiniMax Code CLI not found',
+  'minimaxCodeInstallGuide.reason': 'LobeHub could not start MiniMax Code: {{message}}',
+  'minimaxCodeInstallGuide.title': 'Install MiniMax Code CLI',
   'traeInstallGuide.actions.openDocs': 'Open official docs',
   'traeInstallGuide.actions.openSystemTools': 'Open System Tools',
   'traeInstallGuide.afterInstall':
@@ -968,6 +977,7 @@ export default {
   'newCursorAgent': 'Add Cursor',
   'newGrokBuildAgent': 'Add Grok Build',
   'newKimiCodeAgent': 'Add Kimi Code',
+  'newMinimaxCodeAgent': 'Add MiniMax Code',
   'newOpenCodeAgent': 'Add OpenCode',
   'newPiAgent': 'Add Pi',
   'newQoderAgent': 'Add Qoder',
@@ -1059,6 +1069,7 @@ export default {
   'connectAgent.providerDesc.grok-build': 'xAI coding agent CLI',
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.kimi-code': 'Moonshot AI coding agent CLI',
+  'connectAgent.providerDesc.minimax-code': 'MiniMax coding agent CLI',
   'connectAgent.providerDesc.opencode': 'Open-source coding agent CLI',
   'connectAgent.providerDesc.pi': 'Minimal coding agent CLI',
   'connectAgent.providerDesc.qoder': 'Qoder coding agent CLI',

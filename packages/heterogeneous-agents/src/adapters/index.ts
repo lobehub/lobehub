@@ -7,6 +7,7 @@ export { CursorAdapter } from './cursor';
 export { CursorAcpAdapter } from './cursorAcp';
 export { GrokBuildAdapter } from './grokBuild';
 export { KimiCodeAdapter } from './kimiCode';
+export { MinimaxCodeAcpAdapter } from './minimaxCodeAcp';
 export { OpenCodeAdapter } from './opencode';
 export { PiAdapter } from './pi';
 export { QoderAdapter } from './qoder';

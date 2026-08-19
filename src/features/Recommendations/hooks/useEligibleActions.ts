@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useCreateHeteroAgent } from '@/hooks/useCreateHeteroAgent';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { recommendedActionsRegistry } from '../actions/registry';
 import type { ActionContext, RecommendedAction } from '../actions/types';
@@ -20,16 +22,18 @@ export const useEligibleActions = (): EligibleActionsResult => {
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
   const heteroDetections = useHeteroDetections();
   const createHeteroAgent = useCreateHeteroAgent();
+  const enableMinimaxCode = useUserStore(labPreferSelectors.enableMinimaxCode);
 
   const context = useMemo<ActionContext>(
     () => ({
       agents,
       createHeteroAgent,
+      enableMinimaxCode,
       heteroDetections,
       isDesktop,
       t,
     }),
-    [agents, createHeteroAgent, heteroDetections, t],
+    [agents, createHeteroAgent, enableMinimaxCode, heteroDetections, t],
   );
 
   const actions = useMemo(

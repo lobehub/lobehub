@@ -112,6 +112,15 @@ export {
   type NormalizeImageOptions,
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
+export {
+  buildMinimaxCodeAcpArgs,
+  buildMinimaxCodeAcpPrompt,
+  type MinimaxCodeAcpImagePromptBlock,
+  type MinimaxCodeAcpPromptBlock,
+  MinimaxCodeAcpSession,
+  type MinimaxCodeAcpSessionOptions,
+  type MinimaxCodeAcpTextPromptBlock,
+} from './minimaxCodeAcpSession';
 // NOTE: `resolveCliCommand` is intentionally NOT re-exported here. It runs
 // `promisify(execFile)` at module load, which throws under a partial
 // `node:child_process` mock — and this barrel is widely imported (e.g. for
@@ -141,6 +150,7 @@ export {
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,
+  spawnMinimaxCodeAcpAgent,
   spawnTraeAcpAgent,
 } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';

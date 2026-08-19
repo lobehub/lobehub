@@ -39,13 +39,16 @@ import { DOWNLOAD_URL } from '@/const/url';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { isHeterogeneousAgentTypeEnabled } from '@/helpers/experimentalHeterogeneousAgents';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import type { ConnectableProvider, ConnectAgentProfile } from './providers';
-import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
+import { buildConnectAgentConfig, getConnectableProviders } from './providers';
 import type { ScanTarget } from './useAgentScan';
 import { useAgentScan } from './useAgentScan';
 
@@ -408,6 +411,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const [done, setDone] = useState<CreatedAgent[] | null>(null);
 
     const { scan, state: scanState } = useAgentScan();
+    const enableMinimaxCode = useUserStore(labPreferSelectors.enableMinimaxCode);
+    const connectableProviders = useMemo(
+      () => getConnectableProviders({ enableMinimaxCode }),
+      [enableMinimaxCode],
+    );
 
     useEffect(() => {
       setCanDismissByClickOutside(!creating);
@@ -437,16 +445,16 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const inventory = useMemo(() => {
       if (scanState.status !== 'success' || !scanState.agents) return [];
       const rank = (available?: boolean) => (available ? 0 : 1);
-      return [...CONNECTABLE_PROVIDERS]
+      return [...connectableProviders]
         .map((provider) => ({ provider, status: scanState.agents?.[provider.type] }))
         .sort((a, b) => rank(a.status?.available) - rank(b.status?.available));
-    }, [scanState]);
+    }, [connectableProviders, scanState]);
 
     const detectedCount = inventory.filter((entry) => entry.status?.available).length;
 
     const selectedProviders = useMemo(
-      () => CONNECTABLE_PROVIDERS.filter((provider) => selectedTypes.includes(provider.type)),
-      [selectedTypes],
+      () => connectableProviders.filter((provider) => selectedTypes.includes(provider.type)),
+      [connectableProviders, selectedTypes],
     );
     // Customize (step 3) only applies to a single selection
     const single = selectedProviders.length === 1 ? selectedProviders[0] : null;
@@ -530,6 +538,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         try {
           const created = await Promise.all(
             selectedProviders.map(async (provider) => {
+              if (!isHeterogeneousAgentTypeEnabled(provider.type, { enableMinimaxCode })) {
+                throw new Error(
+                  'MiniMax Code is experimental. Enable it in Settings → Labs first.',
+                );
+              }
               const params = buildCreateParams(
                 provider,
                 provider === single ? overrides : undefined,
@@ -559,6 +572,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       },
       [
         buildCreateParams,
+        enableMinimaxCode,
         onTitleChange,
         refreshAgentList,
         scanState,
@@ -781,7 +795,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <SectionLabel>{t('connectAgent.create.scanning')}</SectionLabel>
               <ScrollableAgentList>
                 {[90, 70, 110, 80, 100, 75, 95]
-                  .slice(0, CONNECTABLE_PROVIDERS.length)
+                  .slice(0, connectableProviders.length)
                   .map((width, i) => (
                     <SkeletonRow key={i} width={width} />
                   ))}

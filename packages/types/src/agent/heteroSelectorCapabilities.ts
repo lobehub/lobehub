@@ -392,6 +392,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     },
   },
   'kimi-code': {},
+  // MiniMax ACP v0.1.4 has no stable model-config option. MVP keeps the CLI
+  // default model and does not expose a selector.
+  'minimax-code': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

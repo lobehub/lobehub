@@ -21,6 +21,7 @@ describe('heterogeneous agent config', () => {
       'cursor',
       'grok-build',
       'kimi-code',
+      'minimax-code',
       'opencode',
       'pi',
       'qoder',
@@ -70,6 +71,12 @@ describe('heterogeneous agent config', () => {
       title: 'Kimi Code',
       type: 'kimi-code',
     });
+    expect(getHeterogeneousAgentConfig('minimax-code')).toMatchObject({
+      auth: { signInCommand: 'mcode login' },
+      defaultCommand: 'mcode',
+      title: 'MiniMax Code',
+      type: 'minimax-code',
+    });
     expect(getHeterogeneousAgentConfig('opencode')).toMatchObject({
       defaultCommand: 'opencode',
       title: 'OpenCode',
@@ -115,6 +122,7 @@ describe('heterogeneous agent config', () => {
       docsUrl: 'https://ampcode.com/manual',
       message: 'Amp could not authenticate. Run `amp login` or configure AMP_API_KEY, then retry.',
     });
+    expect(isHeterogeneousAgentAuthRequired('minimax-code', 'Authentication required')).toBe(true);
     expect(isHeterogeneousAgentAuthRequired('kimi-code', 'No model configured')).toBe(true);
     expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'kimi-code' })).toMatchObject({
       agentType: 'kimi-code',
@@ -149,6 +157,7 @@ describe('heterogeneous agent config', () => {
       'grok-build': 'Grok Build',
       'hermes': 'Hermes',
       'kimi-code': 'Kimi Code',
+      'minimax-code': 'MiniMax Code',
       'openclaw': 'OpenClaw',
       'opencode': 'OpenCode',
       'pi': 'Pi',

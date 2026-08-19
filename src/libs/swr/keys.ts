@@ -1204,8 +1204,9 @@ export const providerKeys = {
   clientConfig: def('provider:clientConfig', (id: string) => ['provider:clientConfig', id]),
 };
 export const recommendationsKeys = {
-  heteroDetections: def('recommendations:heteroDetections', () => [
+  heteroDetections: def('recommendations:heteroDetections', (enableMinimaxCode = false) => [
     'recommendations:heteroDetections',
+    enableMinimaxCode,
   ]),
 };
 export const openInAppKeys = {

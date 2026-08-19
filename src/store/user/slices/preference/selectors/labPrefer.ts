@@ -15,6 +15,7 @@ export const labPreferSelectors = {
     s.preference.lab?.enableDesktopSplitView ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
+  enableMinimaxCode: (s: UserState): boolean => s.preference.lab?.enableMinimaxCode ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
   enableInAppBrowser: (s: UserState): boolean => s.preference.lab?.enableInAppBrowser ?? false,
   enableInputMarkdown: (s: UserState): boolean =>

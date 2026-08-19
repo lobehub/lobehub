@@ -551,6 +551,14 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validateHelpKeywords: ['--prompt', '--output-format'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
+  'minimax-code': {
+    // Distinguish MiniMax Code from any other `mcode` binary, and require the
+    // ACP runtime LobeHub actually launches. Node 20/23 fail this probe.
+    validateHelpArgs: ['acp', '--help'],
+    validateHelpKeywords: ['acp'],
+    validateKeywords: ['minimax', 'mcode'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'opencode': {
     // OpenCode prints only a bare version (for example `1.18.3`) for
     // `--version`, without a product-name prefix.
@@ -676,6 +684,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.bun', 'bin', 'kimi'),
         path.join(homedir(), '.npm-global', 'bin', 'kimi'),
         path.join(homedir(), 'Library', 'pnpm', 'kimi'),
+      ];
+    }
+    case 'minimax-code': {
+      if (platform() === 'win32') {
+        const appData = process.env.APPDATA;
+        return appData ? [path.win32.join(appData, 'npm', 'mcode.cmd')] : [];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [
+        path.join(homedir(), '.local', 'bin', 'mcode'),
+        path.join(homedir(), '.bun', 'bin', 'mcode'),
+        path.join(homedir(), '.npm-global', 'bin', 'mcode'),
+        path.join(homedir(), 'Library', 'pnpm', 'mcode'),
       ];
     }
     case 'opencode': {

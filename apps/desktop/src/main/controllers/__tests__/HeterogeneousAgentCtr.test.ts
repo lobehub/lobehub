@@ -119,6 +119,10 @@ const {
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
   grokAcpSessionRunMock,
+  minimaxCodeAcpSessionCloseMock,
+  minimaxCodeAcpSessionConstructMock,
+  minimaxCodeAcpSessionInterruptMock,
+  minimaxCodeAcpSessionRunMock,
   traeAcpSessionCloseMock,
   traeAcpSessionConstructMock,
   traeAcpSessionInterruptMock,
@@ -145,6 +149,10 @@ const {
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
   grokAcpSessionRunMock: vi.fn(),
+  minimaxCodeAcpSessionCloseMock: vi.fn(),
+  minimaxCodeAcpSessionConstructMock: vi.fn(),
+  minimaxCodeAcpSessionInterruptMock: vi.fn(),
+  minimaxCodeAcpSessionRunMock: vi.fn(),
   traeAcpSessionCloseMock: vi.fn(),
   traeAcpSessionConstructMock: vi.fn(),
   traeAcpSessionInterruptMock: vi.fn(),
@@ -352,6 +360,53 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockMinimaxCodeAcpSession {
+    constructor(private readonly options: any) {
+      minimaxCodeAcpSessionConstructMock(options);
+    }
+
+    close() {
+      minimaxCodeAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      minimaxCodeAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (minimaxCodeAcpSessionRunMock.getMockImplementation()) {
+        return minimaxCodeAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'minimax-code-acp',
+      });
+      this.options.onSessionId('mcode_session_1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'minimax-code-acp',
+      });
+    }
+  }
+
   class MockTraeAcpSession {
     constructor(private readonly options: any) {
       traeAcpSessionConstructMock(options);
@@ -408,6 +463,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
+    MinimaxCodeAcpSession: MockMinimaxCodeAcpSession,
     TraeAcpSession: MockTraeAcpSession,
   };
 });
@@ -556,6 +612,10 @@ describe('HeterogeneousAgentCtr', () => {
       });
     });
     loggerInfoMock.mockReset();
+    minimaxCodeAcpSessionCloseMock.mockReset();
+    minimaxCodeAcpSessionConstructMock.mockReset();
+    minimaxCodeAcpSessionInterruptMock.mockReset();
+    minimaxCodeAcpSessionRunMock.mockReset();
     traeAcpSessionCloseMock.mockReset();
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
@@ -2610,6 +2670,93 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (minimax-code)', () => {
+    it('routes MiniMax Code through ACP and persists the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'minimax-code',
+        args: ['--feature=test'],
+        command: 'mcode',
+        resumeSessionId: 'mcode_session_old',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-mcode', prompt: 'inspect this repo', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(minimaxCodeAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--feature=test'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'mcode',
+          cwd: FAKE_DESKTOP_PATH,
+          operationId: 'op-mcode',
+          prompt: [{ text: 'inspect this repo', type: 'text' }],
+          resumeSessionId: 'mcode_session_old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'mcode_session_1',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentRuntimeStatus', {
+        activeTasks: [],
+        lastEventAt: expect.any(Number),
+        operationId: 'op-mcode',
+        sessionId,
+        state: 'running',
+        transport: 'minimax-code-acp',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('classifies authentication diagnostics emitted only on ACP stderr', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      minimaxCodeAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr(
+          'Sign in to MiniMax to use Agent features. Run mcode login, then retry.\n',
+        );
+        throw new Error('MiniMax Code ACP exited unexpectedly (code 1, signal null)');
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'minimax-code',
+        command: 'mcode',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-mcode-auth', prompt: 'work', sessionId }),
+      ).rejects.toThrow('MiniMax Code could not authenticate');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'minimax-code',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command: 'mcode',
+          stderr: expect.stringContaining('Run mcode login'),
+        }),
+        sessionId,
+      });
+    });
+  });
+
   describe('sendPrompt (trae)', () => {
     it('routes TRAE through ACP and persists the native session id', async () => {
       const send = vi.fn();
@@ -3232,6 +3379,29 @@ describe('HeterogeneousAgentCtr', () => {
       if (!match) throw new Error(`no handler registered for "${eventName}"`);
       return match[1];
     };
+
+    it('before-quit closes a running MiniMax Code ACP session', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'minimax-code',
+        command: 'mcode',
+      });
+      const session = (ctr as any).sessions.get(sessionId);
+      session.minimaxCodeAcpSession = { close: minimaxCodeAcpSessionCloseMock };
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit();
+
+      expect(minimaxCodeAcpSessionCloseMock).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      expect((ctr as any).sessions.has(sessionId)).toBe(false);
+    });
 
     it('before-quit closes a running TRAE ACP session', async () => {
       const electron = (await import('electron')) as any;

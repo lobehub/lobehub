@@ -26,6 +26,8 @@
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
   "features.messageTextSelectionActions.desc": "在聊天消息中选中文本时显示快捷操作，可将选中的文本加入下一次对话上下文。",
   "features.messageTextSelectionActions.title": "消息文本选择操作",
+  "features.minimaxCode.desc": "将 MiniMax Code 作为实验性本地编码助理接入。它通过 `mcode acp` 走 ACP stdio，使用 CLI 默认模型，当前会自动批准工具权限。需要 Node.js 22.19+ 或 24–26，并先运行 `mcode login`。",
+  "features.minimaxCode.title": "MiniMax Code 助理",
   "features.oauthApps.desc": "在个人和工作区设置中显示 OAuth 应用管理入口。此功能默认隐藏。",
   "features.oauthApps.title": "OAuth 应用",
   "features.projects.desc": "将长期目标组织到独立工作空间中，并集中管理相关智能体、资料库与任务。",

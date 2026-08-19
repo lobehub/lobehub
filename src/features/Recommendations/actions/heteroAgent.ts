@@ -7,6 +7,7 @@ import {
   Cursor,
   Grok,
   Kimi,
+  Minimax,
   OpenCode,
   Pi,
   Qoder,
@@ -24,6 +25,7 @@ const avatarIcons = {
   'cursor': Cursor.Avatar,
   'grok-build': Grok.Avatar,
   'kimi-code': Kimi.Avatar,
+  'minimax-code': Minimax.Avatar,
   'opencode': OpenCode.Avatar,
   'pi': Pi.Avatar,
   'qoder': Qoder.Avatar,
@@ -53,6 +55,7 @@ export const buildHeteroAgentAction = (
     id: `hetero-agent:${config.type}`,
     isEligible: (ctx) => {
       if (!ctx.isDesktop) return false;
+      if (config.type === 'minimax-code' && !ctx.enableMinimaxCode) return false;
       if (!ctx.heteroDetections[config.type]?.available) return false;
       return !ctx.agents.some((a) => a.heterogeneousType === config.type);
     },

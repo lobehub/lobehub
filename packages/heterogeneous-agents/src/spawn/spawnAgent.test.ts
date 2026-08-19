@@ -177,8 +177,16 @@ const createGrokAcpProc = ({
 };
 
 const createFakeAcpProc = ({
+  includeModelConfig = true,
   promptAutoComplete = true,
-}: { promptAutoComplete?: boolean } = {}) => {
+  sessionId = 'trae-session-1',
+  text = 'TRAE response',
+}: {
+  includeModelConfig?: boolean;
+  promptAutoComplete?: boolean;
+  sessionId?: string;
+  text?: string;
+} = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -211,17 +219,21 @@ const createFakeAcpProc = ({
             send({
               id: message.id,
               result: {
-                configOptions: [
-                  {
-                    category: 'model',
-                    currentValue: 'seed-2.0-code',
-                    id: 'model',
-                    name: 'Model',
-                    options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
-                    type: 'select',
-                  },
-                ],
-                sessionId: 'trae-session-1',
+                ...(includeModelConfig
+                  ? {
+                      configOptions: [
+                        {
+                          category: 'model',
+                          currentValue: 'seed-2.0-code',
+                          id: 'model',
+                          name: 'Model',
+                          options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
+                          type: 'select',
+                        },
+                      ],
+                    }
+                  : {}),
+                sessionId,
               },
             });
             return;
@@ -235,9 +247,9 @@ const createFakeAcpProc = ({
             send({
               method: 'session/update',
               params: {
-                sessionId: 'trae-session-1',
+                sessionId,
                 update: {
-                  content: { text: 'TRAE response', type: 'text' },
+                  content: { text, type: 'text' },
                   sessionUpdate: 'agent_message_chunk',
                 },
               },
@@ -713,6 +725,57 @@ describe('spawnAgent', () => {
         command: resolvedCommand,
         options: { cwd },
       });
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('runs MiniMax Code through ACP behind the standard handle contract', async () => {
+    const fake = createFakeAcpProc({
+      includeModelConfig: false,
+      sessionId: 'mcode-session-1',
+      text: 'MiniMax response',
+    });
+    nextFakeProc = fake.proc;
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, path: 'mcode' });
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'minimax-code',
+        extraArgs: ['--feature=test'],
+        operationId: 'op-mcode',
+        prompt: 'do a thing',
+      });
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledWith(
+        'minimax-code',
+        'mcode',
+        expect.objectContaining({ PATH: process.env.PATH }),
+      );
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', '--feature=test'],
+        command: 'mcode',
+      });
+      expect(fake.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'session/new',
+        'session/prompt',
+      ]);
+      expect(handle.sessionId).toBe('mcode-session-1');
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'stream_chunk' &&
+            event.data?.chunkType === 'text' &&
+            event.data?.content === 'MiniMax response',
+        ),
+      ).toBe(true);
     } finally {
       killSpy.mockRestore();
     }

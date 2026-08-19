@@ -20,6 +20,7 @@ type LabFeatureI18nKey =
   | 'heteroSessionImport'
   | 'imessage'
   | 'inAppBrowser'
+  | 'minimaxCode'
   | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
@@ -137,5 +138,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'inAppBrowser',
     searchKeywords: ['in-app browser', 'inapp browser', 'embedded browser', 'browser tab'],
     stage: 'beta',
+  },
+  {
+    desktopOnly: true,
+    flag: 'enableMinimaxCode',
+    i18nKey: 'minimaxCode',
+    searchKeywords: ['minimax', 'mcode', 'minimax code'],
+    stage: 'alpha',
   },
 ];

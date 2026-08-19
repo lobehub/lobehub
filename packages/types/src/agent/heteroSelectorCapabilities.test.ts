@@ -23,6 +23,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('trae')).toBe(true);
 
     expect(isHeteroSelectorAvailable('kimi-code')).toBe(false);
+    expect(isHeteroSelectorAvailable('minimax-code')).toBe(false);
     expect(isHeteroSelectorAvailable('openclaw')).toBe(false);
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });

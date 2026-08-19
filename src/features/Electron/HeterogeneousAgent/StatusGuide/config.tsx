@@ -8,6 +8,7 @@ import {
   Cursor,
   Grok,
   Kimi,
+  Minimax,
   OpenCode,
   Pi,
   Qoder,
@@ -48,6 +49,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'kimi-code': {
     icon: Kimi,
     translationPrefix: 'kimiCodeInstallGuide',
+  },
+  'minimax-code': {
+    icon: Minimax,
+    translationPrefix: 'minimaxCodeInstallGuide',
   },
   'opencode': {
     icon: OpenCode,
