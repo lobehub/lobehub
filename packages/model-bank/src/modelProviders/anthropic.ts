@@ -14,6 +14,7 @@ const Anthropic: ModelProviderCard = {
     placeholder: 'https://api.anthropic.com',
   },
   settings: {
+    claudeCode: { direct: true, gateway: 'anthropic-messages' },
     proxyUrl: {
       placeholder: 'https://api.anthropic.com',
     },

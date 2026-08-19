@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
+
 import { AiAgentService } from '../index';
 
 const {
@@ -68,8 +70,16 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/libs/trpc/utils/internalJwt', () => ({
+  signClaudeCodeGatewayJwt: vi.fn().mockResolvedValue('gateway-jwt'),
   signOperationJwt: vi.fn().mockResolvedValue('op-jwt'),
   signUserJWT: vi.fn().mockResolvedValue('user-jwt'),
+}));
+
+vi.mock('@/server/services/claudeCodeGateway/resolver', () => ({
+  resolveClaudeCodeGatewayProvider: vi.fn().mockResolvedValue({
+    apiKey: 'provider-key',
+    baseURL: 'https://api.anthropic.com/v1/messages',
+  }),
 }));
 
 vi.mock('@/database/models/message', () => ({
@@ -404,7 +414,14 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
-  it('should reject Claude Code API mode before sandbox or device dispatch', async () => {
+  it('authorizes Claude Code API mode through the gateway before sandbox dispatch', async () => {
+    const recordStartSpy = vi
+      .spyOn(AgentOperationModel.prototype, 'recordStart')
+      .mockResolvedValue(undefined as never);
+    const updateMetadataSpy = vi
+      .spyOn(AgentOperationModel.prototype, 'updateMetadata')
+      .mockResolvedValue(true);
+
     heteroAgentConfig.agencyConfig = {
       executionTarget: 'sandbox',
       heterogeneousProvider: {
@@ -414,20 +431,28 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       },
     } as any;
 
-    const result = await service.execAgent({
-      agentId: 'agent-1',
-      prompt: 'This must not receive provider credentials remotely',
-    });
+    try {
+      const result = await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Run Claude Code through the server gateway',
+      });
 
-    expect(result).toEqual(
-      expect.objectContaining({
-        error: expect.stringContaining('Desktop local execution'),
-        status: 'error',
-        success: false,
-      }),
-    );
-    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
-    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+      expect(result).toEqual(expect.objectContaining({ success: true }));
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          claudeCodeGatewayEnv: expect.objectContaining({
+            ANTHROPIC_AUTH_TOKEN: 'gateway-jwt',
+            ANTHROPIC_BASE_URL: expect.stringContaining('/api/claude-code'),
+            ANTHROPIC_MODEL: 'claude-test',
+            CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
+          }),
+        }),
+      );
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    } finally {
+      recordStartSpy.mockRestore();
+      updateMetadataSpy.mockRestore();
+    }
   });
 
   it('should pass resolved Codex model and reasoning effort args to sandbox dispatch', async () => {
@@ -1177,6 +1202,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('cancels a platform task through the principal persisted at dispatch', async () => {
+      (service as any).agentOperationModel.interrupt = vi.fn().mockResolvedValue(true);
       topicMock.findById.mockResolvedValue({
         metadata: {
           runningOperation: {
@@ -1206,6 +1232,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       (service as any).agentOperationModel.findById = vi
         .fn()
         .mockResolvedValue({ topicId: 'topic-from-operation' });
+      (service as any).agentOperationModel.interrupt = vi.fn().mockResolvedValue(true);
       topicMock.findById.mockResolvedValue({
         metadata: {
           runningOperation: {
@@ -1229,6 +1256,10 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('does not cancel a newer operation currently running on the same topic', async () => {
+      (service as any).agentOperationModel.findById = vi
+        .fn()
+        .mockResolvedValue({ topicId: 'topic-1' });
+      (service as any).agentOperationModel.interrupt = vi.fn().mockResolvedValue(true);
       topicMock.findById.mockResolvedValue({
         metadata: {
           runningOperation: {
@@ -1244,6 +1275,52 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       await service.interruptTask({ operationId: 'operation-1', topicId: 'topic-1' });
 
       expect(mockExecuteToolCall).not.toHaveBeenCalled();
+    });
+
+    it('uses the durable interrupt as the kill switch for a Claude Code gateway run', async () => {
+      (service as any).agentOperationModel.findById = vi.fn().mockResolvedValue({
+        metadata: {
+          claudeCodeGateway: {
+            allowedModels: ['claude-test'],
+            providerId: 'anthropic',
+            target: 'sandbox',
+          },
+        },
+        topicId: 'topic-1',
+      });
+      (service as any).agentOperationModel.interrupt = vi.fn().mockResolvedValue(true);
+      (service as any).agentRuntimeService.interruptOperation = vi.fn().mockResolvedValue(false);
+      topicMock.findById.mockResolvedValue({
+        metadata: { runningOperation: { operationId: 'operation-1' } },
+      });
+
+      const result = await service.interruptTask({
+        operationId: 'operation-1',
+        topicId: 'topic-1',
+      });
+
+      expect(result.success).toBe(true);
+      expect((service as any).agentOperationModel.interrupt).toHaveBeenCalledWith(
+        'operation-1',
+        'user_cancelled',
+      );
+    });
+
+    it('requires runtime acknowledgement before unlocking an in-process run', async () => {
+      (service as any).agentOperationModel.findById = vi.fn().mockResolvedValue({
+        topicId: 'topic-1',
+      });
+      (service as any).agentOperationModel.interrupt = vi.fn().mockResolvedValue(true);
+      (service as any).agentRuntimeService.interruptOperation = vi.fn().mockResolvedValue(false);
+      topicMock.findById.mockResolvedValue({ metadata: {} });
+
+      const result = await service.interruptTask({
+        operationId: 'operation-1',
+        topicId: 'topic-1',
+      });
+
+      expect(result.success).toBe(false);
+      expect((service as any).agentOperationModel.interrupt).not.toHaveBeenCalled();
     });
   });
 });

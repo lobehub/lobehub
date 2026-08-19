@@ -27,6 +27,7 @@ export interface SandboxProviderCapabilities {
   files: boolean;
   languages: string[];
   persistentSession: boolean;
+  secretEnv: boolean;
   shell: boolean;
   skillScripts: boolean;
 }

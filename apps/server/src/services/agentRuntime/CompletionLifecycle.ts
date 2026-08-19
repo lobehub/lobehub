@@ -143,10 +143,14 @@ export class CompletionLifecycle {
    * Fire-and-forget: a DB outage here must never block the runtime startup
    * path — `dispatchHooks` will still finalize the row if one was written.
    */
-  async recordStart(params: RecordOperationStartParams): Promise<void> {
+  async recordStart(
+    params: RecordOperationStartParams,
+    options?: { required?: boolean },
+  ): Promise<void> {
     try {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
+      if (options?.required) throw error;
       log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }
 

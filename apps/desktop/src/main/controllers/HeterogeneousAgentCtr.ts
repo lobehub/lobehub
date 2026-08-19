@@ -115,4 +115,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       implementation.spawnLhHeteroExec(...args),
     );
   }
+
+  cancelGatewayAgentRun(...args: Parameters<Implementation['cancelGatewayAgentRun']>) {
+    return this.getImplementation().then((implementation) =>
+      implementation.cancelGatewayAgentRun(...args),
+    );
+  }
 }

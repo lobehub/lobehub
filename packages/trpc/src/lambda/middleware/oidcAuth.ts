@@ -10,10 +10,13 @@ export const oidcAuth = trpc.middleware(async (opts) => {
     // hetero-operation tokens are long-lived (4h) and scoped exclusively to
     // heteroIngest / heteroFinish.  Reject them here so a leaked sandbox JWT
     // cannot be replayed against any other authed route.
-    if (ctx.oidcAuth.purpose === 'hetero-operation') {
+    if (
+      ctx.oidcAuth.purpose === 'hetero-operation' ||
+      ctx.oidcAuth.purpose === 'claude-code-gateway'
+    ) {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
-        message: 'hetero-operation tokens are not accepted on this endpoint',
+        message: 'operation-scoped tokens are not accepted on this endpoint',
       });
     }
 

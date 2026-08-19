@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnHeteroSandbox } from '../sandboxRunner';
 
-const { mockCallTool } = vi.hoisted(() => ({
+const { mockCallTool, sandboxState } = vi.hoisted(() => ({
   mockCallTool: vi.fn().mockResolvedValue({ success: true }),
+  sandboxState: { secretEnv: false },
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -12,6 +13,11 @@ vi.mock('@/envs/app', () => ({
 
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: vi.fn(() => ({
+    capabilities: {
+      get secretEnv() {
+        return sandboxState.secretEnv;
+      },
+    },
     callTool: mockCallTool,
   })),
 }));
@@ -20,6 +26,7 @@ describe('spawnHeteroSandbox', () => {
   beforeEach(() => {
     mockCallTool.mockClear();
     mockCallTool.mockResolvedValue({ success: true });
+    sandboxState.secretEnv = false;
   });
 
   it('forwards resolved selector args to lh hetero exec', async () => {
@@ -77,5 +84,31 @@ describe('spawnHeteroSandbox', () => {
 
     const command = mockCallTool.mock.calls[0][1].command;
     expect(command).toContain("LOBEHUB_WORKSPACE_ID='ws-lobehub'");
+  });
+
+  it('injects gateway credentials through secretEnv without serializing them in command', async () => {
+    sandboxState.secretEnv = true;
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      claudeCodeGatewayEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'gateway-secret',
+        ANTHROPIC_BASE_URL: 'https://app.example.com/api/claude-code',
+      },
+      jwt: 'control-secret',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const params = mockCallTool.mock.calls[0][1];
+    expect(params.command).not.toContain('gateway-secret');
+    expect(params.command).not.toContain('control-secret');
+    expect(params.secretEnv).toMatchObject({
+      ANTHROPIC_AUTH_TOKEN: 'gateway-secret',
+      LOBEHUB_JWT: 'control-secret',
+    });
   });
 });

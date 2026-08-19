@@ -120,6 +120,13 @@ export const AiProviderSDKEnum = {
 
 export type AiProviderSDKType = (typeof AiProviderSDKEnum)[keyof typeof AiProviderSDKEnum];
 
+export interface ClaudeCodeProviderCapability {
+  /** Provider can be used by a trusted local Claude Code process. */
+  direct?: boolean;
+  /** Anthropic wire protocol exposed through the LobeHub Claude Code Gateway. */
+  gateway?: 'anthropic-messages';
+}
+
 const AiProviderSdkTypes = [
   'anthropic',
   'comfyui',
@@ -143,6 +150,13 @@ export interface AiProviderSettings {
    * @default 'apiKey'
    */
   authType?: AiProviderAuthType;
+  /**
+   * Explicit Claude Code capabilities.
+   * `sdkType === 'anthropic'` still enables Desktop-local direct mode for
+   * custom providers (no settings UI for this flag). Remote gateway requires
+   * `gateway: 'anthropic-messages'`.
+   */
+  claudeCode?: ClaudeCodeProviderCapability;
   /**
    * whether provider show browser request option by default
    *
@@ -229,6 +243,12 @@ const OAuthDeviceFlowConfigSchema = z.object({
 
 const AiProviderSettingsSchema = z.object({
   authType: z.enum(AiProviderAuthTypes).optional(),
+  claudeCode: z
+    .object({
+      direct: z.boolean().optional(),
+      gateway: z.literal('anthropic-messages').optional(),
+    })
+    .optional(),
   defaultShowBrowserRequest: z.boolean().optional(),
   disableBrowserRequest: z.boolean().optional(),
   maxToolCount: z.number().optional(),

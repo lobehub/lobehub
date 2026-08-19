@@ -19,6 +19,7 @@ app.get('/health', (c) =>
 
 app.all('/api/agent', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/agent/*', (c) => fetchWith(c, () => import('./agent')));
+app.all('/api/claude-code/*', (c) => fetchWith(c, () => import('./claudeCodeGateway')));
 app.all('/api/workflows', (c) => fetchWith(c, () => import('./workflows')));
 app.all('/api/workflows/*', (c) => fetchWith(c, () => import('./workflows')));
 

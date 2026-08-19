@@ -226,6 +226,17 @@ export interface AgentRunRequestMessage {
   args?: string[];
   /** Seed assistant message that receives terminal state from the CLI run. */
   assistantMessageId?: string;
+  /** Run-scoped Claude Code data-plane credentials. Never contains a provider API key. */
+  claudeCodeGateway?: {
+    baseURL: string;
+    modelRoles: {
+      background: string;
+      primary: string;
+      smallFast: string;
+      subagent: string;
+    };
+    token: string;
+  };
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch

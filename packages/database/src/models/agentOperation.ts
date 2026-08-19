@@ -7,6 +7,7 @@ import type {
   AgentOperationAppContext,
   AgentOperationError,
   AgentOperationInterruption,
+  AgentOperationMetadata,
   NewAgentOperation,
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
@@ -30,7 +31,7 @@ export interface RecordOperationStartParams {
    * Agent Signal run marker so server-side tools can read it back from the row
    * (`metadata.agentSignal`) at tool-call time.
    */
-  metadata?: Record<string, unknown>;
+  metadata?: AgentOperationMetadata;
   model?: string;
   modelRuntimeConfig?: Record<string, unknown>;
   operationId: string;
@@ -163,7 +164,7 @@ export class AgentOperationModel {
   async recordCompletion(
     operationId: string,
     params: RecordOperationCompletionParams,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updates: Partial<NewAgentOperation> = {
       completionReason: params.completionReason,
       status: params.status,
@@ -190,10 +191,19 @@ export class AgentOperationModel {
     if (params.interruption !== undefined) updates.interruption = params.interruption;
     if (params.traceS3Key !== undefined) updates.traceS3Key = params.traceS3Key;
 
-    await this.db
+    const sourceStatuses = ['running', 'waiting_for_human', 'waiting_for_async_tool'] as const;
+    const rows = await this.db
       .update(agentOperations)
       .set(updates)
-      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          inArray(agentOperations.status, [...sourceStatuses]),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length > 0;
   }
 
   /**
@@ -247,6 +257,48 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  async updateMetadata(operationId: string, metadata: AgentOperationMetadata): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ metadata, updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length > 0;
+  }
+
+  /** Atomically revoke a running operation. Terminal completion can no longer overwrite it. */
+  async interrupt(operationId: string, reason: string): Promise<boolean> {
+    const interruptedAt = new Date();
+    const rows = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: interruptedAt,
+        completionReason: 'interrupted',
+        interruption: { canResume: false, interruptedAt: interruptedAt.toISOString(), reason },
+        status: 'interrupted',
+        updatedAt: interruptedAt,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          inArray(agentOperations.status, [
+            'running',
+            'waiting_for_human',
+            'waiting_for_async_tool',
+          ]),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length > 0;
   }
 
   /**

@@ -51,6 +51,19 @@ export interface AgentOperationAppContext {
   sourceMessageId?: string;
 }
 
+export interface ClaudeCodeGatewayOperationSnapshot {
+  allowedModels: string[];
+  deviceId?: string;
+  providerId: string;
+  target: 'device' | 'sandbox';
+}
+
+export interface AgentOperationMetadata {
+  [key: string]: unknown;
+  agentSignal?: unknown;
+  claudeCodeGateway?: ClaudeCodeGatewayOperationSnapshot;
+}
+
 export const agentOperations = pgTable(
   'agent_operations',
   {
@@ -143,7 +156,7 @@ export const agentOperations = pgTable(
     /** S3 object key for the full ExecutionSnapshot JSON. */
     traceS3Key: text('trace_s3_key'),
 
-    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+    metadata: jsonb('metadata').$type<AgentOperationMetadata>().default({}),
 
     ...timestamps,
   },

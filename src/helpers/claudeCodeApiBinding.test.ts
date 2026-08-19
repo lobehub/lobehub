@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isClaudeCodeDirectCompatible,
   resolveClaudeCodeApiBindingGuard,
   validateClaudeCodeApiBinding,
 } from './claudeCodeApiBinding';
@@ -9,6 +10,23 @@ const enabledModels = [
   { id: 'claude-fast', providerId: 'anthropic', type: 'chat' },
   { id: 'claude-primary', providerId: 'anthropic', type: 'chat' },
 ];
+
+describe('isClaudeCodeDirectCompatible', () => {
+  it('accepts the explicit direct flag and custom Anthropic-compatible providers', () => {
+    expect(isClaudeCodeDirectCompatible({ claudeCode: { direct: true } })).toBe(true);
+    expect(isClaudeCodeDirectCompatible({ sdkType: 'anthropic' })).toBe(true);
+    expect(
+      isClaudeCodeDirectCompatible({ claudeCode: { direct: true }, sdkType: 'anthropic' }),
+    ).toBe(true);
+  });
+
+  it('rejects providers that are neither flagged nor Anthropic-compatible', () => {
+    expect(isClaudeCodeDirectCompatible(undefined)).toBe(false);
+    expect(isClaudeCodeDirectCompatible({})).toBe(false);
+    expect(isClaudeCodeDirectCompatible({ sdkType: 'openai' })).toBe(false);
+    expect(isClaudeCodeDirectCompatible({ claudeCode: { direct: false } })).toBe(false);
+  });
+});
 
 describe('validateClaudeCodeApiBinding', () => {
   it('accepts an enabled Anthropic provider and both bound models', () => {

@@ -1,4 +1,5 @@
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
@@ -203,6 +204,7 @@ export class GatewayHttpClient {
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeCodeGateway?: AgentRunRequestMessage['claudeCodeGateway'];
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */

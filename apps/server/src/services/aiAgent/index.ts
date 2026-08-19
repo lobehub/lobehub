@@ -46,12 +46,12 @@ import {
   type ToolSource,
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type { ClaudeCodeLaunchPlan, HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
-  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
   getHeterogeneousAgentConfig,
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
+  resolveClaudeCodeLaunchPlan,
 } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
@@ -115,6 +115,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { appEnv } from '@/envs/app';
 import { toolsEnv } from '@/envs/tools';
 import {
   type ExecutionPlan,
@@ -128,7 +129,11 @@ import {
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
-import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import {
+  signClaudeCodeGatewayJwt,
+  signOperationJwt,
+  signUserJWT,
+} from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
@@ -163,6 +168,7 @@ import {
 } from '@/server/services/agentSignal/featureGate';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
 import { platformRegistry } from '@/server/services/bot/platforms';
+import { resolveClaudeCodeGatewayProvider } from '@/server/services/claudeCodeGateway/resolver';
 import { ComposioService } from '@/server/services/composio';
 import {
   buildLastSyncedAtMap,
@@ -2257,6 +2263,13 @@ export class AiAgentService {
 
     if (isHeteroAgent) {
       const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
+      const configuredHeterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+      const isClaudeCodeApiMode =
+        configuredHeterogeneousProvider?.type === 'claude-code' &&
+        configuredHeterogeneousProvider.authMode === 'api';
+      const claudeCodeApiConfig = isClaudeCodeApiMode
+        ? configuredHeterogeneousProvider.apiConfig
+        : undefined;
       // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
       // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
       const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
@@ -2277,28 +2290,32 @@ export class AiAgentService {
         // delivery-checker gate against that plan. Calling the bare operation model
         // here is exactly what silently degraded verify to off for every hetero
         // task run (the plan was never created at start).
-        await new CompletionLifecycle(this.db, this.userId, this.workspaceId).recordStart({
-          agentId: persistAgentId,
-          chatGroupId: appContext?.groupId ?? null,
-          maxSteps,
-          // Seed the heterogeneous provider (claude-code / codex / …), NOT the
-          // agent's configured chat provider — the run executes on the CLI, so
-          // `provider` (e.g. `lobehub`) and `model` (e.g. `deepseek-v4-pro`) are
-          // irrelevant. `model` is intentionally left unset: the real executed
-          // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
-          // assistant-message seeding above (provider: heteroType, model: undefined).
-          operationId,
-          // Top-level dispatch carries no parent; pass it through so the verify
-          // plan gate (taskId && !parentOperationId) reads the real lineage and a
-          // repair/verifier sub-run never re-instantiates its own plan here.
-          parentOperationId,
-          provider: heteroType,
-          taskId: operationTaskId ?? null,
-          threadId: appContext?.threadId ?? null,
-          topicId,
-          trigger,
-        });
+        await new CompletionLifecycle(this.db, this.userId, this.workspaceId).recordStart(
+          {
+            agentId: persistAgentId,
+            chatGroupId: appContext?.groupId ?? null,
+            maxSteps,
+            // Seed the heterogeneous provider (claude-code / codex / …), NOT the
+            // agent's configured chat provider — the run executes on the CLI, so
+            // `provider` (e.g. `lobehub`) and `model` (e.g. `deepseek-v4-pro`) are
+            // irrelevant. `model` is intentionally left unset: the real executed
+            // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
+            // assistant-message seeding above (provider: heteroType, model: undefined).
+            operationId,
+            // Top-level dispatch carries no parent; pass it through so the verify
+            // plan gate (taskId && !parentOperationId) reads the real lineage and a
+            // repair/verifier sub-run never re-instantiates its own plan here.
+            parentOperationId,
+            provider: heteroType,
+            taskId: operationTaskId ?? null,
+            threadId: appContext?.threadId ?? null,
+            topicId,
+            trigger,
+          },
+          { required: isClaudeCodeApiMode },
+        );
       } catch (err) {
+        if (isClaudeCodeApiMode) throw err;
         log('execAgent: hetero recordStart failed (non-fatal): %O', err);
       }
 
@@ -2399,7 +2416,7 @@ export class AiAgentService {
         runAttachments.imageList && runAttachments.imageList.length > 0
           ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
           : undefined;
-      const heteroExecArgs = isLocalHeterogeneousType(heteroType)
+      let heteroExecArgs = isLocalHeterogeneousType(heteroType)
         ? buildHeteroExecArgs(
             agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
               ? agentConfig.agencyConfig.heterogeneousProvider
@@ -2486,34 +2503,6 @@ export class AiAgentService {
           threadId: appContext?.threadId ?? undefined,
         },
       });
-
-      if (
-        agentConfig.agencyConfig?.heterogeneousProvider?.type === 'claude-code' &&
-        agentConfig.agencyConfig.heterogeneousProvider.authMode === 'api'
-      ) {
-        await this.finalizeHeteroDispatchError({
-          agentId: resolvedAgentId,
-          assistantMessageId: assistantMessageRecord.id,
-          detail: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-          message: 'Claude Code API mode does not support this execution target',
-          operationId,
-          topicId,
-        });
-        return {
-          agentId: resolvedAgentId,
-          assistantMessageId: assistantMessageRecord.id,
-          autoStarted: false,
-          createdAt: new Date().toISOString(),
-          error: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-          message: 'Claude Code API mode requires Desktop local execution',
-          operationId,
-          status: 'error',
-          success: false,
-          timestamp: new Date().toISOString(),
-          topicId,
-          userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
-        };
-      }
 
       // Notify-based platform agents (openclaw / hermes) communicate back via
       // agentNotify.notify. A local run uses the requesting desktop's device ID;
@@ -2701,6 +2690,102 @@ export class AiAgentService {
           trigger: requestTriggerMetadata?.trigger,
         });
 
+        let claudeCodeGateway:
+          | {
+              baseURL: string;
+              modelRoles: ClaudeCodeLaunchPlan['modelRoles'];
+              token: string;
+            }
+          | undefined;
+        if (isClaudeCodeApiMode) {
+          try {
+            if (!claudeCodeApiConfig) throw new Error('Claude Code API binding is incomplete');
+            if (heteroPlan.kind !== 'device' && heteroPlan.kind !== 'sandbox') {
+              throw new Error('Claude Code API mode requires a gateway-capable execution target');
+            }
+            await resolveClaudeCodeGatewayProvider({
+              db: this.db,
+              model: claudeCodeApiConfig.model,
+              providerId: claudeCodeApiConfig.providerId,
+              userId: this.userId,
+              workspaceId: this.workspaceId,
+            });
+            const launch = resolveClaudeCodeLaunchPlan({
+              apiConfig: claudeCodeApiConfig,
+              args: heteroExecArgs,
+              capability: { gateway: 'anthropic-messages' },
+              providerEnabled: true,
+              providerHasApiKey: true,
+              providerReachableFromGateway: true,
+              target: heteroPlan.kind,
+            });
+            if (!launch.plan) throw new Error(launch.error ?? 'Invalid Claude Code launch plan');
+            const allowedModels = Array.from(new Set(Object.values(launch.plan.modelRoles)));
+            const deviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
+            if (deviceId) {
+              const deviceWorkspaceId = await this.resolveDeviceWorkspaceId(deviceId);
+              const supported = await deviceGateway.supportsClaudeCodeGateway({
+                deviceId,
+                userId: this.userId,
+                workspaceId: deviceWorkspaceId,
+              });
+              if (!supported) {
+                throw new Error('The selected device must be upgraded for Claude Code API mode');
+              }
+            }
+            const authorized = await this.agentOperationModel.updateMetadata(operationId, {
+              claudeCodeGateway: {
+                allowedModels,
+                deviceId,
+                providerId: claudeCodeApiConfig.providerId,
+                target: heteroPlan.kind,
+              },
+            });
+            if (!authorized)
+              throw new Error('Failed to persist Claude Code operation authorization');
+            const token = await signClaudeCodeGatewayJwt({
+              allowedModels,
+              deviceId,
+              jti: nanoid(),
+              operationId,
+              providerId: claudeCodeApiConfig.providerId,
+              userId: this.userId,
+              workspaceId: this.workspaceId,
+            });
+            const serverUrl = process.env.LOBEHUB_HETERO_SERVER_URL ?? appEnv.APP_URL;
+            claudeCodeGateway = {
+              baseURL: `${serverUrl.replace(/\/$/, '')}/api/claude-code`,
+              modelRoles: launch.plan.modelRoles,
+              token,
+            };
+            heteroExecArgs = launch.plan.args;
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            await this.finalizeHeteroDispatchError({
+              agentId: resolvedAgentId,
+              assistantMessageId: assistantMessageRecord.id,
+              detail,
+              message: 'Claude Code Gateway authorization failed',
+              operationId,
+              topicId,
+            });
+            return {
+              agentId: resolvedAgentId,
+              assistantMessageId: assistantMessageRecord.id,
+              autoStarted: false,
+              createdAt: new Date().toISOString(),
+              error: detail,
+              message: 'Claude Code Gateway authorization failed',
+              operationId,
+              status: 'error',
+              success: false,
+              timestamp: new Date().toISOString(),
+              topicId,
+              userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
+            };
+          }
+        }
+
         if (heteroPlan.kind !== 'sandbox') {
           const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
           if (!dispatchDeviceId) {
@@ -2778,9 +2863,24 @@ export class AiAgentService {
               })
             : undefined;
 
+          await this.topicModel.updateMetadata(topicId, {
+            runningOperation: {
+              assistantMessageId: assistantMessageRecord.id,
+              deviceId: dispatchDeviceId,
+              deviceUserId: this.userId,
+              deviceWorkspaceId: dispatchWorkspaceId,
+              heteroType,
+              hooks: serializedHooks,
+              operationId,
+              scope: appContext?.scope ?? undefined,
+              threadId: appContext?.threadId ?? undefined,
+            },
+          });
+
           const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
             args: heteroExecArgs,
+            claudeCodeGateway,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
             resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
@@ -2868,6 +2968,20 @@ export class AiAgentService {
             ...heteroParams,
             agentType: heteroType as 'claude-code' | 'codex',
             args: heteroExecArgs,
+            claudeCodeGatewayEnv: claudeCodeGateway
+              ? {
+                  ANTHROPIC_AUTH_TOKEN: claudeCodeGateway.token,
+                  ANTHROPIC_BASE_URL: claudeCodeGateway.baseURL,
+                  ANTHROPIC_MODEL: claudeCodeGateway.modelRoles.primary,
+                  ANTHROPIC_SMALL_FAST_MODEL: claudeCodeGateway.modelRoles.smallFast,
+                  CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
+                  CLAUDE_CODE_SUBAGENT_MODEL: claudeCodeGateway.modelRoles.subagent,
+                  CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
+                  CLAUDE_CODE_USE_BEDROCK: '0',
+                  CLAUDE_CODE_USE_MANTLE: '0',
+                  CLAUDE_CODE_USE_VERTEX: '0',
+                }
+              : undefined,
             jwt: sandboxJwt,
             marketService,
             workspaceId: this.workspaceId,
@@ -5721,32 +5835,35 @@ export class AiAgentService {
     // bot/messenger stop). Recover it from the owner-scoped operation row so
     // device cancellation is symmetric across every caller.
     let resolvedTopicId = topicId;
+    let operation = resolvedTopicId
+      ? undefined
+      : ((await this.agentOperationModel.findById(resolvedOperationId)) ?? undefined);
     if (!resolvedTopicId) {
-      const operation = await this.agentOperationModel.findById(resolvedOperationId);
       resolvedTopicId = operation?.topicId ?? undefined;
     }
 
-    // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
-    // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
-    // This runs regardless of whether interruptOperation succeeds — the remote process
-    // is independent of the local operation registry.
+    // 2. Cancel remote hetero process (openclaw / hermes / device Claude Code)
+    // if applicable. Check topic.metadata.runningOperation for device +
+    // heteroType info seeded by execAgent. This runs regardless of whether
+    // interruptOperation succeeds — the remote process is independent of the
+    // local operation registry.
+    let runningOp:
+      | {
+          deviceId?: string;
+          deviceUserId?: string;
+          deviceWorkspaceId?: string;
+          heteroType?: string;
+          operationId?: string;
+        }
+      | undefined;
     if (resolvedTopicId) {
       const topic = await this.topicModel.findById(resolvedTopicId);
-      const runningOp = (topic?.metadata as any)?.runningOperation as
-        | {
-            deviceId?: string;
-            deviceUserId?: string;
-            deviceWorkspaceId?: string;
-            heteroType?: string;
-            operationId?: string;
-          }
-        | undefined;
+      runningOp = (topic?.metadata as any)?.runningOperation as typeof runningOp;
 
       if (
         runningOp?.deviceId &&
         runningOp.heteroType &&
-        runningOp.operationId === resolvedOperationId &&
-        isRemoteHeterogeneousType(runningOp.heteroType)
+        runningOp.operationId === resolvedOperationId
       ) {
         const taskId = runningOp.operationId ?? resolvedOperationId;
         log(
@@ -5757,27 +5874,59 @@ export class AiAgentService {
         );
         const cancelWorkspaceId =
           runningOp.deviceWorkspaceId ?? (await this.resolveDeviceWorkspaceId(runningOp.deviceId));
-        await deviceGateway
-          .executeToolCall(
-            {
-              deviceId: runningOp.deviceId,
-              userId: runningOp.deviceUserId ?? this.userId,
-              workspaceId: cancelWorkspaceId,
-            },
-            {
-              apiName: 'cancelHeteroTask',
-              arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
-              identifier: 'cancelHeteroTask',
-            },
-            5_000,
-          )
-          .catch((err) => log('interruptTask: cancelHeteroTask dispatch failed: %O', err));
+        if (isRemoteHeterogeneousType(runningOp.heteroType)) {
+          await deviceGateway
+            .executeToolCall(
+              {
+                deviceId: runningOp.deviceId,
+                userId: runningOp.deviceUserId ?? this.userId,
+                workspaceId: cancelWorkspaceId,
+              },
+              {
+                apiName: 'cancelHeteroTask',
+                arguments: JSON.stringify({ signal: 'SIGINT', taskId }),
+                identifier: 'cancelHeteroTask',
+              },
+              5_000,
+            )
+            .catch((err) => log('interruptTask: cancelHeteroTask dispatch failed: %O', err));
+        } else if (runningOp.heteroType === 'claude-code') {
+          await deviceGateway.cancelAgentRun({
+            deviceId: runningOp.deviceId,
+            operationId: taskId,
+            userId: runningOp.deviceUserId ?? this.userId,
+            workspaceId: cancelWorkspaceId,
+          });
+        }
       }
     }
 
-    // 3. Interrupt the runtime operation first. Only mark the thread cancelled
-    // after the runtime acknowledges the interrupt to avoid unlocking a live task.
-    const interrupted = await this.agentRuntimeService.interruptOperation(resolvedOperationId);
+    // 3. Interrupt the run.
+    //
+    // Out-of-process runs (Claude Code gateway SSE, sandbox/device hetero)
+    // have no live loop in this process. Persist the durable interrupt so
+    // remote runtimes can observe cancellation — the gateway polls
+    // `status !== 'running'`, and heteroFinish refuses to complete an
+    // interrupted row. That durable write is the kill switch, so it counts
+    // as success even when interruptOperation finds no in-process runtime.
+    //
+    // In-process runtime still has to acknowledge before we mark the thread
+    // cancelled. Using the durable write as success here would unlock a live
+    // SubAgent task whose loop has not actually stopped.
+    const runningOpMatches =
+      Boolean(runningOp?.heteroType) && runningOp?.operationId === resolvedOperationId;
+    if (!operation && !runningOpMatches) {
+      operation = (await this.agentOperationModel.findById(resolvedOperationId)) ?? undefined;
+    }
+    const isOutOfProcessRun = Boolean(operation?.metadata?.claudeCodeGateway) || runningOpMatches;
+    const durableInterrupted = isOutOfProcessRun
+      ? await this.agentOperationModel.interrupt(resolvedOperationId, 'user_cancelled')
+      : false;
+    const runtimeInterrupted =
+      await this.agentRuntimeService.interruptOperation(resolvedOperationId);
+    const interrupted = isOutOfProcessRun
+      ? durableInterrupted || runtimeInterrupted
+      : runtimeInterrupted;
     log(
       'interruptTask: interruptOperation=%s for operationId=%s',
       interrupted,

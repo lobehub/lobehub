@@ -271,6 +271,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const accessToken = await this.remoteServerConfigCtr.getAccessToken();
       const jwt = accessToken || request.jwt;
 
+      if (request.claudeCodeGateway && request.agentType !== 'claude-code') {
+        return {
+          reason: 'Claude Code Gateway credentials require claude-code',
+          status: 'rejected',
+        };
+      }
+
       // The embedded CLI handles spawn -> adapt -> BatchIngester ->
       // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
       // the process has actually spawned (or emitted an early error) before
@@ -279,6 +286,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         agentType: request.agentType,
         assistantMessageId: request.assistantMessageId,
         args: request.args,
+        claudeCodeGateway: request.claudeCodeGateway,
         cwd: request.cwd,
         imageList: request.imageList,
         jwt,
@@ -347,6 +355,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           logger.error(`Failed to approve project preview root ${root}:`, error);
         }
       },
+      cancelAgentRun: (params) => this.heterogeneousAgentCtr.cancelGatewayAgentRun(params),
       // Workspace share (server-driven enroll/unenroll RPCs): the service owns
       // the gateway connections, so both handlers route straight to it.
       enrollWorkspace: (params) => this.service.enrollWorkspace(params),

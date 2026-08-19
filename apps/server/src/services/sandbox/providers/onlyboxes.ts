@@ -51,6 +51,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
     files: true,
     languages: ['python', 'javascript', 'typescript'],
     persistentSession: true,
+    secretEnv: true,
     shell: true,
     skillScripts: true,
   } as const satisfies SandboxProviderCapabilities;
@@ -334,6 +335,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
         {
           command,
           create_if_missing: true,
+          ...(isRecord(params.secretEnv) ? { env: params.secretEnv } : {}),
           lease_ttl_sec: this.leaseTTLSec,
           session_id: this.sessionId,
         },

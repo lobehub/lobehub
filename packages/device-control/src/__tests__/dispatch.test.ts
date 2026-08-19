@@ -31,6 +31,7 @@ afterAll(async () => {
 
 const makeDeps = (): DeviceControlDeps => ({
   approveProjectRoot: vi.fn(async () => {}),
+  cancelAgentRun: vi.fn(async () => ({ success: true })),
   getLocalFilePreview: vi.fn(async () => ({ success: true })),
   getProjectFileIndex: vi.fn(async () => ({
     entries: [],
@@ -47,6 +48,20 @@ const makeDeps = (): DeviceControlDeps => ({
 });
 
 describe('executeDeviceRpc', () => {
+  it('advertises the Claude Code Gateway protocol version', async () => {
+    await expect(executeDeviceRpc('getDeviceCapabilities', {}, makeDeps())).resolves.toEqual({
+      claudeCodeGateway: 'v1',
+    });
+  });
+
+  it('delegates gateway agent cancellation to the host', async () => {
+    const deps = makeDeps();
+    await expect(
+      executeDeviceRpc('cancelAgentRun', { operationId: 'op-1' }, deps),
+    ).resolves.toEqual({ success: true });
+    expect(deps.cancelAgentRun).toHaveBeenCalledWith({ operationId: 'op-1' });
+  });
+
   it('throws on an unknown method', async () => {
     await expect(executeDeviceRpc('nope', {}, makeDeps())).rejects.toThrow(
       'Unknown device RPC method: nope',
