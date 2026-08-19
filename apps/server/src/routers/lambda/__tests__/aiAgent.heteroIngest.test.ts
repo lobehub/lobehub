@@ -3,6 +3,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { topics, workspaceMembers, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { LOCAL_HETEROGENEOUS_AGENT_TYPES } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -109,8 +110,8 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
       });
     });
 
-    it.each(['opencode', 'trae'] as const)(
-      'accepts %s event batches from a device CLI',
+    it.each(LOCAL_HETEROGENEOUS_AGENT_TYPES)(
+      'accepts %s event batches from a local CLI',
       async (agentType) => {
         const events = [buildEvent('stream_start', 0)];
 
@@ -277,8 +278,8 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
       });
     });
 
-    it.each(['opencode', 'trae'] as const)(
-      'accepts a %s session id for subsequent device resume',
+    it.each(LOCAL_HETEROGENEOUS_AGENT_TYPES)(
+      'accepts a %s session id for subsequent local CLI resume',
       async (agentType) => {
         await createCaller().heteroFinish({
           agentType,
