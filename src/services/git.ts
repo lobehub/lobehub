@@ -11,6 +11,7 @@ import type {
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
   DeviceGitDeleteBranchResult,
+  DeviceGitLinkedOpenPullRequest,
   DeviceGitLinkedPullRequest,
   DeviceGitLinkedPullRequestLookupStatus,
   DeviceGitRemoveWorktreeResult,
@@ -36,6 +37,7 @@ export interface GitLinkedPRSummary {
   extraCount?: number;
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
+  pullRequests?: DeviceGitLinkedOpenPullRequest[];
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
   upstream?: DeviceGitUpstreamRef;
 }
@@ -194,13 +196,10 @@ class GitService {
 
   /**
    * PR linked to `branch` on a GitHub repo. Shells out to `gh` (8s timeout), so
-   * callers throttle this far more aggressively than the branch read. Includes
-   * merged/closed PRs so persisted snapshots can refresh after GitHub changes
-   * outside the app.
+   * callers throttle this far more aggressively than the branch read.
    *
    * `branch` is the LOCAL branch; the device resolves the remote ref it publishes
-   * to and queries GitHub under that, falling back to a commit→PR lookup. It
-   * reports the ref it landed on as `upstream` — persist that, not the local name.
+   * to and reports that ref as `upstream` — persist it, not the local name.
    */
   async getLinkedPullRequest({
     branch,
@@ -226,6 +225,7 @@ class GitService {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
+      pullRequests: pr.pullRequests,
       pullRequestStatus: pr.status,
       upstream: pr.upstream,
     };

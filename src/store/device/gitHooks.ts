@@ -147,17 +147,18 @@ export const useFetchGitBranch = (deviceId: string | undefined, path?: string) =
  * so keep a long 60s dedupe + 60s focus throttle — unlike the cheap branch read,
  * this must NOT re-run on every remount or directory revisit. Keyed by branch,
  * so a checkout naturally re-keys into a fresh lookup; disabled for non-github
- * repos and detached HEAD (no branch ref to query). Includes merged/closed PRs
- * so the lifecycle badge can refresh after GitHub changes outside the app.
+ * repos and detached HEAD (no branch ref to query). Live discovery only returns
+ * exact-head Open PRs; persisted lifecycle refresh is handled by the topic hook.
  */
 export const useFetchGitLinkedPR = (
   deviceId: string | undefined,
   path: string | undefined,
   branch: string | undefined,
   isGithub = false,
+  detached = false,
 ) =>
   useClientDataSWR<GitLinkedPRSummary | undefined>(
-    isGithub && branch && isEnabled(deviceId, path)
+    isGithub && branch && !detached && isEnabled(deviceId, path)
       ? deviceKeys.gitLinkedPR(deviceId ?? 'local', path, branch)
       : null,
     () => gitService.getLinkedPullRequest({ branch: branch!, deviceId, path: path! }),

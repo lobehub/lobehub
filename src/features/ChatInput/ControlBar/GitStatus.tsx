@@ -1,7 +1,15 @@
 import { Icon, Tooltip } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import {
+  DropdownMenuItem,
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
+import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -171,7 +179,13 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   const { data: branchData, mutate: mutateBranch } = useFetchGitBranch(deviceId, path);
   const branch = branchData?.branch;
   const detached = branchData?.detached;
-  const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(deviceId, path, branch, isGithub);
+  const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
+    deviceId,
+    path,
+    branch,
+    isGithub,
+    detached,
+  );
   const { data: reviewPatches, mutate: mutateReviewPatches } = useReviewPatches(
     path,
     'unstaged',
@@ -188,11 +202,9 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
   const showRightPanel = useGlobalStore(systemStatusSelectors.showRightPanel);
   const workingSidebarTab = useGlobalStore((s) => s.status.workingSidebarTab);
 
-  const handleOpenPr = useCallback(() => {
-    if (prData?.pullRequest?.url) {
-      void electronSystemService.openExternalLink(prData.pullRequest.url);
-    }
-  }, [prData?.pullRequest?.url]);
+  const handleOpenPr = useCallback((url: string) => {
+    void electronSystemService.openExternalLink(url);
+  }, []);
 
   const handleToggleReview = useCallback(() => {
     if (showRightPanel && workingSidebarTab === 'review') {
@@ -296,7 +308,9 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       : prData.pullRequest.title
     : prData?.ghMissing
       ? t('workingDirectory.ghMissing')
-      : undefined;
+      : prData?.pullRequestStatus === 'error'
+        ? t('workingDirectory.prLookupFailed')
+        : undefined;
 
   const diffStatTooltip = hasChanges
     ? t('workingDirectory.diffLineStatTooltip', {
@@ -443,15 +457,59 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, d
       {pullNode}
       {pushNode}
       {diffNode}
+      {prData &&
+        prData.pullRequestStatus !== 'ok' &&
+        (prData.ghMissing || prData.pullRequestStatus === 'error') && (
+          <Tooltip title={prTooltip}>
+            <div className={styles.prTrigger} role="button" onClick={() => void mutatePR()}>
+              <Icon icon={AlertTriangleIcon} size={12} />
+              <span>{t('workingDirectory.retry')}</span>
+            </div>
+          </Tooltip>
+        )}
       {prData?.pullRequest && (
         <>
           <div className={styles.separator} />
-          <Tooltip title={prTooltip}>
-            <div className={styles.prTrigger} role="button" onClick={handleOpenPr}>
-              <Icon icon={GitPullRequest} size={12} />
-              <span>#{prData.pullRequest.number}</span>
-            </div>
-          </Tooltip>
+          {(prData.pullRequests?.length ?? 0) > 1 ? (
+            <DropdownMenuRoot>
+              <DropdownMenuTrigger nativeButton={false}>
+                <Tooltip title={prTooltip}>
+                  <div className={styles.prTrigger} role="button">
+                    <Icon icon={GitPullRequest} size={12} />
+                    <span>
+                      #{prData.pullRequest.number} +{prData.pullRequests!.length - 1}
+                    </span>
+                  </div>
+                </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
+                  <DropdownMenuPopup>
+                    {prData.pullRequests!.map((pullRequest) => (
+                      <DropdownMenuItem
+                        key={pullRequest.url}
+                        onClick={() => handleOpenPr(pullRequest.url)}
+                      >
+                        #{pullRequest.number} {pullRequest.title}
+                        {pullRequest.baseRefName ? ` → ${pullRequest.baseRefName}` : ''}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuPopup>
+                </DropdownMenuPositioner>
+              </DropdownMenuPortal>
+            </DropdownMenuRoot>
+          ) : (
+            <Tooltip title={prTooltip}>
+              <div
+                className={styles.prTrigger}
+                role="button"
+                onClick={() => handleOpenPr(prData.pullRequest!.url)}
+              >
+                <Icon icon={GitPullRequest} size={12} />
+                <span>#{prData.pullRequest.number}</span>
+              </div>
+            </Tooltip>
+          )}
         </>
       )}
     </>

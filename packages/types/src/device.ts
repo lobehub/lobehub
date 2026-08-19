@@ -84,6 +84,11 @@ export interface DeviceGitLinkedPullRequest {
   url: string;
 }
 
+/** An Open PR discovered for the live branch status, including its target branch. */
+export interface DeviceGitLinkedOpenPullRequest extends DeviceGitLinkedPullRequest {
+  baseRefName?: string;
+}
+
 export type DeviceGitLinkedPullRequestLookupStatus = 'error' | 'gh-missing' | 'ok';
 
 export interface WorkingDirGithubState {
@@ -405,6 +410,8 @@ export interface DeviceGitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch. */
   pullRequest: DeviceGitLinkedPullRequest | null;
+  /** All matching open PRs, ordered by updatedAt descending. */
+  pullRequests?: DeviceGitLinkedOpenPullRequest[];
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found. */

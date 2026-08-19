@@ -26,6 +26,8 @@ const gitHookMocks = vi.hoisted(() => ({
   useFetchGitWorktrees: vi.fn(),
 }));
 
+const systemMocks = vi.hoisted(() => ({ openExternalLink: vi.fn() }));
+
 vi.mock('../BranchSwitcher', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -54,7 +56,7 @@ vi.mock('@/store/global/selectors', () => ({
 }));
 
 vi.mock('@/services/electron/system', () => ({
-  electronSystemService: { openExternalLink: vi.fn() },
+  electronSystemService: { openExternalLink: systemMocks.openExternalLink },
 }));
 
 vi.mock('@/services/git', () => ({
@@ -69,6 +71,14 @@ vi.mock('@/components/AntdStaticMethods', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
+    <button onClick={onClick}>{children}</button>
+  ),
+  DropdownMenuPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuPortal: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenuPositioner: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenuRoot: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
 }));
 
@@ -194,4 +204,60 @@ describe('GitStatus', () => {
     expect(screen.getByTestId('worktree-switcher')).toBeInTheDocument();
     expect(screen.getByText('fix/remote-review')).toBeInTheDocument();
   });
+
+  it('forwards detached HEAD state to disable linked PR discovery', () => {
+    gitHookMocks.useFetchGitBranch.mockReturnValue({
+      data: { branch: 'abc1234', detached: true },
+      mutate: gitHookMocks.mutateBranch,
+    });
+
+    render(<GitStatus isGithub agentId="agent-1" deviceId="device-1" path="/repo" />);
+
+    expect(gitHookMocks.useFetchGitLinkedPR).toHaveBeenCalledWith(
+      'device-1',
+      '/repo',
+      'abc1234',
+      true,
+      true,
+    );
+  });
+
+  it('shows every linked PR with the accurate count, base branch, and independent URL', () => {
+    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
+      data: {
+        pullRequest: {
+          baseRefName: 'canary',
+          number: 2,
+          state: 'OPEN',
+          title: 'Newest',
+          url: 'url-2',
+        },
+        pullRequests: [
+          { baseRefName: 'canary', number: 2, state: 'OPEN', title: 'Newest', url: 'url-2' },
+          { number: 1, state: 'OPEN', title: 'Older', url: 'url-1' },
+        ],
+        pullRequestStatus: 'ok',
+      },
+      mutate: gitHookMocks.mutatePR,
+    });
+    render(<GitStatus isGithub agentId="agent-1" path="/repo" />);
+
+    expect(screen.getByText('#2 +1')).toBeInTheDocument();
+    expect(screen.getByText('#2 Newest → canary')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('#1 Older'));
+    expect(systemMocks.openExternalLink).toHaveBeenCalledWith('url-1');
+  });
+
+  it.each(['gh-missing', 'error'])(
+    'offers retry for %s without displaying a stale PR',
+    (status) => {
+      gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
+        data: { ghMissing: status === 'gh-missing', pullRequest: null, pullRequestStatus: status },
+        mutate: gitHookMocks.mutatePR,
+      });
+      render(<GitStatus isGithub agentId="agent-1" path="/repo" />);
+      fireEvent.click(screen.getByText('workingDirectory.retry'));
+      expect(gitHookMocks.mutatePR).toHaveBeenCalled();
+    },
+  );
 });

@@ -70,6 +70,10 @@ interface LocalBranchRef {
    * it STAYS there after `feat/x` is pushed. Treated as a candidate, never a fact.
    */
   configured?: RemoteRefCandidate;
+  /** `@{push}` — Git's resolved push destination after applying pushRemote/pushDefault/refspecs. */
+  push?: RemoteRefCandidate;
+  /** Push remote selected by Git, even when its branch destination cannot be resolved. */
+  pushRemote?: string;
   /** Commit the local branch points at. */
   sha: string;
 }
@@ -86,23 +90,57 @@ const readLocalBranchRef = async (
   const stdout = await runGit(
     [
       'for-each-ref',
-      '--format=%(objectname)%09%(upstream:remotename)%09%(upstream)',
+      '--format=%(objectname)%09%(upstream:remotename)%09%(upstream)%09%(push:remotename)%09%(push)%09%(push:remoteref)',
       `refs/heads/${branch}`,
     ],
     dirPath,
   );
 
-  const [sha, remote, upstreamRef] = (stdout?.split('\n')[0] ?? '').split('\t');
+  const [sha, remote, upstreamRef, pushRemote, pushRef, pushRemoteRef] = (
+    stdout?.split('\n')[0] ?? ''
+  ).split('\t');
   if (!sha) return undefined;
 
   const prefix = `refs/remotes/${remote}/`;
-  if (remote && upstreamRef?.startsWith(prefix)) {
-    return {
-      configured: { branch: upstreamRef.slice(prefix.length), ref: upstreamRef, remote },
-      sha,
-    };
+  const pushPrefix = `refs/remotes/${pushRemote}/`;
+  const configured =
+    remote && upstreamRef?.startsWith(prefix)
+      ? { branch: upstreamRef.slice(prefix.length), ref: upstreamRef, remote }
+      : undefined;
+  let push =
+    pushRemote && pushRef && pushRemoteRef?.startsWith('refs/heads/')
+      ? {
+          branch: pushRemoteRef.slice('refs/heads/'.length),
+          ref: pushRef,
+          remote: pushRemote,
+        }
+      : pushRemote && pushRef?.startsWith(pushPrefix)
+        ? { branch: pushRef.slice(pushPrefix.length), ref: pushRef, remote: pushRemote }
+        : undefined;
+
+  // Git leaves `%(push)` empty for the default `simple` mode in a triangular
+  // workflow even though a same-name upstream is pushed to pushRemote. Infer that
+  // one documented shape only when no remote push refspec overrides push.default.
+  if (!push && pushRemote) {
+    const [pushDefault, pushRefspec] = await Promise.all([
+      runGit(['config', '--get', 'push.default'], dirPath),
+      runGit(['config', '--get-all', `remote.${pushRemote}.push`], dirPath),
+    ]);
+    const mode = pushDefault?.trim() || 'simple';
+    const pushesLocalName =
+      mode === 'current' ||
+      (mode === 'simple' && (pushRemote !== remote || configured?.branch === branch));
+    if (!pushRefspec?.trim() && pushesLocalName) {
+      push = { branch, ref: `${pushPrefix}${branch}`, remote: pushRemote };
+    }
   }
-  return { sha };
+
+  return {
+    ...(configured ? { configured } : {}),
+    ...(push ? { push } : {}),
+    ...(pushRemote ? { pushRemote } : {}),
+    sha,
+  };
 };
 
 /**
@@ -122,17 +160,34 @@ const listRemoteRefsAt = async (dirPath: string, sha: string): Promise<string[]>
     .filter(Boolean);
 };
 
+/** Every remote-tracking branch, used only when no ref still points at the local tip. */
+const listRemoteRefs = async (dirPath: string): Promise<string[]> => {
+  const stdout = await runGit(['for-each-ref', '--format=%(refname)', 'refs/remotes'], dirPath);
+  return (stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+};
+
 /**
- * Remote refs some local branch already claims as its upstream. Such a ref belongs
- * to THAT branch — reaching this code means ours has no configured upstream at all.
+ * Remote refs another local branch already claims as its upstream. The current
+ * branch's own row is excluded, but a shared ref remains claimed by the other row.
  */
-const listTrackedRemoteRefs = async (dirPath: string): Promise<Set<string>> => {
-  const stdout = await runGit(['for-each-ref', '--format=%(upstream)', 'refs/heads'], dirPath);
+const listTrackedRemoteRefs = async (
+  dirPath: string,
+  currentBranch: string,
+): Promise<Set<string>> => {
+  const stdout = await runGit(
+    ['for-each-ref', '--format=%(refname)%09%(upstream)', 'refs/heads'],
+    dirPath,
+  );
   return new Set(
     (stdout ?? '')
       .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean),
+      .map((line) => line.trim().split('\t'))
+      .flatMap(([localRef, upstream]) =>
+        upstream && localRef !== `refs/heads/${currentBranch}` ? [upstream] : [],
+      ),
   );
 };
 
@@ -146,6 +201,19 @@ const listTrackedRemoteRefs = async (dirPath: string): Promise<Set<string>> => {
 const wasPushedFromHere = async (dirPath: string, ref: string): Promise<boolean> => {
   const stdout = await runGit(['reflog', 'show', ref], dirPath);
   return !!stdout?.includes('update by push');
+};
+
+/** The ref was pushed by this checkout and still belongs to the local branch's history. */
+const isPublishedFromHere = async (
+  dirPath: string,
+  candidate: RemoteRefCandidate,
+  localSha: string,
+): Promise<boolean> => {
+  const [wasPushed, isAncestor] = await Promise.all([
+    wasPushedFromHere(dirPath, candidate.ref),
+    gitSucceeds(['merge-base', '--is-ancestor', candidate.ref, localSha], dirPath),
+  ]);
+  return wasPushed && isAncestor;
 };
 
 /**
@@ -168,7 +236,7 @@ const isPublicationOfBranch = (
   branch: string,
   ownership: { defaultRefs: Set<string>; pushed: Set<string>; tracked: Set<string> },
 ): boolean => {
-  if (candidate.branch === branch) return true;
+  if (candidate.branch === branch) return ownership.pushed.has(candidate.ref);
 
   return (
     ownership.pushed.has(candidate.ref) &&
@@ -187,9 +255,11 @@ export interface ResolvedUpstream {
 /**
  * Resolve the remote ref a local branch publishes to, from local git state alone.
  *
- * Two sources offer a candidate — the configured `@{upstream}`, and any remote-tracking
- * ref sitting on the branch's commit (a push moves one of those even without `-u`,
- * which is what an explicit refspec always does). NEITHER is trusted on its face:
+ * Git's resolved `@{push}` is authoritative when available: it already applies
+ * `branch.<name>.pushRemote`, `remote.pushDefault`, `push.default`, and push refspecs.
+ * Otherwise two sources offer a candidate — the configured `@{upstream}`, and any
+ * remote-tracking ref sitting on the branch's commit (a push moves one of those even
+ * without `-u`, which is what an explicit refspec always does). NEITHER is trusted:
  *
  * - `@{upstream}` is a PULL source. `git checkout -b feat/x origin/canary` sets it to
  *   `origin/canary` and leaves it there even after `feat/x` is pushed, so taking it at
@@ -211,10 +281,28 @@ export const resolveUpstream = async (
   const local = await readLocalBranchRef(dirPath, branch);
   if (!local) return {};
 
-  // The overwhelmingly common shape (`git push -u`, same name both ends). Settled
-  // without a single extra git call — the ownership probes below are never paid for.
+  if (local.push?.ref) {
+    return {
+      sha: local.sha,
+      upstream: (await isPublishedFromHere(dirPath, local.push, local.sha))
+        ? toUpstreamRef(local.push)
+        : undefined,
+    };
+  }
+  // Git selected a push remote but could not resolve a branch destination (for
+  // example push.default=nothing or an unmatched push refspec). Do not substitute
+  // the pull upstream: that is explicitly a different repository in triangle flows.
+  if (local.pushRemote && local.configured?.remote !== local.pushRemote) {
+    return { sha: local.sha };
+  }
+
   if (local.configured?.branch === branch) {
-    return { sha: local.sha, upstream: toUpstreamRef(local.configured) };
+    return {
+      sha: local.sha,
+      upstream: (await isPublishedFromHere(dirPath, local.configured, local.sha))
+        ? toUpstreamRef(local.configured)
+        : undefined,
+    };
   }
 
   const remotes = await listRemotes(dirPath);
@@ -224,33 +312,60 @@ export const resolveUpstream = async (
     .map((ref) => parseRemoteRef(ref, remotes))
     .filter((candidate): candidate is RemoteRefCandidate => !!candidate);
 
-  const candidates = [...(local.configured ? [local.configured] : []), ...atSha].filter(
-    (candidate, index, all) => all.findIndex((other) => other.ref === candidate.ref) === index,
-  );
-  if (candidates.length === 0) return { sha: local.sha };
+  const candidates = [...(local.configured ? [local.configured] : []), ...atSha]
+    .filter((candidate) => !local.pushRemote || candidate.remote === local.pushRemote)
+    .filter(
+      (candidate, index, all) => all.findIndex((other) => other.ref === candidate.ref) === index,
+    );
+  if (candidates.length === 0) {
+    // `git push origin feat/x` without `-u` leaves a pushed remote-tracking ref,
+    // but a subsequent local commit means it no longer points at the local tip.
+    // Recover only an exact-name ref whose reflog proves this repo pushed it and
+    // whose tip is an ancestor of the local branch. The ancestry check rejects an
+    // unrelated stale ref left behind after deleting and recreating the branch.
+    // Multiple matching remotes remain ambiguous and therefore unresolved.
+    const sameNamed = (await listRemoteRefs(dirPath))
+      .map((ref) => parseRemoteRef(ref, remotes))
+      .filter((candidate): candidate is RemoteRefCandidate => candidate?.branch === branch);
+    const pushedSameNamed = (
+      await Promise.all(
+        sameNamed.map(async (candidate) => {
+          return (await isPublishedFromHere(dirPath, candidate, local.sha)) ? candidate : undefined;
+        }),
+      )
+    ).filter((candidate): candidate is RemoteRefCandidate => !!candidate);
 
-  const [tracked, defaults, pushed] = await Promise.all([
-    listTrackedRemoteRefs(dirPath),
-    Promise.all(
-      [...new Set(candidates.map((candidate) => candidate.remote))].map((remote) =>
-        getDefaultRemoteBranch(dirPath, remote),
-      ),
-    ),
-    Promise.all(
+    return {
+      sha: local.sha,
+      upstream: pushedSameNamed.length === 1 ? toUpstreamRef(pushedSameNamed[0]) : undefined,
+    };
+  }
+
+  const publishedCandidates = (
+    await Promise.all(
       candidates.map(async (candidate) =>
-        (await wasPushedFromHere(dirPath, candidate.ref)) ? candidate.ref : undefined,
+        (await isPublishedFromHere(dirPath, candidate, local.sha)) ? candidate : undefined,
+      ),
+    )
+  ).filter((candidate): candidate is RemoteRefCandidate => !!candidate);
+  if (publishedCandidates.length === 0) return { sha: local.sha };
+
+  const [tracked, defaults] = await Promise.all([
+    listTrackedRemoteRefs(dirPath, branch),
+    Promise.all(
+      [...new Set(publishedCandidates.map((candidate) => candidate.remote))].map((remote) =>
+        getDefaultRemoteBranch(dirPath, remote),
       ),
     ),
   ]);
 
   const ownership = {
     defaultRefs: new Set(defaults.filter((ref): ref is string => !!ref)),
-    pushed: new Set(pushed.filter((ref): ref is string => !!ref)),
-    // A branch's own configured upstream is not "another branch's" — exempt it.
-    tracked: new Set([...tracked].filter((ref) => ref !== local.configured?.ref)),
+    pushed: new Set(publishedCandidates.map((candidate) => candidate.ref)),
+    tracked,
   };
 
-  const owned = candidates.filter((candidate) =>
+  const owned = publishedCandidates.filter((candidate) =>
     isPublicationOfBranch(candidate, branch, ownership),
   );
 

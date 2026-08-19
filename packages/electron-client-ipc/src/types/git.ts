@@ -22,6 +22,7 @@ export interface GitBranchInfo {
 export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
 
 export interface GitLinkedPullRequest {
+  baseRefName?: string;
   ciStatus?: GitPullRequestCiStatus;
   isDraft?: boolean;
   mergeable?: string;
@@ -41,6 +42,8 @@ export interface GitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
+  /** All matching open PRs, ordered by updatedAt descending */
+  pullRequests?: GitLinkedPullRequest[];
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
   status: GitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found */
