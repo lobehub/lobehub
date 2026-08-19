@@ -27,6 +27,15 @@ export {
 } from '../codex';
 export type { UsageData } from '../types';
 export {
+  ACP_PROTOCOL_VERSION,
+  AcpAgentSession,
+  type AcpAgentSessionConfig,
+  type AcpAgentSessionOptions,
+  type AcpPermissionOption,
+  parseAcpPermissionOptions,
+  selectAcpPermissionOption,
+} from './acpAgentSession';
+export {
   type AcpRpcErrorData,
   type AcpRpcMessage,
   AcpRpcResponseError,
