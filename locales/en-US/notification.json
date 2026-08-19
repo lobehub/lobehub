@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Your scheduled task \"{{jobName}}\" completed successfully.",
+  "agent_cron_job_completed_title": "Scheduled task completed",
   "agent_cron_job_failed": "Your scheduled task \"{{jobName}}\" failed. Open the task to see the full error.",
   "agent_cron_job_failed_insufficient_budget": "Your scheduled task \"{{jobName}}\" couldn't run because your account is out of credits. Top up or upgrade your plan to resume future runs.",
   "agent_cron_job_failed_insufficient_budget_title": "Scheduled task paused: insufficient credits",
+  "agent_cron_job_failed_paused": "Your scheduled task \"{{jobName}}\" was paused after {{count}} consecutive failures. Review the error and resume it when ready.",
+  "agent_cron_job_failed_paused_title": "Scheduled task paused",
   "agent_cron_job_failed_title": "Scheduled task failed",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Agent task completed",

@@ -37,21 +37,3 @@ export interface WorkspaceHtmlArtifactPublisher {
     input: WorkspaceHtmlArtifactPublishInput,
   ) => Promise<WorkspaceHtmlArtifactPublishResult>;
 }
-
-/**
- * The open-source build has no market deployment backend, so this slot reports
- * the publisher as unavailable; downstream builds override the module via their
- * own `@/business/...` mapping. Keep the returned object referentially stable —
- * consumers put `getExisting` in effect dependencies.
- */
-const unavailablePublisher: WorkspaceHtmlArtifactPublisher = {
-  available: false,
-  getExisting: async () => null,
-  publish: async () => {
-    throw new Error('unavailable');
-  },
-};
-
-export function useWorkspaceHtmlArtifactPublish(): WorkspaceHtmlArtifactPublisher {
-  return unavailablePublisher;
-}

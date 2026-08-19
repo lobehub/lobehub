@@ -405,12 +405,31 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
   }
 };
 
-const spawnGrokAcpAgent = async (
-  options: SpawnAgentOptions,
-  command: string,
-  cwd: string,
-): Promise<SpawnAgentHandle> => {
-  const prompt = await buildGrokAcpPrompt(options.prompt, options.inputOptions);
+/** Guarded raw-stdout tee: diagnostic sink failures must not affect the ACP run. */
+const teeAcpRawStdout =
+  (onRawStdout?: (chunk: Buffer) => void) =>
+  (line: string): void => {
+    if (!onRawStdout) return;
+    try {
+      onRawStdout(Buffer.from(line));
+    } catch {
+      // raw dump is diagnostic-only; never let it disrupt the run
+    }
+  };
+
+/**
+ * Bridge a bidirectional ACP session onto the ordinary `SpawnAgentHandle`
+ * contract shared by the one-shot CLI spawns.
+ *
+ * Exit/error policy (uniform for every ACP agent):
+ * - Host kills resolve `exit` as `{ code: null, signal }`.
+ * - ACP request failures are first adapted into a terminal error event and
+ *   then reject the session's run() promise. Once that structured event is
+ *   queued, the iterable ends normally so callers can apply their error
+ *   policy; transport failures with no terminal event still throw from the
+ *   iterator.
+ */
+const createAcpSpawnBridge = () => {
   const stderr = new PassThrough();
   const queue: AgentStreamEvent[] = [];
   let emittedTerminalError = false;
@@ -427,50 +446,14 @@ const spawnGrokAcpAgent = async (
   const getHostExit = (): { code: null; signal: NodeJS.Signals } | undefined =>
     hostSignal ? { code: null, signal: hostSignal } : undefined;
 
-  const session = new GrokAcpSession({
-    args: options.extraArgs ?? [],
-    clientVersion: 'lobehub-cli',
-    commandPath: command,
-    cwd,
-    env: { ...process.env, ...options.env },
-    onEvents: (events) => {
-      if (events.some(({ type }) => type === 'error')) emittedTerminalError = true;
-      queue.push(...events);
-      wake();
-    },
-    onRawMessage: (line) => options.onRawStdout?.(Buffer.from(line)),
-    onRuntimeStatus: () => {},
-    onSessionId: () => {},
-    onStderr: (data) => {
-      stderr.write(data);
-    },
-    operationId: options.operationId,
-    prompt,
-    resumeSessionId: options.resumeSessionId,
-    sessionId: options.operationId,
-  });
-
-  const exit = session
-    .run()
-    .then(() => getHostExit() ?? { code: 0, signal: null })
-    .catch((error) => {
-      const hostExit = getHostExit();
-      if (hostExit) return hostExit;
-
-      // ACP request failures are first adapted into a terminal error event and
-      // then reject the request promise. Once that structured event is queued,
-      // end the iterable normally so callers can apply their error policy.
-      // Transport failures with no terminal event must still throw.
-      if (!emittedTerminalError) {
-        streamError = error instanceof Error ? error : new Error(String(error));
-      }
-      return { code: 1, signal: null };
-    })
-    .finally(() => {
-      streamEnded = true;
-      stderr.end();
-      wake();
-    });
+  const onEvents = (events: AgentStreamEvent[]): void => {
+    if (events.some(({ type }) => type === 'error')) emittedTerminalError = true;
+    queue.push(...events);
+    wake();
+  };
+  const onStderr = (data: string): void => {
+    stderr.write(data);
+  };
 
   const events: AsyncIterable<AgentStreamEvent> = {
     [Symbol.asyncIterator]() {
@@ -490,21 +473,76 @@ const spawnGrokAcpAgent = async (
     },
   };
 
-  return {
-    events,
-    exit,
-    kill: (signal = 'SIGINT') => {
+  const attach = (session: {
+    close: (signal?: NodeJS.Signals) => void;
+    interrupt: () => void;
+    run: () => Promise<void>;
+  }): Pick<SpawnAgentHandle, 'exit' | 'kill'> => {
+    const exit: SpawnAgentHandle['exit'] = session
+      .run()
+      .then(() => getHostExit() ?? { code: 0, signal: null })
+      .catch((error) => {
+        const hostExit = getHostExit();
+        if (hostExit) return hostExit;
+
+        if (!emittedTerminalError) {
+          streamError = error instanceof Error ? error : new Error(String(error));
+        }
+        return { code: 1, signal: null };
+      })
+      .finally(() => {
+        streamEnded = true;
+        stderr.end();
+        wake();
+      });
+
+    const kill = (signal: NodeJS.Signals = 'SIGINT'): void => {
       hostSignal = signal;
       if (signal === 'SIGINT') session.interrupt();
       else session.close(signal);
-    },
+    };
+    return { exit, kill };
+  };
+
+  return { attach, events, onEvents, onStderr, stderr };
+};
+
+const spawnGrokAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildGrokAcpPrompt(options.prompt, options.inputOptions);
+  const bridge = createAcpSpawnBridge();
+  const session = new GrokAcpSession({
+    args: options.extraArgs ?? [],
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    onEvents: bridge.onEvents,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  const { exit, kill } = bridge.attach(session);
+
+  return {
+    events: bridge.events,
+    exit,
+    kill,
     get pid() {
       return session.pid;
     },
     get sessionId() {
       return session.sessionId;
     },
-    stderr,
+    stderr: bridge.stderr,
   };
 };
 
@@ -748,16 +786,7 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
   }
 
   const prompt = await buildTraeAcpPrompt(options.prompt, options.inputOptions);
-  const stderr = new PassThrough();
-  const queue: AgentStreamEvent[] = [];
-  let ended = false;
-  let wakeup: (() => void) | undefined;
-  const wake = () => {
-    wakeup?.();
-    wakeup = undefined;
-  };
-
-  let nativeSessionId: string | undefined;
+  const bridge = createAcpSpawnBridge();
   const session = new TraeAcpSession({
     args: options.extraArgs ?? [],
     clientVersion: '1.0.0',
@@ -768,72 +797,28 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
       ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
     },
     initialModel: options.initialModel,
-    onEvents: (events) => {
-      queue.push(...events);
-      wake();
-    },
-    onRawMessage: (line) => {
-      if (!options.onRawStdout) return;
-      try {
-        options.onRawStdout(Buffer.from(line));
-      } catch {
-        // Diagnostic tee failures must not affect the ACP run.
-      }
-    },
+    onEvents: bridge.onEvents,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
     onRuntimeStatus: () => {},
-    onSessionId: (sessionId) => {
-      nativeSessionId = sessionId;
-    },
-    onStderr: (data) => {
-      stderr.write(data);
-    },
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
     operationId: options.operationId,
     prompt,
     resumeSessionId: options.resumeSessionId,
     sessionId: options.operationId,
   });
-
-  const exit = session
-    .run()
-    .then(
-      () => ({ code: 0, signal: null }),
-      () => ({ code: 1, signal: null }),
-    )
-    .finally(() => {
-      ended = true;
-      stderr.end();
-      wake();
-    });
-
-  const events: AsyncIterable<AgentStreamEvent> = {
-    [Symbol.asyncIterator]() {
-      return {
-        async next(): Promise<IteratorResult<AgentStreamEvent>> {
-          while (queue.length === 0 && !ended) {
-            await new Promise<void>((resolve) => {
-              wakeup = resolve;
-            });
-          }
-          const event = queue.shift();
-          return event ? { done: false, value: event } : { done: true, value: undefined };
-        },
-      };
-    },
-  };
+  const { exit, kill } = bridge.attach(session);
 
   return {
-    events,
+    events: bridge.events,
     exit,
-    kill: (signal: NodeJS.Signals = 'SIGINT') => {
-      if (signal === 'SIGINT') void session.interrupt();
-      else session.close();
-    },
+    kill,
     get pid() {
       return session.pid;
     },
     get sessionId() {
-      return nativeSessionId;
+      return session.nativeSessionId;
     },
-    stderr,
+    stderr: bridge.stderr,
   };
 };

@@ -1,11 +1,6 @@
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import type {
-  WorkspaceHtmlArtifactPublisher,
-  WorkspaceHtmlArtifactPublishResult,
-} from '@/business/client/features/WorkspaceHtmlArtifactPublish';
-
 import {
   type GatheredWorkspaceHtmlArtifact,
   gatherWorkspaceHtmlArtifact,
@@ -15,6 +10,10 @@ import {
   packWorkspaceHtmlDocument,
 } from './packWorkspaceHtmlDocument';
 import { readWorkspaceAsset } from './readWorkspaceAsset';
+import type {
+  WorkspaceHtmlArtifactPublisher,
+  WorkspaceHtmlArtifactPublishResult,
+} from './workspaceHtmlArtifact';
 
 export interface ReadyWorkspaceHtmlPublishPlan {
   gathered: GatheredWorkspaceHtmlArtifact;

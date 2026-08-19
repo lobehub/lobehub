@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "您的排程任務「{{jobName}}」已成功完成。",
+  "agent_cron_job_completed_title": "排程任務完成",
   "agent_cron_job_failed": "您的排程任務「{{jobName}}」已失敗。開啟任務以查看完整錯誤內容。",
   "agent_cron_job_failed_insufficient_budget": "您的排程任務「{{jobName}}」無法執行，因為您的帳戶點數不足。請儲值或升級方案以恢復後續執行。",
   "agent_cron_job_failed_insufficient_budget_title": "排程任務已暫停：點數不足",
+  "agent_cron_job_failed_paused": "您的排程任務「{{jobName}}」在連續失敗 {{count}} 次後已被暫停。請檢查錯誤並在準備好後恢復執行。",
+  "agent_cron_job_failed_paused_title": "排程任務已暫停",
   "agent_cron_job_failed_title": "排程任務失敗",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "代理任務已完成",

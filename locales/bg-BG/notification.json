@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Вашата планирана задача \"{{jobName}}\" беше успешно завършена.",
+  "agent_cron_job_completed_title": "Планираната задача е завършена",
   "agent_cron_job_failed": "Планираната ви задача \"{{jobName}}\" се провали. Отворете задачата, за да видите пълната грешка.",
   "agent_cron_job_failed_insufficient_budget": "Планираната ви задача \"{{jobName}}\" не можа да се изпълни, защото кредитите по акаунта ви са изчерпани. Заредете кредити или надградете плана си, за да възобновите бъдещите изпълнения.",
   "agent_cron_job_failed_insufficient_budget_title": "Планираната задача е поставена на пауза: недостатъчно кредити",
+  "agent_cron_job_failed_paused": "Вашата планирана задача \"{{jobName}}\" беше спряна след {{count}} последователни неуспеха. Прегледайте грешката и я възобновете, когато сте готови.",
+  "agent_cron_job_failed_paused_title": "Планираната задача е спряна",
   "agent_cron_job_failed_title": "Планираната задача се провали",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Задачата на агента е завършена",

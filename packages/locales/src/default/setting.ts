@@ -758,6 +758,7 @@ export default {
   'notification.category.generation.title': 'Generation',
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.category.workspace.title': 'Workspace',
+  'notification.item.agent_cron_job_completed': 'Scheduled task completed',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',
   'notification.item.agent_run_completed': 'Agent task completed',
   'notification.item.credit_balance_low': 'Credit balance running low',

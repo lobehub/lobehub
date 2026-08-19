@@ -174,14 +174,6 @@ vi.mock('@/services/projectFile', () => ({
   },
 }));
 
-vi.mock('@/business/client/features/WorkspaceHtmlArtifactPublish', () => ({
-  useWorkspaceHtmlArtifactPublish: () => ({
-    available: true,
-    getExisting: async () => null,
-    publish: async () => ({}),
-  }),
-}));
-
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
@@ -337,7 +329,7 @@ describe('Files — reveal request integration', () => {
     );
   });
 
-  it('adds a publish action only for HTML files when artifact deployment is enabled', () => {
+  it('does not offer a publish action in the open-source build', () => {
     const previousLab = useUserStore.getState().preference.lab;
     useUserStore.setState({
       preference: {
@@ -363,40 +355,6 @@ describe('Files — reveal request integration', () => {
           },
           id: 'index.html',
           isFolder: false,
-        }).map((item) => item.key),
-      ).toEqual([
-        'open',
-        'publish',
-        'divider-reveal',
-        'show-in-system',
-        'divider-copy',
-        'copy-absolute-path',
-        'copy-relative-path',
-      ]);
-
-      expect(
-        getContextMenuItems({
-          data: {
-            isDirectory: false,
-            name: 'root.ts',
-            path: '/repo/root.ts',
-            relativePath: 'root.ts',
-          },
-          id: 'root.ts',
-          isFolder: false,
-        }).map((item) => item.key),
-      ).not.toContain('publish');
-
-      expect(
-        getContextMenuItems({
-          data: {
-            isDirectory: true,
-            name: 'site.html',
-            path: '/repo/site.html',
-            relativePath: 'site.html/',
-          },
-          id: 'site.html/',
-          isFolder: true,
         }).map((item) => item.key),
       ).not.toContain('publish');
     } finally {

@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Twoje zaplanowane zadanie \"{{jobName}}\" zostało pomyślnie zakończone.",
+  "agent_cron_job_completed_title": "Zaplanowane zadanie zakończone",
   "agent_cron_job_failed": "Twoje zaplanowane zadanie \"{{jobName}}\" nie powiodło się. Otwórz zadanie, aby zobaczyć pełny błąd.",
   "agent_cron_job_failed_insufficient_budget": "Twoje zaplanowane zadanie \"{{jobName}}\" nie mogło zostać uruchomione, ponieważ na Twoim koncie zabrakło środków. Doładuj je lub ulepsz swój plan, aby wznowić przyszłe uruchomienia.",
   "agent_cron_job_failed_insufficient_budget_title": "Wstrzymano zaplanowane zadanie: niewystarczające środki",
+  "agent_cron_job_failed_paused": "Twoje zaplanowane zadanie \"{{jobName}}\" zostało wstrzymane po {{count}} kolejnych niepowodzeniach. Przejrzyj błąd i wznow je, gdy będziesz gotowy.",
+  "agent_cron_job_failed_paused_title": "Zaplanowane zadanie wstrzymane",
   "agent_cron_job_failed_title": "Błąd zaplanowanego zadania",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Zadanie agenta zakończone",

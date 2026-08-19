@@ -340,6 +340,8 @@
   "payDiffPrice": "支付差价",
   "payDiffPriceApprox": "约",
   "payDiffPriceTip": "实际金额以支付页面为准",
+  "payment.downgradeFailed.desc": "降级设置失败，请稍后重试；如果问题持续存在，请通过电子邮件联系我们",
+  "payment.downgradeFailed.title": "降级失败",
   "payment.error.actions.billing": "账单管理",
   "payment.error.actions.home": "返回首页",
   "payment.error.desc": "未找到订阅 ID：{{id}}。如有疑问，请通过电子邮件联系我们",

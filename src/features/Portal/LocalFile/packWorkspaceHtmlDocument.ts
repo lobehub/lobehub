@@ -1,8 +1,6 @@
 import { decodeFromBase64, encodeToBase64 } from '@lobechat/utils';
 import { escapeRegExp } from 'es-toolkit';
 
-import type { WorkspaceHtmlArtifactFile } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
-
 import {
   collectCssResourceHrefs,
   collectJsResourceHrefs,
@@ -14,6 +12,7 @@ import {
   resolveWorkspaceAssetContentType,
   WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES,
 } from './readWorkspaceAsset';
+import type { WorkspaceHtmlArtifactFile } from './workspaceHtmlArtifact';
 import { resolveLocalResourceHref, toWorkspaceRelativePath } from './workspaceHtmlPath';
 
 const SITE_ROOT = '/__workspace_html_site__';

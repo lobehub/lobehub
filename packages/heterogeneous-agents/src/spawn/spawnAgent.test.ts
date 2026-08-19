@@ -176,7 +176,9 @@ const createGrokAcpProc = ({
   return { proc, requests };
 };
 
-const createFakeAcpProc = () => {
+const createFakeAcpProc = ({
+  promptAutoComplete = true,
+}: { promptAutoComplete?: boolean } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -229,6 +231,7 @@ const createFakeAcpProc = () => {
             return;
           }
           case 'session/prompt': {
+            if (!promptAutoComplete) return;
             send({
               method: 'session/update',
               params: {
@@ -550,6 +553,33 @@ describe('spawnAgent', () => {
       ).toBe(true);
     } finally {
       killSpy.mockRestore();
+    }
+  });
+
+  it('preserves SIGKILL when force-stopping a TRAE ACP run', async () => {
+    const fake = createFakeAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        operationId: 'op-trae-force-stop',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      handle.kill('SIGKILL');
+
+      // The ACP spawn bridge reports host kills as signal exits, uniformly
+      // across ACP agents.
+      expect(processKill).toHaveBeenCalledWith(-12_345, 'SIGKILL');
+      await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
+    } finally {
+      processKill.mockRestore();
     }
   });
 

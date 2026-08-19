@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Ваш запланированный задачa \"{{jobName}}\" успешно завершена.",
+  "agent_cron_job_completed_title": "Запланированная задача завершена",
   "agent_cron_job_failed": "Запланированная задача «{{jobName}}» завершилась с ошибкой. Откройте задачу, чтобы увидеть подробности.",
   "agent_cron_job_failed_insufficient_budget": "Запланированная задача «{{jobName}}» не была выполнена, так как на вашем счёте недостаточно средств. Пополните баланс или обновите тариф, чтобы возобновить будущие запуски.",
   "agent_cron_job_failed_insufficient_budget_title": "Задача приостановлена: недостаточно средств",
+  "agent_cron_job_failed_paused": "Ваш запланированный задачa \"{{jobName}}\" была приостановлена после {{count}} последовательных ошибок. Проверьте ошибку и возобновите выполнение, когда будете готовы.",
+  "agent_cron_job_failed_paused_title": "Запланированная задача приостановлена",
   "agent_cron_job_failed_title": "Сбой запланированной задачи",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Задача агента выполнена",

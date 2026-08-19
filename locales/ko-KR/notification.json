@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "예약된 작업 \"{{jobName}}\"이(가) 성공적으로 완료되었습니다.",
+  "agent_cron_job_completed_title": "예약된 작업 완료",
   "agent_cron_job_failed": "예약된 작업 \"{{jobName}}\"이(가) 실패했습니다. 전체 오류 내용을 확인하려면 작업을 열어보세요.",
   "agent_cron_job_failed_insufficient_budget": "계정 크레딧이 부족하여 예약된 작업 \"{{jobName}}\"을(를) 실행할 수 없습니다. 크레딧을 충전하거나 요금제를 업그레이드하면 이후 작업이 재개됩니다.",
   "agent_cron_job_failed_insufficient_budget_title": "예약된 작업 일시 중지: 크레딧 부족",
+  "agent_cron_job_failed_paused": "예약된 작업 \"{{jobName}}\"이(가) {{count}}번 연속 실패한 후 일시 중지되었습니다. 오류를 검토하고 준비가 되면 다시 시작하세요.",
+  "agent_cron_job_failed_paused_title": "예약된 작업 일시 중지",
   "agent_cron_job_failed_title": "예약된 작업 실패",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "에이전트 작업 완료",
