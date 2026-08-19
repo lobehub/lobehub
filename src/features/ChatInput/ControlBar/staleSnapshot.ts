@@ -1,6 +1,6 @@
 import type { DeviceGitLinkedPullRequest, WorkingDirGitState } from '@lobechat/types';
 
-import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
+import { getWorkingDirectoryName, isWorktreeCheckout } from '@/helpers/workingDirectoryPath';
 
 export type StaleSnapshotExplanationKey =
   'workingDirectory.staleSnapshot' | 'workingDirectory.staleWorktreeSnapshot';
@@ -46,7 +46,7 @@ export const resolveStaleSnapshot = ({
   sourcePath,
 }: ResolveStaleSnapshotParams): StaleSnapshotView => {
   const worktreePath = git.activeWorktree || path;
-  const isWorktree = !!git.isWorktree || (!!sourcePath && worktreePath !== sourcePath);
+  const isWorktree = isWorktreeCheckout({ effectivePath: worktreePath, git, sourcePath });
   const worktreeName = isWorktree ? getWorkingDirectoryName(worktreePath) : undefined;
   const canReset = !!sourcePath && worktreePath !== sourcePath;
 

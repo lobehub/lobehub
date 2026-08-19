@@ -13,6 +13,10 @@ const globalStoreMock = vi.hoisted(() => ({
   toggleRightPanel: vi.fn(),
 }));
 
+const deviceStoreMock = vi.hoisted(() => ({
+  devices: [] as { deviceId: string; online: boolean }[],
+}));
+
 const gitHookMocks = vi.hoisted(() => ({
   mutateAheadBehind: vi.fn(),
   mutateBranch: vi.fn(),
@@ -41,6 +45,12 @@ vi.mock('../StaleGitSnapshot', () => ({
 }));
 
 vi.mock('@/store/device', () => ({
+  deviceSelectors: {
+    getDeviceById: (deviceId?: string) => (state: typeof deviceStoreMock) =>
+      state.devices.find((d) => d.deviceId === deviceId),
+  },
+  useDeviceStore: (selector: (state: typeof deviceStoreMock) => unknown) =>
+    selector(deviceStoreMock),
   useFetchGitAheadBehind: gitHookMocks.useFetchGitAheadBehind,
   useFetchGitBranch: gitHookMocks.useFetchGitBranch,
   useFetchGitLinkedPR: gitHookMocks.useFetchGitLinkedPR,
@@ -103,6 +113,7 @@ vi.mock('react-i18next', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  deviceStoreMock.devices = [{ deviceId: 'device-1', online: true }];
   globalStoreMock.status.showRightPanel = false;
   globalStoreMock.status.workingSidebarTab = 'resources';
 
@@ -150,6 +161,7 @@ describe('GitStatus', () => {
       'unstaged',
       undefined,
       'device-1',
+      true,
     );
     expect(screen.getByText('+3')).toBeInTheDocument();
     expect(screen.getByText('-1')).toBeInTheDocument();
@@ -266,6 +278,70 @@ describe('GitStatus', () => {
       );
 
       expect(container).toBeEmptyDOMElement();
+    });
+
+    it('stops probing the directory it just declared gone', () => {
+      render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      // Left enabled, the diff poll alone keeps shelling out to git every 10s
+      // against a path that cannot be read.
+      expect(gitHookMocks.useReviewPatches).toHaveBeenCalledWith(
+        '/tmp/lobehub-wt-subtask',
+        'unstaged',
+        undefined,
+        undefined,
+        false,
+      );
+      expect(gitHookMocks.useFetchGitAheadBehind).toHaveBeenCalledWith(undefined, undefined);
+      expect(gitHookMocks.useFetchGitWorktrees).toHaveBeenCalledWith(undefined, undefined);
+    });
+
+    // A remote device that is offline answers `undefined`, which the service
+    // normalizes into the same empty shape a deleted directory produces. Reading
+    // that as "gone" would tell the user a live worktree no longer exists — and
+    // offer to drop the override pointing at it.
+    it('does not read an unreachable device as a deleted directory', () => {
+      deviceStoreMock.devices = [{ deviceId: 'device-1', online: false }];
+
+      const { container } = render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          deviceId="device-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+      // …and the reads stay enabled, so the cluster comes back on reconnect.
+      expect(gitHookMocks.useFetchGitWorktrees).toHaveBeenCalledWith(
+        'device-1',
+        '/tmp/lobehub-wt-subtask',
+      );
+    });
+
+    it('hands off once that same device is reachable again', () => {
+      deviceStoreMock.devices = [{ deviceId: 'device-1', online: true }];
+
+      render(
+        <GitStatus
+          isGithub
+          agentId="agent-1"
+          deviceId="device-1"
+          fallbackGit={fallbackGit}
+          path="/tmp/lobehub-wt-subtask"
+        />,
+      );
+
+      expect(screen.getByTestId('stale-git-snapshot')).toBeInTheDocument();
     });
   });
 

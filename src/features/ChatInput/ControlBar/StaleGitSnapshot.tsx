@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 
+import { gitChipStyles } from './gitChipStyles';
 import { resolveStaleSnapshot } from './staleSnapshot';
 import { useSwitchWorktree } from './useSwitchWorktree';
 
@@ -44,60 +45,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   popup: css`
     padding: 0;
-  `,
-  prTrigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  separator: css`
-    flex: none;
-    width: 1px;
-    height: 10px;
-    background: ${cssVar.colorSplit};
-  `,
-  // Muted so the snapshot never reads as live state, but still a control: the
-  // recovery action is the only thing this cluster can still do.
-  trigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    max-width: 200px;
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
   triggerLabel: css`
     overflow: hidden;
@@ -159,7 +106,7 @@ const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
     }, [resetting, resetTarget, switchWorktree]);
 
     const trigger = (
-      <div className={styles.trigger}>
+      <div className={gitChipStyles.staleTrigger}>
         <Icon icon={isWorktree ? GitForkIcon : GitBranchIcon} size={12} />
         <span className={styles.triggerLabel}>{branch}</span>
       </div>
@@ -167,7 +114,7 @@ const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
 
     return (
       <>
-        <div className={styles.separator} />
+        <div className={gitChipStyles.separator} />
         <DropdownMenuRoot open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger>
             <div>{trigger}</div>
@@ -197,8 +144,8 @@ const StaleGitSnapshot = memo<StaleGitSnapshotProps>(
         </DropdownMenuRoot>
         {pullRequest && (
           <>
-            <div className={styles.separator} />
-            <div className={styles.prTrigger} role="button" onClick={handleOpenPr}>
+            <div className={gitChipStyles.separator} />
+            <div className={gitChipStyles.prTrigger} role="button" onClick={handleOpenPr}>
               <Icon icon={GitPullRequest} size={12} />
               <span>#{pullRequest.number}</span>
             </div>

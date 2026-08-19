@@ -10,6 +10,8 @@ import RingLoadingIcon from '@/components/RingLoading';
 import { electronSystemService } from '@/services/electron/system';
 import { gitService } from '@/services/git';
 import {
+  deviceSelectors,
+  useDeviceStore,
   useFetchGitAheadBehind,
   useFetchGitBranch,
   useFetchGitLinkedPR,
@@ -20,6 +22,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
+import { gitChipStyles } from './gitChipStyles';
 import StaleGitSnapshot from './StaleGitSnapshot';
 import WorktreeSwitcher from './WorktreeSwitcher';
 
@@ -70,35 +73,6 @@ const styles = createStaticStyles(({ css }) => {
     diffStatModified: css`
       color: ${cssVar.colorWarning};
     `,
-    prTrigger: css`
-      cursor: pointer;
-
-      display: flex;
-      flex: none;
-      gap: 4px;
-      align-items: center;
-
-      padding-block: 2px;
-      padding-inline: 4px;
-      border-radius: 4px;
-
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      white-space: nowrap;
-
-      transition: background 0.2s;
-
-      &:hover {
-        color: ${cssVar.colorText};
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-    separator: css`
-      flex: none;
-      width: 1px;
-      height: 10px;
-      background: ${cssVar.colorSplit};
-    `,
     syncTrigger: css`
       cursor: pointer;
 
@@ -127,28 +101,6 @@ const styles = createStaticStyles(({ css }) => {
 
       &:hover {
         background: transparent;
-      }
-    `,
-    trigger: css`
-      cursor: pointer;
-
-      display: flex;
-      flex: none;
-      gap: 4px;
-      align-items: center;
-
-      padding-block: 2px;
-      padding-inline: 4px;
-      border-radius: 4px;
-
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      white-space: nowrap;
-
-      transition: background 0.2s;
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
       }
     `,
   };
@@ -192,21 +144,43 @@ const GitStatus = memo<GitStatusProps>(
     // is `data !== undefined` (or an errored one) — keying off `!branch` alone
     // would flash the snapshot cluster on every mount while loading.
     const probeSettled = branchData !== undefined || !!branchError;
-    const isStale = !branch && probeSettled && !!fallbackGit?.branch;
+    // …and only when the probe could reach the directory at all. A remote read
+    // whose device is offline (or whose RPC failed) comes back `undefined`, which
+    // the service normalizes into the SAME empty shape a deleted path produces —
+    // so an unreachable device would otherwise be reported as a missing directory,
+    // offering to drop a worktree override that is perfectly alive. A local read
+    // talks to this filesystem directly and has no such ambiguity.
+    const deviceOnline = useDeviceStore(
+      (s) => !!deviceSelectors.getDeviceById(deviceId)(s)?.online,
+    );
+    const probeReachedDirectory = !deviceId || deviceOnline;
+    const isStale = !branch && probeSettled && probeReachedDirectory && !!fallbackGit?.branch;
     const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
       deviceId,
       path,
       branch,
       isGithub,
     );
+    // The remaining reads are all disabled once the directory is gone: nothing
+    // below renders from them in that state, and the diff poll alone would keep
+    // shelling out to git every 10s — one RPC round-trip per tick on a remote
+    // device — against a path we already know cannot be read.
     const { data: reviewPatches, mutate: mutateReviewPatches } = useReviewPatches(
       path,
       'unstaged',
       undefined,
       deviceId,
+      !isStale,
     );
-    const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(deviceId, path);
-    const { data: worktrees = [], mutate: mutateWorktrees } = useFetchGitWorktrees(deviceId, path);
+    const livePath = isStale ? undefined : path;
+    const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(
+      deviceId,
+      livePath,
+    );
+    const { data: worktrees = [], mutate: mutateWorktrees } = useFetchGitWorktrees(
+      deviceId,
+      livePath,
+    );
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [pulling, setPulling] = useState(false);
     const [pushing, setPushing] = useState(false);
@@ -355,7 +329,7 @@ const GitStatus = memo<GitStatusProps>(
     const pushTargetExists = !!aheadBehind?.pushTargetExists;
 
     const branchTrigger = (
-      <div className={styles.trigger}>
+      <div className={gitChipStyles.trigger}>
         <span className={styles.branchLabel}>{branch}</span>
       </div>
     );
@@ -456,7 +430,7 @@ const GitStatus = memo<GitStatusProps>(
     const diffNode = (() => {
       if (!hasChanges) return null;
       const diffButton = (
-        <div className={styles.trigger} role="button" onClick={handleToggleReview}>
+        <div className={gitChipStyles.trigger} role="button" onClick={handleToggleReview}>
           <span className={styles.diffStat}>
             {diffStats.additions > 0 && (
               <span className={styles.diffStatAdded}>+{diffStats.additions}</span>
@@ -475,7 +449,7 @@ const GitStatus = memo<GitStatusProps>(
 
     return (
       <>
-        <div className={styles.separator} />
+        <div className={gitChipStyles.separator} />
         {/* The worktree icon and the branch name name one thing — which checkout
          * you're on — so they sit closer to each other than to their neighbours. */}
         <div className={styles.branchGroup}>
@@ -487,9 +461,9 @@ const GitStatus = memo<GitStatusProps>(
         {diffNode}
         {prData?.pullRequest && (
           <>
-            <div className={styles.separator} />
+            <div className={gitChipStyles.separator} />
             <Tooltip title={prTooltip}>
-              <div className={styles.prTrigger} role="button" onClick={handleOpenPr}>
+              <div className={gitChipStyles.prTrigger} role="button" onClick={handleOpenPr}>
                 <Icon icon={GitPullRequest} size={12} />
                 <span>#{prData.pullRequest.number}</span>
               </div>
