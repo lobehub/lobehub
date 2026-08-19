@@ -12,24 +12,28 @@ const assetsDir = resolve(workbenchRoot, 'build/client/assets');
 
 dotenv.config({ path: resolve(repoRoot, '.env') });
 
-const env = (workbenchName: string, mobileName: string) =>
-  process.env[workbenchName] || process.env[mobileName];
+const firstEnv = (...names: string[]) => {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return undefined;
+};
 
-const requireEnv = (workbenchName: string, mobileName: string): string => {
-  const value = env(workbenchName, mobileName);
-  if (!value) throw new Error(`Missing env: ${workbenchName} (or fallback ${mobileName})`);
+const requireEnv = (...names: string[]): string => {
+  const value = firstEnv(...names);
+  if (!value) throw new Error(`Missing env: ${names.join(' / ')}`);
   return value;
 };
 
 async function main() {
-  const publicDomain = new URL(requireEnv('WORKBENCH_S3_PUBLIC_DOMAIN', 'MOBILE_S3_PUBLIC_DOMAIN'))
+  const publicDomain = new URL(requireEnv('ASSET_S3_PUBLIC_DOMAIN', 'MOBILE_S3_PUBLIC_DOMAIN'))
     .origin;
   // Same convention as cloud's resolveViteBase: a stable entry suffix, no version
   // stamp — content-hashed filenames make uploads incremental and cache-immutable.
-  const keyPrefix = (process.env.WORKBENCH_S3_KEY_PREFIX || 'workbench').replaceAll(
-    /^\/+|\/+$/g,
-    '',
-  );
+  const keyPrefix = (
+    firstEnv('ASSET_S3_KEY_PREFIX', 'WORKBENCH_S3_KEY_PREFIX') || 'workbench'
+  ).replaceAll(/^\/+|\/+$/g, '');
   const cdnBase = `${publicDomain}/${keyPrefix}/`;
 
   console.log(`=== Step 1: Build workbench (VITE_CDN_BASE=${cdnBase}) ===`);
@@ -48,13 +52,13 @@ async function main() {
 
   console.log('\n=== Step 2: Upload assets to S3 ===');
   await uploadAssets(assetsDir, {
-    accessKeyId: requireEnv('WORKBENCH_S3_ACCESS_KEY_ID', 'MOBILE_S3_ACCESS_KEY_ID'),
-    bucket: requireEnv('WORKBENCH_S3_BUCKET', 'MOBILE_S3_BUCKET'),
-    endpoint: requireEnv('WORKBENCH_S3_ENDPOINT', 'MOBILE_S3_ENDPOINT'),
+    accessKeyId: requireEnv('ASSET_S3_ACCESS_KEY_ID', 'MOBILE_S3_ACCESS_KEY_ID'),
+    bucket: requireEnv('ASSET_S3_BUCKET', 'MOBILE_S3_BUCKET'),
+    endpoint: requireEnv('ASSET_S3_ENDPOINT', 'MOBILE_S3_ENDPOINT'),
     keyPrefix,
     publicDomain,
-    region: env('WORKBENCH_S3_REGION', 'MOBILE_S3_REGION') || 'auto',
-    secretAccessKey: requireEnv('WORKBENCH_S3_SECRET_ACCESS_KEY', 'MOBILE_S3_SECRET_ACCESS_KEY'),
+    region: firstEnv('ASSET_S3_REGION', 'MOBILE_S3_REGION') || 'auto',
+    secretAccessKey: requireEnv('ASSET_S3_SECRET_ACCESS_KEY', 'MOBILE_S3_SECRET_ACCESS_KEY'),
   });
 
   console.log('\n=== Step 3: Deploy worker ===');

@@ -73,8 +73,10 @@ Assets follow the cloud convention (`resolveViteBase`): **stable prefix, no vers
 `VITE_CDN_BASE=https://web-assets.lobehub.com/<name>/`; content-hashed filenames make uploads
 incremental and immutable. `bun run deploy` (see `apps/workbench/scripts/deploy.ts`) =
 build with CDN base → upload `build/client/assets` to R2 (`web-assets` bucket, LobeHub
-account) → `wrangler deploy`. R2 creds: 1Password Shared vault item "CI R2 - web-assets", inject via
-`op read`, never echo values.
+account) → `wrangler deploy`. R2 creds: 1Password Shared vault item "CI R2 - web-assets".
+CI injects repo secrets `ASSET_S3_*` (`ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `BUCKET`,
+`ENDPOINT`, `REGION`, `PUBLIC_DOMAIN`). Local `bun run deploy` can fall back to `MOBILE_S3_*`.
+Never echo values.
 
 Worker responsibilities beyond SSR: reverse-proxy `/api|/oidc|/trpc|/webapi` to
 `WORKBENCH_API_BASE` (standalone mode; behind the gateway the browser hits the apex and the
