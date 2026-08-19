@@ -280,13 +280,14 @@ interface RegenerateUserMessageSource {
 
 type RetryExecutionContext = Pick<
   ConversationContext,
-  'agentId' | 'groupId' | 'scope' | 'subAgentId' | 'isSupervisor' | 'orchestrationRole'
+  'agentId' | 'groupId' | 'scope' | 'subAgentId' | 'isSupervisor' | 'orchestrationRole' | 'threadId'
 >;
 
 interface RetryMessageIdentity {
   agentId?: UIChatMessage['agentId'];
   groupId?: UIChatMessage['groupId'];
   metadata?: UIChatMessage['metadata'];
+  threadId?: UIChatMessage['threadId'];
 }
 
 const getRetryExecutionContext = (
@@ -319,6 +320,7 @@ const getRetryExecutionContext = (
         ? { agentId: message.agentId }
         : {}),
     ...(message.groupId && { groupId: message.groupId }),
+    ...(message.threadId !== undefined && { threadId: message.threadId }),
     ...(message.metadata?.scope && {
       scope: message.metadata.scope as RetryExecutionContext['scope'],
     }),

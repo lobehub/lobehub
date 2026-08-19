@@ -1754,7 +1754,9 @@ export class AiAgentService {
       if (replacementAssistantMessage.topicId !== appContext.topicId) {
         throw new Error('replaceAssistantMessageId does not belong to the requested topic');
       }
-      if ((replacementAssistantMessage.threadId ?? undefined) !== appContext.threadId) {
+      if (
+        (replacementAssistantMessage.threadId ?? undefined) !== (appContext.threadId ?? undefined)
+      ) {
         throw new Error('replaceAssistantMessageId does not belong to the requested thread');
       }
       if ((replacementAssistantMessage.groupId ?? undefined) !== appContext.groupId) {

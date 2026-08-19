@@ -1410,7 +1410,7 @@ describe('Generation Actions', () => {
       expect(mockInternalExecGroupOrchestration).toHaveBeenCalled();
     });
 
-    it('preserves a member assistant identity through gateway regeneration', async () => {
+    it('preserves a member assistant thread through gateway regeneration', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
@@ -1455,6 +1455,7 @@ describe('Generation Actions', () => {
               metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
               parentId: 'user-1',
               role: 'assistant',
+              threadId: 'member-thread-1',
             },
           ],
           displayMessages: [
@@ -1466,6 +1467,7 @@ describe('Generation Actions', () => {
               metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
               parentId: 'user-1',
               role: 'assistant',
+              threadId: 'member-thread-1',
             },
           ],
         } as any);
@@ -1477,11 +1479,16 @@ describe('Generation Actions', () => {
 
       expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: expect.objectContaining({ agentId: 'member-agent', subAgentId: undefined }),
+          context: expect.objectContaining({
+            agentId: 'member-agent',
+            subAgentId: undefined,
+            threadId: 'member-thread-1',
+          }),
           messageContext: expect.objectContaining({
             agentId: 'supervisor-agent',
             orchestrationRole: 'member',
             subAgentId: 'member-agent',
+            threadId: 'member-thread-1',
           }),
           parentMessageId: 'user-1',
           replaceAssistantMessageId: 'assistant-1',

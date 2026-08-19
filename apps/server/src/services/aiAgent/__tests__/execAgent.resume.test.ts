@@ -239,95 +239,100 @@ describe('AiAgentService.execAgent - resume mode', () => {
     );
   });
 
-  it('reuses an existing member assistant without removing its council siblings', async () => {
-    mockFindById.mockImplementation(async (id: string) => {
-      if (id === 'council-tool-1') {
-        return {
-          id,
-          role: 'tool',
-          threadId: 'thread-1',
-          topicId: 'topic-1',
-        };
-      }
+  it.each([null, 'thread-1'])(
+    'reuses an existing member assistant in thread %s without removing its council siblings',
+    async (threadId) => {
+      mockFindById.mockImplementation(async (id: string) => {
+        if (id === 'council-tool-1') {
+          return {
+            id,
+            role: 'tool',
+            threadId,
+            topicId: 'topic-1',
+          };
+        }
 
-      if (id === 'member-1') {
-        return {
-          agentId: 'member-agent',
+        if (id === 'member-1') {
+          return {
+            agentId: 'member-agent',
+            content: 'Old member answer',
+            groupId: 'group-1',
+            id,
+            metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+            parentId: 'council-tool-1',
+            role: 'assistant',
+            threadId,
+            topicId: 'topic-1',
+          };
+        }
+      });
+      mockMessageQuery.mockResolvedValue([
+        { content: 'Prompt', id: 'user-1', role: 'user' },
+        { content: '', id: 'council-tool-1', parentId: 'user-1', role: 'tool' },
+        {
           content: 'Old member answer',
-          groupId: 'group-1',
-          id,
-          metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+          id: 'member-1',
           parentId: 'council-tool-1',
           role: 'assistant',
-          threadId: 'thread-1',
+        },
+        {
+          content: 'Sibling answer',
+          id: 'member-2',
+          parentId: 'council-tool-1',
+          role: 'assistant',
+        },
+      ]);
+      mockQueryTree.mockResolvedValue([
+        { id: 'user-1', parentId: null },
+        { id: 'council-tool-1', parentId: 'user-1' },
+        { id: 'member-1', parentId: 'council-tool-1' },
+        { id: 'member-2', parentId: 'council-tool-1' },
+      ]);
+
+      const result = await service.execAgent({
+        agentId: 'member-agent',
+        appContext: {
+          groupId: 'group-1',
+          orchestrationRole: 'member',
+          threadId,
           topicId: 'topic-1',
-        };
-      }
-    });
-    mockMessageQuery.mockResolvedValue([
-      { content: 'Prompt', id: 'user-1', role: 'user' },
-      { content: '', id: 'council-tool-1', parentId: 'user-1', role: 'tool' },
-      {
-        content: 'Old member answer',
-        id: 'member-1',
-        parentId: 'council-tool-1',
-        role: 'assistant',
-      },
-      {
-        content: 'Sibling answer',
-        id: 'member-2',
-        parentId: 'council-tool-1',
-        role: 'assistant',
-      },
-    ]);
-    mockQueryTree.mockResolvedValue([
-      { id: 'user-1', parentId: null },
-      { id: 'council-tool-1', parentId: 'user-1' },
-      { id: 'member-1', parentId: 'council-tool-1' },
-      { id: 'member-2', parentId: 'council-tool-1' },
-    ]);
+        },
+        parentMessageId: 'council-tool-1',
+        prompt: '',
+        replaceAssistantMessageId: 'member-1',
+        resume: true,
+      });
 
-    const result = await service.execAgent({
-      agentId: 'member-agent',
-      appContext: {
-        groupId: 'group-1',
-        orchestrationRole: 'member',
-        threadId: 'thread-1',
-        topicId: 'topic-1',
-      },
-      parentMessageId: 'council-tool-1',
-      prompt: '',
-      replaceAssistantMessageId: 'member-1',
-      resume: true,
-    });
-
-    expect(result.assistantMessageId).toBe('member-1');
-    expect(mockMessageCreate).not.toHaveBeenCalled();
-    expect(mockMessageUpdate).toHaveBeenCalledWith(
-      'member-1',
-      expect.objectContaining({
-        content: expect.any(String),
-        error: null,
-        metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
-        tools: null,
-      }),
-    );
-    expect(mockCreateOperation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        initialContext: expect.objectContaining({
-          payload: expect.objectContaining({ assistantMessageId: 'member-1' }),
+      expect(result.assistantMessageId).toBe('member-1');
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+      expect(mockMessageUpdate).toHaveBeenCalledWith(
+        'member-1',
+        expect.objectContaining({
+          content: expect.any(String),
+          error: null,
+          metadata: { orchestrationRole: 'member', subAgentId: 'member-agent' },
+          tools: null,
         }),
-        initialMessages: expect.arrayContaining([
-          expect.objectContaining({ id: 'member-2', content: 'Sibling answer' }),
-        ]),
-      }),
-    );
-    expect(mockCreateOperation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        initialMessages: expect.not.arrayContaining([expect.objectContaining({ id: 'member-1' })]),
-      }),
-    );
-  });
+      );
+      expect(mockCreateOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext: expect.objectContaining({
+            payload: expect.objectContaining({ assistantMessageId: 'member-1' }),
+          }),
+          initialMessages: expect.arrayContaining([
+            expect.objectContaining({ id: 'member-2', content: 'Sibling answer' }),
+          ]),
+        }),
+      );
+      expect(mockCreateOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialMessages: expect.not.arrayContaining([
+            expect.objectContaining({ id: 'member-1' }),
+          ]),
+        }),
+      );
+    },
+  );
 
   it('rejects replacing an assistant outside the requested group scope', async () => {
     mockFindById.mockImplementation(async (id: string) => {
