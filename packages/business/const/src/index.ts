@@ -82,6 +82,16 @@ export const SKILL_MARKETPLACE_ENABLED = true;
 export const CLI_CONNECT_ENABLED = true;
 
 /**
+ * The command shown for installing the CLI — on the "ways to use" page, the
+ * connect wizard, and anywhere else that offers it.
+ *
+ * A slot rather than a literal for the same reason as CLI_CONNECT_ENABLED: a
+ * distribution publishing its own CLI under its own package name has this
+ * command install (and its users run) somebody else's package otherwise.
+ */
+export const CLI_INSTALL_COMMAND = 'npm install -g @lobehub/cli';
+
+/**
  * Whether this distribution has a changelog to point users at.
  *
  * `CHANGELOG_URL` is the hosted site's, so a rebranded or self-hosted build

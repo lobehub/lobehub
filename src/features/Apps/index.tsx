@@ -1,39 +1,25 @@
 'use client';
 
-import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
+import { CLI_INSTALL_COMMAND } from '@lobechat/business-const';
+import { isDesktop } from '@lobechat/const';
 import { Icon, Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import type { LucideIcon } from 'lucide-react';
-import { Check, Copy, MessageCircle, Monitor, Smartphone, Terminal } from 'lucide-react';
+import { Check, Copy, Monitor, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+
+import { useDesktopDownload } from '@/features/Downloads/useDesktopDownload';
 
 import { styles } from './style';
 
-const CLI_INSTALL_COMMAND = 'npm install -g @lobehub/cli';
-
-const WAYS = [
+const ALL_WAYS = [
   {
     ctaKey: 'apps.desktop.cta',
     descKey: 'apps.desktop.desc',
     icon: Monitor,
     id: 'desktop',
     titleKey: 'apps.desktop.title',
-  },
-  {
-    ctaKey: 'apps.mobile.cta',
-    descKey: 'apps.mobile.desc',
-    icon: Smartphone,
-    id: 'mobile',
-    titleKey: 'apps.mobile.title',
-  },
-  {
-    ctaKey: 'apps.messenger.cta',
-    descKey: 'apps.messenger.desc',
-    icon: MessageCircle,
-    id: 'messenger',
-    titleKey: 'apps.messenger.title',
   },
   {
     ctaKey: 'apps.cli.copy',
@@ -50,14 +36,17 @@ const WAYS = [
   titleKey: string;
 }>;
 
-const openExternal = (url: string) => {
-  window.open(url, '_blank', 'noopener,noreferrer');
-};
-
 const AppsPage = () => {
   const { t } = useTranslation('setting');
-  const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  const desktopDownload = useDesktopDownload();
+
+  // Mobile and Messenger are upstream capabilities this deployment does not
+  // have (no APK/TestFlight build, no bot integrations) — dropped rather than
+  // left pointing at a dead end. Desktop only shows once there is somewhere
+  // real for it to lead, same rule as everywhere else that offers it (see
+  // useDesktopDownload's doc comment).
+  const WAYS = ALL_WAYS.filter((way) => way.id !== 'desktop' || desktopDownload.available);
 
   const copyInstallCommand = async () => {
     try {
@@ -72,15 +61,7 @@ const AppsPage = () => {
 
   const onAct = (id: (typeof WAYS)[number]['id']) => {
     if (id === 'desktop') {
-      openExternal(DOWNLOAD_URL.default);
-      return;
-    }
-    if (id === 'mobile') {
-      openExternal(DOWNLOAD_URL.mobile);
-      return;
-    }
-    if (id === 'messenger') {
-      navigate('/settings/messenger');
+      if (desktopDownload.href) window.open(desktopDownload.href, '_blank', 'noopener,noreferrer');
       return;
     }
     void copyInstallCommand();
