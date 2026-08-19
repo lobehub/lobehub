@@ -21,7 +21,7 @@ const META_TRIGGER_SEGMENTS = [
   'pnpm-lock.yaml',
   'tsconfig.json',
 ];
-const BUNDLED_LOCALE = /locales\/[^/]+\/(?:chat|pageShare)\.json$/;
+const BUNDLED_LOCALE = /locales\/[^/]+\/(?:chat|error|pageShare)\.json$/;
 
 const META_TRIGGERS = [
   (file) => META_TRIGGER_SEGMENTS.some((segment) => file.includes(segment)),
