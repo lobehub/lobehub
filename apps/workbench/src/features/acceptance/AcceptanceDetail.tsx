@@ -92,7 +92,7 @@ const WorkbenchAcceptanceDetail = memo(() => {
       }),
     { revalidateIfStale: false, revalidateOnFocus: false, revalidateOnReconnect: false },
   );
-  const showSidebar = (Boolean(workspaceList) || import.meta.env.DEV) && !hasFocusedCheck;
+  const showSidebar = Boolean(workspaceList) && !hasFocusedCheck;
 
   return (
     <Flexbox horizontal className={styles.page}>
