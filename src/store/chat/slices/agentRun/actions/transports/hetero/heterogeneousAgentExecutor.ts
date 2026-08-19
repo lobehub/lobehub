@@ -58,6 +58,7 @@ import {
   messageService,
 } from '@/services/message';
 import { threadService } from '@/services/thread';
+import { workService } from '@/services/work';
 import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
@@ -2241,6 +2242,35 @@ export const executeHeterogeneousAgent = async (
               runScope,
               runtimeType: 'hetero',
             });
+
+            // Shell Work scan for this LOCAL run: no server operation exists, so
+            // the completion-time scan (`registerWorksForOperation`) can never
+            // fire — report the run's persisted tool message ids to the server,
+            // which replays the same scan (gh CLI → github Work cards) under a
+            // synthetic anchor-derived rootOperationId. Best-effort and
+            // idempotent server-side; a failure only costs the card, never the
+            // run. Mirrors the gateway path's error-skip: only clean completions
+            // scan. Capped to the server's input limit — a >500-tool run keeps
+            // its most recent calls, which are the ones that own trailing
+            // create/edit output.
+            const toolMessageIds = [...new Set(toolMsgIdByCallId.values())].slice(-500);
+            if (toolMessageIds.length > 0 && mainState.currentAssistantId) {
+              try {
+                const scan = await workService.registerShellWorksForRun({
+                  anchorMessageId: mainState.currentAssistantId,
+                  messageIds: toolMessageIds,
+                  topicId: context.topicId,
+                });
+                if (scan.registered > 0) {
+                  // Re-pull the message list so the anchor's fresh
+                  // `metadata.work.rootOperationId` (and its works payload)
+                  // renders without a manual refresh.
+                  await workService.refreshConversation(context.topicId);
+                }
+              } catch (err) {
+                console.error('[HeterogeneousAgent] Failed to register shell works:', err);
+              }
+            }
           }
         });
       },

@@ -108,6 +108,19 @@ class WorkService {
   ): Promise<WorkItem | null> => lambdaClient.work.handleSkillToolResult.mutate(params);
 
   /**
+   * Report a finished desktop-LOCAL hetero run's tool messages for the
+   * server-side shell Work scan (gh CLI → github Work cards). Local runs have
+   * no `agent_operations` row, so the server's completion scan never fires for
+   * them — the executor calls this at clean completion instead.
+   */
+  registerShellWorksForRun = async (params: {
+    anchorMessageId: string;
+    messageIds: string[];
+    topicId: string;
+  }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
+    lambdaClient.work.registerShellWorksForRun.mutate(params);
+
+  /**
    * Invalidate everything a Work mutation can change for a conversation:
    * - the topic's `message:list` entries, since Work summaries (in-message chips
    *   and the sidebar summary view) ride the message payload
