@@ -211,7 +211,7 @@ describe('computeImageCost', () => {
       expect(result?.breakdown?.imageCount).toBe(5);
     });
 
-    it('should return undefined if fixed pricing unit is not image', () => {
+    it('should return undefined if fixed pricing unit is not image or megapixel', () => {
       const pricing: Pricing = {
         units: [
           {
@@ -228,6 +228,23 @@ describe('computeImageCost', () => {
       const result = computeImageCost(pricing, params, 1);
 
       expect(result).toBeUndefined();
+    });
+
+    it('should compute megapixel pricing from size', () => {
+      const pricing: Pricing = {
+        units: [
+          {
+            name: 'imageGeneration',
+            rate: 0.03,
+            strategy: 'fixed',
+            unit: 'megapixel',
+          },
+        ],
+      };
+
+      const result = computeImageCost(pricing, { size: '1024x1024' }, 1);
+
+      expect(result?.totalCost).toBeCloseTo(0.03 * ((1024 * 1024) / 1_000_000));
     });
   });
 

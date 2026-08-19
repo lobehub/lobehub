@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { act, renderHook } from '@testing-library/react';
 import type { TFunction } from 'i18next';
 import type { Pricing } from 'model-bank';
@@ -49,6 +50,8 @@ vi.mock('@/store/global/selectors', () => ({
 const translations: Record<string, string> = {
   'ModelSwitchPanel.detail.pricing.credits.input': 'Input {{amount}} credits/M tokens',
   'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
+  'ModelSwitchPanel.detail.pricing.credits.second': 'credits/s',
+  'ModelSwitchPanel.detail.pricing.credits.video': 'credits/video',
   'ModelSwitchPanel.detail.pricing.credits.output': 'Output {{amount}} credits/M tokens',
   'ModelSwitchPanel.detail.pricing.credits.perImage': '~ {{amount}} credits / image',
   'ModelSwitchPanel.detail.pricing.credits.perVideo': '~ {{amount}} credits / video',
@@ -129,9 +132,9 @@ const renderModelDetailPanelHook = (
 ) =>
   renderHook(() =>
     useModelDetailPanel({
-      enabledList: createEnabledList('lobehub', basePricing),
+      enabledList: createEnabledList(BRANDING_PROVIDER, basePricing),
       modelId: 'test-model',
-      provider: 'lobehub',
+      provider: BRANDING_PROVIDER,
       t,
       ...params,
     }),
@@ -149,7 +152,7 @@ describe('useModelDetailPanel', () => {
   it('applies business pricing before formatting LobeHub credit prices', () => {
     useBusinessModelPricingMock.mockReturnValue(
       ({ pricing, model, provider }: { model?: string; pricing?: Pricing; provider?: string }) =>
-        provider === 'lobehub' && model === 'test-model' ? discountedPricing : pricing,
+        provider === BRANDING_PROVIDER && model === 'test-model' ? discountedPricing : pricing,
     );
 
     const { result } = renderModelDetailPanelHook();
@@ -163,11 +166,25 @@ describe('useModelDetailPanel', () => {
     });
     expect(result.current.hasCachedInputPricing).toBe(true);
     expect(result.current.getUnitPriceSuffix('millionTokens')).toBe(' credits/M tokens');
+    expect(result.current.getUnitPriceSuffix('video')).toBe(' credits/video');
+    expect(result.current.getUnitPriceSuffix('second')).toBe(' credits/s');
+  });
+
+  it('uses unit suffixes including /video when not on credit pricing', () => {
+    const { result } = renderModelDetailPanelHook({
+      enabledList: createEnabledList('openrouter', unitPricing),
+      provider: 'openrouter',
+    });
+
+    expect(result.current.isCreditPricing).toBe(false);
+    expect(result.current.getUnitPriceSuffix('video')).toBe('/video');
+    expect(result.current.getUnitPriceSuffix('second')).toBe('/s');
+    expect(result.current.getUnitPriceSuffix('megapixel')).toBe('/MP');
   });
 
   it('formats original unit prices for tiered and lookup units', () => {
     const { result } = renderModelDetailPanelHook({
-      enabledList: createEnabledList('lobehub', unitPricing),
+      enabledList: createEnabledList(BRANDING_PROVIDER, unitPricing),
     });
 
     expect(result.current.formatUnitPrice(unitPricing.units[0])).toEqual({
@@ -182,7 +199,7 @@ describe('useModelDetailPanel', () => {
 
   it('uses the enabled model list hook when no list is provided', () => {
     useEnabledChatModelsMock.mockReturnValue(
-      createEnabledList('lobehub', basePricing, {
+      createEnabledList(BRANDING_PROVIDER, basePricing, {
         abilities: { reasoning: true },
       }),
     );

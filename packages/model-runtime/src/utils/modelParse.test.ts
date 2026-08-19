@@ -106,6 +106,18 @@ const { loadModelsMock, mockDefaultModelList } = vi.hoisted(() => ({
         searchProvider: 'builtin',
       },
     },
+    {
+      displayName: 'Known Image Pricing',
+      enabled: true,
+      id: 'known-image-pricing',
+      parameters: { prompt: { default: '' } },
+      pricing: {
+        approximatePricePerImage: 0.04,
+        currency: 'USD',
+        units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+      },
+      type: 'image',
+    },
   ] as (Partial<ChatModelCard> & { id: string })[],
 }));
 
@@ -114,6 +126,7 @@ vi.mock('model-bank', () => ({
   AiModelTypeSchema: {
     options: ['chat', 'embedding', 'tts', 'asr', 'image', 'video', 'text2music', 'realtime'],
   },
+  DEFAULT_VIDEO_GENERATION_PARAMS: { prompt: { default: '' } },
   LOBE_DEFAULT_MODEL_LIST: mockDefaultModelList,
   loadModels: vi.fn().mockResolvedValue(mockDefaultModelList),
   ModelProvider: { LobeHub: 'lobehub' },
@@ -517,6 +530,101 @@ describe('modelParse', () => {
       expect(comfyui.functionCall).toBe(false); // ComfyUI config has empty arrays
       expect(comfyui.reasoning).toBe(false); // ComfyUI config has empty arrays
       expect(comfyui.vision).toBe(false); // ComfyUI config has empty arrays
+    });
+
+    it('preserves generator pricing metadata when pricing already uses unit records', async () => {
+      const [image, video] = await processMultiProviderModelList([
+        {
+          id: 'example/image',
+          parameters: { prompt: { default: '' } },
+          pricing: {
+            approximatePricePerImage: 0.04,
+            currency: 'USD',
+            units: [
+              {
+                name: 'imageGeneration',
+                rate: 40,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+            ],
+          },
+          type: 'image',
+        },
+        {
+          id: 'example/video',
+          pricing: {
+            approximatePricePerVideo: 0.5,
+            currency: 'USD',
+            units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+          },
+          type: 'video',
+        },
+      ]);
+
+      expect(image.pricing).toMatchObject({
+        approximatePricePerImage: 0.04,
+        currency: 'USD',
+      });
+      expect(video.pricing).toMatchObject({
+        approximatePricePerVideo: 0.5,
+        currency: 'USD',
+      });
+    });
+
+    it('keeps known approximate generator prices while live units override stale units', async () => {
+      const [model] = await processMultiProviderModelList([
+        {
+          id: 'known-image-pricing',
+          pricing: {
+            currency: 'USD',
+            units: [
+              {
+                name: 'imageGeneration',
+                rate: 40,
+                strategy: 'fixed',
+                unit: 'millionTokens',
+              },
+            ],
+          },
+          type: 'image',
+        },
+      ]);
+
+      expect(model.pricing).toEqual({
+        approximatePricePerImage: 0.04,
+        currency: 'USD',
+        units: [
+          {
+            name: 'imageGeneration',
+            rate: 40,
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+        ],
+      });
+    });
+
+    it('keeps video parameters (or a default schema) so Create Video can parse them', async () => {
+      const result = await processMultiProviderModelList([
+        {
+          id: 'google/veo-3',
+          parameters: {
+            duration: { default: 8 },
+            prompt: { default: '' },
+          },
+          type: 'video',
+        },
+        { id: 'kwaivgi/kling-v2', type: 'video' },
+      ]);
+
+      const veo = result.find((model) => model.id === 'google/veo-3');
+      const kling = result.find((model) => model.id === 'kwaivgi/kling-v2');
+
+      expect(veo?.type).toBe('video');
+      expect(veo?.parameters).toMatchObject({ duration: { default: 8 }, prompt: { default: '' } });
+      expect(kling?.type).toBe('video');
+      expect(kling?.parameters).toMatchObject({ prompt: { default: '' } });
     });
 
     it('should recognize model capabilities based on keyword detection across providers', async () => {

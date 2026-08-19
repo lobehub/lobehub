@@ -684,4 +684,23 @@ describe('convertOpenAIImageUsage', () => {
       cost: 0.16647, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
     });
   });
+
+  it('prefers OpenRouter provider-reported usage.cost over the pricing estimate', () => {
+    const usage = {
+      input_tokens: 14,
+      input_tokens_details: {
+        text_tokens: 14,
+        image_tokens: 0,
+      },
+      output_tokens: 4160,
+      total_tokens: 4174,
+      cost: 0.04,
+    } as OpenAI.Images.ImagesResponse.Usage;
+
+    const pricing: Pricing = {
+      units: [{ name: 'imageOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' }],
+    };
+
+    expect(convertOpenAIImageUsage(usage, pricing).cost).toBe(0.04);
+  });
 });

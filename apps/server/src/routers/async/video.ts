@@ -63,7 +63,12 @@ async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
   signal: AbortSignal,
-): Promise<{ costUsd?: number; headers?: Record<string, string>; videoUrl: string } | null> {
+): Promise<{
+  costUsd?: number;
+  headers?: Record<string, string>;
+  modelUsage?: { cost?: number; totalOutputTokens?: number; totalTokens?: number };
+  videoUrl: string;
+} | null> {
   const maxRetries = 120;
   const pollingInterval = 5000;
 
@@ -80,6 +85,7 @@ async function pollUntilCompletion(
         return {
           ...(typeof result.costUsd === 'number' ? { costUsd: result.costUsd } : {}),
           headers: result.headers,
+          modelUsage: result.modelUsage,
           videoUrl: result.videoUrl,
         };
       }
@@ -255,7 +261,13 @@ export const videoRouter = router({
               model: resolvedModelId,
               prechargeResult,
               provider,
-              usage: undefined,
+              usage: pollResult.modelUsage
+                ? {
+                    completionTokens: pollResult.modelUsage.totalOutputTokens ?? 0,
+                    cost: pollResult.modelUsage.cost,
+                    totalTokens: pollResult.modelUsage.totalTokens ?? 0,
+                  }
+                : undefined,
               userId: ctx.userId,
               workspaceId,
             });

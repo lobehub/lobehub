@@ -1,3 +1,4 @@
+import type { ModelUsage } from '@lobechat/types';
 import type { RuntimeVideoGenParams } from 'model-bank';
 
 import type { ModelPricingContext } from './pricing';
@@ -36,6 +37,7 @@ export type PollVideoStatusResult =
   | {
       costUsd?: number;
       headers?: Record<string, string>;
+      modelUsage?: ModelUsage;
       status: 'success';
       videoUrl: string;
     }

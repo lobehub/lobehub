@@ -234,5 +234,5 @@ export const convertOpenAIImageUsage = (
     totalTokens: usage.total_tokens,
   };
 
-  return withUsageCost(data as ModelUsage, pricing);
+  return withPricingOrProviderCost(data as ModelUsage, pricing, usage);
 };

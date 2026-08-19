@@ -47,13 +47,19 @@ const isChatType = (type?: string | null): boolean => {
   return normalized === 'chat';
 };
 
+const isImageOrVideoType = (type?: string | null): boolean => {
+  const normalized = (type || '').toLowerCase();
+  return normalized === 'image' || normalized === 'video';
+};
+
 /**
  * Returns the set of OpenRouter model ids that should be enabled by default:
  * always includes {@link OPENROUTER_AUTO_MODEL_ID}, plus the
  * {@link DEFAULT_ENABLED_MODELS_PER_FAMILY} newest chat models from each of
  * openai / anthropic / google (by `releasedAt` desc; missing dates sort last),
- * plus Nano Banana Image-tab `:image` siblings when present in the catalog, and
- * `:image` clones of any default-enabled chat id.
+ * every catalog `image` / `video` generator (Create pickers only list enabled
+ * models), plus Nano Banana Image-tab pins and `:image` clones of default chat
+ * ids when those rows exist.
  */
 export const computeDefaultEnabledOpenRouterModelIds = (
   models: OpenRouterDefaultModelCandidate[],
@@ -101,6 +107,12 @@ export const computeDefaultEnabledOpenRouterModelIds = (
     if (id.endsWith(IMAGE_MODEL_SUFFIX)) continue;
     const imageId = `${id}${IMAGE_MODEL_SUFFIX}`;
     if (catalogIds.has(imageId)) enabled.add(imageId);
+  }
+
+  // Image / Video Create list enabled models only. Chat stays curated (hundreds
+  // of cards); enable every catalog generator so Flux, Veo, etc. appear.
+  for (const model of models) {
+    if (isImageOrVideoType(model.type)) enabled.add(model.id);
   }
 
   return enabled;

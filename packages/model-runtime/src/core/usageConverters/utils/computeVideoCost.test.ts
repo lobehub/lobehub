@@ -27,6 +27,41 @@ describe('computeVideoCost', () => {
       expect(result?.breakdown?.pricePerMillionTokens).toBe(0.21);
     });
 
+    it('should compute cost with second unit times duration', () => {
+      const pricing: Pricing = {
+        units: [
+          {
+            name: 'videoGeneration',
+            rate: 0.1,
+            strategy: 'fixed',
+            unit: 'second',
+          },
+        ],
+      };
+
+      const result = computeVideoCost(pricing, 0, { duration: 5 });
+
+      expect(result?.totalCost).toBe(0.5);
+      expect(result?.totalCredits).toBe(500_000);
+    });
+
+    it('should compute flat per-video cost', () => {
+      const pricing: Pricing = {
+        units: [
+          {
+            name: 'videoGeneration',
+            rate: 0.4,
+            strategy: 'fixed',
+            unit: 'video',
+          },
+        ],
+      };
+
+      const result = computeVideoCost(pricing, 0, {});
+
+      expect(result?.totalCost).toBe(0.4);
+    });
+
     it('should return undefined when unit is not millionTokens', () => {
       const pricing: Pricing = {
         units: [
@@ -90,6 +125,35 @@ describe('computeVideoCost', () => {
       expect(result?.totalCost).toBe(0.42);
       expect(result?.totalCredits).toBe(420_000);
       expect(result?.breakdown?.lookupKey).toBe('true');
+    });
+
+    it('should compute lookup per-second cost times duration', () => {
+      const pricing: Pricing = {
+        units: [
+          {
+            lookup: {
+              pricingParams: ['resolution', 'generateAudio'],
+              prices: {
+                '720p_true': 0.1,
+                '4K_true': 0.3,
+              },
+            },
+            name: 'videoGeneration',
+            strategy: 'lookup',
+            unit: 'second',
+          },
+        ],
+      };
+
+      const result = computeVideoCost(pricing, 0, {
+        duration: 8,
+        generateAudio: true,
+        resolution: '720p',
+      });
+
+      expect(result?.totalCost).toBe(0.8);
+      expect(result?.totalCredits).toBe(800_000);
+      expect(result?.breakdown?.lookupKey).toBe('720p_true');
     });
 
     it('should return undefined when lookup param is missing', () => {

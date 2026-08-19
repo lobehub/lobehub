@@ -29,7 +29,7 @@ describe('OpenRouterModelCatalogModel', () => {
     await expect(catalog.count()).resolves.toBe(0);
   });
 
-  it('enables only the newest 4 chat models per openai/anthropic/google on sync', async () => {
+  it('enables newest 4 chat models per family and every image/video generator', async () => {
     await catalog.replaceCatalog({
       models: [
         { displayName: 'GPT old', id: 'openai/gpt-old', releasedAt: '2024-01-01', type: 'chat' },
@@ -61,6 +61,12 @@ describe('OpenRouterModelCatalogModel', () => {
           releasedAt: '2026-01-01',
           type: 'image',
         },
+        {
+          displayName: 'Veo 3',
+          id: 'google/veo-3',
+          releasedAt: '2026-01-01',
+          type: 'video',
+        },
       ],
       triggeredBy: 'manual:admin',
     });
@@ -76,14 +82,15 @@ describe('OpenRouterModelCatalogModel', () => {
     expect(byId['anthropic/claude-1'].enabled).toBe(true);
     expect(byId['google/gemini-1'].enabled).toBe(true);
     expect(byId['deepseek/deepseek-chat'].enabled).toBe(false);
-    expect(byId['openai/dall-e'].enabled).toBe(false);
+    expect(byId['openai/dall-e'].enabled).toBe(true);
+    expect(byId['google/veo-3'].enabled).toBe(true);
 
     const status = await catalog.getSyncStatus();
     expect(status).toMatchObject({
       lastStatus: 'success',
       lastTriggeredBy: 'manual:admin',
       // Input models + product Auto
-      modelCount: 10,
+      modelCount: 11,
     });
   });
 

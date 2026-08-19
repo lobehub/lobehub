@@ -317,8 +317,16 @@ export const isAiModelVisible = (model: { visible?: boolean }) => model.visible 
 /**
  * OpenRouter-style free tiers: id suffix `:free` (e.g. `…:free`) or display name `(free)`.
  */
-export const isFreeAiModel = (model: { displayName?: string | null; id: string }) =>
-  model.id.includes(':free') || /\(free\)/i.test(model.displayName ?? '');
+export const isFreeAiModel = (model: {
+  displayName?: string | null;
+  id: string;
+  type?: string | null;
+}) => {
+  // Image/video SKUs are often billed per asset with $0 text tokens, which
+  // used to get a "(free)" stamp and vanish from Create pickers.
+  if (model.type === 'image' || model.type === 'video') return false;
+  return model.id.includes(':free') || /\(free\)/i.test(model.displayName ?? '');
+};
 
 export interface AiModelConfig {
   /**

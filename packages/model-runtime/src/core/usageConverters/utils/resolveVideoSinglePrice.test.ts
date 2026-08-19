@@ -28,6 +28,37 @@ describe('resolveVideoSinglePrice', () => {
     expect(result).toEqual({});
   });
 
+  it('derives an approximate clip price from a per-second unit', () => {
+    const result = resolveVideoSinglePrice({
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+    });
+    expect(result.approximatePrice).toBe(0.5);
+  });
+
+  it('derives an approximate clip price from the lowest per-second lookup rate', () => {
+    const result = resolveVideoSinglePrice({
+      units: [
+        {
+          lookup: {
+            prices: { '720p': 0.1, '4K': 0.3 },
+            pricingParams: ['resolution'],
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    });
+    expect(result.approximatePrice).toBe(0.5);
+  });
+
+  it('uses a flat per-video unit as the approximate price', () => {
+    const result = resolveVideoSinglePrice({
+      units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'video' }],
+    });
+    expect(result.approximatePrice).toBe(0.4);
+  });
+
   it('should return approximatePrice of 0 when approximatePricePerVideo is 0', () => {
     const pricing: Pricing = {
       approximatePricePerVideo: 0,

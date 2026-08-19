@@ -95,7 +95,7 @@ describe('pollOpenRouterVideoStatus', () => {
     });
   });
 
-  it('persists OpenRouter usage.cost as costUsd on success', async () => {
+  it('persists OpenRouter usage.cost as costUsd and modelUsage', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       json: async () => ({
         status: 'completed',
@@ -109,6 +109,7 @@ describe('pollOpenRouterVideoStatus', () => {
       pollOpenRouterVideoStatus('video-job-1', { apiKey: 'test-api-key' }),
     ).resolves.toMatchObject({
       costUsd: 0.042,
+      modelUsage: { cost: 0.042 },
       status: 'success',
     });
   });
