@@ -19,6 +19,8 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -112,6 +114,7 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
+  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
   const apiModeAvailable =
     isDesktop &&
     resolveExecutionTarget(effectiveAgencyConfig, {
@@ -142,6 +145,7 @@ const ProfileEditor = memo(() => {
           children: (
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
+              apiModeLabEnabled={apiModeLabEnabled}
               provider={heterogeneousProvider}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}

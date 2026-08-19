@@ -656,6 +656,28 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   }
 
   describe('Claude Code Desktop-local API binding', () => {
+    let previousLab: ReturnType<typeof useUserStore.getState>['preference']['lab'];
+
+    const setClaudeCodeApiModeLab = (enabled: boolean) => {
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableClaudeCodeApiMode: enabled },
+        },
+      }));
+    };
+
+    beforeEach(() => {
+      previousLab = useUserStore.getState().preference.lab;
+      setClaudeCodeApiModeLab(true);
+    });
+
+    afterEach(() => {
+      useUserStore.setState((state) => ({
+        preference: { ...state.preference, lab: previousLab },
+      }));
+    });
+
     const apiProvider = {
       apiConfig: { model: 'api-primary', providerId: 'anthropic-direct' },
       args: ['--model', 'stale-arg-model', '--effort', 'high'],
@@ -701,7 +723,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         expect.objectContaining({
           args: ['--effort', 'high', '--model', 'api-primary'],
           env: expect.objectContaining({
-            ANTHROPIC_API_KEY: 'direct-key',
+            ANTHROPIC_AUTH_TOKEN: 'direct-key',
             ANTHROPIC_BASE_URL: 'https://direct.example.com',
             ANTHROPIC_MODEL: 'api-primary',
             ANTHROPIC_SMALL_FAST_MODEL: 'api-primary',
@@ -715,9 +737,30 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         }),
       );
       const { env } = mockStartSession.mock.calls[0][0];
-      expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined();
       expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('fails before spawn when the Labs experiment is disabled', async () => {
+      configureDirectProvider();
+      setClaudeCodeApiModeLab(false);
+      const store = createMockStore();
+
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        {
+          ...defaultParams,
+          heterogeneousProvider: apiProvider,
+        },
+      );
+
+      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
+        expect.anything(),
+      );
     });
 
     it('fails before spawn when the bound provider is disabled or deleted', async () => {

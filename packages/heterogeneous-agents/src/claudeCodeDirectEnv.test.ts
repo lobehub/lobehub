@@ -16,7 +16,7 @@ describe('Claude Code Desktop-local direct binding', () => {
 
     expect(result.error).toBeUndefined();
     expect(result.env).toEqual({
-      ANTHROPIC_API_KEY: 'test-key',
+      ANTHROPIC_AUTH_TOKEN: 'test-key',
       ANTHROPIC_BASE_URL: 'https://example.com/anthropic',
       ANTHROPIC_MODEL: 'claude-sonnet-test',
       ANTHROPIC_SMALL_FAST_MODEL: 'claude-sonnet-test',
@@ -25,6 +25,43 @@ describe('Claude Code Desktop-local direct binding', () => {
       CLAUDE_CODE_USE_BEDROCK: '0',
       CLAUDE_CODE_USE_MANTLE: '0',
       CLAUDE_CODE_USE_VERTEX: '0',
+    });
+  });
+
+  it('strips SDK-managed /v1 and /v1/messages suffixes from the Claude Code base URL', () => {
+    expect(
+      buildClaudeCodeDirectEnv({
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://gateway.example.com/v1/' },
+        model: 'primary',
+        sdkType: 'anthropic',
+      }).env.ANTHROPIC_BASE_URL,
+    ).toBe('https://gateway.example.com');
+    expect(
+      buildClaudeCodeDirectEnv({
+        keyVaults: { apiKey: 'test-key', baseURL: 'https://gateway.example.com/v1/messages' },
+        model: 'primary',
+        sdkType: 'anthropic',
+      }).env.ANTHROPIC_BASE_URL,
+    ).toBe('https://gateway.example.com');
+  });
+
+  it('uses ANTHROPIC_API_KEY for first-party Anthropic and AUTH_TOKEN for custom gateways', () => {
+    expect(
+      buildClaudeCodeDirectEnv({
+        keyVaults: { apiKey: 'official-key' },
+        model: 'primary',
+        sdkType: 'anthropic',
+      }).env,
+    ).toMatchObject({ ANTHROPIC_API_KEY: 'official-key' });
+    expect(
+      buildClaudeCodeDirectEnv({
+        keyVaults: { apiKey: 'gateway-key', baseURL: 'https://useaifor.me' },
+        model: 'primary',
+        sdkType: 'anthropic',
+      }).env,
+    ).toMatchObject({
+      ANTHROPIC_AUTH_TOKEN: 'gateway-key',
+      ANTHROPIC_BASE_URL: 'https://useaifor.me',
     });
   });
 

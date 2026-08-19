@@ -523,6 +523,10 @@ export default {
   'heteroAgent.cloudNotConfigured.title': 'Cloud credentials required',
   'heteroAgent.apiMode.configMissing':
     'Claude Code API mode requires a provider and model binding. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.labDisabled.action': 'Enable in Labs',
+  'heteroAgent.apiMode.labDisabled.desc':
+    'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
+  'heteroAgent.apiMode.labDisabled.title': 'Claude Code API mode is a Labs experiment',
   'heteroAgent.apiMode.localOnly.desc':
     'Switch the execution environment to Local device, or use Subscription authentication.',
   'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',

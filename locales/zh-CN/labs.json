@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Artifact 部署",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
+  "features.claudeCodeApiMode.desc": "让 Claude Code 在本机使用已配置的 API 服务商和模型，而不是 Claude 订阅。仅支持桌面端本地执行。",
+  "features.claudeCodeApiMode.title": "Claude Code API 服务商",
   "features.claudeCodeSdk.desc": "通过 Claude Agent SDK 运行 Claude Code 会话，替代 CLI 进程方式，提供更丰富的流式输出与会话控制。",
   "features.claudeCodeSdk.title": "Claude Code SDK 运行时",
   "features.codexAppServer.desc": "通过本地 App Server 运行 Codex 会话，替代一次性的 CLI 进程，提供 Token 流式输出与原生 Turn 控制。",

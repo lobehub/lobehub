@@ -1808,6 +1808,16 @@ export const executeHeterogeneousAgent = async (
   let spawnProvider = heterogeneousProvider;
 
   if (adapterType === 'claude-code' && heterogeneousProvider.authMode === 'api') {
+    if (!labPreferSelectors.enableClaudeCodeApiMode(useUserStore.getState())) {
+      await persistTerminalError(
+        toHeterogeneousAgentMessageError(
+          new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
+          adapterType,
+        ),
+      );
+      return;
+    }
+
     const { apiConfig } = heterogeneousProvider;
     const aiInfraState = getAiInfraStoreState();
     const providerConfig = apiConfig

@@ -14,6 +14,7 @@ export type LabStage = 'alpha' | 'beta';
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
   | 'artifactDeployment'
+  | 'claudeCodeApiMode'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
@@ -106,6 +107,13 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableImessage',
     i18nKey: 'imessage',
     searchKeywords: ['imessage', 'bluebubbles'],
+    stage: 'alpha',
+  },
+  {
+    desktopOnly: true,
+    flag: 'enableClaudeCodeApiMode',
+    i18nKey: 'claudeCodeApiMode',
+    searchKeywords: ['claude code api', 'api provider', 'api mode'],
     stage: 'alpha',
   },
   {

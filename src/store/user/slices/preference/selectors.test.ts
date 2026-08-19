@@ -114,6 +114,18 @@ describe('preferenceSelectors', () => {
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
     });
 
+    it('keeps Claude Code API mode disabled by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableClaudeCodeApiMode(store)).toBe(false);
+    });
+
+    it('returns the configured Claude Code API mode preference', () => {
+      store.preference.lab = { enableClaudeCodeApiMode: true };
+
+      expect(labPreferSelectors.enableClaudeCodeApiMode(store)).toBe(true);
+    });
+
     it('keeps OAuth app management hidden by default', () => {
       store.preference.lab = undefined;
 

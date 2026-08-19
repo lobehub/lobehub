@@ -162,6 +162,10 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
+   * let Claude Code use a configured API provider on Desktop instead of a subscription
+   */
+  enableClaudeCodeApiMode: z.boolean().optional(),
+  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),

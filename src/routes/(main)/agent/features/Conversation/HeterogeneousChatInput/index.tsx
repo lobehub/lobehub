@@ -25,6 +25,8 @@ import {
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import ApiModeModelBar from './ApiModeModelBar';
 import HeteroControlBar from './HeteroControlBar';
@@ -100,6 +102,9 @@ const HeterogeneousChatInput = memo(() => {
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const providerType = heterogeneousProvider?.type;
+  const enableClaudeCodeApiMode = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
+  const isApiAuth = providerType === 'claude-code' && heterogeneousProvider?.authMode === 'api';
+  const isApiModeActive = isApiAuth && enableClaudeCodeApiMode;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
@@ -113,7 +118,7 @@ const HeterogeneousChatInput = memo(() => {
     executionTarget === 'none';
 
   const showHeteroModel =
-    heterogeneousProvider?.authMode !== 'api' &&
+    !isApiAuth &&
     isHeteroSelectorAvailable(providerType) &&
     shouldShowHeteroModelSelector({
       boundDeviceId: agencyConfig?.boundDeviceId,
@@ -121,19 +126,10 @@ const HeterogeneousChatInput = memo(() => {
       isDesktopClient: isDesktop,
       providerType,
     });
-  const showApiModeModel =
-    !!agentId &&
-    providerType === 'claude-code' &&
-    heterogeneousProvider?.authMode === 'api' &&
-    executionTarget === 'local';
-  const apiModeTargetUnsupported =
-    providerType === 'claude-code' &&
-    heterogeneousProvider?.authMode === 'api' &&
-    executionTarget !== 'local';
-  const isLocalApiMode =
-    providerType === 'claude-code' &&
-    heterogeneousProvider?.authMode === 'api' &&
-    executionTarget === 'local';
+  const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
+  const apiModeLabDisabled = isApiAuth && !enableClaudeCodeApiMode;
+  const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
+  const isLocalApiMode = isApiModeActive && executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
     resolveClaudeCodeApiBindingGuard({
       active: isLocalApiMode,
@@ -221,6 +217,7 @@ const HeterogeneousChatInput = memo(() => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
     if (
+      apiModeLabDisabled ||
       apiModeTargetUnsupported ||
       isPreferenceLoading ||
       deviceSelectionRequired ||
@@ -237,6 +234,22 @@ const HeterogeneousChatInput = memo(() => {
         action={
           <Button size={'small'} type={'primary'} onClick={goToConfig}>
             {t('heteroAgent.cloudNotConfigured.action')}
+          </Button>
+        }
+      />
+    );
+  };
+
+  const renderApiModeLabGuard = () => {
+    if (!apiModeLabDisabled) return null;
+
+    return (
+      <GuardBanner
+        hint={t('heteroAgent.apiMode.labDisabled.desc')}
+        title={t('heteroAgent.apiMode.labDisabled.title')}
+        action={
+          <Button size={'small'} type={'primary'} onClick={() => navigate('/settings/labs')}>
+            {t('heteroAgent.apiMode.labDisabled.action')}
           </Button>
         }
       />
@@ -297,6 +310,7 @@ const HeterogeneousChatInput = memo(() => {
   // workspace preference loads, keep send disabled: the effective target isn't
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
+    apiModeLabDisabled ||
     apiModeTargetUnsupported ||
     apiModeBindingBlocked ||
     isPreferenceLoading ||
@@ -304,6 +318,7 @@ const HeterogeneousChatInput = memo(() => {
     (!isConfigured && !isDeviceExecution) ||
     deviceBlocked;
   const hasGuard =
+    apiModeLabDisabled ||
     apiModeTargetUnsupported ||
     !!apiModeBindingError ||
     deviceSelectionRequired ||
@@ -312,6 +327,7 @@ const HeterogeneousChatInput = memo(() => {
 
   return (
     <Flexbox>
+      {renderApiModeLabGuard()}
       {renderApiModeTargetGuard()}
       {renderApiModeBindingGuard()}
       {renderDeviceSelectionGuard()}
