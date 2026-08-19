@@ -2,7 +2,10 @@ import type { HeterogeneousApiConfig } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
-import { validateClaudeCodeApiBinding } from '@/helpers/claudeCodeApiBinding';
+import {
+  isClaudeCodeDirectCompatible,
+  validateClaudeCodeApiBinding,
+} from '@/helpers/claudeCodeApiBinding';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 
@@ -34,10 +37,9 @@ export const useClaudeCodeApiBindingValidation = (apiConfig?: HeterogeneousApiCo
       apiConfig,
       enabledModels,
       providerEnabled: !!apiConfig && providerList.some(({ id }) => id === apiConfig.providerId),
-      providerSdkType:
-        providerConfig?.settings.claudeCode?.direct === true
-          ? providerConfig.settings.sdkType
-          : undefined,
+      providerSdkType: isClaudeCodeDirectCompatible(providerConfig?.settings)
+        ? providerConfig?.settings.sdkType
+        : undefined,
     }),
     isReady,
   };
@@ -51,7 +53,7 @@ export const useClaudeCodeCompatibleProviders = (): ClaudeCodeCompatibleProvider
 
   return useMemo(() => {
     const candidateProviders = providerList
-      .filter((provider) => runtimeConfig[provider.id]?.settings.claudeCode?.direct === true)
+      .filter((provider) => isClaudeCodeDirectCompatible(runtimeConfig[provider.id]?.settings))
       .map(({ id, name }) => ({ id, name }));
     const compatibleProviderIds = new Set(candidateProviders.map(({ id }) => id));
     const modelsByProvider: Record<string, ClaudeCodeCompatibleModel[]> = {};

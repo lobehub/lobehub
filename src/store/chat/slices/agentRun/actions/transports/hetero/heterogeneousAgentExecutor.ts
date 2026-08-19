@@ -49,7 +49,10 @@ import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import { validateClaudeCodeApiBinding } from '@/helpers/claudeCodeApiBinding';
+import {
+  isClaudeCodeDirectCompatible,
+  validateClaudeCodeApiBinding,
+} from '@/helpers/claudeCodeApiBinding';
 import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
@@ -1830,10 +1833,9 @@ export const executeHeterogeneousAgent = async (
         !!apiConfig &&
         !!providerConfig &&
         !!aiInfraState.enabledAiProviders?.some((provider) => provider.id === apiConfig.providerId),
-      providerSdkType:
-        providerConfig?.settings.claudeCode?.direct === true
-          ? providerConfig.settings.sdkType
-          : undefined,
+      providerSdkType: isClaudeCodeDirectCompatible(providerConfig?.settings)
+        ? providerConfig?.settings.sdkType
+        : undefined,
     });
     if (bindingError) {
       const message =

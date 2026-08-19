@@ -1,8 +1,5 @@
 import type { AiProviderSDKType } from '@lobechat/types';
 
-export const CLAUDE_CODE_API_LOCAL_ONLY_ERROR =
-  'Claude Code API mode is only supported for Desktop local execution.';
-
 export interface BuildClaudeCodeDirectEnvInput {
   /** Decrypted provider credentials. This function is for trusted local execution only. */
   keyVaults?: Record<string, unknown>;

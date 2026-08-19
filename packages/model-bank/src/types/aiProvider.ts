@@ -150,7 +150,12 @@ export interface AiProviderSettings {
    * @default 'apiKey'
    */
   authType?: AiProviderAuthType;
-  /** Explicit Claude Code compatibility. sdkType alone is not sufficient. */
+  /**
+   * Explicit Claude Code capabilities.
+   * `sdkType === 'anthropic'` still enables Desktop-local direct mode for
+   * custom providers (no settings UI for this flag). Remote gateway requires
+   * `gateway: 'anthropic-messages'`.
+   */
   claudeCode?: ClaudeCodeProviderCapability;
   /**
    * whether provider show browser request option by default

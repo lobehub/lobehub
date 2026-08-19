@@ -6,12 +6,26 @@ interface EnabledChatModelRef {
   type: string;
 }
 
+interface ClaudeCodeDirectSettings {
+  claudeCode?: { direct?: boolean };
+  sdkType?: string;
+}
+
 interface ValidateClaudeCodeApiBindingInput {
   apiConfig?: HeterogeneousApiConfig;
   enabledModels: readonly EnabledChatModelRef[];
   providerEnabled: boolean;
   providerSdkType?: string;
 }
+
+/**
+ * Desktop-local Claude Code can launch builtin providers that opt into
+ * `claudeCode.direct`, and custom Anthropic-compatible providers that only
+ * have `sdkType === 'anthropic'` (no UI exists to set the explicit flag).
+ * Remote gateway still requires `claudeCode.gateway`.
+ */
+export const isClaudeCodeDirectCompatible = (settings?: ClaudeCodeDirectSettings): boolean =>
+  settings?.claudeCode?.direct === true || settings?.sdkType === 'anthropic';
 
 export type ClaudeCodeApiBindingError =
   | { code: 'configMissing' }

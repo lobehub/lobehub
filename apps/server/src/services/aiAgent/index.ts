@@ -5835,26 +5835,30 @@ export class AiAgentService {
     // bot/messenger stop). Recover it from the owner-scoped operation row so
     // device cancellation is symmetric across every caller.
     let resolvedTopicId = topicId;
+    let operation = resolvedTopicId
+      ? undefined
+      : ((await this.agentOperationModel.findById(resolvedOperationId)) ?? undefined);
     if (!resolvedTopicId) {
-      const operation = await this.agentOperationModel.findById(resolvedOperationId);
       resolvedTopicId = operation?.topicId ?? undefined;
     }
 
-    // 2. Cancel remote hetero process (openclaw / hermes) if applicable.
-    // Check topic.metadata.runningOperation for device + heteroType info seeded by execAgent.
-    // This runs regardless of whether interruptOperation succeeds — the remote process
-    // is independent of the local operation registry.
+    // 2. Cancel remote hetero process (openclaw / hermes / device Claude Code)
+    // if applicable. Check topic.metadata.runningOperation for device +
+    // heteroType info seeded by execAgent. This runs regardless of whether
+    // interruptOperation succeeds — the remote process is independent of the
+    // local operation registry.
+    let runningOp:
+      | {
+          deviceId?: string;
+          deviceUserId?: string;
+          deviceWorkspaceId?: string;
+          heteroType?: string;
+          operationId?: string;
+        }
+      | undefined;
     if (resolvedTopicId) {
       const topic = await this.topicModel.findById(resolvedTopicId);
-      const runningOp = (topic?.metadata as any)?.runningOperation as
-        | {
-            deviceId?: string;
-            deviceUserId?: string;
-            deviceWorkspaceId?: string;
-            heteroType?: string;
-            operationId?: string;
-          }
-        | undefined;
+      runningOp = (topic?.metadata as any)?.runningOperation as typeof runningOp;
 
       if (
         runningOp?.deviceId &&
@@ -5897,15 +5901,32 @@ export class AiAgentService {
       }
     }
 
-    // 3. Interrupt the runtime operation first. Only mark the thread cancelled
-    // after the runtime acknowledges the interrupt to avoid unlocking a live task.
-    const durableInterrupted = await this.agentOperationModel.interrupt(
-      resolvedOperationId,
-      'user_cancelled',
-    );
+    // 3. Interrupt the run.
+    //
+    // Out-of-process runs (Claude Code gateway SSE, sandbox/device hetero)
+    // have no live loop in this process. Persist the durable interrupt so
+    // remote runtimes can observe cancellation — the gateway polls
+    // `status !== 'running'`, and heteroFinish refuses to complete an
+    // interrupted row. That durable write is the kill switch, so it counts
+    // as success even when interruptOperation finds no in-process runtime.
+    //
+    // In-process runtime still has to acknowledge before we mark the thread
+    // cancelled. Using the durable write as success here would unlock a live
+    // SubAgent task whose loop has not actually stopped.
+    const runningOpMatches =
+      Boolean(runningOp?.heteroType) && runningOp?.operationId === resolvedOperationId;
+    if (!operation && !runningOpMatches) {
+      operation = (await this.agentOperationModel.findById(resolvedOperationId)) ?? undefined;
+    }
+    const isOutOfProcessRun = Boolean(operation?.metadata?.claudeCodeGateway) || runningOpMatches;
+    const durableInterrupted = isOutOfProcessRun
+      ? await this.agentOperationModel.interrupt(resolvedOperationId, 'user_cancelled')
+      : false;
     const runtimeInterrupted =
       await this.agentRuntimeService.interruptOperation(resolvedOperationId);
-    const interrupted = durableInterrupted || runtimeInterrupted;
+    const interrupted = isOutOfProcessRun
+      ? durableInterrupted || runtimeInterrupted
+      : runtimeInterrupted;
     log(
       'interruptTask: interruptOperation=%s for operationId=%s',
       interrupted,
