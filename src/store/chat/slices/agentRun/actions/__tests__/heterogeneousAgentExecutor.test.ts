@@ -39,6 +39,11 @@ const mockUpdateMessageError = vi.fn();
 const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
+const mockToastInfo = vi.fn();
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { info: (...args: unknown[]) => mockToastInfo(...args) },
+}));
+
 vi.mock('@/services/message', () => ({
   messageService: {
     batchMutate: (...args: any[]) => mockBatchMutate(...args),
@@ -2028,6 +2033,74 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         workingDirectory: '/Users/me/repo',
         workingDirectoryConfig: { path: '/Users/me/repo' },
       });
+      expect(mockStopSession.mock.calls).toEqual([['ipc-sess-1'], ['ipc-sess-2']]);
+    });
+
+    it('starts a fresh Cursor ACP context after an old session cannot be loaded', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const sendPromptControllers = new Map<
+        string,
+        { reject: (reason?: unknown) => void; resolve: () => void }
+      >();
+      let startCount = 0;
+      mockStartSession.mockImplementation(async (params: any) => {
+        startCount += 1;
+        const sessionId = startCount === 1 ? 'ipc-sess-1' : 'ipc-sess-2';
+        ipc.setAgentType(sessionId, params.agentType);
+        return { sessionId };
+      });
+      mockSendPrompt.mockImplementation(
+        ({ sessionId }: { sessionId: string }) =>
+          new Promise<void>((resolve, reject) => {
+            sendPromptControllers.set(sessionId, { reject, resolve });
+          }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'agent', type: 'cursor' as const },
+        resumeSessionId: 'legacy-cursor-session',
+        workingDirectory: '/Users/me/repo',
+      });
+      await flush();
+
+      ipc.emitError('ipc-sess-1', {
+        agentType: 'cursor',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message:
+          'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+      });
+      await flush();
+      sendPromptControllers.get('ipc-sess-1')?.reject(new Error('resume failed'));
+      await flush();
+
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentType: 'cursor',
+          resumeSessionId: 'legacy-cursor-session',
+        }),
+      );
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ agentType: 'cursor', resumeSessionId: undefined }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: undefined,
+        heteroSessionIdByWorkingDirectory: {},
+        workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
+      });
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        expect.stringMatching(/Cursor|cursorAcpIncompatible/),
+      );
+
+      ipc.emitComplete('ipc-sess-2');
+      await flush();
+      sendPromptControllers.get('ipc-sess-2')?.resolve();
+      await executorPromise;
+
       expect(mockStopSession.mock.calls).toEqual([['ipc-sess-1'], ['ipc-sess-2']]);
     });
 

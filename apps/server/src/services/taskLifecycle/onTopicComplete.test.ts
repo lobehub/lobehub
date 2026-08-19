@@ -38,6 +38,16 @@ vi.mock('@/libs/i18n/serverTranslation', () => ({
   translation: async () => ({ t: (key: string) => FAKE_MESSAGES[key] ?? key }),
 }));
 
+// Scheduled-task result notifications go through the `@/business` slot
+// (default impl is a no-op). Mock both hooks so the tests can assert exactly
+// when the lifecycle recalls the user.
+const notifyCompleted = vi.fn().mockResolvedValue(undefined);
+const notifyFailed = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/business/server/task/notifyScheduledTaskResult', () => ({
+  notifyScheduledTaskCompleted: (...args: unknown[]) => notifyCompleted(...args),
+  notifyScheduledTaskFailed: (...args: unknown[]) => notifyFailed(...args),
+}));
+
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
     automationMode: 'heartbeat',
@@ -66,6 +76,8 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
   beforeEach(() => {
     fakeScheduler.scheduleNextTopic.mockClear().mockResolvedValue('msg-new');
+    notifyCompleted.mockReset().mockResolvedValue(undefined);
+    notifyFailed.mockReset().mockResolvedValue(undefined);
 
     service = new TaskLifecycleService({} as any, 'user-1');
 
@@ -636,6 +648,169 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateContext).not.toHaveBeenCalledWith(
         'task-1',
         expect.objectContaining({ lifecycle: expect.anything() }),
+      );
+    });
+  });
+
+  describe('scheduled-task result notifications', () => {
+    it('successful scheduled tick → completed notification with task identity', async () => {
+      const task = baseTask({ automationMode: 'schedule', name: 'Daily digest' });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: 'op-1',
+          taskId: 'task-1',
+          taskIdentifier: 'TASK-1',
+          taskName: 'Daily digest',
+          topicId: 'topic-1',
+          userId: 'user-1',
+        }),
+      );
+      expect(notifyFailed).not.toHaveBeenCalled();
+    });
+
+    it('manual run and heartbeat tick success → NO completed notification', async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: 'schedule' }));
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      findById.mockResolvedValue(baseTask({ automationMode: 'heartbeat' }));
+      await service.onTopicComplete({
+        operationId: 'op-2',
+        reason: 'done',
+        runTrigger: 'heartbeat',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyCompleted).not.toHaveBeenCalled();
+    });
+
+    it('scheduled tick failure below fuse → failed notification, not paused', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { scheduler: { consecutiveFailures: 0 } } as any,
+        name: 'Daily digest',
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorCode: 'InsufficientBudgetForModel',
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyFailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          consecutiveFailures: 1,
+          errorCode: 'InsufficientBudgetForModel',
+          paused: false,
+          runTrigger: 'schedule',
+          taskName: 'Daily digest',
+          userId: 'user-1',
+        }),
+      );
+      // The raw error text must never cross the slot boundary.
+      expect(JSON.stringify(notifyFailed.mock.calls[0][0])).not.toContain('boom');
+      expect(notifyCompleted).not.toHaveBeenCalled();
+    });
+
+    it('scheduled tick failure that blows the fuse → paused failed notification', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { scheduler: { consecutiveFailures: 2 } } as any,
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ consecutiveFailures: 3, paused: true }),
+      );
+    });
+
+    it('manual failure of an automation task → NO failed notification (ad-hoc debug run)', async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: 'schedule' }));
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'manual',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyFailed).not.toHaveBeenCalled();
+    });
+
+    it('transient heartbeat tick failure → NO notification (high-frequency ticks)', async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: 'heartbeat' }));
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'heartbeat',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyFailed).not.toHaveBeenCalled();
+    });
+
+    it('heartbeat failure that blows the fuse → paused failed notification', async () => {
+      findById.mockResolvedValue(
+        baseTask({
+          automationMode: 'heartbeat',
+          context: { scheduler: { consecutiveFailures: 2 } } as any,
+        }),
+      );
+
+      await service.onTopicComplete({
+        errorMessage: 'boom',
+        operationId: 'op-1',
+        reason: 'error',
+        runTrigger: 'heartbeat',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(notifyFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ consecutiveFailures: 3, paused: true, runTrigger: 'heartbeat' }),
       );
     });
   });

@@ -237,6 +237,16 @@ jobs:
           sudo rm -rf apps/desktop/dist || true
           sudo rm -rf /tmp/electron-builder* || true
 
+      - name: Prepare macOS provisioning profile
+        if: runner.os == 'macOS'
+        env:
+          MAC_PROVISIONING_PROFILE_BASE64: ${{ secrets.MAC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$MAC_PROVISIONING_PROFILE_BASE64" ]; then
+            printf '%s' "$MAC_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/lobehub.provisionprofile"
+            echo "MAC_PROVISIONING_PROFILE=$RUNNER_TEMP/lobehub.provisionprofile" >> "$GITHUB_ENV"
+          fi
+
       # macOS 构建
       - name: Build artifact on macOS
         if: runner.os == 'macOS'

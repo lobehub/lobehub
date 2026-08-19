@@ -1,3 +1,13 @@
+export interface DesktopNotificationSender {
+  /**
+   * PNG data URL rendered by the caller; when present on macOS the
+   * notification is styled as a communication notification with this avatar.
+   */
+  avatarDataUrl?: string;
+  conversationId: string;
+  name: string;
+}
+
 export interface ShowDesktopNotificationParams {
   body: string;
   force?: boolean;
@@ -11,6 +21,7 @@ export interface ShowDesktopNotificationParams {
    */
   navigate?: { escape?: boolean; path: string; replace?: boolean };
   requestAttention?: boolean;
+  sender?: DesktopNotificationSender;
   silent?: boolean;
   title: string;
 }

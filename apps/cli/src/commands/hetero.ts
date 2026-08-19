@@ -10,7 +10,7 @@ import {
   isLocalHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
 } from '@lobechat/heterogeneous-agents';
-import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type {
@@ -146,7 +146,9 @@ const buildExtraArgs = (
                 ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
                 : []),
             ]
-          : options.type === 'claude-code' || options.type === 'codebuddy'
+          : options.type === 'claude-code' ||
+              options.type === 'codebuddy' ||
+              options.type === 'grok-build'
             ? [
                 ...(options.model ? ['--model', options.model] : []),
                 ...(options.effort ? ['--effort', options.effort] : []),
@@ -473,24 +475,32 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (serverIngest && (agentType === 'claude-code' || agentType === 'qoder') && serverIngester) {
-    askServer = new LobeBuiltinMcpServer();
-    await askServer.start();
-    askBridge = askServer.registerOperation(operationId);
-    askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
-    await writeFile(
-      askMcpConfigPath,
-      JSON.stringify({
-        mcpServers: {
-          lobe_cc: {
-            alwaysLoad: true,
-            type: 'http',
-            url: askServer.urlForOperation(operationId),
+  if (
+    serverIngest &&
+    (agentType === 'claude-code' || agentType === 'cursor' || agentType === 'qoder') &&
+    serverIngester
+  ) {
+    if (agentType === 'cursor') {
+      askBridge = new AskUserBridge(operationId);
+    } else {
+      askServer = new LobeBuiltinMcpServer();
+      await askServer.start();
+      askBridge = askServer.registerOperation(operationId);
+      askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await writeFile(
+        askMcpConfigPath,
+        JSON.stringify({
+          mcpServers: {
+            lobe_cc: {
+              alwaysLoad: true,
+              type: 'http',
+              url: askServer.urlForOperation(operationId),
+            },
           },
-        },
-      }),
-      'utf8',
-    );
+        }),
+        'utf8',
+      );
+    }
 
     // (i) Forward bridge events into the same ordered ingest path as CC's. The
     // request always goes out. For responses, only forward the ones the browser
@@ -811,6 +821,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const first = await runOneAgent(
     {
       agentType: options.type,
+      askUserBridge: askBridge,
       command: resolvedCommand.command,
       cwd: options.cwd || process.cwd(),
       env: commandEnv,
@@ -849,6 +860,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     result = await runOneAgent(
       {
         agentType: options.type,
+        askUserBridge: askBridge,
         command: resolvedCommand.command,
         cwd: options.cwd || process.cwd(),
         env: commandEnv,
@@ -933,7 +945,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (askServer) {
     askServer.unregisterOperation(operationId);
     await askServer.stop().catch(() => {});
-  }
+  } else askBridge?.cancelAll('session_ended');
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
   if (code !== null) {

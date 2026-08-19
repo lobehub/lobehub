@@ -108,9 +108,11 @@ const taskListViewOptions = (s: GlobalState) =>
   s.status.taskListViewOptions || {
     groupBy: 'status',
     hideCompleted: true,
+    nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',
+    showSubTasks: false,
     subGroupBy: 'none',
   };
 

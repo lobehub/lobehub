@@ -13,7 +13,7 @@ import {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -23,7 +23,7 @@ import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
-import { agentOperations, topics } from '@/database/schemas';
+import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -42,6 +42,49 @@ import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 
 const log = debug('lobe-server:ai-agent-router');
+
+const resolveHeteroTopicWorkspace = async (params: {
+  db: LobeChatDatabase;
+  requestedWorkspaceId?: string | null;
+  topicId: string;
+  userId: string;
+}) => {
+  const { db, requestedWorkspaceId, topicId, userId } = params;
+  const [topic] = await db
+    .select({ userId: topics.userId, workspaceId: topics.workspaceId })
+    .from(topics)
+    .where(eq(topics.id, topicId))
+    .limit(1);
+
+  if (!topic || (requestedWorkspaceId != null && requestedWorkspaceId !== topic.workspaceId)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+  }
+
+  if (!topic.workspaceId) {
+    if (topic.userId !== userId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+    }
+    return undefined;
+  }
+
+  const [membership] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, topic.workspaceId),
+        eq(workspaceMembers.userId, userId),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+  }
+
+  return topic.workspaceId;
+};
 
 /**
  * Workspace `use` guard for operation-keyed endpoints: resolve the operation
@@ -704,9 +747,9 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 // Requires a `hetero-operation` JWT (4h expiry) — normal user tokens are rejected,
 // so only the sandbox/device that received the JWT from execAgent can call these.
 //
-// Note: workspaceId is not on `ctx` for this procedure (the JWT is server-to-server
-// and carries no workspace claim). Handlers must resolve wsId from the row keyed
-// by `topicId` and construct `HeterogeneousAgentService` per request.
+// The workspace header is optional because older gateways may not forward it.
+// Handlers resolve the authoritative scope from `topicId`, then verify the token
+// subject owns the personal topic or is an active member of its workspace.
 const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase);
 const aiAgentWriteProcedure = aiAgentProcedure.use(withScopedPermission('message:create'));
 
@@ -1692,30 +1735,12 @@ export const aiAgentRouter = router({
     );
 
     try {
-      // Resolve workspaceId from the topic row so persistence writes land in
-      // the correct workspace scope. heteroAuthedProcedure carries no
-      // workspace claim, so we must look it up here per request. We bypass
-      // `TopicModel.findById` because it filters by workspace; here we need a
-      // workspace-agnostic lookup keyed only by topicId + userId.
-      const [topicRow] = await ctx.serverDB
-        .select({ workspaceId: topics.workspaceId })
-        .from(topics)
-        .where(and(eq(topics.id, topicId), eq(topics.userId, ctx.userId)))
-        .limit(1);
-
-      // Owner-token callers (a logged-in desktop reusing its own session) must
-      // prove they own the target topic — `topicRow` is already filtered by
-      // `userId`, so a missing row means the topic isn't theirs. The
-      // operation-token path is exempt: its `sub` may be a workspaceId that
-      // never matches `topics.userId`, and it's trusted as server-minted.
-      if (ctx.heteroAuthKind === 'user' && !topicRow) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Topic not found or not owned by the caller',
-        });
-      }
-
-      const wsId = topicRow?.workspaceId ?? undefined;
+      const wsId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId,
+        userId: ctx.userId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       });
@@ -1756,23 +1781,12 @@ export const aiAgentRouter = router({
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
     try {
-      // Resolve workspaceId from the topic row (heteroAuthedProcedure has no
-      // workspace claim) so persistence writes land in the correct scope.
-      const [topicRow] = await ctx.serverDB
-        .select({ workspaceId: topics.workspaceId })
-        .from(topics)
-        .where(and(eq(topics.id, topicId), eq(topics.userId, ctx.userId)))
-        .limit(1);
-
-      // See heteroIngest: owner tokens must own the topic; operation tokens are exempt.
-      if (ctx.heteroAuthKind === 'user' && !topicRow) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Topic not found or not owned by the caller',
-        });
-      }
-
-      const wsId = topicRow?.workspaceId ?? undefined;
+      const wsId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId,
+        userId: ctx.userId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       });

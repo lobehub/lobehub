@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Tu tarea programada \"{{jobName}}\" se completó con éxito.",
+  "agent_cron_job_completed_title": "Tarea programada completada",
   "agent_cron_job_failed": "Tu tarea programada \"{{jobName}}\" ha fallado. Abre la tarea para ver el error completo.",
   "agent_cron_job_failed_insufficient_budget": "Tu tarea programada \"{{jobName}}\" no pudo ejecutarse porque tu cuenta no tiene créditos suficientes. Recarga o actualiza tu plan para reanudar las próximas ejecuciones.",
   "agent_cron_job_failed_insufficient_budget_title": "Tarea programada en pausa: créditos insuficientes",
+  "agent_cron_job_failed_paused": "Tu tarea programada \"{{jobName}}\" se pausó después de {{count}} fallos consecutivos. Revisa el error y reanúdala cuando estés listo.",
+  "agent_cron_job_failed_paused_title": "Tarea programada pausada",
   "agent_cron_job_failed_title": "Fallo en la tarea programada",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Tarea del agente completada",

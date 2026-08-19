@@ -289,6 +289,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         serverUrl,
         systemContext: request.systemContext,
         topicId: request.topicId,
+        workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);

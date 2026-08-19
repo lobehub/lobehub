@@ -12,6 +12,7 @@ import type {
   ClaudeCodeReasoningEffort,
   CodexReasoningEffort,
   CodexSpeedMode,
+  GrokBuildReasoningEffort,
   HeteroCliEncoding,
   HeterogeneousAgentMode,
   HeterogeneousReasoningEffort,
@@ -21,12 +22,14 @@ import type {
 import {
   CODEX_REASONING_EFFORT_CONFIG_KEY,
   CODEX_SERVICE_TIER_CONFIG_KEY,
+  GROK_BUILD_REASONING_EFFORT_FLAGS,
   HETERO_SELECTOR_CAPABILITIES,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isAmpAgentMode,
   isClaudeCodeReasoningEffort,
   isCodexFastServiceTier,
   isCodexReasoningEffort,
+  isGrokBuildReasoningEffort,
   isQoderReasoningEffort,
   QODER_REASONING_EFFORT_FLAG,
 } from './heteroSelectorCapabilities';
@@ -51,7 +54,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type: 'codebuddy' | 'cursor' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -226,6 +229,12 @@ interface CodexSelectionSource {
   speed?: string | null;
 }
 
+interface GrokBuildSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
 interface QoderSelectionSource {
   args?: string[];
   effort?: string | null;
@@ -234,13 +243,16 @@ interface QoderSelectionSource {
 
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
-const modelFlagsOf = (type: 'codex' | 'opencode' | 'pi' | 'qoder'): readonly string[] =>
+const modelFlagsOf = (
+  type: 'codex' | 'grok-build' | 'opencode' | 'pi' | 'qoder',
+): readonly string[] =>
   HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
     encoding.kind === 'flag' ? encoding.flags : [],
   );
 
 const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
 const CURSOR_MODEL_FLAGS = ['--model'] as const;
+const GROK_BUILD_MODEL_FLAGS = modelFlagsOf('grok-build');
 const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
 const PI_MODEL_FLAGS = modelFlagsOf('pi');
 const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
@@ -278,6 +290,13 @@ const getExplicitCodexReasoningEffort = (
 ): CodexReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitGrokBuildReasoningEffort = (
+  source: GrokBuildSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : undefined;
 };
 
 const getExplicitQoderReasoningEffort = (
@@ -321,6 +340,7 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -363,6 +383,21 @@ export const buildHeteroSpawnArgs = (
     const speed = getExplicitCodexSpeedMode(provider);
     if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
       extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${speed}"`);
+    }
+  }
+
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      extraArgs.push('--effort', effort);
     }
   }
 
@@ -440,6 +475,7 @@ export const buildHeteroExecArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -496,6 +532,27 @@ export const buildHeteroExecArgs = (
       !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)
     ) {
       selectorArgs.push('--speed', speed);
+    }
+  }
+
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--model`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${model}`,
+      );
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--effort`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${effort}`,
+      );
     }
   }
 

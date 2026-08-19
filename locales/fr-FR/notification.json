@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Votre tâche planifiée \"{{jobName}}\" s'est terminée avec succès.",
+  "agent_cron_job_completed_title": "Tâche planifiée terminée",
   "agent_cron_job_failed": "Votre tâche planifiée « {{jobName}} » a échoué. Ouvrez la tâche pour consulter l’erreur complète.",
   "agent_cron_job_failed_insufficient_budget": "Votre tâche planifiée « {{jobName}} » n’a pas pu s’exécuter, car votre compte n’a plus de crédits. Rechargez votre solde ou mettez à niveau votre abonnement pour reprendre les prochaines exécutions.",
   "agent_cron_job_failed_insufficient_budget_title": "Tâche planifiée en pause : crédits insuffisants",
+  "agent_cron_job_failed_paused": "Votre tâche planifiée \"{{jobName}}\" a été mise en pause après {{count}} échecs consécutifs. Veuillez examiner l'erreur et la reprendre lorsque vous serez prêt.",
+  "agent_cron_job_failed_paused_title": "Tâche planifiée mise en pause",
   "agent_cron_job_failed_title": "Échec de la tâche planifiée",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Tâche de l'agent terminée",

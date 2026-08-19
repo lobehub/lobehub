@@ -1,6 +1,5 @@
 import { bytesToBase64 } from '@lobechat/utils';
 
-import type { WorkspaceHtmlArtifactFile } from '@/business/client/features/WorkspaceHtmlArtifactPublish';
 import { extractHtmlTitle } from '@/components/HtmlPreview/htmlTagScanner';
 
 import {
@@ -14,6 +13,7 @@ import {
   WORKSPACE_HTML_ARTIFACT_MAX_FILES,
   WORKSPACE_HTML_ARTIFACT_MAX_TOTAL_BYTES,
 } from './readWorkspaceAsset';
+import type { WorkspaceHtmlArtifactFile } from './workspaceHtmlArtifact';
 import {
   lowestCommonAncestorDirectory,
   parentDirectory,

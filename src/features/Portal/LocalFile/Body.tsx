@@ -10,6 +10,11 @@ import { useTranslation } from 'react-i18next';
 import CodeEditorPane from '@/components/CodeEditorPane';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
+import {
+  PublishHtmlArtifactLiveBar,
+  PublishHtmlArtifactProvider,
+  PublishHtmlArtifactTrigger,
+} from '@/features/Portal/LocalFile/PublishHtmlArtifactButton';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { cloudSandboxService } from '@/services/cloudSandbox';
@@ -25,11 +30,6 @@ import {
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
-import {
-  PublishHtmlArtifactLiveBar,
-  PublishHtmlArtifactProvider,
-  PublishHtmlArtifactTrigger,
-} from './PublishHtmlArtifactButton';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
 const DocumentPreview = lazy(() => import('./DocumentPreview'));

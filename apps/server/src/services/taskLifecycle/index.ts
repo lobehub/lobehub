@@ -30,6 +30,10 @@ import type {
 import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
+import {
+  notifyScheduledTaskCompleted,
+  notifyScheduledTaskFailed,
+} from '@/business/server/task/notifyScheduledTaskResult';
 import { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
@@ -275,6 +279,30 @@ export class TaskLifecycleService {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
       }
+
+      // 6. Recall the user when a scheduled tick lands: fire-and-forget through
+      //    the `@/business` slot (default impl is a no-op; a notification
+      //    failure must never affect the task lifecycle). Only genuine
+      //    scheduled ticks notify — manual "run now" runs and high-frequency
+      //    heartbeat ticks stay silent to avoid flooding the inbox.
+      if (currentTask?.automationMode === 'schedule' && params.runTrigger === 'schedule') {
+        void notifyScheduledTaskCompleted({
+          lastAssistantContent,
+          operationId: params.operationId,
+          taskId,
+          taskIdentifier,
+          taskName: currentTask.name ?? undefined,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          log(
+            'scheduled-task success notification failed for task=%s (non-fatal): %O',
+            taskIdentifier,
+            error,
+          ),
+        );
+      }
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
 
@@ -346,6 +374,12 @@ export class TaskLifecycleService {
       const runTrigger = params.runTrigger ?? 'manual';
       const isAutomationTick = runTrigger === 'schedule' || runTrigger === 'heartbeat';
 
+      // Captured by the schedule sub-branch below for the failure notification:
+      // how deep into the fuse this failure is, and whether it blew the fuse
+      // and auto-paused the task.
+      let scheduleConsecutiveFailures: number | undefined;
+      let pausedByFuse = false;
+
       if (!currentTask) {
         // Task vanished mid-run — nothing to transition.
       } else if (!currentTask.automationMode) {
@@ -369,8 +403,10 @@ export class TaskLifecycleService {
         // maybeRearmHeartbeat below, which owns their fuse + re-arm.)
         const ctx = (currentTask.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
         const consecutiveFailures = (ctx.scheduler?.consecutiveFailures ?? 0) + 1;
+        scheduleConsecutiveFailures = consecutiveFailures;
 
         if (consecutiveFailures >= AUTOMATION_FAILURE_FUSE) {
+          pausedByFuse = true;
           log(
             'schedule fuse blown: task=%s consecutiveFailures=%d — pausing',
             taskIdentifier,
@@ -396,9 +432,50 @@ export class TaskLifecycleService {
       } else {
         // Heartbeat tick failed: record the error and keep the resting
         // 'scheduled' state. maybeRearmHeartbeat (below) owns the consecutive-
-        // failure fuse and the re-arm decision for heartbeat tasks.
+        // failure fuse and the re-arm decision for heartbeat tasks — mirror its
+        // fuse arithmetic here (it reads the same pre-increment context) so the
+        // notification below can tell a fuse-stop from a transient failure.
+        const ctx = (currentTask.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
+        scheduleConsecutiveFailures = (ctx.scheduler?.consecutiveFailures ?? 0) + 1;
+        pausedByFuse = scheduleConsecutiveFailures >= AUTOMATION_FAILURE_FUSE;
         await this.recordAutomationError(currentTask, errorText, runTrigger);
         await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+      }
+
+      // Tell the user their automation failed: fire-and-forget through the
+      // `@/business` slot (default impl is a no-op; a notification failure
+      // must never affect the task lifecycle). Manual "run now" failures are
+      // ad-hoc debug runs — the error brief above already covers them, and
+      // they are not an automation-health signal, so only automation ticks
+      // notify. Heartbeat ticks can fire every few seconds, so they only
+      // notify at the fuse-stop moment (the automation stopped re-arming);
+      // low-frequency scheduled ticks notify on every failure. Only the
+      // structured `errorCode` crosses the slot boundary; raw error text
+      // stays in the brief.
+      if (
+        currentTask?.automationMode &&
+        isAutomationTick &&
+        (runTrigger === 'schedule' || pausedByFuse)
+      ) {
+        void notifyScheduledTaskFailed({
+          consecutiveFailures: scheduleConsecutiveFailures,
+          errorCode,
+          operationId: params.operationId,
+          paused: pausedByFuse,
+          runTrigger: runTrigger === 'schedule' ? 'schedule' : 'heartbeat',
+          taskId,
+          taskIdentifier,
+          taskName: currentTask.name ?? undefined,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          log(
+            'scheduled-task failure notification failed for task=%s (non-fatal): %O',
+            taskIdentifier,
+            error,
+          ),
+        );
       }
     }
 

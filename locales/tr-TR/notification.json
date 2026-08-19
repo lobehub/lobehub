@@ -1,7 +1,11 @@
 {
+  "agent_cron_job_completed": "Planlanmış göreviniz \"{{jobName}}\" başarıyla tamamlandı.",
+  "agent_cron_job_completed_title": "Planlanmış görev tamamlandı",
   "agent_cron_job_failed": "\"{{jobName}}\" adlı zamanlanmış göreviniz başarısız oldu. Hatanın tamamını görmek için görevi açın.",
   "agent_cron_job_failed_insufficient_budget": "\"{{jobName}}\" adlı zamanlanmış göreviniz çalıştırılamadı çünkü hesabınızda yeterli kredi yok. Gelecek çalışmaları sürdürebilmek için bakiye ekleyin veya planınızı yükseltin.",
   "agent_cron_job_failed_insufficient_budget_title": "Zamanlanmış görev durduruldu: yetersiz kredi",
+  "agent_cron_job_failed_paused": "Planlanmış göreviniz \"{{jobName}}\" {{count}} ardışık hata sonrası duraklatıldı. Hata inceleyin ve hazır olduğunuzda devam ettirin.",
+  "agent_cron_job_failed_paused_title": "Planlanmış görev duraklatıldı",
   "agent_cron_job_failed_title": "Zamanlanmış görev başarısız oldu",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Ajans görevi tamamlandı",

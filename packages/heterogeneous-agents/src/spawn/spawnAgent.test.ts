@@ -176,7 +176,9 @@ const createGrokAcpProc = ({
   return { proc, requests };
 };
 
-const createFakeAcpProc = () => {
+const createFakeAcpProc = ({
+  promptAutoComplete = true,
+}: { promptAutoComplete?: boolean } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -229,6 +231,7 @@ const createFakeAcpProc = () => {
             return;
           }
           case 'session/prompt': {
+            if (!promptAutoComplete) return;
             send({
               method: 'session/update',
               params: {
@@ -246,6 +249,62 @@ const createFakeAcpProc = () => {
       return true;
     }),
   };
+
+  return { proc, requests };
+};
+
+const createCursorAcpProc = () => {
+  const proc = new EventEmitter() as any;
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const requests: Array<{
+    id?: number;
+    method?: string;
+    params?: Record<string, unknown>;
+  }> = [];
+  const send = (message: Record<string, unknown>) =>
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  Object.assign(proc, {
+    kill: vi.fn(() => true),
+    killed: false,
+    pid: 67_890,
+    stderr,
+    stdin: {
+      once: vi.fn(),
+      write: vi.fn((chunk: string) => {
+        const message = JSON.parse(chunk.trim());
+        requests.push(message);
+        queueMicrotask(() => {
+          switch (message.method) {
+            case 'initialize': {
+              send({
+                id: message.id,
+                result: {
+                  agentCapabilities: { loadSession: true },
+                  authMethods: [{ id: 'cursor_login' }],
+                  protocolVersion: 1,
+                },
+              });
+              return;
+            }
+            case 'authenticate': {
+              send({ id: message.id, result: {} });
+              return;
+            }
+            case 'session/load': {
+              send({ id: message.id, result: {} });
+              return;
+            }
+            case 'session/prompt': {
+              send({ id: message.id, result: { stopReason: 'end_turn' } });
+            }
+          }
+        });
+        return true;
+      }),
+    },
+    stdout,
+  });
 
   return { proc, requests };
 };
@@ -470,39 +529,39 @@ describe('spawnAgent', () => {
     expect(spawnCalls).toHaveLength(0);
   });
 
-  it('spawns Cursor with positional prompt, resume, native args, and no stdin payload', async () => {
-    const fake = createFakeProc();
+  it('runs Cursor through ACP with native args and an ACP-native resume id', async () => {
+    const fake = createCursorAcpProc();
     nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
     const { spawnAgent } = await import('./spawnAgent');
-    await spawnAgent({
+    const handle = await spawnAgent({
       agentType: 'cursor',
       extraArgs: ['--model', 'sonnet', '--mode', 'plan'],
       operationId: 'op-cursor',
       prompt: 'do a thing',
       resumeSessionId: 'cursor-session',
     });
+    const events = [];
+    for await (const event of handle.events) events.push(event);
+    await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
 
     expect(spawnCalls[0]).toMatchObject({
-      args: [
-        '-p',
-        '--force',
-        '--trust',
-        '--output-format',
-        'stream-json',
-        '--stream-partial-output',
-        '--resume',
-        'cursor-session',
-        '--model',
-        'sonnet',
-        '--mode',
-        'plan',
-        '--',
-        'do a thing',
-      ],
+      args: ['--model', 'sonnet', '--mode', 'plan', 'acp'],
       command: 'agent',
     });
-    expect(fake.stdinWrites).toEqual([]);
-    expect(fake.proc.stdin.end).toHaveBeenCalledOnce();
+    expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
+      'initialize',
+      'authenticate',
+      'session/load',
+      'session/prompt',
+    ]);
+    expect(fake.requests.find(({ method }) => method === 'session/prompt')?.params).toEqual({
+      prompt: [{ text: 'do a thing', type: 'text' }],
+      sessionId: 'cursor-session',
+    });
+    expect(handle.sessionId).toBe('cursor-session');
+    expect(events).toContainEqual(expect.objectContaining({ type: 'agent_runtime_end' }));
+    killSpy.mockRestore();
   });
 
   it('runs TRAE through ACP behind the standard handle contract', async () => {
@@ -550,6 +609,33 @@ describe('spawnAgent', () => {
       ).toBe(true);
     } finally {
       killSpy.mockRestore();
+    }
+  });
+
+  it('preserves SIGKILL when force-stopping a TRAE ACP run', async () => {
+    const fake = createFakeAcpProc({ promptAutoComplete: false });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'trae',
+        operationId: 'op-trae-force-stop',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      handle.kill('SIGKILL');
+
+      // The ACP spawn bridge reports host kills as signal exits, uniformly
+      // across ACP agents.
+      expect(processKill).toHaveBeenCalledWith(-12_345, 'SIGKILL');
+      await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
+    } finally {
+      processKill.mockRestore();
     }
   });
 
