@@ -159,6 +159,7 @@ describe('TopicModel - Update', () => {
           runningOperation: {
             assistantMessageId: 'assistant-1',
             operationId: 'operation-1',
+            startedAt: new Date().toISOString(),
           },
         },
       });
@@ -180,15 +181,20 @@ describe('TopicModel - Update', () => {
           runningOperation: {
             assistantMessageId: 'assistant-1',
             operationId: 'old-operation',
+            startedAt: new Date().toISOString(),
           },
         },
       });
 
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'new-start', undefined, 'different-operation'),
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', {
+          replacesOperationId: 'different-operation',
+        }),
       ).resolves.toBe(false);
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'new-start', undefined, 'old-operation'),
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', {
+          replacesOperationId: 'old-operation',
+        }),
       ).resolves.toBe(true);
 
       const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
@@ -211,13 +217,19 @@ describe('TopicModel - Update', () => {
       });
 
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'child-operation-1', 'operation-parent'),
+        topicModel.tryReserveTaskCallback(topicId, 'child-operation-1', {
+          allowRunningOperationId: 'operation-parent',
+        }),
       ).resolves.toBe(true);
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'child-operation-2', 'operation-parent'),
+        topicModel.tryReserveTaskCallback(topicId, 'child-operation-2', {
+          allowRunningOperationId: 'operation-parent',
+        }),
       ).resolves.toBe(true);
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'unrelated-operation', 'operation-other'),
+        topicModel.tryReserveTaskCallback(topicId, 'unrelated-operation', {
+          allowRunningOperationId: 'operation-other',
+        }),
       ).resolves.toBe(false);
 
       const topic = await topicModel.findById(topicId);
@@ -329,6 +341,96 @@ describe('TopicModel - Update', () => {
         msgId: 'assistant-child-1-next',
         operationId: 'child-operation-1',
       });
+    });
+
+    it('recovers a topic whose runningOperation outlived the run that claimed it', async () => {
+      // Regression: `taskCallbackReservation` expires after a TTL, but
+      // `runningOperation` was checked bare. Every clear site is best-effort
+      // (ServerOperationStore.clearRunningMark swallows failures; the gateway
+      // client clears it from `onSessionComplete`, which never runs if the tab
+      // closed or the function was killed), so a marker left behind by a dead
+      // run blocked every later start on that topic — permanently, since
+      // nothing sweeps it.
+      const topicId = 'topic-start-stale-running-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'dead-operation',
+            startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'later-start')).resolves.toBe(true);
+    });
+
+    it('recovers a topic whose runningOperation carries no liveness stamp', async () => {
+      // Markers written before `startedAt` existed cannot be proven live.
+      // Holding the topic on them keeps every already-stuck conversation stuck
+      // forever, so an unstamped marker must not block a fresh start.
+      const topicId = 'topic-start-unstamped-running-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'legacy-operation',
+          },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'later-start')).resolves.toBe(true);
+    });
+
+    it('lets an interactive start through while a run still owns the topic', async () => {
+      // "One foreground turn at a time" is a client-side UX policy with a queue
+      // tray and a Send-now escape hatch. Re-deciding it here can only fail
+      // worse: the gate runs before the user message is persisted, so a refusal
+      // destroys the message instead of parking it.
+      const topicId = 'topic-start-interactive-bypass';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'live-operation',
+            startedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'composer-send', {
+          ignoreRunningOperation: true,
+        }),
+      ).resolves.toBe(true);
+
+      // A background delivery arriving at the same topic still waits.
+      await topicModel.releaseTaskCallbackReservation(topicId, 'composer-send');
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(false);
+    });
+
+    it('still serializes an interactive start behind the short reservation', async () => {
+      // Bypassing `runningOperation` must not bypass the mutex that makes parent
+      // selection atomic — two sends landing together would otherwise both pick
+      // the same parent and fork the spine.
+      const topicId = 'topic-start-interactive-reservation';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'send-1', { ignoreRunningOperation: true }),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'send-2', { ignoreRunningOperation: true }),
+      ).resolves.toBe(false);
     });
 
     it('recovers a stale reservation left by a crashed delivery worker', async () => {

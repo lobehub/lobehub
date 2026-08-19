@@ -64,6 +64,19 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
+/**
+ * How long a `runningOperation` marker may hold the topic against a background
+ * start before it is treated as dead.
+ *
+ * The marker is a reconnect anchor, not a lease: it lives for the whole run and
+ * every clear site is best-effort (`ServerOperationStore.clearRunningMark`
+ * swallows failures; the gateway client clears it from `onSessionComplete`,
+ * which never runs if the tab closed or the function was killed). Without an
+ * upper bound a marker left by a dead run blocks the topic forever. This is a
+ * floor, not a promise — the real reaper is the gateway watchdog's
+ * `finalize-abandoned` call.
+ */
+const RUNNING_OPERATION_LIVENESS_TTL_MS = 30 * 60 * 1000;
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
@@ -1658,8 +1671,26 @@ export class TopicModel {
   tryReserveTaskCallback = async (
     id: string,
     messageId: string,
-    allowRunningOperationId?: string,
-    replacesOperationId?: string,
+    options?: {
+      /**
+       * Permit a start that runs *under* this marker (a group member starting
+       * beneath its supervisor). A pure permission check — it never takes the
+       * reservation.
+       */
+      allowRunningOperationId?: string;
+      /**
+       * Skip the `runningOperation` check entirely and serialize only on the
+       * short reservation. Set by interactive sends: "don't run two foreground
+       * turns at once" is a UX policy the client already owns end to end (queue
+       * tray, "Send now", FIFO drain), and it is the only layer that can show
+       * the user anything. A second, blind copy of that policy here can only
+       * fail worse — it used to destroy the message before it was ever
+       * persisted. Background starts (task callbacks, cron, bots) have no such
+       * queue and keep the check.
+       */
+      ignoreRunningOperation?: boolean;
+      replacesOperationId?: string;
+    },
   ): Promise<boolean | null> =>
     this.db.transaction(async (tx) => {
       const [existing] = await tx
@@ -1678,13 +1709,32 @@ export class TopicModel {
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
+
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
-        !!allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
-      if (allowRunningOperationId) return ownedRunningOperation;
+        !!options?.allowRunningOperationId &&
+        runningOperation?.operationId === options.allowRunningOperationId;
+      if (options?.allowRunningOperationId) return ownedRunningOperation;
+
       const canReplaceRunningOperation =
-        !!replacesOperationId && runningOperation?.operationId === replacesOperationId;
-      if ((runningOperation && !canReplaceRunningOperation) || hasLiveReservation) return false;
+        !!options?.replacesOperationId &&
+        runningOperation?.operationId === options.replacesOperationId;
+
+      // Only a run that can prove it is still alive may hold the topic. A marker
+      // with no stamp predates this field and cannot be proven live, so it must
+      // not keep an already-stuck topic stuck.
+      const runStartedAt = runningOperation?.startedAt
+        ? Date.parse(runningOperation.startedAt)
+        : Number.NaN;
+      const hasLiveRunningOperation =
+        !!runningOperation &&
+        Number.isFinite(runStartedAt) &&
+        Date.now() - runStartedAt < RUNNING_OPERATION_LIVENESS_TTL_MS;
+
+      const blockedByRunningOperation =
+        !options?.ignoreRunningOperation && hasLiveRunningOperation && !canReplaceRunningOperation;
+
+      if (blockedByRunningOperation || hasLiveReservation) return false;
 
       await tx
         .update(topics)

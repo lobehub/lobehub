@@ -435,6 +435,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
   hooks?: AgentHook[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
+  /**
+   * This start came from a person waiting at a composer, not from a background
+   * producer (task callback, cron, bot, API). Interactive starts serialize only
+   * on the short topic-start reservation and never on `runningOperation` — the
+   * client already owns "one foreground turn at a time" with a queue and a UI,
+   * and a refusal here destroys the message before it is ever persisted.
+   */
+  interactiveStart?: boolean;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**
@@ -1342,6 +1350,7 @@ export class AiAgentService {
     const reserved = await acquireTopicStartReservation({
       replacesOperationId: params.replacesOperationId,
       allowRunningOperationId: params.topicStartOwnerOperationId,
+      ignoreRunningOperation: params.interactiveStart,
       reservationId,
       topicId,
       topicModel: this.topicModel,
@@ -2528,6 +2537,7 @@ export class AiAgentService {
       const childOperation = {
         assistantMessageId: assistantMessageRecord.id,
         hooks: serializedHooks,
+        startedAt: new Date().toISOString(),
         ...(isRemoteHetero && remoteDeviceId
           ? {
               deviceId: remoteDeviceId,
@@ -4863,6 +4873,9 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             operationId,
             scope: appContext?.scope ?? undefined,
+            // Liveness stamp — without it this marker can never be proven dead
+            // and would hold the topic against background starts forever.
+            startedAt: new Date().toISOString(),
             threadId: appContext?.threadId ?? undefined,
           },
         });

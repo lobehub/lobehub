@@ -1303,6 +1303,10 @@ export const aiAgentRouter = router({
         appContext,
         autoStart,
         clientIds: input.clientIds,
+        // This procedure serves the composer (`aiAgentService.execAgentTask`).
+        // The client already queues follow-ups behind a live run and shows the
+        // user a tray; refusing here would only make the message disappear.
+        interactiveStart: true,
         // Propagate the originating request's client IP / user agent into the run
         // so downstream LLM-call metadata can carry them for auditing and spend
         // attribution. These are server-derived from the tRPC context and are
