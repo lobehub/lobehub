@@ -1,8 +1,9 @@
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { BRANDING_NAME, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import isEqual from 'fast-deep-equal';
 import { type AiModelForSelect, type AiProviderModelListItem } from 'model-bank';
 import { useMemo } from 'react';
 
+import { isBrandedOpenRouterProvider } from '@/components/Branding/brandedModelId';
 import {
   filterAicoManagedProviders,
   isAicoManagedRuntimeProvider,
@@ -81,10 +82,13 @@ export const useEnabledChatModels = (): EnabledProviderWithModels[] => {
       isAicoManagedRuntimeProvider(provider.id),
     );
 
+    const orgProviderId = managedFromPersonal?.id ?? DEFAULT_PROVIDER;
     const orgProvider: EnabledProviderWithModels = {
       children,
-      id: managedFromPersonal?.id ?? DEFAULT_PROVIDER,
-      name: managedFromPersonal?.name ?? 'OpenRouter',
+      id: orgProviderId,
+      name: isBrandedOpenRouterProvider(orgProviderId)
+        ? BRANDING_NAME
+        : (managedFromPersonal?.name ?? 'OpenRouter'),
       source: managedFromPersonal?.source ?? 'builtin',
     };
 

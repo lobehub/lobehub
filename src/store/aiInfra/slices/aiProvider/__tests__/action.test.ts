@@ -1,5 +1,11 @@
 import * as runtimeModule from '@lobechat/model-runtime/getModelPropertyWithFallback';
-import type { AIImageModelCard, EnabledAiModel, ModelParamsSchema, Pricing } from 'model-bank';
+import type {
+  AIImageModelCard,
+  AIVideoModelCard,
+  EnabledAiModel,
+  ModelParamsSchema,
+  Pricing,
+} from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,6 +17,7 @@ import {
   normalizeChatModel,
   normalizeEmbeddingModel,
   normalizeImageModel,
+  normalizeVideoModel,
   resolveUserScopedBuiltinModelState,
 } from '../action';
 
@@ -46,6 +53,18 @@ const createImageModel = (overrides: Partial<ImageEnabledModel> = {}): ImageEnab
   id: overrides.id ?? 'image-model',
   providerId: overrides.providerId ?? 'openai',
   type: 'image',
+  ...overrides,
+});
+
+type VideoEnabledModel = EnabledAiModel & AIVideoModelCard;
+
+const createVideoModel = (overrides: Partial<VideoEnabledModel> = {}): VideoEnabledModel => ({
+  abilities: overrides.abilities ?? {},
+  displayName: overrides.displayName ?? 'Video Model',
+  enabled: overrides.enabled ?? true,
+  id: overrides.id ?? 'video-model',
+  providerId: overrides.providerId ?? 'openrouter',
+  type: 'video',
   ...overrides,
 });
 
@@ -269,6 +288,41 @@ describe('aiProvider action helpers', () => {
         size: { default: '1024x1024', enum: ['512x512', '1024x1024'] },
       });
       expect(fallbackSpy).toHaveBeenCalledWith('cogview-4', 'parameters', 'zhipu');
+    });
+  });
+
+  describe('normalizeVideoModel', () => {
+    it('derives and exposes the default clip price from per-second pricing', async () => {
+      const result = await normalizeVideoModel(
+        createVideoModel({
+          parameters: {
+            duration: { default: 8, enum: [4, 6, 8] },
+            prompt: { default: '' },
+          },
+          pricing: {
+            currency: 'USD',
+            units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+          },
+        }),
+      );
+
+      expect(result.approximatePricePerVideo).toBe(0.8);
+      expect(result.pricing).toMatchObject({
+        approximatePricePerVideo: 0.8,
+        currency: 'USD',
+      });
+    });
+
+    it('exposes an exact per-video price', async () => {
+      const result = await normalizeVideoModel(
+        createVideoModel({
+          pricing: {
+            units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'video' }],
+          },
+        }),
+      );
+
+      expect(result.pricePerVideo).toBe(1.25);
     });
   });
 

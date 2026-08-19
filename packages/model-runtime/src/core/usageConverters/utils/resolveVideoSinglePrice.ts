@@ -2,9 +2,10 @@ import type { Pricing } from 'model-bank';
 
 export interface VideoSinglePriceResult {
   approximatePrice?: number;
+  price?: number;
 }
 
-/** Matches Create Video's default clip length when approximatePricePerVideo is absent. */
+/** Matches Create Video's default clip length when a model has no duration default. */
 const DEFAULT_CLIP_SECONDS = 5;
 
 const lowestLookupPrice = (prices: Record<string, number> | undefined) => {
@@ -13,7 +14,10 @@ const lowestLookupPrice = (prices: Record<string, number> | undefined) => {
   return Math.min(...values);
 };
 
-export const resolveVideoSinglePrice = (pricing?: Pricing): VideoSinglePriceResult => {
+export const resolveVideoSinglePrice = (
+  pricing?: Pricing,
+  defaultDuration?: number,
+): VideoSinglePriceResult => {
   if (!pricing) return {};
 
   if (typeof pricing.approximatePricePerVideo === 'number') {
@@ -23,20 +27,22 @@ export const resolveVideoSinglePrice = (pricing?: Pricing): VideoSinglePriceResu
   const videoUnit = pricing.units.find((unit) => unit.name === 'videoGeneration');
   if (!videoUnit) return {};
 
+  const duration =
+    typeof defaultDuration === 'number' && Number.isFinite(defaultDuration) && defaultDuration > 0
+      ? defaultDuration
+      : DEFAULT_CLIP_SECONDS;
+
   if (videoUnit.strategy === 'fixed') {
-    if (videoUnit.unit === 'video') return { approximatePrice: videoUnit.rate };
-    if (videoUnit.unit === 'second') {
-      return { approximatePrice: videoUnit.rate * DEFAULT_CLIP_SECONDS };
-    }
+    if (videoUnit.unit === 'video') return { price: videoUnit.rate };
+    if (videoUnit.unit === 'second') return { approximatePrice: videoUnit.rate * duration };
     return {};
   }
 
   if (videoUnit.strategy === 'lookup') {
     const lowest = lowestLookupPrice(videoUnit.lookup.prices);
     if (typeof lowest !== 'number') return {};
-    if (videoUnit.unit === 'second') return { approximatePrice: lowest * DEFAULT_CLIP_SECONDS };
+    if (videoUnit.unit === 'second') return { approximatePrice: lowest * duration };
     if (videoUnit.unit === 'video') return { approximatePrice: lowest };
-    return {};
   }
 
   return {};

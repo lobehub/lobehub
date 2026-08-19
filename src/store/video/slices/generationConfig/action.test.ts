@@ -51,6 +51,17 @@ const mockProviders = [
     name: 'Provider B',
     children: [testVideoModels[1]],
   },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    children: [
+      {
+        displayName: 'Veo 3',
+        id: 'google/veo-3',
+        type: 'video',
+      },
+    ],
+  },
 ];
 
 vi.mock('@/store/aiInfra', () => ({
@@ -105,6 +116,18 @@ describe('video generationConfig actions', () => {
       endImageUrl: 'end-custom.png',
     });
     expect(result.current.parameters?.duration).toBe(modelBDefaultValues.duration);
+  });
+
+  it('does not throw when the selected video model has no parameters schema', () => {
+    const { result } = renderHook(() => useVideoStore());
+
+    act(() => {
+      result.current.setModelAndProviderOnSelect('google/veo-3', 'openrouter');
+    });
+
+    expect(result.current.model).toBe('google/veo-3');
+    expect(result.current.provider).toBe('openrouter');
+    expect(result.current.parameters?.prompt).toBeDefined();
   });
 });
 

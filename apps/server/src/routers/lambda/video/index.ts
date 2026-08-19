@@ -156,35 +156,23 @@ export const videoRouter = router({
         }
       }
 
-      // In development, convert localhost proxy URLs to S3 URLs for API access
-      let generationParams = params;
-      if (process.env.NODE_ENV === 'development') {
-        const updates: Record<string, unknown> = {};
+      // External generation providers cannot authenticate to our `/f/:id`
+      // proxy, so resolve uploaded references to storage access URLs before
+      // submitting the task. The persistent batch config remains key-only.
+      const generationUpdates: Record<string, unknown> = {};
 
-        if (typeof params.imageUrl === 'string' && params.imageUrl) {
-          const s3Url = await fileService.getFullFileUrl(configForDatabase.imageUrl as string);
-          if (s3Url) {
-            log('Dev: converted imageUrl proxy URL to S3 URL: %s -> %s', params.imageUrl, s3Url);
-            updates.imageUrl = s3Url;
-          }
-        }
-
-        if (typeof params.endImageUrl === 'string' && params.endImageUrl) {
-          const s3Url = await fileService.getFullFileUrl(configForDatabase.endImageUrl as string);
-          if (s3Url) {
-            log(
-              'Dev: converted endImageUrl proxy URL to S3 URL: %s -> %s',
-              params.endImageUrl,
-              s3Url,
-            );
-            updates.endImageUrl = s3Url;
-          }
-        }
-
-        if (Object.keys(updates).length > 0) {
-          generationParams = { ...params, ...updates };
-        }
+      if (typeof configForDatabase.imageUrl === 'string' && configForDatabase.imageUrl) {
+        const accessUrl = await fileService.getFullFileUrl(configForDatabase.imageUrl);
+        if (accessUrl) generationUpdates.imageUrl = accessUrl;
       }
+
+      if (typeof configForDatabase.endImageUrl === 'string' && configForDatabase.endImageUrl) {
+        const accessUrl = await fileService.getFullFileUrl(configForDatabase.endImageUrl);
+        if (accessUrl) generationUpdates.endImageUrl = accessUrl;
+      }
+
+      const generationParams =
+        Object.keys(generationUpdates).length > 0 ? { ...params, ...generationUpdates } : params;
 
       // Step 0: Pre-charge (atomic budget deduction to prevent concurrent abuse)
       const generationTopic = await generationTopicModel.findById(generationTopicId);

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
 import * as uriParserModule from '../../utils/uriParser';
-import { createOpenAICompatibleImage } from './createImage';
+import { createOpenAICompatibleImage, extractImageUrlFromChatMessage } from './createImage';
 
 // Mock the console to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -842,6 +842,74 @@ describe('createOpenAICompatibleImage', () => {
 
       expect(result.imageUrl).toBe('data:image/png;base64,imageWithoutUsage');
       expect(result.modelUsage).toBeUndefined();
+    });
+  });
+
+  describe('extractImageUrlFromChatMessage', () => {
+    it('reads image URLs from multimodal content parts', () => {
+      expect(
+        extractImageUrlFromChatMessage({
+          content: [
+            { text: 'done', type: 'text' },
+            { image_url: { url: 'data:image/png;base64,fromPart' }, type: 'image_url' },
+          ],
+        }),
+      ).toBe('data:image/png;base64,fromPart');
+    });
+
+    it('reads markdown and data-URI images from string content', () => {
+      expect(
+        extractImageUrlFromChatMessage({
+          content: 'Here you go: ![cat](https://cdn.example/cat.png)',
+        }),
+      ).toBe('https://cdn.example/cat.png');
+      expect(
+        extractImageUrlFromChatMessage({
+          content: 'data:image/png;base64,abc123',
+        }),
+      ).toBe('data:image/png;base64,abc123');
+    });
+  });
+
+  describe('openrouter dedicated image models (no :image suffix)', () => {
+    it('uses chat completions when the provider is openrouter', async () => {
+      vi.mocked(mockClient.chat.completions.create).mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: [{ image_url: { url: 'data:image/png;base64,flux' }, type: 'image_url' }],
+            },
+          },
+        ],
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        { model: 'black-forest-labs/flux-2', params: { prompt: 'a cat' } },
+        'openrouter',
+      );
+
+      expect(result.imageUrl).toBe('data:image/png;base64,flux');
+      expect(mockClient.chat.completions.create).toHaveBeenCalled();
+      expect(mockClient.images.generate).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the images API when chat returns no image', async () => {
+      vi.mocked(mockClient.chat.completions.create).mockResolvedValue({
+        choices: [{ message: { content: 'no image here' } }],
+      } as any);
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'fromImagesApi' }],
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        { model: 'black-forest-labs/flux-2', params: { prompt: 'a cat' } },
+        'openrouter',
+      );
+
+      expect(result.imageUrl).toBe('data:image/png;base64,fromImagesApi');
+      expect(mockClient.images.generate).toHaveBeenCalled();
     });
   });
 });

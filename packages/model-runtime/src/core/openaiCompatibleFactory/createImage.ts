@@ -174,6 +174,69 @@ async function processImageUrlForChat(imageUrl: string): Promise<string> {
 }
 
 /**
+ * OpenRouter (and similar) may return the image in `message.images`, as
+ * multimodal `content` parts, or as a data URI / markdown image in a string.
+ */
+export const extractImageUrlFromChatMessage = (message: unknown): string | undefined => {
+  if (!message || typeof message !== 'object') return undefined;
+  const msg = message as Record<string, unknown>;
+
+  const urlFromImageLike = (value: unknown): string | undefined => {
+    if (typeof value === 'string' && value) return value;
+    if (!value || typeof value !== 'object') return undefined;
+    const rec = value as Record<string, unknown>;
+    if (typeof rec.url === 'string' && rec.url) return rec.url;
+    if (typeof rec.b64_json === 'string' && rec.b64_json) {
+      return `data:image/png;base64,${rec.b64_json}`;
+    }
+    const nested = rec.image_url ?? rec.imageUrl ?? rec.image;
+    if (nested && nested !== value) return urlFromImageLike(nested);
+    return undefined;
+  };
+
+  const urlFromImagesArray = (images: unknown): string | undefined => {
+    if (!Array.isArray(images)) return undefined;
+    for (const image of images) {
+      const url = urlFromImageLike(image);
+      if (url) return url;
+    }
+    return undefined;
+  };
+
+  const fromImages = urlFromImagesArray(msg.images);
+  if (fromImages) return fromImages;
+
+  const content = msg.content;
+  if (Array.isArray(content)) {
+    for (const part of content) {
+      if (!part || typeof part !== 'object') continue;
+      const rec = part as Record<string, unknown>;
+      const url = urlFromImageLike(rec.image_url ?? rec.imageUrl ?? rec.image ?? rec);
+      if (
+        url &&
+        (rec.type === 'image_url' ||
+          rec.type === 'image' ||
+          rec.type === 'output_image' ||
+          rec.image_url ||
+          rec.image ||
+          rec.b64_json)
+      ) {
+        return url;
+      }
+    }
+  }
+
+  if (typeof content === 'string') {
+    const dataUri = content.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/);
+    if (dataUri) return dataUri[0];
+    const markdown = content.match(/!\[[^\]]*\]\((data:image\/[^)]+|https?:[^)\s]+)\)/);
+    if (markdown?.[1]) return markdown[1];
+  }
+
+  return undefined;
+};
+
+/**
  * Generate images using chat completion API (OpenRouter Gemini, etc.)
  */
 async function generateByChatModel(
@@ -228,25 +291,17 @@ async function generateByChatModel(
 
   log('Chat API response: %O', response);
 
-  // Extract image from response
   const message = response.choices[0]?.message;
   if (!message) {
     throw new Error('No message in chat completion response');
   }
 
-  // Check if response has images in the expected format
-  if ((message as any).images && Array.isArray((message as any).images)) {
-    const { images } = message as any;
-    if (images.length > 0) {
-      const image = images[0];
-      if (image.image_url?.url) {
-        log('Successfully extracted image from chat response');
-        return { imageUrl: image.image_url.url };
-      }
-    }
+  const imageUrl = extractImageUrlFromChatMessage(message);
+  if (imageUrl) {
+    log('Successfully extracted image from chat response');
+    return { imageUrl };
   }
 
-  // If no images found, throw error
   throw new Error('No image generated in chat completion response');
 }
 
@@ -261,12 +316,21 @@ export async function createOpenAICompatibleImage(
 ): Promise<CreateImageResponse> {
   const { model } = payload;
   const routingModel = options?.routingModel ?? model;
+  const requestModel = options?.requestModel;
 
-  // Check if it's a chat model for image generation (via :image suffix)
-  if (routingModel.endsWith(':image')) {
-    return await generateByChatModel(client, payload, options?.requestModel);
+  // Chat-based generators use `:image` siblings. OpenRouter dedicated image
+  // models (Flux, Seedream, …) have no suffix but still speak chat completions
+  // with modalities — the Images API returns empty/unsupported payloads.
+  const useChatImage = routingModel.endsWith(':image') || provider === 'openrouter';
+  if (useChatImage) {
+    try {
+      return await generateByChatModel(client, payload, requestModel);
+    } catch (error) {
+      if (routingModel.endsWith(':image') || !(error instanceof Error)) throw error;
+      if (!error.message.includes('No image generated in chat completion response')) throw error;
+      log('OpenRouter chat image empty, falling back to images API: %s', routingModel);
+    }
   }
 
-  // Default to traditional images API
   return await generateByImageMode(client, payload, provider, options);
 }

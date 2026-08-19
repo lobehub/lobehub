@@ -138,6 +138,7 @@ export const UNIT_ICON_MAP: Partial<Record<PricingUnitName, LucideIcon>> = {
   textInput_cacheRead: CircleFadingArrowUp,
   textInput_cacheWrite: CircleFadingArrowUp,
   textOutput: ArrowDownToDot,
+  videoGeneration: VideoIcon,
 };
 
 const UNIT_SORT_ORDER: Record<PricingUnitName, number> = {

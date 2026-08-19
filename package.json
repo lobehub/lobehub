@@ -322,6 +322,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@saintno/comfyui-sdk": "^0.2.53",
+    "@smithy/node-http-handler": "^4.9.13",
     "@t3-oss/env-core": "^0.13.11",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@tanstack/react-query": "^5.101.2",

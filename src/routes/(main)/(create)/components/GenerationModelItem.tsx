@@ -2,7 +2,6 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
-import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { AiModelForSelect } from 'model-bank';
@@ -10,6 +9,7 @@ import numeral from 'numeral';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandedModelIcon } from '@/components/Branding/BrandedModelIcon';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -161,7 +161,7 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
 
     const content = (
       <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-        <ModelIcon model={model.id} size={20} />
+        <BrandedModelIcon model={model.id} size={20} />
         <Text ellipsis title={model.displayName || model.id}>
           {model.displayName || model.id}
         </Text>
