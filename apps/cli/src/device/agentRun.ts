@@ -1,11 +1,10 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import os from 'node:os';
 
 import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
+import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
 
 export interface SpawnHeteroAgentRunParams {
   agentType: string;
@@ -77,7 +76,7 @@ export function spawnHeteroAgentRun(
   // A stale project path must not prevent the wrapper CLI from starting: the
   // inner spawnAgent preflight owns cwd classification and reports the
   // structured working_directory_not_found error through heteroFinish.
-  const spawnCwd = existsSync(workDir) ? workDir : os.homedir();
+  const spawnCwd = resolveHeteroSpawnCwd(workDir);
 
   // Server-ingest mode (--topic + --operation-id): events are batch-POSTed to
   // the server, not rendered. `--input-json -` reads the prompt from stdin.

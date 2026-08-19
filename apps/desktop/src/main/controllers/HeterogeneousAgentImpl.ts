@@ -71,6 +71,11 @@ import {
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
+import {
+  describeUnusableWorkingDirectory,
+  isSpawnableDirectory,
+  resolveHeteroSpawnCwd,
+} from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -465,7 +470,7 @@ export default class HeterogeneousAgentCtr {
       agentType: session.agentType,
       code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
       command: this.resolveSessionCommand(session),
-      message: `Working directory does not exist: ${workingDirectory}`,
+      message: describeUnusableWorkingDirectory(workingDirectory),
       workingDirectory,
     };
   }
@@ -617,7 +622,7 @@ export default class HeterogeneousAgentCtr {
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
       const workingDirectory = this.resolveSessionWorkingDirectory(session);
-      if (!existsSync(workingDirectory)) {
+      if (!isSpawnableDirectory(workingDirectory)) {
         return this.buildWorkingDirectoryMissingError(session, workingDirectory);
       }
 
@@ -684,7 +689,7 @@ export default class HeterogeneousAgentCtr {
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
     const workingDirectory = this.resolveSessionWorkingDirectory(session);
-    if (!existsSync(workingDirectory)) {
+    if (!isSpawnableDirectory(workingDirectory)) {
       return this.buildWorkingDirectoryMissingError(session, workingDirectory);
     }
 
@@ -2644,8 +2649,8 @@ export default class HeterogeneousAgentCtr {
     // Let the embedded CLI classify a stale project path and finish the
     // operation through heteroFinish instead of failing this wrapper spawn as
     // the misleading `spawn LobeHub.exe ENOENT`.
-    const workDirExists = existsSync(workDir);
-    const spawnCwd = workDirExists ? workDir : os.homedir();
+    const workDirUsable = isSpawnableDirectory(workDir);
+    const spawnCwd = resolveHeteroSpawnCwd(workDir);
 
     // When CLI tracing is enabled (dev builds, or the Help-menu toggle in
     // packaged builds), have `lh hetero exec` persist the agent process's RAW
@@ -2656,7 +2661,7 @@ export default class HeterogeneousAgentCtr {
     // path for a missing workDir: RawStreamDump would recreate the deleted
     // directory before spawnAgent can report it.
     const rawDumpDir =
-      this.shouldTraceCliOutput && workDirExists ? this.resolveTraceRootDir(workDir) : undefined;
+      this.shouldTraceCliOutput && workDirUsable ? this.resolveTraceRootDir(workDir) : undefined;
 
     const args = [
       'hetero',

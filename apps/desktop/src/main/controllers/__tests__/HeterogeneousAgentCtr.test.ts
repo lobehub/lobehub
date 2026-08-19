@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -24,8 +24,16 @@ const platformMock = vi.mocked(os.platform);
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, existsSync: vi.fn(() => true) };
+  return { ...actual, existsSync: vi.fn(() => true), statSync: vi.fn() };
 });
+
+// Working-directory checks go through `statSync`; treat every path as an
+// existing directory unless a test marks one as missing.
+const asDirectory = { isDirectory: () => true } as ReturnType<typeof statSync>;
+const mockMissingDir = (missing: string) =>
+  vi
+    .mocked(statSync)
+    .mockImplementation((candidate) => (candidate === missing ? undefined : asDirectory) as never);
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
 
@@ -563,6 +571,7 @@ describe('HeterogeneousAgentCtr', () => {
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(statSync).mockReturnValue(asDirectory);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
   });
@@ -1639,7 +1648,9 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('validates the default desktop directory when the session cwd is omitted', async () => {
-      vi.mocked(existsSync).mockImplementation((candidate) => candidate === FAKE_DESKTOP_PATH);
+      vi.mocked(statSync).mockImplementation((candidate) =>
+        candidate === FAKE_DESKTOP_PATH ? asDirectory : (undefined as never),
+      );
       const detect = vi.fn().mockResolvedValue({ available: false });
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
@@ -1655,13 +1666,13 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('Codex CLI was not found');
 
-      expect(existsSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH);
+      expect(statSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH, expect.anything());
       expect(detect).toHaveBeenCalledWith('codex', true);
     });
 
     it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
       const missingCwd = '/tmp/lobehub-deleted-worktree';
-      vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+      mockMissingDir(missingCwd);
       const detect = vi.fn().mockResolvedValue({
         available: true,
         path: '/Applications/ChatGPT.app/Contents/Resources/codex',
@@ -2831,7 +2842,7 @@ describe('HeterogeneousAgentCtr', () => {
       const missingCwd = '/missing/project';
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+      mockMissingDir(missingCwd);
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },

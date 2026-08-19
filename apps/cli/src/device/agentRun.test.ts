@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import os from 'node:os';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,10 +9,18 @@ import { spawnHeteroAgentRun } from './agentRun';
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+// `resolveHeteroSpawnCwd` stats the candidate directories; treat every path as
+// an existing directory unless a test says otherwise.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, existsSync: vi.fn(() => true) };
+  return { ...actual, statSync: vi.fn() };
 });
+
+const asDirectory = { isDirectory: () => true } as ReturnType<typeof statSync>;
+const mockMissingDir = (missing: string) =>
+  vi
+    .mocked(statSync)
+    .mockImplementation((candidate) => (candidate === missing ? undefined : asDirectory) as never);
 
 const makeFakeChild = () => {
   const child = new EventEmitter() as EventEmitter & {
@@ -34,7 +42,7 @@ const baseParams = {
 
 describe('spawnHeteroAgentRun', () => {
   beforeEach(() => {
-    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(statSync).mockReturnValue(asDirectory);
   });
 
   afterEach(() => {
@@ -98,7 +106,7 @@ describe('spawnHeteroAgentRun', () => {
     const missingCwd = '/missing';
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
-    vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+    mockMissingDir(missingCwd);
 
     const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: missingCwd });
 
@@ -116,7 +124,7 @@ describe('spawnHeteroAgentRun', () => {
     const missingCwd = '/missing';
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
-    vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+    mockMissingDir(missingCwd);
 
     const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: missingCwd });
     child.emit('error', new Error('spawn EACCES'));
