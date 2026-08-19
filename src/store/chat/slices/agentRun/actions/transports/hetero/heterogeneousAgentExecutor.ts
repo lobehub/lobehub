@@ -1830,7 +1830,10 @@ export const executeHeterogeneousAgent = async (
         !!apiConfig &&
         !!providerConfig &&
         !!aiInfraState.enabledAiProviders?.some((provider) => provider.id === apiConfig.providerId),
-      providerSdkType: providerConfig?.settings.sdkType,
+      providerSdkType:
+        providerConfig?.settings.claudeCode?.direct === true
+          ? providerConfig.settings.sdkType
+          : undefined,
     });
     if (bindingError) {
       const message =

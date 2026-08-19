@@ -21,6 +21,7 @@ const createProvider = (): SandboxProvider =>
       files: true,
       languages: ['python'],
       persistentSession: true,
+      secretEnv: true,
       shell: true,
       skillScripts: true,
     },

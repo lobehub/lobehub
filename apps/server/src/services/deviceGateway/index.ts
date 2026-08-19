@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
+  type AgentRunRequestMessage,
   type DeviceMessageApiResult,
   type DeviceStatusResult,
   type DeviceSystemInfo,
@@ -1276,6 +1277,7 @@ export class DeviceGateway {
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeCodeGateway?: AgentRunRequestMessage['claudeCodeGateway'];
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded to the device as fetchable (signed) URLs. */
@@ -1301,6 +1303,45 @@ export class DeviceGateway {
       const message = error instanceof Error ? error.message : String(error);
       log('dispatchAgentRun: error — %s', message);
       return { error: message, success: false };
+    }
+  }
+
+  async supportsClaudeCodeGateway(params: {
+    deviceId: string;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) return false;
+    try {
+      const result = await client.invokeRpc<{ claudeCodeGateway?: string }>(
+        { ...params, timeout: 5000 },
+        { method: 'getDeviceCapabilities' },
+      );
+      return result.success && result.data?.claudeCodeGateway === 'v1';
+    } catch {
+      return false;
+    }
+  }
+
+  async cancelAgentRun(params: {
+    deviceId: string;
+    operationId: string;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) return false;
+
+    try {
+      const result = await client.invokeRpc<{ success: boolean }>(
+        { ...params, timeout: 5000 },
+        { method: 'cancelAgentRun', params: { operationId: params.operationId } },
+      );
+      return result.success && result.data?.success === true;
+    } catch (error) {
+      log('cancelAgentRun: error for deviceId=%s — %O', params.deviceId, error);
+      return false;
     }
   }
 

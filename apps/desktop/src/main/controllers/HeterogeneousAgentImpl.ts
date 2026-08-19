@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { finished as streamFinished } from 'node:stream/promises';
 
+import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
@@ -405,6 +406,8 @@ export default class HeterogeneousAgentCtr {
   }
 
   private sessions = new Map<string, AgentSession>();
+  /** Gateway-dispatched one-shot CLI processes, keyed for server-side cancellation. */
+  private gatewayAgentProcesses = new Map<string, ChildProcess>();
   /**
    * Per-operation AskUserQuestion bridge state. Keyed by `operationId` so the
    * `submitIntervention` IPC can route an answer to the right pending MCP
@@ -2615,6 +2618,7 @@ export default class HeterogeneousAgentCtr {
     assistantMessageId?: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeCodeGateway?: AgentRunRequestMessage['claudeCodeGateway'];
     cwd?: string;
     /** Image attachments (signed URLs) appended as image content blocks. */
     imageList?: HeteroExecImageRef[];
@@ -2633,6 +2637,7 @@ export default class HeterogeneousAgentCtr {
       agentType,
       assistantMessageId,
       args: extraArgs,
+      claudeCodeGateway,
       cwd,
       imageList,
       jwt,
@@ -2701,6 +2706,20 @@ export default class HeterogeneousAgentCtr {
       ...process.env,
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
+      ...(claudeCodeGateway
+        ? {
+            ANTHROPIC_AUTH_TOKEN: claudeCodeGateway.token,
+            ANTHROPIC_BASE_URL: claudeCodeGateway.baseURL,
+            ANTHROPIC_MODEL: claudeCodeGateway.modelRoles.primary,
+            ANTHROPIC_SMALL_FAST_MODEL: claudeCodeGateway.modelRoles.smallFast,
+            CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
+            CLAUDE_CODE_SUBAGENT_MODEL: claudeCodeGateway.modelRoles.subagent,
+            CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
+            CLAUDE_CODE_USE_BEDROCK: '0',
+            CLAUDE_CODE_USE_MANTLE: '0',
+            CLAUDE_CODE_USE_VERTEX: '0',
+          }
+        : {}),
       LOBEHUB_JWT: jwt,
       ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
@@ -2720,8 +2739,10 @@ export default class HeterogeneousAgentCtr {
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
     });
+    this.gatewayAgentProcesses.set(operationId, child);
 
     child.on('exit', (code, signal) => {
+      this.gatewayAgentProcesses.delete(operationId);
       logger.info('spawnLhHeteroExec: exited — op=%s code=%s signal=%s', operationId, code, signal);
     });
 
@@ -2759,9 +2780,17 @@ export default class HeterogeneousAgentCtr {
       });
 
       child.once('error', (err) => {
+        this.gatewayAgentProcesses.delete(operationId);
         logger.error('spawnLhHeteroExec: spawn failed — %s', err.message);
         settle({ reason: err.message, status: 'rejected' });
       });
     });
+  }
+
+  async cancelGatewayAgentRun({ operationId }: { operationId: string }) {
+    const child = this.gatewayAgentProcesses.get(operationId);
+    if (!child) return { success: false };
+
+    return { success: child.kill('SIGINT') };
   }
 }

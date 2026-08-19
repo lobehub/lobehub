@@ -203,6 +203,8 @@ export interface WorkspaceScanDeps {
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
+  /** Stop a Claude Code gateway-backed agent process owned by this device. */
+  cancelAgentRun?: (params: { operationId: string }) => Promise<{ success: boolean }>;
   /**
    * Enroll this machine into a workspace pool: derive the workspace-scoped
    * deviceId and open a second gateway connection authenticated with `token`

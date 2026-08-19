@@ -34,7 +34,10 @@ export const useClaudeCodeApiBindingValidation = (apiConfig?: HeterogeneousApiCo
       apiConfig,
       enabledModels,
       providerEnabled: !!apiConfig && providerList.some(({ id }) => id === apiConfig.providerId),
-      providerSdkType: providerConfig?.settings.sdkType,
+      providerSdkType:
+        providerConfig?.settings.claudeCode?.direct === true
+          ? providerConfig.settings.sdkType
+          : undefined,
     }),
     isReady,
   };
@@ -48,7 +51,7 @@ export const useClaudeCodeCompatibleProviders = (): ClaudeCodeCompatibleProvider
 
   return useMemo(() => {
     const candidateProviders = providerList
-      .filter((provider) => runtimeConfig[provider.id]?.settings.sdkType === 'anthropic')
+      .filter((provider) => runtimeConfig[provider.id]?.settings.claudeCode?.direct === true)
       .map(({ id, name }) => ({ id, name }));
     const compatibleProviderIds = new Set(candidateProviders.map(({ id }) => id));
     const modelsByProvider: Record<string, ClaudeCodeCompatibleModel[]> = {};

@@ -43,6 +43,8 @@ import { initWorkspace, listProjectSkills, statPath } from './workspace';
  * handler, with no per-method gateway route.
  */
 export const DEVICE_RPC_METHODS = [
+  'getDeviceCapabilities',
+  'cancelAgentRun',
   'enrollWorkspace',
   'unenrollWorkspace',
   'initWorkspace',
@@ -96,6 +98,16 @@ export const executeDeviceRpc = async (
   deps: DeviceControlDeps,
 ): Promise<unknown> => {
   switch (method) {
+    case 'getDeviceCapabilities': {
+      return deps.cancelAgentRun ? { claudeCodeGateway: 'v1' } : {};
+    }
+
+    case 'cancelAgentRun': {
+      if (!deps.cancelAgentRun)
+        throw new Error('This device client does not support gateway agent cancellation');
+      return deps.cancelAgentRun(params as { operationId: string });
+    }
+
     // Remote workspace share: the host owns the gateway connections, so both
     // handlers are host-injected. A host that can't manage a second connection
     // rejects with a stable reason the server surfaces to the user.

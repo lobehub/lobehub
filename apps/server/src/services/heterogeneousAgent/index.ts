@@ -281,6 +281,17 @@ export class HeterogeneousAgentService {
       sessionId,
       topicId,
     });
+    let wasInterrupted = false;
+    try {
+      const durableOperation = await new AgentOperationModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findById(operationId);
+      wasInterrupted = durableOperation?.status === 'interrupted';
+    } catch (error) {
+      log('heteroFinish: failed to read durable operation status (non-fatal): %O', error);
+    }
 
     // Drive the run's lifecycle hooks (onComplete / onError) through the same
     // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
@@ -331,14 +342,14 @@ export class HeterogeneousAgentService {
         agentType,
         error,
         operationId,
-        reason: result,
+        reason: wasInterrupted ? 'cancelled' : result,
         sessionId,
       },
       stepIndex: 0,
       type: 'agent_runtime_end',
     });
 
-    if (result === 'cancelled') return;
+    if (result === 'cancelled' || wasInterrupted) return;
 
     // The owning agentId is authoritatively encoded in the operationId
     // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved

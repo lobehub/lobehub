@@ -24,6 +24,8 @@ export interface SandboxRunParams {
    * the CLI can pass it through the heteroIngest payload, removing the need for the server
    * to re-read topic.metadata.runningOperation on every cold Lambda start. */
   assistantMessageId: string;
+  /** Run-scoped Claude Code Gateway environment, injected outside the command payload. */
+  claudeCodeGatewayEnv?: Record<string, string>;
   cwd?: string;
   /** GitHub OAuth token for cloning private repos. */
   githubToken?: string;
@@ -79,15 +81,14 @@ function repoToLocalDir(repo: string): string {
  */
 function buildCredsSetupScript(githubToken?: string): string | null {
   if (!githubToken) return null;
-  const tokenArg = shellQuote(githubToken);
   return [
     'mkdir -p ~/.creds',
     // Write GITHUB_ACCESS_TOKEN matching the injectCredsToSandbox oauth naming scheme
-    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' ${tokenArg} > ~/.creds/env`,
+    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' "$GITHUB_TOKEN" > ~/.creds/env`,
     // Pre-authenticate gh CLI so CC can use it immediately (gh also picks up
     // GITHUB_TOKEN from env, but explicit login ensures ~/.config/gh/hosts.yml
     // is populated for cases where env is reset in a sub-shell)
-    `echo ${tokenArg} | gh auth login --hostname github.com --with-token 2>/dev/null || true`,
+    `echo "$GITHUB_TOKEN" | gh auth login --hostname github.com --with-token 2>/dev/null || true`,
   ].join(' && \\\n');
 }
 
@@ -108,9 +109,7 @@ function buildRepoSetupScript(repos: string[], githubToken?: string): string | n
     const dirArg = shellQuote(dir);
     const repoUrlArg = shellQuote(`https://github.com/${repoPath}`);
     const cloneCmd = githubToken
-      ? `git -c ${shellQuote(
-          `url.https://oauth2:${githubToken}@github.com/.insteadOf=https://github.com/`,
-        )} clone -q ${repoUrlArg} ${dirArg}`
+      ? `git -c "url.https://oauth2:$GITHUB_TOKEN@github.com/.insteadOf=https://github.com/" clone -q ${repoUrlArg} ${dirArg}`
       : `git clone -q ${repoUrlArg} ${dirArg}`;
 
     // `|| true` makes clone failures non-fatal — CC still runs even if a repo can't be cloned.
@@ -197,22 +196,13 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   // (e.g. a cloudflare tunnel). APP_URL is NOT used here because it's tied to
   // auth callbacks and must stay as localhost in dev.
   const serverUrl = process.env.LOBEHUB_HETERO_SERVER_URL ?? appEnv.APP_URL;
-  const envVars = [
-    `LOBEHUB_JWT=${shellQuote(jwt)}`,
-    `LOBEHUB_SERVER=${shellQuote(serverUrl)}`,
-    `LOBEHUB_ASSISTANT_MESSAGE_ID=${shellQuote(assistantMessageId)}`,
-    ...(workspaceId ? [`LOBEHUB_WORKSPACE_ID=${shellQuote(workspaceId)}`] : []),
-    // Inject GitHub token so CC can authenticate git operations and GitHub API
-    // calls inside the sandbox (e.g. gh CLI, git push, API requests).
-    ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),
-  ].join(' ');
   const shellArgs = args.map(shellQuote).join(' ');
-  const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${envVars} ${shellArgs}`;
+  const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${shellArgs}`;
   // Creds first (writes ~/.creds/env + authenticates gh CLI), then repo clone.
   const credsScript = buildCredsSetupScript(githubToken);
   const repoScript = buildRepoSetupScript(repos ?? [], githubToken);
   const setupParts = [credsScript, repoScript].filter(Boolean);
-  const shellCommand =
+  let shellCommand =
     setupParts.length > 0 ? `${setupParts.join(' && \\\n')} && \\\n${mainCommand}` : mainCommand;
 
   log(
@@ -224,9 +214,29 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   );
 
   const sandboxService = createSandboxService({ marketService, topicId, userId });
+  if (!sandboxService.capabilities.secretEnv && params.claudeCodeGatewayEnv) {
+    throw new Error(
+      'Configured sandbox provider does not support secure secret environment injection',
+    );
+  }
+  const secretEnv = {
+    ...params.claudeCodeGatewayEnv,
+    ...(githubToken ? { GITHUB_TOKEN: githubToken } : {}),
+    LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId,
+    LOBEHUB_JWT: jwt,
+    LOBEHUB_SERVER: serverUrl,
+    ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
+  };
+  if (!sandboxService.capabilities.secretEnv) {
+    const legacyEnv = Object.entries(secretEnv)
+      .map(([key, value]) => `${key}=${shellQuote(value)}`)
+      .join(' ');
+    shellCommand = `${legacyEnv} ${shellCommand}`;
+  }
   const result = await sandboxService.callTool('runCommand', {
     background: true,
     command: shellCommand,
+    ...(sandboxService.capabilities.secretEnv ? { secretEnv } : {}),
     timeout: 600_000,
   });
 

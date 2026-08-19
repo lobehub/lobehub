@@ -30,22 +30,28 @@ vi.mock('@/envs/auth', () => ({
 // so the chain (.setProtectedHeader().setSubject()…) doesn't break.
 const signMock = vi.fn().mockResolvedValue('signed.jwt.token');
 const setExpirationTimeMock = vi.fn();
+const setAudienceMock = vi.fn();
 const setIssuedAtMock = vi.fn();
+const setJtiMock = vi.fn();
 const setSubjectMock = vi.fn();
 const setProtectedHeaderMock = vi.fn();
 
 const buildSignJWTChain = () => {
   const chain = {
+    setAudience: setAudienceMock.mockReturnValue(undefined as any),
     setExpirationTime: setExpirationTimeMock.mockReturnValue(undefined as any),
     setIssuedAt: setIssuedAtMock.mockReturnValue(undefined as any),
+    setJti: setJtiMock.mockReturnValue(undefined as any),
     setProtectedHeader: setProtectedHeaderMock.mockReturnValue(undefined as any),
     setSubject: setSubjectMock.mockReturnValue(undefined as any),
     sign: signMock,
   };
   // Make every setter return the same chain object so .method().method() works.
   setProtectedHeaderMock.mockReturnValue(chain);
+  setAudienceMock.mockReturnValue(chain);
   setSubjectMock.mockReturnValue(chain);
   setIssuedAtMock.mockReturnValue(chain);
+  setJtiMock.mockReturnValue(chain);
   setExpirationTimeMock.mockReturnValue(chain);
   return chain;
 };
@@ -147,6 +153,34 @@ describe('internalJwt', () => {
 
       expect(userExpiry).toBe('5m');
       expect(opExpiry).toBe('4h');
+    });
+  });
+
+  describe('signClaudeCodeGatewayJwt', () => {
+    it('binds the token to its operation, provider, models, audience, and jti', async () => {
+      const { signClaudeCodeGatewayJwt } = await import('../internalJwt');
+
+      await signClaudeCodeGatewayJwt({
+        allowedModels: ['claude-sonnet'],
+        deviceId: 'device-1',
+        jti: 'jti-1',
+        operationId: 'op-1',
+        providerId: 'anthropic',
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+
+      expect(SignJWTMock).toHaveBeenCalledWith({
+        allowed_models: ['claude-sonnet'],
+        device_id: 'device-1',
+        operation_id: 'op-1',
+        provider_id: 'anthropic',
+        purpose: 'claude-code-gateway',
+        workspace_id: 'ws-1',
+      });
+      expect(setAudienceMock).toHaveBeenCalledWith('lobe-claude-code-gateway');
+      expect(setSubjectMock).toHaveBeenCalledWith('user-1');
+      expect(setJtiMock).toHaveBeenCalledWith('jti-1');
     });
   });
 

@@ -23,6 +23,7 @@ export class MarketSandboxProvider implements SandboxProvider {
     files: true,
     languages: ['python', 'javascript', 'typescript'],
     persistentSession: true,
+    secretEnv: false,
     shell: true,
     skillScripts: true,
   } as const satisfies SandboxProviderCapabilities;

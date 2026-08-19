@@ -208,6 +208,24 @@ describe('AgentOperationModel', () => {
       // The attacker cannot read the row either.
       expect(await attackerModel.findById(operationId)).toBeNull();
     });
+
+    it('does not let a late completion overwrite an interrupted operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-interrupt-race';
+      await model.recordStart({ operationId });
+
+      expect(await model.interrupt(operationId, 'user_cancelled')).toBe(true);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'done',
+          status: 'done',
+        }),
+      ).toBe(false);
+
+      const row = await model.findById(operationId);
+      expect(row?.status).toBe('interrupted');
+      expect(row?.interruption).toMatchObject({ reason: 'user_cancelled' });
+    });
   });
 
   describe('sumChildUsage', () => {

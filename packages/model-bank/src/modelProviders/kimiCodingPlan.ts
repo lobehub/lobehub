@@ -12,6 +12,7 @@ const KimiCodingPlan: ModelProviderCard = {
   modelsUrl: 'https://platform.moonshot.ai/docs',
   name: 'Kimi Code',
   settings: {
+    claudeCode: { direct: true, gateway: 'anthropic-messages' },
     disableBrowserRequest: true,
     proxyUrl: {
       placeholder: 'https://api.kimi.com/coding',

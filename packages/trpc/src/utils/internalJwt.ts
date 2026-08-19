@@ -6,6 +6,18 @@ import { authEnv } from '@/envs/auth';
 const log = debug('lobe-internal-jwt');
 
 const INTERNAL_JWT_PURPOSE = 'lobe-internal-call';
+export const CLAUDE_CODE_GATEWAY_AUDIENCE = 'lobe-claude-code-gateway';
+export const CLAUDE_CODE_GATEWAY_PURPOSE = 'claude-code-gateway';
+
+export interface ClaudeCodeGatewayJwtClaims {
+  allowedModels: string[];
+  deviceId?: string;
+  jti: string;
+  operationId: string;
+  providerId: string;
+  userId: string;
+  workspaceId?: string;
+}
 
 /**
  * Get RSA key pair from JWKS_KEY environment variable
@@ -119,6 +131,63 @@ export const signOperationJwt = async (userId: string): Promise<string> => {
     .setIssuedAt()
     .setExpirationTime('4h')
     .sign(key);
+};
+
+/** Sign a short-lived data-plane token accepted only by the Claude Code Gateway. */
+export const signClaudeCodeGatewayJwt = async (
+  claims: ClaudeCodeGatewayJwtClaims,
+  expiration: string | number = '4h',
+): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({
+    allowed_models: claims.allowedModels,
+    device_id: claims.deviceId,
+    operation_id: claims.operationId,
+    provider_id: claims.providerId,
+    purpose: CLAUDE_CODE_GATEWAY_PURPOSE,
+    workspace_id: claims.workspaceId,
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setAudience(CLAUDE_CODE_GATEWAY_AUDIENCE)
+    .setSubject(claims.userId)
+    .setJti(claims.jti)
+    .setIssuedAt()
+    .setExpirationTime(expiration)
+    .sign(key);
+};
+
+/** Verify and normalize a Claude Gateway token without granting ordinary API access. */
+export const verifyClaudeCodeGatewayJwt = async (
+  token: string,
+): Promise<ClaudeCodeGatewayJwtClaims> => {
+  const publicKey = await getVerificationKey();
+  const { payload } = await jwtVerify(token, publicKey, {
+    algorithms: ['RS256'],
+    audience: CLAUDE_CODE_GATEWAY_AUDIENCE,
+  });
+
+  if (payload.purpose !== CLAUDE_CODE_GATEWAY_PURPOSE) throw new Error('Invalid token purpose');
+  if (
+    typeof payload.sub !== 'string' ||
+    typeof payload.jti !== 'string' ||
+    typeof payload.operation_id !== 'string' ||
+    typeof payload.provider_id !== 'string' ||
+    !Array.isArray(payload.allowed_models) ||
+    !payload.allowed_models.every((model) => typeof model === 'string')
+  ) {
+    throw new Error('Invalid Claude Code Gateway token claims');
+  }
+
+  return {
+    allowedModels: payload.allowed_models,
+    deviceId: typeof payload.device_id === 'string' ? payload.device_id : undefined,
+    jti: payload.jti,
+    operationId: payload.operation_id,
+    providerId: payload.provider_id,
+    userId: payload.sub,
+    workspaceId: typeof payload.workspace_id === 'string' ? payload.workspace_id : undefined,
+  };
 };
 
 /**

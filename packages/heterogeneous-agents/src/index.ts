@@ -13,6 +13,15 @@ export {
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
 } from './claudeCodeDirectEnv';
+export {
+  CLAUDE_CODE_MANAGED_ENV_KEYS,
+  type ClaudeCodeCredentialMode,
+  type ClaudeCodeLaunchPlan,
+  type ClaudeCodeModelRoles,
+  resolveClaudeCodeLaunchPlan,
+  type ResolveClaudeCodeLaunchPlanInput,
+  type ResolveClaudeCodeLaunchPlanResult,
+} from './claudeCodeLaunchPlan';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,
