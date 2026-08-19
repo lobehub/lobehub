@@ -12,9 +12,9 @@ import { Link } from 'react-router';
 
 import { toastAicoError } from '@/business/client/resolveAicoErrorMessage';
 import StatisticCard from '@/components/StatisticCard';
+import type { AicoBillingContext, AicoBillingSource } from '@/features/AicoBilling';
 import {
-  type AicoBillingContext,
-  type AicoBillingSource,
+  AICO_MY_WALLET_SWR_KEY,
   formatRemainingUsd,
   useAicoBillingSources,
 } from '@/features/AicoBilling';
@@ -23,6 +23,7 @@ import {
   FxTopupFields,
   type FxTopupFormValues,
 } from '@/features/AicoBilling/FxTopupFields';
+import { AICO_TABLE_SCROLL, aicoPanelStyles } from '@/features/AicoPanels';
 import { buildPhoneVerifyRedirectUrl } from '@/libs/better-auth/phone';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -30,21 +31,6 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-  `,
-  page: css`
-    width: 100%;
-    max-width: 960px;
-  `,
-  section: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
   sourceActive: css`
     border-color: ${cssVar.colorBorder};
     background: ${cssVar.colorFillTertiary};
@@ -71,11 +57,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
-  sourceGrid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 12px;
-  `,
 }));
 
 const sourceToContext = (source: AicoBillingSource): AicoBillingContext =>
@@ -97,7 +78,7 @@ export const AicoWallet = () => {
     Boolean(userProfileSelectors.userProfile(s)?.phoneNumberVerified),
   );
 
-  const { data: wallet, mutate: mutateWallet } = useClientDataSWR('aico-my-wallet', () =>
+  const { data: wallet, mutate: mutateWallet } = useClientDataSWR(AICO_MY_WALLET_SWR_KEY, () =>
     lambdaClient.aicoBilling.getMyWallet.query(),
   );
   const { data: fx } = useClientDataSWR('aico-fx', () =>
@@ -114,9 +95,12 @@ export const AicoWallet = () => {
   );
 
   const { canSwitch, data: billingSources, isSelected, selectSource } = useAicoBillingSources();
+  const personalRemainingUsd = billingSources?.sources.find(
+    (source) => source.source === 'personal',
+  )?.remainingUsd;
 
   return (
-    <Flexbox className={styles.page} gap={20}>
+    <Flexbox className={aicoPanelStyles.page} gap={20}>
       <Flexbox gap={4}>
         <Flexbox horizontal align="center" gap={8}>
           <Text strong as="h1" style={{ fontSize: 22, margin: 0 }}>
@@ -127,10 +111,12 @@ export const AicoWallet = () => {
         <Text type="secondary">{t('wallet.subtitle')}</Text>
       </Flexbox>
 
-      <div className={styles.grid}>
+      <div className={aicoPanelStyles.grid}>
         <StatisticCard
-          statistic={{ value: `$${Number(wallet?.balanceUsd ?? 0).toFixed(4)}` }}
           title={t('wallet.balanceUsd')}
+          statistic={{
+            value: `$${Number(personalRemainingUsd ?? wallet?.balanceUsd ?? 0).toFixed(4)}`,
+          }}
         />
         <StatisticCard
           statistic={{ value: Number(wallet?.balanceToman ?? 0).toLocaleString() }}
@@ -148,11 +134,11 @@ export const AicoWallet = () => {
       </div>
 
       {billingSources && billingSources.sources.length > 0 ? (
-        <Block className={styles.section} variant="outlined">
+        <Block className={aicoPanelStyles.section} variant="outlined">
           <Flexbox gap={12}>
             <Text strong>{t('billing.sourcesTitle')}</Text>
             <Text type="secondary">{t('billing.selectHint')}</Text>
-            <div className={styles.sourceGrid}>
+            <div className={aicoPanelStyles.sourceGrid}>
               {billingSources.sources.map((source) => {
                 const ctx = sourceToContext(source);
                 const selected = isSelected(ctx);
@@ -200,7 +186,7 @@ export const AicoWallet = () => {
         </Block>
       ) : null}
 
-      <Block className={styles.section} variant="outlined">
+      <Block className={aicoPanelStyles.section} variant="outlined">
         <Flexbox gap={16}>
           <Flexbox horizontal align="center" gap={8}>
             <Text strong>{t('wallet.onlineTopupTitle')}</Text>
@@ -224,7 +210,7 @@ export const AicoWallet = () => {
         </Flexbox>
       </Block>
 
-      <Block className={styles.section} variant="outlined">
+      <Block className={aicoPanelStyles.section} variant="outlined">
         <Flexbox gap={12}>
           <Text strong>{t('wallet.trialTitle')}</Text>
           {trial && !trial.config.enabled ? (
@@ -285,7 +271,7 @@ export const AicoWallet = () => {
         </Flexbox>
       </Block>
 
-      <Block className={styles.section} variant="outlined">
+      <Block className={aicoPanelStyles.section} variant="outlined">
         <Flexbox gap={12}>
           <Text strong>{t('wallet.upgradeTitle')}</Text>
           <Text type="secondary">{t('wallet.upgradeDesc')}</Text>
@@ -295,32 +281,35 @@ export const AicoWallet = () => {
         </Flexbox>
       </Block>
 
-      <Block className={styles.section} variant="outlined">
+      <Block className={aicoPanelStyles.section} variant="outlined">
         <Flexbox gap={12}>
           <Text strong>{t('wallet.transactions')}</Text>
-          <Table
-            dataSource={txs || []}
-            pagination={false}
-            rowKey="id"
-            columns={[
-              { dataIndex: 'type', title: t('wallet.columns.type') },
-              {
-                dataIndex: 'amountUsd',
-                title: t('wallet.columns.usd'),
-                render: (v) => (v == null ? '—' : Number(v).toFixed(4)),
-              },
-              {
-                dataIndex: 'amountToman',
-                title: t('wallet.columns.toman'),
-                render: (v: number | string) => Number(v ?? 0).toLocaleString(),
-              },
-              {
-                dataIndex: 'createdAt',
-                title: t('wallet.columns.date'),
-                render: (v: Date | string) => new Date(v).toLocaleString(),
-              },
-            ]}
-          />
+          <div className={aicoPanelStyles.tableScroll}>
+            <Table
+              dataSource={txs || []}
+              pagination={false}
+              rowKey="id"
+              scroll={AICO_TABLE_SCROLL}
+              columns={[
+                { dataIndex: 'type', title: t('wallet.columns.type') },
+                {
+                  dataIndex: 'amountUsd',
+                  title: t('wallet.columns.usd'),
+                  render: (v) => (v == null ? '—' : Number(v).toFixed(4)),
+                },
+                {
+                  dataIndex: 'amountToman',
+                  title: t('wallet.columns.toman'),
+                  render: (v: number | string) => Number(v ?? 0).toLocaleString(),
+                },
+                {
+                  dataIndex: 'createdAt',
+                  title: t('wallet.columns.date'),
+                  render: (v: Date | string) => new Date(v).toLocaleString(),
+                },
+              ]}
+            />
+          </div>
         </Flexbox>
       </Block>
     </Flexbox>

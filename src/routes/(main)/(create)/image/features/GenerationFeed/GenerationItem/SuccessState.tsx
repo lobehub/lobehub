@@ -3,6 +3,7 @@
 import { Block } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { GenerationCostBadge } from '@/components/GenerationCostBadge';
 import ImageItem from '@/components/ImageItem';
 
 import { ActionButtons } from './ActionButtons';
@@ -49,6 +50,11 @@ export const SuccessState = memo<SuccessStateProps>(
           onCopySeed={onCopySeed}
           onDelete={onDelete}
           onDownload={onDownload}
+        />
+        <GenerationCostBadge
+          costUsd={
+            generation.asset && 'costUsd' in generation.asset ? generation.asset.costUsd : undefined
+          }
         />
       </Block>
     );

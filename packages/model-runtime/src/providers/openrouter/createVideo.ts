@@ -19,7 +19,7 @@ interface OpenRouterVideoJob {
   status?: string;
   unsigned_urls?: string[] | null;
   url?: string | null;
-  usage?: unknown;
+  usage?: { cost?: number } | null;
 }
 
 const openRouterHeaders = (apiKey: string) => ({
@@ -67,7 +67,9 @@ export const pollOpenRouterVideoStatus = async (
     // from networks where only openrouter.ai is reachable.
     const origin = baseURL.replace(/\/$/, '');
     const modelUsage = modelUsageFromJob(data);
+    const costUsd = modelUsage?.cost;
     return {
+      ...(typeof costUsd === 'number' ? { costUsd } : {}),
       headers: { Authorization: `Bearer ${options.apiKey}` },
       ...(modelUsage && { modelUsage }),
       status: 'success',

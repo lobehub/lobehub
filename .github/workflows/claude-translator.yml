@@ -3,15 +3,10 @@ concurrency:
   group: translator-${{ github.event.comment.id || github.event.issue.number || github.event.review.id }}
   cancel-in-progress: false
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  issues:
-    types: [opened]
-  issue_comment:
-    types: [created, edited]
-  pull_request_review:
-    types: [submitted, edited]
-  pull_request_review_comment:
-    types: [created, edited]
+  workflow_dispatch: {}
 
 jobs:
   translate:

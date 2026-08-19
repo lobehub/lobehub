@@ -1,8 +1,9 @@
 name: Claude PR Assign
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
-  pull_request_target:
-    types: [opened, labeled]
+  workflow_dispatch: {}
 
 jobs:
   assign-reviewer:

@@ -12,7 +12,7 @@ export class AiImageService {
 
     try {
       // Managed OpenRouter/Aico must send explicit billing — same contract as chat.
-      const { AICO_BILLING_SOURCES_SWR_KEY, assertAicoBillingAllowsChat } =
+      const { assertAicoBillingAllowsChat, refreshAicoBillingBalance } =
         await import('@/features/AicoBilling');
       const aicoBilling = await assertAicoBillingAllowsChat(payload.provider);
       const requestPayload = aicoBilling ? { ...payload, aicoBilling } : payload;
@@ -25,9 +25,7 @@ export class AiImageService {
       });
 
       if (aicoBilling) {
-        const { mutate: globalMutate } = await import('@/libs/swr');
-        void globalMutate(AICO_BILLING_SOURCES_SWR_KEY);
-        void globalMutate('aico-my-wallet');
+        void refreshAicoBillingBalance();
       }
 
       return result;

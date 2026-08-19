@@ -64,6 +64,7 @@ async function pollUntilCompletion(
   inferenceId: string,
   signal: AbortSignal,
 ): Promise<{
+  costUsd?: number;
   headers?: Record<string, string>;
   modelUsage?: { cost?: number; totalOutputTokens?: number; totalTokens?: number };
   videoUrl: string;
@@ -82,6 +83,7 @@ async function pollUntilCompletion(
       if (result.status === 'success') {
         log('Video generation succeeded for inferenceId: %s', inferenceId);
         return {
+          ...(typeof result.costUsd === 'number' ? { costUsd: result.costUsd } : {}),
           headers: result.headers,
           modelUsage: result.modelUsage,
           videoUrl: result.videoUrl,
@@ -210,6 +212,7 @@ export const videoRouter = router({
         await generationModel.createAssetAndFile(
           generationId,
           {
+            ...(typeof pollResult.costUsd === 'number' ? { costUsd: pollResult.costUsd } : {}),
             coverUrl: processResult.coverKey,
             duration: processResult.duration,
             height: processResult.height,

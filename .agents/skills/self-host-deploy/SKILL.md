@@ -100,7 +100,17 @@ For a Linux server that must always match GitHub `canary` with no data loss and 
 
 → **[canary-cicd.md](canary-cicd.md)** (`deploy-canary.yml` + `panachat-deploy-remote.sh` + `docker-compose.panachat.yml`)
 
-## Image: private `ghcr.io/<owner>/panachat:<sha>`. Volumes: `panachat_*` only.
+First-time VPS (Ubuntu packages, env, DNS/TLS, first GHCR image, bootstrap) for `chat.panafor.com` / `preview.panafor.com` / admin `adchat.panafor.com`:
+
+→ **[SERVER-BOOTSTRAP.md](../../../docker-compose/deploy/SERVER-BOOTSTRAP.md)**
+
+Image: private `ghcr.io/<owner>/panachat:<sha>`. Volumes: `panachat_*` only.
+
+### Path D: Preview branch (staging on same VPS)
+
+Long-lived `preview` branch deploys to an isolated stack with its **own** Postgres/Redis/RustFS volumes (`panachat_preview_*`). Promote with a PR `preview` → `canary`.
+
+→ **[preview-cicd.md](preview-cicd.md)** (`deploy-preview.yml` + `PANACHAT_ENV=preview`)
 
 ## Reverse proxy / CDN
 
@@ -200,13 +210,13 @@ After deploy updates, users may need one hard refresh (`Ctrl+Shift+R`). The app 
 
 ## Troubleshooting quick hits
 
-| Symptom                                                           | Likely cause                                             | Fix                                                                                  |
-| ----------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `Failed to fetch dynamically imported module` on `/_spa/assets/*` | Missing SPA build in image, or CDN/proxy blocking assets | Rebuild image; verify `/_spa/assets/*` returns 200; see [reference.md](reference.md) |
-| `null value in column "id"` on `platform_admins`                  | Raw SQL without `id`                                     | Use insert with `padm_` prefix id (above)                                            |
-| OAuth redirect mismatch                                           | Wrong `APP_URL`                                          | Set `APP_URL` to exact public URL; add to `AUTH_TRUSTED_ORIGINS`                     |
-| Image upload in chat fails                                        | `S3_ENDPOINT` not browser-reachable                      | Use public domain, not `http://rustfs:9000`                                          |
-| Async features silent fail                                        | Missing `INTERNAL_APP_URL`                               | Set `INTERNAL_APP_URL=http://localhost:3210`                                         |
+| Symptom                                                           | Likely cause                                             | Fix                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Failed to fetch dynamically imported module` on `/_spa/assets/*` | Missing SPA build in image, or CDN/proxy blocking assets | Rebuild image; verify `/_spa/assets/*` returns 200; see [reference.md](reference.md)                                                                                                                                                                                  |
+| `null value in column "id"` on `platform_admins`                  | Raw SQL without `id`                                     | Use insert with `padm_` prefix id (above)                                                                                                                                                                                                                             |
+| OAuth redirect mismatch                                           | Wrong `APP_URL`                                          | Set `APP_URL` to exact public URL; add to `AUTH_TRUSTED_ORIGINS`                                                                                                                                                                                                      |
+| Image upload in chat fails                                        | `S3_ENDPOINT` not browser-reachable, or S3 CORS missing  | Use public `https://s3.example.com` (not `http://rustfs:9000`); set `RUSTFS_CORS_ALLOWED_ORIGINS` (compose default `*`) and confirm OPTIONS returns `Access-Control-Allow-Origin`. CORS is not file authorization — objects stay private; durable links are `/f/:id`. |
+| Async features silent fail                                        | Missing `INTERNAL_APP_URL`                               | Set `INTERNAL_APP_URL=http://localhost:3210`                                                                                                                                                                                                                          |
 
 Full troubleshooting: [reference.md](reference.md)
 
@@ -224,11 +234,13 @@ Full troubleshooting: [reference.md](reference.md)
 | **Deploy**  | Backup → pull/rebuild → `verify-deployment.sh` → rollback plan ready                                      |
 | **Updates** | Pin image tags; never `pull` without a DB backup                                                          |
 | **Canary**  | Server tracks GitHub `canary` via GHCR + blue-green — see [canary-cicd.md](canary-cicd.md)                |
+| **Preview** | Same VPS staging on `preview` with own DB — see [preview-cicd.md](preview-cicd.md)                        |
 
 Templates:
 
 - [production.env.example](templates/production.env.example)
 - [docker-compose.production.override.yml](templates/docker-compose.production.override.yml)
-- [canary-cicd.md](canary-cicd.md) — Panachat CI/CD (private GHCR, `panachat-deploy-remote.sh`)
+- [canary-cicd.md](canary-cicd.md) — Panachat prod CI/CD (private GHCR, `panachat-deploy-remote.sh`)
+- [preview-cicd.md](preview-cicd.md) — Panachat preview stack (`panachat_preview_*` volumes)
 
 Complete guide: [best-practices.md](best-practices.md)

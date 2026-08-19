@@ -691,6 +691,7 @@ table aico_security_alert_state {
 table aico_security_audit_logs {
   id text [pk, not null]
   actor_user_id text
+  actor_admin_id text
   action text [not null]
   target_type text
   target_id text
@@ -706,6 +707,7 @@ table aico_security_audit_logs {
     action [name: 'aico_security_audit_logs_action_idx']
     organization_id [name: 'aico_security_audit_logs_organization_id_idx']
     actor_user_id [name: 'aico_security_audit_logs_actor_user_id_idx']
+    actor_admin_id [name: 'aico_security_audit_logs_actor_admin_id_idx']
     created_at [name: 'aico_security_audit_logs_created_at_idx']
   }
 }
@@ -909,6 +911,36 @@ table organizations {
   }
 }
 
+table platform_admin_sessions {
+  id text [pk, not null]
+  admin_user_id text [not null]
+  token_hash text [not null]
+  expires_at "timestamp with time zone" [not null]
+  ip_address text
+  user_agent text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    token_hash [name: 'platform_admin_sessions_token_hash_uidx', unique]
+    admin_user_id [name: 'platform_admin_sessions_admin_user_id_idx']
+    expires_at [name: 'platform_admin_sessions_expires_at_idx']
+  }
+}
+
+table platform_admin_users {
+  id text [pk, not null]
+  email text [not null]
+  name text
+  password_hash text [not null]
+  banned boolean [not null, default: false]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    email [name: 'platform_admin_users_email_uidx', unique]
+  }
+}
+
 table platform_admins {
   id text [pk, not null]
   user_id text [not null]
@@ -917,6 +949,14 @@ table platform_admins {
   indexes {
     user_id [name: 'platform_admins_user_id_uidx', unique]
   }
+}
+
+table platform_fx_config {
+  id text [pk, not null, default: 'default']
+  toman_per_usd bigint [not null, default: 187400]
+  updated_by_user_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
 }
 
 table platform_trial_config {
@@ -1011,12 +1051,17 @@ table wallet_transactions {
   type text [not null]
   amount_toman bigint [not null, default: 0]
   amount_micro_usd bigint [not null, default: 0]
+  balance_before_micro_usd bigint
+  balance_after_micro_usd bigint
+  balance_before_toman bigint
+  balance_after_toman bigint
   fx_rate_toman_per_usd bigint
   renewal_batch_id text
   gateway_ref_id text
   description text
   metadata jsonb [default: `{}`]
   created_by_user_id text
+  created_by_admin_id text
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
@@ -1024,6 +1069,7 @@ table wallet_transactions {
     user_id [name: 'wallet_transactions_user_id_idx']
     created_at [name: 'wallet_transactions_created_at_idx']
     renewal_batch_id [name: 'wallet_transactions_renewal_batch_id_idx']
+    gateway_ref_id [name: 'wallet_transactions_gateway_ref_uidx', unique]
   }
 }
 

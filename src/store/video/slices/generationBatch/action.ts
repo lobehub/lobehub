@@ -2,6 +2,8 @@ import { isEqual } from 'es-toolkit/compat';
 import { useRef } from 'react';
 import type { SWRResponse } from 'swr';
 
+import { isAicoManagedRuntimeProvider } from '@/features/AicoBilling/isManagedRuntimeProvider';
+import { refreshAicoBillingBalance } from '@/features/AicoBilling/refreshAicoBillingBalance';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { videoKeys } from '@/libs/swr/keys';
 import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
@@ -210,7 +212,12 @@ export class GenerationBatchActionImpl {
               }
             }
 
-            await this.#get().refreshGenerationBatches();
+            await Promise.all([
+              this.#get().refreshGenerationBatches(),
+              isAicoManagedRuntimeProvider(targetBatch.provider)
+                ? refreshAicoBillingBalance()
+                : Promise.resolve(),
+            ]);
           }
         },
         refreshInterval: (data: GetGenerationStatusResult | undefined) => {

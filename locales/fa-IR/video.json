@@ -21,6 +21,7 @@
   "generation.actions.errorCopied": "پیام خطا در کلیپ‌بورد کپی شد",
   "generation.actions.errorCopyFailed": "کپی پیام خطا ناموفق بود",
   "generation.actions.generate": "تولید",
+  "generation.cost": "هزینه",
   "generation.freeQuota.exhausted": "🎁 سهمیه رایگان تمام شده است، از اعتبار استفاده خواهد شد",
   "generation.freeQuota.remaining": "🎁 {{remaining}} ویدیوی رایگان باقی‌مانده برای امروز",
   "generation.status.failed": "تولید ناموفق بود",

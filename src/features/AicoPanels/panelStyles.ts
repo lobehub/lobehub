@@ -76,10 +76,24 @@ export const aicoPanelStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   tableScroll: css`
     overflow-x: auto;
+
     width: 100%;
     min-width: 0;
+    max-width: 100%;
 
     -webkit-overflow-scrolling: touch;
+
+    .ant-table-wrapper,
+    .ant-table {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* antd paints hover/header fills via physical left/right ::before; under RTL
+       that fill sits on the wrong edge. inset:0 pins all four edges. */
+    .ant-table-cell::before {
+      inset: 0 !important;
+    }
   `,
   tabs: css`
     width: 100%;

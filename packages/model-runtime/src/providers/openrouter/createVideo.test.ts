@@ -95,11 +95,12 @@ describe('pollOpenRouterVideoStatus', () => {
     });
   });
 
-  it('attaches provider-reported usage.cost as modelUsage', async () => {
+  it('persists OpenRouter usage.cost as costUsd and modelUsage', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       json: async () => ({
         status: 'completed',
-        usage: { cost: 0.42 },
+        unsigned_urls: ['https://storage.example.com/out.mp4'],
+        usage: { cost: 0.042 },
       }),
       ok: true,
     });
@@ -107,7 +108,8 @@ describe('pollOpenRouterVideoStatus', () => {
     await expect(
       pollOpenRouterVideoStatus('video-job-1', { apiKey: 'test-api-key' }),
     ).resolves.toMatchObject({
-      modelUsage: { cost: 0.42 },
+      costUsd: 0.042,
+      modelUsage: { cost: 0.042 },
       status: 'success',
     });
   });

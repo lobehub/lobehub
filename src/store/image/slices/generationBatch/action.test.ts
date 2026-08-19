@@ -2,6 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  AICO_BILLING_SOURCES_SWR_KEY,
+  AICO_MY_WALLET_SWR_KEY,
+} from '@/features/AicoBilling/cacheKeys';
 import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { generationService } from '@/services/generation';
@@ -434,8 +438,8 @@ describe('GenerationBatchAction', () => {
 
       vi.mocked(generationBatchService.getGenerationBatches).mockResolvedValue(batches);
 
-      const { result } = renderHook(() => {
-        const store = useImageStore();
+      renderHook(() => {
+        useImageStore();
 
         // Simulate the onSuccess callback behavior directly
         React.useEffect(() => {
@@ -491,6 +495,50 @@ describe('GenerationBatchAction', () => {
       // When disabled, SWR returns an object with undefined data
       expect(result.current.data).toBeUndefined();
       expect(generationService.getGenerationStatus).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the managed wallet as soon as generation reaches a terminal status', async () => {
+      const topicId = 'gt_wallet_refresh';
+      const generationId = 'gen_wallet_refresh';
+      const asyncTaskId = 'task_wallet_refresh';
+
+      useImageStore.setState({
+        activeGenerationTopicId: topicId,
+        generationBatchesMap: {
+          [topicId]: [
+            {
+              createdAt: new Date(),
+              generations: [
+                {
+                  asyncTaskId,
+                  createdAt: new Date(),
+                  id: generationId,
+                  seed: null,
+                  task: { id: asyncTaskId, status: AsyncTaskStatus.Pending },
+                },
+              ],
+              id: 'batch_wallet_refresh',
+              model: 'managed-image-model',
+              prompt: 'test',
+              provider: 'aico',
+            },
+          ],
+        },
+      });
+      vi.mocked(generationService.getGenerationStatus).mockResolvedValue({
+        error: null,
+        generation: null,
+        status: AsyncTaskStatus.Error,
+      });
+
+      renderHook(() =>
+        useImageStore().useCheckGenerationStatus(generationId, asyncTaskId, topicId, true),
+      );
+
+      await waitFor(() => {
+        expect(mutate).toHaveBeenCalledWith(AICO_BILLING_SOURCES_SWR_KEY);
+        expect(mutate).toHaveBeenCalledWith(AICO_MY_WALLET_SWR_KEY);
+      });
     });
   });
 });

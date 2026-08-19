@@ -956,7 +956,8 @@ export const favoriteKeys = {
 
 // ---- changelog ----------------------------------------------------------
 export const changelogKeys = {
-  modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
+  index: def('changelog:index', () => ['changelog:index']),
+  modalIndex: def('changelog:modalIndex', () => ['changelog:index']),
   post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
 };
 

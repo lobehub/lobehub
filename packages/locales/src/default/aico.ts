@@ -19,6 +19,11 @@ export default {
   'errors.MANAGED_KEY_UNAVAILABLE': 'Managed key is unavailable. Please try again later.',
   'errors.DIRECT_PROVIDER_NOT_ALLOWED':
     'Direct providers are not available. Use a {{brandName}} model — we create an OpenRouter key from your wallet.',
+  'errors.EMAIL_PASSWORD_REQUIRED': 'Email and password are required.',
+  'errors.INVALID_CREDENTIALS': 'Email or password is incorrect.',
+  'errors.OPERATOR_EMAIL_EXISTS': 'An operator with this email already exists.',
+  'errors.PASSWORD_TOO_WEAK':
+    'Password must be at least 8 characters and include a letter and a digit.',
   'errors.managedKey.description':
     'Top up your wallet or use organization credit so a managed key can be provisioned. You do not need to enter a provider API key.',
   'errors.managedKey.title': '{{brandName}} uses managed API keys',
@@ -221,6 +226,8 @@ export default {
   'platform.b2cTitle': 'B2C wallets',
   'platform.b2cWallets': 'B2C wallets',
   'platform.columns.actions': 'Actions',
+  'platform.columns.actor': 'Actor',
+  'platform.columns.description': 'Description',
   'platform.columns.email': 'Email',
   'platform.columns.key': 'Key',
   'platform.columns.members': 'Members',
@@ -258,11 +265,11 @@ export default {
   'platform.loadErrorTitle': 'Failed to load',
   'platform.loginChecking': 'Checking session…',
   'platform.loginEmail': 'Email',
-  'platform.loginFailed':
-    'Sign-in failed. Check email, password, and that the product API is running.',
+  'platform.loginFailed': 'Sign-in failed. Use a control-plane operator email and password.',
   'platform.loginPassword': 'Password',
   'platform.loginSubmit': 'Sign in',
-  'platform.loginSubtitle': 'Sign in with a platform admin account.',
+  'platform.loginSubtitle':
+    'Operator account only — a chat password for the same email will not work here.',
   'platform.loginTitle': 'Control plane',
   'platform.notAdminDesc':
     '{{email}} is signed in but is not a platform admin. Sign out and use a platform admin account.',

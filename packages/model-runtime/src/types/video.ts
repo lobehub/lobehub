@@ -35,6 +35,7 @@ export type CreateVideoResponse =
 
 export type PollVideoStatusResult =
   | {
+      costUsd?: number;
       headers?: Record<string, string>;
       modelUsage?: ModelUsage;
       status: 'success';

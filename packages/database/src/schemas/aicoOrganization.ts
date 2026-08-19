@@ -210,6 +210,57 @@ export type PlatformAdminItem = typeof platformAdmins.$inferSelect;
 export type NewPlatformAdmin = typeof platformAdmins.$inferInsert;
 
 /**
+ * Operator identity for the control-plane admin (adchat).
+ * Email is unique among operators only — it may match a chat `users.email`
+ * with a different password.
+ */
+export const platformAdminUsers = pgTable(
+  'platform_admin_users',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('platformAdminUsers'))
+      .notNull()
+      .primaryKey(),
+    email: text('email').notNull(),
+    name: text('name'),
+    passwordHash: text('password_hash').notNull(),
+    banned: boolean('banned').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('platform_admin_users_email_uidx').on(t.email)],
+);
+
+export type PlatformAdminUserItem = typeof platformAdminUsers.$inferSelect;
+export type NewPlatformAdminUser = typeof platformAdminUsers.$inferInsert;
+
+export const platformAdminSessions = pgTable(
+  'platform_admin_sessions',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('platformAdminSessions'))
+      .notNull()
+      .primaryKey(),
+    adminUserId: text('admin_user_id')
+      .references(() => platformAdminUsers.id, { onDelete: 'cascade' })
+      .notNull(),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('platform_admin_sessions_token_hash_uidx').on(t.tokenHash),
+    index('platform_admin_sessions_admin_user_id_idx').on(t.adminUserId),
+    index('platform_admin_sessions_expires_at_idx').on(t.expiresAt),
+  ],
+);
+
+export type PlatformAdminSessionItem = typeof platformAdminSessions.$inferSelect;
+export type NewPlatformAdminSession = typeof platformAdminSessions.$inferInsert;
+
+/**
  * Per-member prepaid period budgets.
  * OpenRouter key stays stable across renewals; limit_reset mirrors period.
  */
@@ -367,6 +418,9 @@ export const walletTransactions = pgTable(
     description: text('description'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdByAdminId: text('created_by_admin_id').references(() => platformAdminUsers.id, {
       onDelete: 'set null',
     }),
     createdAt: createdAt(),
@@ -729,6 +783,9 @@ export const aicoSecurityAuditLogs = pgTable(
       .notNull()
       .primaryKey(),
     actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    actorAdminId: text('actor_admin_id').references(() => platformAdminUsers.id, {
+      onDelete: 'set null',
+    }),
     action: text('action').notNull(),
     targetType: text('target_type'),
     targetId: text('target_id'),
@@ -748,6 +805,7 @@ export const aicoSecurityAuditLogs = pgTable(
     index('aico_security_audit_logs_action_idx').on(t.action),
     index('aico_security_audit_logs_organization_id_idx').on(t.organizationId),
     index('aico_security_audit_logs_actor_user_id_idx').on(t.actorUserId),
+    index('aico_security_audit_logs_actor_admin_id_idx').on(t.actorAdminId),
     index('aico_security_audit_logs_created_at_idx').on(t.createdAt),
   ],
 );

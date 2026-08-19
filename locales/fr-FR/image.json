@@ -48,6 +48,7 @@
   "generation.actions.seedApplyFailed": "Échec de l'application de la graine",
   "generation.actions.seedCopied": "Graine copiée dans le presse-papiers",
   "generation.actions.seedCopyFailed": "Échec de la copie de la graine",
+  "generation.cost": "Coût",
   "generation.metadata.by": "par {{name}}",
   "generation.metadata.count": "{{count}} images",
   "generation.metadata.createdAt": "Créé à {{time}}",

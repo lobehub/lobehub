@@ -12,6 +12,7 @@
   "main": "./src/index.ts",
   "scripts": {},
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/prompts": "workspace:*"
   },

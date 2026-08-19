@@ -21,6 +21,7 @@
   "generation.actions.errorCopied": "错误信息已复制到剪贴板",
   "generation.actions.errorCopyFailed": "复制错误信息失败",
   "generation.actions.generate": "生成",
+  "generation.cost": "费用",
   "generation.freeQuota.exhausted": "🎁 免费额度已用完，将开始消耗积分",
   "generation.freeQuota.remaining": "🎁 今日剩余 {{remaining}} 个免费视频",
   "generation.status.failed": "生成失败",

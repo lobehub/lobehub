@@ -51,7 +51,7 @@ Any issue that only affects 1.x or earlier versions. This includes but is not li
 
 #### 2. File Proxy Public Access (`/f/:id`)
 
-The file proxy endpoint `/f/:id` uses randomly generated, non-enumerable IDs as [capability URLs](https://www.w3.org/TR/capability-urls/). This is a deliberate design choice, similar to how S3 presigned URLs or Google Docs sharing links work. Knowing the URL grants access — this is by design, not an authorization bypass.
+The file proxy endpoint `/f/:id` uses randomly generated, non-enumerable IDs as [capability URLs](https://www.w3.org/TR/capability-urls/). This is a deliberate design choice, similar to how S3 presigned URLs or Google Docs sharing links work. Knowing the URL grants access — this is by design, not an authorization bypass. S3 objects themselves are private (`S3_SET_ACL=0`, no anonymous `GetObject`); `/f/:id` mints a short-lived presigned GET. A raw object URL without a signature must not be world-readable.
 
 #### 3. User Enumeration on Login Flows
 

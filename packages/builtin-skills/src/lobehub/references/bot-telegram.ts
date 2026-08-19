@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 const content = `# Telegram Bot Setup Guide
 
 Connect a Telegram bot to your agent.
@@ -54,7 +56,7 @@ lh bot connect <botId>
 ## Notes
 
 - **App ID** is the numeric bot ID extracted from the token prefix (e.g. token \`987654321:XYZ...\` → app-id \`987654321\`)
-- **Secret Token** (optional): a custom string you define; LobeHub includes it in webhook requests so you can verify they genuinely come from LobeHub — leave blank unless you have a security requirement
+- **Secret Token** (optional): a custom string you define; ${BRANDING_NAME} includes it in webhook requests so you can verify they genuinely come from ${BRANDING_NAME} — leave blank unless you have a security requirement
 - Telegram does not have native message search; use \`lh bot message read\` with pagination instead
 - If you lose the token, retrieve it by sending \`/token\` (then select your bot) to @BotFather
 `;

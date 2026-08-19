@@ -44,6 +44,8 @@ services:
       OPENROUTER_MANAGEMENT_API_KEY: ${OPENROUTER_MANAGEMENT_API_KEY:-}
       # Prefer the compose network DB/Redis, not host-only URLs from repo .env
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
+      # env_file can leak DATABASE_DRIVER=neon; Neon WS fails against compose Postgres.
+      DATABASE_DRIVER: node
       REDIS_URL: redis://redis:6379
       REDIS_PREFIX: ${REDIS_PREFIX:-lobechat}
       REDIS_TLS: '0'
@@ -67,6 +69,8 @@ services:
       # Local OpenRouter mock without a real management key (requires allow flag)
       AICO_OPENROUTER_MOCK: ${AICO_OPENROUTER_MOCK:-1}
       AICO_ALLOW_INSECURE_CONTROL_PLANE: ${AICO_ALLOW_INSECURE_CONTROL_PLANE:-1}
+      AICO_BOOTSTRAP_ADMIN_EMAIL: ${AICO_BOOTSTRAP_ADMIN_EMAIL:-}
+      AICO_BOOTSTRAP_ADMIN_PASSWORD: ${AICO_BOOTSTRAP_ADMIN_PASSWORD:-}
     ports:
       # Loopback only — do not publish admin/API on all interfaces
       - '127.0.0.1:${AICO_CONTROL_PLANE_PORT:-3020}:3020'

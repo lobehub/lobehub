@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aicoBillingRouter } from '../aicoBilling';
 import { organizationRouter } from '../organization';
 import { platformAdminRouter } from '../platformAdmin';
-import { createTestContext } from './integration/setup';
+import { createAdminContext, createTestContext } from './integration/setup';
 
 process.env.KEY_VAULTS_SECRET = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
@@ -36,13 +36,17 @@ vi.mock('@/server/services/sms', () => ({
 
 const {
   disableAllOrgMemberKeysMock,
+  disableUserKeyMock,
   ensureMemberKeyMock,
+  ensureUserKeyMock,
   getUserRemainingMock,
   reclaimMemberKeyMock,
   syncMemberCycleUsageMock,
 } = vi.hoisted(() => ({
   disableAllOrgMemberKeysMock: vi.fn().mockResolvedValue([]),
+  disableUserKeyMock: vi.fn().mockResolvedValue(null),
   ensureMemberKeyMock: vi.fn().mockResolvedValue({ created: false, keyId: null }),
+  ensureUserKeyMock: vi.fn().mockResolvedValue({ created: false, keyId: null }),
   getUserRemainingMock: vi.fn().mockResolvedValue({ remainingMicroUsd: 0, usageMicroUsd: null }),
   reclaimMemberKeyMock: vi.fn().mockResolvedValue(null),
   syncMemberCycleUsageMock: vi.fn().mockResolvedValue(null),
@@ -50,8 +54,9 @@ const {
 
 vi.mock('@/server/services/openrouter/keyService', () => ({
   AicoOpenRouterKeyService: class {
-    ensureUserKey = vi.fn().mockResolvedValue({ created: false, keyId: null });
+    ensureUserKey = ensureUserKeyMock;
     ensureMemberKey = ensureMemberKeyMock;
+    disableUserKey = disableUserKeyMock;
     disableMemberKey = vi.fn().mockResolvedValue(null);
     disableAllOrgMemberKeys = disableAllOrgMemberKeysMock;
     getUserRemaining = getUserRemainingMock;
@@ -66,9 +71,11 @@ const ownerBId = 'p2-rbac-owner-b';
 const memberId = 'p2-rbac-member';
 const strangerId = 'p2-rbac-stranger';
 const platformId = 'p2-rbac-platform';
+const operatorId = 'p2-rbac-operator';
 
 const cleanup = async () => {
   const {
+    aicoSecurityAuditLogs,
     memberBudgets,
     organizationInvites,
     organizationMembers,
@@ -76,6 +83,8 @@ const cleanup = async () => {
     organizationTeamMembers,
     organizationTeams,
     platformAdmins,
+    platformAdminSessions,
+    platformAdminUsers,
     platformTrialConfig,
     trialAbuseBlocklist,
     usageLogs,
@@ -88,7 +97,10 @@ const cleanup = async () => {
   await testDB.delete(trialAbuseBlocklist);
   await testDB.delete(userTrials);
   await testDB.delete(platformTrialConfig);
+  await testDB.delete(aicoSecurityAuditLogs);
   await testDB.delete(walletTransactions);
+  await testDB.delete(platformAdminSessions);
+  await testDB.delete(platformAdminUsers);
   await testDB.delete(memberBudgets);
   await testDB.delete(organizationTeamMembers);
   await testDB.delete(organizationTeams);
@@ -102,6 +114,8 @@ const cleanup = async () => {
 
 beforeEach(async () => {
   disableAllOrgMemberKeysMock.mockClear();
+  disableUserKeyMock.mockClear();
+  ensureUserKeyMock.mockClear();
   reclaimMemberKeyMock.mockClear();
   reclaimMemberKeyMock.mockResolvedValue(null);
   testDB = await getTestDB();
@@ -127,6 +141,12 @@ beforeEach(async () => {
   const { OrganizationModel } = await import('@/database/models/organization');
   const orgModel = new OrganizationModel(testDB);
   await orgModel.addPlatformAdmin(platformId);
+  const { platformAdminUsers } = await import('@/database/schemas/aicoOrganization');
+  await testDB.insert(platformAdminUsers).values({
+    email: 'operator@rbac.test',
+    id: operatorId,
+    passwordHash: 'unusable:test',
+  });
 }, 60_000);
 
 afterEach(async () => {
@@ -214,7 +234,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
   it('org manager can load transaction history and usage charts for a date range', async () => {
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await ownerCaller.create({ name: 'Analytics Org' });
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     await platformCaller.addManualCredit({
       amountToman: 25_000,
       description: 'analytics seed',
@@ -260,7 +280,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const orgA = await ownerA.create({ name: 'Tenant Org A' });
     const orgB = await ownerB.create({ name: 'Tenant Org B' });
 
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     await platformCaller.addManualCredit({
       amountToman: 1_000_000,
       description: 'tenant isolation seed',
@@ -315,21 +335,21 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
 
   it('non-platform user cannot call platformAdmin mutations', async () => {
     const caller = platformAdminRouter.createCaller(createTestContext(strangerId));
-    await expect(caller.listOrganizations({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(caller.listOrganizations({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     await expect(caller.suspendOrganization({ orgId: 'any' })).rejects.toMatchObject({
-      code: 'FORBIDDEN',
+      code: 'UNAUTHORIZED',
     });
     await expect(caller.addManualCredit({ amountToman: 1000, orgId: 'any' })).rejects.toMatchObject(
-      { code: 'FORBIDDEN' },
+      { code: 'UNAUTHORIZED' },
     );
     await expect(
       caller.addManualUserCredit({ amountToman: 1000, email: 'stranger@rbac.test' }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(caller.listUserWallets()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    await expect(caller.listUserWallets()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
   it('platform admin can manually credit a B2C user wallet by email', async () => {
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     const result = await platformCaller.addManualUserCredit({
       amountToman: 50_000,
       description: 'Support credit',
@@ -346,10 +366,21 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     expect(Number(wallet!.balanceToman)).toBe(50_000);
   });
 
+  it('reactivateUser re-enables the managed OpenRouter key', async () => {
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
+
+    await platformCaller.deactivateUser({ reason: 'abuse', userId: strangerId });
+    expect(disableUserKeyMock).toHaveBeenCalledWith(strangerId);
+
+    ensureUserKeyMock.mockClear();
+    await platformCaller.reactivateUser({ userId: strangerId });
+    expect(ensureUserKeyMock).toHaveBeenCalledWith(strangerId);
+  });
+
   it('platform admin can suspend; member procedures still reachable on model (enforcement gap covered elsewhere)', async () => {
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await ownerCaller.create({ name: 'Suspend RBAC' });
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     const row = await platformCaller.suspendOrganization({ orgId: created.id });
     expect(row.status).toBe('suspended');
     // Suspend must disable every member's OpenRouter key immediately (fail closed).
@@ -357,7 +388,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
   });
 
   it('platform admin updateTrialConfig round-trips trialBudgetUsd as decimal string', async () => {
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     const updated = await platformCaller.updateTrialConfig({ trialBudgetUsd: '2.500000' });
     expect(updated.trialBudgetUsd).toBe('2.500000');
     const fetched = await platformCaller.getTrialConfig();
@@ -365,7 +396,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
   });
 
   it('platform admin listUserWallets and listOrganizations include publicCode', async () => {
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     await platformCaller.addManualUserCredit({
       amountToman: 50_000,
       description: 'seed for publicCode',
@@ -644,7 +675,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await ownerCaller.create({ name: 'Remove RBAC' });
     // promote stranger briefly as admin via platform
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     const assigned = await platformCaller.assignManager({
       orgId: created.id,
       role: 'admin',
@@ -662,7 +693,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
     const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
     const created = await ownerCaller.create({ name: 'Delete Me Co' });
 
-    const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+    const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
     await platformCaller.assignManager({
       orgId: created.id,
       role: 'admin',
@@ -722,7 +753,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
       const created = await ownerCaller.create({ name: 'Admin Escalation Org' });
 
-      const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+      const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
       const adminMember = await platformCaller.assignManager({
         orgId: created.id,
         role: 'admin',
@@ -762,7 +793,7 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
       const ownerCaller = organizationRouter.createCaller(createTestContext(ownerId));
       await ownerCaller.create({ name: 'Platform Gate Org' });
 
-      const platformCaller = platformAdminRouter.createCaller(createTestContext(platformId));
+      const platformCaller = platformAdminRouter.createCaller(createAdminContext(operatorId));
       await platformCaller.assignManager({
         orgId: (await ownerCaller.getMine())[0]!.id,
         role: 'admin',
@@ -771,13 +802,19 @@ describe('Aico RBAC / IDOR matrix (Phase 2)', () => {
 
       const ownerPlatformAttempt = platformAdminRouter.createCaller(createTestContext(ownerId));
       await expect(
-        ownerPlatformAttempt.addPlatformAdmin({ userId: memberId }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        ownerPlatformAttempt.addPlatformAdmin({
+          email: 'member@rbac.test',
+          password: 'Member1pass',
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
 
       const adminPlatformAttempt = platformAdminRouter.createCaller(createTestContext(memberId));
       await expect(
-        adminPlatformAttempt.addPlatformAdmin({ userId: strangerId }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        adminPlatformAttempt.addPlatformAdmin({
+          email: 'stranger@rbac.test',
+          password: 'Stranger1pass',
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     });
 
     it('owner can transfer ownership via updateMemberRole (AUTHZ-001)', async () => {

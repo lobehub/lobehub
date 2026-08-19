@@ -21,6 +21,8 @@ type Params = Promise<{ id: string }>;
  * embedded in bare `<img>` tags, download links, and links shared to AI — none
  * of which can attach auth headers/cookies. Adding `checkAuth` here would break
  * every previously-shared `/f/:id` link, so access stays public by id.
+ * S3 objects are private (`S3_SET_ACL=0`); this handler mints a short-lived
+ * presigned GET. Knowing `/f/:id` is the permission (capability URL).
  */
 export const GET = async (_req: Request, segmentData: { params: Params }) => {
   try {

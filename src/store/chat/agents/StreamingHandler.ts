@@ -134,6 +134,8 @@ export class StreamingHandler {
    * Handle streaming finish
    */
   async handleFinish(finishData: FinishData): Promise<StreamingResult> {
+    this.endReasoningIfNeeded();
+
     // Update traceId
     if (finishData.traceId) {
       this.msgTraceId = finishData.traceId;

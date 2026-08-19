@@ -4,14 +4,19 @@ import { z } from 'zod';
 
 import { AicoBillingModel } from '@/database/models/aicoBilling';
 import { OrganizationModel } from '@/database/models/organization';
+import { PlatformAdminUserModel } from '@/database/models/platformAdminUser';
 import { session, users, userWallets } from '@/database/schemas';
 import {
   microUsdToDecimalString,
   tomanString,
   usdDecimalStringToMicro,
 } from '@/database/utils/aicoMoney';
+import {
+  hashOperatorPassword,
+  meetsOperatorPasswordComplexity,
+} from '@/database/utils/operatorPassword';
 import { revokeOIDCArtifactsByUserId } from '@/libs/oidc-provider/access-control';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { platformAdminProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getTomanPerUsd } from '@/server/services/aico/fxService';
 import { refreshAicoMasterMonitorState } from '@/server/services/aico/masterMonitor';
@@ -28,14 +33,17 @@ import { OpenRouterModelCatalogSyncService } from '@/server/services/openrouter/
  * Do not mount this router on the customer product lambda.
  */
 
-const platformProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
+const platformProcedure = platformAdminProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   const organizationModel = new OrganizationModel(ctx.serverDB);
-  const allowed = await organizationModel.isPlatformAdmin(ctx.userId);
-  if (!allowed) {
+  const adminModel = new PlatformAdminUserModel(ctx.serverDB);
+  const admin = await adminModel.findActiveById(ctx.adminId);
+  if (!admin) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform admin required' });
   }
   return next({
     ctx: {
+      admin,
+      adminModel,
       billingModel: new AicoBillingModel(ctx.serverDB),
       modelCatalogSync: new OpenRouterModelCatalogSyncService(ctx.serverDB),
       organizationModel,
@@ -49,10 +57,16 @@ export const platformAdminRouter = router({
    * are platform admins without throwing FORBIDDEN (so the UI can stay on login /
    * "not allowed" instead of the admin panel shell).
    */
-  checkAccess: authedProcedure.use(serverDatabase).query(async ({ ctx }) => {
-    const organizationModel = new OrganizationModel(ctx.serverDB);
-    const isPlatformAdmin = await organizationModel.isPlatformAdmin(ctx.userId);
-    return { isPlatformAdmin, userId: ctx.userId };
+  checkAccess: publicProcedure.use(serverDatabase).query(async ({ ctx }) => {
+    if (!ctx.adminId) {
+      return { email: null, isPlatformAdmin: false, adminId: null };
+    }
+    const admin = await new PlatformAdminUserModel(ctx.serverDB).findActiveById(ctx.adminId);
+    return {
+      adminId: admin?.id ?? null,
+      email: admin?.email ?? null,
+      isPlatformAdmin: Boolean(admin),
+    };
   }),
 
   /** FX helper for the control-plane admin UI (replaces aicoBilling.getFxRate there). */
@@ -71,11 +85,10 @@ export const platformAdminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const row = await ctx.billingModel.updateFxConfig({
         tomanPerUsd: input.tomanPerUsd,
-        updatedByUserId: ctx.userId,
       });
       await recordAicoSecurityEvent(ctx.serverDB, {
         action: 'platform.fx.update',
-        actorUserId: ctx.userId,
+        actorAdminId: ctx.adminId,
         ipAddress: ctx.clientIp,
         metadata: { tomanPerUsd: row.tomanPerUsd },
         targetId: 'default',
@@ -131,7 +144,7 @@ export const platformAdminRouter = router({
       });
       await recordAicoSecurityEvent(ctx.serverDB, {
         action: 'platform.org.create',
-        actorUserId: ctx.userId,
+        actorAdminId: ctx.adminId,
         ipAddress: ctx.clientIp,
         metadata: { name: org.name, slug: org.slug },
         organizationId: org.id,
@@ -175,7 +188,7 @@ export const platformAdminRouter = router({
         .then(async (row) => {
           await recordAicoSecurityEvent(ctx.serverDB, {
             action: 'platform.org.assign_manager',
-            actorUserId: ctx.userId,
+            actorAdminId: ctx.adminId,
             ipAddress: ctx.clientIp,
             metadata: { role: input.role, targetUserId: userId },
             organizationId: input.orgId,
@@ -201,7 +214,7 @@ export const platformAdminRouter = router({
 
         await recordAicoSecurityEvent(ctx.serverDB, {
           action: 'platform.org.suspend',
-          actorUserId: ctx.userId,
+          actorAdminId: ctx.adminId,
           ipAddress: ctx.clientIp,
           organizationId: input.orgId,
           targetId: input.orgId,
@@ -228,7 +241,7 @@ export const platformAdminRouter = router({
         if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' });
         await recordAicoSecurityEvent(ctx.serverDB, {
           action: 'platform.org.activate',
-          actorUserId: ctx.userId,
+          actorAdminId: ctx.adminId,
           ipAddress: ctx.clientIp,
           organizationId: input.orgId,
           targetId: input.orgId,
@@ -263,7 +276,7 @@ export const platformAdminRouter = router({
         const result = await ctx.organizationModel.addManualCredit({
           amountMicroUsd,
           amountToman,
-          createdByUserId: ctx.userId,
+          createdByAdminId: ctx.adminId,
           description: input.description,
           fxRateTomanPerUsd,
           idempotencyKey: input.idempotencyKey,
@@ -272,7 +285,7 @@ export const platformAdminRouter = router({
         });
         await recordAicoSecurityEvent(ctx.serverDB, {
           action: 'platform.credit.org_add',
-          actorUserId: ctx.userId,
+          actorAdminId: ctx.adminId,
           ipAddress: ctx.clientIp,
           metadata: {
             amountMicroUsd,
@@ -340,7 +353,7 @@ export const platformAdminRouter = router({
         const result = await ctx.billingModel.manualCreditUser({
           amountMicroUsd,
           amountToman,
-          createdByUserId: ctx.userId,
+          createdByAdminId: ctx.adminId,
           description: input.description,
           fxRateTomanPerUsd,
           idempotencyKey: input.idempotencyKey,
@@ -353,7 +366,7 @@ export const platformAdminRouter = router({
 
         await recordAicoSecurityEvent(ctx.serverDB, {
           action: 'platform.credit.user_add',
-          actorUserId: ctx.userId,
+          actorAdminId: ctx.adminId,
           ipAddress: ctx.clientIp,
           metadata: {
             amountMicroUsd,
@@ -392,37 +405,46 @@ export const platformAdminRouter = router({
   addPlatformAdmin: platformProcedure
     .input(
       z.object({
-        email: z.string().email().optional(),
-        userId: z.string().min(1).optional(),
+        email: z.string().email(),
+        name: z.string().max(120).optional(),
+        password: z.string().min(8).max(64),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      let userId = input.userId;
-      if (!userId && input.email) {
-        const row = await ctx.serverDB.query.users.findFirst({
-          where: eq(users.email, input.email.trim().toLowerCase()),
-        });
-        userId = row?.id;
+      if (!meetsOperatorPasswordComplexity(input.password)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'PASSWORD_TOO_WEAK' });
       }
-      if (!userId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'userId or email is required' });
+      const email = input.email.trim().toLowerCase();
+      const existing = await ctx.adminModel.findByEmail(email);
+      if (existing) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'OPERATOR_EMAIL_EXISTS' });
       }
-      return ctx.organizationModel.addPlatformAdmin(userId).then(async (row) => {
-        await recordAicoSecurityEvent(ctx.serverDB, {
-          action: 'platform.admin.add',
-          actorUserId: ctx.userId,
-          ipAddress: ctx.clientIp,
-          metadata: { targetUserId: userId },
-          targetId: userId,
-          targetType: 'user',
-          userAgent: ctx.userAgent,
-        });
-        return row;
+      const row = await ctx.adminModel.create({
+        email,
+        name: input.name,
+        passwordHash: await hashOperatorPassword(input.password),
       });
+      await recordAicoSecurityEvent(ctx.serverDB, {
+        action: 'platform.admin.add',
+        actorAdminId: ctx.adminId,
+        ipAddress: ctx.clientIp,
+        metadata: { targetAdminId: row.id, targetEmail: email },
+        targetId: row.id,
+        targetType: 'platform_admin_user',
+        userAgent: ctx.userAgent,
+      });
+      return { createdAt: row.createdAt, email: row.email, id: row.id, name: row.name };
     }),
 
   listPlatformAdmins: platformProcedure.query(async ({ ctx }) => {
-    return ctx.organizationModel.listPlatformAdmins();
+    const rows = await ctx.adminModel.list();
+    return rows.map((row) => ({
+      banned: row.banned,
+      createdAt: row.createdAt,
+      email: row.email,
+      id: row.id,
+      name: row.name,
+    }));
   }),
 
   getTrialConfig: platformProcedure.query(async ({ ctx }) => {
@@ -458,7 +480,6 @@ export const platformAdminRouter = router({
         enabled: input.enabled,
         maxRequests: input.maxRequests,
         trialBudgetMicroUsd,
-        updatedByUserId: ctx.userId,
       });
       return {
         allowedModelIds: JSON.parse(row.allowedModelIds || '[]') as string[],
@@ -513,13 +534,17 @@ export const platformAdminRouter = router({
         from: null as string | null,
         marginToman: String(Math.trunc(marginToman)),
         recentTransactions: txs.slice(0, 50).map((t) => ({
+          actorEmail: t.actorAdminEmail || t.actorUserEmail || null,
           amountMicroUsd: String(t.amountMicroUsd ?? 0),
           amountToman: tomanString(t.amountToman ?? 0),
           amountUsd: microUsdToDecimalString(t.amountMicroUsd ?? 0),
           createdAt: t.createdAt.toISOString(),
+          description: t.description,
           id: t.id,
           orgId: t.orgId,
+          orgName: t.orgName,
           type: t.type,
+          userEmail: t.userEmail,
           userId: t.userId,
         })),
         to: null as string | null,
@@ -577,10 +602,6 @@ export const platformAdminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (input.userId === ctx.userId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot deactivate yourself' });
-      }
-
       const [user] = await ctx.serverDB
         .select({ id: users.id })
         .from(users)
@@ -635,6 +656,9 @@ export const platformAdminRouter = router({
         .set({ isActive: true })
         .where(eq(userWallets.userId, input.userId));
 
+      const keyService = new AicoOpenRouterKeyService(ctx.serverDB);
+      await keyService.ensureUserKey(input.userId);
+
       return { ok: true as const };
     }),
 
@@ -649,7 +673,7 @@ export const platformAdminRouter = router({
     }),
 
   syncOpenRouterModels: platformProcedure.mutation(async ({ ctx }) => {
-    const status = await ctx.modelCatalogSync.sync(`manual:${ctx.userId}`);
+    const status = await ctx.modelCatalogSync.sync(`manual:${ctx.adminId}`);
     if (status.lastStatus !== 'success') {
       throw new TRPCError({
         code: 'BAD_GATEWAY',

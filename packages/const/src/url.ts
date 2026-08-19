@@ -31,7 +31,8 @@ export const LobeHubPath = {
 
 export const GITHUB = 'https://github.com/lobehub/lobe-chat';
 export const GITHUB_ISSUES = urlJoin(GITHUB, 'issues/new/choose');
-export const CHANGELOG = 'https://lobehub.com/changelog';
+export const CHANGELOG_PATH = '/changelog';
+export const CHANGELOG = CHANGELOG_PATH;
 
 export const DOCUMENTS = urlJoin(OFFICIAL_SITE, '/docs');
 export const USAGE_DOCUMENTS = urlJoin(DOCUMENTS, '/usage');
@@ -103,7 +104,7 @@ export const mailTo = (email: string) => `mailto:${email}`;
 
 export const AES_GCM_URL = 'https://datatracker.ietf.org/doc/html/draft-ietf-avt-srtp-aes-gcm-01';
 export const BASE_PROVIDER_DOC_URL = 'https://lobehub.com/docs/usage/providers';
-export const CHANGELOG_URL = urlJoin(OFFICIAL_SITE, 'changelog');
+export const CHANGELOG_URL = CHANGELOG_PATH;
 
 export const DOWNLOAD_URL = {
   android: 'https://play.google.com/store/apps/details?id=com.lobehub.app',

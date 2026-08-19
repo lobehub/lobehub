@@ -48,6 +48,7 @@
   "generation.actions.seedApplyFailed": "اعمال بذر ناموفق بود",
   "generation.actions.seedCopied": "بذر در کلیپ‌بورد کپی شد",
   "generation.actions.seedCopyFailed": "کپی بذر ناموفق بود",
+  "generation.cost": "هزینه",
   "generation.metadata.by": "توسط {{name}}",
   "generation.metadata.count": "{{count}} تصویر",
   "generation.metadata.createdAt": "ایجاد شده در {{time}}",

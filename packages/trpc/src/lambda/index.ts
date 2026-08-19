@@ -9,6 +9,7 @@
  */
 
 import { openTelemetry } from '../middleware/openTelemetry';
+import { platformAdminAuth } from '../middleware/platformAdminAuth';
 import { userAuth } from '../middleware/userAuth';
 import { trpc } from './init';
 import { heteroOperationAuth } from './middleware/heteroOperationAuth';
@@ -30,6 +31,8 @@ export const publicProcedure = baseProcedure;
 
 // procedure that asserts that the user is logged in
 export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth);
+
+export const platformAdminProcedure = baseProcedure.use(platformAdminAuth);
 
 // procedure for hetero-agent ingest/finish endpoints — requires a `hetero-operation` JWT
 export const heteroAuthedProcedure = baseProcedure.use(heteroOperationAuth).use(userAuth);

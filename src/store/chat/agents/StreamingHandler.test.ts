@@ -429,6 +429,20 @@ describe('StreamingHandler', () => {
       expect(result.metadata.reasoning?.duration).toBeGreaterThan(0);
     });
 
+    it('should complete reasoning when the stream finishes without text or stop chunks', async () => {
+      const callbacks = createMockCallbacks();
+      const handler = new StreamingHandler(mockContext, callbacks);
+
+      handler.handleChunk({ type: 'reasoning', text: 'Thinking...' });
+      await new Promise((r) => setTimeout(r, 10));
+
+      const result = await handler.handleFinish({ type: 'stop' });
+
+      expect(callbacks.onReasoningComplete).toHaveBeenCalledWith('reasoning-op-id');
+      expect(result.metadata.reasoning?.content).toBe('Thinking...');
+      expect(result.metadata.reasoning?.duration).toBeGreaterThan(0);
+    });
+
     it('should include grounding from finish data', async () => {
       const callbacks = createMockCallbacks();
       const handler = new StreamingHandler(mockContext, callbacks);

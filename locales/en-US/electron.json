@@ -9,6 +9,7 @@
   "gateway.statusDisconnected": "Not connected to Gateway",
   "gateway.title": "Device Gateway",
   "navigation.agents": "Agents",
+  "navigation.changelog": "Changelog",
   "navigation.channels": "Channels",
   "navigation.chat": "Chat",
   "navigation.discover": "Discover",

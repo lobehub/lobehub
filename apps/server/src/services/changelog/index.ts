@@ -1,3 +1,6 @@
+import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
+
 import dayjs from 'dayjs';
 import { template } from 'es-toolkit/compat';
 import matter from 'gray-matter';
@@ -26,10 +29,14 @@ export interface ChangelogConfig {
   user: string;
 }
 
+const shouldUseLocalChangelogFiles = () =>
+  Boolean(process.env.CHANGELOG_DIR) || process.env.VITEST !== 'true';
+
 export class ChangelogService {
   cdnUrls: {
     [key: string]: string;
   } = {};
+  private localDirCache: string | null | undefined;
   config: ChangelogConfig = {
     branch: process.env.DOCS_BRANCH || 'main',
     cdnPath: 'docs/.cdn.cache.json',
@@ -49,6 +56,15 @@ export class ChangelogService {
 
   async getChangelogIndex(): Promise<ChangelogIndexItem[]> {
     try {
+      const localIndex = await this.readLocalFile('index.json');
+      if (localIndex) {
+        const data = JSON.parse(localIndex) as {
+          cloud?: ChangelogIndexItem[];
+          community?: ChangelogIndexItem[];
+        };
+        return this.mergeChangelogs(data.cloud ?? [], data.community ?? []);
+      }
+
       const url = this.genUrl(urlJoin(this.config.docsPath, 'index.json'));
 
       const res = await fetch(url, {
@@ -58,7 +74,7 @@ export class ChangelogService {
       if (res.ok) {
         const data = await res.json();
 
-        return this.mergeChangelogs(data.cloud, data.community).slice(0, 5);
+        return this.mergeChangelogs(data.cloud, data.community);
       }
 
       return [];
@@ -87,13 +103,10 @@ export class ChangelogService {
       const post = await this.getIndexItemById(id);
 
       const filename = options?.locale?.startsWith('zh') ? `${id}.zh-CN.mdx` : `${id}.mdx`;
-      const url = this.genUrl(urlJoin(this.config.docsPath, filename));
+      const localText = await this.readLocalFile(filename);
+      const text = localText ?? (await this.fetchRemotePost(filename));
+      if (!text) return false as any;
 
-      const response = await fetch(url, {
-        next: { revalidate: 3600, tags: [FetchCacheTag.Changelog] },
-      });
-
-      const text = await response.text();
       const { data, content } = matter(text);
 
       const regex = /^#\s(.+)/;
@@ -141,6 +154,57 @@ export class ChangelogService {
 
       return false as any;
     }
+  }
+
+  private shouldUseLocalFiles() {
+    return shouldUseLocalChangelogFiles();
+  }
+
+  private async resolveLocalDir(): Promise<string | null> {
+    if (this.localDirCache !== undefined) return this.localDirCache;
+    if (!this.shouldUseLocalFiles()) {
+      this.localDirCache = null;
+      return null;
+    }
+
+    const candidates = [
+      process.env.CHANGELOG_DIR,
+      path.join(process.cwd(), 'docs/changelog'),
+      path.join(process.cwd(), '../../docs/changelog'),
+    ].filter((value): value is string => Boolean(value));
+
+    for (const dir of candidates) {
+      try {
+        await access(path.join(dir, 'index.json'));
+        this.localDirCache = dir;
+        return dir;
+      } catch {
+        // try the next candidate
+      }
+    }
+
+    this.localDirCache = null;
+    return null;
+  }
+
+  private async readLocalFile(relativePath: string): Promise<string | null> {
+    const dir = await this.resolveLocalDir();
+    if (!dir) return null;
+
+    try {
+      return await readFile(path.join(dir, relativePath), 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchRemotePost(filename: string): Promise<string | null> {
+    const url = this.genUrl(urlJoin(this.config.docsPath, filename));
+    const response = await fetch(url, {
+      next: { revalidate: 3600, tags: [FetchCacheTag.Changelog] },
+    });
+    if (response.ok === false) return null;
+    return response.text();
   }
 
   private mergeChangelogs(

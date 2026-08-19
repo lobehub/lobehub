@@ -21,6 +21,7 @@
   "generation.actions.errorCopied": "Message d'erreur copié dans le presse-papiers",
   "generation.actions.errorCopyFailed": "Échec de la copie du message d'erreur",
   "generation.actions.generate": "Générer",
+  "generation.cost": "Coût",
   "generation.freeQuota.exhausted": "🎁 Quota gratuit épuisé, des crédits seront utilisés",
   "generation.freeQuota.remaining": "🎁 {{remaining}} vidéos gratuites aujourd'hui",
   "generation.status.failed": "Échec de la génération",

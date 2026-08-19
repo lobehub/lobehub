@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto';
 
 import { and, desc, eq, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import {
+  organizations,
+  platformAdminUsers,
   platformFxConfig,
   platformTrialConfig,
   trialAbuseBlocklist,
@@ -11,6 +14,7 @@ import {
   userWallets,
   walletTransactions,
 } from '../schemas/aicoOrganization';
+import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
 
 /**
@@ -118,7 +122,8 @@ export class AicoBillingModel {
   manualCreditUser = async (params: {
     amountMicroUsd: number;
     amountToman: number;
-    createdByUserId: string;
+    createdByAdminId?: string | null;
+    createdByUserId?: string | null;
     description?: string;
     fxRateTomanPerUsd: number;
     /** Optional client idempotency key — unique in wallet_transactions.gateway_ref_id (FIN-003). */
@@ -179,7 +184,8 @@ export class AicoBillingModel {
             balanceAfterToman: Number(wallet?.balanceToman ?? 0),
             balanceBeforeMicroUsd,
             balanceBeforeToman,
-            createdByUserId: params.createdByUserId,
+            createdByAdminId: params.createdByAdminId ?? null,
+            createdByUserId: params.createdByUserId ?? null,
             description: params.description ?? 'Manual credit',
             fxRateTomanPerUsd: params.fxRateTomanPerUsd,
             gatewayRefId: params.idempotencyKey ?? null,
@@ -303,7 +309,7 @@ export class AicoBillingModel {
     );
   };
 
-  updateFxConfig = async (params: { tomanPerUsd: number; updatedByUserId: string }) => {
+  updateFxConfig = async (params: { tomanPerUsd: number; updatedByUserId?: string | null }) => {
     const rate = Math.trunc(params.tomanPerUsd);
     if (!Number.isFinite(rate) || rate <= 0) {
       throw new Error('INVALID_FX_RATE');
@@ -347,7 +353,7 @@ export class AicoBillingModel {
     enabled?: boolean;
     maxRequests?: number | null;
     trialBudgetMicroUsd?: number;
-    updatedByUserId: string;
+    updatedByUserId?: string | null;
   }) => {
     await this.getTrialConfig();
     const [row] = await this.db
@@ -490,10 +496,33 @@ export class AicoBillingModel {
   };
 
   listRecentTransactions = async (limit = 100) => {
-    return this.db.query.walletTransactions.findMany({
-      orderBy: [desc(walletTransactions.createdAt)],
-      limit,
-    });
+    const actorUser = alias(users, 'tx_actor_user');
+    const targetUser = alias(users, 'tx_target_user');
+
+    return this.db
+      .select({
+        actorAdminEmail: platformAdminUsers.email,
+        actorUserEmail: actorUser.email,
+        amountMicroUsd: walletTransactions.amountMicroUsd,
+        amountToman: walletTransactions.amountToman,
+        createdAt: walletTransactions.createdAt,
+        createdByAdminId: walletTransactions.createdByAdminId,
+        createdByUserId: walletTransactions.createdByUserId,
+        description: walletTransactions.description,
+        id: walletTransactions.id,
+        orgId: walletTransactions.orgId,
+        orgName: organizations.name,
+        type: walletTransactions.type,
+        userId: walletTransactions.userId,
+        userEmail: targetUser.email,
+      })
+      .from(walletTransactions)
+      .leftJoin(platformAdminUsers, eq(walletTransactions.createdByAdminId, platformAdminUsers.id))
+      .leftJoin(actorUser, eq(walletTransactions.createdByUserId, actorUser.id))
+      .leftJoin(targetUser, eq(walletTransactions.userId, targetUser.id))
+      .leftJoin(organizations, eq(walletTransactions.orgId, organizations.id))
+      .orderBy(desc(walletTransactions.createdAt))
+      .limit(limit);
   };
 
   /** Sum of `usage_logs.cost_micro_usd` across all B2C + B2B traffic — real OpenRouter spend. */

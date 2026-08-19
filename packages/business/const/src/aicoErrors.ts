@@ -47,6 +47,11 @@ export const AICO_ERROR_CODES = [
   'MEMBER_BUDGET_UNFUNDED',
   'MEMBER_BUDGET_INACTIVE',
   'MEMBER_BUDGET_RENEWAL_BLOCKED',
+  // Control-plane operator auth
+  'INVALID_CREDENTIALS',
+  'EMAIL_PASSWORD_REQUIRED',
+  'PASSWORD_TOO_WEAK',
+  'OPERATOR_EMAIL_EXISTS',
 ] as const;
 
 export type AicoErrorCode = (typeof AICO_ERROR_CODES)[number];
@@ -75,7 +80,9 @@ export const AICO_ERROR_MESSAGES_FA: Record<AicoErrorCode, string> = {
   DEFAULT_TEAM_MISSING: 'تیم پیش‌فرض سازمان یافت نشد.',
   DIRECT_PROVIDER_NOT_ALLOWED:
     'ارائه‌دهنده مستقیم مجاز نیست. فقط مدل‌های کیف‌پولی (مدیریت‌شده) قابل استفاده هستند.',
+  EMAIL_PASSWORD_REQUIRED: 'ایمیل و رمز عبور الزامی است.',
   INSUFFICIENT_ORG_BALANCE: 'موجودی کیف پول سازمان کافی نیست.',
+  INVALID_CREDENTIALS: 'ایمیل یا رمز عبور نادرست است.',
   INVITE_EXPIRED: 'این دعوت‌نامه منقضی شده است.',
   INVITE_IDENTIFIER_MISMATCH: 'این دعوت‌نامه برای حساب دیگری صادر شده است.',
   INVITE_NOT_FOUND: 'دعوت‌نامه یافت نشد.',
@@ -92,8 +99,10 @@ export const AICO_ERROR_MESSAGES_FA: Record<AicoErrorCode, string> = {
   ORG_NAME_MISMATCH: 'نام سازمان با تأیید شما مطابقت ندارد.',
   ORG_NOT_ACTIVE: 'سازمان غیرفعال یا معلق است.',
   ORG_NOT_FOUND: 'سازمان یافت نشد.',
+  OPERATOR_EMAIL_EXISTS: 'اپراتوری با این ایمیل از قبل وجود دارد.',
   ORG_WALLET_EMPTY: 'موجودی کیف پول سازمان کافی نیست.',
   ORG_WALLET_NOT_EMPTY: 'برای حذف سازمان، ابتدا موجودی کیف پول را به صفر برسانید.',
+  PASSWORD_TOO_WEAK: 'رمز عبور باید حداقل ۸ نویسه باشد و شامل حرف و رقم باشد.',
   PERSONAL_FUNDS_UNAVAILABLE:
     'موجودی کیف پول شخصی کافی نیست. لطفاً شارژ کنید یا دوره آزمایشی را فعال کنید.',
   PERSONAL_WALLET_INACTIVE: 'کیف پول شخصی شما غیرفعال است.',

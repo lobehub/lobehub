@@ -7,6 +7,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GenerationCostBadge } from '@/components/GenerationCostBadge';
 import { useClientDataSWR } from '@/libs/swr';
 import { imageKeys } from '@/libs/swr/keys';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
@@ -88,6 +89,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   tile: css`
+    position: relative;
+
     overflow: hidden;
 
     aspect-ratio: 1;
@@ -194,6 +197,7 @@ const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ inde
     task.status ||
     (isLoading ? 'processing' : 'pending');
   const url = getTaskAssetUrl(task) || getAssetUrl(data);
+  const costUsd = data?.generation?.asset?.costUsd ?? task.asset?.costUsd;
   const errorDetail =
     error instanceof Error ? error.message : getTaskErrorDetail(task) || getErrorDetail(data);
   const canRetry = Boolean(error) && normalizeAsyncError(error).retryable;
@@ -225,6 +229,7 @@ const GenerationTile = memo<{ index: number; task: GeneratedImageTask }>(({ inde
           )}
         </div>
       )}
+      <GenerationCostBadge costUsd={costUsd} />
     </div>
   );
 });

@@ -1,4 +1,5 @@
 export { default as BillingSourceSwitcher } from './BillingSourceSwitcher';
+export { AICO_BILLING_SOURCES_SWR_KEY, AICO_MY_WALLET_SWR_KEY } from './cacheKeys';
 export {
   FUNDS_BLOCKED_SOUND_STORAGE_KEY,
   FUNDS_BLOCKED_SOUND_TOGGLE_CODE,
@@ -10,6 +11,7 @@ export {
   useFundsBlockedSoundEnabled,
 } from './fundsBlockedSoundFlag';
 export { FUNDS_BLOCKED_SOUND_URL, playFundsBlockedSound } from './playFundsBlockedSound';
+export { refreshAicoBillingBalance } from './refreshAicoBillingBalance';
 export {
   assertAicoBillingAllowsChat,
   resolveAicoBillingForRequest,
@@ -31,5 +33,5 @@ export {
   preferenceToBillingContext,
 } from './types';
 export { useAicoBillingChatGate } from './useAicoBillingChatGate';
-export { AICO_BILLING_SOURCES_SWR_KEY, useAicoBillingSources } from './useAicoBillingSources';
+export { useAicoBillingSources } from './useAicoBillingSources';
 export { useFundsBlockedComposerCue } from './useFundsBlockedComposerCue';

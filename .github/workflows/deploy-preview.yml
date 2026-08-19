@@ -1,0 +1,228 @@
+name: Deploy Panachat Preview
+
+# Build ghcr.io/<owner>/panachat and panachat-control-plane on every push
+# to preview, then SSH-deploy the isolated preview stack (own DB volumes).
+#
+# Required secrets (same as canary deploy):
+#   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY
+#   GHCR_READ_TOKEN — PAT with read:packages
+# Optional:
+#   DEPLOY_PATH (repo root on server; default ~/panachat)
+#
+# Preview must use .env.preview + docker-compose/deploy/.env.preview on the server
+# and panachat_preview_* volumes — never prod panachat_* volumes.
+
+on:
+  push:
+    branches: [preview]
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: 'Build/push only (skip SSH deploy)'
+        type: boolean
+        default: false
+
+# No workflow-level queue: a newer preview SHA must start building immediately.
+# Image jobs cancel the previous SHA. SSH deploy never cancels (blue-green in flight).
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build and push Panachat preview image
+    concurrency:
+      group: deploy-preview-chat-image
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      sha_short: ${{ steps.vars.outputs.sha_short }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Image name (lowercase)
+        id: vars
+        run: |
+          owner_lc="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=${{ env.REGISTRY }}/${owner_lc}/panachat" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          ref='${{ github.ref }}'
+          if [[ "$ref" == refs/tags/v* ]]; then
+            echo "panachat_version=${ref#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "panachat_version=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          cleanup: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.sha_short }}
+            type=raw,value=${{ steps.vars.outputs.sha }}
+            type=raw,value=preview
+          labels: |
+            org.opencontainers.image.title=panachat
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ steps.vars.outputs.sha }}
+            SHA=${{ steps.vars.outputs.sha_short }}
+            PANACHAT_CHANNEL=preview
+            PANACHAT_VERSION=${{ steps.vars.outputs.panachat_version }}
+            BUILD_TIME=${{ steps.vars.outputs.build_time }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Ensure GHCR package is private
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner='${{ github.repository_owner }}'
+          pkg='panachat'
+          if gh api "orgs/${owner}/packages/container/${pkg}" >/dev/null 2>&1; then
+            gh api --method PATCH "orgs/${owner}/packages/container/${pkg}" \
+              -f visibility=private || true
+          elif gh api "users/${owner}/packages/container/${pkg}" >/dev/null 2>&1; then
+            gh api --method PATCH "users/${owner}/packages/container/${pkg}" \
+              -f visibility=private || true
+          else
+            echo "Package not visible yet via API — set Private in GitHub Packages UI after first push."
+          fi
+
+  build-control-plane:
+    name: Build and push preview control-plane image
+    concurrency:
+      group: deploy-preview-control-plane-image
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      sha_short: ${{ steps.vars.outputs.sha_short }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Image name (lowercase)
+        id: vars
+        run: |
+          owner_lc="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=${{ env.REGISTRY }}/${owner_lc}/panachat-control-plane" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          cleanup: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.sha_short }}
+            type=raw,value=preview
+          labels: |
+            org.opencontainers.image.title=panachat-control-plane
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./apps/aico-control-plane/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=control-plane-preview
+          cache-to: type=gha,mode=max,scope=control-plane-preview
+          platforms: linux/amd64
+
+      - name: Ensure GHCR package is private
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner='${{ github.repository_owner }}'
+          pkg='panachat-control-plane'
+          if gh api "orgs/${owner}/packages/container/${pkg}" >/dev/null 2>&1; then
+            gh api --method PATCH "orgs/${owner}/packages/container/${pkg}" \
+              -f visibility=private || true
+          elif gh api "users/${owner}/packages/container/${pkg}" >/dev/null 2>&1; then
+            gh api --method PATCH "users/${owner}/packages/container/${pkg}" \
+              -f visibility=private || true
+          fi
+
+  deploy:
+    name: SSH preview blue-green deploy
+    concurrency:
+      group: deploy-preview-ssh
+      cancel-in-progress: false
+    needs: [build, build-control-plane]
+    if: ${{ always() && needs.build.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.skip_deploy != true) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy preview over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          envs: IMAGE,CONTROL_PLANE_IMAGE,DEPLOY_PATH,GHCR_USER,GHCR_TOKEN
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${DEPLOY_PATH:-$HOME/panachat}"
+            cd "$DEPLOY_PATH"
+            # Shared checkout with prod — always track canary for compose/scripts.
+            git fetch origin canary
+            git merge --ff-only FETCH_HEAD || echo "WARN: could not fast-forward (local changes?); deploying with existing scripts"
+            if [ -n "${GHCR_TOKEN:-}" ]; then
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+            fi
+            export PANACHAT_CONTROL_PLANE_IMAGE="$CONTROL_PLANE_IMAGE"
+            PANACHAT_ENV=preview ./scripts/panachat-deploy-remote.sh deploy "$IMAGE"
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}:${{ needs.build.outputs.sha_short }}
+          CONTROL_PLANE_IMAGE: ${{ needs.build-control-plane.result == 'success' && format('{0}:{1}', needs.build-control-plane.outputs.image, needs.build-control-plane.outputs.sha_short) || '' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GHCR_USER: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}

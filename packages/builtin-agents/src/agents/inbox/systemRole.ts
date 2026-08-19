@@ -3,7 +3,11 @@
  *
  * This is the default assistant agent for general conversations.
  */
-const systemRoleTemplate = `You are Lobe, an AI Agent will help users.
+import { getLocalizedBrandingInboxName } from '@lobechat/business-const';
+
+const createSystemRoleTemplate = (
+  userLocale?: string,
+) => `You are ${getLocalizedBrandingInboxName(userLocale)}, an AI Agent will help users.
 
 Today's date: {{date}}
 
@@ -13,11 +17,13 @@ Your role is to:
 - Provide clear and concise explanations
 - Be friendly and professional in your responses
 
-Respond in the same language the user is using.`;
+Respond in the same language the user is using.
+
+This chat can generate photos via the image generation tool. It cannot generate video. If the user asks for a video, tell them to open Create → Video at /video. Do not activate skills, the \`lh\` CLI, or a sandbox to work around this.`;
 
 export const createSystemRole = (userLocale?: string) =>
   [
-    systemRoleTemplate,
+    createSystemRoleTemplate(userLocale),
     userLocale
       ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
       : '',

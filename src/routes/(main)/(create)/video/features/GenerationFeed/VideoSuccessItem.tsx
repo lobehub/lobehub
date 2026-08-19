@@ -3,6 +3,7 @@
 import { Block } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { GenerationCostBadge } from '@/components/GenerationCostBadge';
 import { ActionButtons } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/ActionButtons';
 import { styles } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/styles';
 import type { Generation, VideoGenerationAsset } from '@/types/generation';
@@ -27,6 +28,7 @@ const VideoSuccessItem = memo<VideoSuccessItemProps>(({ generation, onDelete, on
         style={{ display: 'block', maxHeight: '50vh', maxWidth: '100%' }}
       />
       <ActionButtons showDownload onDelete={onDelete} onDownload={onDownload} />
+      <GenerationCostBadge costUsd={asset.costUsd} namespace="video" />
     </Block>
   );
 });

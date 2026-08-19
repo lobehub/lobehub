@@ -1,3 +1,9 @@
+# syntax=docker/dockerfile:1
+# Empty ENV names (*_API_KEY, AUTH_SECRET, …) document runtime config; real
+# values come from compose/host at start. Dummy builder placeholders are not
+# production secrets. BuildKit flags the names anyway.
+# check=skip=SecretsUsedInArgOrEnv
+
 ## Set global build ENV
 ARG NODEJS_VERSION="24"
 
@@ -93,6 +99,16 @@ RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
 # run build standalone for docker version
 RUN npm run build:docker
 
+# Next 16 + pnpm standalone omits @swc/helpers; the server then crashes with
+# MODULE_NOT_FOUND .../next@.../node_modules/@swc/helpers/esm/_interop_require_default.js
+RUN set -eux; \
+    helper_src="$(find /app/node_modules/.pnpm -maxdepth 1 -type d -name '@swc+helpers@*' | head -1)"; \
+    test -n "${helper_src}"; \
+    next_dir="$(find /app/.next/standalone/node_modules/.pnpm -maxdepth 1 -type d -name 'next@*' | head -1)"; \
+    test -n "${next_dir}"; \
+    mkdir -p "${next_dir}/node_modules/@swc/helpers"; \
+    cp -a "${helper_src}/node_modules/@swc/helpers/." "${next_dir}/node_modules/@swc/helpers/"
+
 ## Application image, copy all the files for production
 FROM busybox:latest AS app
 
@@ -108,6 +124,7 @@ COPY --from=builder /app/public/_spa-auth /app/public/_spa-auth
 COPY --from=builder /app/public/_spa-workbench /app/public/_spa-workbench
 # Copy database migrations
 COPY --from=builder /app/packages/database/migrations /app/migrations
+COPY --from=builder /app/docs/changelog /app/docs/changelog
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
 COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
 
@@ -143,6 +160,18 @@ ENV MIDDLEWARE_REWRITE_THROUGH_LOCAL="1"
 # set hostname to localhost
 ENV HOSTNAME="0.0.0.0" \
     PORT="3210"
+
+# Panachat deploy metadata (injected by CI build-args; shown on Settings → About)
+ARG GIT_SHA=""
+ARG SHA=""
+ARG PANACHAT_CHANNEL=""
+ARG PANACHAT_VERSION=""
+ARG BUILD_TIME=""
+ENV GIT_SHA="${GIT_SHA}" \
+    SHA="${SHA}" \
+    PANACHAT_CHANNEL="${PANACHAT_CHANNEL}" \
+    PANACHAT_VERSION="${PANACHAT_VERSION}" \
+    BUILD_TIME="${BUILD_TIME}"
 
 # General Variables
 ENV APP_URL="" \

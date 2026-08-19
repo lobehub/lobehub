@@ -10,6 +10,9 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/business-const": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },

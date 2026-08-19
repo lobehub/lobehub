@@ -2,10 +2,10 @@ name: Publish Docker Image
 permissions:
   contents: read
 
+# Aico: not used (no Anthropic org token / not our product surface).
+# Restore upstream `on:` when re-enabling. Manual run still possible.
 on:
   workflow_dispatch: {}
-  release:
-    types: [published]
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}

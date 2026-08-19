@@ -6,6 +6,7 @@ import type {
 import { BaseExecutor } from '@lobechat/types';
 import type { AiModelForSelect, AiProviderModelListItem } from 'model-bank';
 
+import { filterAicoManagedProviders } from '@/features/AicoBilling/isManagedRuntimeProvider';
 import { aiModelService } from '@/services/aiModel';
 import { aiProviderService } from '@/services/aiProvider';
 import { generationService } from '@/services/generation';
@@ -68,7 +69,9 @@ const createClientImageGenerationRuntime = (topicVisibility?: 'private' | 'publi
       };
     },
     listImageModels: async ({ provider, limit }) => {
-      const storeProviders = aiProviderSelectors.enabledImageModelList(getAiInfraStoreState());
+      const storeProviders = filterAicoManagedProviders(
+        aiProviderSelectors.enabledImageModelList(getAiInfraStoreState()),
+      );
       const filteredStoreProviders = provider
         ? storeProviders.filter((item) => item.id === provider)
         : storeProviders;
@@ -102,9 +105,11 @@ const createClientImageGenerationRuntime = (topicVisibility?: 'private' | 'publi
         return { providers: [], totalModels: 0 };
       }
 
-      const enabledProviders = provider
-        ? runtimeState.enabledImageAiProviders.filter((item) => item.id === provider)
-        : runtimeState.enabledImageAiProviders;
+      const enabledProviders = filterAicoManagedProviders(
+        provider
+          ? runtimeState.enabledImageAiProviders.filter((item) => item.id === provider)
+          : runtimeState.enabledImageAiProviders,
+      );
 
       const providers = await Promise.all(
         enabledProviders.map(async (item) => {

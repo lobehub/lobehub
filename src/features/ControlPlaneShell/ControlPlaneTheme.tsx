@@ -16,6 +16,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useLocaleThemeFont } from '@/hooks/useLocaleThemeFont';
 import Image from '@/libs/next/Image';
 import Link from '@/libs/next/Link';
+import { GlobalStyle } from '@/styles';
 
 /** Full-viewport panel surface — no darker colorBgLayout header/footer bands. */
 const styles = createStaticStyles(({ css, cssVar: v }) => ({
@@ -80,6 +81,7 @@ const ControlPlaneTheme = memo<PropsWithChildren>(({ children }) => {
       }}
     >
       {!!fontURL && <FontLoader url={fontURL} />}
+      <GlobalStyle />
       <App className={styles.root} style={{ background: cssVar.colorBgContainer, height: '100%' }}>
         <AntdStaticMethods />
         <ConfigProvider config={{ aAs: Link, imgAs: Image, imgUnoptimized: true }} motion={m}>

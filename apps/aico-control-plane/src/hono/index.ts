@@ -4,9 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { Hono } from 'hono';
 
-import { auth } from '@/auth';
-
 import { createOpenRouterInternalApp } from './openrouterInternal';
+import { createOperatorAuthApp } from './operatorAuth';
 import { createControlPlaneTrpcApp } from './platformTrpc';
 
 const app = new Hono();
@@ -79,12 +78,7 @@ app.get('/health', (c) =>
 
 app.route('/internal/openrouter/v1/keys', createOpenRouterInternalApp());
 app.route('/trpc/lambda', createControlPlaneTrpcApp());
-
-/**
- * Better Auth on this origin (not proxied to product) so session cookies match
- * the control-plane host/port and work over local HTTP.
- */
-app.all('/api/auth/*', (c) => auth.handler(c.req.raw));
+app.route('/api/admin', createOperatorAuthApp());
 
 app.get('/admin', (c) => c.redirect('/'));
 

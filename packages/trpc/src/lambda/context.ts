@@ -10,7 +10,9 @@ import { auth } from '@/auth';
 import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
+import { PlatformAdminUserModel } from '@/database/models/platformAdminUser';
 import { hasWorkspaceAdminAccess } from '@/database/models/workspace';
+import { ADMIN_SESSION_COOKIE, hashSessionToken } from '@/database/utils/operatorPassword';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
@@ -78,6 +80,7 @@ export interface OIDCAuth {
 }
 
 export interface AuthContext {
+  adminId?: string | null;
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
@@ -97,6 +100,7 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  adminId?: string | null;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   marketAccessToken?: string;
@@ -111,6 +115,7 @@ export const createContextInner = async (params?: {
   const responseHeaders = new Headers();
 
   return {
+    adminId: params?.adminId,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
@@ -148,6 +153,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     (isDebugApi || isMockUser)
   ) {
     return createContextInner({
+      adminId: process.env.AICO_MOCK_ADMIN_ID || undefined,
       clientMetadata,
       userId: process.env.MOCK_DEV_USER_ID,
     });
@@ -176,6 +182,28 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     userAgent,
     workspaceId,
   };
+
+  if (process.env.AICO_IS_CONTROL_PLANE === '1') {
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token) {
+      return createContextInner({ ...commonContext, adminId: null, traceContext, userId: null });
+    }
+    try {
+      const db = await getServerDB();
+      const found = await new PlatformAdminUserModel(db).findValidSessionByTokenHash(
+        hashSessionToken(token),
+      );
+      return createContextInner({
+        ...commonContext,
+        adminId: found?.admin.id ?? null,
+        traceContext,
+        userId: null,
+      });
+    } catch (error) {
+      log('Control-plane admin session lookup failed: %O', error);
+      return createContextInner({ ...commonContext, adminId: null, traceContext, userId: null });
+    }
+  }
 
   const apiKeyToken = request.headers.get(LOBE_CHAT_API_KEY_HEADER)?.trim();
   log('X-API-Key header: %s', apiKeyToken ? 'exists' : 'not found');

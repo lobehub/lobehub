@@ -89,6 +89,18 @@ describe('desktop router shared definition', () => {
     },
   );
 
+  it.each(mainAreaVariants)('%s matches in-app changelog routes', (_, factory) => {
+    const listMatches = matchRoutes(createMainAreaRoutes(factory), '/changelog');
+    const detailMatches = matchRoutes(createMainAreaRoutes(factory), '/changelog/2026-01-01-foo');
+
+    expect(listMatches?.at(-1)?.route.index).toBe(true);
+    expect(detailMatches?.at(-1)?.route.path).toBe(':id');
+    expect(
+      (listMatches?.at(-1)?.route.handle as { meta?: { titleKey?: string } } | undefined)?.meta
+        ?.titleKey,
+    ).toBe('navigation.changelog');
+  });
+
   it.each(mainAreaVariants)('%s keeps legacy agent stats deep-links matching', (_, factory) => {
     const matches = matchRoutes(createMainAreaRoutes(factory), '/agent/agent-1/stats');
 

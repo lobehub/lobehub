@@ -7,9 +7,15 @@ import { uuid } from '@/utils/uuid';
 /**
  * Create test context
  */
-export const createTestContext = (userId?: string) => ({
+export const createTestContext = (userId?: string, extras?: { adminId?: string }) => ({
+  adminId: extras?.adminId,
   jwtPayload: { userId: userId || uuid() },
   userId: userId || uuid(),
+});
+
+export const createAdminContext = (adminId: string) => ({
+  adminId,
+  jwtPayload: { userId: adminId },
 });
 
 /**
