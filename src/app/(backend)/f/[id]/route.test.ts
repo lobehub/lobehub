@@ -66,4 +66,17 @@ describe('file proxy route', () => {
     );
     expect(fileServiceMocks.instance.getFullFileUrl).not.toHaveBeenCalled();
   });
+
+  it('should resolve the file by id without a session cookie or userId filter', async () => {
+    const response = await GET(
+      new Request('https://lobehub.com/f/file-id', {
+        headers: { origin: 'https://other.example' },
+      }),
+      { params: Promise.resolve({ id: 'file-id' }) },
+    );
+
+    expect(response.status).toBe(302);
+    expect(FileModel.getFileById).toHaveBeenCalledWith(db, 'file-id');
+    expect(FileModel.getFileById).toHaveBeenCalledTimes(1);
+  });
 });

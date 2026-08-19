@@ -203,6 +203,10 @@ services:
       - RUSTFS_CONSOLE_ENABLE=true
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      # Unset = RustFS sends no CORS headers. Chat image PUT is cross-origin
+      # (chat.* → s3.*) via a presigned URL, so browsers block it. * is safe:
+      # the XHR does not send cookies.
+      - 'RUSTFS_CORS_ALLOWED_ORIGINS=${RUSTFS_CORS_ALLOWED_ORIGINS:-*}'
     volumes:
       - rustfs_data:/data
     healthcheck:
@@ -225,7 +229,7 @@ services:
     volumes:
       - ./bucket.config.json:/bucket.config.json:ro
     entrypoint: /bin/sh
-    command: -c ' set -eux; mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
+    command: -c ' set -eux; mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set none "rustfs/lobe"; '
     restart: 'no'
     networks:
       - panachat-network

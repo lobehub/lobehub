@@ -61,6 +61,7 @@ services:
       - RUSTFS_CONSOLE_ENABLE=true
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+      - 'RUSTFS_CORS_ALLOWED_ORIGINS=${RUSTFS_CORS_ALLOWED_ORIGINS:-*}'
     volumes:
       - rustfs-data:/data
     healthcheck:
@@ -90,7 +91,7 @@ services:
         mc ls rustfs || true;
         mc mb "rustfs/lobe" --ignore-existing;
         mc admin info rustfs || true;
-        mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
+        mc anonymous set none "rustfs/lobe";
       '
     restart: 'no'
     networks:
