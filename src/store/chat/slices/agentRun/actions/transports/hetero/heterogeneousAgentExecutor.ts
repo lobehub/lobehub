@@ -2254,7 +2254,9 @@ export const executeHeterogeneousAgent = async (
             // its most recent calls, which are the ones that own trailing
             // create/edit output.
             const toolMessageIds = [...new Set(toolMsgIdByCallId.values())].slice(-500);
-            if (toolMessageIds.length > 0 && mainState.currentAssistantId) {
+            // Topicless runs can't scan: the server validates the anchor against
+            // the claimed topic, and a card has no conversation to render in.
+            if (toolMessageIds.length > 0 && mainState.currentAssistantId && context.topicId) {
               try {
                 const scan = await workService.registerShellWorksForRun({
                   anchorMessageId: mainState.currentAssistantId,
