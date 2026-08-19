@@ -242,7 +242,8 @@ postgres_user_count() {
 postgres_admin_count() {
   local container="${POSTGRES_CONTAINER:-${PANACHAT_STACK}-postgres}"
   local db="${LOBE_DB_NAME:-${PANACHAT_DB_NAME:-lobechat}}"
-  docker exec "$container" psql -U postgres -d "$db" -Atc "SELECT count(*) FROM platform_admins;" 2>/dev/null || echo "?"
+  # Operator logins live in platform_admin_users (separate password from chat users).
+  docker exec "$container" psql -U postgres -d "$db" -Atc "SELECT count(*) FROM platform_admin_users;" 2>/dev/null || echo "?"
 }
 
 # Same safety as moz: refuse deploy if live users dropped vs last healthy fingerprint.

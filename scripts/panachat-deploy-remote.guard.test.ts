@@ -53,6 +53,7 @@ describe('control-plane CI/CD wiring', () => {
 
     expect(script).toContain('echo "Users:');
     expect(script).toContain('Platform admins:');
+    expect(script).toContain('FROM platform_admin_users');
     expect(script).toContain('Control plane /health');
 
     for (const yaml of [canary, preview]) {
