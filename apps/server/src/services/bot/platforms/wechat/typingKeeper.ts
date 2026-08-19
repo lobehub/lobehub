@@ -15,8 +15,15 @@ const log = debug('bot-platform:wechat:typing-keeper');
 
 /** Matches the gateway DO's typing cadence (iLink typing display is short-lived). */
 const TYPING_PULSE_INTERVAL_MS = 4000;
-/** Hard stop: never outlive a stuck step. Mirrors the DO's typing timeout. */
-const TYPING_KEEPER_MAX_MS = 60_000;
+/**
+ * Hard stop: never outlive a stuck step. Sized above real step durations —
+ * tool-heavy steps legitimately run past 90s, and a keeper that self-
+ * extinguishes mid-step reads as the bot going silent while still working.
+ * The step's own finally() is the ordinary stop; this is only the backstop,
+ * and its leak is bounded (WeChat clears the indicator seconds after pulses
+ * stop, so a stuck step shows typing for at most this long).
+ */
+const TYPING_KEEPER_MAX_MS = 5 * 60_000;
 
 type StopTypingKeeper = () => void;
 

@@ -103,10 +103,14 @@ describe('startWechatTypingKeeper', () => {
       resolveCredentials: credentials,
     });
 
+    // Still pulsing at 2min: a tool-heavy step must not lose its indicator.
     await vi.advanceTimersByTimeAsync(120_000);
+    expect(startTyping.mock.calls.length).toBeGreaterThan(16);
+
+    await vi.advanceTimersByTimeAsync(240_000);
     const callsAtMax = startTyping.mock.calls.length;
-    // 60s cap → ~15 interval pulses + the immediate one; nothing after.
-    expect(callsAtMax).toBeLessThanOrEqual(16);
+    // 5min cap → ~75 interval pulses + the immediate one; nothing after.
+    expect(callsAtMax).toBeLessThanOrEqual(76);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(startTyping).toHaveBeenCalledTimes(callsAtMax);
   });
