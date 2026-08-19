@@ -86,7 +86,7 @@ export default function Root() {
 
   return (
     <NextThemeProvider>
-      <WorkbenchShell locale={data?.locale} resources={data?.resources} serverConfig={null}>
+      <WorkbenchShell locale={data?.locale} resources={data?.resources}>
         <Outlet />
       </WorkbenchShell>
     </NextThemeProvider>
@@ -106,7 +106,7 @@ export const ErrorBoundary = () => {
   // (theme + i18n) for the shared error page to render properly.
   return (
     <NextThemeProvider>
-      <WorkbenchShell locale={data?.locale} resources={data?.resources} serverConfig={null}>
+      <WorkbenchShell locale={data?.locale} resources={data?.resources}>
         <ErrorCapture error={error} />
       </WorkbenchShell>
     </NextThemeProvider>

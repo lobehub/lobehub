@@ -11,6 +11,8 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import { sharedRendererDefine } from '../../plugins/vite/sharedRendererConfig';
+import { shikiCdnUrl } from './app/stubs/shikiCdn';
+import { isShikiSource } from './app/stubs/shikiSource';
 import { antdStaticCssOptions, themeVarsCssOptions } from './staticCssOptions.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
@@ -21,6 +23,11 @@ const define = {
 };
 
 const { 'process.env': _processEnvFallback, ...ssrDefine } = define;
+
+const shikiSsrStub = path.resolve(import.meta.dirname, 'app/stubs/shiki.ts');
+const shikiVersion = JSON.parse(
+  readFileSync(path.resolve(repoRoot, 'node_modules/shiki/package.json'), 'utf8'),
+).version as string;
 
 const ssrStubs: Record<string, string> = {
   '@/libs/trpc/client': path.resolve(import.meta.dirname, 'app/stubs/trpcClient.ts'),
@@ -37,8 +44,9 @@ const workbenchSsrStubs = (): Plugin => ({
   applyToEnvironment: (environment) => environment.name === 'ssr',
   enforce: 'pre',
   name: 'workbench-ssr-stubs',
-  resolveId(source) {
-    return ssrStubs[source];
+  resolveId(source, importer) {
+    if (ssrStubs[source]) return ssrStubs[source];
+    if (isShikiSource(source, importer)) return shikiSsrStub;
   },
 });
 
@@ -48,6 +56,7 @@ const i18nClientStub = path.resolve(
 );
 
 const clientStubs: Record<string, string> = {
+  '@/libs/trpc/client': path.resolve(import.meta.dirname, 'app/stubs/trpcClient.client.ts'),
   '@/utils/i18n/loadI18nNamespaceModule': i18nClientStub,
 };
 
@@ -57,6 +66,17 @@ const workbenchClientStubs = (): Plugin => ({
   name: 'workbench-client-stubs',
   resolveId(source) {
     return clientStubs[source];
+  },
+});
+
+const workbenchClientShikiCdn = (): Plugin => ({
+  applyToEnvironment: (environment) => environment.name === 'client',
+  enforce: 'pre',
+  name: 'workbench-client-shiki-cdn',
+  resolveId(source) {
+    const url = shikiCdnUrl(source, shikiVersion);
+    if (!url) return;
+    return { external: true, id: url };
   },
 });
 
@@ -253,6 +273,7 @@ export default defineConfig({
       : undefined,
     workbenchSsrStubs(),
     workbenchClientStubs(),
+    workbenchClientShikiCdn(),
     clientI18nNsGuard(),
     buildInputsManifest(),
     viteMarkdownImport(),
@@ -264,6 +285,9 @@ export default defineConfig({
     reactRouter(),
     ...lobeIconImports(),
   ],
+  optimizeDeps: {
+    exclude: ['shiki', '@shikijs/core', '@shikijs/stream', '@shikijs/transformers'],
+  },
   resolve: {
     tsconfigPaths: true,
   },
