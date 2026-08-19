@@ -58,12 +58,14 @@ const AcceptancePage = ({
         <Flexbox horizontal className={styles.page}>
           <Flexbox className={styles.contentFrame} flex={1} style={{ minWidth: 0 }}>
             <Flexbox
+              flex={focused ? 1 : undefined}
               gap={16}
               paddingBlock={focused ? 0 : 20}
               paddingInline={focused ? 0 : 24}
               style={{
                 margin: focused ? 0 : '0 auto',
                 maxWidth: focused ? 'none' : 920,
+                minHeight: focused ? 0 : undefined,
                 width: '100%',
               }}
             >

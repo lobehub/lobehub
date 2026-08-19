@@ -48,6 +48,11 @@ const styles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
 
+    @media (width > 900px) {
+      flex: 1;
+      min-height: 0;
+    }
+
     @media (width <= 900px) {
       grid-template-columns: 1fr;
     }

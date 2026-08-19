@@ -1,141 +1,191 @@
 ---
 name: compose-atoms
-description: 'Split a shared feature into capability atoms so each surface only imports what it mounts. Use when the same domain UI is assembled on more than one surface (in-app workspace vs public SSR vs portal), a micro-app is inheriting a heavy viewer, a readOnly/isPublic/variant flag is hiding owner actions, or a visual split still leaves actions and store calls on the page. Triggers on `compose-atoms`, `readOnly`, tree-shake, 原子组件, 拆成原子, 组装, module graph, slot composition, AcceptanceViewer, workbench public page.'
+description: 'Decompose a heavy domain feature into mountable capability atoms. Use when a Viewer/Page/index.tsx owns fetch, filters, mutations, modals, and host integrations together; a visual split still leaves store calls and actions on the page; a portal, embed, share, mobile, or micro-app needs a subset of the same domain; or a new capability is landing as another `readOnly`/`mode`/`variant` flag. Triggers on `compose-atoms`, sink state, 状态下沉, 重业务拆分, 拆成原子, 原子组件, 组装, god component, fat viewer, module graph, slot composition, host seam.'
 user-invocable: false
 ---
 
 # Compose Atoms
 
-Canonical living example: `src/features/Verify/Acceptance/` assembled by the in-app page (`index.tsx`) and the public workbench page (`apps/workbench/src/features/acceptance/AcceptanceDetail.tsx`). Read those files when in doubt — this skill records the rules, not copies of the JSX.
+A heavy domain is a **kit**, not a viewer with modes. Each host is an import list. An atom owns the data, actions, and dependencies of one capability. The assembler only chooses what to mount.
 
-This is a **module-graph** split. Hiding a button does not remove a module. Only a surface that never imports a file can drop that file from its bundle.
+This is a **module-graph** split. Hiding UI does not drop a module. A host that never imports a file is the only host that does not ship it.
 
-Do not use this skill to slice a single-surface component into smaller files. That case is owned by the `react` skill.
+Do not use this skill to slice one component into smaller files. That is `react`.
 
-## When this applies
+## When
 
-The same domain has (or is about to have) more than one assembler:
+The folder is a product surface (Conversation, Acceptance, Document, Verify, Task, …) and at least one of these is true:
 
-| Surface                    | What it may mount                                                            |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| In-app / portal            | Full capability: identity, goal, list, owner writes, decision, focus, ledger |
-| Public / share / micro-app | A subset: identity, read-only goal, list                                     |
+- One entry owns read + write + workflow + host integration.
+- A second host already exists or is the next change (page, portal, share, mobile, popup, micro-app).
+- The next feature is another boolean / `mode` / `variant` on the fat tree.
+- Reusing a header, list, or card would import trays, stores, or chat.
 
-If there is only one assembler and no bundle boundary, stop. `react` still says: do not split solely to make files smaller.
+If the file is large but has **one** capability and **one** host, stop. Use `react`.
 
-## What does not work
+## Grain
 
-| Move                                                                      | Why the bundler still keeps the heavy module                   |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `readOnly` / `isPublic` / `variant` on the fat page                       | Flags change runtime, not the static import graph              |
-| Split JSX, leave hooks and actions on the page                            | The page file still imports DecisionBar, modals, trays, stores |
-| Optional callback (`onEdit?`) implemented in the same file as the read UI | The write implementation is already in that module             |
-| Light surface imports the fat `index.tsx` / feature barrel                | Evaluating the barrel evaluates sibling exports                |
-| Shared hook lives in a barrel next to list / document / infinite hooks    | Importing the hook pulls the barrel                            |
+An atom is the **smallest unit a host is allowed not to mount**.
 
-`dynamic(() => import(...))` only helps when **no static import** of that module remains on the light graph.
+Ask, for every chunk: _would any host ship the rest and skip this?_ If yes, it is an atom. If no, it stays inside its parent.
 
-## Capability, not section
+That grain is coarser than a visual section and finer than the whole page.
 
-Split on **what a surface is allowed to do**, not on visual bands.
+| Too coarse                         | Right grain                         | Too fine                                      |
+| ---------------------------------- | ----------------------------------- | --------------------------------------------- |
+| One `Viewer` with `readOnly`       | Identity, goal, list, decision, …   | Every badge, row, and icon as a public export |
+| `Chat` as a single import          | List, composer, intervention, …     | Every message sub-row the page then rewires   |
+| `Document` as editor + every panel | Canvas, header, comments as omitted | Internal toolbar buttons                      |
 
+A **workflow** (focus review, thread, publish) is one atom to hosts that skip the whole mode. Inside it, keep splitting only if a host would mount a piece of that workflow alone.
+
+## Sink State
+
+The split is worthless if the assembler still holds the domain state. **Imports follow the hook.** A `useStore` / `useX` / `handleAccept` left on the page keeps that module (and everything it imports) on every host that mounts the page.
+
+Sink everything the atom needs into the atom:
+
+| Sinks into the atom                        | Stays on the assembler                        |
+| ------------------------------------------ | --------------------------------------------- |
+| Resource fetch                             | The record id / scope identity                |
+| Derived view model (counts, labels, scope) | Which atoms are mounted (the import list)     |
+| Transient UI (filter, collapse, pending)   | Host layout state (focused vs overview, rail) |
+| Mutation handlers and their stores/modals  | Host seams (provider value the runtime owns)  |
+
+```tsx
+// wrong — visual split, state still on the page
+const Page = () => {
+  const { data, mutate } = useX(id);
+  const [filter, setFilter] = useState('all');
+  const accept = () => void mutate(...);
+  return (
+    <>
+      <Identity data={data} />
+      <List data={data} filter={filter} onFilter={setFilter} />
+      <DecisionBar onAccept={accept} />
+    </>
+  );
+};
+
+// right — each atom reads and acts; page only assembles
+const Page = () => (
+  <Scope id={id}>
+    <Identity />
+    <List />
+    <Decision />
+  </Scope>
+);
 ```
-read atom     — present data; own its fetch and local UI state
-write atom    — mutate; own its pending state and side-effect imports
-assembler     — import atoms, place them, pass slots; no domain actions
-```
 
-A visual section that both reads and writes is two atoms, composed with a slot.
+Do not lift "to fetch once" or "so siblings share data". Two atoms calling the same SWR hook share the cache by key. Sibling writes go through that cache (or a store slice the write atom imports), not through page `useState`.
 
-```
-AcceptanceGoal          read: requirement, collapse
-  editSlot              write: AcceptanceGoalEdit → GoalModal
-  reportSlot            write/nav: AcceptanceViewReportLink
+Lift only when the state **is** the assembler's job: which workflow is on screen, whether a rail is open. If a value is used to render or mutate one capability, it belongs in that capability.
 
-AcceptanceIdentity      read: title, origin, counts
-  statusSlot            write: AcceptanceStatusControl
-  topicSlot             app-only: AcceptanceOriginTopic
+## Kit
 
-AcceptanceCheckInventory  read: list, filter, expand
-  toolbar               write: AcceptanceCheckOwnerToolbar
-```
+| Piece            | Owns                                              | Must not own                                       |
+| ---------------- | ------------------------------------------------- | -------------------------------------------------- |
+| Domain primitive | Types, predicates, formatters                     | React, stores, services                            |
+| Data access      | One resource, one file                            | Sibling list / infinite / document hooks           |
+| Read atom        | Present + local UI state + its own fetch          | Mutations, trays, owner services, host stores      |
+| Write atom       | One mutation and its UI                           | Page layout, unrelated writes                      |
+| Workflow atom    | A mode assembled from other atoms                 | Becoming the only entry other hosts can import     |
+| Domain slot      | `ReactNode` hole for another **same-domain** atom | A callback whose implementation lives in this file |
+| Host seam        | Optional host-provided UI, **null by default**    | A fallback that imports the host graph             |
+| Assembler        | Layout + the import list                          | Domain actions; domain fetch except local chrome   |
 
-Flags that only change behavior of code already in the atom (`canReview` on rows) are fine. Flags that exist so the atom can skip importing another module are not — that other module must be a slot or a sibling the assembler chooses not to import.
+A visual block that both reads and writes is a read atom + a write atom, joined by a domain slot.
+
+Two seam types — do not mix them:
+
+- **Domain slot** — same feature, optional capability (`editSlot`, `toolbar`). The host imports the write atom and passes it in.
+- **Host seam** — only some runtimes can resolve it (chat store, topic drawer, Electron). Context default is `null`. The micro-app / share page never imports the provider value. See `split-micro-app` for the runtime cut.
 
 ## Ownership
 
-Each atom owns the state and imports its capability needs.
+State and imports live in the atom that needs them.
 
-- **Read atoms** call the isolated read hook themselves. Transient UI state (filter, collapse, expand) lives in the atom, not the assembler.
-- **Write atoms** call the same read hook for the current record, then mutate. They import trays, modals, and owner services. They return `null` when the record is not writable.
-- **Assembler** does not call the domain hook to feed props into atoms. It may read the hook only for chrome that is unique to that surface (workbench header title).
-- **Scope context** may carry identity (`acceptanceId`, `embedded`). It must not carry actions, stores, or modal openers.
+- Read atoms call the isolated resource hook. Filter / collapse / expand stay in the atom.
+- Write atoms call the same hook, then mutate. They import their own modals and services. They return `null` when the record is not writable.
+- Workflow atoms compose other atoms. They still do not become the light host's entry.
+- Assemblers do not fetch in order to push props down. Chrome unique to that host (a title in a shell header) may read the hook.
+- Scope context carries **identity** (`id`, `embedded`). It does not carry actions, stores, or modal openers.
 
-Multiple atoms calling the same SWR hook is expected. SWR dedupes on key. Do not lift the data to the assembler "to fetch once".
+Several atoms calling the same SWR hook is expected. SWR dedupes on key. Do not lift data to the assembler "to fetch once".
 
-Put the shared read hook in **its own file**. Light surfaces import that file, never a feature `hooks.ts` that also exports list / document / infinite helpers.
+The shared read hook is **its own file**. A light host imports that file, never a `hooks.ts` / store barrel that also exports list, document, or send-message.
 
 ```ts
-// light and full both:
-import { useAcceptanceBundle } from '@/features/Verify/Acceptance/useAcceptanceBundle';
+// any host:
+import { useX } from '@/features/Domain/useX';
 
-// never from a light surface:
-import { useAcceptanceBundle } from '@/features/Verify/hooks';
-import { AcceptanceViewer } from '@/features/Verify';
+// never from a light host:
+import { useX } from '@/features/Domain/hooks';
+import { DomainViewer } from '@/features/Domain';
 ```
 
-## Assemblers
+A flag that only changes behavior of code already in the atom is fine. A flag whose purpose is to skip importing another module is not — that module is a slot or a sibling the assembler omits.
 
-A surface is an import list. If a file is not in that list, it is not in the bundle.
+`dynamic(() => import(...))` only helps when **no static import** of that module remains on the light graph.
+
+## Assembler
+
+A host is its import list.
 
 ```tsx
-// public / workbench — deep imports only
-<AcceptanceScope acceptanceId={id}>
-  <AcceptanceBundleGate>
-    <AcceptanceIdentity />
-    <AcceptanceGoal />
-    <AcceptanceCheckInventory />
-  </AcceptanceBundleGate>
-</AcceptanceScope>
+// light host — deep imports only
+<Scope id={id}>
+  <ReadA />
+  <ReadB />
+</Scope>
 
-// in-app page — same reads, plus write atoms in slots
-<AcceptanceIdentity
-  statusSlot={<AcceptanceStatusControl />}
-  topicSlot={<AcceptanceOriginTopic />}
-/>
-<AcceptanceGoal
-  editSlot={<AcceptanceGoalEdit />}
-  reportSlot={<AcceptanceViewReportLink />}
-/>
-<AcceptanceCheckInventory canReview toolbar={<AcceptanceCheckOwnerToolbar />} />
-<AcceptanceDecision />
+// full host — same reads, write atoms in slots, workflows as siblings
+<ReadA extra={<WriteA />} />
+<ReadB toolbar={<WriteB />} />
+<Workflow />
+<WriteC />
 ```
 
-Route files compose the surface skeleton (providers, slots the app owns such as `OriginConversationProvider`). Do not add a wrapper page whose only job is to sit between the route and the assembler.
+Route / portal files compose host skeleton (providers, host seams). Do not add a wrapper page whose only job is to sit between the route and the assembler.
 
-App-only capabilities that a micro-app cannot even resolve (chat store, topic drawer) stay behind a **null default context seam** (`originConversation.tsx`). The micro-app never imports the provider value. That is the `split-micro-app` slot-inject cut; this skill owns the component-level equivalent.
+The feature barrel may export the **full** assembler for in-app use. Light hosts must not import that barrel.
 
 ## Procedure
 
-1. List surfaces and the capabilities each one is allowed to mount. Stop if there is only one surface.
-2. Draw the import graph of the fat entry. Anything the light surface must not ship becomes a write atom or an app-only slot.
-3. Extract read atoms first. Move the read hook into its own file. Give optional capabilities `ReactNode` slots, not callbacks that close over write modules.
-4. Extract each write atom into its own file. The atom imports its own heavy deps.
-5. Rewrite each assembler as an import list plus layout. Delete `readOnly` / `isPublic` / `variant` on the fat tree.
-6. Point the light surface at the atoms by **deep path**. Confirm it does not import `index.tsx` or the feature barrel.
-7. Prove the cut with a module trace, not with a screenshot of a missing button.
+1. List **hosts** (page, portal, share, mobile, popup, micro-app — include the next one).
+2. List **capabilities as verbs** (view identity, edit field, decide, open host thing). Map host → verbs.
+3. Set **grain**: each verb a host can skip is an atom. Group the rest under a parent.
+4. Extract primitives and the isolated read hook first.
+5. Extract read atoms. Optional same-domain capabilities become `ReactNode` slots, not callbacks that close over write modules.
+6. Extract each write / workflow atom into its own file. Heavy deps stay in that file.
+7. **Sink state.** Move fetch, view-model, transient UI, and handlers out of the assembler. If the page still calls a domain hook to feed props, the split is not done.
+8. Rewrite every host as an import list plus layout. Delete `readOnly` / `isPublic` / `mode` / `variant` on the fat tree.
+9. Point light hosts at atoms by **deep path**.
+10. Prove the cut. Grep the light entry's import tree, or trace a module the light host must not ship. A missing button is not proof.
 
 ```bash
-# workbench example — expect no DecisionBar / GoalModal / chat store from the public page
+# example: light host must not import a write atom
 WORKBENCH_TRACE_MODULE=features/Verify/Acceptance/AcceptanceDecision bun run build:rr
-WORKBENCH_TRACE_MODULE=features/Conversation/ChatInput/VerifyTray/GoalModal bun run build:rr
 ```
 
-The trace must not list the light assembler as an importer. If it does, a static import still exists — usually a barrel, a leftover flag-era import, or state left on the page.
+If the light assembler appears on the importer chain, a static import still exists — usually a barrel, a leftover flag, or actions left on the page.
+
+## Example
+
+`src/features/Verify/Acceptance/` is one application of this kit, not the template to copy file-for-file.
+
+| Host                          | Mounts                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| In-app `Acceptance/index.tsx` | Identity, goal, inventory, decision, focus workflow, ledger + write slots |
+| Workbench public detail       | Identity, goal, inventory only                                            |
+| Portal                        | Full assembler + `OriginConversationProvider`                             |
+
+Read `AcceptanceGoal` (read + `editSlot`) and `AcceptanceGoalEdit` (write) for the slot cut. Read `originConversation.tsx` for a host seam. Read workbench `AcceptanceDetail.tsx` for a light assembler.
 
 ## Related skills
 
-- **`react`**: single-surface component boundaries, styling, memoization. Do not use `compose-atoms` to shrink one file.
-- **`split-micro-app`**: worker / SSR / gateway / stub / `.client.tsx`. After the app exists, this skill is how shared UI is cut so the worker does not inherit the in-app graph.
+- **`react`**: single-surface boundaries, styling, memoization.
+- **`split-micro-app`**: worker / SSR / gateway / stubs. This skill is how the shared UI is cut afterwards.
 - **`spa-routes`**: route files stay thin assemblers.
-- **`data-fetching-architecture`**: how the isolated read hook should fetch (service + SWR), not where it may be imported from.
+- **`data-fetching-architecture`**: how the isolated hook fetches, not where a host may import it from.
+- **`zustand`**: narrow selectors inside an atom; do not put the whole store on scope context.

@@ -16,7 +16,7 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 `AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
 
 - **React and TSX**: Before editing components, component state, render boundaries, or memoization, read [`.agents/skills/react/SKILL.md`](.agents/skills/react/SKILL.md). It owns component selection, styling, state locality, and render-performance rules.
-- **Multi-surface feature UI**: When the same domain is assembled on more than one surface (in-app vs public/SSR vs portal) and unused capabilities must stay out of a bundle, read [`.agents/skills/compose-atoms/SKILL.md`](.agents/skills/compose-atoms/SKILL.md). Do not hide those capabilities behind `readOnly` / `isPublic` flags.
+- **Heavy domain features**: When splitting a fat Viewer/Page into reusable pieces (page vs portal vs share vs micro-app), read [`.agents/skills/compose-atoms/SKILL.md`](.agents/skills/compose-atoms/SKILL.md). Split on mountable capabilities, not visual sections, and do not hide unused work behind `readOnly` / `mode` flags.
 
 ## Project Structure
 
