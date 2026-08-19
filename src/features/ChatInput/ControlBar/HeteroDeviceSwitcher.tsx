@@ -2,7 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import type { DeviceExecutionTarget } from '@lobechat/types';
+import { getHeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -23,7 +24,9 @@ import { DOWNLOAD_URL } from '@/const/url';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useLocalSandboxCapability } from '@/features/ChatInput/hooks/useLocalSandboxCapability';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import { useDeviceAgentScan } from '@/features/DeviceManager/useDeviceAgentScan';
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
+import { useLocalHeteroAgentStatus } from '@/features/DeviceManager/useLocalHeteroAgentStatus';
 import {
   ExecutionTargetDeviceStatus,
   ExecutionTargetIcon,
@@ -362,6 +365,89 @@ const OptionRow = memo<OptionRowProps>(
 
 OptionRow.displayName = 'HeteroDeviceSwitcher.OptionRow';
 
+interface DeviceOptionRowProps {
+  active: boolean;
+  /** Heterogeneous agent type — when set, the row probes the device's CLI. */
+  agentType?: string;
+  /** Resolved launch command — used for the current machine's IPC probe. */
+  command?: string;
+  device: DeviceListItem;
+  isCurrentMachine: boolean;
+  onSelect: (deviceId: string) => void;
+  /** Probe the CLI only while the popover is open (one round-trip per device). */
+  open: boolean;
+}
+
+/**
+ * One device row of the execution-target picker. For heterogeneous agents the
+ * row probes whether the agent's CLI is installed there and disables itself
+ * when it is not — picking a device that cannot run the agent would strand
+ * every run there. The current machine is probed over Electron IPC (fast,
+ * gateway-free); other devices through the gateway. Probes only fire while
+ * the picker is open; SWR caches them per device, so re-opening is instant.
+ */
+const DeviceOptionRow = memo<DeviceOptionRowProps>(
+  ({ active, agentType, command, device, isCurrentMachine, onSelect, open }) => {
+    const { t } = useTranslation('chat');
+
+    const local = useLocalHeteroAgentStatus(
+      open && isCurrentMachine ? agentType : undefined,
+      open && isCurrentMachine ? command : undefined,
+    );
+    const scan = useDeviceAgentScan(
+      open && agentType && !isCurrentMachine && device.online ? device.deviceId : undefined,
+      agentType,
+    );
+
+    const checking = isCurrentMachine ? local.detecting : device.online && scan.isLoading;
+    // Current machine: the IPC probe's explicit verdict. Remote device: the
+    // device answered the scan but reported unavailable (`available: false`)
+    // or its client is too old to know the type (absent map entry). Either
+    // way the CLI cannot run there, so the row is disabled — but the reason
+    // differs. A failed probe (offline device, client without the scan tool)
+    // stays selectable: "could not check" must not silently block a target.
+    const cliUnavailable = isCurrentMachine
+      ? local.status !== undefined && !local.status.available
+      : device.online && scan.scanned && scan.data?.available === false;
+    const cliOutdated =
+      !isCurrentMachine && device.online && scan.scanned && scan.data === undefined;
+    const cliName = agentType ? (HETEROGENEOUS_TYPE_LABELS[agentType] ?? agentType) : '';
+
+    let desc: ReactNode;
+    if (checking) {
+      desc = t('heteroAgent.executionTarget.cliChecking', { name: cliName });
+    } else if (cliUnavailable) {
+      desc = t('heteroAgent.executionTarget.cliNotInstalled', { name: cliName });
+    } else if (cliOutdated) {
+      desc = t('heteroAgent.executionTarget.cliOutdated', { name: cliName });
+    } else if (isCurrentMachine && device.online) {
+      desc = t('heteroAgent.executionTarget.gatewayDesc');
+    } else {
+      desc = (
+        <ExecutionTargetDeviceStatus
+          offlineLabel={t('heteroAgent.executionTarget.offline')}
+          online={device.online}
+          onlineLabel={t('heteroAgent.executionTarget.online')}
+        />
+      );
+    }
+
+    return (
+      <OptionRow
+        active={active}
+        desc={desc}
+        disabled={!device.online || cliUnavailable || cliOutdated}
+        icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
+        label={device.friendlyName || device.hostname || device.deviceId}
+        tag={isCurrentMachine ? t('heteroAgent.executionTarget.gateway') : undefined}
+        onClick={() => onSelect(device.deviceId)}
+      />
+    );
+  },
+);
+
+DeviceOptionRow.displayName = 'HeteroDeviceSwitcher.DeviceOptionRow';
+
 interface HeteroDeviceSwitcherProps {
   agentId: string;
 }
@@ -391,11 +477,40 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
+  // The resolved launch command — the current-machine row probes it over
+  // Electron IPC instead of the gateway.
+  const providerConfig = getHeterogeneousAgentClientConfig(heteroType ?? '');
+  const resolvedCommand =
+    agencyConfig?.heterogeneousProvider?.command?.trim() || providerConfig?.defaultCommand || '';
+
   // Heterogeneous agents bring their own toolchain and must execute somewhere, so `'none'`
   // (plain chat, no execution environment) isn't a valid target for them: hide
   // the option and never fall back to / honour a stale stored `'none'`.
   const isHetero = !!heteroType;
+
+  // The always-rendered desktop `Local` row obeys the same rule as the device
+  // rows: with a heterogeneous agent it probes THIS machine's CLI (only while
+  // the picker is open; SWR caches the verdict) and disables itself when the
+  // CLI is missing — `local` means "run the agent's CLI on this machine", and
+  // a machine without it would strand every run there. A failed probe (no
+  // binary detector, IPC error) stays selectable: "could not check" must not
+  // silently block the default target.
+  const localCli = useLocalHeteroAgentStatus(
+    open && isHetero ? heteroType : undefined,
+    open && isHetero ? resolvedCommand : undefined,
+  );
+  const localCliChecking = isHetero && localCli.detecting;
+  const localCliUnavailable =
+    isHetero && localCli.status !== undefined && !localCli.status.available;
+  const localCliName = heteroType ? (HETEROGENEOUS_TYPE_LABELS[heteroType] ?? heteroType) : '';
   const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heteroType);
+  // Shared by the plain and the fenced local rows: a probing / missing CLI
+  // outranks the generic "run on this machine" description.
+  const localRowDesc = localCliChecking
+    ? t('heteroAgent.executionTarget.cliChecking', { name: localCliName })
+    : localCliUnavailable
+      ? t('heteroAgent.executionTarget.cliNotInstalled', { name: localCliName })
+      : t('heteroAgent.executionTarget.localDesc');
 
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
@@ -651,28 +766,18 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     return executionTarget === target;
   };
 
-  const renderDeviceStatus = (d: NonNullable<typeof devices>[number]) => (
-    <ExecutionTargetDeviceStatus
-      offlineLabel={t('heteroAgent.executionTarget.offline')}
-      online={d.online}
-      onlineLabel={t('heteroAgent.executionTarget.online')}
-    />
-  );
-
   const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => {
     const isCurrentMachine = d.deviceId === currentDeviceId;
     return (
-      <OptionRow
+      <DeviceOptionRow
         active={isActive('device', d.deviceId)}
-        disabled={!d.online}
-        icon={<ExecutionTargetIcon devicePlatform={d.platform} target={'device'} />}
+        agentType={isHetero ? heteroType : undefined}
+        command={resolvedCommand}
+        device={d}
+        isCurrentMachine={isCurrentMachine}
         key={d.deviceId}
-        label={d.friendlyName || d.hostname || d.deviceId}
-        tag={isCurrentMachine ? t('heteroAgent.executionTarget.gateway') : undefined}
-        desc={
-          isCurrentMachine ? t('heteroAgent.executionTarget.gatewayDesc') : renderDeviceStatus(d)
-        }
-        onClick={() => void handleSelect('device', d.deviceId)}
+        open={open}
+        onSelect={(deviceId) => void handleSelect('device', deviceId)}
       />
     );
   };
@@ -738,9 +843,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
-          desc={t('heteroAgent.executionTarget.localDesc')}
+          desc={localRowDesc}
+          disabled={localCliUnavailable}
           icon={<ExecutionTargetIcon target={'local'} />}
-          // 本机统一显示「本地设备」，不再带具体设备名称
           label={t('heteroAgent.executionTarget.local')}
           onClick={() => void handleSelect('local', undefined, false)}
         />
@@ -750,29 +855,34 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           allowlist. Shown even when the host can't provide a sandbox — disabled,
           carrying the real reason, because "unavailable" here usually means
           "not installed yet" and silently hiding the feature would strand the
-          user with no way to find out why. */}
+          user with no way to find out why. A missing CLI wins over a present
+          sandbox backend: the fence still runs the agent's CLI on this machine,
+          so without it the row would be a selectable dead end — the same
+          non-runnable target the plain Local row above is guarded against. */}
       {isDesktop ? (
         <OptionRow
           active={executionTarget === 'local' && localSandboxEnabled}
-          disabled={!canUseLocalSandbox}
+          disabled={localCliUnavailable || !canUseLocalSandbox}
           icon={<Icon icon={ShieldCheckIcon} size={14} />}
           label={t('heteroAgent.executionTarget.localSandbox')}
           desc={
-            canUseLocalSandbox
-              ? t(
-                  localSandboxNetwork
-                    ? 'heteroAgent.executionTarget.localSandboxDescNetwork'
-                    : 'heteroAgent.executionTarget.localSandboxDesc',
-                )
-              : // Prefer the actionable instruction (Linux's "install this
-                // package") over the backend's raw diagnostic when we have one.
-                (sandboxCapability?.instructions ??
-                t('heteroAgent.executionTarget.localSandboxUnavailable', {
-                  reason: sandboxCapability?.reason ?? '',
-                }))
+            localCliUnavailable
+              ? t('heteroAgent.executionTarget.cliNotInstalled', { name: localCliName })
+              : canUseLocalSandbox
+                ? t(
+                    localSandboxNetwork
+                      ? 'heteroAgent.executionTarget.localSandboxDescNetwork'
+                      : 'heteroAgent.executionTarget.localSandboxDesc',
+                  )
+                : // Prefer the actionable instruction (Linux's "install this
+                  // package") over the backend's raw diagnostic when we have one.
+                  (sandboxCapability?.instructions ??
+                  t('heteroAgent.executionTarget.localSandboxUnavailable', {
+                    reason: sandboxCapability?.reason ?? '',
+                  }))
           }
           extra={
-            canUseLocalSandbox ? (
+            localCliUnavailable ? undefined : canUseLocalSandbox ? (
               <>
                 <InstantSwitch
                   enabled={localSandboxNetwork}
