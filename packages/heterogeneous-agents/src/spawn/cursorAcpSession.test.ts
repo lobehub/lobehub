@@ -168,7 +168,7 @@ const createAcpProcess = ({
     stdout,
   });
 
-  return { child, requests };
+  return { child, requests, send };
 };
 
 const createSessionOptions = (
@@ -321,6 +321,45 @@ describe('CursorAcpSession', () => {
     expect(fake.requests.find(({ id }) => id === 'ask-1')?.result).toEqual({
       outcome: { outcome: 'cancelled' },
     });
+  });
+
+  it('keeps streaming session updates while AskUserBridge is waiting', async () => {
+    const fake = createAcpProcess({ askQuestion: true });
+    spawnMock.mockReturnValue(fake.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const bridge = new AskUserBridge('operation-1');
+    const options = createSessionOptions({ askUserBridge: bridge });
+    const events: AgentStreamEvent[] = [];
+    options.onEvents = (batch) => {
+      events.push(...batch);
+    };
+    const eventIterator = bridge.events()[Symbol.asyncIterator]();
+    const run = new CursorAcpSession(options).run();
+
+    await eventIterator.next();
+    fake.send({
+      method: 'session/update',
+      params: {
+        sessionId: 'cursor-session-1',
+        update: {
+          content: { text: ' still streaming', type: 'text' },
+          sessionUpdate: 'agent_message_chunk',
+        },
+      },
+    });
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: { chunkType: 'text', content: ' still streaming' },
+          type: 'stream_chunk',
+        }),
+      ),
+    );
+
+    bridge.resolve('cursor-question-1', {
+      result: { 'How broad should the fix be?': 'Full' },
+    });
+    await run;
   });
 
   it('blocks cursor/ask_question until the bridge returns selected option labels', async () => {
