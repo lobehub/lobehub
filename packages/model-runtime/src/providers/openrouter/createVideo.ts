@@ -2,6 +2,7 @@ import { BRANDING_NAME, OFFICIAL_URL } from '@lobechat/const';
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import { readProviderReportedCost } from '../../core/usageConverters/openai';
 import type {
   CreateVideoPayload,
   CreateVideoResponse,
@@ -18,6 +19,7 @@ interface OpenRouterVideoJob {
   status?: string;
   unsigned_urls?: string[] | null;
   url?: string | null;
+  usage?: unknown;
 }
 
 const openRouterHeaders = (apiKey: string) => ({
@@ -31,6 +33,12 @@ const jobErrorMessage = (error: OpenRouterVideoJob['error']) => {
   if (!error) return 'Video generation failed';
   if (typeof error === 'string') return error;
   return error.message || 'Video generation failed';
+};
+
+const modelUsageFromJob = (data: OpenRouterVideoJob) => {
+  const cost = readProviderReportedCost(data.usage);
+  if (cost === undefined) return undefined;
+  return { cost };
 };
 
 export const pollOpenRouterVideoStatus = async (
@@ -58,8 +66,10 @@ export const pollOpenRouterVideoStatus = async (
     // point at provider CDNs (GCS, etc.) that fail with undici "fetch failed"
     // from networks where only openrouter.ai is reachable.
     const origin = baseURL.replace(/\/$/, '');
+    const modelUsage = modelUsageFromJob(data);
     return {
       headers: { Authorization: `Bearer ${options.apiKey}` },
+      ...(modelUsage && { modelUsage }),
       status: 'success',
       videoUrl: `${origin}/videos/${inferenceId}/content`,
     };
@@ -77,11 +87,11 @@ export const createOpenRouterVideo = async (
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> => {
   const { model, params } = payload;
-  const { prompt, imageUrl, aspectRatio, duration, resolution } = params;
+  const { prompt, imageUrl, aspectRatio, duration, resolution, generateAudio } = params;
   const baseURL = options.baseURL || DEFAULT_BASE_URL;
 
   const body: Record<string, unknown> = {
-    generate_audio: false,
+    generate_audio: generateAudio ?? false,
     model,
     prompt,
   };

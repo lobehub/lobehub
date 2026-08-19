@@ -188,6 +188,7 @@ export default {
   'ModelSwitchPanel.detail.pricing.credits.millionCharacters': 'credits/M chars',
   'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
   'ModelSwitchPanel.detail.pricing.credits.second': 'credits/s',
+  'ModelSwitchPanel.detail.pricing.credits.video': 'credits/video',
   'ModelSwitchPanel.detail.pricing.group.audio': 'Audio',
   'ModelSwitchPanel.detail.pricing.group.image': 'Image',
   'ModelSwitchPanel.detail.pricing.group.text': 'Text',

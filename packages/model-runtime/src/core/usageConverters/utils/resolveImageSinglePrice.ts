@@ -29,6 +29,13 @@ export const resolveImageSinglePrice = (pricing?: Pricing): ImageSinglePriceResu
     }
   }
 
-  // Lookup/tiered pricing typically requires explicit configuration; treat as unavailable here.
+  // Lookup: show the lowest listed price as an approximate per-image amount.
+  if (imageGenerationUnit.strategy === 'lookup') {
+    const prices = Object.values(imageGenerationUnit.lookup.prices);
+    if (prices.length === 0) return {};
+    return { approximatePrice: Math.min(...prices) };
+  }
+
+  // Token-priced generators live on imageOutput, not imageGeneration.
   return {};
 };

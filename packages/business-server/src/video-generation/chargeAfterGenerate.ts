@@ -12,7 +12,7 @@ interface ChargeParams {
   model: string;
   prechargeResult?: Record<string, unknown>;
   provider: string;
-  usage?: { completionTokens: number; totalTokens: number };
+  usage?: { completionTokens: number; cost?: number; totalTokens: number };
   userId: string;
   workspaceId?: string;
 }

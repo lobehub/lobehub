@@ -95,6 +95,23 @@ describe('pollOpenRouterVideoStatus', () => {
     });
   });
 
+  it('attaches provider-reported usage.cost as modelUsage', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      json: async () => ({
+        status: 'completed',
+        usage: { cost: 0.42 },
+      }),
+      ok: true,
+    });
+
+    await expect(
+      pollOpenRouterVideoStatus('video-job-1', { apiKey: 'test-api-key' }),
+    ).resolves.toMatchObject({
+      modelUsage: { cost: 0.42 },
+      status: 'success',
+    });
+  });
+
   it('returns pending while the job is still running', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       json: async () => ({ status: 'processing' }),

@@ -5,7 +5,6 @@ import {
   fetchOpenRouterModels,
   mapOpenRouterModelCard,
   mergeOpenRouterModelPages,
-  resolveOpenRouterVideoPricing,
   typeFromOpenRouterOutputModalities,
 } from './modelFetch';
 import type { OpenRouterModelCard, OpenRouterVideoModelCard } from './type';
@@ -140,7 +139,7 @@ describe('mapOpenRouterModelCard modalities', () => {
       currency: 'USD',
       units: [
         {
-          name: 'imageGeneration',
+          name: 'imageOutput',
           rate: 40,
           strategy: 'fixed',
           unit: 'millionTokens',
@@ -168,65 +167,30 @@ describe('mapOpenRouterModelCard modalities', () => {
     expect(mapped.type).toBe('chat');
     expect(mapped.displayName).toBe('Llama 3.3 70B (free)');
   });
-});
 
-describe('resolveOpenRouterVideoPricing', () => {
-  it('uses the default audio and resolution per-second SKU for the approximate clip cost', () => {
-    const pricing = resolveOpenRouterVideoPricing(
-      videoCard({
-        id: 'google/veo-3.1-fast',
-        pricing_skus: {
-          duration_seconds_with_audio: '0.12',
-          duration_seconds_with_audio_4k: '0.30',
-          duration_seconds_with_audio_720p: '0.10',
-          duration_seconds_without_audio_720p: '0.08',
+  it('lets dedicated image endpoint pricing replace generic image_output tokens', () => {
+    const mapped = mapOpenRouterModelCard(
+      baseCard({
+        architecture: {
+          input_modalities: ['text'],
+          instruct_type: null,
+          modality: 'text->image',
+          output_modalities: ['image'],
+          tokenizer: 'default',
         },
-        supported_durations: [4, 6, 8],
+        id: 'black-forest-labs/flux.2-pro',
+        pricing: { completion: '0', image_output: '0.00004', prompt: '0' },
       }),
+      undefined,
+      {
+        currency: 'USD',
+        units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'megapixel' }],
+      },
     );
 
-    expect(pricing).toEqual({
-      approximatePricePerVideo: 0.4,
+    expect(mapped.pricing).toEqual({
       currency: 'USD',
-      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
-    });
-  });
-
-  it('converts cents-per-second SKUs to USD', () => {
-    const pricing = resolveOpenRouterVideoPricing(
-      videoCard({
-        generate_audio: false,
-        id: 'runway/gen-4.5',
-        pricing_skus: { cents_per_second_output: '12' },
-        supported_durations: [2, 3, 4, 5],
-      }),
-    );
-
-    expect(pricing?.units[0]).toMatchObject({ rate: 0.12, unit: 'second' });
-    expect(pricing?.approximatePricePerVideo).toBe(0.6);
-  });
-
-  it('preserves video-token billing as a per-million-token unit', () => {
-    const pricing = resolveOpenRouterVideoPricing(
-      videoCard({
-        id: 'bytedance/seedance-2.0',
-        pricing_skus: {
-          video_tokens: '0.000007',
-          video_tokens_without_audio: '0.000006',
-        },
-      }),
-    );
-
-    expect(pricing).toEqual({
-      currency: 'USD',
-      units: [
-        {
-          name: 'videoGeneration',
-          rate: 7,
-          strategy: 'fixed',
-          unit: 'millionTokens',
-        },
-      ],
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'megapixel' }],
     });
   });
 });
@@ -283,7 +247,8 @@ describe('fetchOpenRouterModels', () => {
 
   it('merges the default catalog with image and video modality pages', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (String(url) === 'https://openrouter.ai/api/v1/videos/models') {
+      const href = String(url);
+      if (href === 'https://openrouter.ai/api/v1/videos/models') {
         return {
           json: async () => ({
             data: [
@@ -298,8 +263,35 @@ describe('fetchOpenRouterModels', () => {
         };
       }
 
-      const isImage = String(url).includes('output_modalities=image');
-      const isVideo = String(url).includes('output_modalities=video');
+      if (href === 'https://openrouter.ai/api/v1/images/models') {
+        return {
+          json: async () => ({
+            data: [
+              {
+                endpoints: '/api/v1/images/models/black-forest-labs/flux-2/endpoints',
+                id: 'black-forest-labs/flux-2',
+              },
+            ],
+          }),
+          ok: true,
+        };
+      }
+
+      if (href.endsWith('/black-forest-labs/flux-2/endpoints')) {
+        return {
+          json: async () => ({
+            endpoints: [
+              {
+                pricing: [{ billable: 'output_image', cost_usd: 0.03, unit: 'megapixel' }],
+              },
+            ],
+          }),
+          ok: true,
+        };
+      }
+
+      const isImage = href.includes('output_modalities=image');
+      const isVideo = href.includes('output_modalities=video');
       const id = isVideo ? 'google/veo-3' : isImage ? 'black-forest-labs/flux-2' : 'openai/gpt-4o';
       const output = isVideo ? ['video'] : isImage ? ['image'] : ['text'];
       return {
@@ -335,6 +327,8 @@ describe('fetchOpenRouterModels', () => {
         'https://openrouter.ai/api/v1/models?output_modalities=image',
         'https://openrouter.ai/api/v1/models?output_modalities=video',
         'https://openrouter.ai/api/v1/videos/models',
+        'https://openrouter.ai/api/v1/images/models',
+        'https://openrouter.ai/api/v1/images/models/black-forest-labs/flux-2/endpoints',
       ]),
     );
     expect(models.some((m) => m.id === 'openai/gpt-4o')).toBe(true);
@@ -346,21 +340,60 @@ describe('fetchOpenRouterModels', () => {
       duration: { default: 5, enum: [5, 8] },
       prompt: { default: '' },
     });
-    expect(models.find((m) => m.id === 'google/veo-3')?.pricing).toEqual({
+    expect(models.find((m) => m.id === 'google/veo-3')?.pricing).toMatchObject({
       approximatePricePerVideo: 0.5,
       currency: 'USD',
       units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
     });
-    expect(models.find((m) => m.id === 'black-forest-labs/flux-2')?.pricing).toEqual({
+    expect(models.find((m) => m.id === 'black-forest-labs/flux-2')?.pricing).toMatchObject({
       currency: 'USD',
-      units: [
-        {
-          name: 'imageGeneration',
-          rate: 40,
-          strategy: 'fixed',
-          unit: 'millionTokens',
-        },
-      ],
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'megapixel' }],
     });
+  });
+
+  it('still returns the catalog when one image endpoints page fails', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const href = String(url);
+      if (href === 'https://openrouter.ai/api/v1/images/models') {
+        return {
+          json: async () => ({
+            data: [
+              {
+                endpoints: '/api/v1/images/models/missing/endpoints',
+                id: 'missing/model',
+              },
+            ],
+          }),
+          ok: true,
+        };
+      }
+      if (href.endsWith('/missing/model/endpoints')) {
+        return { json: async () => ({}), ok: false, status: 403 };
+      }
+      if (href === 'https://openrouter.ai/api/v1/videos/models') {
+        return { json: async () => ({ data: [] }), ok: true };
+      }
+      return {
+        json: async () => ({
+          data: [
+            baseCard({
+              architecture: {
+                input_modalities: ['text'],
+                instruct_type: null,
+                modality: 'text->text',
+                output_modalities: ['text'],
+                tokenizer: 'default',
+              },
+              id: 'openai/gpt-4o',
+            }),
+          ],
+        }),
+        ok: true,
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const models = await fetchOpenRouterModels();
+    expect(models.some((m) => m.id === 'openai/gpt-4o')).toBe(true);
   });
 });

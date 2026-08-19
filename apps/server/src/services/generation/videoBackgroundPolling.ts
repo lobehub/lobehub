@@ -161,7 +161,11 @@ export async function processBackgroundVideoPolling(
 async function pollUntilCompletion(
   modelRuntime: any,
   inferenceId: string,
-): Promise<{ headers?: Record<string, string>; videoUrl: string } | null> {
+): Promise<{
+  headers?: Record<string, string>;
+  modelUsage?: { cost?: number };
+  videoUrl: string;
+} | null> {
   const maxRetries = 120;
   const pollingInterval = 5000;
 
@@ -173,7 +177,11 @@ async function pollUntilCompletion(
 
       if (result.status === 'success') {
         log('Video generation succeeded for task: %s', inferenceId);
-        return { headers: result.headers, videoUrl: result.videoUrl };
+        return {
+          headers: result.headers,
+          modelUsage: result.modelUsage,
+          videoUrl: result.videoUrl,
+        };
       }
 
       if (result.status === 'failed') {

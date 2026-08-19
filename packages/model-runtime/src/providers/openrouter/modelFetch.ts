@@ -1,51 +1,51 @@
-import type { Pricing, PricingUnit, VideoModelParamsSchema } from 'model-bank';
+import type { Pricing, VideoModelParamsSchema } from 'model-bank';
 import { CHAT_MODEL_IMAGE_GENERATION_PARAMS, DEFAULT_VIDEO_GENERATION_PARAMS } from 'model-bank';
 
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { postProcessModelList } from '../../utils/postProcessModelList';
-import type { OpenRouterModelCard, OpenRouterVideoModelCard } from './type';
+import {
+  compactUnits,
+  fixedUnit,
+  formatPrice,
+  getDefaultVideoDuration,
+  getDefaultVideoResolution,
+  mergePricing,
+  parsePrice,
+  resolveOpenRouterImageEndpointPricing,
+  resolveOpenRouterVideoPricing,
+  withoutImagePricingUnits,
+} from './openRouterPricing';
+import type {
+  OpenRouterImageEndpoint,
+  OpenRouterImageModelListItem,
+  OpenRouterModelCard,
+  OpenRouterVideoModelCard,
+} from './type';
+
+/** Used when model-bank's Create Video defaults are unavailable at runtime. */
+const OPENROUTER_VIDEO_PARAM_DEFAULTS: VideoModelParamsSchema = {
+  aspectRatio: {
+    default: '16:9',
+    enum: ['16:9', '9:16', '1:1'],
+  },
+  duration: { default: 5, max: 15, min: 1 },
+  imageUrl: { default: null },
+  prompt: { default: '' },
+  resolution: {
+    default: '720p',
+    enum: ['720p', '1080p'],
+  },
+};
+
+const videoParamDefaults = (): VideoModelParamsSchema =>
+  (DEFAULT_VIDEO_GENERATION_PARAMS as VideoModelParamsSchema | undefined) ??
+  OPENROUTER_VIDEO_PARAM_DEFAULTS;
+
+export { resolveOpenRouterVideoPricing } from './openRouterPricing';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
+const OPENROUTER_IMAGE_MODELS_URL = 'https://openrouter.ai/api/v1/images/models';
 const OPENROUTER_VIDEO_MODELS_URL = 'https://openrouter.ai/api/v1/videos/models';
-
-const formatPrice = (price?: string) => {
-  if (price === undefined || price === '-1') return undefined;
-  const numericPrice = Number(price);
-  if (!Number.isFinite(numericPrice) || numericPrice < 0) return undefined;
-  return Number((numericPrice * 1e6).toPrecision(5));
-};
-
-const parsePrice = (price?: string) => {
-  if (price === undefined || price === '-1') return undefined;
-  const numericPrice = Number(price);
-  return Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : undefined;
-};
-
-const fixedUnit = (
-  name: PricingUnit['name'],
-  rate: number | undefined,
-  unit: PricingUnit['unit'],
-): PricingUnit | undefined =>
-  typeof rate === 'number' ? { name, rate, strategy: 'fixed', unit } : undefined;
-
-const compactUnits = (units: Array<PricingUnit | undefined>): PricingUnit[] =>
-  units.filter((unit): unit is PricingUnit => !!unit);
-
-const mergePricing = (base?: Pricing, generation?: Pricing): Pricing | undefined => {
-  if (!base) return generation;
-  if (!generation) return base;
-
-  const generationUnitNames = new Set(generation.units.map((unit) => unit.name));
-  return {
-    approximatePricePerImage: generation.approximatePricePerImage ?? base.approximatePricePerImage,
-    approximatePricePerVideo: generation.approximatePricePerVideo ?? base.approximatePricePerVideo,
-    currency: generation.currency ?? base.currency,
-    units: [
-      ...base.units.filter((unit) => !generationUnitNames.has(unit.name)),
-      ...generation.units,
-    ],
-  };
-};
 
 const mapOpenRouterPricing = (
   pricing: OpenRouterModelCard['pricing'],
@@ -65,8 +65,12 @@ const mapOpenRouterPricing = (
     fixedUnit('textOutput', output === 0 && hasAssetOutput ? undefined : output, 'millionTokens'),
     fixedUnit('textInput_cacheRead', cachedInput, 'millionTokens'),
     fixedUnit('textInput_cacheWrite', writeCacheInput, 'millionTokens'),
+    // Generic /models `image` is often input-image tokens or a per-image rate; dedicated
+    // image endpoints overwrite this when they succeed.
     fixedUnit('imageInput', imageInput, 'image'),
-    fixedUnit('imageGeneration', imageOutput, 'millionTokens'),
+    // Token-priced generators must use imageOutput so computeChatCost can bill
+    // outputImageTokens. Dedicated endpoints overwrite unit/strategy when present.
+    fixedUnit('imageOutput', imageOutput, 'millionTokens'),
     fixedUnit('videoGeneration', videoOutput, 'millionTokens'),
   ]);
 
@@ -74,160 +78,11 @@ const mapOpenRouterPricing = (
   return { currency: 'USD', units };
 };
 
-const getDefaultVideoDuration = (durations: number[] | null): number => {
-  if (!durations?.length) return DEFAULT_VIDEO_GENERATION_PARAMS.duration.default;
-  if (durations.includes(DEFAULT_VIDEO_GENERATION_PARAMS.duration.default)) {
-    return DEFAULT_VIDEO_GENERATION_PARAMS.duration.default;
-  }
-  return [...durations].sort((a, b) => a - b)[0];
-};
-
-const getDefaultVideoResolution = (resolutions: string[] | null): string | undefined => {
-  if (!resolutions?.length) return DEFAULT_VIDEO_GENERATION_PARAMS.resolution.default;
-  if (resolutions.includes(DEFAULT_VIDEO_GENERATION_PARAMS.resolution.default)) {
-    return DEFAULT_VIDEO_GENERATION_PARAMS.resolution.default;
-  }
-  return resolutions[0];
-};
-
-const scoreVideoSecondSku = (
-  key: string,
-  model: OpenRouterVideoModelCard,
-  defaultResolution: string | undefined,
-) => {
-  const normalizedKey = key.toLowerCase().replaceAll('-', '_');
-  let score = 0;
-
-  if (
-    normalizedKey === 'duration_seconds' ||
-    normalizedKey === 'cents_per_second_output' ||
-    normalizedKey === 'per_video_second'
-  ) {
-    score += 5;
-  }
-
-  if (model.generate_audio === true) {
-    if (normalizedKey.includes('with_audio')) score += 20;
-    if (normalizedKey.includes('without_audio')) score -= 20;
-  } else if (model.generate_audio === false) {
-    if (normalizedKey.includes('without_audio')) score += 20;
-    if (normalizedKey.includes('with_audio')) score -= 20;
-  }
-
-  const resolutionMatches = normalizedKey.match(/(?:^|_)(\d{3,4}p|[124]k)(?:_|$)/g) ?? [];
-  if (defaultResolution) {
-    const normalizedResolution = defaultResolution.toLowerCase();
-    if (normalizedKey.includes(normalizedResolution)) score += 10;
-    else if (resolutionMatches.length > 0) score -= 10;
-  }
-
-  if (normalizedKey.includes('text_to_video')) score += 3;
-  if (
-    normalizedKey.includes('image_to_video') ||
-    normalizedKey.includes('continuation') ||
-    normalizedKey.includes('video_input')
-  ) {
-    score -= 10;
-  }
-
-  return score;
-};
-
-const isVideoSecondSku = (key: string) => {
-  const normalizedKey = key.toLowerCase().replaceAll('-', '_');
-  if (
-    normalizedKey.includes('minimum') ||
-    normalizedKey.includes('image_input') ||
-    normalizedKey.includes('reference')
-  ) {
-    return false;
-  }
-  return normalizedKey.includes('duration_seconds') || normalizedKey.includes('second');
-};
-
-const priceFromVideoSecondSku = (key: string, value: string) => {
-  const price = parsePrice(value);
-  if (price === undefined) return undefined;
-  return key.toLowerCase().replaceAll('-', '_').startsWith('cents_') ? price / 100 : price;
-};
-
-/** Convert OpenRouter's heterogeneous video SKUs into the unit shown by Create Video. */
-export const resolveOpenRouterVideoPricing = (
-  model: OpenRouterVideoModelCard,
-): Pricing | undefined => {
-  const entries = Object.entries(model.pricing_skus ?? {});
-  const defaultResolution = getDefaultVideoResolution(model.supported_resolutions);
-  const secondCandidates = entries
-    .filter(([key]) => isVideoSecondSku(key))
-    .map(([key, value]) => ({
-      key,
-      rate: priceFromVideoSecondSku(key, value),
-      score: scoreVideoSecondSku(key, model, defaultResolution),
-    }))
-    .filter(
-      (entry): entry is { key: string; rate: number; score: number } =>
-        typeof entry.rate === 'number',
-    )
-    .sort((a, b) => b.score - a.score || a.rate - b.rate);
-
-  const secondRate = secondCandidates[0]?.rate;
-  if (typeof secondRate === 'number') {
-    return {
-      approximatePricePerVideo: secondRate * getDefaultVideoDuration(model.supported_durations),
-      currency: 'USD',
-      units: [{ name: 'videoGeneration', rate: secondRate, strategy: 'fixed', unit: 'second' }],
-    };
-  }
-
-  const videoTokenEntry =
-    entries.find(([key]) => key === 'video_tokens') ??
-    entries.find(([key]) => key.startsWith('video_tokens'));
-  const videoTokenRate = formatPrice(videoTokenEntry?.[1]);
-  if (typeof videoTokenRate === 'number') {
-    return {
-      currency: 'USD',
-      units: [
-        {
-          name: 'videoGeneration',
-          rate: videoTokenRate,
-          strategy: 'fixed',
-          unit: 'millionTokens',
-        },
-      ],
-    };
-  }
-
-  const flatVideoEntry = entries.find(([key]) =>
-    ['generate', 'per_video', 'per-video'].includes(key.toLowerCase()),
-  );
-  const flatVideoRate = parsePrice(flatVideoEntry?.[1]);
-  if (typeof flatVideoRate === 'number') {
-    return {
-      approximatePricePerVideo: flatVideoRate,
-      currency: 'USD',
-      units: [{ name: 'videoGeneration', rate: flatVideoRate, strategy: 'fixed', unit: 'video' }],
-    };
-  }
-
-  const minimumGenerationEntry = entries.find(([key]) =>
-    key.toLowerCase().includes('minimum_cents_per_generation'),
-  );
-  const minimumGenerationPrice = parsePrice(minimumGenerationEntry?.[1]);
-  if (typeof minimumGenerationPrice === 'number') {
-    return {
-      approximatePricePerVideo: minimumGenerationPrice / 100,
-      currency: 'USD',
-      units: [],
-    };
-  }
-
-  return undefined;
-};
-
 const resolveOpenRouterVideoParameters = (
   model?: OpenRouterVideoModelCard,
 ): VideoModelParamsSchema => {
-  if (!model) return DEFAULT_VIDEO_GENERATION_PARAMS;
+  const defaults = videoParamDefaults();
+  if (!model) return defaults;
 
   const aspectRatios = model.supported_aspect_ratios;
   const resolutions = model.supported_resolutions;
@@ -235,7 +90,7 @@ const resolveOpenRouterVideoParameters = (
   const defaultDuration = getDefaultVideoDuration(durations);
 
   return {
-    ...DEFAULT_VIDEO_GENERATION_PARAMS,
+    ...defaults,
     ...(aspectRatios?.length && {
       aspectRatio: {
         default: aspectRatios.includes('16:9') ? '16:9' : aspectRatios[0],
@@ -280,6 +135,7 @@ export const typeFromOpenRouterOutputModalities = (
 export const mapOpenRouterModelCard = (
   model: OpenRouterModelCard,
   videoModel?: OpenRouterVideoModelCard,
+  imagePricing?: Pricing,
 ) => {
   const { top_provider, architecture, pricing, supported_parameters } = model;
 
@@ -306,7 +162,6 @@ export const mapOpenRouterModelCard = (
 
   const inputPrice = formatPrice(pricing.prompt);
   const outputPrice = formatPrice(pricing.completion);
-  const cachedInputPrice = formatPrice(pricing.input_cache_read);
   const writeCacheInputPrice = formatPrice(pricing.input_cache_write);
 
   const hasReasoning = supported_parameters.includes('reasoning');
@@ -351,10 +206,15 @@ export const mapOpenRouterModelCard = (
       ? { parameters: resolveOpenRouterVideoParameters(videoModel) }
       : {}),
     pricing: mergePricing(
-      mapOpenRouterPricing(pricing, outputModalities),
-      resolvedType === 'video' && videoModel
-        ? resolveOpenRouterVideoPricing(videoModel)
-        : undefined,
+      imagePricing
+        ? withoutImagePricingUnits(mapOpenRouterPricing(pricing, outputModalities))
+        : mapOpenRouterPricing(pricing, outputModalities),
+      mergePricing(
+        resolvedType === 'image' || hasImageOutput ? imagePricing : undefined,
+        resolvedType === 'video' && videoModel
+          ? resolveOpenRouterVideoPricing(videoModel)
+          : undefined,
+      ),
     ),
     reasoning: hasReasoning,
     releasedAt: new Date(model.created * 1000).toISOString().split('T')[0],
@@ -426,6 +286,44 @@ const fetchOpenRouterVideoModelPage = async () => {
   return data.data ?? [];
 };
 
+const imageEndpointsUrl = (item: OpenRouterImageModelListItem) => {
+  if (item.endpoints?.startsWith('http')) return item.endpoints;
+  if (item.endpoints?.startsWith('/')) return `https://openrouter.ai${item.endpoints}`;
+  return `${OPENROUTER_IMAGE_MODELS_URL}/${item.id}/endpoints`;
+};
+
+const fetchJson = async <T>(url: string): Promise<T | undefined> => {
+  const response = await fetch(url);
+  if (!response.ok) return undefined;
+  return (await response.json()) as T;
+};
+
+/** Fail-soft: a missing/403 endpoints page must not empty the catalog. */
+export const fetchOpenRouterImagePricingById = async (): Promise<Map<string, Pricing>> => {
+  const list = await fetchJson<{ data?: OpenRouterImageModelListItem[] }>(
+    OPENROUTER_IMAGE_MODELS_URL,
+  ).catch(() => undefined);
+  const items = list?.data ?? [];
+  if (items.length === 0) return new Map();
+
+  const entries = await Promise.all(
+    items.map(async (item) => {
+      try {
+        const payload = await fetchJson<{ endpoints?: OpenRouterImageEndpoint[] }>(
+          imageEndpointsUrl(item),
+        );
+        const pricing = resolveOpenRouterImageEndpointPricing(payload?.endpoints ?? []);
+        if (!pricing) return undefined;
+        return [item.id, pricing] as const;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+
+  return new Map(entries.filter((entry): entry is readonly [string, Pricing] => !!entry));
+};
+
 /** Later pages win so image/video modality metadata overwrites the text catalog stub. */
 export const mergeOpenRouterModelPages = (
   pages: OpenRouterModelCard[][],
@@ -448,15 +346,18 @@ export const mergeOpenRouterModelPages = (
  * see the full set (Flux, Veo, Kling, …).
  */
 export const fetchOpenRouterModels = async () => {
-  const [textModels, imageModels, videoModels, videoPricingModels] = await Promise.all([
-    fetchOpenRouterModelPage(),
-    fetchOpenRouterModelPage('image'),
-    fetchOpenRouterModelPage('video'),
-    fetchOpenRouterVideoModelPage().catch(() => []),
-  ]);
+  const [textModels, imageModels, videoModels, videoPricingModels, imagePricingById] =
+    await Promise.all([
+      fetchOpenRouterModelPage(),
+      fetchOpenRouterModelPage('image'),
+      fetchOpenRouterModelPage('video'),
+      fetchOpenRouterVideoModelPage().catch(() => []),
+      fetchOpenRouterImagePricingById().catch(() => new Map<string, Pricing>()),
+    ]);
   const videoPricingById = new Map(videoPricingModels.map((model) => [model.id, model]));
   const formattedModels = mergeOpenRouterModelPages([textModels, imageModels, videoModels]).map(
-    (model) => mapOpenRouterModelCard(model, videoPricingById.get(model.id)),
+    (model) =>
+      mapOpenRouterModelCard(model, videoPricingById.get(model.id), imagePricingById.get(model.id)),
   );
   const models = await processMultiProviderModelList(formattedModels, 'openrouter');
 

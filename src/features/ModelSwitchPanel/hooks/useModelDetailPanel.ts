@@ -162,6 +162,7 @@ const UNIT_LABEL_MAP: Record<string, string> = {
   millionCharacters: '/M chars',
   millionTokens: '/M tokens',
   second: '/s',
+  video: '/video',
 };
 
 const formatUnitRate = (

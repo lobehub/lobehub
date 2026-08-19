@@ -4,12 +4,30 @@ import type { FixedPricingUnit, LookupPricingUnit, Pricing } from 'model-bank';
 
 const log = debug('lobe-cost:computeImagePricing');
 
+const DEFAULT_REFERENCE_MP = (1024 * 1024) / 1_000_000;
+
 export interface ImageGenerationParams {
   // Other possible parameters for future extensions
   [key: string]: any;
+  height?: number;
   quality?: 'standard' | 'hd';
   size?: string;
+  width?: number;
 }
+
+const megapixelsFromParams = (params: ImageGenerationParams): number => {
+  if (typeof params.megapixels === 'number' && params.megapixels > 0) return params.megapixels;
+  if (typeof params.size === 'string') {
+    const match = params.size.match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+    if (match) return (Number(match[1]) * Number(match[2])) / 1_000_000;
+  }
+  const width = Number(params.width);
+  const height = Number(params.height);
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+    return (width * height) / 1_000_000;
+  }
+  return DEFAULT_REFERENCE_MP;
+};
 
 export interface ImageCostResult {
   breakdown?: {
@@ -40,20 +58,25 @@ export const computeImageCost = (
     return undefined;
   }
 
-  let pricePerImageInUSD = 0;
+  let pricePerImageInUSD: number;
   let lookupKey: string | undefined;
 
   switch (imageGenUnit.strategy) {
     case 'fixed': {
       const fixedUnit = imageGenUnit as FixedPricingUnit;
-      if (fixedUnit.unit !== 'image') {
-        log(`Unsupported unit type for fixed pricing: ${fixedUnit.unit}`);
-        return undefined;
+      if (fixedUnit.unit === 'image') {
+        pricePerImageInUSD = fixedUnit.rate;
+        log(`Fixed pricing: $${pricePerImageInUSD} per image`);
+        break;
       }
-      pricePerImageInUSD = fixedUnit.rate;
-      log(`Fixed pricing: $${pricePerImageInUSD} per image`);
-
-      break;
+      if (fixedUnit.unit === 'megapixel') {
+        const megapixels = megapixelsFromParams(params);
+        pricePerImageInUSD = fixedUnit.rate * megapixels;
+        log(`Megapixel pricing: $${fixedUnit.rate}/MP × ${megapixels} MP = $${pricePerImageInUSD}`);
+        break;
+      }
+      log(`Unsupported unit type for fixed pricing: ${fixedUnit.unit}`);
+      return undefined;
     }
     case 'lookup': {
       const lookupUnit = imageGenUnit as LookupPricingUnit;

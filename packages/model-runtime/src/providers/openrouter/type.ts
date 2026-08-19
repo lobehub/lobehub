@@ -43,6 +43,24 @@ export interface OpenRouterModelCard {
   top_provider: TopProvider;
 }
 
+export interface OpenRouterImagePricingLine {
+  billable: string;
+  cost_usd: number;
+  unit: 'image' | 'megapixel' | 'token' | string;
+  variant?: string;
+}
+
+export interface OpenRouterImageEndpoint {
+  pricing?: OpenRouterImagePricingLine[];
+  provider_slug?: string;
+  supported_parameters?: Record<string, { type?: string; values?: string[] }>;
+}
+
+export interface OpenRouterImageModelListItem {
+  endpoints?: string;
+  id: string;
+}
+
 export interface OpenRouterVideoModelCard {
   allowed_passthrough_parameters: string[];
   canonical_slug: string;
