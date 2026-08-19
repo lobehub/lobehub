@@ -56,6 +56,7 @@ tsconfig `include` must cover `app/`). Stack: `@react-router/dev@8` + `@cloudfla
 | SSR-stub store hubs           | vite `resolveId` stubs per env (`app/stubs/`): trpc client, services/global, store/electron, store/file, i18n loader. Stubs must be **callable empty-state hooks**, not throwing proxies — render paths call them |
 | Slot-inject app-only features | Context seam owned by the shared feature (see `src/features/Verify/Acceptance/originConversation.tsx`); app provides, micro app leaves null → affordances hide                                                    |
 | Bypass barrels                | Deep-path imports (`@/features/Verify/Acceptance`, not the barrel) — barrels evaluate sibling exports with side effects                                                                                           |
+| Compose capability atoms      | Shared UI is assembled per surface; the light app never imports the fat viewer. See **`compose-atoms`**. Do not add `readOnly` on the in-app page                                                                 |
 | Decouple dual-use components  | Lift store reads to optional props (see AudioPlayer `uploadState`/`onCancelUpload`)                                                                                                                               |
 
 Products: `build/client` (assets → CDN), `build/server` (worker; deploy with

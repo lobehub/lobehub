@@ -61,13 +61,7 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
     VERIFY_REPORT_SWR_CONFIG,
   );
 
-/** Cross-round acceptance decision bundle by acceptance id. */
-export const useAcceptanceBundle = (acceptanceId: string | null) =>
-  useClientDataSWR(
-    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
-    () => verifyService.getAcceptanceBundle(acceptanceId!),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
-  );
+export { useAcceptanceBundle } from './Acceptance/useAcceptanceBundle';
 
 /** The optional acceptance aggregate attached to a task/topic/document subject. */
 export const useAcceptanceBySubject = (

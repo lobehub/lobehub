@@ -58,7 +58,7 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 
 Keep transient state in its smallest useful owner. Extract a custom hook when state transitions and handlers obscure rendering or form a reusable unit; do not extract solely because a component has a particular number of hooks.
 
-Split a component only to establish a real state, reuse, or render-update boundary. Do not split solely to make files smaller.
+Split a component only to establish a real state, reuse, render-update, or multi-surface module-graph boundary. Do not split solely to make files smaller. Bundle isolation across surfaces is owned by **`compose-atoms`**.
 
 ## Render Performance and Memoization
 
@@ -85,4 +85,5 @@ Use `Flexbox` and `Center` from `@lobehub/ui`. See `references/layout-kit.md` fo
 - **`ux`**: loading visuals and user-facing interaction design. Do not use antd `Spin` / `<Spin />`.
 - **`modal`**: imperative base-ui modal patterns.
 - **`spa-routes`**: SPA navigation, route ownership, router configuration, and `.desktop` variants.
+- **`compose-atoms`**: split a shared feature into capability atoms so a light surface never imports owner actions.
 - **`zustand`**: store structure and selector conventions.

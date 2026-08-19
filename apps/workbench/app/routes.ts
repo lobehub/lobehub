@@ -4,7 +4,7 @@ export default [
   index('routes/homeRedirect.tsx'),
   route('agent/:aid/docs/:docId', 'routes/agentDoc.tsx'),
   route('acceptance', 'layouts/acceptanceNamespace.tsx', [
-    index('routes/acceptanceList.tsx'),
+    index('routes/acceptanceIndex.tsx'),
     route(':acceptanceId', 'routes/acceptanceDetail.tsx'),
     route(':acceptanceId/check/:checkId', 'routes/acceptanceDetailCheck.tsx'),
   ]),

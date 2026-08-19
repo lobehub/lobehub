@@ -7,7 +7,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TopicChatDrawerBody } from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
-import type { OriginTopicPanelProps } from '@/features/Verify';
+
+import type { OriginTopicPanelProps } from './originConversation';
 
 /**
  * The origin conversation rendered in the acceptance workspace's existing

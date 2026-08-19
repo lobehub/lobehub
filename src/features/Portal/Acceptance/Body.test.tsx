@@ -45,7 +45,7 @@ vi.mock('@/store/task', () => ({
     selector({ closeTopicDrawer: () => {}, openTopicDrawer: () => {} }),
 }));
 
-vi.mock('./TopicPanel', () => ({ default: () => null }));
+vi.mock('@/features/Verify/Acceptance/TopicPanel', () => ({ default: () => null }));
 
 describe('Portal Acceptance Body — draftToComposer via the global bus', () => {
   beforeEach(() => {

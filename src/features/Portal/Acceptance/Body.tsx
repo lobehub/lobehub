@@ -6,11 +6,10 @@ import {
   OriginConversationProvider,
   type OriginConversationSlot,
 } from '@/features/Verify';
+import TopicPanel from '@/features/Verify/Acceptance/TopicPanel';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
-
-import TopicPanel from './TopicPanel';
 
 const Body = memo(() => {
   const acceptanceId = useChatStore(chatPortalSelectors.acceptancePortalId);

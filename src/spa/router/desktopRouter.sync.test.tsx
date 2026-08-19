@@ -277,7 +277,7 @@ describe('desktop router shared definition', () => {
     expect(webPaths).toContain('/share/t');
     expect(webPaths).toContain('/share/page');
     expect(webPaths).not.toContain('/verify');
-    expect(webPaths).not.toContain('/acceptance');
+    expect(webPaths).toContain('/acceptance');
     expect(webPaths).toContain('/onboarding');
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');

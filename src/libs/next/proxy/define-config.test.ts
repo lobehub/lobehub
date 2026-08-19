@@ -53,26 +53,28 @@ describe('defineConfig locale path-traversal hardening', () => {
 });
 
 describe('defineConfig Workbench SPA rewrite', () => {
-  it('routes verify and acceptance through Workbench for every user agent', async () => {
-    const mobileAcceptance = await run(
-      'http://localhost:3010/acceptance/acceptance-1?hl=en-US',
-      MOBILE_USER_AGENT,
-    );
-    const desktopAcceptance = await run('http://localhost:3010/acceptance/acceptance-1?hl=en-US');
+  it('routes verify through Workbench for every user agent', async () => {
     const mobileVerify = await run(
       'http://localhost:3010/verify/run-1?hl=en-US',
       MOBILE_USER_AGENT,
     );
     const desktopVerify = await run('http://localhost:3010/verify/run-1?hl=en-US');
 
-    expect(new URL(mobileAcceptance!).pathname).toBe(
-      '/spa-workbench/en-US/acceptance/acceptance-1',
-    );
-    expect(new URL(desktopAcceptance!).pathname).toBe(
-      '/spa-workbench/en-US/acceptance/acceptance-1',
-    );
     expect(new URL(mobileVerify!).pathname).toBe('/spa-workbench/en-US/verify/run-1');
     expect(new URL(desktopVerify!).pathname).toBe('/spa-workbench/en-US/verify/run-1');
+  });
+
+  it('keeps acceptance on the main SPA', async () => {
+    const mobileAcceptance = await run(
+      'http://localhost:3010/acceptance/acceptance-1?hl=en-US',
+      MOBILE_USER_AGENT,
+    );
+    const desktopAcceptance = await run('http://localhost:3010/acceptance/acceptance-1?hl=en-US');
+
+    expect(new URL(mobileAcceptance!).pathname).toMatch(/^\/spa\/[^/]+\/acceptance\/acceptance-1$/);
+    expect(new URL(desktopAcceptance!).pathname).toMatch(
+      /^\/spa\/[^/]+\/acceptance\/acceptance-1$/,
+    );
   });
 
   it('keeps the agent documents index in the Main Mobile SPA', async () => {
