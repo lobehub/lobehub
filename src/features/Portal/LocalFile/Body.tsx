@@ -494,11 +494,16 @@ const ActiveFileView = memo<ActiveFileViewProps>(
     if (preview.type === 'document') {
       return (
         <Suspense fallback={<Loading />}>
+          {/* Key by source + path: without a remount, switching between two files of
+              the same document type reuses the pane instance, whose local
+              loading/parse state isn't reset on blob change — the previous file's
+              rendered content lingers until the new one finishes (LOBE-13010). */}
           <DocumentPreview
             blob={preview.blob}
             contentType={preview.contentType}
             filePath={filePath}
             isLocalFile={!sandboxTopicId && !deviceId && isDesktop}
+            key={`${sandboxTopicId ?? deviceId ?? 'local'}:${filePath}`}
           />
         </Suspense>
       );
