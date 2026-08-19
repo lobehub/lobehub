@@ -2649,6 +2649,45 @@ describe('topic action', () => {
       expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, 'Partial Title');
       expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: 'Summarized Title' });
     });
+
+    it('requests a plain-text title, which is what gets persisted', async () => {
+      const topicId = 'topic-1';
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+      await act(async () => {
+        useChatStore.setState({
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              items: topics,
+              total: topics.length,
+              currentPage: 0,
+              hasMore: false,
+              pageSize: 20,
+            },
+          },
+          activeAgentId: 'test',
+        });
+      });
+
+      const fetchSpy = vi
+        .spyOn(chatService, 'fetchPresetTaskResult')
+        .mockImplementation(async (params) => {
+          await params?.onFinish?.('Summarized Title', { type: 'done' });
+        });
+      const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      // This path streams a plain completion and stores the text as the title, so an
+      // instruction to answer with a JSON object would be persisted verbatim.
+      const prompt = String(fetchSpy.mock.calls[0][0].params?.messages?.[0]?.content ?? '');
+      expect(prompt).toContain('Output ONLY the title text');
+      expect(prompt).not.toContain('JSON');
+      expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: 'Summarized Title' });
+    });
   });
   describe('createTopic', () => {
     it('should create a new topic and update the store', async () => {

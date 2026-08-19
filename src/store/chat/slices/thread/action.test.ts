@@ -620,6 +620,51 @@ describe('thread action', () => {
       });
     });
 
+    it('requests a plain-text title, which is what gets persisted', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const mockThread: ThreadItem = {
+        createdAt: new Date(),
+        id: 'thread-id',
+        lastActiveAt: new Date(),
+        sourceMessageId: 'msg-1',
+        status: ThreadStatus.Active,
+        title: 'Old Title',
+        topicId: 'test-topic-id',
+        type: ThreadType.Continuation,
+        updatedAt: new Date(),
+        userId: 'user-1',
+      };
+
+      act(() => {
+        useChatStore.setState({
+          portalThreadId: 'thread-id',
+          threadMaps: {
+            'test-topic-id': [mockThread],
+          },
+        });
+      });
+
+      (chatService.fetchPresetTaskResult as Mock).mockImplementation(async ({ onFinish }) => {
+        await onFinish?.('New Generated Title');
+      });
+      const internalUpdateSpy = vi
+        .spyOn(result.current, 'internal_updateThread')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.summaryThreadTitle('thread-id', []);
+      });
+
+      // Same contract as the topic path: the streamed text becomes the title as-is.
+      const { params } = (chatService.fetchPresetTaskResult as Mock).mock.calls[0][0];
+      expect(String(params.messages[0].content)).toContain('Output ONLY the title text');
+      expect(String(params.messages[0].content)).not.toContain('JSON');
+      expect(internalUpdateSpy).toHaveBeenCalledWith('thread-id', {
+        title: 'New Generated Title',
+      });
+    });
+
     it('should show loading indicator during generation', async () => {
       const { result } = renderHook(() => useChatStore());
 

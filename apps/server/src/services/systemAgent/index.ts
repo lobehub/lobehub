@@ -4,7 +4,7 @@ import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
   chainGenerateSkillMeta,
-  chainSummaryTitle,
+  chainSummaryTitleStructured,
   GENERATE_SKILL_META_PROMPT_VERSION,
   GENERATE_SKILL_META_SCHEMA,
   GENERATE_SKILL_META_SCHEMA_NAME,
@@ -65,7 +65,7 @@ export class SystemAgentService {
         { content: lastAssistantContent, role: 'assistant' as const },
       ];
 
-      const payload = chainSummaryTitle(messages, locale);
+      const payload = chainSummaryTitleStructured(messages, locale);
 
       const modelRuntime = await initModelRuntimeFromDB(
         this.db,
