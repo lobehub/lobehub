@@ -28,21 +28,35 @@ describe('Claude Code Desktop-local direct binding', () => {
     });
   });
 
-  it('strips SDK-managed /v1 and /v1/messages suffixes from the Claude Code base URL', () => {
+  it.each([
+    ['https://gateway.example.com/v1/', 'https://gateway.example.com'],
+    ['https://gateway.example.com/v1/messages', 'https://gateway.example.com'],
+    ['https://gateway.example.com/v1/messages/', 'https://gateway.example.com'],
+    [`https://gateway.example.com/v1/messages${'/'.repeat(64)}`, 'https://gateway.example.com'],
+    ['https://gateway.example.com/anthropic', 'https://gateway.example.com/anthropic'],
+    [
+      'https://gateway.example.com/v1/messages/extra',
+      'https://gateway.example.com/v1/messages/extra',
+    ],
+    ['https://gateway.example.com/v10', 'https://gateway.example.com/v10'],
+  ])('normalizes Claude Code base URL %s', (baseURL, expected) => {
     expect(
       buildClaudeCodeDirectEnv({
-        keyVaults: { apiKey: 'test-key', baseURL: 'https://gateway.example.com/v1/' },
+        keyVaults: { apiKey: 'test-key', baseURL },
         model: 'primary',
         sdkType: 'anthropic',
       }).env.ANTHROPIC_BASE_URL,
-    ).toBe('https://gateway.example.com');
+    ).toBe(expected);
+  });
+
+  it('drops a slash-only base URL instead of emitting an empty env value', () => {
     expect(
       buildClaudeCodeDirectEnv({
-        keyVaults: { apiKey: 'test-key', baseURL: 'https://gateway.example.com/v1/messages' },
+        keyVaults: { apiKey: 'test-key', baseURL: '///' },
         model: 'primary',
         sdkType: 'anthropic',
       }).env.ANTHROPIC_BASE_URL,
-    ).toBe('https://gateway.example.com');
+    ).toBeUndefined();
   });
 
   it('uses ANTHROPIC_API_KEY for first-party Anthropic and AUTH_TOKEN for custom gateways', () => {

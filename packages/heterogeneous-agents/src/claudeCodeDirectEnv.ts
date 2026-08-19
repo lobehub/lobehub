@@ -37,12 +37,24 @@ const pickNonEmptyString = (value: unknown): string | undefined => {
 /**
  * Claude Code appends `/v1/messages` to `ANTHROPIC_BASE_URL`.
  * LobeHub provider settings often store the SDK-style host (`…/v1` or `…/v1/messages`).
+ * Strip with linear string ops; quantified-slash regexes are ReDoS on user URLs.
  */
-const ANTHROPIC_SDK_MESSAGES_PATH_PATTERN = /\/v1(?:\/messages)?\/?$/;
+const ANTHROPIC_SDK_BASE_URL_SUFFIXES = ['/v1/messages', '/v1'] as const;
 const FIRST_PARTY_ANTHROPIC_HOSTS = new Set(['api.anthropic.com']);
 
+const stripTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+};
+
 const normalizeClaudeCodeBaseURL = (baseURL: string): string | undefined => {
-  const normalized = baseURL.replace(ANTHROPIC_SDK_MESSAGES_PATH_PATTERN, '').replace(/\/+$/, '');
+  let normalized = stripTrailingSlashes(baseURL);
+  for (const suffix of ANTHROPIC_SDK_BASE_URL_SUFFIXES) {
+    if (!normalized.endsWith(suffix)) continue;
+    normalized = stripTrailingSlashes(normalized.slice(0, -suffix.length));
+    break;
+  }
   return normalized || undefined;
 };
 
