@@ -8,7 +8,7 @@ import { appEnv } from '@/envs/app';
 import { fileEnv } from '@/envs/file';
 import { pythonEnv } from '@/envs/python';
 import { translation } from '@/libs/i18n/serverTranslation';
-import { buildAnalyticsConfig, fetchViteDevTemplate, renderSpaHtml } from '@/libs/spaHtml';
+import { buildAnalyticsConfig, renderSpaHtml } from '@/libs/spaHtml';
 import { type Locales, normalizeLocale } from '@/locales/resources';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { type SPAClientEnv, type SPAServerConfig } from '@/types/spaServerConfig';
@@ -19,11 +19,10 @@ export function generateStaticParams() {
   return staticLocales.map((locale) => ({ locale }));
 }
 
-const isDev = process.env.NODE_ENV === 'development';
-
+// No dev branch here: share is developed against its own Vite server
+// (`dev:spa:share`), and asking the main one for a shell it doesn't own gets the
+// main SPA back through the HTML fallback — silently, since that responds 200.
 async function getTemplate(): Promise<string> {
-  if (isDev) return fetchViteDevTemplate('/index.share.html');
-
   const { shareHtmlTemplate } = await import('../../shareHtmlTemplate');
 
   return shareHtmlTemplate;
