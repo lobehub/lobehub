@@ -1,6 +1,6 @@
 ---
 name: split-micro-app
-description: 'Use when splitting a monorepo surface into a standalone micro app (React Router SSR on Cloudflare Workers), fighting SSR bundle bloat from main-src imports, deploying its assets to CDN/R2, adding SEO/OG meta to an SSR page, or adding a target and route rules for it in the lobehub gateway (torii).'
+description: 'Use when splitting a monorepo surface into a standalone micro app (React Router SSR on Cloudflare Workers), fighting SSR bundle bloat from main-src imports, deploying its assets to CDN/R2, adding SEO/OG meta to an SSR page, adding a target and route rules for it in the lobehub gateway (torii), wiring it into the OSS Docker image, or deciding whether Cloud Next should still build or rewrite it.'
 user-invocable: false
 ---
 
@@ -9,6 +9,23 @@ user-invocable: false
 Canonical living example: **`apps/workbench`** (verify/acceptance, extracted 2026-08). When
 in doubt, read the real files there — this skill records the decisions and landmines, not
 copies of the code.
+
+## Hosting
+
+One app, two serve paths. Do not mix them.
+
+| Surface             | Who serves `/verify` `/acceptance` | Build                                                                                                                                                        |
+| ------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cloud               | Gateway (torii) → workbench Worker | Cloud Next does **not** `build:spa:workbench`, copy `_spa-workbench`, rewrite to `/spa-workbench`, or CDN-upload that prefix                                 |
+| OSS / 子部署 Docker | Next in the same image             | `build:docker` runs `build:spa:workbench`; `WORKBENCH_REQUIRED=1` on `generateSpaTemplates`; Dockerfile copies `apps/workbench/package.json` before `pnpm i` |
+
+`generateSpaTemplates` skips a missing `dist/<name>` HTML unless `WORKBENCH_REQUIRED=1`. Cloud must skip. Docker must require.
+
+Do not revive Cloud `SPA_TARGET=workbench` Vite builds or a `/spa-workbench` middleware rewrite.
+
+## Crossing from the main SPA
+
+Only markdown internal entity links leave the main SPA (`InternalEntityLink` → `window.location.assign` when `shouldHardNavigateToWorkbench`). `Link` and `useWorkspaceAwareNavigate` stay in-router. Electron never hard-navs (portal). Do not add a `__WORKBENCH__` Vite define — the helper keys off the path (and skips Electron).
 
 ## 1. Splitting & Artifacts
 
@@ -130,3 +147,6 @@ protocol affinity for the landing pair; it consults `resolveRule` and lets other
    browser run (content must survive) and view-source (SSR content + meta present).
 5. Deploy worker; verify workers.dev standalone (API proxy, `/` redirect).
 6. Gateway: target + policy + rules on staging KV; curl matrix with x-torii headers; promote.
+7. OSS Docker: workspace `package.json` in the Dockerfile `pnpm i` layer; `build:docker`
+   builds the app; `WORKBENCH_REQUIRED=1` (or the new app's equivalent) on template gen.
+8. Cloud Next: no Vite target, no `/spa-<name>` rewrite, no `_spa-<name>` CDN upload.
