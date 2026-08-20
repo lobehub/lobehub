@@ -222,6 +222,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       // call_llm does a parent existence preflight; return a truthy row by
       // default so existing tests don't have to stub it.
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
+      // The abort settle asks whether a row already holds the call. Null by
+      // default: these tests exercise calls that never got one.
+      findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
       query: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
       updateToolMessage: vi.fn().mockResolvedValue({ success: true }),

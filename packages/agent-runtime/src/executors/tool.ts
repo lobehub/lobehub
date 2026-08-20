@@ -137,7 +137,6 @@ const resolveCallIndex = (state: AgentState, toolName: string) => {
 const createRunContext = ({
   host,
   mode,
-  onToolMessageCreated,
   parentMessageId,
   reuseExistingMessage,
   state,
@@ -147,7 +146,6 @@ const createRunContext = ({
 }: {
   host: AgentRuntimeHost;
   mode: ToolRunContext['mode'];
-  onToolMessageCreated?: (toolMessageId: string) => void;
   parentMessageId: string;
   reuseExistingMessage?: boolean;
   state: AgentState;
@@ -175,7 +173,6 @@ const createRunContext = ({
     groupId: host.operation.groupId ?? state.metadata?.groupId,
     messageId: state.metadata?.sourceMessageId,
     mode,
-    onToolMessageCreated,
     operationId: host.operation.operationId,
     parentMessageId,
     parsedArgs: parseToolArgs(tool),
@@ -264,23 +261,18 @@ const raceToolAbort = async <T>(run: () => Promise<T>, signal?: AbortSignal): Pr
  */
 const settleAbortedCall = async ({
   events,
-  existingToolMessageId,
   host,
   parentMessageId,
   state,
   tool,
 }: {
   events: AgentEvent[];
-  existingToolMessageId?: string;
   host: AgentRuntimeHost;
   parentMessageId: string;
   state: AgentState;
   tool: ChatToolPayload;
 }) => {
   const settled = await settleAbortedToolRows({
-    existingToolMessageIds: existingToolMessageId
-      ? { [tool.id]: existingToolMessageId }
-      : undefined,
     host,
     parentMessageId,
     state,
@@ -496,16 +488,9 @@ export const callTool =
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
     const events: AgentEvent[] = [];
-    // A transport may persist its row before the run finishes (the client one
-    // does). Held here so an abort mid-run settles THAT row instead of adding a
-    // second one for the same tool_call_id.
-    let optimisticRowId: string | undefined;
     const runContext = createRunContext({
       host,
       mode: 'single',
-      onToolMessageCreated: (id) => {
-        optimisticRowId = id;
-      },
       parentMessageId: payload.parentMessageId,
       reuseExistingMessage: payload.skipCreateToolMessage,
       state,
@@ -513,14 +498,6 @@ export const callTool =
       tool,
       toolMessageId: payload.skipCreateToolMessage ? payload.parentMessageId : undefined,
     });
-
-    // On an approval resume `parentMessageId` IS the pending tool row (see the
-    // `toolMessageId` above). If Stop wins that race, the abort must settle THAT
-    // row — creating a new one would duplicate the tool_call_id, leave the
-    // approval card pending, and parent a tool row to another tool row.
-    const approvalResumeRowId = payload.skipCreateToolMessage
-      ? (payload.parentMessageId as string)
-      : undefined;
 
     await host.transports.stream.publishEvent({
       data: payload,
@@ -535,7 +512,6 @@ export const callTool =
       if (host.operation.abortSignal?.aborted) {
         return settleAbortedCall({
           events,
-          existingToolMessageId: approvalResumeRowId,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -564,7 +540,6 @@ export const callTool =
         // used to strand the tool_call_id with no row at all.
         return settleAbortedCall({
           events,
-          existingToolMessageId: execution.toolMessageId ?? optimisticRowId ?? approvalResumeRowId,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -739,7 +714,6 @@ export const callTool =
       if (isOperationAbort(error, host.operation.abortSignal)) {
         return settleAbortedCall({
           events,
-          existingToolMessageId: optimisticRowId ?? approvalResumeRowId,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -783,7 +757,6 @@ export const callToolsBatch =
       // to collect these, so parking them strands every tool_call_id in the batch.
       if (host.operation.abortSignal?.aborted) {
         const { messages } = await settleAbortedToolRows({
-          existingToolMessageIds,
           host,
           parentMessageId,
           state,
@@ -811,7 +784,6 @@ export const callToolsBatch =
      * will call back) — these need `aborted` rows before the next `call_llm`.
      */
     const abortedTools: ChatToolPayload[] = [];
-    const abortedToolMessageIds: Record<string, string> = {};
     const deferredTools: ChatToolPayload[] = [];
     // `tool_call_id → placeholder message id` for the deferred tools in this batch.
     const deferredToolMessageIds: Record<string, string> = {};
@@ -823,9 +795,6 @@ export const callToolsBatch =
         const runContext = createRunContext({
           host,
           mode: 'batch',
-          onToolMessageCreated: (id) => {
-            abortedToolMessageIds[tool.id] = id;
-          },
           parentMessageId,
           reuseExistingMessage: !!existingMessageId,
           state,
@@ -848,8 +817,6 @@ export const callToolsBatch =
 
           if (execution.interrupted) {
             abortedTools.push(tool);
-            const rowId = execution.toolMessageId ?? existingMessageId;
-            if (rowId) abortedToolMessageIds[tool.id] = rowId;
             return;
           }
 
@@ -936,7 +903,6 @@ export const callToolsBatch =
           // aborted-row settle after the batch.
           if (isOperationAbort(error, host.operation.abortSignal)) {
             abortedTools.push(tool);
-            if (existingMessageId) abortedToolMessageIds[tool.id] = existingMessageId;
             return;
           }
 
@@ -961,11 +927,6 @@ export const callToolsBatch =
     // below, so the rows are part of the state this step returns.
     if (toSettle.length > 0) {
       await settleAbortedToolRows({
-        // The payload's ids matter as much as the ones observed during this
-        // step: on an approved batch resume every call already has a pending
-        // row, including the client ones that never entered `toolsToExecute`.
-        // Dropping them would insert duplicates and strand those approval cards.
-        existingToolMessageIds: { ...existingToolMessageIds, ...abortedToolMessageIds },
         host,
         parentMessageId,
         state,

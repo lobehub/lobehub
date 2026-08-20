@@ -48,12 +48,22 @@ const createToolCall = (id = 'tool-call-1') => ({
 
 describe('resolveTools executors', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
+  let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
+  /** `tool_call_id → row id` the store already holds. */
+  let toolRows: Map<string, string>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
   let host: AgentRuntimeHost;
 
   beforeEach(() => {
-    createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
+    toolRows = new Map();
+    createToolMessage = vi.fn().mockImplementation(async (params: any) => {
+      if (params?.tool_call_id) toolRows.set(params.tool_call_id, 'tool-msg-1');
+      return { id: 'tool-msg-1' };
+    });
+    findToolMessageIdByToolCallId = vi
+      .fn()
+      .mockImplementation(async (toolCallId: string) => toolRows.get(toolCallId));
     publishError = vi.fn().mockResolvedValue(undefined);
     publishEvent = vi.fn().mockResolvedValue(undefined);
 
@@ -68,6 +78,7 @@ describe('resolveTools executors', () => {
           createToolMessage,
           deleteMessage: vi.fn(),
           findById: vi.fn(),
+          findToolMessageIdByToolCallId,
           query: vi.fn(),
           update: vi.fn(),
           updatePluginState: vi.fn(),
@@ -216,10 +227,12 @@ describe('resolveTools executors', () => {
     const updateToolIntervention = vi.fn().mockResolvedValue(undefined);
     host.transports.messages.updateToolMessage = updateToolMessage;
     host.transports.messages.updateToolIntervention = updateToolIntervention;
+    // The pause wrote this row before parking; the settle discovers it rather
+    // than being handed the id.
+    toolRows.set('tool-call-1', 'pending-msg-1');
 
     const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
       payload: {
-        existingToolMessageIds: { 'tool-call-1': 'pending-msg-1' },
         parentMessageId: 'assistant-msg-1',
         toolsCalling: [createToolCall('tool-call-1'), createToolCall('tool-call-2')],
       },

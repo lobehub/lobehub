@@ -68,14 +68,11 @@ export const publishPersistError = async (host: AgentRuntimeHost, error: unknown
  * an abort landed, which settle inline rather than deferring to another step).
  */
 export const settleAbortedToolRows = async ({
-  existingToolMessageIds = {},
   host,
   parentMessageId,
   state,
   toolsCalling,
 }: {
-  /** `tool_call_id → row id` for calls that already have a row to settle. */
-  existingToolMessageIds?: Record<string, string>;
   host: AgentRuntimeHost;
   parentMessageId: string;
   state: AgentState;
@@ -100,20 +97,21 @@ export const settleAbortedToolRows = async ({
 
   const messageIds: Record<string, string> = {};
   const messages: Array<{ content: string; role: 'tool'; tool_call_id: string }> = [];
-  const settled = new Set<string>();
 
   for (const toolPayload of toolsCalling) {
-    // "Exactly one row per tool_call_id" is the whole contract — callers merge
-    // several abort sources into one list, so a repeat here would break it.
-    if (settled.has(toolPayload.id)) continue;
-    settled.add(toolPayload.id);
-
-    const existingMessageId = existingToolMessageIds[toolPayload.id];
+    // Asked, not told. Callers cannot reliably know whether a row exists — it
+    // may have been written by an approval pause, by a transport pre-creating
+    // it, or by this very list arriving twice — and every mechanism that tried
+    // to carry that knowledge to the call site only covered the one source it
+    // was added for. One indexed read makes the invariant hold for all of them.
+    const existingMessageId = await transports.messages.findToolMessageIdByToolCallId(
+      toolPayload.id,
+    );
     try {
       if (existingMessageId) {
-        // A row already exists for this call (approval pause, or a transport
-        // that pre-created it). Settle THAT row: inserting a second one would
-        // duplicate the tool in the turn and leave the original `pending`.
+        // Settle THAT row: inserting a second one would duplicate the tool in
+        // the turn and leave the original `pending`, so the approval card
+        // outlives the Stop that was supposed to clear it.
         await transports.messages.updateToolMessage(existingMessageId, {
           content: ABORTED_TOOL_CONTENT,
         });

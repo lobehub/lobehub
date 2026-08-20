@@ -52,8 +52,15 @@ const createToolCall = (id = 'tool-call-1', identifier = 'web-search') => ({
 
 describe('tool executors', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
+  let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
   let updateToolIntervention: ReturnType<typeof vi.fn>;
   let updateToolMessage: ReturnType<typeof vi.fn>;
+  /**
+   * `tool_call_id → row id`, the store's view of which calls already have a row.
+   * Writes register here so a later lookup finds them — the same reason the real
+   * settle can ask instead of being told.
+   */
+  let toolRows: Map<string, string>;
   let publishChunk: ReturnType<typeof vi.fn>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
@@ -62,7 +69,14 @@ describe('tool executors', () => {
   let host: AgentRuntimeHost;
 
   beforeEach(() => {
-    createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
+    toolRows = new Map();
+    createToolMessage = vi.fn().mockImplementation(async (params: any) => {
+      if (params?.tool_call_id) toolRows.set(params.tool_call_id, 'tool-msg-1');
+      return { id: 'tool-msg-1' };
+    });
+    findToolMessageIdByToolCallId = vi
+      .fn()
+      .mockImplementation(async (toolCallId: string) => toolRows.get(toolCallId));
     updateToolIntervention = vi.fn().mockResolvedValue(undefined);
     updateToolMessage = vi.fn().mockResolvedValue(undefined);
     publishChunk = vi.fn().mockResolvedValue(undefined);
@@ -90,6 +104,7 @@ describe('tool executors', () => {
           createToolMessage,
           deleteMessage: vi.fn(),
           findById: vi.fn(),
+          findToolMessageIdByToolCallId,
           query,
           update: vi.fn(),
           updatePluginState: vi.fn(),
@@ -232,6 +247,7 @@ describe('tool executors', () => {
       toolMessageId: 'cancelled-tool-msg',
     });
     const toolCall = createToolCall();
+    toolRows.set(toolCall.id, 'cancelled-tool-msg');
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
       type: 'call_tool',
@@ -343,6 +359,8 @@ describe('tool executors', () => {
     );
 
     const toolCall = createToolCall();
+    // The approval pause wrote this row before parking.
+    toolRows.set(toolCall.id, 'pending-tool-row');
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: {
         // On an approval resume this IS the pending tool row, not an assistant.
@@ -433,17 +451,17 @@ describe('tool executors', () => {
 
     // The client transport persists its row before executing, and only surfaces
     // the id through a settled run — which an abort never gives us.
+    const toolCall = createToolCall();
     runTool.mockImplementationOnce(
-      (_tool: any, context: any) =>
+      () =>
         new Promise(() => {
-          context.onToolMessageCreated?.('optimistic-row');
-          // Abort only after the row exists — aborting earlier is a different
-          // case (nothing was created yet, so inserting a row IS correct).
+          // The client transport persists its row before executing, so by the
+          // time the abort lands the store already knows about it.
+          toolRows.set(toolCall.id, 'optimistic-row');
           controller.abort();
         }),
     );
 
-    const toolCall = createToolCall();
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
       type: 'call_tool',
@@ -828,11 +846,12 @@ describe('tool executors', () => {
     const serverCall = createToolCall('server-call');
     const clientCall = createToolCall('client-call', 'client-tool');
 
+    // An approved batch resume left a pending row for EVERY call, including the
+    // client ones that never enter `toolsToExecute`.
+    toolRows.set(serverCall.id, 'server-row');
+    toolRows.set(clientCall.id, 'client-row');
     const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
       payload: {
-        // An approved batch resume carries a pending row for EVERY call,
-        // including the client ones that never enter `toolsToExecute`.
-        existingToolMessageIds: { 'client-call': 'client-row', 'server-call': 'server-row' },
         parentMessageId: 'assistant-msg-1',
         toolsCalling: [serverCall, clientCall],
       },

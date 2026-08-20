@@ -89,16 +89,6 @@ export interface ToolRunContext {
   groupId?: string;
   messageId?: string;
   mode: 'batch' | 'single';
-  /**
-   * Report a tool row the transport persisted BEFORE the run finished.
-   *
-   * `ToolRunExecution.toolMessageId` only reaches the executor if the run
-   * settles. A transport that creates its row up front (the client one does, so
-   * the UI has something to render) must call this too — otherwise an abort
-   * mid-run leaves the executor unaware of that row and it settles the call by
-   * inserting a second one for the same `tool_call_id`.
-   */
-  onToolMessageCreated?: (toolMessageId: string) => void;
   operationId: string;
   parentMessageId: string;
   parsedArgs: Record<string, unknown>;
