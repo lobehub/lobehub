@@ -3308,20 +3308,23 @@ describe('MessageModel Query Tests', () => {
           createdAt: new Date('2023-01-01T00:00:00'),
         },
         {
-          id: 'ghost',
-          userId,
-          topicId: 'topic1',
-          role: 'assistant',
-          content: '   ',
-          createdAt: new Date('2023-01-01T00:00:01'),
-        },
-        {
           id: 'reasoning-only',
           userId,
           topicId: 'topic1',
           role: 'assistant',
           content: '',
           reasoning: { content: 'thinking' },
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          // Newest on purpose: the ghost has to WIN the ordering for this case to
+          // discriminate. With it parked in the middle the query returns the right
+          // answer even without the guard, and the test passes for the wrong reason.
+          id: 'ghost',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '   ',
           createdAt: new Date('2023-01-01T00:00:02'),
         },
       ]);
