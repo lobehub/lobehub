@@ -168,7 +168,9 @@ export class AgentShareModel {
         .where(eq(agentShares.agentId, agentId))
         .returning();
 
-      return updated ?? null;
+      return updated
+        ? { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) }
+        : null;
     });
 
   /** Disable sharing by deleting the agent's share record. */
