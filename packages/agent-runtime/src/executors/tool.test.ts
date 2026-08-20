@@ -298,6 +298,76 @@ describe('tool executors', () => {
     expect(result.newState.status).toBe('running');
   });
 
+  it('never starts a tool when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(abortingHost)(instruction, createState());
+
+    // No transport ever inspects `context.abortSignal` before doing its work, so
+    // launching it here would spawn the process Stop was meant to prevent.
+    expect(runTool).not.toHaveBeenCalled();
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        tool_call_id: toolCall.id,
+      }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+  });
+
+  it('settles the pending approval row when an approved tool is aborted', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    runTool.mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          // never settles — the abort is what ends the wait
+        }),
+    );
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: {
+        // On an approval resume this IS the pending tool row, not an assistant.
+        parentMessageId: 'pending-tool-row',
+        skipCreateToolMessage: true,
+        toolCalling: toolCall,
+      },
+      type: 'call_tool',
+    };
+
+    const pending = callTool(abortingHost)(instruction, createState());
+    controller.abort();
+    await pending;
+
+    // Creating a row here would duplicate the tool_call_id, strand the approval
+    // card as `pending`, and parent a tool row to another tool row.
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith('pending-tool-row', {
+      content: 'Tool execution was aborted by user.',
+    });
+    expect(updateToolIntervention).toHaveBeenCalledWith('pending-tool-row', {
+      status: 'aborted',
+    });
+  });
+
   it('terminates removed client sub-agent stop states like other stop results', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
@@ -569,6 +639,45 @@ describe('tool executors', () => {
         content: 'Tool execution was aborted by user.',
         tool_call_id: stuck.id,
       }),
+    );
+  });
+
+  it('settles unstarted client tools instead of parking them when a mixed batch aborts', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const serverCall = createToolCall('server-call');
+    const clientCall = createToolCall('client-call', 'client-tool');
+
+    runTool.mockImplementation(
+      () =>
+        new Promise(() => {
+          // never settles — the abort is what ends the wait
+        }),
+    );
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [serverCall, clientCall] },
+      type: 'call_tools_batch',
+    };
+
+    const pending = callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+    controller.abort();
+    await pending;
+
+    // The client call never started, and the pause it was waiting for would park
+    // it into a run nothing resumes — leaving its tool_call_id with no row ever.
+    const settledIds = createToolMessage.mock.calls.map((call: any) => call[0].tool_call_id);
+    expect(settledIds).toContain(serverCall.id);
+    expect(settledIds).toContain(clientCall.id);
+    expect(publishChunk).not.toHaveBeenCalledWith(
+      expect.objectContaining({ chunkType: 'tools_calling' }),
     );
   });
 

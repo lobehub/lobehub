@@ -132,6 +132,8 @@ const STEP_LOCK_TTL_SECONDS = 120;
  * is the only way a running tool learns it should stop.
  */
 const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
+/** Cap on the exponential backoff multiplier after consecutive poll failures. */
+const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
 
 /**
@@ -849,7 +851,7 @@ export class AgentRuntimeService {
 
     // Hoisted so the shared `finally` can stop it on every exit path — an
     // orphaned interval would keep polling Redis for a step that is long gone.
-    let stepAbortPoll: ReturnType<typeof setInterval> | undefined;
+    let stepAbortPoll: ReturnType<typeof setTimeout> | undefined;
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -1036,16 +1038,34 @@ export class AgentRuntimeService {
         // and cancel locally, otherwise a multi-minute tool would keep running
         // long after the user asked it to stop.
         const stepAbortController = new AbortController();
-        stepAbortPoll = setInterval(() => {
-          void this.coordinator
-            .loadAgentState(operationId)
-            .then((latest) => {
-              if (latest?.status === 'interrupted') stepAbortController.abort();
-            })
-            .catch((error) => {
-              log('[%s][%d] Abort poll failed: %O', operationId, stepIndex, error);
-            });
-        }, STEP_ABORT_POLL_INTERVAL_MS);
+        // Serialized on purpose: `setInterval` would fire a new read without
+        // waiting for the last one, so a slow or failing state store turns every
+        // concurrent run into a growing pile of overlapping requests — the load
+        // spikes exactly when the store is already struggling. Each read is
+        // scheduled only after the previous one settles, and failures back off.
+        let abortPollFailures = 0;
+        const pollForAbort = async () => {
+          try {
+            const latest = await this.coordinator.loadAgentState(operationId);
+            abortPollFailures = 0;
+            if (latest?.status === 'interrupted') {
+              stepAbortController.abort();
+              return;
+            }
+          } catch (error) {
+            abortPollFailures += 1;
+            log('[%s][%d] Abort poll failed: %O', operationId, stepIndex, error);
+          }
+
+          if (stepAbortController.signal.aborted) return;
+
+          stepAbortPoll = setTimeout(
+            pollForAbort,
+            STEP_ABORT_POLL_INTERVAL_MS *
+              Math.min(2 ** abortPollFailures, STEP_ABORT_POLL_MAX_BACKOFF),
+          );
+        };
+        stepAbortPoll = setTimeout(pollForAbort, STEP_ABORT_POLL_INTERVAL_MS);
 
         const { runtime } = await this.createAgentRuntime({
           abortSignal: stepAbortController.signal,
@@ -1604,7 +1624,7 @@ export class AgentRuntimeService {
       throw error;
     } finally {
       invokeAgentSpan.end();
-      if (stepAbortPoll) clearInterval(stepAbortPoll);
+      if (stepAbortPoll) clearTimeout(stepAbortPoll);
       stopStepLockHeartbeat();
       await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
