@@ -6,13 +6,14 @@ import { cssVar } from 'antd-style';
 import { memo, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ConversationArea from '@/features/AgentConversation/ConversationArea';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
+import ReadOnlyConversationArea from './ReadOnlyConversationArea';
+
 /**
- * The visitor-facing conversation column: mounts the standard ConversationArea
- * after hand-seeding the stores, mirroring the popup quick-chat pattern.
+ * The visitor-facing conversation column: mounts the lean read-only message
+ * surface after hand-seeding the stores, mirroring the popup quick-chat pattern.
  */
 const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
   const { t } = useTranslation('agent');
@@ -45,13 +46,13 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
     setSeeded(true);
   }, [agentId, agentMeta]);
 
-  // ConversationArea reads the active ids on first render — mounting it before
+  // The message surface reads the active ids on first render — mounting it before
   // the seed lands would fetch against a stale topic left by the main app.
   if (!seeded) return null;
 
   return (
     <>
-      <ConversationArea agentShareId={shareId} />
+      <ReadOnlyConversationArea agentId={agentId} agentShareId={shareId} />
       <Flexbox align={'center'} paddingBlock={4}>
         <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
           {t('share.visitor.sendDisabled')}
