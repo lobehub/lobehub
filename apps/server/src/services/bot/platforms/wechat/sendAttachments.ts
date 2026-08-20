@@ -6,6 +6,7 @@ import {
   buildAttachmentFallbackLine,
   compressImageToBudget,
   PLATFORM_ATTACHMENT_BUDGETS,
+  splitFallbackMessages,
 } from '../attachmentBudget';
 
 const log = debug('bot-platform:wechat:send-attachments');
@@ -133,6 +134,7 @@ export const sendWechatAttachments = async (
   contextToken: string,
 ): Promise<void> => {
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
+  const fallbackLines: string[] = [];
 
   for (const attachment of attachments) {
     try {
@@ -159,11 +161,12 @@ export const sendWechatAttachments = async (
             buffer.length,
             limit,
           );
-          await api.sendMessage(
-            toUserId,
-            buildAttachmentFallbackLine(attachment, attachment.fetchUrl),
-            contextToken,
-          );
+          // Queued, not sent here: the send must sit OUTSIDE the per-attachment
+          // catch below. That catch exists so one bad upload cannot take down
+          // the rest, but a failing `sendMessage` means the text channel itself
+          // is down — swallowing it would let `deliver` resolve and the replay
+          // queue drop a payload that was never delivered.
+          fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
         } else {
           log('sendWechatAttachments: skipping over-budget attachment without fetchUrl');
         }
@@ -193,5 +196,11 @@ export const sendWechatAttachments = async (
         error,
       );
     }
+  }
+
+  // Deliberately outside the loop's try/catch — see the note above.
+  const linkMessages = splitFallbackMessages(fallbackLines, budget.textMaxChars);
+  for (const message of linkMessages) {
+    await api.sendMessage(toUserId, message, contextToken);
   }
 };

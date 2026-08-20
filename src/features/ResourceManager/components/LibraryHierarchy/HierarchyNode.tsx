@@ -114,6 +114,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       id: item.id,
       libraryId,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
+      size: item.size,
       sourceType: item.sourceType,
       url: item.url,
       userId: item.userId,

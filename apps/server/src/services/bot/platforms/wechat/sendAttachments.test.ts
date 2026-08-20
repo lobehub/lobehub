@@ -124,6 +124,46 @@ describe('sendWechatAttachments', () => {
     );
   });
 
+  it('propagates a fallback-link failure so the replay queue keeps the payload', async () => {
+    const api = makeApi();
+    api.sendMessage.mockRejectedValue(new Error('iLink down'));
+
+    await expect(
+      sendWechatAttachments(
+        api as any,
+        'user-1',
+        [
+          {
+            data: Buffer.alloc(21 * MB, 1).toString('base64'),
+            fetchUrl: 'https://example.com/f/big.zip',
+            name: 'big.zip',
+            type: 'file',
+          },
+        ],
+        'token-1',
+      ),
+    ).rejects.toThrow('iLink down');
+  });
+
+  it('batches several fallback links into one message', async () => {
+    const api = makeApi();
+    const oversized = Buffer.alloc(21 * MB, 1).toString('base64');
+
+    await sendWechatAttachments(
+      api as any,
+      'user-1',
+      [
+        { data: oversized, fetchUrl: 'https://example.com/f/a', name: 'a.zip', type: 'file' },
+        { data: oversized, fetchUrl: 'https://example.com/f/b', name: 'b.zip', type: 'file' },
+      ],
+      'token-1',
+    );
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][1]).toContain('a.zip');
+    expect(api.sendMessage.mock.calls[0][1]).toContain('b.zip');
+  });
+
   it('skips an over-budget attachment with no fetchUrl instead of uploading it', async () => {
     const api = makeApi();
     budgetMocks.compressImageToBudget.mockResolvedValueOnce(undefined);

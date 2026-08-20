@@ -6,6 +6,8 @@ export interface TreeItem {
   isFolder: boolean;
   metadata?: Record<string, any>;
   name: string;
+  /** Byte size for file nodes — drives the push modal's oversize pre-warning. */
+  size?: number;
   slug?: string | null;
   sourceType?: string;
   url: string;
