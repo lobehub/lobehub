@@ -1,4 +1,6 @@
 // @vitest-environment node
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -9,6 +11,7 @@ import {
   assertFileNotInRestrictedKnowledgeBase,
   filterRestrictedKnowledgeBases,
   getRestrictedKnowledgeBaseIds,
+  getUseLevelKnowledgeBaseIds,
 } from './index';
 
 vi.mock('@/server/services/workspacePermission', () => ({
@@ -38,6 +41,33 @@ const dbWithResults = (...results: unknown[][]) => {
       }),
     }),
   } as unknown as LobeChatDatabase;
+};
+
+/**
+ * Fake drizzle db that also records each chain's rendered `where` clause.
+ * `dbWithResults` ignores predicates, so it cannot tell a query that filters
+ * on a column from one that forgot to.
+ */
+const dbCapturingWhere = (...results: unknown[][]) => {
+  const clauses: string[] = [];
+  const dialect = new PgDialect();
+  let call = 0;
+  const next = (condition?: SQL) => {
+    clauses.push(condition ? dialect.sqlToQuery(condition).sql : '');
+    const promise = Promise.resolve(results[call++] ?? []);
+    return Object.assign(promise, { limit: () => promise });
+  };
+  const db = {
+    select: () => ({
+      from: () => ({
+        innerJoin: () => ({ where: next }),
+        leftJoin: () => ({ where: next }),
+        where: next,
+      }),
+    }),
+  } as unknown as LobeChatDatabase;
+
+  return { clauses, db };
 };
 
 beforeEach(() => {
@@ -210,5 +240,29 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
     await expect(
       assertContentsNotInRestrictedKnowledgeBase(ctx, ['file-open', 'docs_open']),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('workspace-wide subject scoping', () => {
+  // `resource_permissions` is polymorphic on `user_id`: NULL carries the
+  // workspace-wide level, a set value carries one member's collaborator grant.
+  // A grant reaching these scans would restrict the knowledge base for
+  // everyone, so both direct reads must pin the workspace-wide subject.
+  const workspaceWide = '"resource_permissions"."user_id" is null';
+
+  it('getUseLevelKnowledgeBaseIds reads only the workspace-wide rows', async () => {
+    const { clauses, db } = dbCapturingWhere();
+
+    await getUseLevelKnowledgeBaseIds(db, 'ws-1');
+
+    expect(clauses[0]).toContain(workspaceWide);
+  });
+
+  it('getRestrictedKnowledgeBaseIds reads only the workspace-wide rows', async () => {
+    const { clauses, db } = dbCapturingWhere([{ id: 'kb-1' }]);
+
+    await getRestrictedKnowledgeBaseIds({ serverDB: db, userId: 'member', workspaceId: 'ws-1' });
+
+    expect(clauses[0]).toContain(workspaceWide);
   });
 });

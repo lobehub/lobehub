@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 
 import {
   documents,
@@ -64,6 +64,9 @@ export const getUseLevelKnowledgeBaseIds = async (
       and(
         eq(resourcePermissions.workspaceId, workspaceId),
         eq(resourcePermissions.resourceType, 'knowledgeBase'),
+        // Workspace-wide rows only: a per-member collaborator grant grades one
+        // member, and must never mark the knowledge base itself as restricted.
+        isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
         // A permission row staged on a still-private KB is inert until the KB
         // is published — private KBs are creator-only regardless of the row.
@@ -96,6 +99,8 @@ export const getRestrictedKnowledgeBaseIds = async (
       and(
         eq(resourcePermissions.workspaceId, ctx.workspaceId),
         eq(resourcePermissions.resourceType, 'knowledgeBase'),
+        // Workspace-wide rows only — see `getUseLevelKnowledgeBaseIds`.
+        isNull(resourcePermissions.userId),
         eq(resourcePermissions.accessLevel, 'use'),
         // A `use` row staged while the KB is still private must not leak into
         // member-facing filters: the private KB is already creator-only, and
