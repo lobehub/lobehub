@@ -2,7 +2,7 @@ import type { ShareVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, exists, isNull, sql } from 'drizzle-orm';
 
-import type { AgentShareConfig } from '../schemas';
+import type { AgentShareConfig, AgentShareConfigPatch } from '../schemas';
 import { agents, agentShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
@@ -138,13 +138,17 @@ export class AgentShareModel {
     return { ...share, shareConfig: normalizeAgentShareConfig(share.shareConfig) };
   };
 
-  /** Replace client-owned fields while preserving platform and legacy JSON keys. */
-  updateConfig = async (agentId: string, config: AgentShareConfig) =>
+  /** Atomically merge client-owned fields while preserving sibling and legacy JSON keys. */
+  updateConfig = async (agentId: string, config: AgentShareConfigPatch) =>
     this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const { filePermissionConfig, ...topLevelConfig } = config;
+      const nextConfig = filePermissionConfig
+        ? sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(topLevelConfig)}::jsonb || jsonb_build_object('filePermissionConfig', COALESCE(${agentShares.shareConfig}->'filePermissionConfig', '{}'::jsonb) || ${JSON.stringify(filePermissionConfig)}::jsonb)`
+        : sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(topLevelConfig)}::jsonb`;
       const [updated] = await tx
         .update(agentShares)
         .set({
-          shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(config)}::jsonb`,
+          shareConfig: nextConfig,
           updatedAt: new Date(),
         })
         .where(eq(agentShares.agentId, agentId))

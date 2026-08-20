@@ -27,6 +27,23 @@ const shareRow = (agentId: string) => ({
   visibility: 'private',
 });
 
+const applyConfigPatch = (
+  agentId: string,
+  patch: Partial<ReturnType<typeof shareRow>['shareConfig']>,
+) => {
+  const row = shareRow(agentId);
+  return {
+    ...row,
+    shareConfig: {
+      ...row.shareConfig,
+      ...patch,
+      filePermissionConfig: patch.filePermissionConfig
+        ? { ...row.shareConfig.filePermissionConfig, ...patch.filePermissionConfig }
+        : row.shareConfig.filePermissionConfig,
+    },
+  };
+};
+
 describe('useAgentShare', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,12 +104,11 @@ describe('useAgentShare', () => {
     expect(result.current.shareInfo).toEqual(updated);
   });
 
-  it('merges config patches over the server-normalized config before submitting', async () => {
+  it('submits only changed fields and accepts the server-normalized result', async () => {
     mocks.getShareStatus.mockResolvedValue(shareRow('agent-merge'));
-    mocks.updateShareConfig.mockImplementation(async (agentId, config) => ({
-      ...shareRow(agentId),
-      shareConfig: config,
-    }));
+    mocks.updateShareConfig.mockImplementation(async (agentId, config) =>
+      applyConfigPatch(agentId, config),
+    );
 
     const { result } = renderHook(() => useAgentShare('agent-merge', true));
     await waitFor(() => {
@@ -103,14 +119,14 @@ describe('useAgentShare', () => {
       await result.current.updateConfig({ enabledToolIds: ['dalle'], maxTurnsPerTopic: 50 });
     });
 
-    // The strict whole-replace schema requires untouched fields to survive.
     expect(mocks.updateShareConfig).toHaveBeenCalledWith('agent-merge', {
-      allowReadMemory: false,
       enabledToolIds: ['dalle'],
-      filePermissionConfig: { agentFiles: 'none', knowledgeBase: 'none', uploadAllowed: false },
-      maxTopicsPerVisitor: 5,
       maxTurnsPerTopic: 50,
     });
+    expect(result.current.shareInfo?.shareConfig).toEqual(
+      applyConfigPatch('agent-merge', { enabledToolIds: ['dalle'], maxTurnsPerTopic: 50 })
+        .shareConfig,
+    );
   });
 
   it('serializes rapid config patches over the latest submitted snapshot', async () => {
@@ -121,13 +137,10 @@ describe('useAgentShare', () => {
       .mockImplementationOnce(
         (agentId, config) =>
           new Promise((resolve) => {
-            resolveFirst = () => resolve({ ...shareRow(agentId), shareConfig: config });
+            resolveFirst = () => resolve(applyConfigPatch(agentId, config));
           }),
       )
-      .mockImplementationOnce(async (agentId, config) => ({
-        ...shareRow(agentId),
-        shareConfig: config,
-      }));
+      .mockImplementationOnce(async (agentId, config) => applyConfigPatch(agentId, config));
 
     const { result } = renderHook(() => useAgentShare('agent-queue', true));
     await waitFor(() => expect(result.current.shareInfo).toBeTruthy());
@@ -144,10 +157,6 @@ describe('useAgentShare', () => {
     await act(async () => Promise.all([first, second]));
 
     expect(mocks.updateShareConfig).toHaveBeenNthCalledWith(2, 'agent-queue', {
-      allowReadMemory: true,
-      enabledToolIds: [],
-      filePermissionConfig: { agentFiles: 'none', knowledgeBase: 'none', uploadAllowed: false },
-      maxTopicsPerVisitor: 5,
       maxTurnsPerTopic: 50,
     });
   });
@@ -160,13 +169,10 @@ describe('useAgentShare', () => {
       .mockImplementationOnce(
         (agentId, config) =>
           new Promise((resolve) => {
-            resolveFirst = () => resolve({ ...shareRow(agentId), shareConfig: config });
+            resolveFirst = () => resolve(applyConfigPatch(agentId, config));
           }),
       )
-      .mockImplementationOnce(async (agentId, config) => ({
-        ...shareRow(agentId),
-        shareConfig: config,
-      }));
+      .mockImplementationOnce(async (agentId, config) => applyConfigPatch(agentId, config));
 
     const firstMount = renderHook(() => useAgentShare('agent-remount', true));
     await waitFor(() => expect(firstMount.result.current.shareInfo).toBeTruthy());
@@ -190,19 +196,16 @@ describe('useAgentShare', () => {
     resolveFirst(shareRow('agent-remount'));
     await act(async () => Promise.all([first, second]));
 
-    expect(mocks.updateShareConfig).toHaveBeenNthCalledWith(
-      2,
-      'agent-remount',
-      expect.objectContaining({ allowReadMemory: true, maxTurnsPerTopic: 50 }),
-    );
+    expect(mocks.updateShareConfig).toHaveBeenNthCalledWith(2, 'agent-remount', {
+      maxTurnsPerTopic: 50,
+    });
   });
 
   it('resolves functional patches from the latest queued config', async () => {
     mocks.getShareStatus.mockResolvedValue(shareRow('agent-functional'));
-    mocks.updateShareConfig.mockImplementation(async (agentId, config) => ({
-      ...shareRow(agentId),
-      shareConfig: config,
-    }));
+    mocks.updateShareConfig.mockImplementation(async (agentId, config) =>
+      applyConfigPatch(agentId, config),
+    );
 
     const { result } = renderHook(() => useAgentShare('agent-functional', true));
     await waitFor(() => expect(result.current.shareInfo).toBeTruthy());
@@ -214,9 +217,8 @@ describe('useAgentShare', () => {
       }));
     });
 
-    expect(mocks.updateShareConfig).toHaveBeenLastCalledWith(
-      'agent-functional',
-      expect.objectContaining({ enabledToolIds: ['dalle', 'search'] }),
-    );
+    expect(mocks.updateShareConfig).toHaveBeenLastCalledWith('agent-functional', {
+      enabledToolIds: ['dalle', 'search'],
+    });
   });
 });

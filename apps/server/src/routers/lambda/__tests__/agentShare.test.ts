@@ -23,7 +23,8 @@ vi.mock('@/database/models/agentShare', () => ({
   })),
 }));
 
-const { agentShareConfigSchema, agentShareRouter } = await import('../agentShare');
+const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
+  await import('../agentShare');
 
 const share = {
   agentId: 'agent-1',
@@ -65,23 +66,17 @@ describe('agentShareRouter', () => {
     await expect(caller.getShareStatus({ agentId: 'agent-1' })).resolves.toBeNull();
   });
 
-  it('forwards a complete share configuration', async () => {
+  it('forwards an atomic share configuration patch', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
-    const config = {
-      allowReadMemory: true,
-      enabledToolIds: ['search'],
-      filePermissionConfig: {
-        agentFiles: 'read' as const,
-        knowledgeBase: 'read' as const,
-        uploadAllowed: true,
-      },
-      maxTopicsPerVisitor: 10,
-      maxTurnsPerTopic: 40,
-    };
+    const config = { maxTopicsPerVisitor: 10 };
 
     await caller.updateShareConfig({ agentId: 'agent-1', config });
 
     expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+  });
+
+  it('rejects an empty share configuration patch', () => {
+    expect(agentShareConfigPatchSchema.safeParse({}).success).toBe(false);
   });
 
   it('requires positive integer topic and turn limits', async () => {
