@@ -119,13 +119,16 @@ describe('ResourcePermissionModel', () => {
 describe('ResourcePermissionModel collaborators', () => {
   const kbId = 'rp-test-kb';
 
-  it('grants and lists collaborators in insertion order', async () => {
+  it('grants and lists collaborators in a stable order', async () => {
     await model.upsertCollaborators({
       accessLevel: 'edit',
       createdBy: ownerId,
       resourceId: kbId,
       resourceType: 'knowledgeBase',
-      userIds: [memberA, memberB],
+      // Inserted B-then-A: one batch shares a `created_at` (`now()` is the
+      // transaction timestamp), so the asserted order can only come from the
+      // userId tie-breaker, never from the insertion order.
+      userIds: [memberB, memberA],
     });
 
     const rows = await model.listCollaborators('knowledgeBase', kbId);

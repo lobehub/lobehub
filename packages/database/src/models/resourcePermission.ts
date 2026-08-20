@@ -91,7 +91,12 @@ export class ResourcePermissionModel {
       });
   };
 
-  /** All collaborator grant rows of one resource, oldest grant first. */
+  /**
+   * All collaborator grant rows of one resource, oldest grant first. Grants
+   * made in one batch share a `created_at` — `now()` is the transaction
+   * timestamp — so `userId` breaks the tie and keeps the order stable across
+   * reads instead of leaving it to the query plan.
+   */
   listCollaborators = async (
     resourceType: PermissionResourceType,
     resourceId: string,
@@ -102,7 +107,7 @@ export class ResourcePermissionModel {
       .where(
         and(this.resourceMatch(resourceType, resourceId), isNotNull(resourcePermissions.userId)),
       )
-      .orderBy(resourcePermissions.createdAt);
+      .orderBy(resourcePermissions.createdAt, resourcePermissions.userId);
   };
 
   /** The collaborator level granted to one member on one resource, if any. */
