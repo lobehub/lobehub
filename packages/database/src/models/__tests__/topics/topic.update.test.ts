@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { messages, sessions, topics, users } from '../../../schemas';
+import { agentOperations, messages, sessions, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 
@@ -11,8 +11,32 @@ const sessionId = 'topic-update-session';
 const serverDB: LobeChatDatabase = await getTestDB();
 const topicModel = new TopicModel(serverDB, userId);
 
+/**
+ * Seed the `agent_operations` row a `runningOperation` marker points at — the
+ * authority `tryReserveTaskCallback` consults to decide whether the run still
+ * owns the topic. `topicId` is deliberately left unset: the liveness lookup is
+ * by operation id, and setting it would require the topic row to exist first.
+ */
+const seedOperation = async ({
+  createdAt,
+  id,
+  status,
+}: {
+  createdAt?: Date;
+  id: string;
+  status: 'done' | 'error' | 'idle' | 'running' | 'waiting_for_async_tool' | 'waiting_for_human';
+}) => {
+  await serverDB.insert(agentOperations).values({
+    id,
+    status,
+    userId,
+    ...(createdAt ? { createdAt } : {}),
+  });
+};
+
 describe('TopicModel - Update', () => {
   beforeEach(async () => {
+    await serverDB.delete(agentOperations);
     await serverDB.delete(users);
     await serverDB.transaction(async (tx) => {
       await tx.insert(users).values([{ id: userId }]);
@@ -343,15 +367,16 @@ describe('TopicModel - Update', () => {
       });
     });
 
-    it('recovers a topic whose runningOperation outlived the run that claimed it', async () => {
+    it('recovers a topic whose runningOperation already reached a terminal state', async () => {
       // Regression: `taskCallbackReservation` expires after a TTL, but
       // `runningOperation` was checked bare. Every clear site is best-effort
       // (ServerOperationStore.clearRunningMark swallows failures; the gateway
       // client clears it from `onSessionComplete`, which never runs if the tab
-      // closed or the function was killed), so a marker left behind by a dead
-      // run blocked every later start on that topic — permanently, since
-      // nothing sweeps it.
-      const topicId = 'topic-start-stale-running-operation';
+      // closed or the function was killed), so a marker left behind by a
+      // finished run blocked every later start on that topic — permanently,
+      // since nothing sweeps it.
+      const topicId = 'topic-start-terminal-running-operation';
+      await seedOperation({ id: 'finished-operation', status: 'error' });
       await serverDB.insert(topics).values({
         userId,
         id: topicId,
@@ -359,8 +384,7 @@ describe('TopicModel - Update', () => {
         metadata: {
           runningOperation: {
             assistantMessageId: 'assistant-1',
-            operationId: 'dead-operation',
-            startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+            operationId: 'finished-operation',
           },
         },
       });
@@ -368,11 +392,33 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'later-start')).resolves.toBe(true);
     });
 
-    it('recovers a topic whose runningOperation carries no liveness stamp', async () => {
-      // Markers written before `startedAt` existed cannot be proven live.
-      // Holding the topic on them keeps every already-stuck conversation stuck
-      // forever, so an unstamped marker must not block a fresh start.
-      const topicId = 'topic-start-unstamped-running-operation';
+    it('recovers a topic whose runningOperation row no longer exists and carries no stamp', async () => {
+      // A marker with neither an operation row nor a `startedAt` cannot be
+      // proven live; holding the topic on it keeps an already-stuck
+      // conversation stuck forever.
+      const topicId = 'topic-start-orphan-running-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: { assistantMessageId: 'assistant-1', operationId: 'no-such-operation' },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'later-start')).resolves.toBe(true);
+    });
+
+    it('keeps holding the topic for a run parked on a human, however long it waits', async () => {
+      // `startedAt` is never refreshed, so an age-based check declared any run
+      // older than the TTL dead and let a callback start a competing
+      // continuation. An approval wait legitimately lasts days.
+      const topicId = 'topic-start-long-approval-wait';
+      await seedOperation({
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+        id: 'parked-operation',
+        status: 'waiting_for_human',
+      });
       await serverDB.insert(topics).values({
         userId,
         id: topicId,
@@ -380,7 +426,53 @@ describe('TopicModel - Update', () => {
         metadata: {
           runningOperation: {
             assistantMessageId: 'assistant-1',
-            operationId: 'legacy-operation',
+            operationId: 'parked-operation',
+            startedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(false);
+    });
+
+    it('keeps holding the topic for a live run whose marker predates the stamp', async () => {
+      // Rolling deployment: an older server instance writes `runningOperation`
+      // without `startedAt`. Treating unstamped markers as dead would let a new
+      // instance start a competing run against a live one.
+      const topicId = 'topic-start-unstamped-live-operation';
+      await seedOperation({ id: 'old-instance-operation', status: 'running' });
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'old-instance-operation',
+          },
+        },
+      });
+
+      await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-1')).resolves.toBe(false);
+    });
+
+    it('ages out a run that still claims running long after its process died', async () => {
+      // A killed process never writes a terminal status, so status alone would
+      // hold the topic forever. Only non-parked states are aged out.
+      const topicId = 'topic-start-abandoned-running-operation';
+      await seedOperation({
+        createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
+        id: 'abandoned-operation',
+        status: 'running',
+      });
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-1',
+            operationId: 'abandoned-operation',
           },
         },
       });

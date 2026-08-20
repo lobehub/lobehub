@@ -65,18 +65,31 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
 /**
- * How long a `runningOperation` marker may hold the topic against a background
- * start before it is treated as dead.
+ * How long an operation that still claims `running` / `idle` may hold the topic
+ * against a background start before it is treated as abandoned.
  *
- * The marker is a reconnect anchor, not a lease: it lives for the whole run and
- * every clear site is best-effort (`ServerOperationStore.clearRunningMark`
- * swallows failures; the gateway client clears it from `onSessionComplete`,
- * which never runs if the tab closed or the function was killed). Without an
- * upper bound a marker left by a dead run blocks the topic forever. This is a
- * floor, not a promise — the real reaper is the gateway watchdog's
+ * Only a backstop for the case the operation row cannot describe: a process
+ * killed mid-run leaves its row at `running` forever, and every marker clear
+ * site is best-effort (`ServerOperationStore.clearRunningMark` swallows
+ * failures; the gateway client clears it from `onSessionComplete`, which never
+ * runs if the tab closed). Runs parked on a human or an async tool are exempt —
+ * those legitimately last days — so this only has to be longer than a plausible
+ * uninterrupted generation. The real reaper remains the gateway watchdog's
  * `finalize-abandoned` call.
  */
-const RUNNING_OPERATION_LIVENESS_TTL_MS = 30 * 60 * 1000;
+const ABANDONED_OPERATION_TTL_MS = 6 * 60 * 60 * 1000;
+/**
+ * Operation statuses that mean "this run is still the topic's owner". Parked
+ * states are included on purpose: a run waiting for approval is not stuck.
+ */
+const LIVE_OPERATION_STATUSES = new Set([
+  'idle',
+  'running',
+  'waiting_for_human',
+  'waiting_for_async_tool',
+]);
+/** Parked states are exempt from the abandoned-age backstop — see above. */
+const UNBOUNDED_OPERATION_STATUSES = new Set(['waiting_for_human', 'waiting_for_async_tool']);
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
@@ -1660,6 +1673,49 @@ export class TopicModel {
     });
 
   /**
+   * Whether the run a `runningOperation` marker points at is still the topic's
+   * legitimate owner.
+   *
+   * The marker itself cannot answer this — it carries no heartbeat and is
+   * cleared best-effort — so the authority is the operation row, which both the
+   * in-process runtime (`createOperation`) and the heterogeneous path
+   * (`CompletionLifecycle.recordStart`) write before publishing the marker.
+   *
+   * Falls back to the marker's own `startedAt` only when no row exists: hetero's
+   * `recordStart` is deliberately non-fatal, so a DB hiccup can leave a live run
+   * with a marker and no row. A marker with neither a row nor a stamp cannot be
+   * proven live and must not keep an already-stuck topic stuck.
+   */
+  private isRunningOperationAlive = async (
+    tx: Pick<LobeChatDatabase, 'select'>,
+    runningOperation: NonNullable<ChatTopicMetadata['runningOperation']>,
+  ): Promise<boolean> => {
+    const [operation] = await tx
+      .select({ createdAt: agentOperations.createdAt, status: agentOperations.status })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, runningOperation.operationId))
+      .limit(1);
+
+    if (!operation) {
+      const markerStartedAt = runningOperation.startedAt
+        ? Date.parse(runningOperation.startedAt)
+        : Number.NaN;
+      return (
+        Number.isFinite(markerStartedAt) &&
+        Date.now() - markerStartedAt < ABANDONED_OPERATION_TTL_MS
+      );
+    }
+
+    if (!LIVE_OPERATION_STATUSES.has(operation.status)) return false;
+    if (UNBOUNDED_OPERATION_STATUSES.has(operation.status)) return true;
+
+    // Claims `running`/`idle`, but a killed process never writes a terminal
+    // status — age it out so the topic is not held forever.
+    const startedAt = operation.createdAt ? new Date(operation.createdAt).getTime() : Number.NaN;
+    return !Number.isFinite(startedAt) || Date.now() - startedAt < ABANDONED_OPERATION_TTL_MS;
+  };
+
+  /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *
    * The topic row lock closes the check/set race between callback workers:
@@ -1720,21 +1776,17 @@ export class TopicModel {
         !!options?.replacesOperationId &&
         runningOperation?.operationId === options.replacesOperationId;
 
-      // Only a run that can prove it is still alive may hold the topic. A marker
-      // with no stamp predates this field and cannot be proven live, so it must
-      // not keep an already-stuck topic stuck.
-      const runStartedAt = runningOperation?.startedAt
-        ? Date.parse(runningOperation.startedAt)
-        : Number.NaN;
+      // Only a run that can prove it is still alive may hold the topic. Ask the
+      // operation row rather than the marker's age: the marker is never
+      // refreshed, so age alone declares a legitimately long run (an approval
+      // wait can last days) dead and lets a competing continuation start.
       const hasLiveRunningOperation =
         !!runningOperation &&
-        Number.isFinite(runStartedAt) &&
-        Date.now() - runStartedAt < RUNNING_OPERATION_LIVENESS_TTL_MS;
+        !canReplaceRunningOperation &&
+        !options?.ignoreRunningOperation &&
+        (await this.isRunningOperationAlive(tx, runningOperation));
 
-      const blockedByRunningOperation =
-        !options?.ignoreRunningOperation && hasLiveRunningOperation && !canReplaceRunningOperation;
-
-      if (blockedByRunningOperation || hasLiveReservation) return false;
+      if (hasLiveRunningOperation || hasLiveReservation) return false;
 
       await tx
         .update(topics)
