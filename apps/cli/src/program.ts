@@ -26,6 +26,7 @@ import { registerNotifyCommand } from './commands/notify';
 import { registerPluginCommand } from './commands/plugin';
 import { registerProjectCommand } from './commands/project';
 import { registerProviderCommand } from './commands/provider';
+import { registerSandboxCommand } from './commands/sandbox';
 import { registerSearchCommand } from './commands/search';
 import { registerSessionGroupCommand } from './commands/session-group';
 import { registerSkillCommand } from './commands/skill';
@@ -75,6 +76,7 @@ export function createProgram() {
   registerCompletionCommand(program);
   registerManCommand(program);
   registerCliConfigCommand(program);
+  registerSandboxCommand(program);
   registerConnectCommand(program);
   registerDeviceCommand(program);
   registerStatusCommand(program);

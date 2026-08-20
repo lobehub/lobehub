@@ -11,6 +11,7 @@ import { resolveCommandMode, resolveSandboxNetwork } from '../settings';
 import { decideSandbox } from '../settings/commandMode';
 import { log } from '../utils/logger';
 import { ensureSandboxWorkspace } from './sandboxWorkspace';
+import { applySandboxHostPaths } from './srtWin';
 
 const processManager = new ShellProcessManager();
 
@@ -31,6 +32,9 @@ let sandboxCapability: Promise<{ available: boolean; reason?: string }> | undefi
 export const probeSandbox = () =>
   (sandboxCapability ??= (async () => {
     try {
+      // Before the probe, not after: the probe's whole job is to answer whether
+      // the helper is present, so it has to be told where this build put it.
+      applySandboxHostPaths();
       const { probeSandboxCapability } = await import('@lobechat/device-sandbox');
       return await probeSandboxCapability();
     } catch (error) {

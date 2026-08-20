@@ -4,9 +4,26 @@ import path from 'node:path';
 /**
  * Where the relocated helper lives. Under `ProgramData` because its default ACL
  * grants `BUILTIN\Users` read+execute — which is the entire point.
+ *
+ * The vendor segment is overridable because this directory is created on the
+ * END USER's machine and stays there. A distribution shipping under its own
+ * name would otherwise leave a directory named after this one in
+ * `C:\ProgramData` — visible, permanent, and nothing to do with the product the
+ * user installed. Set by the host at startup; unset keeps upstream's name, so
+ * the default build is unchanged.
+ *
+ * Sanitised rather than trusted: it becomes a path segment, and a value with a
+ * separator in it would silently relocate the staging tree. Dots are stripped
+ * along with separators — keeping them would let `..` survive as a whole
+ * segment, which is the traversal this is here to prevent. A name that
+ * sanitises away to nothing falls back to the default rather than to an empty
+ * segment.
  */
+const stagingVendorDir = (): string =>
+  process.env.LOBE_SANDBOX_STAGING_NAME?.replaceAll(/[^\w-]/g, '') || 'LobeHub';
+
 const stagingRoot = (): string =>
-  path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'LobeHub', 'sandbox');
+  path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', stagingVendorDir(), 'sandbox');
 
 const ARCH_DIR: Partial<Record<string, string>> = { arm64: 'arm64', x64: 'x64' };
 
