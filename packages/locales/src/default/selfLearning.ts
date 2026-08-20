@@ -46,6 +46,8 @@ export default {
     'e.g. Make these a true progression of proficiency, rather than stages in a workflow…',
   'create.adjust.placeholder.outOfScope':
     'e.g. Exclude general project management and decisions made on behalf of the principal…',
+  'create.adjust.placeholder.rationale':
+    'e.g. Say plainly what I will get better at, without listing the layers again…',
   'create.adjust.title': 'Adjust with AI',
   'create.back': 'Back',
   'create.briefHelp':
@@ -59,6 +61,7 @@ export default {
   'create.field.domainFilter': 'What counts as practice',
   'create.field.outOfScope': 'What does not count',
   'create.field.outOfScopePlaceholder': 'e.g. design discussions, general Q&A…',
+  'create.field.rationalePlaceholder': 'How it reads this direction, and where it will improve…',
   'create.field.title': 'Name',
   'create.generate': 'Generate with AI',
   'create.generating': 'Reading your brief…',
