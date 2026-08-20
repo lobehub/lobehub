@@ -6,7 +6,7 @@ import { Challenge, Credential, Method, Store, z } from 'mppx';
 import { Mppx } from 'mppx/server';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { machinePayment, requirePaymentOr } from './machine-payment';
+import { machinePayment, type MachinePaymentConfig, requirePaymentOr } from './machine-payment';
 
 // ---------------------------------------------------------------------------
 // Fixture: a self-contained payment rail
@@ -99,13 +99,25 @@ const PRICES: Record<string, { amount: string; currency: string } | null> = {
   'GET /search/free': { amount: '0', currency: 'usd' },
 };
 
-const createApp = (
-  settlements: Settlement[],
-  recorded: MachinePaymentRecordParams[] = [],
-  recordPayment: (params: MachinePaymentRecordParams) => Promise<void> = async (params) => {
-    recorded.push(params);
-  },
-) => {
+interface AppOptions {
+  prices?: Record<string, { amount: string; currency: string } | null>;
+  recorded?: MachinePaymentRecordParams[];
+  recordPayment?: (params: MachinePaymentRecordParams) => Promise<void>;
+  resolvePrice?: MachinePaymentConfig['resolvePrice'];
+  settlements?: Settlement[];
+}
+
+const createApp = (options: AppOptions = {}) => {
+  const {
+    prices = PRICES,
+    recorded = [],
+    settlements = [],
+    recordPayment = async (params: MachinePaymentRecordParams) => {
+      recorded.push(params);
+    },
+    resolvePrice = async ({ route }: { route: string }) => prices[route] ?? null,
+  } = options;
+
   const mppx = Mppx.create({
     methods: [createTestMethod(settlements)],
     realm: 'lobehub.test',
@@ -116,7 +128,7 @@ const createApp = (
     methodKey: METHOD_KEY,
     mppx: mppx as any,
     recordPayment,
-    resolvePrice: async ({ route }) => PRICES[route] ?? null,
+    resolvePrice,
   });
 
   const app = new Hono();
@@ -140,7 +152,7 @@ describe('machinePayment', () => {
   beforeEach(() => {
     settlements = [];
     recorded = [];
-    app = createApp(settlements, recorded);
+    app = createApp({ recorded, settlements });
   });
 
   /** Reads the 402 challenge for a route without answering it. */
@@ -179,7 +191,9 @@ describe('machinePayment', () => {
       const res = await app.request('/ping', { headers: { Authorization: 'Bearer sk-lh-test' } });
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true, tier: 'unpriced' });
+      // Reported as `authenticated`, not `unpriced`: a non-Payment credential
+      // short-circuits before `resolvePrice` is consulted at all.
+      expect(await res.json()).toEqual({ ok: true, tier: 'authenticated' });
     });
 
     it('settles nothing', async () => {
@@ -375,8 +389,11 @@ describe('machinePayment', () => {
   describe('when ledger recording fails', () => {
     const brokenLedger = () => {
       const seen: Settlement[] = [];
-      const app = createApp(seen, [], async () => {
-        throw new Error('ledger unavailable');
+      const app = createApp({
+        recordPayment: async () => {
+          throw new Error('ledger unavailable');
+        },
+        settlements: seen,
       });
       return { app, seen };
     };
@@ -402,6 +419,53 @@ describe('machinePayment', () => {
       });
 
       expect(res.headers.get('Payment-Receipt')).toBeTruthy();
+    });
+  });
+
+  describe('when the pricing backend is down', () => {
+    const brokenPricing = () =>
+      createApp({
+        resolvePrice: async () => {
+          throw new Error('pricing backend unavailable');
+        },
+      });
+
+    it('still serves an authenticated caller', async () => {
+      // Pricing a route must not make its existing authenticated clients
+      // depend on the availability of a service they never pay.
+      const res = await brokenPricing().request('/search', {
+        headers: { Authorization: 'Bearer sk-lh-test' },
+      });
+
+      expect(res.status).toBe(200);
+    });
+
+    it('does not quietly serve an anonymous caller', async () => {
+      const res = await brokenPricing().request('/search');
+
+      expect(res.status).not.toBe(200);
+    });
+  });
+
+  describe('a quote that is no longer current', () => {
+    it('is refused rather than settled at either price', async () => {
+      // mppx binds the amount into the challenge id, so a stale quote cannot be
+      // spent. This pins that invariant: the ledger derives its amount from the
+      // settled credential, and this is what keeps the two from ever diverging.
+      const prices = { ...PRICES };
+      const settlements: Settlement[] = [];
+      const recorded: MachinePaymentRecordParams[] = [];
+      const repriced = createApp({ prices, recorded, settlements });
+
+      const challenge = Challenge.fromResponse(await repriced.request('/search'));
+      prices['GET /search'] = { amount: '0.05', currency: 'usd' };
+      const res = await repriced.request('/search', {
+        headers: { Authorization: mint(challenge) },
+      });
+
+      expect(res.status).toBe(402);
+      expect(settlements).toHaveLength(0);
+      expect(recorded).toHaveLength(0);
     });
   });
 });
