@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "پیامی برای ارسال به {{platform}} بنویسید…",
   "messenger.push.queued": "{{count}} پیام در صف قرار دارد و پس از ارسال پیام شما به ربات در {{platform}} تحویل داده خواهد شد.",
   "messenger.push.queuedToast": "پنجره ارسال بسته است — پیام شما در صف قرار گرفت. به ربات در {{platform}} پیام دهید تا آن را دریافت کنید.",
+  "messenger.push.resource.description": "فایل به‌عنوان پیوست به حساب مرتبط شما در {{platform}} ارسال خواهد شد.",
+  "messenger.push.resource.placeholder": "یک پیام اضافه کنید (اختیاری)…",
   "messenger.push.retry": "دوباره تلاش کنید",
   "messenger.push.sectionTitle": "ارسال پیام",
   "messenger.push.send": "ارسال به {{platform}}",

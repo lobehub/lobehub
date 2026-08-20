@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "Scrivi un messaggio da inviare a {{platform}}…",
   "messenger.push.queued": "{{count}} messaggio/i in coda verrà/verranno consegnato/i dopo che avrai inviato un messaggio al bot su {{platform}}.",
   "messenger.push.queuedToast": "La finestra di invio è chiusa — il tuo messaggio è in coda. Invia un messaggio al bot su {{platform}} per riceverlo.",
+  "messenger.push.resource.description": "Il file verrà inviato come allegato al tuo account {{platform}} collegato.",
+  "messenger.push.resource.placeholder": "Aggiungi un messaggio (facoltativo)…",
   "messenger.push.retry": "Riprova",
   "messenger.push.sectionTitle": "Invio messaggi",
   "messenger.push.send": "Invia a {{platform}}",
