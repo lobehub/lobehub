@@ -39,16 +39,21 @@ const errorDetail = (payload: { error?: unknown } | undefined, response: Respons
  * `<url>/<procedure>` with the superjson-serialized input as the body, and a
  * `{ result: { data } }` / `{ error }` envelope back, both superjson payloads.
  */
-const lambdaMutation = async <T>(
+export const callLambdaMutation = async <T>(
   { accessToken, serverUrl }: LambdaCallContext,
   procedure: string,
   input: unknown,
+  workspaceId?: string,
 ): Promise<T> => {
   const base = serverUrl.replace(/\/$/, '');
 
   const response = await fetch(`${base}/trpc/lambda/${procedure}`, {
     body: JSON.stringify(superjson.serialize(input)),
-    headers: { 'Content-Type': 'application/json', 'Oidc-Auth': accessToken },
+    headers: {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': accessToken,
+      ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+    },
     method: 'POST',
   });
 
@@ -94,8 +99,8 @@ export const createLambdaFileStorePort = async (
   const ctx: LambdaCallContext = { accessToken, serverUrl };
 
   return {
-    checkFileHash: (input) => lambdaMutation(ctx, 'file.checkFileHash', input),
-    createFile: (input) => lambdaMutation(ctx, 'file.createFile', input),
-    createS3PreSignedUrl: (input) => lambdaMutation(ctx, 'upload.createS3PreSignedUrl', input),
+    checkFileHash: (input) => callLambdaMutation(ctx, 'file.checkFileHash', input),
+    createFile: (input) => callLambdaMutation(ctx, 'file.createFile', input),
+    createS3PreSignedUrl: (input) => callLambdaMutation(ctx, 'upload.createS3PreSignedUrl', input),
   };
 };

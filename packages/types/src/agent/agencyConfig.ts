@@ -108,7 +108,7 @@ export interface HeterogeneousApiConfig {
  *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
-  /** API binding. Only used by Claude Code when `authMode` is `api`. */
+  /** Credential-free LobeHub Provider binding used when `authMode` is `api`. */
   apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];

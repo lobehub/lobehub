@@ -1,6 +1,6 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
 import {
-  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
@@ -106,10 +106,7 @@ export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
-  if (
-    ctx.heterogeneousProvider?.type === 'claude-code' &&
-    ctx.heterogeneousProvider.authMode === 'api'
-  ) {
+  if (ctx.heterogeneousProvider?.authMode === 'api') {
     const target = resolveExecutionTarget(
       {
         boundDeviceId: ctx.boundDeviceId,
@@ -123,7 +120,7 @@ export const selectRuntimeType = (
       },
     );
     if (target !== 'local' || (ctx.parentRuntime && ctx.parentRuntime !== 'hetero')) {
-      throw new Error(CLAUDE_CODE_API_LOCAL_ONLY_ERROR);
+      throw new Error(HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR);
     }
   }
 

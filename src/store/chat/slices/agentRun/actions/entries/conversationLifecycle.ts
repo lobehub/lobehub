@@ -64,7 +64,10 @@ import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
-import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
+import {
+  getNativeHeteroSessionBindingKey,
+  resolveHeteroResume,
+} from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import type { QueuedFile } from '@/store/chat/slices/operation/types';
 import {
   isQueueBlockingOperation,
@@ -1499,7 +1502,8 @@ export class ConversationLifecycleActionImpl {
         // Read heterogeneous-agent session id from topic metadata for multi-turn
         // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
         // doesn't match the current one, so CC doesn't emit
-        // "No conversation found with session ID".
+        // "No conversation found with session ID". Pre-binding native rows
+        // retain the old cwd-only behavior, independent of the Labs flag.
         // Store lookup first (freshest optimistic edits), but fall back to the
         // server row resolved above — the paginated store misses deep-linked
         // older topics, and a miss here silently dropped `--resume` even when
@@ -1508,12 +1512,21 @@ export class ConversationLifecycleActionImpl {
           (heteroContext.topicId
             ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
             : undefined) ?? existingTopic;
-        const { cwdChanged, resumeSessionId } = resolveHeteroResume(
+        const providerBinding = heterogeneousProvider.authMode === 'api';
+        const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
           topic?.metadata,
           workingDirectory,
+          {
+            currentBindingKey: providerBinding
+              ? undefined
+              : getNativeHeteroSessionBindingKey(heterogeneousProvider.type),
+            providerBinding,
+          },
         );
         if (cwdChanged) {
           toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+        } else if (reason === 'binding_changed') {
+          toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
         }
 
         await executeHeterogeneousAgent(() => this.#get(), {
@@ -1525,6 +1538,7 @@ export class ConversationLifecycleActionImpl {
           message,
           operationId: heteroOpId,
           pageSelections: effectivePageSelections,
+          resumeBindingKey,
           resumeSessionId,
           workingDirectory,
           workingDirectoryConfig,

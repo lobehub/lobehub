@@ -48,8 +48,8 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
-  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
   getHeterogeneousAgentConfig,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
@@ -2595,15 +2595,12 @@ export class AiAgentService {
         }
       };
 
-      if (
-        agentConfig.agencyConfig?.heterogeneousProvider?.type === 'claude-code' &&
-        agentConfig.agencyConfig.heterogeneousProvider.authMode === 'api'
-      ) {
+      if (agentConfig.agencyConfig?.heterogeneousProvider?.authMode === 'api') {
         await this.finalizeHeteroDispatchError({
           agentId: resolvedAgentId,
           assistantMessageId: assistantMessageRecord.id,
-          detail: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-          message: 'Claude Code API mode does not support this execution target',
+          detail: HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+          message: 'Provider-bound heterogeneous agents do not support this execution target',
           operationId,
           topicId,
         });
@@ -2612,8 +2609,8 @@ export class AiAgentService {
           assistantMessageId: assistantMessageRecord.id,
           autoStarted: false,
           createdAt: new Date().toISOString(),
-          error: CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
-          message: 'Claude Code API mode requires Desktop local execution',
+          error: HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+          message: 'Heterogeneous agent provider binding requires Desktop local execution',
           operationId,
           status: 'error',
           success: false,

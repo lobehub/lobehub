@@ -14,14 +14,14 @@ import { type ActionKeys } from '@/features/ChatInput';
 import HeteroModel from '@/features/ChatInput/ControlBar/HeteroModel';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
-import { useClaudeCodeApiBindingValidation } from '@/features/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders';
+import { useProviderBindingValidation } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { resolveClaudeCodeApiBindingGuard } from '@/helpers/claudeCodeApiBinding';
 import {
   isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
+import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
@@ -103,7 +103,7 @@ const HeterogeneousChatInput = memo(() => {
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const providerType = heterogeneousProvider?.type;
   const enableClaudeCodeApiMode = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
-  const isApiAuth = providerType === 'claude-code' && heterogeneousProvider?.authMode === 'api';
+  const isApiAuth = heterogeneousProvider?.authMode === 'api';
   const isApiModeActive = isApiAuth && enableClaudeCodeApiMode;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
@@ -111,7 +111,7 @@ const HeterogeneousChatInput = memo(() => {
     workspaceScoped,
   });
   const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
-    useClaudeCodeApiBindingValidation(heterogeneousProvider?.apiConfig);
+    useProviderBindingValidation(providerType, heterogeneousProvider?.apiConfig);
   const deviceSelectionRequired =
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
@@ -131,7 +131,7 @@ const HeterogeneousChatInput = memo(() => {
   const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
   const isLocalApiMode = isApiModeActive && executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
-    resolveClaudeCodeApiBindingGuard({
+    resolveProviderBindingGuard({
       active: isLocalApiMode,
       error: apiBindingValidationError,
       isReady: isApiBindingStateReady,
@@ -278,7 +278,9 @@ const HeterogeneousChatInput = memo(() => {
     const title =
       apiModeBindingError.code === 'configMissing'
         ? t('heteroAgent.apiMode.configMissing')
-        : t(`heteroAgent.apiMode.${apiModeBindingError.code}`, apiModeBindingError);
+        : apiModeBindingError.code === 'agentUnsupported'
+          ? t('heteroAgent.apiMode.agentUnsupported', { name: providerType })
+          : t(`heteroAgent.apiMode.${apiModeBindingError.code}`, apiModeBindingError);
 
     return (
       <GuardBanner

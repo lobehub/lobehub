@@ -1,7 +1,10 @@
 import type { AiProviderSDKType } from '@lobechat/types';
 
-export const CLAUDE_CODE_API_LOCAL_ONLY_ERROR =
-  'Claude Code API mode is only supported for Desktop local execution.';
+export const HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR =
+  'Heterogeneous agent provider binding is only supported for Desktop local execution.';
+
+/** @deprecated Use HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR. */
+export const CLAUDE_CODE_API_LOCAL_ONLY_ERROR = HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR;
 
 export interface BuildClaudeCodeDirectEnvInput {
   /** Decrypted provider credentials. This function is for trusted local execution only. */
@@ -76,18 +79,26 @@ export const sanitizeClaudeCodeDirectEnv = (
   return env;
 };
 
-/** Remove every persisted model override before applying the API-bound model. */
+/** Remove persisted model/session overrides before applying a host-authoritative binding. */
 export const sanitizeClaudeCodeDirectArgs = (source: string[] | undefined): string[] => {
   const sourceArgs = source ?? [];
   const args: string[] = [];
 
   for (let index = 0; index < sourceArgs.length; index += 1) {
     const arg = sourceArgs[index];
-    if (arg === '--model') {
+    if (arg === '--model' || arg === '--resume' || arg === '--session-id') {
       index += 1;
       continue;
     }
-    if (arg.startsWith('--model=')) continue;
+    if (
+      arg === '--continue' ||
+      arg === '-c' ||
+      arg.startsWith('--model=') ||
+      arg.startsWith('--resume=') ||
+      arg.startsWith('--session-id=')
+    ) {
+      continue;
+    }
     args.push(arg);
   }
 

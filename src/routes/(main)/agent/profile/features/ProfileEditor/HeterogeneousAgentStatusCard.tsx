@@ -2,6 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
+import { isHeterogeneousProviderBindingSupported } from '@lobechat/heterogeneous-agents';
 import {
   getHeterogeneousAgentClientConfig,
   isRemoteHeterogeneousType,
@@ -19,7 +20,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
-import { useClaudeCodeCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders';
+import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -248,7 +249,9 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const [savingCommand, setSavingCommand] = useState(false);
     const commandInputRef = useRef<HTMLInputElement | null>(null);
     const authMode = provider.authMode ?? 'subscription';
-    const { modelsByProvider, providers: compatibleProviders } = useClaudeCodeCompatibleProviders();
+    const providerBindingSupported = isHeterogeneousProviderBindingSupported(provider.type);
+    const { modelsByProvider, providers: compatibleProviders } =
+      useProviderBindingCompatibleProviders(provider.type);
     const compatibleProviderIds = useMemo(
       () => compatibleProviders.map(({ id }) => id),
       [compatibleProviders],
@@ -549,7 +552,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     };
 
     const renderAuthMode = () => {
-      if (provider.type !== 'claude-code' || detecting || !status?.available) return null;
+      if (!providerBindingSupported || detecting || !status?.available) return null;
       // Keep leftover API-mode agents visible so they can switch back; hide the
       // experiment entirely for subscription agents until Labs is enabled.
       if (!apiModeLabEnabled && authMode !== 'api') return null;
@@ -638,7 +641,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
     const renderApiConfig = () => {
       if (
-        provider.type !== 'claude-code' ||
+        !providerBindingSupported ||
         authMode !== 'api' ||
         !apiModeLabEnabled ||
         !apiModeAvailable ||
@@ -653,7 +656,11 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
             <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
               <Text className={styles.unavailableText}>
-                {t('heterogeneousStatus.apiMode.noProviders')}
+                {t(
+                  provider.type === 'codex'
+                    ? 'heterogeneousStatus.apiMode.noResponsesProviders'
+                    : 'heterogeneousStatus.apiMode.noProviders',
+                )}
               </Text>
               <Text
                 className={styles.metaText}
@@ -687,7 +694,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               }}
             />
           </div>
-          {provider.apiConfig && (
+          {provider.type === 'claude-code' && provider.apiConfig && (
             <div className={styles.detailRow} style={{ alignItems: 'flex-start' }}>
               <Text className={styles.detailLabel} style={{ paddingBlockStart: 14 }}>
                 {t('heterogeneousStatus.apiMode.smallFastModel')}

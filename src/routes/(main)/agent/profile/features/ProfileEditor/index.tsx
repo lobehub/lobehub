@@ -1,7 +1,10 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  isHeterogeneousProviderBindingSupported,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
@@ -117,6 +120,8 @@ const ProfileEditor = memo(() => {
   const apiModeLabEnabled = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
   const apiModeAvailable =
     isDesktop &&
+    !!heterogeneousProvider &&
+    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
     resolveExecutionTarget(effectiveAgencyConfig, {
       clientExecutionAvailable: true,
       isHetero: true,

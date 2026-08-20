@@ -113,7 +113,7 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     desktopOnly: true,
     flag: 'enableClaudeCodeApiMode',
     i18nKey: 'claudeCodeApiMode',
-    searchKeywords: ['claude code api', 'api provider', 'api mode'],
+    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
     stage: 'alpha',
   },
   {

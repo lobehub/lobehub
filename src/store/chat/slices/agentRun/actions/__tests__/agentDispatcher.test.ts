@@ -9,6 +9,12 @@ const apiHeteroProvider = {
   command: 'claude',
   type: 'claude-code' as const,
 };
+const codexApiHeteroProvider = {
+  apiConfig: { model: 'gpt-test', providerId: 'openai' },
+  authMode: 'api' as const,
+  command: 'codex',
+  type: 'codex' as const,
+};
 const remoteHeteroProvider = { type: 'openclaw' as const };
 const remoteHeteroProviderHermes = { type: 'hermes' as const };
 
@@ -115,6 +121,30 @@ describe('selectRuntimeType', () => {
             isGatewayMode: false,
           },
           { isDesktop: false },
+        ),
+      ).toThrow(/Desktop local execution/);
+    });
+
+    it('applies the same Desktop-local guard to Codex provider binding', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: codexApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'sandbox',
+            heterogeneousProvider: codexApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
         ),
       ).toThrow(/Desktop local execution/);
     });

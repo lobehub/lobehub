@@ -10,6 +10,7 @@ export {
   type BuildClaudeCodeDirectEnvInput,
   type BuildClaudeCodeDirectEnvResult,
   CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
 } from './claudeCodeDirectEnv';
@@ -86,6 +87,26 @@ export type {
   SetErrorIntent,
 } from './mainAgentCoordinator';
 export { createMainAgentRunState, reduceMainAgent } from './mainAgentCoordinator';
+export type {
+  EnabledProviderBindingModelRef,
+  HeterogeneousProviderBindingCapability,
+  HeterogeneousProviderBindingError,
+  HeterogeneousProviderBindingProtocol,
+  HeterogeneousProviderBindingReference,
+  HeterogeneousProviderBindingResolution,
+  HeterogeneousProviderBindingRuntime,
+  ResolveHeterogeneousProviderBindingInput,
+  ResolveHeterogeneousProviderBindingResult,
+} from './providerBinding';
+export {
+  formatHeterogeneousProviderBindingError,
+  getHeterogeneousProviderBindingCapability,
+  getProviderInferenceProtocols,
+  HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
+  isHeterogeneousProviderBindingSupported,
+  resolveHeterogeneousProviderBinding,
+  resolveProviderBindingProtocol,
+} from './providerBinding';
 export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
 export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
 export {
