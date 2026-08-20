@@ -388,6 +388,45 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
   };
 };
 
+/**
+ * Excludes an assistant row that never produced anything a user can see.
+ *
+ * A late-replayed heterogeneous-agent create can otherwise become the newest row
+ * in a topic despite carrying no payload, and it is not a valid conversation
+ * anchor: parenting the next user turn to it builds a dead branch that the
+ * conversation-flow renderer drops, so the turn disappears.
+ *
+ * The rule is an enumeration of every column a visible payload can land in, which
+ * makes it fragile in one specific direction: a payload kind that is not listed
+ * here is silently misread as "invisible", and the guard then HIDES real user
+ * content instead of dead rows. Reviews of #17474 caught four such misses
+ * (whitespace-only text, error-only turns, attachment-only turns, in-flight
+ * placeholders) before this list settled. So:
+ *
+ * **Adding a column or relation that renders on its own? Add it here too.**
+ *
+ * Deliberately NOT treated as empty:
+ * - `LOADING_FLAT` content — the in-flight marker both runtimes seed. A running
+ *   turn is the correct anchor; only the terminal-time ledger sweep in
+ *   `pendingCreateLedger` may treat the placeholder as empty.
+ * - rows with `error` — they render an error card.
+ * - rows with related `messages_files` — generated images/audio/files are joined
+ *   back in as visible content.
+ * - rows with `search` — `MessageContent` renders grounding independently of text.
+ */
+const notAnEmptyAssistantShell = () => sql`NOT (
+  ${messages.role} = 'assistant'
+  AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
+  AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
+  AND ${messages.reasoning} IS NULL
+  AND ${messages.error} IS NULL
+  AND ${messages.search} IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM ${messagesFiles}
+    WHERE ${messagesFiles.messageId} = ${messages.id}
+  )
+)`;
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -3292,21 +3331,7 @@ export class MessageModel {
             COALESCE(jsonb_exists(${messages.metadata}, 'signal'), false)
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
           )`,
-          // A late-replayed heterogeneous-agent create can otherwise become the
-          // newest row despite never having produced any user-visible payload.
-          // It is not a valid conversation anchor: parenting the next user turn
-          // to it creates a dead branch that the conversation-flow renderer drops.
-          sql`NOT (
-            ${messages.role} = 'assistant'
-            AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
-            AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
-            AND ${messages.reasoning} IS NULL
-            AND ${messages.error} IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM ${messagesFiles}
-              WHERE ${messagesFiles.messageId} = ${messages.id}
-            )
-          )`,
+          notAnEmptyAssistantShell(),
           this.ownership(),
         ),
       )
@@ -3346,17 +3371,7 @@ export class MessageModel {
           eq(messages.topicId, topicId),
           not(eq(messages.role, 'tool')),
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
-          sql`NOT (
-            ${messages.role} = 'assistant'
-            AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
-            AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
-            AND ${messages.reasoning} IS NULL
-            AND ${messages.error} IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM ${messagesFiles}
-              WHERE ${messagesFiles.messageId} = ${messages.id}
-            )
-          )`,
+          notAnEmptyAssistantShell(),
           this.ownership(),
         ),
       )

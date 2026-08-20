@@ -1,4 +1,4 @@
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { INBOX_SESSION_ID, LOADING_FLAT } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -3400,16 +3400,14 @@ describe('MessageModel Query Tests', () => {
           createdAt: new Date('2023-01-01T00:00:01'),
         },
       ]);
-      await serverDB
-        .insert(files)
-        .values({
-          id: 'f-img',
-          userId,
-          url: 'abc',
-          name: 'gen.png',
-          fileType: 'image/png',
-          size: 1,
-        });
+      await serverDB.insert(files).values({
+        id: 'f-img',
+        userId,
+        url: 'abc',
+        name: 'gen.png',
+        fileType: 'image/png',
+        size: 1,
+      });
       await serverDB
         .insert(messagesFiles)
         .values({ fileId: 'f-img', messageId: 'image-only', userId });
@@ -3418,6 +3416,62 @@ describe('MessageModel Query Tests', () => {
       expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe(
         'image-only',
       );
+    });
+
+    it('keeps a search-grounding-only assistant eligible as an anchor', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'real tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // MessageContent renders grounding independently of text, so citations
+          // alone still make this a turn the user sees.
+          id: 'search-only',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '',
+          search: { citations: [{ title: 'src', url: 'https://example.com' }] } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('search-only');
+    });
+
+    it('keeps an in-flight assistant still holding the loading placeholder', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'prev-step',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'previous step',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // Both runtimes seed this before the first chunk lands. Skipping it
+          // resolves the spine to the previous step and forks the run.
+          id: 'in-flight',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: LOADING_FLAT,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('in-flight');
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('in-flight');
     });
 
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {

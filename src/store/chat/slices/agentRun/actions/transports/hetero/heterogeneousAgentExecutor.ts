@@ -3,6 +3,7 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
@@ -1493,7 +1494,10 @@ export const executeHeterogeneousAgent = async (
         if (intent.signal) createMetadata.signal = intent.signal;
         const messageToCreate = {
           agentId: intent.agentId ?? context.agentId,
-          content: '',
+          // See the server-side twin in HeterogeneousPersistenceHandler: a blank
+          // assistant reads as a dead shell to the anchor queries, so the row an
+          // in-flight step is about to fill must carry the loading placeholder.
+          content: LOADING_FLAT,
           id: intent.messageId,
           ...(Object.keys(createMetadata).length > 0 ? { metadata: createMetadata } : {}),
           model: intent.model,

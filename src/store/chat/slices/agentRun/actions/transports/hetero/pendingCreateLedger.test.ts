@@ -1,3 +1,4 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPendingCreateLedger } from './pendingCreateLedger';
@@ -156,6 +157,24 @@ describe('createPendingCreateLedger', () => {
         'child',
         'with-update',
       ]);
+    });
+
+    it('discards a create still holding the loading placeholder at terminal time', async () => {
+      const createMessage = vi.fn().mockResolvedValue(undefined);
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      // The anchor queries keep LOADING_FLAT rows because they may be in flight.
+      // This sweep only runs once the run is over, so the placeholder means the
+      // step produced nothing at all.
+      ledger.add('seeded', { ...row('seeded', 'stale-parent'), content: LOADING_FLAT });
+      ledger.discardEmptyLeafAssistants(() => false);
+      await ledger.drain();
+
+      expect(createMessage).not.toHaveBeenCalled();
+      expect(ledger.size).toBe(0);
     });
 
     it('peels an entire chain of empty creates, not just its tail', async () => {

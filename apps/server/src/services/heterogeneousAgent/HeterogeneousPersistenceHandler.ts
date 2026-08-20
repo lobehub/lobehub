@@ -935,7 +935,14 @@ export class HeterogeneousPersistenceHandler {
         await this.deps.messageModel.create(
           {
             agentId: intent.agentId ?? undefined,
-            content: '',
+            // Seed the in-flight placeholder the chat path uses, not '': the anchor
+            // queries treat a blank assistant as a dead shell to skip, and this row
+            // stays blank until its first chunk lands. Seeding '' made every batch's
+            // `refreshMainStateFromDb` resolve the spine to the PREVIOUS step and
+            // fork the run onto a stale node — the exact regression that method's
+            // comment says it exists to prevent. `toAssistantSnapshot` already
+            // normalizes LOADING_FLAT back to '' on read.
+            content: LOADING_FLAT,
             ...(Object.keys(createMetadata).length > 0 ? { metadata: createMetadata } : {}),
             model: intent.model,
             parentId: intent.parentId,

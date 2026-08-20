@@ -1,3 +1,5 @@
+import { LOADING_FLAT } from '@lobechat/const';
+
 import type { MessageBatchOperation } from '@/services/message';
 
 type CreateMessageRow = Extract<MessageBatchOperation, { type: 'createMessage' }>['message'];
@@ -13,6 +15,9 @@ type CreateMessageRow = Extract<MessageBatchOperation, { type: 'createMessage' }
  * insertion order, so one in-order drain is correct with no knowledge of which
  * parent kind any given row uses.
  */
+const stripPlaceholder = (content: string | null | undefined) =>
+  content === LOADING_FLAT ? '' : (content ?? '');
+
 export const createPendingCreateLedger = (deps: {
   createMessage: (message: CreateMessageRow) => Promise<unknown>;
   /** The write batcher's flush. Resolves even when the writes inside it failed. */
@@ -52,9 +57,13 @@ export const createPendingCreateLedger = (deps: {
      * Terminates because every pass that sets `removed` shrinks `pending`.
      */
     discardEmptyLeafAssistants: (hasPendingUpdate: (messageId: string) => boolean) => {
+      // LOADING_FLAT counts as empty HERE and only here. It marks a row as
+      // in-flight, which is why the anchor queries keep it — but this sweep runs
+      // at terminal time, so a row still holding the placeholder is one that never
+      // produced anything at all.
       const isEmptyAssistant = (message: CreateMessageRow) =>
         message.role === 'assistant' &&
-        !message.content?.trim() &&
+        !stripPlaceholder(message.content).trim() &&
         (message.tools?.length ?? 0) === 0;
 
       let removed = true;
