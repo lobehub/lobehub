@@ -3,7 +3,17 @@
 import { imageUrl } from '@lobechat/const';
 import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
 import { AGENT_ARTWORK_STYLES } from '@lobechat/prompts';
-import { Accordion, AccordionItem, Avatar, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import {
+  Accordion,
+  AccordionItem,
+  ActionIcon,
+  Avatar,
+  Center,
+  Flexbox,
+  Icon,
+  Input,
+  Text,
+} from '@lobehub/ui';
 import { Alert, Button, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -11,10 +21,11 @@ import {
   CircleUserRound,
   PersonStanding,
   SettingsIcon,
+  Trash2,
   UploadIcon,
   WandSparkles,
 } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -180,6 +191,15 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 16px;
     color: ${cssVar.colorTextTertiary};
   `,
+  removeButton: css`
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 6px;
+    inset-inline-end: 6px;
+
+    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
+    backdrop-filter: blur(8px);
+  `,
   sectionTitle: css`
     font-weight: 500;
   `,
@@ -214,6 +234,12 @@ export interface ArtworkStudioContentProps {
   generatingTitle: string;
   /** True when the last generation attempt failed and can be retried. */
   generationFailed?: boolean;
+  /**
+   * True when the subject has an avatar of its own. Separate from `avatar`,
+   * which falls back to a default so the slot is never blank — there is
+   * nothing to remove when only the fallback is showing.
+   */
+  hasStoredAvatar?: boolean;
   /** Free-text direction the subject was last generated with. */
   initialDirection?: string;
   /** Style preset the subject was last generated with. */
@@ -224,6 +250,8 @@ export interface ArtworkStudioContentProps {
     composition?: AgentArtworkComposition,
     direction?: string,
   ) => void;
+  /** Clears the artwork in one slot. */
+  onRemove: (composition: AgentArtworkComposition) => void;
   onUpload: (file: File, composition: AgentArtworkComposition) => void;
   uploading?: boolean;
 }
@@ -241,10 +269,12 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
     generating,
     generatingTarget,
     generationFailed,
+    hasStoredAvatar,
     initialDirection,
     initialStyle,
     onCancel,
     onGenerate,
+    onRemove,
     onUpload,
     uploading,
   }) => {
@@ -283,6 +313,22 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
 
     // The slot is only ~200px wide, so the overlay carries the headline and the
     // cancel affordance; the duration hint sits under the row where it has space.
+    // Sits on the preview rather than in the button row: removal is rare next to
+    // upload and generate, and a third button crowded the ~200px column.
+    const renderRemove = (composition: AgentArtworkComposition, hasImage: boolean) =>
+      hasImage && !isGenerating(composition) ? (
+        <ActionIcon
+          className={styles.removeButton}
+          icon={Trash2}
+          size={'small'}
+          title={t('artworkStudio.remove')}
+          onClick={(event: MouseEvent<HTMLDivElement>) => {
+            event.stopPropagation();
+            onRemove(composition);
+          }}
+        />
+      ) : null;
+
     const renderGenerationOverlay = (composition: AgentArtworkComposition) =>
       isGenerating(composition) ? (
         <Center className={styles.generationOverlay} gap={8}>
@@ -323,6 +369,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                   shape={'square'}
                   size={AVATAR_SIZE}
                 />
+                {renderRemove('avatar', !!hasStoredAvatar)}
                 {renderGenerationOverlay('avatar')}
               </Center>
               <Flexbox horizontal className={styles.outputActions} gap={8}>
@@ -373,6 +420,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                 ) : (
                   <Icon icon={PersonStanding} size={64} />
                 )}
+                {renderRemove('fullBody', !!fullBody)}
                 {renderGenerationOverlay('fullBody')}
               </Center>
               <Flexbox horizontal className={styles.outputActions} gap={8}>

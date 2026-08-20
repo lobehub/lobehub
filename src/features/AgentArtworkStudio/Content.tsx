@@ -56,6 +56,7 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const fullBody = useAgentStore(agentSelectors.getAgentFullBodyArtworkById(agentId));
   const profile = useAgentStore(agentSelectors.getAgentProfileById(agentId));
+  const storedAvatar = useAgentStore(agentSelectors.getAgentStoredAvatarById(agentId));
   const systemRole = useAgentStore(
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.systemRole,
   );
@@ -134,6 +135,26 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
     ],
   );
 
+  const remove = useCallback(
+    async (composition: AgentArtworkComposition) => {
+      try {
+        if (composition === 'avatar') {
+          await updateAgentMetaById(agentId, { avatar: null });
+          return;
+        }
+
+        // Drop the key rather than storing an empty value, so the bag keeps
+        // only what the agent actually has.
+        const { fullBodyArtwork: _removed, ...rest } = profile ?? {};
+        await updateAgentMetaById(agentId, { profile: rest });
+      } catch (error) {
+        console.error('Failed to remove agent artwork:', error);
+        toast.error(t('settingAgent.artwork.uploadFailed'));
+      }
+    },
+    [agentId, profile, t, updateAgentMetaById],
+  );
+
   const upload = useCallback(
     async (file: File, composition: AgentArtworkComposition) => {
       if (file.size > MAX_AVATAR_SIZE) {
@@ -173,11 +194,13 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       generatingTarget={generatingTarget}
       generatingTitle={t('settingAgent.artwork.avatar.generating')}
       generationFailed={generationFailed}
+      hasStoredAvatar={!!storedAvatar}
       initialDirection={profile?.artworkDirection}
       initialStyle={profile?.artworkStyle}
       uploading={uploading}
       onCancel={() => void cancelAgentArtworkGeneration(agentId)}
       onGenerate={generate}
+      onRemove={(composition) => void remove(composition)}
       onUpload={(file, composition) => void upload(file, composition)}
     />
   );

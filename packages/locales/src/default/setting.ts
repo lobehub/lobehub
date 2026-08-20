@@ -86,6 +86,7 @@ export default {
   'artworkStudio.generatingHint':
     'This usually takes about 60 seconds. You can keep editing while it finishes.',
   'artworkStudio.noModel': 'Enable an image generation model to use one-click generation.',
+  'artworkStudio.remove': 'Remove',
   'artworkStudio.style.anime': 'Anime',
   'artworkStudio.style.lineArt': 'Hand-drawn Lines',
   'artworkStudio.style.lobe': 'Lobe Style',

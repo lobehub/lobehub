@@ -255,6 +255,7 @@
   "artworkStudio.generatingHint": "通常需要约 60 秒，生成期间可以继续编辑其他内容",
   "artworkStudio.noModel": "启用图像生成模型后即可一键生成",
   "artworkStudio.preview.fullBody": "全身形象预览",
+  "artworkStudio.remove": "移除",
   "artworkStudio.style.anime": "二次元",
   "artworkStudio.style.lineArt": "线条手绘",
   "artworkStudio.style.lobe": "Lobe 风格",
