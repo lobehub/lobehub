@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
@@ -24,8 +24,16 @@ const platformMock = vi.mocked(os.platform);
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, existsSync: vi.fn(() => true) };
+  return { ...actual, existsSync: vi.fn(() => true), statSync: vi.fn() };
 });
+
+// Working-directory checks go through `statSync`; treat every path as an
+// existing directory unless a test marks one as missing.
+const asDirectory = { isDirectory: () => true } as ReturnType<typeof statSync>;
+const mockMissingDir = (missing: string) =>
+  vi
+    .mocked(statSync)
+    .mockImplementation((candidate) => (candidate === missing ? undefined : asDirectory) as never);
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
 
@@ -111,6 +119,10 @@ const {
   codexAppServerShouldFailAfterThread,
   codexAppServerShouldFailResume,
   codexAppServerShouldFallback,
+  cursorAcpSessionCloseMock,
+  cursorAcpSessionConstructMock,
+  cursorAcpSessionInterruptMock,
+  cursorAcpSessionRunMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -133,6 +145,10 @@ const {
   codexAppServerShouldFailAfterThread: { value: false },
   codexAppServerShouldFailResume: { value: false },
   codexAppServerShouldFallback: { value: false },
+  cursorAcpSessionCloseMock: vi.fn(),
+  cursorAcpSessionConstructMock: vi.fn(),
+  cursorAcpSessionInterruptMock: vi.fn(),
+  cursorAcpSessionRunMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -297,6 +313,53 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockCursorAcpSession {
+    constructor(private readonly options: any) {
+      cursorAcpSessionConstructMock(options);
+    }
+
+    close() {
+      cursorAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      cursorAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (cursorAcpSessionRunMock.getMockImplementation()) {
+        return cursorAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'cursor-acp',
+      });
+      this.options.onSessionId('cursor-session-1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'cursor-acp',
+      });
+    }
+  }
+
   class MockTraeAcpSession {
     constructor(private readonly options: any) {
       traeAcpSessionConstructMock(options);
@@ -349,6 +412,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerClient: MockCodexAppServerClient,
     CodexThreadSession: MockCodexThreadSession,
+    CursorAcpSession: MockCursorAcpSession,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
@@ -462,6 +526,10 @@ describe('HeterogeneousAgentCtr', () => {
     codexAppServerShouldFailAfterThread.value = false;
     codexAppServerShouldFailResume.value = false;
     codexAppServerShouldFallback.value = false;
+    cursorAcpSessionCloseMock.mockReset();
+    cursorAcpSessionConstructMock.mockReset();
+    cursorAcpSessionInterruptMock.mockReset();
+    cursorAcpSessionRunMock.mockReset();
     grokAcpSessionCloseMock.mockReset();
     grokAcpSessionConstructMock.mockReset();
     grokAcpSessionInterruptMock.mockReset();
@@ -503,6 +571,7 @@ describe('HeterogeneousAgentCtr', () => {
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(statSync).mockReturnValue(asDirectory);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
   });
@@ -1107,53 +1176,189 @@ describe('HeterogeneousAgentCtr', () => {
       execFileMock.mockReset();
     });
 
-    it('spawns with the positional prompt without writing it to argv logs or trace metadata', async () => {
-      const originalNodeEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+    it('routes Cursor through ACP and persists its native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'cursor',
+        args: ['--model', 'composer-1.5'],
+        command: 'agent',
+        resumeSessionId: 'cursor-session-old',
+      });
 
-      try {
-        const prompt = 'private user request';
-        const systemContext = 'private selected workspace context';
-        const payload = `${systemContext}\n\n${prompt}`;
-        const { proc, writes } = createFakeProc();
-        nextFakeProc = proc;
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
-        const { sessionId } = await ctr.startSession({
-          agentType: 'cursor',
-          command: 'agent',
-          cwd: appStoragePath,
-        });
+      await ctr.sendPrompt({
+        operationId: 'op-cursor',
+        prompt: 'private user request',
+        sessionId,
+        systemContext: 'private selected workspace context',
+      });
 
-        await ctr.sendPrompt({
-          operationId: 'op-cursor-private',
-          prompt,
+      expect(spawnCalls).toHaveLength(0);
+      expect(cursorAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'composer-1.5'],
+          askUserBridge: expect.any(Object),
+          clientVersion: '1.0.0-test',
+          commandPath: 'agent',
+          cwd: FAKE_DESKTOP_PATH,
+          operationId: 'op-cursor',
+          prompt: [
+            { text: 'private selected workspace context', type: 'text' },
+            { text: 'private user request', type: 'text' },
+          ],
+          resumeSessionId: 'cursor-session-old',
           sessionId,
-          systemContext,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'cursor-session-1',
+      });
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentRuntimeStatus',
+        expect.objectContaining({ state: 'running', transport: 'cursor-acp' }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('forwards Cursor questions through the existing intervention bridge and returns the answer', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let receivedAnswer: unknown;
+      cursorAcpSessionRunMock.mockImplementation(async (options) => {
+        receivedAnswer = await options.askUserBridge.pending({
+          arguments: {
+            questions: [
+              {
+                header: 'Scope',
+                multiSelect: false,
+                options: [{ label: 'Narrow' }, { label: 'Full' }],
+                question: 'How broad?',
+              },
+            ],
+          },
+          toolCallId: 'cursor-question-1',
         });
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
+      const run = ctr.sendPrompt({ operationId: 'op-cursor-question', prompt: 'work', sessionId });
 
-        const { args: cliArgs } = spawnCalls[0];
-        expect(cliArgs.at(-2)).toBe('--');
-        expect(cliArgs.at(-1)).toBe(payload);
-        expect(writes).toEqual([]);
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith(
+          'heteroAgentEvent',
+          expect.objectContaining({
+            event: expect.objectContaining({
+              data: expect.objectContaining({ toolCallId: 'cursor-question-1' }),
+              type: 'agent_intervention_request',
+            }),
+            sessionId,
+          }),
+        ),
+      );
+      await ctr.submitIntervention({
+        operationId: 'op-cursor-question',
+        result: { 'How broad?': 'Full' },
+        toolCallId: 'cursor-question-1',
+      });
+      await run;
 
-        const logged = JSON.stringify(loggerInfoMock.mock.calls);
-        expect(logged).toContain('<argv payload redacted>');
-        expect(logged).not.toContain(prompt);
-        expect(logged).not.toContain(systemContext);
+      expect(receivedAnswer).toEqual({ result: { 'How broad?': 'Full' } });
+    });
 
-        const traceRoot = path.join(appStoragePath, '.heerogeneous-tracing', 'cursor');
-        const traceDirs = await readdir(traceRoot);
-        const metaText = await readFile(path.join(traceRoot, traceDirs[0], 'meta.json'), 'utf8');
-        const meta = JSON.parse(metaText);
-        expect(meta.args).toEqual(cliArgs.slice(0, -1));
-        expect(metaText).not.toContain(prompt);
-        expect(metaText).not.toContain(systemContext);
-      } finally {
-        process.env.NODE_ENV = originalNodeEnv;
-      }
+    it('classifies an exact Cursor ACP session/load not-found error for resume fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_602,
+        message: 'Session "legacy-cursor-session" not found',
+      });
+      cursorAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr('Cursor ACP diagnostic\n');
+        throw missingSessionError;
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'cursor',
+        command: 'agent',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'legacy-cursor-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-cursor-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+      );
+
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: {
+          agentType: 'cursor',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'agent',
+          details: {
+            code: -32_602,
+            message: 'Session "legacy-cursor-session" not found',
+          },
+          message:
+            'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+          resumeSessionId: 'legacy-cursor-session',
+          stderr: missingSessionError.message,
+          workingDirectory: '/Users/fake/projects/repo',
+        },
+        sessionId,
+      });
+      expect(send).not.toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it.each([
+      ['cancelSession', cursorAcpSessionInterruptMock],
+      ['stopSession', cursorAcpSessionCloseMock],
+    ] as const)('%s delegates to the active Cursor ACP session', async (action, expectedMock) => {
+      let resolveRun: (() => void) | undefined;
+      cursorAcpSessionRunMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
+      const run = ctr.sendPrompt({ operationId: 'op-cursor', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(cursorAcpSessionConstructMock).toHaveBeenCalledOnce());
+
+      await ctr[action]({ sessionId });
+
+      expect(expectedMock).toHaveBeenCalledOnce();
+      resolveRun?.();
+      await run;
     });
   });
 
@@ -1443,7 +1648,9 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('validates the default desktop directory when the session cwd is omitted', async () => {
-      vi.mocked(existsSync).mockImplementation((candidate) => candidate === FAKE_DESKTOP_PATH);
+      vi.mocked(statSync).mockImplementation((candidate) =>
+        candidate === FAKE_DESKTOP_PATH ? asDirectory : (undefined as never),
+      );
       const detect = vi.fn().mockResolvedValue({ available: false });
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
@@ -1459,13 +1666,13 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('Codex CLI was not found');
 
-      expect(existsSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH);
+      expect(statSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH, expect.anything());
       expect(detect).toHaveBeenCalledWith('codex', true);
     });
 
     it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
       const missingCwd = '/tmp/lobehub-deleted-worktree';
-      vi.mocked(existsSync).mockImplementation((candidate) => candidate !== missingCwd);
+      mockMissingDir(missingCwd);
       const detect = vi.fn().mockResolvedValue({
         available: true,
         path: '/Applications/ChatGPT.app/Contents/Resources/codex',
@@ -2549,6 +2756,7 @@ describe('HeterogeneousAgentCtr', () => {
         '--operation-id',
         'op-gateway',
       ]);
+      expect(spawnCall.options.cwd).toBe(process.cwd());
       expect(spawnCall.options.env).toEqual(
         expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
@@ -2557,6 +2765,7 @@ describe('HeterogeneousAgentCtr', () => {
           LOBEHUB_SERVER: 'https://server.example.com',
         }),
       );
+      expect(spawnCall.options.env).not.toHaveProperty('LOBEHUB_WORKSPACE_ID');
       expect(proc.stdin.write).not.toHaveBeenCalled();
 
       proc.emit('spawn');
@@ -2564,6 +2773,54 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(ack).resolves.toEqual({ status: 'accepted' });
       expect(proc.stdin.write).toHaveBeenCalledOnce();
       expect(proc.stdin.end).toHaveBeenCalledOnce();
+    });
+
+    it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, workspaceId: 'ws-lobehub' });
+      proc.emit('spawn');
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+      expect(spawnCalls[0].options.env).toEqual(
+        expect.objectContaining({ LOBEHUB_WORKSPACE_ID: 'ws-lobehub' }),
+      );
+    });
+
+    it('encodes primary and resume fallback contexts for the embedded CLI', async () => {
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({
+        ...params,
+        resumeFallbackSystemContext: 'workspace rules\n\nprevious conversation',
+        resumeSessionId: 'session-1',
+        systemContext: 'workspace rules',
+      });
+      proc.emit('spawn');
+
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+      expect(proc.stdin.write).toHaveBeenCalledWith(
+        JSON.stringify({
+          content: [
+            { text: 'workspace rules', type: 'text' },
+            { text: 'inspect the repository', type: 'text' },
+          ],
+          resumeFallback: [
+            { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+            { text: 'inspect the repository', type: 'text' },
+          ],
+        }),
+      );
     });
 
     it('rejects the gateway request when the embedded CLI cannot spawn', async () => {
@@ -2581,8 +2838,34 @@ describe('HeterogeneousAgentCtr', () => {
       expect(proc.stdin.write).not.toHaveBeenCalled();
     });
 
+    it('starts the wrapper from home so its inner preflight can report a missing cwd', async () => {
+      const missingCwd = '/missing/project';
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      mockMissingDir(missingCwd);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const ack = ctr.spawnLhHeteroExec({ ...params, cwd: missingCwd });
+
+      expect(spawnCalls).toHaveLength(1);
+      const [spawnCall] = spawnCalls;
+      const cwdArgIndex = spawnCall.args.indexOf('--cwd');
+      expect(spawnCall.options.cwd).toBe(os.homedir());
+      expect(spawnCall.args[cwdArgIndex + 1]).toBe(missingCwd);
+      expect(spawnCall.args).not.toContain('--raw-dump');
+      proc.emit('spawn');
+
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+      expect(proc.stdin.write).toHaveBeenCalledOnce();
+    });
+
     it('rejects before spawn when the embedded CLI is missing', async () => {
-      vi.mocked(existsSync).mockReturnValueOnce(false);
+      vi.mocked(existsSync).mockImplementation(
+        (candidate) => candidate !== '/fake/cli/dist/index.js',
+      );
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },

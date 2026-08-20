@@ -37,7 +37,15 @@ vi.mock('@/features/Verify', () => ({
     mocks.captured.onDraftToComposer = props.onDraftToComposer;
     return null;
   },
+  OriginConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
+
+vi.mock('@/store/task', () => ({
+  useTaskStore: (selector: (s: unknown) => unknown) =>
+    selector({ closeTopicDrawer: () => {}, openTopicDrawer: () => {} }),
+}));
+
+vi.mock('./TopicPanel', () => ({ default: () => null }));
 
 describe('Portal Acceptance Body — draftToComposer via the global bus', () => {
   beforeEach(() => {

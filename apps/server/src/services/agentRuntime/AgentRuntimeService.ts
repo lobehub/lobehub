@@ -61,6 +61,7 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
+import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
 import { isAbortError, throwIfAborted } from './abort';
 import {
@@ -70,6 +71,7 @@ import {
   isSuccessLikeCompletionReason,
   normalizeCompletionMessages,
 } from './CompletionLifecycle';
+import { logToolCallPc } from './formalObservation';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
@@ -92,7 +94,6 @@ import {
   type StepCompletionReason,
   type SubAgentBridgeParams,
 } from './types';
-import { stateHasEntityFileEdits } from './workRegistration';
 
 if (process.env.VERCEL) {
   // Route debug output to stdout (`console.info`) instead of stderr, which
@@ -461,6 +462,8 @@ export class AgentRuntimeService {
       deviceAccessPolicy,
       discordContext,
       evalContext,
+      enableExpertise,
+      expertise,
       executionPlan,
       maxSteps,
       userMemory,
@@ -542,6 +545,8 @@ export class AgentRuntimeService {
       const initialState = {
         activatedStepTools,
         createdAt: new Date().toISOString(),
+        enableExpertise,
+        expertise,
         // Store initialContext for executeSync to use
         initialContext,
         lastModified: new Date().toISOString(),
@@ -1113,6 +1118,10 @@ export class AgentRuntimeService {
 
         // Execute step (skipped when force-finishing a parked supervisor op).
         const startAt = Date.now();
+        logToolCallPc(operationId, stepIndex, 'post.runtime_step_entered', () => ({
+          forcedFinish: Boolean(forcedFinishState),
+          stateStatus: currentState.status,
+        }));
         const stepResult = forcedFinishState
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
           : await runtime.step(currentState, currentContext);
@@ -1125,10 +1134,19 @@ export class AgentRuntimeService {
         if (stepResult.newState.error) {
           stepResult.newState.error = formatErrorForState(stepResult.newState.error);
         }
+        logToolCallPc(operationId, stepIndex, 'post.runtime_step_returned', () => ({
+          errorCategory: stepResult.newState.error?.category ?? null,
+          errorRetryable: stepResult.newState.error?.retryable ?? null,
+          nextContextPresent: stepResult.nextContext !== undefined,
+          stateStatus: stepResult.newState.status,
+        }));
 
         // Check if the operation was interrupted while the step was executing
         // (e.g., user clicked abort during a long LLM call)
         const latestState = await this.coordinator.loadAgentState(operationId);
+        logToolCallPc(operationId, stepIndex, 'post.latest_state_loaded', () => ({
+          interrupted: latestState?.status === 'interrupted',
+        }));
         if (latestState?.status === 'interrupted') {
           stepResult.newState.status = 'interrupted';
           stepResult.newState.lastModified = new Date().toISOString();
@@ -1161,6 +1179,7 @@ export class AgentRuntimeService {
           // per-(op, file) versions at pre-approval content.
           if (isSuccessLikeCompletionReason(preSaveReason)) {
             await this.completionLifecycle.registerFileWorks(operationId, stepResult.newState);
+            logToolCallPc(operationId, stepIndex, 'post.file_works_registered', () => ({}));
           }
         }
 
@@ -1170,6 +1189,10 @@ export class AgentRuntimeService {
           executionTime: Date.now() - startAt,
           stepIndex, // placeholder
         });
+        logToolCallPc(operationId, stepIndex, 'post.step_result_saved', () => ({
+          stateStatus: stepResult.newState.status,
+          stateStepCount: stepResult.newState.stepCount,
+        }));
 
         let nextStepScheduled = false;
 
@@ -1183,6 +1206,7 @@ export class AgentRuntimeService {
           stepIndex,
           type: 'step_complete',
         });
+        logToolCallPc(operationId, stepIndex, 'post.step_complete_published', () => ({}));
 
         await this.publishSubAgentProgress(stepResult.newState, stepIndex);
 
@@ -1297,6 +1321,13 @@ export class AgentRuntimeService {
         const hasAfterStepHooks = stepResult.newState.metadata?._hooks?.some(
           (h: { type: string }) => h.type === 'afterStep',
         );
+        logToolCallPc(operationId, stepIndex, 'post.trace_appended', () => ({}));
+        logToolCallPc(operationId, stepIndex, 'post.route_selected', () => ({
+          hasAfterStepHooks,
+          nextContextPresent: stepResult.nextContext !== undefined,
+          queueAvailable: Boolean(this.queueService),
+          shouldContinue,
+        }));
         if (hasAfterStepHooks && stepResult.newState.metadata) {
           const prevTracking = stepResult.newState.metadata._stepTracking || {};
           const newTotalToolCalls =
@@ -1318,6 +1349,7 @@ export class AgentRuntimeService {
           // Persist tracking state for next step
           stepResult.newState.metadata._stepTracking = updatedTracking;
           await this.coordinator.saveAgentState(operationId, stepResult.newState);
+          logToolCallPc(operationId, stepIndex, 'post.step_tracking_saved', () => ({}));
         }
 
         if (shouldContinue && stepResult.nextContext && this.queueService) {
@@ -1342,6 +1374,9 @@ export class AgentRuntimeService {
             stepIndex: nextStepIndex,
           });
           nextStepScheduled = true;
+          logToolCallPc(operationId, stepIndex, 'post.next_step_scheduled', () => ({
+            nextStepIndex,
+          }));
 
           log('[%s][%d] Scheduled next step %d', operationId, stepIndex, nextStepIndex);
         }
@@ -1369,9 +1404,11 @@ export class AgentRuntimeService {
             stepResult.newState,
             reason,
           );
+          logToolCallPc(operationId, stepIndex, 'post.completion_signals', () => ({ reason }));
 
           // Dispatch completion hooks
           await this.completionLifecycle.dispatchHooks(operationId, stepResult.newState, reason);
+          logToolCallPc(operationId, stepIndex, 'post.completion_hooks', () => ({ reason }));
 
           // Park-time self-check: sub-agents are dispatched mid-step, so a
           // fast child can complete BEFORE this op's parked state/row were
@@ -1418,6 +1455,7 @@ export class AgentRuntimeService {
               : undefined,
             state: stepResult.newState,
           });
+          logToolCallPc(operationId, stepIndex, 'post.trace_finalized', () => ({ reason }));
         }
 
         return {
@@ -1493,9 +1531,11 @@ export class AgentRuntimeService {
       }
 
       await this.completionLifecycle.emitSignalEvents(operationId, finalStateWithError, 'error');
+      logToolCallPc(operationId, stepIndex, 'post.completion_signals', () => ({ reason: 'error' }));
 
       // Dispatch onComplete + onError hooks
       await this.completionLifecycle.dispatchHooks(operationId, finalStateWithError, 'error');
+      logToolCallPc(operationId, stepIndex, 'post.completion_hooks', () => ({ reason: 'error' }));
 
       // Finalize the partial snapshot into the canonical S3 path so the
       // failed op is observable in the same place as a successful run.
@@ -1531,6 +1571,7 @@ export class AgentRuntimeService {
         },
         state: finalStateWithError,
       });
+      logToolCallPc(operationId, stepIndex, 'post.trace_finalized', () => ({ reason: 'error' }));
 
       throw error;
     } finally {

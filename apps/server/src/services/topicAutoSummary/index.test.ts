@@ -77,6 +77,14 @@ describe('TopicAutoSummaryService', () => {
       'Previous rolling summary:\nEarlier decision: use PostgreSQL.',
     );
     expect(request.messages[1].content).toContain('Recent conversation:\nUSER: What is next?');
+    expect(mocks.generateObject.mock.calls[0][1]).toEqual({
+      tracing: {
+        promptVersion: 'v1',
+        scenario: 'topic_auto_summary',
+        schemaName: 'topic_auto_summary',
+        topicId: 'topic-1',
+      },
+    });
   });
 
   it('skips a user who never opted in', async () => {

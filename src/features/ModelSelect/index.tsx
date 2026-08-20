@@ -88,6 +88,8 @@ interface ModelSelectProps extends Pick<
   /** Fired when the selection is cleared via `allowClear`. */
   onClear?: () => void;
   popupWidth?: number;
+  /** Restrict selection to these provider ids. */
+  providerIds?: string[];
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
   /** `undefined` renders the empty state (`placeholder`) instead of a selection. */
@@ -111,14 +113,20 @@ const ModelSelect = memo<ModelSelectProps>(
     initialWidth = false,
     popupWidth,
     modelType = 'chat',
+    providerIds,
   }) => {
     const { t } = useTranslation('components');
     const [enabling, setEnabling] = useState(false);
-    const enabledList = useAiInfraStore((s) =>
+    const fullEnabledList = useAiInfraStore((s) =>
       modelType === 'embedding'
         ? aiProviderSelectors.enabledEmbeddingModelList(s)
         : s.enabledChatModelList || [],
     );
+    const enabledList = useMemo(() => {
+      if (!providerIds) return fullEnabledList;
+      const allowedProviderIds = new Set(providerIds);
+      return fullEnabledList.filter((provider) => allowedProviderIds.has(provider.id));
+    }, [fullEnabledList, providerIds]);
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
     const enabledAiProviders = useAiInfraStore((s) => s.enabledAiProviders);

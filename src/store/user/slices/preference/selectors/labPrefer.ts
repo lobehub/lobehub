@@ -9,6 +9,8 @@ export const labPreferSelectors = {
     false,
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
+  enableClaudeCodeApiMode: (s: UserState): boolean =>
+    s.preference.lab?.enableClaudeCodeApiMode ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
   enableCodexAppServer: (s: UserState): boolean => s.preference.lab?.enableCodexAppServer ?? false,
   enableDesktopSplitView: (s: UserState): boolean =>
@@ -24,6 +26,7 @@ export const labPreferSelectors = {
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
+  enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
   enableTopicAcceptance: (s: UserState): boolean =>

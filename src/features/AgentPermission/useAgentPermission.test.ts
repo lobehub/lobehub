@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   access: undefined as { accessLevel: string; canManage: boolean } | undefined,
   accessError: undefined as unknown,
   agentMap: {} as Record<string, object>,
-  canEditContent: true,
   devices: [] as unknown[],
   permissionResourceId: undefined as string | undefined,
   setAccessLevel: vi.fn(),
@@ -31,10 +30,6 @@ vi.mock('@/features/ResourcePermission/useResourcePermission', () => ({
       updating: false,
     };
   },
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: mocks.canEditContent }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -66,7 +61,6 @@ describe('useAgentPermission', () => {
     vi.clearAllMocks();
     mocks.access = { accessLevel: 'use', canManage: true };
     mocks.accessError = undefined;
-    mocks.canEditContent = true;
     mocks.devices = [];
     mocks.permissionResourceId = undefined;
     mocks.agentMap = { 'agent-1': workspaceAgent() };
@@ -78,6 +72,7 @@ describe('useAgentPermission', () => {
     expect(result.current.isWorkspaceAgent).toBe(true);
     expect(mocks.permissionResourceId).toBe('agent-1');
     expect(result.current.accessLevel).toBe('use');
+    expect(result.current.canEditConfig).toBe(true);
     expect(result.current.canManageAccess).toBe(true);
   });
 
@@ -197,14 +192,7 @@ describe('useAgentPermission', () => {
 
     const { result } = setup();
 
-    expect(result.current.canManageAccess).toBe(false);
-  });
-
-  it('withholds the config policies from a role that cannot edit content', () => {
-    mocks.canEditContent = false;
-
-    const { result } = setup();
-
     expect(result.current.canEditConfig).toBe(false);
+    expect(result.current.canManageAccess).toBe(false);
   });
 });

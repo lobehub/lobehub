@@ -1,6 +1,4 @@
-import type { ConnectorDataErrorOptions } from './errors';
 import { ConnectorDataError } from './errors';
-import type { ConnectorDataProvider } from './providers';
 
 const DEFAULT_ATTEMPTS = 3;
 const FIRST_RETRY_DELAY_MS = 250;
@@ -17,10 +15,8 @@ const TRANSIENT_NETWORK_CODES = new Set([
 export type ConnectorRetryDelay = (milliseconds: number) => Promise<void>;
 
 export interface ConnectorRetryOptions {
-  code: string;
+  /** Delay implementation used between retry attempts. */
   delay?: ConnectorRetryDelay;
-  operation: string;
-  provider: ConnectorDataProvider;
 }
 
 const defaultDelay: ConnectorRetryDelay = async (milliseconds) => {
@@ -50,7 +46,20 @@ const getErrorCode = (error: unknown): string | undefined => {
   return typeof code === 'string' ? code : undefined;
 };
 
-const isTransientError = (error: unknown) => {
+/**
+ * Determines whether a connector failure can be retried without user intervention.
+ *
+ * Use when:
+ * - Retrying raw upstream failures
+ * - Persisting provider diagnostics after retries finish
+ *
+ * Expects:
+ * - A raw upstream error or connector-owned protocol error
+ *
+ * Returns:
+ * - Whether the failure matches the connector retry policy
+ */
+export const isConnectorErrorRetryable = (error: unknown) => {
   if (error instanceof ConnectorDataError) return error.retryable;
 
   const status = getErrorStatus(error);
@@ -64,38 +73,31 @@ const isTransientError = (error: unknown) => {
   return code !== undefined && TRANSIENT_NETWORK_CODES.has(code);
 };
 
+/**
+ * Retries transient connector operations and rethrows the original terminal error.
+ *
+ * Use when:
+ * - Calling an external connector transport with bounded retries
+ *
+ * Expects:
+ * - The operation throws its original upstream or connector-owned error
+ *
+ * Returns:
+ * - The successful operation result without wrapping terminal failures
+ */
 export const withConnectorRetry = async <T>(
   operation: () => Promise<T>,
-  { code, delay = defaultDelay, operation: operationName, provider }: ConnectorRetryOptions,
+  { delay = defaultDelay }: ConnectorRetryOptions = {},
 ): Promise<T> => {
-  for (let attempt = 0; attempt < DEFAULT_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; ; attempt += 1) {
     try {
       return await operation();
     } catch (error) {
-      const retryable = isTransientError(error);
+      const retryable = isConnectorErrorRetryable(error);
       const canRetry = attempt < DEFAULT_ATTEMPTS - 1 && retryable;
 
-      if (canRetry) {
-        await delay(getRetryDelay(attempt));
-        continue;
-      }
-
-      if (error instanceof ConnectorDataError) throw error;
-
-      const errorOptions: ConnectorDataErrorOptions = {
-        code,
-        operation: operationName,
-        provider,
-        retryable,
-      };
-      throw new ConnectorDataError(errorOptions);
+      if (!canRetry) throw error;
+      await delay(getRetryDelay(attempt));
     }
   }
-
-  throw new ConnectorDataError({
-    code,
-    operation: operationName,
-    provider,
-    retryable: false,
-  });
 };

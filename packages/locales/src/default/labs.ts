@@ -13,6 +13,9 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.claudeCodeApiMode.desc':
+    'Let Claude Code use a configured API provider and model on this desktop instead of a Claude subscription. Desktop local execution only.',
+  'features.claudeCodeApiMode.title': 'Claude Code API Provider',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
@@ -48,6 +51,9 @@ export default {
   'features.taskVerify.desc':
     'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Task Delivery Acceptance',
+  'features.selfLearning.desc':
+    'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
+  'features.selfLearning.title': 'Self-evolving',
   'features.topicAcceptance.desc':
     'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
   'features.topicAcceptance.title': 'Topic Acceptance',

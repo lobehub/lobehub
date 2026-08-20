@@ -6,6 +6,7 @@ import type {
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
+  buildClaudeCodeDirectEnv,
   buildHeterogeneousAgentAuthRequiredError,
   createMainAgentRunState,
   isHeterogeneousAgentAuthRequired,
@@ -16,6 +17,8 @@ import {
   reduceMainAgent,
   rehydrateSubagentRunsState,
   resolveHeterogeneousAgentCommand,
+  sanitizeClaudeCodeDirectArgs,
+  sanitizeClaudeCodeDirectEnv,
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
@@ -46,6 +49,7 @@ import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
+import { validateClaudeCodeApiBinding } from '@/helpers/claudeCodeApiBinding';
 import {
   removeHeteroSessionIdForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
@@ -58,6 +62,8 @@ import {
   messageService,
 } from '@/services/message';
 import { threadService } from '@/services/thread';
+import { workService } from '@/services/work';
+import { getAiInfraStoreState } from '@/store/aiInfra';
 import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
@@ -226,25 +232,14 @@ const buildLocalHeterogeneousSystemContext = ({
   agentSystemContext,
   contextSelections,
   pageSelections,
-  workingDirectory,
 }: {
   agentSystemContext?: string;
   contextSelections?: ContextSelection[];
   pageSelections?: PageSelection[];
-  workingDirectory?: string;
 }): string | undefined => {
   const parts: string[] = [];
 
   if (agentSystemContext?.trim()) parts.push(agentSystemContext.trim());
-
-  if (workingDirectory?.trim()) {
-    parts.push(
-      [
-        '## Workspace',
-        `You are running on the user's own machine. Your working directory is \`${workingDirectory.trim()}\`.`,
-      ].join('\n'),
-    );
-  }
 
   const selectionContext =
     contextSelections && contextSelections.length > 0
@@ -494,7 +489,7 @@ export const executeHeterogeneousAgent = async (
     model?: string;
     usage: unknown;
   }) => {
-    if (adapterType !== 'claude-code') return;
+    if (adapterType !== 'claude-code' || heterogeneousProvider.authMode === 'api') return;
     const u = intent.usage as ModelUsage;
     agentQuotaService
       .recordUsage({
@@ -1025,7 +1020,14 @@ export const executeHeterogeneousAgent = async (
     completed = true;
     fallbackPromise = (async () => {
       await clearStaleResumeMetadata().catch(console.error);
-      toast?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      toast?.info?.(
+        t(
+          adapterType === 'cursor'
+            ? 'heteroAgent.resumeReset.cursorAcpIncompatible'
+            : 'heteroAgent.resumeReset.resumeFailed',
+          { ns: 'chat' },
+        ),
+      );
       await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
     })();
 
@@ -1801,11 +1803,78 @@ export const executeHeterogeneousAgent = async (
 
   await rehydrateClientSubagentRuns();
 
+  let directEnv: Record<string, string> | undefined;
+  let directModel: string | undefined;
+  let spawnProvider = heterogeneousProvider;
+
+  if (adapterType === 'claude-code' && heterogeneousProvider.authMode === 'api') {
+    if (!labPreferSelectors.enableClaudeCodeApiMode(useUserStore.getState())) {
+      await persistTerminalError(
+        toHeterogeneousAgentMessageError(
+          new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
+          adapterType,
+        ),
+      );
+      return;
+    }
+
+    const { apiConfig } = heterogeneousProvider;
+    const aiInfraState = getAiInfraStoreState();
+    const providerConfig = apiConfig
+      ? aiInfraState.aiProviderRuntimeConfig[apiConfig.providerId]
+      : undefined;
+    const bindingError = validateClaudeCodeApiBinding({
+      apiConfig,
+      enabledModels: aiInfraState.enabledAiModels ?? [],
+      providerEnabled:
+        !!apiConfig &&
+        !!providerConfig &&
+        !!aiInfraState.enabledAiProviders?.some((provider) => provider.id === apiConfig.providerId),
+      providerSdkType: providerConfig?.settings.sdkType,
+    });
+    if (bindingError) {
+      const message =
+        bindingError.code === 'configMissing'
+          ? t('heteroAgent.apiMode.configMissing', { ns: 'chat' })
+          : t(`heteroAgent.apiMode.${bindingError.code}`, {
+              ...bindingError,
+              ns: 'chat',
+            });
+      await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
+      return;
+    }
+
+    if (!apiConfig || !providerConfig) return;
+
+    const result = buildClaudeCodeDirectEnv({
+      keyVaults: providerConfig.keyVaults,
+      model: apiConfig.model,
+      sdkType: providerConfig.settings.sdkType,
+      smallFastModel: apiConfig.smallFastModel ?? undefined,
+    });
+    if (result.error) {
+      await persistTerminalError(
+        toHeterogeneousAgentMessageError(new Error(result.error), adapterType),
+      );
+      return;
+    }
+
+    directEnv = result.env;
+    directModel = apiConfig.model.trim();
+    spawnProvider = {
+      ...heterogeneousProvider,
+      args: sanitizeClaudeCodeDirectArgs(heterogeneousProvider.args),
+      model: undefined,
+    };
+  }
+
   try {
     // Account routing: realize the pinned/balanced account choice as spawn env
     // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
     // before; a quota-service failure must never block the run.
-    const quotaAccountPlan = await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
+    const quotaAccountPlan = directEnv
+      ? { env: {}, externalAccountId: undefined }
+      : await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
 
     const sessionEnv = {
       // Tell the CLI which LobeHub conversation it is running inside. The child
@@ -1821,13 +1890,20 @@ export const executeHeterogeneousAgent = async (
       ...quotaAccountPlan.env,
       // The agent's own env is the most specific choice and keeps winning —
       // over both provenance and account routing.
-      ...heterogeneousProvider.env,
+      ...(directEnv
+        ? sanitizeClaudeCodeDirectEnv(heterogeneousProvider.env)
+        : heterogeneousProvider.env),
+      ...directEnv,
     };
+
+    const spawnArgs = buildHeteroSpawnArgs(spawnProvider);
+    const resolvedSpawnArgs =
+      directEnv && directModel ? [...(spawnArgs ?? []), '--model', directModel] : spawnArgs;
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: buildHeteroSpawnArgs(heterogeneousProvider),
+      args: resolvedSpawnArgs,
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
@@ -1845,7 +1921,7 @@ export const executeHeterogeneousAgent = async (
     // Attribute the run to the login the FINAL env actually resolves to (an
     // agent-env CLAUDE_CONFIG_DIR beats routing, and unbound agents use the
     // default login). Falls back to the routed choice when the file read fails.
-    if (adapterType === 'claude-code') {
+    if (adapterType === 'claude-code' && !directEnv) {
       heterogeneousAgentService
         .getClaudeCodeIdentity({ env: sessionEnv })
         .then((identity) => {
@@ -2252,6 +2328,37 @@ export const executeHeterogeneousAgent = async (
               runScope,
               runtimeType: 'hetero',
             });
+
+            // Shell Work scan for this LOCAL run: no server operation exists, so
+            // the completion-time scan (`registerWorksForOperation`) can never
+            // fire — report the run's persisted tool message ids to the server,
+            // which replays the same scan (gh CLI → github Work cards) under a
+            // synthetic anchor-derived rootOperationId. Best-effort and
+            // idempotent server-side; a failure only costs the card, never the
+            // run. Mirrors the gateway path's error-skip: only clean completions
+            // scan. Capped to the server's input limit — a >500-tool run keeps
+            // its most recent calls, which are the ones that own trailing
+            // create/edit output.
+            const toolMessageIds = [...new Set(toolMsgIdByCallId.values())].slice(-500);
+            // Topicless runs can't scan: the server validates the anchor against
+            // the claimed topic, and a card has no conversation to render in.
+            if (toolMessageIds.length > 0 && mainState.currentAssistantId && context.topicId) {
+              try {
+                const scan = await workService.registerShellWorksForRun({
+                  anchorMessageId: mainState.currentAssistantId,
+                  messageIds: toolMessageIds,
+                  topicId: context.topicId,
+                });
+                if (scan.registered > 0) {
+                  // Re-pull the message list so the anchor's fresh
+                  // `metadata.work.rootOperationId` (and its works payload)
+                  // renders without a manual refresh.
+                  await workService.refreshConversation(context.topicId);
+                }
+              } catch (err) {
+                console.error('[HeterogeneousAgent] Failed to register shell works:', err);
+              }
+            }
           }
         });
       },
@@ -2312,9 +2419,6 @@ export const executeHeterogeneousAgent = async (
       agentSystemContext: heterogeneousProvider.systemContext,
       contextSelections,
       pageSelections,
-      // The native CLI session already retains its workspace context. Reinjecting this note on
-      // every resumed turn makes it accumulate in persistent Codex/Claude conversations.
-      workingDirectory: resumeSessionId ? undefined : workingDirectory,
     });
 
     // When resuming, hand main the prior turns so it can rebuild a Claude Code

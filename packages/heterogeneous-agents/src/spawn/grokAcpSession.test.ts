@@ -115,6 +115,10 @@ const createAcpProcess = ({
             send({ id: message.id, jsonrpc: '2.0', result: {} });
             return;
           }
+          case 'session/set_model': {
+            send({ id: message.id, jsonrpc: '2.0', result: {} });
+            return;
+          }
           case 'session/prompt': {
             promptRequest = message;
             stdout.write('not-json\n');
@@ -374,25 +378,56 @@ describe('GrokAcpSession', () => {
     expect(statuses.map(({ state }) => state)).toEqual(['starting', 'running', 'idle', 'closed']);
   });
 
-  it('loads resumed sessions with noReplay', async () => {
+  it('loads resumed sessions, reapplies model and effort, then prompts', async () => {
     const { child, requests } = createAcpProcess();
     spawnMock.mockReturnValue(child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const { session, sessionIds } = createSession({ resumeSessionId: 'existing-session' });
+    const { session, sessionIds } = createSession({
+      args: ['--model=grok-4.6', '--reasoning-effort', 'high'],
+      resumeSessionId: 'existing-session',
+    });
 
     await session.run();
 
     expect(requests.map(({ method }) => method).includes('session/new')).toBe(false);
+    expect(
+      requests.map(({ method }) => method).filter((method) => method?.startsWith('session/')),
+    ).toEqual(['session/load', 'session/set_model', 'session/prompt']);
     expect(requests.find(({ method }) => method === 'session/load')?.params).toEqual({
       _meta: { noReplay: true },
       cwd: '/workspace',
       mcpServers: [],
       sessionId: 'existing-session',
     });
+    expect(requests.find(({ method }) => method === 'session/set_model')?.params).toEqual({
+      _meta: { reasoningEffort: 'high' },
+      modelId: 'grok-4.6',
+      sessionId: 'existing-session',
+    });
     expect(requests.find(({ method }) => method === 'session/prompt')?.params).toMatchObject({
       sessionId: 'existing-session',
     });
     expect(sessionIds).toEqual(['existing-session']);
+  });
+
+  it('applies an effort-only override while loading a resumed session', async () => {
+    const { child, requests } = createAcpProcess();
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const { session } = createSession({
+      args: ['--effort', 'high'],
+      resumeSessionId: 'existing-session',
+    });
+
+    await session.run();
+
+    expect(requests.find(({ method }) => method === 'session/load')?.params).toEqual({
+      _meta: { noReplay: true, reasoningEffort: 'high' },
+      cwd: '/workspace',
+      mcpServers: [],
+      sessionId: 'existing-session',
+    });
+    expect(requests.some(({ method }) => method === 'session/set_model')).toBe(false);
   });
 
   it('falls back to a supported advertised auth method when the default is unsupported', async () => {

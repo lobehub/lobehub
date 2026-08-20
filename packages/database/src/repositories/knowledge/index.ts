@@ -279,6 +279,21 @@ export class KnowledgeRepo {
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);
 
   /**
+   * Narrow a workspace-scoped list to one Resources mode. Personal rows are
+   * already owner-scoped and deliberately ignore the mode filter.
+   */
+  private visibilityFilter = (
+    visibility: QueryFileListParams['visibility'],
+    column: AnyPgColumn,
+  ): SQL | undefined => {
+    if (!this.workspaceId || !visibility) return undefined;
+
+    return visibility === 'private'
+      ? eq(column, 'private')
+      : (or(eq(column, 'public'), isNull(column)) as SQL);
+  };
+
+  /**
    * Filters shared by both arms. `visibility` narrows the ownership-scoped pool;
    * rows predating the column count as public.
    */
@@ -298,10 +313,7 @@ export class KnowledgeRepo {
         ? isNull(cols.parentId)
         : eq(cols.parentId, parentId),
     q ? or(...cols.names.map((name) => ilike(name, `%${q}%`))) : undefined,
-    visibility === 'private' ? eq(cols.visibility, 'private') : undefined,
-    visibility === 'public'
-      ? or(eq(cols.visibility, 'public'), isNull(cols.visibility))
-      : undefined,
+    this.visibilityFilter(visibility, cols.visibility),
   ];
 
   private fileArm = (
@@ -429,9 +441,14 @@ export class KnowledgeRepo {
    * `LIMIT` truncate away every row of the wanted kind — a burst of uploads
    * left the resource home with an empty "recent pages" section.
    */
-  async queryRecent(limit: number = 12, kind?: RecentItemKind): Promise<KnowledgeItem[]> {
+  async queryRecent(
+    limit: number = 12,
+    kind?: RecentItemKind,
+    visibility?: QueryFileListParams['visibility'],
+  ): Promise<KnowledgeItem[]> {
     const fileArm = this.fileArm([
       this.notInAnyKnowledgeBase(),
+      this.visibilityFilter(visibility, f.visibility),
       // Derived pages live in the documents table; their backing file row is not
       // a file the user uploaded, so it never belongs to the file list.
       kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
@@ -439,6 +456,7 @@ export class KnowledgeRepo {
 
     const documentArm = this.documentArm([
       isNull(d.knowledgeBaseId),
+      this.visibilityFilter(visibility, d.visibility),
       // Folders are containers, not pages.
       kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
     ]);

@@ -7,8 +7,10 @@ import {
   knowledgeBases,
   projectCompletionReviews,
   projects,
+  projectWorks,
   tasks,
   users,
+  works,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -67,6 +69,34 @@ describe('ProjectModel', () => {
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
     ).toHaveLength(0);
+  });
+
+  it('resolves a project by slug without escaping the current scope', async () => {
+    const project = await createProject(model, { name: 'Apollo', slug: 'apollo' });
+    await createProject(otherModel, { name: 'Other Apollo', slug: 'other-apollo' });
+
+    expect(await model.findByIdOrSlug('apollo')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(await model.findByIdOrSlug(project.id)).toEqual(
+      expect.objectContaining({ slug: 'apollo' }),
+    );
+    expect(await model.findByIdOrSlug('other-apollo')).toBeNull();
+  });
+
+  it('finds a bounded set of readable projects', async () => {
+    const first = await createProject(model, { name: 'First' });
+    const second = await createProject(model, { name: 'Second' });
+    const hidden = await createProject(otherModel, { name: 'Hidden', visibility: 'private' });
+
+    expect(await model.findByIds([])).toEqual([]);
+    expect(await model.findByIds([first.id, second.id, hidden.id])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: first.id }),
+        expect.objectContaining({ id: second.id }),
+      ]),
+    );
+    expect(await model.findByIds([first.id, second.id, hidden.id])).toHaveLength(2);
   });
 
   it('normalizes identifiers and enforces uniqueness within their ownership scope', async () => {
@@ -202,9 +232,22 @@ describe('ProjectModel', () => {
       .insert(knowledgeBases)
       .values({ name: 'Foreign KB', userId: otherUserId })
       .returning();
+    const [foreignWork] = await serverDB
+      .insert(works)
+      .values({
+        resourceId: 'foreign-work',
+        resourceType: 'github_issue',
+        toolIdentifier: 'github',
+        toolName: 'create_issue',
+        type: 'external',
+        userId: otherUserId,
+        visibility: 'private',
+      })
+      .returning();
 
     expect(await model.listAgents(foreignProject.id)).toBeNull();
     expect(await model.listKnowledgeBases(foreignProject.id)).toBeNull();
+    expect(await model.listWorks(foreignProject.id)).toBeNull();
     expect(await model.listTasks(foreignProject.id)).toBeNull();
     expect(await model.listCompletionReviews(foreignProject.id)).toBeNull();
     expect(await model.addAgent(foreignProject.id, { agentId: 'missing' })).toBeNull();
@@ -213,11 +256,52 @@ describe('ProjectModel', () => {
     ).toBeNull();
     expect(await model.removeAgent(foreignProject.id, 'missing')).toBe(false);
     expect(await model.removeKnowledgeBase(foreignProject.id, foreignKnowledgeBase.id)).toBe(false);
+    expect(await model.addWork(foreignProject.id, { workId: 'missing' })).toBeNull();
+    expect(await model.removeWork(foreignProject.id, 'missing')).toBe(false);
 
     const project = await createProject(model, { name: 'Local' });
     await expect(
       model.addKnowledgeBase(project.id, { knowledgeBaseId: foreignKnowledgeBase.id }),
     ).rejects.toThrow('Knowledge base not found');
+    await expect(model.addWork(project.id, { workId: foreignWork.id })).rejects.toThrow(
+      'Work not found',
+    );
+  });
+
+  it('associates one durable Work with multiple projects without changing Work ownership', async () => {
+    const firstProject = await createProject(model, { name: 'First Work Project' });
+    const secondProject = await createProject(model, { name: 'Second Work Project' });
+    const [work] = await serverDB
+      .insert(works)
+      .values({
+        resourceId: 'lobehub/lobehub#1',
+        resourceType: 'github_pull_request',
+        toolIdentifier: 'github',
+        toolName: 'create_pull_request',
+        type: 'external',
+        userId,
+        visibility: 'private',
+      })
+      .returning();
+
+    await model.addWork(firstProject.id, { sortOrder: 2, workId: work.id });
+    await model.addWork(secondProject.id, { workId: work.id });
+    await model.addWork(firstProject.id, { sortOrder: 1, workId: work.id });
+
+    expect(await model.listWorks(firstProject.id)).toEqual([
+      expect.objectContaining({
+        binding: expect.objectContaining({ sortOrder: 1 }),
+        work: expect.objectContaining({ id: work.id }),
+      }),
+    ]);
+    expect(
+      await serverDB.select().from(projectWorks).where(eq(projectWorks.workId, work.id)),
+    ).toHaveLength(2);
+
+    expect(await model.removeWork(firstProject.id, work.id)).toBe(true);
+    expect(await model.removeWork(firstProject.id, work.id)).toBe(false);
+    expect(await model.listWorks(secondProject.id)).toHaveLength(1);
+    expect(await serverDB.select().from(works).where(eq(works.id, work.id))).toHaveLength(1);
   });
 
   it('moves a task subtree into a project', async () => {

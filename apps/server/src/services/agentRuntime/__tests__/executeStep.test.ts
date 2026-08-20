@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
-import type { ReasoningGraph } from '@lobechat/types';
+import type { AgentGraph } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
@@ -226,7 +226,7 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
       name: 'answer-graph',
       nodes: { answer: { type: 'llm' } },
       terminal: 'answer',
-    } satisfies ReasoningGraph;
+    } satisfies AgentGraph;
     const service = new AgentRuntimeService({} as any, 'user-1', {
       agentFactory: (config) => new GraphAgent({ ...config, graph }),
       queueService: null,

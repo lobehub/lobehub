@@ -13,6 +13,11 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { useReportPanelExpand } from '../../Workspace/useReportPanelExpand';
 import AcceptanceListPanel from './AcceptanceListPanel';
+import AcceptanceProjectActions from './AcceptanceProjectActions';
+
+const renderProjectActions = (projectId?: string) => (
+  <AcceptanceProjectActions projectId={projectId} />
+);
 
 const styles = createStaticStyles(({ css }) => ({
   expandBtn: css`
@@ -74,7 +79,9 @@ const AcceptanceWorkspace = memo(() => {
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       {/* Standalone route (outside the app main layout): drive the tab title here. */}
       <RouteMetaBridge />
-      {canShowList && !hasFocusedCheck && <AcceptanceListPanel {...panel} />}
+      {canShowList && !hasFocusedCheck && (
+        <AcceptanceListPanel {...panel} renderProjectActions={renderProjectActions} />
+      )}
       <div className={styles.main}>
         {canShowList && !hasFocusedCheck && !panel.expand && (
           <button

@@ -13,8 +13,9 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useGlobalStore } from '@/store/global';
+import type { TaskViewMode } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import type { TaskGroupBy, TaskListViewOptions, TaskOrderBy } from './listViewOptions';
 
@@ -37,8 +38,8 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
   const { t } = useTranslation('chat');
-  const viewMode = useTaskStore(taskListSelectors.viewMode);
-  const setViewMode = useTaskStore((s) => s.setViewMode);
+  const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const groupingOptions = useMemo<Array<{ label: string; value: TaskGroupBy }>>(
     () => [
       { label: t('taskList.groupBy.none'), value: 'none' },
@@ -155,6 +156,38 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       minWidth: undefined,
       label: t('taskList.form.showCompleted'),
     },
+    {
+      children: (
+        <Switch
+          checked={options.showSubTasks}
+          size={'small'}
+          onChange={(checked) => {
+            setOptions((prev) => ({ ...prev, showSubTasks: checked }));
+          }}
+        />
+      ),
+      minWidth: undefined,
+      label: t('taskList.form.showSubTasks'),
+    },
+    // Only meaningful once sub-tasks are on the list — otherwise the toggle
+    // would sit there controlling nothing.
+    ...(options.showSubTasks
+      ? [
+          {
+            children: (
+              <Switch
+                checked={options.nestedSubTasks}
+                size={'small'}
+                onChange={(checked) => {
+                  setOptions((prev) => ({ ...prev, nestedSubTasks: checked }));
+                }}
+              />
+            ),
+            minWidth: undefined,
+            label: t('taskList.form.nestedSubTasks'),
+          } satisfies FormItemProps,
+        ]
+      : []),
   ];
 
   const panelContent = (
@@ -173,7 +206,9 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           list: { display: 'flex', width: '100%' },
           tab: { flex: 1 },
         }}
-        onChange={(key) => setViewMode(key as 'kanban' | 'list')}
+        onChange={(key) =>
+          updateSystemStatus({ taskListViewMode: key as TaskViewMode }, 'updateTaskListViewMode')
+        }
       />
       {viewMode === 'list' && (
         <Form

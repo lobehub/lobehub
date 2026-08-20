@@ -12,14 +12,10 @@ import { trpc } from '../init';
  *   remote run dispatched to it, so the spawned `lh hetero exec` can stream
  *   results back without a server round-trip to mint a dedicated token.
  *
- * The owner-token path is safe because heteroIngest / heteroFinish additionally
- * gate every write on `topics.userId === ctx.userId` (see the `heteroAuthKind`
- * ownership check in the handlers), so an owner token can only touch its own
- * running operation — it cannot reach another user's topic.
- *
- * `heteroAuthKind` is forwarded so handlers can apply the strict ownership guard
- * to owner tokens only, while leaving the operation-token path (whose `sub` may
- * be a workspaceId that never matches `topics.userId`) untouched.
+ * The handlers resolve the target topic and require this subject to own its
+ * personal scope or be an active member of its workspace before writing.
+ * `heteroAuthKind` remains available to endpoints that need to distinguish the
+ * narrow operation token from a full user session.
  */
 export const heteroOperationAuth = trpc.middleware(async (opts) => {
   const { ctx, next } = opts;

@@ -1213,6 +1213,44 @@ describe('AgentModel', () => {
       expect(result?.updatedAt.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
     });
 
+    it('should persist only reference fields in an API binding and clear fast model with null', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-primary',
+              providerId: 'anthropic',
+              smallFastModel: 'claude-fast',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              keyVaults: { apiKey: 'must-not-persist' },
+              model: 'claude-primary',
+              providerId: 'anthropic',
+              smallFastModel: null,
+            },
+          },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+        smallFastModel: null,
+      });
+    });
+
     it('should update updatedAt even when only updating meta fields like avatar', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1393,6 +1431,28 @@ describe('AgentModel', () => {
   });
 
   describe('create', () => {
+    it('should strip secrets and unknown fields from an API binding', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              keyVaults: { apiKey: 'must-not-persist' },
+              model: 'claude-primary',
+              providerId: 'anthropic',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      } as any);
+
+      expect(agent.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+      });
+    });
+
     it('should persist explicit selection policy defaults only for workspace agents', async () => {
       const [workspace] = await serverDB
         .insert(workspaces)
@@ -1425,6 +1485,30 @@ describe('AgentModel', () => {
       const agent = await agentModel.create({ slug: 'my-own-slug', title: 'Mine' });
 
       expect(agent.slug).toBe('my-own-slug');
+    });
+
+    it('should also strip API binding secrets from direct updates', async () => {
+      const agent = await agentModel.create({ title: 'API Agent' });
+
+      await agentModel.update(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              model: 'claude-primary',
+              providerId: 'anthropic',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+      });
     });
 
     // Identity / scope / provisioning fields feed authorization, so no update may
@@ -2826,7 +2910,7 @@ describe('AgentModel', () => {
       });
     });
 
-    it('should replace an explicitly supplied reasoning graph', async () => {
+    it('should replace an explicitly supplied reasoning graph on agencyConfig', async () => {
       const oldGraph = {
         edges: [],
         entry: 'legacy',
@@ -2846,17 +2930,78 @@ describe('AgentModel', () => {
       const [agent] = await serverDB
         .insert(agents)
         .values({
-          chatConfig: { enableGraphMode: true, graph: oldGraph },
+          agencyConfig: { enableGraphMode: true, graph: oldGraph },
           title: 'Graph Agent',
           userId,
         } as NewAgent)
         .returning();
 
-      await agentModel.updateConfig(agent.id, { chatConfig: { graph } } as any);
+      await agentModel.updateConfig(agent.id, { agencyConfig: { graph } } as any);
 
       const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
 
-      expect(result?.chatConfig).toEqual({ enableGraphMode: true, graph });
+      expect(result?.agencyConfig).toEqual({ enableGraphMode: true, graph });
+    });
+
+    it('should migrate a legacy chatConfig graph to agencyConfig on write', async () => {
+      const graph = {
+        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+        fields: {},
+        name: 'compiled-graph',
+        nodes: { work: { type: 'agent' } },
+        terminal: 'work',
+      };
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableGraphMode: true, graph },
+          title: 'Legacy Graph Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      // A legacy client still writing graph through chatConfig must be
+      // forwarded onto agencyConfig so the row migrates on the next write.
+      await agentModel.updateConfig(agent.id, {
+        chatConfig: { enableGraphMode: true, graph } as any,
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig).toEqual({ enableGraphMode: true, graph });
+      expect(result?.chatConfig).not.toHaveProperty('graph');
+      expect(result?.chatConfig).not.toHaveProperty('enableGraphMode');
+    });
+
+    it('should let an explicit null agency graph clear a legacy chatConfig graph', async () => {
+      const graph = {
+        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+        fields: {},
+        name: 'compiled-graph',
+        nodes: { work: { type: 'agent' } },
+        terminal: 'work',
+      };
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          chatConfig: { enableGraphMode: true, graph },
+          title: 'Legacy Graph Agent',
+          userId,
+        } as NewAgent)
+        .returning();
+
+      // An explicit agency-level null must be authoritative: it clears the
+      // graph AND removes the legacy chatConfig fields, otherwise the runtime
+      // fallback would resurrect the old snapshot.
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { graph: null },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.graph).toBeNull();
+      expect(result?.chatConfig).not.toHaveProperty('graph');
+      expect(result?.chatConfig).not.toHaveProperty('enableGraphMode');
     });
 
     it('should delete params field when value is undefined', async () => {

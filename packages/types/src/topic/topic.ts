@@ -214,6 +214,18 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    childOperations?: Array<{
+      assistantMessageId: string;
+      deviceId?: string;
+      deviceUserId?: string;
+      deviceWorkspaceId?: string;
+      heteroType?: string;
+      hooks?: SerializedAgentHook[];
+      operationId: string;
+      orchestrationRole?: 'supervisor' | 'member';
+      scope?: string;
+      threadId?: string | null;
+    }>;
     /** Device selected for a notify-based platform task. */
     deviceId?: string;
     /** Personal-device owner used to route dispatch and cancellation through the same principal. */
@@ -238,6 +250,7 @@ export interface ChatTopicMetadata {
      */
     hooks?: SerializedAgentHook[];
     operationId: string;
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string;
     threadId?: string | null;
   } | null;
@@ -476,12 +489,29 @@ export const chatTopicMetadataUpdateSchema = z.object({
   runningOperation: z
     .object({
       assistantMessageId: z.string(),
+      childOperations: z
+        .array(
+          z.object({
+            assistantMessageId: z.string(),
+            deviceId: z.string().optional(),
+            deviceUserId: z.string().optional(),
+            deviceWorkspaceId: z.string().optional(),
+            heteroType: z.string().optional(),
+            hooks: z.array(serializedAgentHookSchema).optional(),
+            operationId: z.string(),
+            orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+            scope: z.string().optional(),
+            threadId: z.string().nullish(),
+          }),
+        )
+        .optional(),
       deviceId: z.string().optional(),
       deviceUserId: z.string().optional(),
       deviceWorkspaceId: z.string().optional(),
       heteroType: z.string().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
+      orchestrationRole: z.enum(['supervisor', 'member']).optional(),
       scope: z.string().optional(),
       threadId: z.string().nullish(),
     })

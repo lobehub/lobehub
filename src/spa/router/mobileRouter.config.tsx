@@ -6,12 +6,8 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
+import AppsSkeleton from '@/components/Skeleton/Apps';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
-import {
-  acceptanceRouteMeta,
-  verifyReportsRouteMeta,
-  verifyRouteMeta,
-} from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
@@ -293,6 +289,15 @@ export const mobileRoutes: RouteObject[] = [
   {
     children: [
       ...sharedMainAreaChildren,
+
+      // Apps page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: dynamicElement(() => import('@/routes/(main)/apps'), 'Mobile > Apps', {
+          fallback: <AppsSkeleton />,
+        }),
+        errorElement: <ErrorBoundary />,
+        path: 'apps',
+      },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
@@ -618,45 +623,5 @@ export const mobileRoutes: RouteObject[] = [
     element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
-  },
-
-  // Verify report workspace — standalone master-detail (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/verify/empty'),
-          'Mobile > Verify Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Mobile > VerifyReport'),
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Mobile > Verify'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: '/verify',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/acceptance/[acceptanceId]'),
-      'Mobile > AcceptanceReport',
-    ),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: acceptanceRouteMeta },
-    path: '/acceptance/:acceptanceId',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/acceptance/[acceptanceId]'),
-      'Mobile > AcceptanceCheck',
-    ),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: acceptanceRouteMeta },
-    path: '/acceptance/:acceptanceId/check/:checkId',
   },
 ];

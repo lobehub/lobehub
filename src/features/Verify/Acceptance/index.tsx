@@ -48,10 +48,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { openCheckEditModal } from '@/features/Conversation/ChatInput/VerifyTray/EditModal';
 import { openGoalModal } from '@/features/Conversation/ChatInput/VerifyTray/GoalModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useSingleton } from '@/hooks/useSingleton';
 // The workspace-scoped mutate — a bare `import { mutate } from 'swr'` misses
@@ -59,7 +59,6 @@ import { useSingleton } from '@/hooks/useSingleton';
 import { mutate as globalMutate } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
-import { useTaskStore } from '@/store/task';
 
 import { useAcceptanceBundle } from '../hooks';
 import ReportViewer from '../ReportViewer';
@@ -87,9 +86,9 @@ import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { acceptanceFocusedLayout, acceptanceScrollLayout } from './layout';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
+import { useOriginConversation } from './originConversation';
 import { acceptanceCheckPath, acceptanceOverviewPath } from './routes';
 import { getAcceptanceStatusActions } from './statusActions';
-import TopicPanel from './TopicPanel';
 import { canViewAcceptanceHistory, resolveAcceptanceHistoryNavigation } from './visibility';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -158,8 +157,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     overflow: hidden;
 
-    /* AppTheme's root is a centered flex column — without an explicit width the page
-       shrinks to content width and the ledger hugs the shrunken edge, not the viewport */
     width: 100%;
     height: 100%;
 
@@ -315,9 +312,12 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const isEmbedded = Boolean(explicitAcceptanceId);
     const navigate = useNavigate();
     const { t } = useTranslation('verify');
-    const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
-    const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
-    const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
+    const hydrated = useIsHydrated();
+    const { data, isLoading, mutate } = useAcceptanceBundle(acceptanceId ?? null);
+    const originConversation = useOriginConversation();
+    const openTopicDrawer = originConversation?.openTopicDrawer;
+    const closeTopicDrawer = originConversation?.closeTopicDrawer;
+    const OriginTopicPanel = originConversation?.TopicPanel;
     // Below `lg` the report body and a 300px+ in-flow ledger cannot share the
     // viewport — the ledger switches to a float overlay, closed by default (the
     // same narrow regime the list panel uses).
@@ -332,7 +332,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
     // later task/home surface that also mounts TopicChatDrawer.
     useEffect(
       () => () => {
-        if (!isEmbedded) closeTopicDrawer();
+        if (!isEmbedded) closeTopicDrawer?.();
       },
       [closeTopicDrawer, isEmbedded],
     );
@@ -429,11 +429,11 @@ const AcceptancePage = memo<AcceptancePageProps>(
     }
     const closeTopicPanel = useCallback(() => {
       setTopicPanelOpen(false);
-      closeTopicDrawer();
+      closeTopicDrawer?.();
     }, [closeTopicDrawer]);
 
     const openTopicPanel = useCallback(() => {
-      if (!data?.origin?.topic) return;
+      if (!openTopicDrawer || !data?.origin?.topic) return;
       openTopicDrawer(data.origin.topic.id, {
         agentId: data.origin.agent?.id,
         title: data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id,
@@ -450,6 +450,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
      */
     const openVerifierTrace = useCallback(
       async (verifierOperationId: string) => {
+        if (!openTopicDrawer) return;
         const resolved = await verifyService.getVerifierThread(verifierOperationId);
         const topicId = resolved?.topicId;
         if (!topicId) return;
@@ -748,14 +749,14 @@ const AcceptancePage = memo<AcceptancePageProps>(
       [data],
     );
 
-    if (isLoading)
+    if (isLoading && !data)
       return (
         <Center height={'100%'}>
           <NeuralNetworkLoading size={48} />
         </Center>
       );
 
-    if (error || !data)
+    if (!data)
       return (
         <Center height={'100%'}>
           <Empty
@@ -1013,9 +1014,10 @@ const AcceptancePage = memo<AcceptancePageProps>(
     const barTexts = {
       accepted: {
         statusText: t('acceptance.banner.accepted', {
-          time: acceptance.completedAt
-            ? dayjs(acceptance.completedAt).format('YYYY-MM-DD HH:mm')
-            : '',
+          time:
+            hydrated && acceptance.completedAt
+              ? dayjs(acceptance.completedAt).format('YYYY-MM-DD HH:mm')
+              : '',
         }),
         subText: `${countsText} · ${t('acceptance.banner.acceptedHint', { count: rounds.length })}`,
       },
@@ -1268,7 +1270,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                     <Text fontSize={12} type={'secondary'}>
                       {[
                         countsText,
-                        currentRound
+                        hydrated && currentRound
                           ? t('acceptance.verdict.latestAt', {
                               time: dayjs(currentRound.run.createdAt).format('MM-DD HH:mm'),
                             })
@@ -1293,32 +1295,22 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   {!isEmbedded && (originAgent || originTopic || scope?.pullRequest?.number) && (
                     <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
                       {originAgent && (
-                        <AgentProfilePopup
-                          agentId={originAgent.id}
-                          trigger={'hover'}
-                          agent={{
-                            avatar: originAgent.avatar ?? undefined,
-                            backgroundColor: originAgent.backgroundColor ?? undefined,
-                            title: originAgent.title ?? undefined,
-                          }}
+                        <Flexbox
+                          horizontal
+                          align={'center'}
+                          className={styles.scopeChip}
+                          gap={6}
+                          style={{ cursor: 'default', fontSize: 14 }}
                         >
-                          <Flexbox
-                            horizontal
-                            align={'center'}
-                            className={styles.scopeChip}
-                            gap={6}
-                            style={{ cursor: 'default', fontSize: 14 }}
-                          >
-                            <Avatar
-                              avatar={originAgent.avatar ?? undefined}
-                              background={originAgent.backgroundColor ?? undefined}
-                              size={18}
-                            />
-                            {originAgent.title ?? t('acceptance.origin.agentFallback')}
-                          </Flexbox>
-                        </AgentProfilePopup>
+                          <Avatar
+                            avatar={originAgent.avatar ?? undefined}
+                            background={originAgent.backgroundColor ?? undefined}
+                            size={18}
+                          />
+                          {originAgent.title ?? t('acceptance.origin.agentFallback')}
+                        </Flexbox>
                       )}
-                      {originTopic && (
+                      {originTopic && originConversation && (
                         <Button
                           className={cx(styles.scopeChip, styles.scopeLink)}
                           icon={MessagesSquare}
@@ -1908,7 +1900,7 @@ const AcceptancePage = memo<AcceptancePageProps>(
                   round={roundFilter}
                   onDismissProposal={handleDismissProposal}
                   onGroupFeedback={handleGroupFeedback}
-                  onOpenTrace={openVerifierTrace}
+                  onOpenTrace={originConversation ? openVerifierTrace : undefined}
                   onReview={handleReview}
                   onRound={historyNavigation}
                   onToggleGroup={handleToggleGroup}
@@ -1974,8 +1966,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
               width={'min(340px, 88vw)'}
               onClose={() => setLedgerExpand(false)}
             >
-              {topicPanelOpen && origin?.agent?.id && origin.topic ? (
-                <TopicPanel
+              {topicPanelOpen && origin?.agent?.id && origin.topic && OriginTopicPanel ? (
+                <OriginTopicPanel
                   agentId={origin.agent.id}
                   title={origin.topic.title ?? subject.title ?? origin.topic.id}
                   topicId={origin.topic.id}
@@ -2003,8 +1995,8 @@ const AcceptancePage = memo<AcceptancePageProps>(
               onExpandChange={setLedgerExpand}
             >
               <Flexbox style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
-                {topicPanelOpen && origin?.agent?.id && origin.topic ? (
-                  <TopicPanel
+                {topicPanelOpen && origin?.agent?.id && origin.topic && OriginTopicPanel ? (
+                  <OriginTopicPanel
                     agentId={origin.agent.id}
                     title={origin.topic.title ?? subject.title ?? origin.topic.id}
                     topicId={origin.topic.id}

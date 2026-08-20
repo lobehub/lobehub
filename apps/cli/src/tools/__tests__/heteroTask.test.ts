@@ -227,6 +227,37 @@ describe('runHeteroTask (openclaw)', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 
+  it('isolates concurrent group members that share a topic', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-child-1',
+      parentOperationId: 'op-parent',
+      prompt: 'member one',
+      taskId: 'task-child-1',
+      topicId: 'topic-shared',
+    });
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-child-2',
+      parentOperationId: 'op-parent',
+      prompt: 'member two',
+      taskId: 'task-child-2',
+      topicId: 'topic-shared',
+    });
+
+    expect(killSpy).not.toHaveBeenCalled();
+    const firstArgs = spawnMock.mock.calls[0][1] as string[];
+    const secondArgs = spawnMock.mock.calls[1][1] as string[];
+    expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+    expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+    expect(saveTask).toHaveBeenLastCalledWith(
+      expect.objectContaining({ parentOperationId: 'op-parent', taskId: 'task-child-2' }),
+    );
+  });
+
   it('does not kill processes for a different topicId', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
@@ -348,6 +379,7 @@ describe('runHeteroTask (openclaw)', () => {
       string[],
       { env: NodeJS.ProcessEnv },
     ];
+    expect(spawnOpts.env.LOBEHUB_OPERATION_ID).toBe('op-ws');
     expect(spawnOpts.env.LOBEHUB_WORKSPACE_ID).toBe('ws-42');
   });
 
@@ -378,6 +410,81 @@ describe('runHeteroTask (openclaw)', () => {
       expect(call[0]).toBe('ws-99');
     }
   });
+
+  it('reports a signal exit as a cancelled terminal signal', async () => {
+    const child = makeMockChild(7788);
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-cancelled',
+      prompt: 'cancel me',
+      taskId: 'task-cancelled',
+      topicId: 'topic-cancelled',
+    });
+
+    child._emit('close', null, 'SIGINT');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelled: true,
+        done: true,
+        operationId: 'op-cancelled',
+        role: 'assistant',
+        topicId: 'topic-cancelled',
+      }),
+    );
+  });
+});
+
+describe('runHeteroTask retry ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fsState.content = undefined;
+    for (const key of Object.keys(taskStore)) delete taskStore[key];
+    execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+    resetTrpcClientMock();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['openclaw', 'hermes'] as const)(
+    'ignores the stale %s close callback after an exact task retry',
+    async (agentType) => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const oldChild = makeMockChild(1111);
+      const replacementChild = makeMockChild(2222);
+      spawnMock.mockReturnValueOnce(oldChild).mockReturnValueOnce(replacementChild);
+
+      await runHeteroTask({
+        agentType,
+        operationId: 'op-old',
+        prompt: 'first attempt',
+        taskId: 'task-retry',
+        topicId: 'topic-retry',
+      });
+      await runHeteroTask({
+        agentType,
+        operationId: 'op-replacement',
+        prompt: 'retry',
+        taskId: 'task-retry',
+        topicId: 'topic-retry',
+      });
+
+      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(taskStore['task-retry']).toEqual(expect.objectContaining({ pid: 2222 }));
+
+      oldChild._emit('close', null, 'SIGTERM');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(taskStore['task-retry']).toEqual(expect.objectContaining({ pid: 2222 }));
+      expect(getTrpcClientMock).not.toHaveBeenCalled();
+      expect(notifyMutateMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('runHeteroTask (hermes)', () => {

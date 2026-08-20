@@ -5,6 +5,14 @@ export {
   GrokBuildAdapter,
   QoderAdapter,
 } from './adapters';
+export {
+  buildClaudeCodeDirectEnv,
+  type BuildClaudeCodeDirectEnvInput,
+  type BuildClaudeCodeDirectEnvResult,
+  CLAUDE_CODE_API_LOCAL_ONLY_ERROR,
+  sanitizeClaudeCodeDirectArgs,
+  sanitizeClaudeCodeDirectEnv,
+} from './claudeCodeDirectEnv';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,

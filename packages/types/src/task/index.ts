@@ -1,4 +1,5 @@
 import type { BriefArtifacts } from '../brief';
+import type { GoalItem } from '../goal';
 import type { ChatFileItem } from '../message/ui/chat';
 
 // ── Task type aliases ──
@@ -53,21 +54,6 @@ export interface CheckpointConfig {
  * config when present, otherwise the nearest ancestor's config in full (never a
  * field-level merge). Resolved at runtime via `TaskModel.resolveVerifyConfig`.
  */
-/**
- * Goal-driven loop config, persisted under `tasks.config.goal`. Written by the
- * `createGoal` builtin tool; its presence marks the task as a goal task and
- * enables the outer verify-driven round loop (a failed verify run spawns a new
- * task topic instead of pausing, until a budget below runs out).
- */
-export interface TaskGoalConfig {
-  /** Max execution rounds (task topics). Null = uncapped by the user. */
-  maxIterations?: number | null;
-  /** Total USD budget across all rounds and their verify runs. Null = uncapped. */
-  maxTotalCost?: number | null;
-  /** Conversation topic that spawned the goal — terminal callbacks post back here. */
-  originTopicId?: string | null;
-}
-
 export interface TaskVerifyConfig {
   /** Whether the verify gate runs on topic completion. */
   enabled?: boolean;
@@ -254,6 +240,12 @@ export interface TaskItem {
   description: string | null;
   editorData: unknown;
   error: string | null;
+  /**
+   * The goal entity bound to this task (`goals.subjectType='task'`), attached
+   * by list/detail reads. Presence marks a goal-driven task; the goal owns its
+   * budget, requirement and lifecycle status.
+   */
+  goal?: GoalItem | null;
   heartbeatInterval: number | null;
   heartbeatTimeout: number | null;
   id: string;
@@ -486,6 +478,8 @@ export interface TaskDetailData {
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
+  /** The goal entity carried by this task (`goals` row); null when not a goal task. */
+  goal?: GoalItem | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;

@@ -307,7 +307,7 @@ export const deviceRouter = router({
         cwd: z.string().optional(),
         deviceId: z.string(),
         env: z.record(z.string(), z.string()).optional(),
-        type: z.enum(['codebuddy', 'cursor', 'opencode', 'pi', 'qoder', 'trae']),
+        type: z.enum(['codebuddy', 'cursor', 'grok-build', 'opencode', 'pi', 'qoder', 'trae']),
       }),
     )
     .query(async ({ ctx, input }) =>

@@ -31,6 +31,8 @@ vi.mock('@lobechat/connector-data/github', () => ({
 
 vi.mock('@lobechat/connector-data/gmail', () => ({
   createGmailConnectorClient: mocks.createGmailClient,
+  hasGmailReadPermission: (scopes: readonly string[]) =>
+    scopes.some((scope) => scope.endsWith('gmail.readonly')),
 }));
 
 vi.mock('@lobechat/connector-data/notion', () => ({
@@ -472,6 +474,36 @@ describe('ConnectorDataService', () => {
     await expect(service.listAvailableProviderIds(['github', 'gmail', 'notion'])).resolves.toEqual([
       'github',
     ]);
+  });
+
+  /** @example Gmail without message-read scope is omitted from Understanding availability. */
+  it('excludes connected Gmail accounts without read permission', async () => {
+    // ROOT CAUSE:
+    //
+    // Connection availability only checked whether a Gmail client could be created.
+    // Identity-only OAuth grants therefore entered Understanding and failed during collection.
+    // We fixed this by checking the account's granted scopes as part of source availability.
+    mocks.queryComposioReferences.mockResolvedValue([
+      {
+        composio: {
+          appSlug: 'gmail',
+          connectedAccountId: 'gmail-account',
+          ownerUserId: 'gmail-owner',
+          status: 'ACTIVE',
+        },
+        id: 'gmail-a',
+        isEnabled: true,
+        status: 'connected',
+      },
+    ]);
+    mocks.getAccount.mockResolvedValue({
+      externalAccountId: 'gmail-account',
+      scopes: ['openid', 'https://www.googleapis.com/auth/userinfo.email'],
+    });
+
+    await expect(
+      new ConnectorDataService(authDb([]), 'user-1').listAvailableProviderIds(['gmail']),
+    ).resolves.toEqual([]);
   });
 
   /** @example A temporary provider failure rejects availability instead of omitting the source. */

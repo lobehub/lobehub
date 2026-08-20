@@ -2819,15 +2819,95 @@ export class MessageModel {
 
     const heterogeneousMatch = sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`;
 
+    // Query the two conditions SEPARATELY instead of `OR`-ing them in one WHERE.
+    // A combined `... AND (withinWindow OR heterogeneousMatch)` is unindexable: the
+    // `metadata->>'heterogeneousToolStateOperationId'` branch has no index, so the
+    // planner abandons the `topic_id` index for the whole predicate and scans every
+    // plugin row the user owns (100k+ for heavy users), probing `messages` once per
+    // row — 25s+ per call in the worst case. Splitting lets each branch use its own
+    // index (topic-window range scan vs. the exact jsonb lookup). The branches can
+    // overlap (a heterogeneous row that also falls inside the window), so de-dup by
+    // message id before restoring the `createdAt asc, id asc` order the OR query
+    // produced in SQL.
+    const projection = {
+      apiName: messagePlugins.apiName,
+      arguments: messagePlugins.arguments,
+      clientId: messagePlugins.clientId,
+      // The tool message's text body. Heterogeneous CLI adapters (claude-code
+      // Bash) persist the command's stdout here rather than in a structured
+      // `state` field, and the completion-time github Work scan reads the gh
+      // CLI's printed entity URL from it.
+      content: messages.content,
+      createdAt: messages.createdAt,
+      error: messagePlugins.error,
+      id: messagePlugins.id,
+      identifier: messagePlugins.identifier,
+      intervention: messagePlugins.intervention,
+      state: messagePlugins.state,
+      toolCallId: messagePlugins.toolCallId,
+      type: messagePlugins.type,
+      userId: messagePlugins.userId,
+    };
+
+    const scan = (condition: SQL | undefined) =>
+      this.db
+        .select(projection)
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messagePlugins.id, messages.id))
+        .where(and(this.ownership(), this.pluginsOwnership(), condition));
+
+    const [windowRows, heterogeneousRows] = await Promise.all([
+      scan(withinWindow),
+      scan(heterogeneousMatch),
+    ]);
+
+    const byId = new Map<string, (typeof windowRows)[number]>();
+    for (const row of windowRows) byId.set(row.id, row);
+    for (const row of heterogeneousRows) if (!byId.has(row.id)) byId.set(row.id, row);
+
+    const rows = [...byId.values()].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return rows.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
+   * Load specific tool-call rows by their message ids, ownership-scoped and
+   * pinned to one topic. Serves the LOCAL hetero run work scan
+   * (`work.registerShellWorksForRun`): a desktop-local CLI run has no
+   * `agent_operations` row, so the client reports the exact tool message ids it
+   * persisted instead of the server reconstructing an operation window. The
+   * topic pin means a caller can never scan rows outside the conversation it
+   * claims to complete.
+   */
+  listMessagePluginsByIds = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
+    if (params.ids.length === 0) return [];
+
     const rows = await this.db
       .select({
         apiName: messagePlugins.apiName,
         arguments: messagePlugins.arguments,
         clientId: messagePlugins.clientId,
-        // The tool message's text body. Heterogeneous CLI adapters (claude-code
-        // Bash) persist the command's stdout here rather than in a structured
-        // `state` field, and the completion-time github Work scan reads the gh
-        // CLI's printed entity URL from it.
+        // The tool message's text body — claude-code Bash persists the
+        // command's stdout here (see listMessagePluginsForOperation).
         content: messages.content,
         createdAt: messages.createdAt,
         error: messagePlugins.error,
@@ -2841,10 +2921,20 @@ export class MessageModel {
       })
       .from(messagePlugins)
       .innerJoin(messages, eq(messagePlugins.id, messages.id))
-      .where(and(this.ownership(), this.pluginsOwnership(), or(withinWindow, heterogeneousMatch)))
-      .orderBy(asc(messages.createdAt), asc(messages.id));
+      .where(
+        and(
+          inArray(messagePlugins.id, params.ids),
+          eq(messages.topicId, params.topicId),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      );
 
-    return rows.map((row) => ({
+    const sorted = [...rows].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return sorted.map((row) => ({
       apiName: row.apiName ?? undefined,
       arguments: row.arguments ?? undefined,
       clientId: row.clientId ?? undefined,

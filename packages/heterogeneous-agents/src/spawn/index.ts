@@ -27,6 +27,15 @@ export {
 } from '../codex';
 export type { UsageData } from '../types';
 export {
+  ACP_PROTOCOL_VERSION,
+  AcpAgentSession,
+  type AcpAgentSessionConfig,
+  type AcpAgentSessionOptions,
+  type AcpPermissionOption,
+  parseAcpPermissionOptions,
+  selectAcpPermissionOption,
+} from './acpAgentSession';
+export {
   type AcpRpcErrorData,
   type AcpRpcMessage,
   AcpRpcResponseError,
@@ -65,6 +74,15 @@ export {
   readCodexSessionModel,
   resolveCodexInitialModel,
 } from './codexModel';
+export {
+  buildCursorAcpArgs,
+  buildCursorAcpPrompt,
+  CursorAcpSession,
+  type CursorAcpSessionOptions,
+  type CursorAcpTextPromptBlock,
+  isCursorAcpSessionNotFoundError,
+  normalizeCursorQuestion,
+} from './cursorAcpSession';
 export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
@@ -115,7 +133,6 @@ export {
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
-  CURSOR_BASE_ARGS,
   KIMI_CODE_BASE_ARGS,
   OPENCODE_BASE_ARGS,
   PI_BASE_ARGS,

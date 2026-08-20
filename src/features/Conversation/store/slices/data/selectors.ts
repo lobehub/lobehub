@@ -49,11 +49,11 @@ const toEpochMs = (value: Date | number | string | null | undefined): number | u
 /**
  * `createdAt` of a tool call's result row, normalized to epoch ms.
  *
- * The row is written when the call is issued, so it provides a durable baseline
- * for the elapsed time shown by the tool call.
+ * Resolve the row by its unique message id rather than `tool_call_id`: Codex
+ * reuses item ids such as `item_1` across resumed turns in the same topic.
  */
-const getToolMessageCreatedAt = (toolCallId: string) => (s: State) =>
-  toEpochMs(getDbMessageByToolCallId(toolCallId)(s)?.createdAt);
+const getToolMessageCreatedAt = (resultMessageId: string | undefined) => (s: State) =>
+  resultMessageId ? toEpochMs(getDbMessageById(resultMessageId)(s)?.createdAt) : undefined;
 
 /**
  * Helper to find last message ID in an AssistantContentBlock

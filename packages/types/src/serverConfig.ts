@@ -28,6 +28,7 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
   hideGitHub: boolean | undefined;

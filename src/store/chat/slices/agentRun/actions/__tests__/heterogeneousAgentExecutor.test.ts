@@ -21,6 +21,7 @@ import type { ChatTopicMetadata, HeterogeneousProviderConfig } from '@lobechat/t
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat/store';
 import { useUserStore } from '@/store/user';
 
@@ -38,6 +39,11 @@ const mockUpdateMessage = vi.fn();
 const mockUpdateMessageError = vi.fn();
 const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
+
+const mockToastInfo = vi.fn();
+vi.mock('@lobehub/ui/base-ui', () => ({
+  toast: { info: (...args: unknown[]) => mockToastInfo(...args) },
+}));
 
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -593,6 +599,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    useAiInfraStore.setState({
+      aiProviderRuntimeConfig: {},
+      enabledAiModels: [],
+      enabledAiProviders: [],
+    });
     delete (globalThis as any).window;
   });
 
@@ -643,6 +654,157 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
     return { get, store };
   }
+
+  describe('Claude Code Desktop-local API binding', () => {
+    let previousLab: ReturnType<typeof useUserStore.getState>['preference']['lab'];
+
+    const setClaudeCodeApiModeLab = (enabled: boolean) => {
+      useUserStore.setState((state) => ({
+        preference: {
+          ...state.preference,
+          lab: { ...state.preference.lab, enableClaudeCodeApiMode: enabled },
+        },
+      }));
+    };
+
+    beforeEach(() => {
+      previousLab = useUserStore.getState().preference.lab;
+      setClaudeCodeApiModeLab(true);
+    });
+
+    afterEach(() => {
+      useUserStore.setState((state) => ({
+        preference: { ...state.preference, lab: previousLab },
+      }));
+    });
+
+    const apiProvider = {
+      apiConfig: { model: 'api-primary', providerId: 'anthropic-direct' },
+      args: ['--model', 'stale-arg-model', '--effort', 'high'],
+      authMode: 'api' as const,
+      command: 'claude',
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'stale-token',
+        CLAUDE_CODE_USE_BEDROCK: '1',
+        KEEP_ME: 'yes',
+      },
+      model: 'stale-config-model',
+      type: 'claude-code' as const,
+    };
+
+    const configureDirectProvider = () => {
+      useAiInfraStore.setState({
+        aiProviderRuntimeConfig: {
+          'anthropic-direct': {
+            keyVaults: { apiKey: 'direct-key', baseURL: 'https://direct.example.com' },
+            settings: { sdkType: 'anthropic' },
+          } as any,
+        },
+        enabledAiModels: [
+          {
+            enabled: true,
+            id: 'api-primary',
+            providerId: 'anthropic-direct',
+            type: 'chat',
+          } as any,
+        ],
+        enabledAiProviders: [{ id: 'anthropic-direct' } as any],
+      });
+    };
+
+    it('launches with only the bound model and direct credentials', async () => {
+      configureDirectProvider();
+
+      await runWithEvents([ccResult()], {
+        params: { heterogeneousProvider: apiProvider },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--effort', 'high', '--model', 'api-primary'],
+          env: expect.objectContaining({
+            ANTHROPIC_AUTH_TOKEN: 'direct-key',
+            ANTHROPIC_BASE_URL: 'https://direct.example.com',
+            ANTHROPIC_MODEL: 'api-primary',
+            ANTHROPIC_SMALL_FAST_MODEL: 'api-primary',
+            CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
+            CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1',
+            CLAUDE_CODE_USE_BEDROCK: '0',
+            CLAUDE_CODE_USE_MANTLE: '0',
+            CLAUDE_CODE_USE_VERTEX: '0',
+            KEEP_ME: 'yes',
+          }),
+        }),
+      );
+      const { env } = mockStartSession.mock.calls[0][0];
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
+      expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('fails before spawn when the Labs experiment is disabled', async () => {
+      configureDirectProvider();
+      setClaudeCodeApiModeLab(false);
+      const store = createMockStore();
+
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        {
+          ...defaultParams,
+          heterogeneousProvider: apiProvider,
+        },
+      );
+
+      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
+        expect.anything(),
+      );
+    });
+
+    it('fails before spawn when the bound provider is disabled or deleted', async () => {
+      const store = createMockStore();
+
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        {
+          ...defaultParams,
+          heterogeneousProvider: apiProvider,
+        },
+      );
+
+      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: expect.stringContaining('anthropic-direct') }),
+        expect.anything(),
+      );
+    });
+
+    it('fails before spawn when an explicitly bound fast model is unavailable', async () => {
+      configureDirectProvider();
+      const store = createMockStore();
+
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        {
+          ...defaultParams,
+          heterogeneousProvider: {
+            ...apiProvider,
+            apiConfig: { ...apiProvider.apiConfig, smallFastModel: 'disabled-fast-model' },
+          },
+        },
+      );
+
+      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: expect.stringContaining('disabled-fast-model') }),
+        expect.anything(),
+      );
+    });
+  });
 
   it('surfaces stream_retry metadata on the running operation and clears it on the next event', async () => {
     const store = createMockStore();
@@ -1741,7 +1903,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
-    it('should inject local workspace context only when starting a native session', async () => {
+    it('should not inject local workspace context into native sessions', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
       const params = {
@@ -1756,9 +1918,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       await executeHeterogeneousAgent(get, params);
 
-      expect(mockSendPrompt.mock.calls[0][0].systemContext).toContain(
-        "You are running on the user's own machine. Your working directory is `/Users/me/repo`.",
-      );
+      expect(mockSendPrompt.mock.calls[0][0].systemContext).toBe('Follow the agent rules.');
 
       await executeHeterogeneousAgent(get, {
         ...params,
@@ -2030,6 +2190,74 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         workingDirectory: '/Users/me/repo',
         workingDirectoryConfig: { path: '/Users/me/repo' },
       });
+      expect(mockStopSession.mock.calls).toEqual([['ipc-sess-1'], ['ipc-sess-2']]);
+    });
+
+    it('starts a fresh Cursor ACP context after an old session cannot be loaded', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const sendPromptControllers = new Map<
+        string,
+        { reject: (reason?: unknown) => void; resolve: () => void }
+      >();
+      let startCount = 0;
+      mockStartSession.mockImplementation(async (params: any) => {
+        startCount += 1;
+        const sessionId = startCount === 1 ? 'ipc-sess-1' : 'ipc-sess-2';
+        ipc.setAgentType(sessionId, params.agentType);
+        return { sessionId };
+      });
+      mockSendPrompt.mockImplementation(
+        ({ sessionId }: { sessionId: string }) =>
+          new Promise<void>((resolve, reject) => {
+            sendPromptControllers.set(sessionId, { reject, resolve });
+          }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'agent', type: 'cursor' as const },
+        resumeSessionId: 'legacy-cursor-session',
+        workingDirectory: '/Users/me/repo',
+      });
+      await flush();
+
+      ipc.emitError('ipc-sess-1', {
+        agentType: 'cursor',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message:
+          'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+      });
+      await flush();
+      sendPromptControllers.get('ipc-sess-1')?.reject(new Error('resume failed'));
+      await flush();
+
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentType: 'cursor',
+          resumeSessionId: 'legacy-cursor-session',
+        }),
+      );
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ agentType: 'cursor', resumeSessionId: undefined }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: undefined,
+        heteroSessionIdByWorkingDirectory: {},
+        workingDirectory: '/Users/me/repo',
+        workingDirectoryConfig: { path: '/Users/me/repo' },
+      });
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        expect.stringMatching(/Cursor|cursorAcpIncompatible/),
+      );
+
+      ipc.emitComplete('ipc-sess-2');
+      await flush();
+      sendPromptControllers.get('ipc-sess-2')?.resolve();
+      await executorPromise;
+
       expect(mockStopSession.mock.calls).toEqual([['ipc-sess-1'], ['ipc-sess-2']]);
     });
 
