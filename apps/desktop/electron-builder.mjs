@@ -143,6 +143,43 @@ const appId = process.env.DESKTOP_APP_ID || 'com.lobehub.lobehub-desktop';
 const productName = process.env.DESKTOP_PRODUCT_NAME || 'LobeHub';
 const executableName = process.env.DESKTOP_EXECUTABLE_NAME || 'LobeHub';
 
+/**
+ * Who the binary says it comes from — Windows' Properties -> Details, which is
+ * the first place anyone looks to identify an executable.
+ *
+ * Read from env rather than left to `package.json`'s `author`, because a
+ * distribution cannot edit that file: it belongs to this repository, and the
+ * name in it is this project's. Left unset, everything below resolves to the
+ * previous behaviour exactly.
+ *
+ * Applied HERE rather than through `--c.extraMetadata.author` on the command
+ * line, which does not work and fails in a way that looks like it did:
+ * `appInfo.companyName` reads `metadata.author?.name`, so the string form
+ * replaces the normalised object, `.name` comes back undefined, and the exe
+ * silently keeps Electron's own stock `CompanyName` — a worse answer than the
+ * one being corrected. Verified on a real artifact, twice.
+ */
+const companyName = process.env.DESKTOP_COMPANY_NAME;
+
+/**
+ * Manifest fields a distribution overrides without editing `package.json`,
+ * which belongs to this repository.
+ *
+ * They are collected into ONE `extraMetadata` object on purpose. Passing any of
+ * them as `--c.extraMetadata.<field>` on the command line instead replaces this
+ * whole object rather than merging into it, so a build that set the version
+ * that way silently lost every other field — including `author`, whose absence
+ * shows up three layers away as `CompanyName: GitHub, Inc.` on the exe.
+ */
+const extraMetadata = {
+  ...(companyName ? { author: { name: companyName } } : {}),
+  ...(process.env.DESKTOP_APP_DESCRIPTION
+    ? { description: process.env.DESKTOP_APP_DESCRIPTION }
+    : {}),
+  ...(process.env.DESKTOP_HOMEPAGE_URL ? { homepage: process.env.DESKTOP_HOMEPAGE_URL } : {}),
+  ...(process.env.DESKTOP_APP_VERSION ? { version: process.env.DESKTOP_APP_VERSION } : {}),
+};
+
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
   // A custom scheme has to be distinct per distribution too: schemes are
@@ -258,6 +295,13 @@ const config = {
   },
   afterSign: verifyFontListSignature,
   appId,
+  // Both derive from the same name, and `copyright` has to be explicit: left
+  // unset, electron-builder falls back to `companyName || productName`, which
+  // would put the product name where a legal entity belongs.
+  // Left unset, electron-builder falls back to `companyName || productName`,
+  // which would put the product name where a legal entity belongs.
+  ...(companyName ? { copyright: `Copyright © ${new Date().getFullYear()} ${companyName}` } : {}),
+  ...(Object.keys(extraMetadata).length > 0 ? { extraMetadata } : {}),
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
