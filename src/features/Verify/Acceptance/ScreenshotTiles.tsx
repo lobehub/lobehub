@@ -209,9 +209,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
               width: `${annotation.rect.width * 100}%`,
             }}
           >
-            {numbered && (
-              <span className={styles.badge}>{annotation.label ?? annotation.index + 1}</span>
-            )}
+            {numbered && <span className={styles.badge}>{annotation.label ?? index + 1}</span>}
           </div>
         ))}
       </div>,
