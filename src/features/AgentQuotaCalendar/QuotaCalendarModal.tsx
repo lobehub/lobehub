@@ -269,7 +269,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 3px;
 
     min-width: 0;
-    height: 54px;
+    height: 38px;
     padding: 4px;
     border-radius: ${cssVar.borderRadiusSM};
 
@@ -310,14 +310,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 10px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
-  `,
-  windowSpend: css`
-    overflow: hidden;
-
-    font-size: 9px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   weekday: css`
     font-size: 11px;
@@ -600,11 +592,12 @@ const windowTooltip = (stat: WindowStat, t: TFunction<'chat'>) =>
     t('heteroAgent.claudeQuota.calendar.windowUtilization', {
       percent: Math.round(stat.peakUtilization),
     }),
-    stat.tokens > 0 &&
-      t('heteroAgent.claudeQuota.calendar.windowSpend', {
-        cost: formatTrackedCost(stat, t),
-        tokens: formatTokens(stat.tokens),
-      }),
+    stat.tokens > 0
+      ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
+          cost: formatTrackedCost(stat, t),
+          tokens: formatTokens(stat.tokens),
+        })
+      : t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort'),
     stat.rateLimitedAt && t('heteroAgent.claudeQuota.calendar.rateLimited'),
   ].filter(Boolean) as string[];
 
@@ -656,11 +649,6 @@ const WindowHistory = memo<{
                     <strong>{Math.round(stat.peakUtilization)}%</strong>
                   </Flexbox>
                   <CapacityMeter utilization={stat.peakUtilization} />
-                  <span className={styles.windowSpend}>
-                    {stat.tokens > 0
-                      ? `${formatTokens(stat.tokens)} · ${formatTrackedCost(stat, t)}`
-                      : t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
-                  </span>
                 </div>
               );
 
