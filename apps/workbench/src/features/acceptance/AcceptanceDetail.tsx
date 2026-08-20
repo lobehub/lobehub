@@ -4,6 +4,8 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useParams } from 'react-router';
 
+import AcceptanceCheckInventory from '@/features/Verify/Acceptance/AcceptanceCheckInventory';
+import AcceptanceGoal from '@/features/Verify/Acceptance/AcceptanceGoal';
 import AcceptanceIdentity from '@/features/Verify/Acceptance/AcceptanceIdentity';
 import {
   AcceptanceBundleGate,
@@ -70,6 +72,8 @@ const WorkbenchAcceptanceDetail = () => {
           <AcceptanceBundleGate height={'100%'}>
             <Flexbox className={styles.report} gap={16}>
               <AcceptanceIdentity />
+              <AcceptanceGoal />
+              <AcceptanceCheckInventory />
             </Flexbox>
           </AcceptanceBundleGate>
         </div>
