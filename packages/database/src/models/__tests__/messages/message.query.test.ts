@@ -3376,6 +3376,50 @@ describe('MessageModel Query Tests', () => {
       expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('errored');
     });
 
+    it('keeps an attachment-only assistant eligible as an anchor', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'real tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // A generated-image turn: the payload lives in messages_files, so every
+          // column checked above is empty. The query side joins those files back
+          // in as visible content, so this is a real turn to anchor to.
+          id: 'image-only',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+      await serverDB
+        .insert(files)
+        .values({
+          id: 'f-img',
+          userId,
+          url: 'abc',
+          name: 'gen.png',
+          fileType: 'image/png',
+          size: 1,
+        });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: 'f-img', messageId: 'image-only', userId });
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('image-only');
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe(
+        'image-only',
+      );
+    });
+
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);

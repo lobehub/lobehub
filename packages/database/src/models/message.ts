@@ -3302,6 +3302,10 @@ export class MessageModel {
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
             AND ${messages.reasoning} IS NULL
             AND ${messages.error} IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ${messagesFiles}
+              WHERE ${messagesFiles.messageId} = ${messages.id}
+            )
           )`,
           this.ownership(),
         ),
@@ -3348,6 +3352,10 @@ export class MessageModel {
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
             AND ${messages.reasoning} IS NULL
             AND ${messages.error} IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ${messagesFiles}
+              WHERE ${messagesFiles.messageId} = ${messages.id}
+            )
           )`,
           this.ownership(),
         ),
