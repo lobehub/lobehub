@@ -292,6 +292,38 @@ describe('sendProactiveWechatMessage', () => {
     expect(JSON.parse(queued[0]).attachments).toHaveLength(1);
   });
 
+  it('requeues an attachment whose upload failed alongside the degraded one', async () => {
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
+    // Text lands; the in-budget upload fails inside sendWechatAttachments (the
+    // mocked client has no uploadCdnMedia) and is swallowed; the link
+    // follow-up then fails too.
+    mockSendMessage.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('iLink down'));
+
+    const result = await sendProactiveWechatMessage({
+      attachments: [
+        { data: Buffer.alloc(1024, 1).toString('base64'), name: 'small.png', type: 'image' },
+        {
+          fetchUrl: 'https://example.com/f/big.mp4',
+          name: 'big.mp4',
+          size: 100 * 1024 * 1024,
+          type: 'video',
+        },
+      ],
+      content: 'here you go',
+      serverDB,
+      userId: LOBE_USER,
+    });
+
+    expect(result).toEqual({ status: 'queued' });
+    const queued = JSON.parse(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))![0]);
+    expect(queued.content).toBeUndefined();
+    // Neither attachment reached the user, so both must survive the replay.
+    expect(queued.attachments.map((a: { name: string }) => a.name)).toEqual([
+      'small.png',
+      'big.mp4',
+    ]);
+  });
+
   it('reports unlinked when the user has no WeChat account link', async () => {
     mockFindByPlatform.mockResolvedValueOnce(undefined);
 

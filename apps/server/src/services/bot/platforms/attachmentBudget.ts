@@ -41,6 +41,12 @@ export interface PreparedAttachments {
    * recipient still gets the resource as a download link.
    */
   fallbackLines: string[];
+  /**
+   * The untouched inputs behind `attachments`, index-aligned with it. A
+   * recompressed image carries megabytes of base64 in `attachments`; a caller
+   * requeueing a failed send wants the small original back, not that.
+   */
+  keptOriginals: BotMessageAttachment[];
 }
 
 const formatBytes = (bytes: number): string => {
@@ -206,6 +212,7 @@ export const prepareAttachmentsForBudget = async (
   budget: PlatformAttachmentBudget,
 ): Promise<PreparedAttachments> => {
   const kept: BotMessageAttachment[] = [];
+  const keptOriginals: BotMessageAttachment[] = [];
   const degraded: BotMessageAttachment[] = [];
   const fallbackLines: string[] = [];
 
@@ -215,6 +222,7 @@ export const prepareAttachmentsForBudget = async (
 
     if (size === undefined || size <= limit) {
       kept.push(attachment);
+      keptOriginals.push(attachment);
       continue;
     }
 
@@ -233,6 +241,7 @@ export const prepareAttachmentsForBudget = async (
           name: toJpegFilename(attachment.name),
           size: compressed.length,
         });
+        keptOriginals.push(attachment);
         continue;
       }
     }
@@ -252,9 +261,10 @@ export const prepareAttachmentsForBudget = async (
     // No URL to link to and no smaller representation — keep the original and
     // let the platform sender try (matches pre-budget behavior).
     kept.push(attachment);
+    keptOriginals.push(attachment);
   }
 
-  return { attachments: kept, degraded, fallbackLines };
+  return { attachments: kept, degraded, fallbackLines, keptOriginals };
 };
 
 /**

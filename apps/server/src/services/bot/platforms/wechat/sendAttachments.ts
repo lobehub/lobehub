@@ -126,21 +126,29 @@ const buildMediaItemFromUpload = (
  * protocol §6.7, one MessageItem per request). Single-attachment failures
  * are logged and skipped so the rest still ship — mirroring the chat-adapter
  * adapter's per-item try/catch.
+ *
+ * Returns the attachments that did NOT reach the user, so a caller with a
+ * replay queue can requeue exactly those instead of assuming the whole leg
+ * landed. Attachments degraded to a download link count as delivered once
+ * the link message sends; if that send throws, the whole call throws and the
+ * return value is moot.
  */
 export const sendWechatAttachments = async (
   api: WechatApiClient,
   toUserId: string,
   attachments: WechatOutboundAttachment[],
   contextToken: string,
-): Promise<void> => {
+): Promise<WechatOutboundAttachment[]> => {
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
   const fallbackLines: string[] = [];
+  const undelivered: WechatOutboundAttachment[] = [];
 
   for (const attachment of attachments) {
     try {
       let buffer = await loadAttachmentBuffer(attachment);
       if (!buffer) {
         log('sendWechatAttachments: skipping attachment without resolvable bytes');
+        undelivered.push(attachment);
         continue;
       }
 
@@ -169,6 +177,7 @@ export const sendWechatAttachments = async (
           fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
         } else {
           log('sendWechatAttachments: skipping over-budget attachment without fetchUrl');
+          undelivered.push(attachment);
         }
         continue;
       }
@@ -195,6 +204,7 @@ export const sendWechatAttachments = async (
         attachment.name ?? '(unnamed)',
         error,
       );
+      undelivered.push(attachment);
     }
   }
 
@@ -203,4 +213,6 @@ export const sendWechatAttachments = async (
   for (const message of linkMessages) {
     await api.sendMessage(toUserId, message, contextToken);
   }
+
+  return undelivered;
 };

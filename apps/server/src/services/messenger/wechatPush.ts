@@ -106,6 +106,8 @@ interface PreparedWechatDelivery {
   content?: string;
   /** Originals behind `linkMessages`, requeued when the link leg fails. */
   degraded: WechatOutboundAttachment[];
+  /** Untouched originals of `attachments`, index-aligned — see PreparedAttachments. */
+  keptOriginals: WechatOutboundAttachment[];
   /** Download-link follow-ups, batched to the platform's text limit. */
   linkMessages: string[];
 }
@@ -116,12 +118,13 @@ const prepareWechatDelivery = async (
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
   const prepared = payload.attachments?.length
     ? await prepareAttachmentsForBudget(payload.attachments, budget)
-    : { attachments: [], degraded: [], fallbackLines: [] };
+    : { attachments: [], degraded: [], fallbackLines: [], keptOriginals: [] };
 
   return {
     attachments: prepared.attachments,
     content: payload.content?.trim() ? payload.content : undefined,
     degraded: prepared.degraded,
+    keptOriginals: prepared.keptOriginals,
     linkMessages: splitFallbackMessages(prepared.fallbackLines, budget.textMaxChars),
   };
 };
@@ -176,13 +179,20 @@ const deliver = async (
     await api.sendMessage(platformUserId, prepared.content, token);
     progress.contentDelivered = true;
   }
-  if (prepared.attachments.length) {
-    await sendWechatAttachments(api, platformUserId, prepared.attachments, token);
-  }
   // Per-item upload failures are swallowed inside `sendWechatAttachments` by
-  // design, so reaching here means the upload leg is finished either way —
-  // only the degraded attachments still owe the user their link.
-  progress.undeliveredAttachments = prepared.degraded;
+  // design, but it reports which attachments never landed. Requeue those plus
+  // the degraded ones — mapping back to the untouched originals so a failed
+  // recompressed image does not put megabytes of base64 into Redis.
+  const failed = prepared.attachments.length
+    ? await sendWechatAttachments(api, platformUserId, prepared.attachments, token)
+    : [];
+  progress.undeliveredAttachments = [
+    ...failed.map(
+      (attachment) =>
+        prepared.keptOriginals[prepared.attachments.indexOf(attachment)] ?? attachment,
+    ),
+    ...prepared.degraded,
+  ];
 
   for (const message of prepared.linkMessages) {
     await api.sendMessage(platformUserId, message, token);
