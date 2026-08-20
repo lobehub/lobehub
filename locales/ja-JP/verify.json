@@ -288,6 +288,7 @@
   "actions.backToApp": "{{name}}に戻る",
   "actions.cancel": "キャンセル",
   "actions.delete": "削除",
+  "actions.goToApp": "{{name}} に移動",
   "badge.errored": "チェックを実行できませんでした",
   "badge.failed": "チェック失敗",
   "badge.passed": "チェック成功",

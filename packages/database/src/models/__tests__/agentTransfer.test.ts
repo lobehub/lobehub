@@ -6,6 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agentBotProviders,
   agentCronJobs,
+  agentDocuments,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -13,6 +14,7 @@ import {
   briefs,
   chatGroups,
   chatGroupsAgents,
+  documentHistories,
   documents,
   expertiseBindings,
   expertiseHits,
@@ -31,7 +33,10 @@ import {
   threads,
   topicCommentMentions,
   topicComments,
+  topicDocuments,
   topics,
+  userConnectors,
+  userConnectorTools,
   users,
   workspaces,
 } from '../../schemas';
@@ -1046,6 +1051,287 @@ describe('AgentModel.transferAgent', () => {
     await expect(model.transferAgent('nonexistent', wsId1, userId)).rejects.toThrow(
       'Agent not found',
     );
+  });
+});
+
+describe('AgentModel.transferAgent scope riders (connectors & documents)', () => {
+  it('should move agent-scoped connectors with credentials when the owner stays the same', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Plugin Agent' });
+
+    const [connector] = await serverDB
+      .insert(userConnectors)
+      .values({
+        agentId: agent.id,
+        credentials: 'encrypted-secret',
+        identifier: 'my-custom-mcp',
+        isEnabled: true,
+        name: 'My Custom MCP',
+        sourceType: 'custom',
+        status: 'connected',
+        userId,
+      })
+      .returning();
+    await serverDB.insert(userConnectorTools).values({
+      crudType: 'read',
+      permission: 'auto',
+      toolName: 'do_thing',
+      userConnectorId: connector.id,
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [moved] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, connector.id));
+    expect(moved.workspaceId).toBe(wsId1);
+    expect(moved.userId).toBe(userId);
+    // Same owner: credentials ride along, the plugin keeps working.
+    expect(moved.credentials).toBe('encrypted-secret');
+    expect(moved.status).toBe('connected');
+
+    const [tool] = await serverDB
+      .select()
+      .from(userConnectorTools)
+      .where(eq(userConnectorTools.userConnectorId, connector.id));
+    expect(tool.workspaceId).toBe(wsId1);
+    expect(tool.userId).toBe(userId);
+  });
+
+  it('should strip credentials from foreign-owned agent connectors on scope transfer', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Shared Agent' });
+
+    // Another member connected this agent-scoped connector with THEIR account.
+    const [connector] = await serverDB
+      .insert(userConnectors)
+      .values({
+        agentId: agent.id,
+        credentials: 'their-secret',
+        identifier: 'their-mcp',
+        isEnabled: true,
+        name: 'Their MCP',
+        sourceType: 'custom',
+        status: 'connected',
+        userId: targetUserId,
+        workspaceId: wsId1,
+      })
+      .returning();
+
+    await model.transferAgent(agent.id, null, userId);
+
+    const [moved] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, connector.id));
+    expect(moved.workspaceId).toBeNull();
+    expect(moved.userId).toBe(userId);
+    // Ownership changed: the previous owner's credentials never travel.
+    expect(moved.credentials).toBeNull();
+    expect(moved.status).toBe('disconnected');
+    expect(moved.isEnabled).toBe(false);
+  });
+
+  it('should unmount base connectors linked by the moved agent', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Mount Agent' });
+
+    const [base] = await serverDB
+      .insert(userConnectors)
+      .values({
+        identifier: 'personal-linear',
+        isEnabled: true,
+        metadata: { mountedByAgentId: agent.id },
+        name: 'Linear',
+        sourceType: 'builtin',
+        status: 'connected',
+        userId,
+      })
+      .returning();
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [after] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, base.id));
+    // The base row stays in the source scope, just unmounted.
+    expect(after.workspaceId).toBeNull();
+    expect(after.metadata?.mountedByAgentId).toBeUndefined();
+  });
+
+  it('should move dedicated agent documents with binding and history', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Doc Agent' });
+
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'dedicated-doc',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'dedicated-doc',
+      userId,
+    });
+    await serverDB.insert(documentHistories).values({
+      documentId: 'dedicated-doc',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: new Date(),
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'dedicated-doc'));
+    expect(doc.workspaceId).toBe(wsId1);
+    expect(doc.userId).toBe(userId);
+    expect(doc.visibility).toBe('private');
+
+    const [binding] = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(binding.workspaceId).toBe(wsId1);
+    expect(binding.userId).toBe(userId);
+
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'dedicated-doc'));
+    expect(history.workspaceId).toBe(wsId1);
+  });
+
+  it('should detach associated documents and leave them in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Assoc Agent' });
+
+    await serverDB.insert(documents).values({
+      content: 'notes',
+      fileType: 'text/plain',
+      id: 'assoc-doc',
+      source: 'https://example.com/notes',
+      sourceType: 'web',
+      title: 'Personal notes',
+      totalCharCount: 5,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'assoc-doc',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'assoc-doc'));
+    // The pre-existing personal document is NOT the agent's property.
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.userId).toBe(userId);
+
+    const bindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(bindings).toHaveLength(0);
+  });
+
+  it('should keep a dedicated document bound to an outside agent in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Moving Agent' });
+    const stayingAgent = await model.create({ title: 'Staying Agent' });
+
+    await serverDB.insert(documents).values({
+      content: 'shared skill',
+      fileType: 'text/markdown',
+      id: 'shared-dedicated-doc',
+      source: `agent-document://${agent.id}/shared.md`,
+      sourceType: 'agent',
+      title: 'shared.md',
+      totalCharCount: 12,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values([
+      { agentId: agent.id, documentId: 'shared-dedicated-doc', userId },
+      { agentId: stayingAgent.id, documentId: 'shared-dedicated-doc', userId },
+    ]);
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'shared-dedicated-doc'));
+    // An external consumer pins the document to the source scope.
+    expect(doc.workspaceId).toBeNull();
+
+    const movedBindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(movedBindings).toHaveLength(0);
+
+    const stayingBindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, stayingAgent.id));
+    expect(stayingBindings).toHaveLength(1);
+    expect(stayingBindings[0].workspaceId).toBeNull();
+  });
+
+  it('should move a dedicated document referenced only by topics that move too', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Topic Doc Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ agentId: agent.id, id: 'moving-topic', title: 'T', userId });
+    await serverDB.insert(documents).values({
+      content: 'report',
+      fileType: 'text/markdown',
+      id: 'topic-ref-doc',
+      source: `agent-document://${agent.id}/report.md`,
+      sourceType: 'agent',
+      title: 'report.md',
+      totalCharCount: 6,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'topic-ref-doc',
+      userId,
+    });
+    await serverDB.insert(topicDocuments).values({
+      documentId: 'topic-ref-doc',
+      topicId: 'moving-topic',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    // The referencing topic moves with the agent, so the document moves too —
+    // and the topic-document link follows its topic's scope.
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'topic-ref-doc'));
+    expect(doc.workspaceId).toBe(wsId1);
+
+    const [link] = await serverDB
+      .select()
+      .from(topicDocuments)
+      .where(eq(topicDocuments.topicId, 'moving-topic'));
+    expect(link.workspaceId).toBe(wsId1);
+    expect(link.userId).toBe(userId);
   });
 });
 

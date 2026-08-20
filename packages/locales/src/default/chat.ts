@@ -1218,6 +1218,7 @@ export default {
   'sendPlaceholderHeterogeneous': 'Describe a task or ask a question to {{name}}',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
+  'sender.unknownMember': 'Member',
   'sessionGroup.config': 'Category Management',
   'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
@@ -1281,6 +1282,7 @@ export default {
   'shareModal.pdfGenerationError': 'PDF generation failed',
   'shareModal.pdfReady': 'PDF is ready',
   'shareModal.popover.export': 'Export',
+  'shareModal.popover.loadError': 'Failed to load sharing settings, please try again later',
   'shareModal.popover.privacyWarning.confirm': 'Share & copy link',
   'shareModal.popover.privacyWarning.content':
     "Anyone with the link can open this whole conversation, so take a moment to make sure there's nothing here you'd rather keep private. A shared topic may include:",

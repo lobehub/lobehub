@@ -288,6 +288,7 @@
   "actions.backToApp": "Quay lại {{name}}",
   "actions.cancel": "Hủy",
   "actions.delete": "Xóa",
+  "actions.goToApp": "Đi đến {{name}}",
   "badge.errored": "Không thể chạy kiểm tra",
   "badge.failed": "Kiểm tra thất bại",
   "badge.passed": "Kiểm tra thành công",

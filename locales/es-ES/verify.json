@@ -288,6 +288,7 @@
   "actions.backToApp": "Volver a {{name}}",
   "actions.cancel": "Cancelar",
   "actions.delete": "Eliminar",
+  "actions.goToApp": "Ir a {{name}}",
   "badge.errored": "La verificación no pudo ejecutarse",
   "badge.failed": "Verificación fallida",
   "badge.passed": "Verificación aprobada",

@@ -729,9 +729,13 @@ export class MessageModel {
             targetId: messages.targetId,
 
             sender: {
+              // `id` MUST be the first selected field: drizzle decides whether a
+              // left-joined nested selection is null from its first column, so
+              // leading with a nullable column (avatar) collapsed every
+              // avatar-less sender to `sender: null`.
+              id: users.id,
               avatar: users.avatar,
               fullName: users.fullName,
-              id: users.id,
               username: users.username,
             },
 
@@ -1362,6 +1366,15 @@ export class MessageModel {
         agentId: messages.agentId,
         targetId: messages.targetId,
 
+        sender: {
+          // `id` MUST be the first selected field — see queryWithWhere's sender
+          // selection for why (drizzle left-join nested-object nullification).
+          id: users.id,
+          avatar: users.avatar,
+          fullName: users.fullName,
+          username: users.username,
+        },
+
         tools: messages.tools,
         tool_call_id: messagePlugins.toolCallId,
 
@@ -1391,6 +1404,7 @@ export class MessageModel {
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+      .leftJoin(users, eq(users.id, messages.userId))
       .orderBy(asc(messages.createdAt));
 
     if (result.length === 0) return [];
@@ -1536,10 +1550,23 @@ export class MessageModel {
 
     // 6. Transform messages to UIChatMessage format
     return result.map(
-      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+      ({
+        model,
+        provider,
+        translate,
+        ttsId,
+        ttsFile,
+        ttsContentMd5,
+        ttsVoice,
+        sender,
+        ...item
+      }) => {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
         return {
           ...item,
+          // Same presence contract as queryWithWhere: collapse a null-id sender
+          // (deleted account) to `null` so clients can rely on `sender?.id`.
+          sender: sender?.id ? sender : null,
           chunksList: chunksList
             .filter((relation) => relation.messageId === item.id)
             .map((c) => ({

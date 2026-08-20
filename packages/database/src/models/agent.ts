@@ -57,6 +57,7 @@ import {
   tasks,
   taskTopics,
   threads,
+  topicDocuments,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -64,8 +65,14 @@ import {
   collectBoundDeviceIds,
   sanitizeAgencyConfigsForWorkspace,
 } from '../utils/agencyConfigDevices';
-import { rehomeAgentConnectorsForRecipient } from '../utils/agentConnectors';
-import { rehomeAgentDocumentsForRecipient } from '../utils/agentDocumentsOwnership';
+import {
+  rehomeAgentConnectorsForRecipient,
+  rehomeAgentConnectorsForScopeTransfer,
+} from '../utils/agentConnectors';
+import {
+  moveAgentDocumentsForScopeTransfer,
+  rehomeAgentDocumentsForRecipient,
+} from '../utils/agentDocumentsOwnership';
 import { rehomeAgentExpertiseForRecipient } from '../utils/agentExpertise';
 import {
   detachAgentKnowledgeMountsForRecipient,
@@ -2230,6 +2237,21 @@ export class AgentModel {
         targetWorkspaceId,
       );
 
+      // 6b. Topic-document links denormalize the topic's scope the same way —
+      // move them with their topic or workspace-filtered document panels on
+      // the moved topics read stale rows.
+      if (movedTopics.length > 0) {
+        await trx
+          .update(topicDocuments)
+          .set(ownershipUpdate)
+          .where(
+            inArray(
+              topicDocuments.topicId,
+              movedTopics.map((topic) => topic.id),
+            ),
+          );
+      }
+
       // 7. Message scope rewrite — fast/slow split. Rewriting a message row
       // maintains every message index (incl. the multi-GB BM25 index), so a
       // heavy agent's history cannot be rewritten inside this transaction:
@@ -2412,6 +2434,30 @@ export class AgentModel {
         .update(agentBotProviders)
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(inArray(agentBotProviders.agentId, agentIds));
+
+      // 14a. Agent-scoped connectors (custom plugins) ride along, or every
+      // custom tool the agent carries stops resolving in the target scope.
+      // Same-owner rows keep their credentials; a target owner change strips
+      // them to reauthorization shells (member-handover policy).
+      await rehomeAgentConnectorsForScopeTransfer(trx, {
+        agentIds,
+        targetUserId,
+        targetWorkspaceId,
+      });
+
+      // 14b. Agent documents (Skills / VFS files) ride along: dedicated
+      // agent-created documents move with binding + history, associated
+      // personal documents stay behind with their binding detached. Without
+      // this the agent's Documents list arrives empty and the files strand in
+      // the source scope's Resource list.
+      await moveAgentDocumentsForScopeTransfer(trx, {
+        agentIds,
+        movedTaskIds,
+        movedTopicIds,
+        targetUserId,
+        targetVisibility,
+        targetWorkspaceId,
+      });
 
       // 15. Leave every chat group: a group belongs to the source scope, and a
       // roster row pointing at an agent that now lives elsewhere would render

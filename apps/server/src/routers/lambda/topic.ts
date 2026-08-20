@@ -1,4 +1,3 @@
-import { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import {
   chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
@@ -21,7 +20,6 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
-import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
@@ -90,10 +88,11 @@ interface TopicShareCtx {
 }
 
 /**
- * Workspace share management is creator + workspace-owner only: a member may
- * manage shares of their own topics; managing someone else's requires the
- * `:all` scope (workspace owner). Personal mode needs no extra check — the
- * model's ownership filter already scopes mutations to the caller.
+ * Workspace share management follows the co-editing rule (same gate as
+ * `updateTopic`): any member with `use`-level General access on the topic's
+ * conversation may manage its share by default — view-only members stay
+ * read-only. Personal mode needs no extra check — the model's ownership
+ * filter already scopes mutations to the caller.
  */
 const assertCanManageTopicShare = async (ctx: TopicShareCtx, topicId: string) => {
   if (!ctx.workspaceId) return;
@@ -104,16 +103,7 @@ const assertCanManageTopicShare = async (ctx: TopicShareCtx, topicId: string) =>
   }
   if (topic.userId === ctx.userId) return;
 
-  const isWorkspaceAdmin = await new RbacModel(ctx.serverDB, ctx.userId).hasPermission(
-    `${PERMISSION_ACTIONS.TOPIC_UPDATE}:all`,
-    { workspaceId: ctx.workspaceId },
-  );
-  if (!isWorkspaceAdmin) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Only the topic creator or a workspace owner can manage this share',
-    });
-  }
+  await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
 };
 
 /**

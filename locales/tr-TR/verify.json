@@ -288,6 +288,7 @@
   "actions.backToApp": "{{name}}'e geri dön",
   "actions.cancel": "İptal",
   "actions.delete": "Sil",
+  "actions.goToApp": "{{name}} uygulamasına git",
   "badge.errored": "Kontrol çalıştırılamadı",
   "badge.failed": "Kontrol başarısız",
   "badge.passed": "Kontrol başarılı",

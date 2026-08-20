@@ -288,6 +288,7 @@
   "actions.backToApp": "Обратно към {{name}}",
   "actions.cancel": "Отказ",
   "actions.delete": "Изтриване",
+  "actions.goToApp": "Отиди на {{name}}",
   "badge.errored": "Проверката не можа да бъде изпълнена",
   "badge.failed": "Проверката не е успешна",
   "badge.passed": "Проверката е успешна",

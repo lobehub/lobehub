@@ -58,8 +58,10 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     s.updateSystemStatus,
   ]);
 
+  const [createFailed, setCreateFailed] = useState(false);
   const {
     data: shareInfo,
+    error: loadError,
     isLoading,
     mutate,
   } = useSWR(
@@ -68,12 +70,16 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     { revalidateOnFocus: false },
   );
 
-  // Auto-create share record if not exists
+  // Auto-create share record if not exists. Surface failures (e.g. a 403 from
+  // the share permission gate) instead of leaving the popover on the skeleton.
   useEffect(() => {
-    if (!isLoading && !shareInfo && activeTopicId && canShare) {
-      topicService.enableSharing(activeTopicId, 'private').then(() => mutate());
+    if (!isLoading && !loadError && !shareInfo && activeTopicId && canShare) {
+      topicService
+        .enableSharing(activeTopicId, 'private')
+        .then(() => mutate())
+        .catch(() => setCreateFailed(true));
     }
-  }, [isLoading, shareInfo, activeTopicId, canShare, mutate]);
+  }, [isLoading, loadError, shareInfo, activeTopicId, canShare, mutate]);
 
   const shareUrl = shareInfo?.id ? `${appOrigin}/share/t/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as Visibility) || 'private';
@@ -167,6 +173,15 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
       <Flexbox className={styles.container} gap={8}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
         <Text type="secondary">{reason}</Text>
+      </Flexbox>
+    );
+  }
+
+  if (loadError || createFailed) {
+    return (
+      <Flexbox className={styles.container} gap={8}>
+        <Text strong>{t('share', { ns: 'common' })}</Text>
+        <Text type="secondary">{t('shareModal.popover.loadError')}</Text>
       </Flexbox>
     );
   }

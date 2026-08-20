@@ -288,6 +288,7 @@
   "actions.backToApp": "بازگشت به {{name}}",
   "actions.cancel": "لغو",
   "actions.delete": "حذف",
+  "actions.goToApp": "برو به {{name}}",
   "badge.errored": "بررسی اجرا نشد",
   "badge.failed": "بررسی ناموفق",
   "badge.passed": "بررسی موفق",

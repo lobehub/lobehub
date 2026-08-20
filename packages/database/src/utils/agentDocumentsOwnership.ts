@@ -238,3 +238,198 @@ export const countAssociatedAgentDocumentsToDetach = async (
     );
   return row.value;
 };
+
+/**
+ * Document policy for a CROSS-SCOPE transfer (personal ↔ workspace): the
+ * agent's own documents are part of the agent and must move with it, or the
+ * transfer strands them — the binding rows stop matching the target scope's
+ * ownership predicate (the agent's Documents list goes empty) while the
+ * backing rows linger in the source scope's Resource list with no agent left
+ * to reach them from.
+ *
+ * The dedicated/associated split reuses the member-handover doctrine above,
+ * with one scope-transfer twist: references from topics and tasks that move
+ * in the SAME transfer are internal (those rows follow the agent anyway), so
+ * only references from OUTSIDE the moving set make a document shared content
+ * that stays behind.
+ *
+ * - DEDICATED documents (agent-created provenance, no external consumers):
+ *   binding + backing document + revision history all re-scope to the target.
+ *   Visibility cascades like the task rows in `transferAgents` — a `private`
+ *   transfer must not leak previously-personal skill files to every member.
+ * - ASSOCIATED documents (pre-existing content made visible to the agent, or
+ *   dedicated files that grew external consumers): the backing document stays
+ *   where it lives; the binding is detached — kept, it would be a dead link
+ *   no scope can resolve (same rationale as the knowledge-mount detach).
+ */
+export const moveAgentDocumentsForScopeTransfer = async (
+  db: Db,
+  params: {
+    agentIds: string[];
+    /** Tasks moving in the same transfer — their document refs are internal. */
+    movedTaskIds: string[];
+    /** Topics moving in the same transfer — their document refs are internal. */
+    movedTopicIds: string[];
+    targetUserId: string;
+    targetVisibility?: 'private' | 'public';
+    targetWorkspaceId: string | null;
+  },
+): Promise<void> => {
+  const {
+    agentIds,
+    movedTaskIds,
+    movedTopicIds,
+    targetUserId,
+    targetVisibility,
+    targetWorkspaceId,
+  } = params;
+  if (agentIds.length === 0) return;
+
+  const rows = await db
+    .select({
+      agentId: agentDocuments.agentId,
+      bindingId: agentDocuments.id,
+      bindingUserId: agentDocuments.userId,
+      documentId: agentDocuments.documentId,
+      slug: documents.slug,
+      source: documents.source,
+      sourceType: documents.sourceType,
+    })
+    .from(agentDocuments)
+    .innerJoin(documents, eq(documents.id, agentDocuments.documentId))
+    .where(inArray(agentDocuments.agentId, agentIds));
+  if (rows.length === 0) return;
+
+  const dedicatedCandidates = rows.filter((row) =>
+    isDedicatedProvenance(row.source, row.sourceType),
+  );
+
+  // External consumers pin a document to the source scope. Unlike the member
+  // handover, topic/task references only count when the referencing row is
+  // NOT itself moving with this transfer.
+  const externallyBound = new Set<string>();
+  if (dedicatedCandidates.length > 0) {
+    const candidateDocIds = [...new Set(dedicatedCandidates.map((row) => row.documentId))];
+    const [externalAgents, topicRefs, taskRefs] = await Promise.all([
+      db
+        .selectDistinct({ documentId: agentDocuments.documentId })
+        .from(agentDocuments)
+        .where(
+          and(
+            inArray(agentDocuments.documentId, candidateDocIds),
+            notInArray(agentDocuments.agentId, agentIds),
+          ),
+        ),
+      db
+        .selectDistinct({ documentId: topicDocuments.documentId })
+        .from(topicDocuments)
+        .where(
+          and(
+            inArray(topicDocuments.documentId, candidateDocIds),
+            movedTopicIds.length > 0
+              ? notInArray(topicDocuments.topicId, movedTopicIds)
+              : undefined,
+          ),
+        ),
+      db
+        .selectDistinct({ documentId: taskDocuments.documentId })
+        .from(taskDocuments)
+        .where(
+          and(
+            inArray(taskDocuments.documentId, candidateDocIds),
+            movedTaskIds.length > 0 ? notInArray(taskDocuments.taskId, movedTaskIds) : undefined,
+          ),
+        ),
+    ]);
+    for (const row of [...externalAgents, ...topicRefs, ...taskRefs])
+      externallyBound.add(row.documentId);
+  }
+
+  const dedicated = dedicatedCandidates.filter((row) => !externallyBound.has(row.documentId));
+  const dedicatedDocIds = [...new Set(dedicated.map((row) => row.documentId))];
+  const dedicatedBindingIds = new Set(dedicated.map((row) => row.bindingId));
+  const associated = rows.filter((row) => !dedicatedBindingIds.has(row.bindingId));
+
+  // Bindings are unique per (agent, document, user): re-scoping every rider to
+  // `targetUserId` would collide where several members hold a binding for the
+  // same pair, so keep the target owner's row (or the first) and merge the
+  // rest away.
+  const keptByPair = new Map<string, string>();
+  const duplicateBindingIds: string[] = [];
+  for (const row of dedicated) {
+    const pair = `${row.agentId}:${row.documentId}`;
+    const kept = keptByPair.get(pair);
+    if (!kept) {
+      keptByPair.set(pair, row.bindingId);
+    } else if (row.bindingUserId === targetUserId) {
+      duplicateBindingIds.push(kept);
+      keptByPair.set(pair, row.bindingId);
+    } else {
+      duplicateBindingIds.push(row.bindingId);
+    }
+  }
+
+  const bindingsToDelete = [...associated.map((row) => row.bindingId), ...duplicateBindingIds];
+  if (bindingsToDelete.length > 0) {
+    await db.delete(agentDocuments).where(inArray(agentDocuments.id, bindingsToDelete));
+  }
+  if (keptByPair.size > 0) {
+    await db
+      .update(agentDocuments)
+      .set({ userId: targetUserId, workspaceId: targetWorkspaceId })
+      .where(inArray(agentDocuments.id, [...keptByPair.values()]));
+  }
+
+  if (dedicatedDocIds.length === 0) return;
+
+  // Dedicated agent files carry no slug today, but a slugged row colliding
+  // with the target scope's unique index must not abort the whole transfer —
+  // drop the slug instead (the agent reaches its files by binding, not slug).
+  const sluggedDocs = dedicated.filter((row) => row.slug);
+  const conflictedDocIds = new Set<string>();
+  if (sluggedDocs.length > 0) {
+    const conflictRows = await db
+      .select({ slug: documents.slug })
+      .from(documents)
+      .where(
+        and(
+          buildWorkspaceWhere(
+            { userId: targetUserId, workspaceId: targetWorkspaceId ?? undefined },
+            documents,
+          ),
+          notInArray(documents.id, dedicatedDocIds),
+          inArray(documents.slug, [...new Set(sluggedDocs.map((row) => row.slug!))]),
+        ),
+      );
+    const taken = new Set(conflictRows.map((row) => row.slug));
+    for (const row of sluggedDocs) if (taken.has(row.slug)) conflictedDocIds.add(row.documentId);
+  }
+
+  // Visibility only applies when landing in a workspace — mirror the task
+  // cascade in `transferAgents`. `clientId` is cleared like the member
+  // handover: it is unique per user and belongs to the source owner's sync.
+  const documentScopeUpdate = {
+    clientId: null,
+    userId: targetUserId,
+    workspaceId: targetWorkspaceId,
+    ...(targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {}),
+  };
+  const cleanDocIds = dedicatedDocIds.filter((id) => !conflictedDocIds.has(id));
+  if (cleanDocIds.length > 0) {
+    await db.update(documents).set(documentScopeUpdate).where(inArray(documents.id, cleanDocIds));
+  }
+  if (conflictedDocIds.size > 0) {
+    await db
+      .update(documents)
+      .set({ ...documentScopeUpdate, slug: null })
+      .where(inArray(documents.id, [...conflictedDocIds]));
+  }
+
+  // Revision history denormalizes the scope — left behind, workspace-filtered
+  // history reads for the moved document go stale. Author attribution
+  // (`user_id`) is kept.
+  await db
+    .update(documentHistories)
+    .set({ workspaceId: targetWorkspaceId })
+    .where(inArray(documentHistories.documentId, dedicatedDocIds));
+};

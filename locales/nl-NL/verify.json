@@ -288,6 +288,7 @@
   "actions.backToApp": "Terug naar {{name}}",
   "actions.cancel": "Annuleren",
   "actions.delete": "Verwijderen",
+  "actions.goToApp": "Ga naar {{name}}",
   "badge.errored": "Controle kon niet worden uitgevoerd",
   "badge.failed": "Controle mislukt",
   "badge.passed": "Controle geslaagd",
