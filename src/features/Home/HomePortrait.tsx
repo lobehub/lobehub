@@ -15,9 +15,11 @@ const styles = createStaticStyles(({ css }) => ({
    * a few percent of margin, so sizing by height lands both at the same stature.
    * Anchored deep enough that the lower body passes behind the first card — the
    * character leans on the surface instead of standing on it. The offset is what
-   * sets how much shows: 94px leaves 65% of the character above the card, which
-   * clears the catalog mascot's head (it is half its own height) and reaches the
-   * hem on a standing figure, where 57% cut both at the collar and the waist.
+   * sets how much shows: 94px leaves `HOME_PORTRAIT_VISIBLE_RATIO` of the
+   * character above the card (see ./portraitFraming), which clears the catalog
+   * mascot's head — it is half its own height — and reaches the hem on a
+   * standing figure, where 57% cut both at the collar and the waist. Change one
+   * and the studio's preview frame stops matching what home shows.
    */
   image: css`
     pointer-events: none;

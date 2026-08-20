@@ -92,11 +92,21 @@ const buildStyleReferenceDirection = (
   count: number,
   mode: 'character' | 'fullBodyCharacter' | 'surface',
   subject: string,
+  /**
+   * A preset reference is one of ours: it stands for a look, so the prompt has
+   * to fence off its literal subject. A reference the user attached is the
+   * opposite — they are pointing at the character they want, and refusing to
+   * follow it would ignore the only thing they said.
+   */
+  isUserSupplied = false,
 ): string => {
   if (count === 0) return '';
 
   const imageWord = count === 1 ? 'image' : 'images';
   const possessive = count === 1 ? 'its' : 'their';
+
+  if (isUserSupplied)
+    return `\n\nThe user attached the ${imageWord} as ${possessive} own reference for this character. Follow ${possessive} appearance closely — the same character design, features, palette, and rendering — and adapt it to the composition and canvas rules above rather than inventing a different character.`;
 
   if (mode === 'surface')
     return `\n\nUse the attached ${imageWord} only as a rendering-style reference — match ${possessive} materials, lighting, color saturation, and level of finish. Do not copy ${possessive} subjects or compositions.`;
@@ -147,6 +157,12 @@ export interface AgentArtworkPromptInput {
    * blend the two references unpredictably.
    */
   styleReferenceImageUrls?: string[] | null;
+  /**
+   * Where `styleReferenceImageUrls` came from. `custom` means the user attached
+   * them, which flips the wording from "borrow this look" to "follow this
+   * character" — see {@link buildStyleReferenceDirection}.
+   */
+  styleReferenceSource?: 'preset' | 'custom' | null;
   systemRole?: string | null;
   title?: string | null;
 }
@@ -197,6 +213,7 @@ export const buildAgentArtworkPrompt = (input: AgentArtworkPromptInput): string 
         ? 'fullBodyCharacter'
         : 'character',
     'agent',
+    input.styleReferenceSource === 'custom',
   );
   const counterpartReferenceUrl = styleReferenceCount > 0 ? undefined : input.referenceImageUrl;
   const userDirection = buildUserDirection(input.direction);

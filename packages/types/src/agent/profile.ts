@@ -65,6 +65,12 @@ export interface AgentProfile {
    */
   artworkDirection?: string;
   /**
+   * A reference image the user attached themselves. Unlike a style preset — which
+   * says "look like this kind of art" — this says "look like THIS character", so
+   * a generation using it follows the reference instead of inventing a subject.
+   */
+  artworkReferenceImage?: string;
+  /**
    * Id of the artwork style preset the current images were generated with, so
    * reopening the studio resumes where the user left off. Values are the
    * studio's own preset ids; the studio narrows the string it reads back.

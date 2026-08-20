@@ -17,8 +17,9 @@ import {
 import { Alert, Button, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
-  Check,
   CircleUserRound,
+  Frame,
+  ImagePlus,
   PersonStanding,
   SettingsIcon,
   Trash2,
@@ -31,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { avatarRemountKey, openFilePicker } from '@/features/AgentProfileArtwork/utils';
 import { CHIEF_AGENT_ARTWORKS, DEFAULT_CHIEF_AGENT_ARTWORK } from '@/features/ChiefAgent/artwork';
+import { HOME_PORTRAIT_VISIBLE_RATIO } from '@/features/Home/portraitFraming';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
@@ -55,22 +57,14 @@ const PREVIEW_MAX_SIZE = 240;
  */
 const STYLE_THUMB_SIZE = 64;
 const GENERATE_SECTION_KEY = 'generate';
+/**
+ * Vertical breathing room inside the full-body slot. The avatar gets a much
+ * larger inset because a head reads fine small; a full body needs the height,
+ * so this only keeps the character off the frame's edge.
+ */
+const FULL_BODY_INSET = 12;
 
 const styles = createStaticStyles(({ css }) => ({
-  galleryCheck: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 4px;
-    inset-inline-end: 4px;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-
-    color: ${cssVar.colorTextLightSolid};
-
-    background: ${cssVar.colorPrimary};
-  `,
   galleryGrid: css`
     display: flex;
     flex-wrap: wrap;
@@ -114,6 +108,31 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   galleryThumbWrap: css`
     position: relative;
+  `,
+  /** Empty state of the custom-reference tile: same footprint as a thumbnail. */
+  referenceEmpty: css`
+    aspect-ratio: 1;
+    width: ${STYLE_THUMB_SIZE}px;
+    border: 1px dashed ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    color: ${cssVar.colorTextTertiary};
+  `,
+  referenceRemove: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 2px;
+    inset-inline-end: 2px;
+
+    opacity: 0;
+    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
+    backdrop-filter: blur(8px);
+
+    transition: opacity ${cssVar.motionDurationFast};
+
+    *:hover > & {
+      opacity: 1;
+    }
   `,
   generationOverlay: css`
     position: absolute;
@@ -222,10 +241,56 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     max-height: ${PREVIEW_MAX_SIZE}px;
   `,
+  /**
+   * Breathing room so the head is not pinned to the slot's top edge. Far less
+   * than the avatar's inset — a full body wants the height — but enough that the
+   * slot reads as a frame around the character rather than a crop of it.
+   */
   previewBodyImage: css`
+    box-sizing: border-box;
     width: 100%;
     height: 100%;
+    padding-block: ${FULL_BODY_INSET}px;
+
     object-fit: contain;
+  `,
+  /**
+   * Dashed marker for the share of the character the home surface actually
+   * shows, so framing can be judged here instead of by walking to home.
+   */
+  framePreview: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 3;
+    inset-block-start: ${FULL_BODY_INSET}px;
+    inset-inline: ${FULL_BODY_INSET}px;
+
+    height: calc((100% - ${FULL_BODY_INSET * 2}px) * ${HOME_PORTRAIT_VISIBLE_RATIO});
+    border: 1px dashed ${cssVar.colorTextSecondary};
+    border-radius: ${cssVar.borderRadiusSM};
+  `,
+  framePreviewLabel: css`
+    position: absolute;
+    inset-block-end: 4px;
+    inset-inline-end: 6px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 11px;
+    line-height: 14px;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  frameToggle: css`
+    position: absolute;
+    z-index: 4;
+    inset-block-start: 8px;
+    inset-inline-start: 8px;
+
+    opacity: 0;
+    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
+    backdrop-filter: blur(8px);
+
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   controlLabel: css`
     font-size: 12px;
@@ -293,10 +358,19 @@ export interface ArtworkStudioContentProps {
     style: AgentArtworkStyle,
     composition?: AgentArtworkComposition,
     direction?: string,
+    /** True when the user's own reference should drive the character. */
+    useReference?: boolean,
   ) => void;
+  /** Attaches (or clears, with `undefined`) the user's own generation reference. */
+  onReferenceChange: (file?: File) => void;
   /** Clears the artwork in one slot. */
   onRemove: (composition: AgentArtworkComposition) => void;
   onUpload: (file: File, composition: AgentArtworkComposition) => void;
+  /**
+   * The user's own reference image, if they attached one. Selecting it makes a
+   * generation follow that character instead of a style preset.
+   */
+  referenceImage?: string | null;
   uploading?: boolean;
 }
 
@@ -355,7 +429,9 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
     onCancel,
     onGenerate,
     onRemove,
+    onReferenceChange,
     onUpload,
+    referenceImage,
     uploading,
   }) => {
     const { t } = useTranslation('setting');
@@ -367,6 +443,10 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
 
     const avatarInputRef = useRef<HTMLInputElement>(null);
     const fullBodyInputRef = useRef<HTMLInputElement>(null);
+    const referenceInputRef = useRef<HTMLInputElement>(null);
+    // Off by default: the frame is a measuring tool, and leaving it drawn over
+    // every artwork would make the slot read as cropped.
+    const [showFramePreview, setShowFramePreview] = useState(false);
     // Resume the subject's own last choice; a preset that no longer exists
     // falls back rather than leaving the gallery with nothing selected.
     const [style, setStyle] = useState<AgentArtworkStyle>(() =>
@@ -376,7 +456,14 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
     );
     const [direction, setDirection] = useState(initialDirection ?? '');
     const [generateExpanded, setGenerateExpanded] = useState(true);
-    const selectStyle = useCallback((next: AgentArtworkStyle) => setStyle(next), []);
+    // The gallery picks one source for the character: a preset, or the user's own
+    // reference. Keeping the preset selected underneath means clearing the
+    // reference lands back where they were instead of on nothing.
+    const [useReference, setUseReference] = useState(false);
+    const selectStyle = useCallback((next: AgentArtworkStyle) => {
+      setStyle(next);
+      setUseReference(false);
+    }, []);
 
     const keySelect = useCallback(
       (next: AgentArtworkStyle) => (event: { key: string; preventDefault: () => void }) => {
@@ -456,7 +543,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                     type={'fill'}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onGenerate(style, 'avatar', direction);
+                      onGenerate(style, 'avatar', direction, useReference);
                     }}
                   >
                     {t('artworkStudio.generate.avatar')}
@@ -496,6 +583,27 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                 ) : (
                   <Icon icon={PersonStanding} size={64} />
                 )}
+                {showFramePreview && fullBody ? (
+                  <div className={styles.framePreview}>
+                    <span className={styles.framePreviewLabel}>
+                      {Math.round(HOME_PORTRAIT_VISIBLE_RATIO * 100)}%
+                    </span>
+                  </div>
+                ) : null}
+                {fullBody && !isGenerating('fullBody') ? (
+                  <ActionIcon
+                    data-slot-actions
+                    active={showFramePreview}
+                    className={styles.frameToggle}
+                    icon={Frame}
+                    size={'small'}
+                    title={t('artworkStudio.framePreview')}
+                    onClick={(event: MouseEvent<HTMLDivElement>) => {
+                      event.stopPropagation();
+                      setShowFramePreview((open) => !open);
+                    }}
+                  />
+                ) : null}
                 {renderRemove('fullBody', !!fullBody)}
                 <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
                   <Button icon={UploadIcon} loading={uploading} style={{ flex: 1 }} type={'fill'}>
@@ -507,7 +615,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                     type={'fill'}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onGenerate(style, 'fullBody', direction);
+                      onGenerate(style, 'fullBody', direction, useReference);
                     }}
                   >
                     {t('artworkStudio.generate.fullBody')}
@@ -545,7 +653,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                   <div className={styles.galleryGrid}>
                     {GALLERY_STYLES.map((item) => (
                       <Flexbox
-                        className={`${styles.galleryItem} ${style === item ? styles.galleryItemActive : ''}`}
+                        className={`${styles.galleryItem} ${style === item && !useReference ? styles.galleryItemActive : ''}`}
                         gap={6}
                         key={item}
                         role={'button'}
@@ -563,17 +671,66 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                                 : imageUrl(`agent-artwork-styles/style-${item}.webp`)
                             }
                           />
-                          {style === item ? (
-                            <Center className={styles.galleryCheck}>
-                              <Icon icon={Check} size={13} />
-                            </Center>
-                          ) : null}
                         </div>
                         <Text ellipsis className={styles.galleryLabel}>
                           {t(`artworkStudio.style.${item}`)}
                         </Text>
                       </Flexbox>
                     ))}
+                    {/*
+                      A preset says "look like this kind of art"; this says "look
+                      like THIS character". It sits in the same row because it is
+                      the same choice — what the generation follows — and only one
+                      of them can be in effect.
+                    */}
+                    <Flexbox
+                      className={`${styles.galleryItem} ${useReference ? styles.galleryItemActive : ''}`}
+                      gap={6}
+                      role={'button'}
+                      tabIndex={0}
+                      onClick={() =>
+                        referenceImage
+                          ? setUseReference(true)
+                          : referenceInputRef.current && openFilePicker(referenceInputRef.current)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        if (referenceImage) setUseReference(true);
+                        else if (referenceInputRef.current)
+                          openFilePicker(referenceInputRef.current);
+                      }}
+                    >
+                      <div className={styles.galleryThumbWrap}>
+                        {referenceImage ? (
+                          <>
+                            <img
+                              alt={t('artworkStudio.reference.title')}
+                              className={styles.galleryThumb}
+                              src={referenceImage}
+                            />
+                            <ActionIcon
+                              className={styles.referenceRemove}
+                              icon={Trash2}
+                              size={'small'}
+                              title={t('artworkStudio.reference.remove')}
+                              onClick={(event: MouseEvent<HTMLDivElement>) => {
+                                event.stopPropagation();
+                                setUseReference(false);
+                                onReferenceChange();
+                              }}
+                            />
+                          </>
+                        ) : (
+                          <Center className={styles.referenceEmpty}>
+                            <Icon icon={ImagePlus} size={18} />
+                          </Center>
+                        )}
+                      </div>
+                      <Text ellipsis className={styles.galleryLabel}>
+                        {t('artworkStudio.reference.title')}
+                      </Text>
+                    </Flexbox>
                   </div>
                   <Input
                     disabled={generating}
@@ -586,7 +743,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                       disabled={generating}
                       icon={WandSparkles}
                       type={'fill'}
-                      onClick={() => onGenerate(style, undefined, direction)}
+                      onClick={() => onGenerate(style, undefined, direction, useReference)}
                     >
                       {t('artworkStudio.generate.characterSet')}
                     </Button>
@@ -640,6 +797,23 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
             const file = event.target.files?.[0];
             event.target.value = '';
             if (file) onUpload(file, 'fullBody');
+          }}
+        />
+        <input
+          accept="image/*"
+          aria-label={t('artworkStudio.reference.title')}
+          className={styles.visuallyHiddenInput}
+          ref={referenceInputRef}
+          tabIndex={-1}
+          type="file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            // Attaching one is also choosing it — nobody uploads a reference
+            // they did not want the next generation to follow.
+            setUseReference(true);
+            onReferenceChange(file);
           }}
         />
       </Flexbox>

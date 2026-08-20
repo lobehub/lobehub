@@ -85,7 +85,13 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       nextStyle: AgentArtworkStyle,
       composition?: AgentArtworkComposition,
       direction?: string,
+      useReference?: boolean,
     ) => {
+      // The user's own reference replaces the preset's images rather than joining
+      // them: the two carry opposite instructions ("follow this character" vs
+      // "borrow this look, invent a character"), and a model given both blends
+      // them into neither.
+      const customReference = useReference ? profile?.artworkReferenceImage : undefined;
       const commonInput = {
         description: meta.description,
         id: agentId,
@@ -94,7 +100,10 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
         direction,
         referenceImageUrl: resolveAgentBackground(meta.backgroundColor),
         style: nextStyle,
-        styleReferenceImageUrls: styleReferencesForArtworkStyle(nextStyle, appOrigin),
+        styleReferenceImageUrls: customReference
+          ? [customReference]
+          : styleReferencesForArtworkStyle(nextStyle, appOrigin),
+        styleReferenceSource: customReference ? 'custom' : 'preset',
         systemRole,
         title: meta.title,
       } as const;
@@ -129,10 +138,40 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       meta.avatar,
       meta.name,
       meta.title,
+      profile?.artworkReferenceImage,
       saveProfile,
       systemRole,
       toTransparentFullBody,
     ],
+  );
+
+  /** Attaches the user's own generation reference, or clears it when called bare. */
+  const changeReference = useCallback(
+    async (file?: File) => {
+      if (!file) {
+        const { artworkReferenceImage: _cleared, ...rest } = profile ?? {};
+        await updateAgentMetaById(agentId, { profile: rest });
+        return;
+      }
+
+      if (file.size > MAX_AVATAR_SIZE) {
+        toast.error(t('settingAgent.artwork.sizeExceeded'));
+        return;
+      }
+
+      setUploading(true);
+      try {
+        const result = await uploadWithProgress({ file });
+        if (!result?.url) throw new Error('Upload returned no URL');
+        await saveProfile({ artworkReferenceImage: result.url });
+      } catch (error) {
+        console.error('Failed to upload artwork reference:', error);
+        toast.error(t('settingAgent.artwork.uploadFailed'));
+      } finally {
+        setUploading(false);
+      }
+    },
+    [agentId, profile, saveProfile, t, updateAgentMetaById, uploadWithProgress],
   );
 
   const remove = useCallback(
@@ -197,9 +236,11 @@ const AgentArtworkStudioContent = memo<AgentArtworkStudioContentProps>(({ agentI
       hasStoredAvatar={!!storedAvatar}
       initialDirection={profile?.artworkDirection}
       initialStyle={profile?.artworkStyle}
+      referenceImage={profile?.artworkReferenceImage}
       uploading={uploading}
       onCancel={() => void cancelAgentArtworkGeneration(agentId)}
       onGenerate={generate}
+      onReferenceChange={(file) => void changeReference(file)}
       onRemove={(composition) => void remove(composition)}
       onUpload={(file, composition) => void upload(file, composition)}
     />
