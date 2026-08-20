@@ -7,6 +7,7 @@ import {
   AI_RUNTIME_OPERATION_TYPES,
   INPUT_LOADING_OPERATION_TYPES,
   isQueueBlockingOperation,
+  QUEUE_BLOCKING_OPERATION_TYPES,
 } from './types';
 
 // === Basic Queries ===
@@ -225,6 +226,29 @@ const getOperationsByContext =
         const contextThreadId = context.threadId ?? null;
         return opThreadId === contextThreadId;
       });
+  };
+
+/**
+ * Whether a later conversation operation has taken ownership of this context.
+ *
+ * A run can publish `visible_output_end` before its terminal snapshot arrives,
+ * which intentionally lets the next send start. The old snapshot must not then
+ * replace the newer turn's optimistic messages. Status is deliberately ignored:
+ * the newer send may already have handed off to its runtime (or even settled),
+ * but its later start time still proves that the older snapshot is superseded.
+ */
+const hasNewerConversationOperation =
+  (operationId: string, context: Operation['context']) =>
+  (s: ChatStoreState): boolean => {
+    const operation = s.operations[operationId];
+    if (!operation || !context.agentId) return false;
+
+    return getOperationsByContext({ ...context, agentId: context.agentId })(s).some(
+      (candidate) =>
+        candidate.id !== operationId &&
+        QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type) &&
+        candidate.metadata.startTime > operation.metadata.startTime,
+    );
   };
 
 /**
@@ -903,6 +927,7 @@ export const operationSelectors = {
   getRunningQueueBlockingOperationIds,
   getRunningToolCallStartTime,
   hasAnyRunningOperation,
+  hasNewerConversationOperation,
   hasRunningOperationByContext,
   hasRunningOperationType,
   /** @deprecated Use isAgentRuntimeRunning instead */
