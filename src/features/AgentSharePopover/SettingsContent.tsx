@@ -13,9 +13,10 @@ import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
+import { type AgentShareLimitDraft, clearCommittedLimitDraft } from './limitDraft';
 import { Section, SettingRow } from './SectionLayout';
 import { type AgentShareConfigPatch, useAgentShare } from './useAgentShare';
-import { useDebouncedLimitPatch } from './useDebouncedLimitPatch';
+import { type AgentShareLimitPatch, useDebouncedLimitPatch } from './useDebouncedLimitPatch';
 
 type FileAccess = 'none' | 'read';
 
@@ -68,25 +69,25 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
   // Visitor limits keep a local draft so typing doesn't fire a request per
   // keystroke; valid values commit after a short debounce (blur alone would
   // lose stepper-button edits when the modal closes right after).
-  const [limitDraft, setLimitDraft] = useState<{
-    maxTopicsPerVisitor?: number | null;
-    maxTurnsPerTopic?: number | null;
-  }>({});
+  const [limitDraft, setLimitDraft] = useState<AgentShareLimitDraft>({});
+  const clearLimitDraft = useCallback((patch: AgentShareLimitPatch) => {
+    setLimitDraft((draft) => clearCommittedLimitDraft(draft, patch));
+  }, []);
+  const handleLimitCommit = useCallback(
+    async (patch: AgentShareLimitPatch) => {
+      await updateConfig(patch);
+      clearLimitDraft(patch);
+    },
+    [clearLimitDraft, updateConfig],
+  );
   const handleLimitCommitError = useCallback(
-    (patch: Partial<Record<'maxTopicsPerVisitor' | 'maxTurnsPerTopic', number>>) => {
-      setLimitDraft((draft) => {
-        const next = { ...draft };
-        for (const [field, value] of Object.entries(patch)) {
-          const limitField = field as 'maxTopicsPerVisitor' | 'maxTurnsPerTopic';
-          if (next[limitField] === value) delete next[limitField];
-        }
-        return next;
-      });
+    (patch: AgentShareLimitPatch) => {
+      clearLimitDraft(patch);
       toast.error(t('share.updateError'));
     },
-    [t],
+    [clearLimitDraft, t],
   );
-  const scheduleLimitCommit = useDebouncedLimitPatch(updateConfig, handleLimitCommitError);
+  const scheduleLimitCommit = useDebouncedLimitPatch(handleLimitCommit, handleLimitCommitError);
 
   const handleLimitChange = useCallback(
     (field: 'maxTopicsPerVisitor' | 'maxTurnsPerTopic', value: number | null) => {
