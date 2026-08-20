@@ -125,6 +125,27 @@ describe('AgentShareModel', () => {
       expect(resolvedShare?.shareConfig).toEqual(ownerShare?.shareConfig);
     });
 
+    it('normalizes a legacy config returned by a visibility update', async () => {
+      await serverDB.insert(agentShares).values({
+        agentId,
+        shareConfig: { maxGuestTopics: 12 } as unknown as AgentShareConfig,
+      });
+
+      const updated = await agentShareModel.updateVisibility(agentId, 'link');
+
+      expect(updated?.shareConfig).toEqual({
+        allowReadMemory: false,
+        enabledToolIds: [],
+        filePermissionConfig: {
+          agentFiles: 'none',
+          knowledgeBase: 'none',
+          uploadAllowed: false,
+        },
+        maxTopicsPerVisitor: 12,
+        maxTurnsPerTopic: 20,
+      });
+    });
+
     it('reads and updates the complete config', async () => {
       await agentShareModel.create(agentId);
       const config: AgentShareConfig = {
