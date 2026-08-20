@@ -2546,6 +2546,7 @@ table resource_permissions {
   resource_type text [not null]
   resource_id text [not null]
   workspace_id text [not null]
+  user_id text
   access_level text [not null]
   created_by text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
@@ -2553,9 +2554,10 @@ table resource_permissions {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (workspace_id, resource_type, resource_id) [name: 'resource_permissions_workspace_resource_unique', unique]
+    (workspace_id, resource_type, resource_id, user_id) [name: 'resource_permissions_workspace_resource_subject_unique', unique]
     (resource_type, resource_id) [name: 'resource_permissions_resource_idx']
     workspace_id [name: 'resource_permissions_workspace_idx']
+    (workspace_id, user_id) [name: 'resource_permissions_workspace_user_idx']
   }
 }
 

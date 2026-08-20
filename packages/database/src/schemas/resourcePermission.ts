@@ -1,4 +1,4 @@
-import { index, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 
 import { timestamps } from './_helpers';
 import { users } from './user';
@@ -97,17 +97,31 @@ export const isResourceAccessLevelAllowed = (
   );
 
 /**
- * Workspace-wide access policy for public workspace resources.
+ * Access policy for public workspace resources, polymorphic on the subject:
  *
- * The current phase intentionally has exactly one possible subject: the
- * resource's workspace. New or newly-published resources store an explicit
- * row. Public resources without a row resolve to the resource-specific default
- * (`edit` for Agent/Group, `view` for Document), so no production backfill is
- * needed to keep legacy rows consistent with newly created ones.
+ * - `userId IS NULL` — the workspace-wide row: what *every* member may do.
+ *   At most one per resource. Public resources without one resolve to the
+ *   resource-specific default (`edit` for Agent/Group, `view` for Document),
+ *   so no production backfill is needed to keep legacy rows consistent with
+ *   newly created ones.
+ * - `userId` set — a per-member collaborator grant that lifts that member
+ *   above the workspace-wide level. Grants only ever raise: evaluation
+ *   resolves `max(workspace level, grant)`, so a grant at or below the
+ *   workspace level is inert, never a demotion. Grants never pierce private
+ *   resources or the RBAC capability ceiling. Rows of members who later
+ *   leave the workspace stay behind but are inert — every evaluation path
+ *   checks workspace membership first.
+ *
+ * Every read of the workspace-wide policy MUST filter `userId IS NULL`
+ * (`ResourcePermissionModel` centralizes this): a per-member grant leaking
+ * into a workspace-wide read is a permission bug. The unique constraint is
+ * NULLS NOT DISTINCT so the workspace-wide row stays unique alongside the
+ * per-member rows and both shapes upsert through the same conflict target.
  *
  * Visibility itself stays on the resources' own `visibility` column; this
- * table only grades what visible workspace members may do. Private resources
- * must not retain rows in this table.
+ * table only grades what visible workspace members may do. Rows staged on a
+ * still-private resource are inert until it is published, and are removed
+ * together (`removeAll`) when the resource is deleted or transferred.
  */
 export const resourcePermissions = pgTable(
   'resource_permissions',
@@ -121,6 +135,9 @@ export const resourcePermissions = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' })
       .notNull(),
 
+    /** Grant subject: `NULL` = the whole workspace, set = one member. */
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+
     accessLevel: text('access_level', { enum: RESOURCE_ACCESS_LEVELS }).notNull(),
 
     createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
@@ -128,13 +145,12 @@ export const resourcePermissions = pgTable(
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('resource_permissions_workspace_resource_unique').on(
-      t.workspaceId,
-      t.resourceType,
-      t.resourceId,
-    ),
+    unique('resource_permissions_workspace_resource_subject_unique')
+      .on(t.workspaceId, t.resourceType, t.resourceId, t.userId)
+      .nullsNotDistinct(),
     index('resource_permissions_resource_idx').on(t.resourceType, t.resourceId),
     index('resource_permissions_workspace_idx').on(t.workspaceId),
+    index('resource_permissions_workspace_user_idx').on(t.workspaceId, t.userId),
   ],
 );
 
