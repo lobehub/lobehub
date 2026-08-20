@@ -28,20 +28,22 @@ vi.mock('@/utils/env', () => ({
 // Mock default locale modules with flat key structure (i18n keys are flat, not nested objects)
 // Keys like 'nested.key' are direct string keys, not nested property paths
 vi.mock('@/locales/default/common', () => ({
-  'key1': 'Value 1',
-  'key2': 'Value 2 with {{param}}',
-  'nested.key': 'Nested value',
-  'multiParam': 'Hello {{name}}, you have {{count}} messages',
-  'simpleText': 'Just a simple text',
-  'withParam': 'Text with {{param}}',
-  'very.deeply.nested.key': 'Found the nested value',
-  // Add exports for testing missing keys (will be undefined, triggering fallback)
-  'nonexistent': undefined,
-  'totally.missing.key': undefined,
+  default: {
+    'key1': 'Value 1',
+    'key2': 'Value 2 with {{param}}',
+    'nested.key': 'Nested value',
+    'multiParam': 'Hello {{name}}, you have {{count}} messages',
+    'simpleText': 'Just a simple text',
+    'withParam': 'Text with {{param}}',
+    'very.deeply.nested.key': 'Found the nested value',
+    // Add exports for testing missing keys (will be undefined, triggering fallback)
+    'nonexistent': undefined,
+    'totally.missing.key': undefined,
+  },
 }));
 
 vi.mock('@/locales/default/chat', () => ({
-  welcome: 'Welcome to the chat',
+  default: { welcome: 'Welcome to the chat' },
 }));
 
 vi.mock('@/locales/default/models', () => ({

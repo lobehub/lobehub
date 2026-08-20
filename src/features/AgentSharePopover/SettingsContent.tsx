@@ -5,7 +5,7 @@ import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Select, Switch, toast } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentShareSettingsExtension from '@/business/client/features/AgentShareSettingsExtension';
@@ -16,10 +16,9 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import { Section, SettingRow } from './SectionLayout';
 import { useAgentShare } from './useAgentShare';
+import { useDebouncedLimitPatch } from './useDebouncedLimitPatch';
 
 type FileAccess = 'none' | 'read';
-
-const LIMIT_COMMIT_DELAY = 500;
 
 interface SettingsContentProps {
   agentId: string;
@@ -69,24 +68,14 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
     maxTopicsPerVisitor?: number | null;
     maxTurnsPerTopic?: number | null;
   }>({});
-  const limitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (limitTimerRef.current) clearTimeout(limitTimerRef.current);
-    },
-    [],
-  );
+  const scheduleLimitCommit = useDebouncedLimitPatch(handleConfigChange);
 
   const handleLimitChange = useCallback(
     (field: 'maxTopicsPerVisitor' | 'maxTurnsPerTopic', value: number | null) => {
       setLimitDraft((prev) => ({ ...prev, [field]: value }));
-      if (limitTimerRef.current) clearTimeout(limitTimerRef.current);
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) return;
-      limitTimerRef.current = setTimeout(() => {
-        handleConfigChange({ [field]: value });
-      }, LIMIT_COMMIT_DELAY);
+      scheduleLimitCommit(field, value);
     },
-    [handleConfigChange],
+    [scheduleLimitCommit],
   );
 
   if (isLoading || !shareConfig) {

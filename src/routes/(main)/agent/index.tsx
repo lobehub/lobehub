@@ -2,8 +2,9 @@
 
 import { Flexbox } from '@lobehub/ui';
 
-import Conversation from './features/Conversation';
-import ChatHydration from './features/Conversation/ChatHydration';
+import Conversation from '@/features/AgentConversation';
+import ChatHydration from '@/features/AgentConversation/ChatHydration';
+
 import TelemetryNotification from './features/TelemetryNotification';
 
 const ChatPage = () => {

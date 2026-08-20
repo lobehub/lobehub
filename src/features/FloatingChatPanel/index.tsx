@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActionsBarConfig } from '@/features/AgentConversation/useActionsBarConfig';
 import {
   type ActionsBarConfig,
   type ConversationHooks,
@@ -19,7 +20,6 @@ import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConve
 import CopilotToolbar from '@/features/PageEditor/Copilot/Toolbar';
 import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { useOperationState } from '@/hooks/useOperationState';
-import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

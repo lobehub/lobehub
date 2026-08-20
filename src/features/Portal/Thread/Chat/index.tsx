@@ -4,6 +4,7 @@ import { type IThreadType, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
+import HeterogeneousChatInput from '@/features/AgentConversation/HeterogeneousChatInput';
 import { type ConversationContext, type ConversationHooks } from '@/features/Conversation';
 import {
   ChatInput,
@@ -18,7 +19,6 @@ import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { type ComposerTarget, resolveThreadComposerTarget } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
-import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

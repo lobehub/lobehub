@@ -6,8 +6,8 @@ import { cssVar } from 'antd-style';
 import { memo, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ConversationArea from '@/routes/(main)/agent/features/Conversation/ConversationArea';
-import { type MainChatInputProps } from '@/routes/(main)/agent/features/Conversation/MainChatInput';
+import ConversationArea from '@/features/AgentConversation/ConversationArea';
+import { type MainChatInputProps } from '@/features/AgentConversation/MainChatInput';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 

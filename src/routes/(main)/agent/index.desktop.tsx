@@ -4,12 +4,12 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
+import Conversation from '@/features/AgentConversation';
+import ChatHydration from '@/features/AgentConversation/ChatHydration';
 import TopicInPopupGuard from '@/features/TopicPopupGuard';
 import { useTopicInPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useChatStore } from '@/store/chat';
 
-import Conversation from './features/Conversation';
-import ChatHydration from './features/Conversation/ChatHydration';
 import TelemetryNotification from './features/TelemetryNotification';
 
 const ChatPage = memo(() => {

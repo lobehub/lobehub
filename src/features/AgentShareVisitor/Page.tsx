@@ -4,12 +4,13 @@ import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { Drawer } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
+import { navigateFromShareToAgent } from './navigation';
 import TopicPanel from './TopicPanel';
 import { useSharedAgent } from './useSharedAgent';
 import VisitorConversation from './VisitorConversation';
@@ -25,11 +26,13 @@ const AgentShareVisitorPage = memo(() => {
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Loading and error states render in the route layout's ShareShell.
-  if (!data) return null;
+  useEffect(() => {
+    if (data?.isOwner) navigateFromShareToAgent(data.agentId);
+  }, [data?.agentId, data?.isOwner]);
 
-  // Creators land back in their own workspace instead of the visitor view.
-  if (data.isOwner) return <Navigate replace to={`/agent/${data.agentId}`} />;
+  // Loading and error states render in the route layout's ShareShell.
+  // Owners also stay empty while the hard navigation exits the Share router.
+  if (!data || data.isOwner) return null;
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>

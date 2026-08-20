@@ -180,6 +180,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentNotify: rw('agent:read', 'agent:write'),
   agentQuota: rw('agent:read', null),
   agentSignal: rw('agent:read', 'agent:write'),
+  agentShare: rw('agent:read', 'agent:write'),
   agentSkills: rw('agent:read', 'agent:write'),
   // a trace snapshot is the whole inside of a run — system role, injected user
   // memory, tool results — and `getSnapshotUrl` hands back a presigned URL that
