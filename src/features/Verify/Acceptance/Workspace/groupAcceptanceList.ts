@@ -46,3 +46,25 @@ export const expandedAcceptanceGroupKeys = (
   groups: AcceptanceListGroup[],
   collapsedKeys: string[],
 ) => groups.map(({ key }) => key).filter((key) => !collapsedKeys.includes(key));
+
+/**
+ * Fold an accordion change back into the collapsed set.
+ *
+ * Only the groups the list is currently showing can be reported by the
+ * accordion, so a group hidden behind the active filter/search keeps whatever
+ * the user last chose for it. Rebuilding the set from the visible groups alone
+ * would silently re-open it the moment the filter is cleared.
+ */
+export const nextCollapsedGroupKeys = (
+  previousCollapsed: string[],
+  groups: AcceptanceListGroup[],
+  expandedKeys: string[],
+) => {
+  const visible = new Set(groups.map(({ key }) => key));
+  const expanded = new Set(expandedKeys);
+
+  return [
+    ...previousCollapsed.filter((key) => !visible.has(key)),
+    ...groups.map(({ key }) => key).filter((key) => !expanded.has(key)),
+  ];
+};

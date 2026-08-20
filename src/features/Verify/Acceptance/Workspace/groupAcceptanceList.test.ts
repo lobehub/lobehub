@@ -6,6 +6,7 @@ import {
   expandedAcceptanceGroupKeys,
   groupAcceptanceList,
   hasProjectAcceptanceGroups,
+  nextCollapsedGroupKeys,
 } from './groupAcceptanceList';
 
 const item = (id: string, project: { id: string; name: string } | null): AcceptanceListItem =>
@@ -55,5 +56,26 @@ describe('groupAcceptanceList', () => {
     ]);
 
     expect(expandedAcceptanceGroupKeys(withNewGroup, ['p1'])).toEqual(['p2', 'p3']);
+  });
+
+  it('keeps a collapsed group that the active filter hides out of view', () => {
+    const all = groupAcceptanceList([
+      item('one', { id: 'p1', name: 'Alpha' }),
+      item('two', { id: 'p2', name: 'Beta' }),
+    ]);
+    // The user collapses Alpha while both groups are listed.
+    const collapsed = nextCollapsedGroupKeys([], all, ['p2']);
+    expect(collapsed).toEqual(['p1']);
+
+    // A search now hides Alpha entirely; toggling Beta must not forget Alpha.
+    const filtered = groupAcceptanceList([item('two', { id: 'p2', name: 'Beta' })]);
+    const afterToggle = nextCollapsedGroupKeys(collapsed, filtered, []);
+    expect(afterToggle).toEqual(['p1', 'p2']);
+
+    // Clearing the search brings Alpha back — still collapsed, as the user left it.
+    expect(expandedAcceptanceGroupKeys(all, afterToggle)).toEqual([]);
+    expect(
+      expandedAcceptanceGroupKeys(all, nextCollapsedGroupKeys(afterToggle, filtered, ['p2'])),
+    ).toEqual(['p2']);
   });
 });

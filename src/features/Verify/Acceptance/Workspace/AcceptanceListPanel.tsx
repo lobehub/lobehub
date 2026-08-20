@@ -51,6 +51,7 @@ import {
   expandedAcceptanceGroupKeys,
   groupAcceptanceList,
   hasProjectAcceptanceGroups,
+  nextCollapsedGroupKeys,
 } from './groupAcceptanceList';
 
 const PANEL_MIN = 260;
@@ -411,8 +412,8 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                     expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
                     gap={4}
                     onExpandedChange={(keys) =>
-                      setCollapsedGroups(
-                        groups.map(({ key }) => key).filter((key) => !keys.includes(key)),
+                      setCollapsedGroups((previous) =>
+                        nextCollapsedGroupKeys(previous, groups, keys.map(String)),
                       )
                     }
                   >

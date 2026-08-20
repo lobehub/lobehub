@@ -5,16 +5,21 @@ import Icon from '@lobehub/ui/es/Icon/index';
 import { Check, FolderInput, FolderMinus, FolderPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR, { mutate } from 'swr';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { projectService } from '@/services/project';
 
 import { buildAcceptanceProjectMenuState } from './acceptanceProjectOptions';
 
-/** Scoped like every other project read: one workspace's projects per cache entry. */
-const projectOptionsKey = () => ['acceptance:projectOptions', getActiveWorkspaceId()] as const;
+/**
+ * Read and invalidation go through the same pair on purpose: `useClientDataSWR`
+ * and the scoped `mutate` both run the key through `augmentKey`, so workspace
+ * scoping stays symmetric. Plain `swr`'s global mutate cannot reach this cache
+ * at all (the app installs a custom provider), and hand-scoping the key here
+ * would double-augment it.
+ */
+const PROJECT_OPTIONS_KEY = ['acceptance:projectOptions'];
 
 interface AcceptanceProjectMenuItemParams {
   /** The project the acceptance is filed under, if any. */
@@ -43,8 +48,8 @@ export const useAcceptanceProjectMenuItem = ({
   const { t } = useTranslation('verify');
   const [requested, setRequested] = useState(false);
 
-  const { data, error } = useSWR(
-    requested ? projectOptionsKey() : null,
+  const { data, error } = useClientDataSWR(
+    requested ? PROJECT_OPTIONS_KEY : null,
     () => projectService.listAll(),
     { revalidateOnFocus: false },
   );
@@ -83,8 +88,9 @@ export const useAcceptanceProjectMenuItem = ({
     onClick: () =>
       openCreateProjectModal({
         onCreated: (project) => {
-          // The submenu's own project list must show it on the next open.
-          void mutate(projectOptionsKey());
+          // This row's submenu is already subscribed, so nothing refetches it
+          // on the next open — the new project has to be pushed into the cache.
+          void mutate(PROJECT_OPTIONS_KEY);
           onSelect(project.id);
         },
       }),
