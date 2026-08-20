@@ -80,21 +80,26 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
 
   return async (c, next) => {
     const route = routeOf(c.req.method, c.req.url);
+
+    // A caller holding a non-Payment credential is asking to be authenticated,
+    // not to buy. Challenging it would mean that pricing an existing route
+    // silently *replaces* authentication: every current API-key client of that
+    // route would start getting 402. Hand it to the auth chain instead — which
+    // still rejects it if the credential is bad, since nothing settled.
+    //
+    // This runs before `resolvePrice` on purpose. Pricing is a separate backend
+    // and it can be down; resolving first would make callers who never pay
+    // depend on its availability to reach a route they already have access to.
+    const authorization = c.req.header('Authorization');
+    if (authorization && !Credential.extractPaymentScheme(authorization)) {
+      c.set('machinePaymentTier', 'authenticated');
+      return next();
+    }
+
     const price = await resolvePrice({ route });
 
     if (!price) {
       c.set('machinePaymentTier', 'unpriced');
-      return next();
-    }
-
-    // A caller holding a non-Payment credential is asking to be authenticated,
-    // not to buy. Challenging it here would mean that pricing an existing route
-    // silently *replaces* authentication: every current API-key client of that
-    // route would start getting 402. Hand it to the auth chain instead — which
-    // still rejects it if the credential is bad, since nothing settled.
-    const authorization = c.req.header('Authorization');
-    if (authorization && !Credential.extractPaymentScheme(authorization)) {
-      c.set('machinePaymentTier', 'authenticated');
       return next();
     }
 
@@ -124,8 +129,16 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
     const receiptHeader = result.withReceipt(new Response(null)).headers.get(RECEIPT_HEADER);
     if (receiptHeader) c.header(RECEIPT_HEADER, receiptHeader);
 
-    // Recorded before delivery for the same reason: the money moved whether or
-    // not the handler succeeds, so the ledger has to see it either way.
+    // Amount and currency come from the settled credential rather than the
+    // price just resolved: the ledger should record what was actually charged.
+    // mppx binds the amount into the challenge id and refuses a stale quote, so
+    // the two cannot currently diverge — reading the settled value keeps that
+    // true without depending on the invariant holding.
+    const settled = settlementOf(c.req.raw);
+
+    // Recorded before delivery for the same reason as the receipt: the money
+    // moved whether or not the handler succeeds, so the ledger has to see it
+    // either way.
     //
     // But bookkeeping must never cost the caller what they just bought. If the
     // ledger is down, letting it reject here would charge them, withhold the
@@ -133,14 +146,13 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
     // so they would have to pay twice. Delivery wins; reconciling a missed row
     // is our problem. Durability belongs to the `recordPayment` implementation,
     // which this middleware calls exactly once and never retries.
-    const source = payerOf(c.req.raw);
     try {
       await recordPayment?.({
-        amount: price.amount,
-        currency: price.currency,
+        amount: settled.amount ?? price.amount,
+        currency: settled.currency ?? price.currency,
         reference: receiptHeader ? Receipt.deserialize(receiptHeader).reference : '',
         route,
-        ...(source ? { source } : {}),
+        ...(settled.source ? { source: settled.source } : {}),
       });
     } catch (error) {
       log(
@@ -155,18 +167,32 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
   };
 };
 
+interface SettledCredential {
+  amount?: string;
+  currency?: string;
+  source?: string;
+}
+
 /**
- * Payer identity asserted by the credential, when it declares one.
+ * What the settled credential itself declares — the authoritative record of
+ * what was charged and who paid.
  *
- * Never throws: the credential already verified, so a parse failure here means
- * the payer is simply unknown. Failing a settled request over a missing `source`
- * would charge the caller and then deny them the resource.
+ * Never throws: the credential already verified, so a parse failure here only
+ * means those details are unknown. Failing a settled request over unreadable
+ * bookkeeping fields would charge the caller and then deny them the resource.
  */
-const payerOf = (request: Request): string | undefined => {
+const settlementOf = (request: Request): SettledCredential => {
   try {
-    return Credential.fromRequest(request).source;
+    const credential = Credential.fromRequest(request);
+    const charged = credential.challenge?.request as Record<string, unknown> | undefined;
+
+    return {
+      ...(typeof charged?.amount === 'string' ? { amount: charged.amount } : {}),
+      ...(typeof charged?.currency === 'string' ? { currency: charged.currency } : {}),
+      ...(credential.source ? { source: credential.source } : {}),
+    };
   } catch {
-    return undefined;
+    return {};
   }
 };
 
