@@ -18,10 +18,17 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-end: -64px;
     inset-inline-end: 12px;
 
+    /*
+     * Portrait-shaped, because that is what the artwork is: a full-body 3:4
+     * character letterboxed into a square box renders at two thirds the width
+     * and floats away from the card it leans on. Anchored at the bottom, so a
+     * taller frame grows upward and keeps the same dip.
+     */
     width: 152px;
-    height: 152px;
+    height: 203px;
 
     object-fit: contain;
+    object-position: bottom;
   `,
   root: css`
     position: relative;

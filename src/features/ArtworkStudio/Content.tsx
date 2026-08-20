@@ -25,7 +25,7 @@ import {
   UploadIcon,
   WandSparkles,
 } from 'lucide-react';
-import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
+import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -40,10 +40,14 @@ const LOBE_STYLE_PREVIEW =
   CHIEF_AGENT_ARTWORKS.find((item) => item.id === 'sienna')?.avatar ??
   DEFAULT_CHIEF_AGENT_ARTWORK.avatar;
 
-/** Both slots share this height so the two cards read as one row. */
-const PREVIEW_HEIGHT = 280;
-/** Keeps the avatar's inset inside its slot proportional to the slot itself. */
-const AVATAR_SIZE = PREVIEW_HEIGHT - 40;
+/**
+ * The avatar fills its own grid column and the full-body slot stretches to the
+ * same row height, so the pair sizes with the modal instead of a fixed number.
+ * This is the breathing room left around the avatar inside its frame.
+ */
+const AVATAR_INSET = 40;
+/** Default slot size; the pair shrinks below it on a narrower modal. */
+const PREVIEW_MAX_SIZE = 240;
 /**
  * The style gallery is a picker, not content. At full-bleed thumbnail size its
  * five saturated images outweighed the artwork the modal is actually about, so
@@ -146,22 +150,29 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 0;
     padding-inline: 8px;
   `,
+  /**
+   * Upload / generate / remove live on the artwork and only appear on hover or
+   * keyboard focus, so a settled slot is just the character.
+   */
   outputActions: css`
+    position: absolute;
+    z-index: 2;
+    inset-block-end: 10px;
+    inset-inline: 10px;
+
+    opacity: 0;
+
+    transition: opacity ${cssVar.motionDurationMid};
+  `,
+  outputColumn: css`
     width: 100%;
-  `,
-  /** Each column is exactly as wide as its own preview, so nothing overhangs. */
-  outputColumnAvatar: css`
-    width: ${PREVIEW_HEIGHT}px;
-    max-width: 100%;
-  `,
-  outputColumnFullBody: css`
-    width: ${Math.round((PREVIEW_HEIGHT * 3) / 4)}px;
-    max-width: 100%;
+    height: 100%;
   `,
   outputGrid: css`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px;
+    align-items: stretch;
   `,
   outputPreview: css`
     position: relative;
@@ -172,14 +183,31 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
+
+    &:hover [data-slot-actions],
+    &:focus-within [data-slot-actions] {
+      opacity: 1;
+    }
   `,
+  /**
+   * Square, and as wide as the column allows up to its default size — this sets
+   * the row height, and shrinks with the modal rather than pinning a number.
+   */
   outputPreviewAvatar: css`
     aspect-ratio: 1;
-    height: ${PREVIEW_HEIGHT}px;
+    width: 100%;
+    max-width: ${PREVIEW_MAX_SIZE}px;
   `,
+  /** Matches the avatar's height; its own ratio then decides the width. */
+  /**
+   * Matches the avatar's height — same cap, so the pair stays level — and its
+   * own ratio then decides the width.
+   */
   outputPreviewFullBody: css`
     aspect-ratio: 3 / 4;
-    height: ${PREVIEW_HEIGHT}px;
+    max-width: 100%;
+    height: 100%;
+    max-height: ${PREVIEW_MAX_SIZE}px;
   `,
   previewBodyImage: css`
     width: 100%;
@@ -194,11 +222,14 @@ const styles = createStaticStyles(({ css }) => ({
   removeButton: css`
     position: absolute;
     z-index: 2;
-    inset-block-start: 6px;
-    inset-inline-end: 6px;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
 
+    opacity: 0;
     background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
     backdrop-filter: blur(8px);
+
+    transition: opacity ${cssVar.motionDurationMid};
   `,
   sectionTitle: css`
     font-weight: 500;
@@ -261,6 +292,42 @@ export interface ArtworkStudioContentProps {
  * The same underlying image is shown in its two product crops so users can
  * choose the intended generation composition without hiding either result.
  */
+/**
+ * The avatar sizes itself off the slot rather than a fixed pixel value, so the
+ * pair keeps its proportions as the modal grows.
+ */
+const AvatarSlotImage = memo<{ avatar?: string | null }>(({ avatar }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(0);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setSize(Math.max(0, Math.round(entry.contentRect.width) - AVATAR_INSET));
+    });
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <Center height={'100%'} ref={ref} width={'100%'}>
+      {size > 0 ? (
+        <Avatar
+          avatar={avatar || undefined}
+          key={avatarRemountKey(avatar)}
+          shape={'square'}
+          size={size}
+        />
+      ) : null}
+    </Center>
+  );
+});
+
+AvatarSlotImage.displayName = 'AvatarSlotImage';
+
 const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
   ({
     avatar,
@@ -318,6 +385,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
     const renderRemove = (composition: AgentArtworkComposition, hasImage: boolean) =>
       hasImage && !isGenerating(composition) ? (
         <ActionIcon
+          data-slot-actions
           className={styles.removeButton}
           icon={Trash2}
           size={'small'}
@@ -361,33 +429,28 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
               <Icon icon={CircleUserRound} size={16} />
               <Text className={styles.sectionTitle}>{t('artworkStudio.composition.avatar')}</Text>
             </Flexbox>
-            <Flexbox align={'center'} className={styles.outputColumnAvatar} gap={10}>
+            <Flexbox align={'center'} className={styles.outputColumn} gap={10}>
               <Center className={`${styles.outputPreview} ${styles.outputPreviewAvatar}`}>
-                <Avatar
-                  avatar={avatar || undefined}
-                  key={avatarRemountKey(avatar)}
-                  shape={'square'}
-                  size={AVATAR_SIZE}
-                />
+                <AvatarSlotImage avatar={avatar} />
                 {renderRemove('avatar', !!hasStoredAvatar)}
+                <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
+                  <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
+                    {t('artworkStudio.upload')}
+                  </Button>
+                  <Button
+                    icon={WandSparkles}
+                    size={'small'}
+                    style={{ flex: 1 }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onGenerate(style, 'avatar', direction);
+                    }}
+                  >
+                    {t('artworkStudio.generate.avatar')}
+                  </Button>
+                </Flexbox>
                 {renderGenerationOverlay('avatar')}
               </Center>
-              <Flexbox horizontal className={styles.outputActions} gap={8}>
-                <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
-                  {t('artworkStudio.upload')}
-                </Button>
-                <Button
-                  icon={WandSparkles}
-                  size={'small'}
-                  style={{ flex: 1 }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onGenerate(style, 'avatar', direction);
-                  }}
-                >
-                  {t('artworkStudio.generate.avatar')}
-                </Button>
-              </Flexbox>
               <Text className={styles.uploadSpec}>{t('artworkStudio.uploadSpec.avatar')}</Text>
             </Flexbox>
           </Flexbox>
@@ -409,7 +472,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
               <Icon icon={PersonStanding} size={16} />
               <Text className={styles.sectionTitle}>{t('artworkStudio.composition.fullBody')}</Text>
             </Flexbox>
-            <Flexbox align={'center'} className={styles.outputColumnFullBody} gap={10}>
+            <Flexbox align={'center'} className={styles.outputColumn} gap={10}>
               <Center className={`${styles.outputPreview} ${styles.outputPreviewFullBody}`}>
                 {fullBody ? (
                   <img
@@ -421,24 +484,24 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                   <Icon icon={PersonStanding} size={64} />
                 )}
                 {renderRemove('fullBody', !!fullBody)}
+                <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
+                  <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
+                    {t('artworkStudio.upload')}
+                  </Button>
+                  <Button
+                    icon={WandSparkles}
+                    size={'small'}
+                    style={{ flex: 1 }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onGenerate(style, 'fullBody', direction);
+                    }}
+                  >
+                    {t('artworkStudio.generate.fullBody')}
+                  </Button>
+                </Flexbox>
                 {renderGenerationOverlay('fullBody')}
               </Center>
-              <Flexbox horizontal className={styles.outputActions} gap={8}>
-                <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
-                  {t('artworkStudio.upload')}
-                </Button>
-                <Button
-                  icon={WandSparkles}
-                  size={'small'}
-                  style={{ flex: 1 }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onGenerate(style, 'fullBody', direction);
-                  }}
-                >
-                  {t('artworkStudio.generate.fullBody')}
-                </Button>
-              </Flexbox>
               <Text className={styles.uploadSpec}>{t('artworkStudio.uploadSpec.fullBody')}</Text>
             </Flexbox>
           </Flexbox>
