@@ -3,8 +3,11 @@ import type {
   MachinePaymentPriceParams,
   MachinePaymentRecordParams,
 } from '@lobechat/business-server/machine-payments/types';
+import debug from 'debug';
 import type { MiddlewareHandler } from 'hono';
 import { Credential, Receipt } from 'mppx';
+
+const log = debug('lobe-hono:machine-payment');
 
 const RECEIPT_HEADER = 'Payment-Receipt';
 
@@ -30,7 +33,15 @@ export interface MachinePaymentConfig {
   /** Canonical `name/intent` key of the configured method, e.g. `stripe/charge`. */
   methodKey: string;
   mppx: MachinePaymentMppx;
-  /** Invoked once per settlement, before the handler runs. */
+  /**
+   * Invoked once per settlement, before the handler runs.
+   *
+   * Called exactly once and never retried, and a rejection is logged rather
+   * than propagated — a caller who paid still gets what they bought. Durability
+   * is therefore the implementation's job: make it idempotent on `reference`
+   * (unique per settlement) and write through an outbox if the ledger can be
+   * unavailable.
+   */
   recordPayment?: (params: MachinePaymentRecordParams) => Promise<void>;
   resolvePrice: (params: MachinePaymentPriceParams) => Promise<MachinePaymentPrice | null>;
 }
@@ -115,14 +126,30 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
 
     // Recorded before delivery for the same reason: the money moved whether or
     // not the handler succeeds, so the ledger has to see it either way.
+    //
+    // But bookkeeping must never cost the caller what they just bought. If the
+    // ledger is down, letting it reject here would charge them, withhold the
+    // resource, and leave a spent credential that a retry refuses as a replay —
+    // so they would have to pay twice. Delivery wins; reconciling a missed row
+    // is our problem. Durability belongs to the `recordPayment` implementation,
+    // which this middleware calls exactly once and never retries.
     const source = payerOf(c.req.raw);
-    await recordPayment?.({
-      amount: price.amount,
-      currency: price.currency,
-      reference: receiptHeader ? Receipt.deserialize(receiptHeader).reference : '',
-      route,
-      ...(source ? { source } : {}),
-    });
+    try {
+      await recordPayment?.({
+        amount: price.amount,
+        currency: price.currency,
+        reference: receiptHeader ? Receipt.deserialize(receiptHeader).reference : '',
+        route,
+        ...(source ? { source } : {}),
+      });
+    } catch (error) {
+      log(
+        'recordPayment failed for a settled request: route=%s receipt=%s %O',
+        route,
+        receiptHeader,
+        error,
+      );
+    }
 
     return next();
   };
