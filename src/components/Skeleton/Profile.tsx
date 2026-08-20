@@ -4,12 +4,13 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
 type ProfileSkeletonVariant = 'agent' | 'group';
 
-interface ProfileSkeletonProps {
+interface ProfileSkeletonProps extends RouteSkeletonProps {
   variant?: ProfileSkeletonVariant;
 }
 
@@ -102,13 +103,17 @@ const GroupProfileSkeleton = () => (
   </WideScreenContainer>
 );
 
-const ProfileSkeleton = ({ variant = 'agent' }: ProfileSkeletonProps) => (
+const ProfileSkeleton = ({ chrome = 'page', variant = 'agent' }: ProfileSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    <NavigationSkeleton />
+    {chrome !== 'body' && <NavigationSkeleton />}
     <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden', overflowY: 'auto' }}>
       {variant === 'agent' ? <AgentProfileSkeleton /> : <GroupProfileSkeleton />}
     </Flexbox>
   </Flexbox>
+);
+
+export const GroupProfileRouteSkeleton = (props: RouteSkeletonProps) => (
+  <ProfileSkeleton variant={'group'} {...props} />
 );
 
 export default ProfileSkeleton;
