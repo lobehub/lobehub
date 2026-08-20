@@ -52,7 +52,33 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(ChatErrorType.InternalServerError);
       expect(result.message).toBe('boom');
-      expect(result.body).toEqual({ name: 'TypeError' });
+      expect(result.body).toMatchObject({ name: 'TypeError' });
+    });
+
+    it('persists the stack of an unclassified Error so the throw site is locatable', () => {
+      // `name` + `message` alone are useless for a recurring
+      // `SyntaxError: Bad escaped character in JSON at position N` — the only
+      // thing that identifies which `JSON.parse` blew up is the stack.
+      const result = formatErrorForState(new SyntaxError('Bad escaped character in JSON'));
+
+      expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
+    });
+
+    it('truncates an oversized stack instead of storing it whole', () => {
+      const error = new Error('boom');
+      error.stack = 'x'.repeat(10_000);
+
+      const stack = (formatErrorForState(error).body as { stack?: string }).stack;
+
+      expect(stack).toHaveLength(1001);
+      expect(stack?.endsWith('…')).toBe(true);
+    });
+
+    it('omits `stack` when the thrown Error carries none', () => {
+      const error = new Error('boom');
+      error.stack = undefined;
+
+      expect((formatErrorForState(error).body as { stack?: string }).stack).toBeUndefined();
     });
 
     it('falls back to AgentRuntimeError for unknown thrown values', () => {
