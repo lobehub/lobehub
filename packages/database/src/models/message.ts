@@ -2817,18 +2817,23 @@ export class MessageModel {
       lte(messages.createdAt, completedAt),
     );
 
-    const heterogeneousMatch = sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`;
-
-    // Query the two conditions SEPARATELY instead of `OR`-ing them in one WHERE.
-    // A combined `... AND (withinWindow OR heterogeneousMatch)` is unindexable: the
-    // `metadata->>'heterogeneousToolStateOperationId'` branch has no index, so the
-    // planner abandons the `topic_id` index for the whole predicate and scans every
-    // plugin row the user owns (100k+ for heavy users), probing `messages` once per
-    // row — 25s+ per call in the worst case. Splitting lets each branch use its own
-    // index (topic-window range scan vs. the exact jsonb lookup). The branches can
-    // overlap (a heterogeneous row that also falls inside the window), so de-dup by
-    // message id before restoring the `createdAt asc, id asc` order the OR query
-    // produced in SQL.
+    // The two branches are resolved SEPARATELY — never OR-ed into one WHERE (an
+    // `... AND (withinWindow OR heteroMatch)` is unindexable and seq-scans every
+    // plugin row the user owns). They are also SHAPED differently on purpose:
+    //
+    // - Time window: one index-friendly range scan joined to its plugin rows.
+    // - Heterogeneous match: resolved id-FIRST, not as a plugin JOIN. The
+    //   `metadata->>'heterogeneousToolStateOperationId'` predicate carries a 0.5%
+    //   default selectivity estimate, so joining it to `message_plugins` makes the
+    //   planner scan / nested-loop the user's ENTIRE plugin history (100k+ rows,
+    //   100s+ per call for heavy users — it returns ~0 rows but pays the full scan
+    //   every time, since most ops never stamp the key). Looking up the few
+    //   matching message ids in a JOIN-free query first, then fetching those rows
+    //   by primary key, leaves the planner no join to mis-order: the lookup is
+    //   single-table (index-served once the metadata expression is indexed; a
+    //   bounded scan otherwise) and the fetch is a pure PK access. Kept
+    //   topic-agnostic to preserve the prior behaviour exactly — a late CLI row
+    //   can land outside the op's window (and, rarely, its topic).
     const projection = {
       apiName: messagePlugins.apiName,
       arguments: messagePlugins.arguments,
@@ -2856,9 +2861,24 @@ export class MessageModel {
         .innerJoin(messages, eq(messagePlugins.id, messages.id))
         .where(and(this.ownership(), this.pluginsOwnership(), condition));
 
+    const fetchHeterogeneous = async () => {
+      const idRows = await this.db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            this.ownership(),
+            sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`,
+          ),
+        );
+      const ids = idRows.map((row) => row.id);
+      if (ids.length === 0) return [];
+      return scan(inArray(messagePlugins.id, ids));
+    };
+
     const [windowRows, heterogeneousRows] = await Promise.all([
       scan(withinWindow),
-      scan(heterogeneousMatch),
+      fetchHeterogeneous(),
     ]);
 
     const byId = new Map<string, (typeof windowRows)[number]>();
