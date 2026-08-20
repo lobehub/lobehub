@@ -153,14 +153,27 @@ const styles = createStaticStyles(({ css }) => ({
   /**
    * Upload / generate / remove live on the artwork and only appear on hover or
    * keyboard focus, so a settled slot is just the character.
+   *
+   * Filled buttons are translucent by design, so the row carries its own scrim:
+   * a bottom-up fade that darkens whatever the character puts behind the labels
+   * without boxing the buttons in a panel.
    */
   outputActions: css`
     position: absolute;
     z-index: 2;
-    inset-block-end: 10px;
-    inset-inline: 10px;
+    inset-block-end: 0;
+    inset-inline: 0;
+
+    padding-block: 40px 10px;
+    padding-inline: 10px;
 
     opacity: 0;
+    background: linear-gradient(
+      to top,
+      ${cssVar.colorBgContainer} 0%,
+      color-mix(in srgb, ${cssVar.colorBgContainer} 76%, transparent) 46%,
+      transparent 100%
+    );
 
     transition: opacity ${cssVar.motionDurationMid};
   `,
