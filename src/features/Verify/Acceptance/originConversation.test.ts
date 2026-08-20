@@ -16,7 +16,7 @@ import {
 const TopicPanel = (_props: OriginTopicPanelProps) => null;
 
 const wrapper = ({ children }: { children?: ReactNode }) =>
-  createElement(OriginConversationProvider, { TopicPanel }, children);
+  createElement(OriginConversationProvider, { TopicPanel, children });
 
 describe('originTopicPanelProps', () => {
   const origin = {
