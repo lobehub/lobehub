@@ -182,6 +182,14 @@ export default {
   'acceptance.review.annotateHint':
     'Drag on the image to circle a region, then leave a note for it.',
   'acceptance.review.annotationPlaceholder': 'What is wrong in region {{index}}…',
+  'acceptance.predict.allClear':
+    'AI reviewed {{count}} pending check(s) and agrees with the current verdicts — nothing new to flag.',
+  'acceptance.predict.inconclusive':
+    'AI could not form an opinion — no readable screenshot evidence, or the review call failed.',
+  'acceptance.predict.nonePending': 'Nothing left to review — every check already has a verdict.',
+  'acceptance.predict.proposals': 'AI review finished: {{count}} check(s) flagged for you.',
+  'acceptance.predict.stillRunning':
+    'AI review is still running — refresh in a moment to see the results.',
   'acceptance.proposal.confirm': 'Confirm and send back',
   'acceptance.proposal.misidentified': 'Real problem, wrong spot',
   'acceptance.proposal.notAnIssue': 'Not a problem',

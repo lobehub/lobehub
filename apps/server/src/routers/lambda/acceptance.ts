@@ -459,6 +459,12 @@ export const acceptanceRouter = router({
             evidence: check.result ? (evidenceByResult.get(check.result.id) ?? []) : [],
             prediction:
               prediction && shouldSurfaceProposal(prediction, settled) ? prediction : null,
+            // The card above is gated to actionable rejects, but the FACT that
+            // the predictor finished with this check must stay visible: an
+            // `accept`, a skip and an error all render no card, and without
+            // this the predict button's poll cannot tell "still running" from
+            // "reviewed, nothing to say" — it spins to timeout on a clean bill.
+            predictionStatus: prediction?.status ?? null,
             reviews: resolvedReviews,
             timeline: check.timeline.map((entry) => ({
               ...entry,
