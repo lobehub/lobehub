@@ -85,7 +85,9 @@ describe('MemoryExecutionRuntime', () => {
   it.each([
     { detail: 'network unavailable', error: new Error('network unavailable') },
     { detail: 'network unavailable', error: 'network unavailable' },
-    { detail: 'null', error: null },
+    { detail: 'service unavailable', error: { message: 'service unavailable' } },
+    { detail: 'Unknown error', error: Object.assign(new Error('placeholder'), { message: '' }) },
+    { detail: 'Unknown error', error: null },
   ])('preserves thrown error details for $error', async ({ detail, error }) => {
     const searchMemory = vi.fn().mockRejectedValue(error);
     const runtime = new MemoryExecutionRuntime({ service: createService({ searchMemory }) });

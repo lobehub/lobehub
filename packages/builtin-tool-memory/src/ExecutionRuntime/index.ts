@@ -62,8 +62,15 @@ const READ_ONLY_RESULT: BuiltinServerRuntimeOutput = {
   success: false,
 };
 
-const getErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error) return error;
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  return 'Unknown error';
+};
 
 export class MemoryExecutionRuntime {
   private service: MemoryRuntimeService;
