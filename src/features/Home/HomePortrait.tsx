@@ -1,5 +1,5 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import { resolveChiefAgentArtwork } from '@/features/ChiefAgent/artwork';
@@ -9,32 +9,22 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useResolvedHomeAgentId } from './AgentSelect/useResolvedHomeAgentId';
 
 const styles = createStaticStyles(({ css }) => ({
-  // Anchored below the greeting row rather than above the rail, so the agent
-  // stands the same distance into the first card however the greeting wraps.
   /**
-   * The built-in catalog is framed as a bust — the character already fills the
-   * top of its own file — so it keeps the original small, shallow placement.
+   * One frame for every character. Generated artwork arrives cropped to the
+   * subject, and the built-in catalog draws its character across the frame with
+   * a few percent of margin, so sizing by height lands both at the same stature.
+   * Anchored deep enough that the lower body passes behind the first card — the
+   * character leans on the surface instead of standing on it.
    */
-  builtinImage: css`
-    inset-block-end: -64px;
-    width: 152px;
-    height: 152px;
-  `,
-  /**
-   * A generated character is head-to-toe, so it needs room to read at all and
-   * has to sit deep enough that its legs pass behind the first card instead of
-   * standing on top of it — while keeping the head clear of the header.
-   */
-  generatedImage: css`
-    inset-block-end: -240px;
-    width: 240px;
-    height: 320px;
-  `,
   image: css`
     pointer-events: none;
 
     position: absolute;
+    inset-block-end: -110px;
     inset-inline-end: 12px;
+
+    width: 176px;
+    height: 200px;
 
     object-fit: contain;
     object-position: bottom;
@@ -63,13 +53,7 @@ const HomePortrait = memo(() => {
 
   return (
     <div className={styles.root}>
-      <img
-        aria-hidden
-        alt=""
-        className={cx(styles.image, fullBodyArtwork ? styles.generatedImage : styles.builtinImage)}
-        key={hero}
-        src={hero}
-      />
+      <img aria-hidden alt="" className={styles.image} key={hero} src={hero} />
     </div>
   );
 });

@@ -20,12 +20,57 @@ export interface CutOutOptions {
 export interface CutOutResult {
   /** False when the result was rejected as untrustworthy and `data` was left untouched. */
   applied: boolean;
+  /**
+   * Bounding box of what survived, or `undefined` when nothing did. Callers crop
+   * to it so the stored artwork's edges are the character's edges — see
+   * {@link subjectBounds}.
+   */
+  bounds?: SubjectBounds;
   /** Share of pixels turned fully transparent, 0–1. */
   removedRatio: number;
 }
 
+export interface SubjectBounds {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+}
+
+/**
+ * Box around every pixel the cut-out kept.
+ *
+ * A model frames a standing character with whatever margin it likes — measured
+ * against the built-in artwork, a generated full body filled only 35% of its
+ * canvas width where the catalog's fills 75%. Cropping to this box makes the
+ * file's edges mean the same thing every time, so one display rule can size any
+ * character instead of guessing per source.
+ */
+export const subjectBounds = ({ data, height, width }: RgbaImage): SubjectBounds | undefined => {
+  let minX = width;
+  let maxX = -1;
+  let minY = height;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (data[(y * width + x) * 4 + 3] <= ALPHA_FLOOR) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return;
+
+  return { height: maxY - minY + 1, left: minX, top: minY, width: maxX - minX + 1 };
+};
+
 /** Squared distance keeps the hot loop free of `Math.sqrt`. */
 const TOLERANCE = 26 * 26 * 3;
+/** Alpha at or below this is background as far as the subject box is concerned. */
+const ALPHA_FLOOR = 16;
 /** Below this the backdrop clearly was not flat; above it the character was eaten. */
 const MIN_REMOVED_RATIO = 0.05;
 const MAX_REMOVED_RATIO = 0.97;
@@ -141,5 +186,5 @@ export const cutOutFlatBackground = (image: RgbaImage, options?: CutOutOptions):
   const removedRatio = removed / pixelCount;
   const applied = removedRatio >= MIN_REMOVED_RATIO && removedRatio <= MAX_REMOVED_RATIO;
 
-  return { applied, removedRatio };
+  return { applied, bounds: applied ? subjectBounds(image) : undefined, removedRatio };
 };

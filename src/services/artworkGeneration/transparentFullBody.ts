@@ -24,13 +24,34 @@ export const cutOutFullBodyArtwork = async (url: string): Promise<File | undefin
     bitmap.close();
 
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    const { applied } = cutOutFlatBackground(imageData);
-    if (!applied) return;
+    const { applied, bounds } = cutOutFlatBackground(imageData);
+    if (!applied || !bounds) return;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.putImageData(imageData, 0, 0);
 
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    // Crop to the character so the file's edges are its edges: the model frames
+    // a standing figure with whatever margin it likes, and a surface cannot size
+    // artwork it has to guess the padding of.
+    const cropped = document.createElement('canvas');
+    cropped.width = bounds.width;
+    cropped.height = bounds.height;
+    const croppedContext = cropped.getContext('2d');
+    if (!croppedContext) return;
+
+    croppedContext.drawImage(
+      canvas,
+      bounds.left,
+      bounds.top,
+      bounds.width,
+      bounds.height,
+      0,
+      0,
+      bounds.width,
+      bounds.height,
+    );
+
+    const blob = await new Promise<Blob | null>((resolve) => cropped.toBlob(resolve, 'image/png'));
     if (!blob) return;
 
     return new File([blob], 'full-body.png', { type: 'image/png' });

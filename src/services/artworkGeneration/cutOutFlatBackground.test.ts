@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cutOutFlatBackground, type RgbaImage } from './cutOutFlatBackground';
+import { cutOutFlatBackground, type RgbaImage, subjectBounds } from './cutOutFlatBackground';
 
 interface Rgb {
   b: number;
@@ -81,6 +81,30 @@ describe('cutOutFlatBackground', () => {
     const alpha = alphaAt(image, 20, 10);
     expect(alpha).toBeGreaterThan(0);
     expect(alpha).toBeLessThan(255);
+  });
+
+  it('reports the character box so callers can crop the margin away', () => {
+    const image = makeImage(40, ORANGE, SKIN, 10);
+
+    const { bounds } = cutOutFlatBackground(image);
+
+    expect(bounds).toEqual({ height: 20, left: 10, top: 10, width: 20 });
+  });
+
+  it('has no character box when the cut-out was rejected', () => {
+    const image = makeImage(40, ORANGE, ORANGE);
+
+    const { applied, bounds } = cutOutFlatBackground(image);
+
+    expect(applied).toBe(false);
+    expect(bounds).toBeUndefined();
+  });
+
+  it('ignores all-transparent input when measuring the character box', () => {
+    const size = 8;
+    const data = new Uint8ClampedArray(size * size * 4);
+
+    expect(subjectBounds({ data, height: size, width: size })).toBeUndefined();
   });
 
   it('reports the cut-out as not applied when the backdrop is not flat', () => {
