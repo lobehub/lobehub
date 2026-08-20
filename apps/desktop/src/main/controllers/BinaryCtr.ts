@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import type {
+  BinaryUpdateInfo,
+  CheckBinaryUpdateParams,
   ClaudeAuthStatus,
   DetectHeterogeneousAgentCommandParams,
 } from '@lobechat/electron-client-ipc';
@@ -9,7 +11,11 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 
 import type { BinaryCategory, BinaryStatus } from '@/core/infrastructure/BinaryManager';
-import { detectHeterogeneousCliCommand } from '@/modules/binaries';
+import {
+  checkBinaryUpdate,
+  checkBinaryUpdates,
+  detectHeterogeneousCliCommand,
+} from '@/modules/binaries';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -158,5 +164,21 @@ export default class BinaryCtr extends ControllerModule {
       logger.debug('Failed to get claude auth status:', error);
       return null;
     }
+  }
+
+  /**
+   * Check whether a single CLI binary has a newer version available on npm.
+   */
+  @IpcMethod()
+  async checkUpdate(params: CheckBinaryUpdateParams): Promise<BinaryUpdateInfo> {
+    return checkBinaryUpdate(params);
+  }
+
+  /**
+   * Batch-check updates for multiple CLI binaries.
+   */
+  @IpcMethod()
+  async checkUpdates(params: CheckBinaryUpdateParams[]): Promise<BinaryUpdateInfo[]> {
+    return checkBinaryUpdates(params);
   }
 }

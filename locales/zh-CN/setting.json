@@ -1107,6 +1107,8 @@
   "settingSystemTools.tools.qwen.desc": "Qwen Code - 阿里通义千问命令行编码助理",
   "settingSystemTools.tools.rg.desc": "ripgrep - 极快的文本搜索工具",
   "settingSystemTools.tools.uv.desc": "uv - 极快的 Python 包管理器",
+  "settingSystemTools.update.badge": "可更新",
+  "settingSystemTools.update.versionFormat": "{{current}} → {{latest}}",
   "settingTTS.openai.sttModel": "OpenAI 语音识别模型",
   "settingTTS.openai.title": "OpenAI",
   "settingTTS.openai.ttsModel": "OpenAI 语音合成模型",

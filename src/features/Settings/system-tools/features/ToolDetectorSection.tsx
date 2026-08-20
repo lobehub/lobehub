@@ -1,6 +1,6 @@
 'use client';
 
-import { type BinaryStatus } from '@lobechat/electron-client-ipc';
+import { type BinaryStatus, type BinaryUpdateInfo } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { CopyButton, Flexbox, Form, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
@@ -73,9 +73,10 @@ const TOOL_CATEGORIES = {
 interface ToolStatusDisplayProps {
   isDetecting?: boolean;
   status?: BinaryStatus;
+  updateInfo?: BinaryUpdateInfo;
 }
 
-const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting }) => {
+const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting, updateInfo }) => {
   const { t } = useTranslation('setting');
 
   if (isDetecting) {
@@ -110,6 +111,11 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
       <Flexbox horizontal align="center" gap={8} justify="flex-end">
         <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={16} />
         <Text type="success">{t('settingSystemTools.status.available')}</Text>
+        {updateInfo?.updateAvailable && updateInfo.latestVersion && (
+          <Tag color="warning" style={{ marginInlineEnd: 0 }}>
+            {t('settingSystemTools.update.badge')}
+          </Tag>
+        )}
       </Flexbox>
       {status.path && (
         <Tooltip title={status.path}>
@@ -128,6 +134,7 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
 const ToolDetectorSection = memo(() => {
   const { t } = useTranslation('setting');
   const [toolStatuses, setToolStatuses] = useState<Record<string, BinaryStatus>>({});
+  const [updateInfos, setUpdateInfos] = useState<Record<string, BinaryUpdateInfo>>({});
   const [detecting, setDetecting] = useState(true);
   // A failed `detectAll` used to be swallowed (console.error), leaving every tool
   // rendered as "not detected" — a failure masquerading as an all-missing
@@ -137,6 +144,7 @@ const ToolDetectorSection = memo(() => {
   const detectTools = useCallback(async (force = false) => {
     try {
       setDetecting(true);
+      setUpdateInfos({});
       const statuses = await binaryService.detectAll(force);
       setToolStatuses(statuses);
       setDetectError(undefined);
@@ -151,6 +159,42 @@ const ToolDetectorSection = memo(() => {
   useEffect(() => {
     void detectTools(true);
   }, [detectTools]);
+
+  // Background update check — runs after detection completes, does not
+  // delay the detecting spinner. Uses a cancellation token so a stale
+  // request (e.g. after re-detect) doesn't overwrite newer state.
+  useEffect(() => {
+    if (detecting) return;
+    if (Object.keys(toolStatuses).length === 0) return;
+
+    const checkParams = Object.entries(toolStatuses)
+      .filter(([, s]) => s.available && s.version)
+      .map(([name, s]) => ({ currentVersion: s.version!, name }));
+
+    if (checkParams.length === 0) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const updates = await binaryService.checkUpdates(checkParams);
+        if (cancelled) return;
+        const updateMap: Record<string, BinaryUpdateInfo> = {};
+        checkParams.forEach((param, index) => {
+          if (updates[index]?.updateAvailable) {
+            updateMap[param.name] = updates[index];
+          }
+        });
+        setUpdateInfos(updateMap);
+      } catch {
+        // Update check failure is non-critical — silently skip.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detecting, toolStatuses]);
 
   const handleRedetect = useCallback(() => {
     detectTools(true);
@@ -168,10 +212,24 @@ const ToolDetectorSection = memo(() => {
                 {status.version}
               </Tag>
             )}
+            {updateInfos[tool.name]?.updateAvailable && (
+              <Tag color="warning" style={{ marginInlineStart: 0 }}>
+                {t('settingSystemTools.update.versionFormat', {
+                  current: status?.version,
+                  latest: updateInfos[tool.name].latestVersion,
+                })}
+              </Tag>
+            )}
           </Flexbox>
         );
         return {
-          children: <ToolStatusDisplay isDetecting={detecting} status={status} />,
+          children: (
+            <ToolStatusDisplay
+              isDetecting={detecting}
+              status={status}
+              updateInfo={updateInfos[tool.name]}
+            />
+          ),
           desc: t(tool.descKey),
           label,
           minWidth: undefined,

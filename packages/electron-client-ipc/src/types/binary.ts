@@ -38,6 +38,23 @@ export interface DetectHeterogeneousAgentCommandParams {
 }
 
 /**
+ * Result of checking whether a CLI binary has an update available on npm.
+ */
+export interface BinaryUpdateInfo {
+  latestVersion?: string;
+  updateAvailable: boolean;
+  upgradeCommand?: string;
+}
+
+/**
+ * Parameters for checking a single binary for updates.
+ */
+export interface CheckBinaryUpdateParams {
+  currentVersion: string;
+  name: string;
+}
+
+/**
  * Claude Code CLI auth status (from `claude auth status --json`)
  */
 export interface ClaudeAuthStatus {

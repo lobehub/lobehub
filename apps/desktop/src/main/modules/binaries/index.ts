@@ -10,5 +10,11 @@ export { cliAgentBinaries, detectHeterogeneousCliCommand } from './cliAgentBinar
 export { astSearchBinaries, contentSearchBinaries } from './contentSearchBinaries';
 export { fileSearchBinaries } from './fileSearchBinaries';
 export { runtimeEnvironmentBinaries } from './runtimeEnvironmentBinaries';
+export {
+  checkBinaryUpdate,
+  checkBinaryUpdates,
+  clearUpdateCache,
+  CLI_UPDATE_SOURCES,
+} from './updateCheck';
 export type { BinaryCategory, BinarySpec, BinaryStatus } from '@/core/infrastructure/BinaryManager';
 export { defineCommandBinary } from '@/core/infrastructure/BinaryManager';

@@ -1309,6 +1309,8 @@ export default {
   'settingSystemTools.tools.qwen.desc': 'Qwen Code - Alibaba Qwen agentic coding CLI',
   'settingSystemTools.tools.rg.desc': 'ripgrep - extremely fast text search tool',
   'settingSystemTools.tools.uv.desc': 'uv - extremely fast Python package manager',
+  'settingSystemTools.update.badge': 'Updatable',
+  'settingSystemTools.update.versionFormat': '{{current}} → {{latest}}',
   'settingTTS.openai.sttModel': 'OpenAI Speech-to-Text Model',
   'settingTTS.openai.title': 'OpenAI',
   'settingTTS.openai.ttsModel': 'OpenAI Text-to-Speech Model',

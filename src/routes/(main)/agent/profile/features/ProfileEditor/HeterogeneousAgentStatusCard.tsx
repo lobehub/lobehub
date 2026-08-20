@@ -1,7 +1,11 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
+import {
+  type BinaryStatus,
+  type BinaryUpdateInfo,
+  type ClaudeAuthStatus,
+} from '@lobechat/electron-client-ipc';
 import {
   getHeterogeneousAgentClientConfig,
   isRemoteHeterogeneousType,
@@ -242,6 +246,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
     const [status, setStatus] = useState<BinaryStatus | undefined>();
     const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
+    const [updateInfo, setUpdateInfo] = useState<BinaryUpdateInfo | null>(null);
     const [commandInput, setCommandInput] = useState(resolvedCommand);
     const [detecting, setDetecting] = useState(true);
     const [isEditingCommand, setIsEditingCommand] = useState(false);
@@ -326,6 +331,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       }
 
       setDetecting(true);
+      setUpdateInfo(null);
       try {
         const result = await binaryService.detectHeterogeneousAgentCommand({
           agentType: provider.type,
@@ -345,6 +351,37 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     useEffect(() => {
       void detect();
     }, [detect]);
+
+    // Background update check — runs after detection completes, does not
+    // delay the detecting spinner. Skipped for custom commands (may point to
+    // a fork or non-npm distribution channel). Uses a cancellation token so
+    // a stale request (e.g. after re-detect) doesn't overwrite newer state.
+    useEffect(() => {
+      const version = status?.version;
+      if (detecting || !status?.available || !version || isUsingCustomCommand) {
+        setUpdateInfo(null);
+        return;
+      }
+
+      let cancelled = false;
+      setUpdateInfo(null);
+
+      void (async () => {
+        try {
+          const update = await binaryService.checkUpdate({
+            currentVersion: version,
+            name: resolvedCommand,
+          });
+          if (!cancelled) setUpdateInfo(update);
+        } catch {
+          // Silently skip — update badge is non-critical.
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [detecting, isUsingCustomCommand, resolvedCommand, status?.available, status?.version]);
 
     useEffect(() => {
       if (provider.type !== 'claude-code' || authMode === 'api' || !status?.available) {
@@ -475,6 +512,14 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
           {status.version && (
             <Tag color="processing" style={{ marginInlineEnd: 0 }}>
               {status.version}
+            </Tag>
+          )}
+          {updateInfo?.updateAvailable && updateInfo.latestVersion && (
+            <Tag color="warning" style={{ marginInlineEnd: 0 }}>
+              {t('settingSystemTools.update.versionFormat', {
+                current: status.version,
+                latest: updateInfo.latestVersion,
+              })}
             </Tag>
           )}
           {status.path && (

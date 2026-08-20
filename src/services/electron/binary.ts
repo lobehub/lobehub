@@ -2,6 +2,8 @@ import {
   type BinaryCategory,
   type BinaryInfo,
   type BinaryStatus,
+  type BinaryUpdateInfo,
+  type CheckBinaryUpdateParams,
   type ClaudeAuthStatus,
   type DetectHeterogeneousAgentCommandParams,
 } from '@lobechat/electron-client-ipc';
@@ -93,6 +95,20 @@ class BinaryService {
    */
   getClaudeAuthStatus = async (command = 'claude'): Promise<ClaudeAuthStatus | null> => {
     return ensureElectronIpc().binary.getClaudeAuthStatus(command);
+  };
+
+  /**
+   * Check whether a single CLI binary has a newer version available on npm.
+   */
+  checkUpdate = async (params: CheckBinaryUpdateParams): Promise<BinaryUpdateInfo> => {
+    return ensureElectronIpc().binary.checkUpdate(params);
+  };
+
+  /**
+   * Batch-check updates for multiple CLI binaries.
+   */
+  checkUpdates = async (params: CheckBinaryUpdateParams[]): Promise<BinaryUpdateInfo[]> => {
+    return ensureElectronIpc().binary.checkUpdates(params);
   };
 }
 
