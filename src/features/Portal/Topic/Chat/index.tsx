@@ -5,6 +5,7 @@ import { cssVar } from 'antd-style';
 import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import HeterogeneousChatInput from '@/features/AgentConversation/HeterogeneousChatInput';
 import {
   TopicMigrationPlaceholder,
   useTopicMigrationPending,
@@ -20,7 +21,6 @@ import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
-import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

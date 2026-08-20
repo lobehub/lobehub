@@ -4,6 +4,8 @@ import { isShareSpaRoute } from './shareRoutes';
 
 describe('isShareSpaRoute', () => {
   it.each([
+    '/share/a/agent_1',
+    '/share/a/agent_1?hl=zh-CN',
     '/share/t/abc',
     '/share/t/abc/',
     '/share/page/docs_1',
@@ -18,6 +20,8 @@ describe('isShareSpaRoute', () => {
     '/share',
     '/share/',
     '/share/t',
+    '/share/a',
+    '/share/a/agent_1/extra',
     '/share/artifact',
     '/share/t/abc/extra',
     '/shared/t/abc',

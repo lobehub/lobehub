@@ -2,8 +2,8 @@
 
 import { memo } from 'react';
 
-import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
-import ConversationArea from '@/routes/(main)/agent/features/Conversation/ConversationArea';
+import ChatHydration from '@/features/AgentConversation/ChatHydration';
+import ConversationArea from '@/features/AgentConversation/ConversationArea';
 import PortalPanel from '@/routes/(main)/agent/features/Portal/features/PortalPanel';
 import TelemetryNotification from '@/routes/(main)/agent/features/TelemetryNotification';
 

@@ -3,10 +3,10 @@
 import { memo, useLayoutEffect } from 'react';
 import { useParams } from 'react-router';
 
+import Conversation from '@/features/AgentConversation';
 import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
-import Conversation from '@/routes/(main)/agent/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
