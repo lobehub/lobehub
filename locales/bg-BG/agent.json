@@ -295,7 +295,7 @@
   "share.budget.confirm.content": "Да използвате {{amount}} кредити за този споделен агент?",
   "share.budget.confirm.ok": "Продължи",
   "share.budget.confirm.rules.irreversible": "Прегледайте сумата преди да продължите.",
-  "share.budget.confirm.rules.permanent": "Това разрешение остава присвоено на споделения агент.",
+  "share.budget.confirm.rules.permanent": "Този лимит остава разпределен за споделения агент.",
   "share.budget.confirm.rules.source": "Използването се проследява за този споделен агент.",
   "share.budget.confirm.title": "Актуализиране на споделеното използване?",
   "share.budget.consumed": "Използване",

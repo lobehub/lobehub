@@ -295,7 +295,7 @@
   "share.budget.confirm.content": "使用 {{amount}} 點數分配給此共享代理人？",
   "share.budget.confirm.ok": "繼續",
   "share.budget.confirm.rules.irreversible": "在繼續之前請仔細檢查金額。",
-  "share.budget.confirm.rules.permanent": "此配額將永久分配給共享代理人。",
+  "share.budget.confirm.rules.permanent": "此使用額度仍分配給共享代理人。",
   "share.budget.confirm.rules.source": "使用情況將為此共享代理人進行追蹤。",
   "share.budget.confirm.title": "更新共享使用量？",
   "share.budget.consumed": "使用量",

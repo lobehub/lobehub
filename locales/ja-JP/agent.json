@@ -295,7 +295,7 @@
   "share.budget.confirm.content": "この共有エージェントに {{amount}} クレジットを使用しますか？",
   "share.budget.confirm.ok": "続行",
   "share.budget.confirm.rules.irreversible": "続行する前に金額を確認してください。",
-  "share.budget.confirm.rules.permanent": "この割り当ては共有エージェントに永続的に割り当てられます。",
+  "share.budget.confirm.rules.permanent": "この利用枠は共有エージェントに割り当てられたままです。",
   "share.budget.confirm.rules.source": "使用状況はこの共有エージェントに対して追跡されます。",
   "share.budget.confirm.title": "共有使用量を更新しますか？",
   "share.budget.consumed": "使用量",

@@ -295,7 +295,7 @@
   "share.budget.confirm.content": "Sử dụng {{amount}} tín dụng cho tác nhân được chia sẻ này?",
   "share.budget.confirm.ok": "Tiếp tục",
   "share.budget.confirm.rules.irreversible": "Xem lại số tiền trước khi tiếp tục.",
-  "share.budget.confirm.rules.permanent": "Khoản phân bổ này sẽ được gán vĩnh viễn cho tác nhân được chia sẻ.",
+  "share.budget.confirm.rules.permanent": "Hạn mức sử dụng này vẫn được phân bổ cho tác nhân được chia sẻ.",
   "share.budget.confirm.rules.source": "Việc sử dụng được theo dõi cho tác nhân được chia sẻ này.",
   "share.budget.confirm.title": "Cập nhật sử dụng chia sẻ?",
   "share.budget.consumed": "Sử dụng",

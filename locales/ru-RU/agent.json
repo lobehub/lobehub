@@ -295,7 +295,7 @@
   "share.budget.confirm.content": "Использовать {{amount}} кредитов для этого общего агента?",
   "share.budget.confirm.ok": "Продолжить",
   "share.budget.confirm.rules.irreversible": "Проверьте сумму перед продолжением.",
-  "share.budget.confirm.rules.permanent": "Это разрешение остается назначенным общему агенту.",
+  "share.budget.confirm.rules.permanent": "Этот лимит остается выделенным общему агенту.",
   "share.budget.confirm.rules.source": "Использование отслеживается для этого общего агента.",
   "share.budget.confirm.title": "Обновить общее использование?",
   "share.budget.consumed": "Использование",
