@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Triển khai Hiện vật",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.claudeCodeApiMode.desc": "Cho phép Claude Code sử dụng nhà cung cấp API và mô hình được cấu hình trên máy tính này thay vì đăng ký Claude. Chỉ thực thi cục bộ trên máy tính.",
+  "features.claudeCodeApiMode.title": "Nhà cung cấp API Claude Code",
   "features.claudeCodeSdk.desc": "Chạy các phiên Claude Code thông qua Claude Agent SDK thay vì khởi chạy CLI. Cho phép truyền tải phong phú hơn và kiểm soát phiên làm việc.",
   "features.claudeCodeSdk.title": "Thời gian chạy Claude Code SDK",
   "features.codexAppServer.desc": "Chạy các phiên Codex thông qua máy chủ ứng dụng cục bộ thay vì các quy trình CLI một lần. Cho phép truyền tải token và kiểm soát lượt tự nhiên.",

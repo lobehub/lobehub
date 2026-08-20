@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Artefaktbereitstellungen",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
+  "features.claudeCodeApiMode.desc": "Lassen Sie Claude Code einen konfigurierten API-Anbieter und ein Modell auf diesem Desktop verwenden, anstatt ein Claude-Abonnement. Nur lokale Ausführung auf dem Desktop.",
+  "features.claudeCodeApiMode.title": "Claude Code API-Anbieter",
   "features.claudeCodeSdk.desc": "Führen Sie Claude Code-Sitzungen über das Claude Agent SDK aus, anstatt die CLI zu starten. Ermöglicht reichhaltigeres Streaming und Sitzungssteuerung.",
   "features.claudeCodeSdk.title": "Claude Code SDK-Laufzeit",
   "features.codexAppServer.desc": "Führen Sie Codex-Sitzungen über den lokalen App-Server aus, anstatt über einmalige CLI-Prozesse. Ermöglicht Token-Streaming und native Steuerung von Dialogen.",

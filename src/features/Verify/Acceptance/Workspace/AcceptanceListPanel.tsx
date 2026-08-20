@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  Accordion,
+  AccordionItem,
   ActionIcon,
   Center,
   DraggablePanel,
@@ -18,6 +20,7 @@ import isEqual from 'fast-deep-equal';
 import {
   ArrowLeft,
   Check,
+  FolderClosed,
   ListFilter,
   PanelLeftClose,
   ScrollText,
@@ -44,6 +47,7 @@ import {
   normalizeAcceptanceListFilter,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
+import { groupAcceptanceList, hasProjectAcceptanceGroups } from './groupAcceptanceList';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
@@ -175,6 +179,20 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 6px 16px;
     padding-inline: 8px;
   `,
+  groupList: css`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  `,
+  groupTitle: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
   emptyState: css`
     height: 100%;
     min-height: 240px;
@@ -203,6 +221,13 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface AcceptanceListPanelProps extends ReportPanelExpand {
   headerLeading?: ReactNode;
+  /**
+   * Renders the per-project action menu. Injected by the main app rather than
+   * imported here: the actions open the create-project modal and navigate to
+   * `/project/:id`, neither of which exists in the standalone workbench app —
+   * and a direct import would drag the project store into its bundle.
+   */
+  renderProjectActions?: (projectId?: string) => ReactNode;
 }
 
 /**
@@ -211,7 +236,7 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
  * same persisted panel-width preference so the two surfaces read as one family.
  */
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
-  ({ expand, headerLeading, isNarrow, setExpand }) => {
+  ({ expand, headerLeading, isNarrow, renderProjectActions, setExpand }) => {
     const { t } = useTranslation('verify');
     const navigate = useNavigate();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
@@ -227,6 +252,8 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     );
     const filter = normalizeAcceptanceListFilter(storedFilter);
     const filtered = filterAcceptanceList(data ?? [], filter, query);
+    const groups = groupAcceptanceList(filtered);
+    const showGroups = hasProjectAcceptanceGroups(groups);
     const trimmedQuery = query.trim();
 
     const filterItems: DropdownItem[] = (
@@ -318,6 +345,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                   title={t('acceptance.workspace.filters.title')}
                 />
               </DropdownMenu>
+              {!showGroups && renderProjectActions?.()}
             </div>
           </div>
 
@@ -371,14 +399,48 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               )
             ) : (
               <div className={styles.list}>
-                {filtered.map((item) => (
-                  <AcceptanceRow
-                    active={item.id === acceptanceId}
-                    item={item}
-                    key={item.id}
-                    onChanged={mutate}
-                  />
-                ))}
+                {showGroups ? (
+                  <Accordion defaultExpandedKeys={groups.map(({ key }) => key)} gap={4}>
+                    {groups.map((group) => (
+                      <AccordionItem
+                        action={renderProjectActions?.(group.projectName ? group.key : undefined)}
+                        itemKey={group.key}
+                        key={group.key}
+                        paddingBlock={4}
+                        paddingInline={8}
+                        title={
+                          <span className={styles.groupTitle}>
+                            <Icon icon={FolderClosed} size={14} />
+                            <span>
+                              {group.projectName ?? t('acceptance.workspace.groups.ungrouped')} ·{' '}
+                              {group.items.length}
+                            </span>
+                          </span>
+                        }
+                      >
+                        <div className={styles.groupList}>
+                          {group.items.map((item) => (
+                            <AcceptanceRow
+                              active={item.id === acceptanceId}
+                              item={item}
+                              key={item.id}
+                              onChanged={mutate}
+                            />
+                          ))}
+                        </div>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : (
+                  filtered.map((item) => (
+                    <AcceptanceRow
+                      active={item.id === acceptanceId}
+                      item={item}
+                      key={item.id}
+                      onChanged={mutate}
+                    />
+                  ))
+                )}
               </div>
             )}
           </Flexbox>

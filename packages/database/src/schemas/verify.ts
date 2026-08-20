@@ -52,6 +52,7 @@ import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agentOperations } from './agentOperations';
 import { documents, files } from './file';
 import { llmGenerationTracing } from './llmGenerationTracing';
+import { projects } from './project';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -371,6 +372,9 @@ export const acceptances = pgTable(
     /** Workspace this acceptance belongs to — scopes listing and cascades on workspace delete. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /** Project grouping captured from the accepted task/topic; deleted projects become ungrouped. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+
     /**
      * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
      * topic, document, standalone delivery, or future subject types without
@@ -420,6 +424,7 @@ export const acceptances = pgTable(
   (t) => [
     index('acceptances_user_id_idx').on(t.userId),
     index('acceptances_workspace_id_idx').on(t.workspaceId),
+    index('acceptances_project_id_idx').on(t.projectId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
     index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),

@@ -11,6 +11,11 @@ import { RouteMetaBridge } from '@/features/RouteMeta';
 
 import { useReportPanelExpand } from '../../Workspace/useReportPanelExpand';
 import AcceptanceListPanel from './AcceptanceListPanel';
+import AcceptanceProjectActions from './AcceptanceProjectActions';
+
+const renderProjectActions = (projectId?: string) => (
+  <AcceptanceProjectActions projectId={projectId} />
+);
 
 const styles = createStaticStyles(({ css }) => ({
   expandBtn: css`
@@ -62,7 +67,7 @@ const AcceptanceWorkspace = memo(() => {
   return (
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       <RouteMetaBridge />
-      {showList && <AcceptanceListPanel {...panel} />}
+      {showList && <AcceptanceListPanel {...panel} renderProjectActions={renderProjectActions} />}
       <div className={styles.main}>
         {showList && !panel.expand && (
           <button

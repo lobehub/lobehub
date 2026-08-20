@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Distribuzioni di Artefatti",
   "features.assistantMessageGroup.desc": "Raggruppa i messaggi dell'agente e i risultati delle chiamate agli strumenti per una visualizzazione unificata",
   "features.assistantMessageGroup.title": "Raggruppamento Messaggi Agente",
+  "features.claudeCodeApiMode.desc": "Consenti a Claude Code di utilizzare un provider API e un modello configurati su questo desktop invece di un abbonamento Claude. Esecuzione locale solo su desktop.",
+  "features.claudeCodeApiMode.title": "Provider API di Claude Code",
   "features.claudeCodeSdk.desc": "Esegui sessioni Claude Code tramite il Claude Agent SDK invece di avviare il CLI. Consente uno streaming più ricco e un controllo delle sessioni più avanzato.",
   "features.claudeCodeSdk.title": "Runtime SDK di Claude Code",
   "features.codexAppServer.desc": "Esegui sessioni Codex tramite il server dell'app locale invece di processi CLI one-shot. Abilita lo streaming di token e il controllo nativo dei turni.",
