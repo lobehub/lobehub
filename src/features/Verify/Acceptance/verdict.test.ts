@@ -1,8 +1,9 @@
+import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
 import { formatAcceptanceCountsText, resolveAcceptanceVerdictMeta } from './verdict';
 
-const t = (key: string) => key;
+const t = ((key: string) => key) as TFunction<'verify'>;
 
 describe('resolveAcceptanceVerdictMeta', () => {
   it('treats repairing as an in-progress task, not a settled verdict', () => {

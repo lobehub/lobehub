@@ -1,4 +1,5 @@
 import { cssVar } from 'antd-style';
+import type { TFunction } from 'i18next';
 import {
   BadgeCheck,
   CircleDashed,
@@ -21,7 +22,7 @@ export type AcceptanceVerdictMeta = {
 
 export const resolveAcceptanceVerdictMeta = (
   status: string,
-  t: (key: string) => string,
+  t: TFunction<'verify'>,
 ): AcceptanceVerdictMeta => {
   if (status === 'repairing') {
     return {
@@ -32,7 +33,7 @@ export const resolveAcceptanceVerdictMeta = (
       spin: true,
     };
   }
-  if (LIVE_ACCEPTANCE_STATUSES.has(status)) {
+  if (status === 'pending' || status === 'planned' || status === 'verifying') {
     return {
       bg: cssVar.colorInfoBg,
       color: cssVar.colorInfo,
@@ -82,7 +83,7 @@ export const resolveAcceptanceVerdictMeta = (
 };
 
 export const formatAcceptanceCountsText = (
-  t: (key: string, options: { count: number }) => string,
+  t: TFunction<'verify'>,
   counts: { failed: number; notExecuted: number; passed: number; uncertain: number },
 ) =>
   [
