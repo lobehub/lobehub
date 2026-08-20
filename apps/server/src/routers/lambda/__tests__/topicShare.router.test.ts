@@ -31,6 +31,11 @@ vi.mock('@/database/models/workspaceAuditLog', () => ({
   WorkspaceAuditLogModel: vi.fn(() => ({ create: mockAuditCreate })),
 }));
 
+const mockHasPermission = vi.fn();
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: vi.fn(() => ({ hasPermission: mockHasPermission })),
+}));
+
 const mockAssertCanUseTopicTargets = vi.fn();
 vi.mock('../_helpers/conversationResourceGuard', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -46,6 +51,8 @@ const creatorId = 'user-creator';
 const memberId = 'user-member';
 const workspaceId = 'ws-1';
 const topicId = 'topic-1';
+/** A topic backed by a real conversation resolves to at least one target. */
+const RESOLVED_CONVERSATION = [{ meta: {}, resourceId: 'agt_1', resourceType: 'agent' }];
 
 describe('topic share management gate', () => {
   beforeEach(() => {
@@ -54,11 +61,13 @@ describe('topic share management gate', () => {
     mockShareGetByTopicId.mockResolvedValue(null);
     mockShareCreate.mockResolvedValue({ id: 'share-1', topicId, visibility: 'private' });
     mockShareUpdateVisibility.mockResolvedValue({ id: 'share-1', topicId, visibility: 'link' });
+    mockAssertCanUseTopicTargets.mockResolvedValue(RESOLVED_CONVERSATION);
+    mockHasPermission.mockResolvedValue(false);
   });
 
   describe('enableSharing', () => {
     it('allows a workspace member with co-edit access on the topic', async () => {
-      mockAssertCanUseTopicTargets.mockResolvedValue(undefined);
+      mockAssertCanUseTopicTargets.mockResolvedValue(RESOLVED_CONVERSATION);
       const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);
 
       const result = await caller.enableSharing({ topicId });
@@ -102,6 +111,28 @@ describe('topic share management gate', () => {
       expect(mockShareCreate).toHaveBeenCalledWith(topicId, undefined);
     });
 
+    it('rejects a member on a topic that backs no conversation at all', async () => {
+      // Legacy row: no agent, no group, no resolvable session — the co-editing
+      // guard has nothing to check and would otherwise pass for everyone.
+      mockAssertCanUseTopicTargets.mockResolvedValue([]);
+      const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);
+
+      await expect(caller.enableSharing({ topicId })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockShareCreate).not.toHaveBeenCalled();
+    });
+
+    it('still lets a workspace owner share a topic that backs no conversation', async () => {
+      mockAssertCanUseTopicTargets.mockResolvedValue([]);
+      mockHasPermission.mockResolvedValue(true);
+      const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);
+
+      await caller.enableSharing({ topicId });
+
+      expect(mockShareCreate).toHaveBeenCalledWith(topicId, undefined);
+    });
+
     it('throws NOT_FOUND when the topic does not exist in the workspace', async () => {
       mockTopicFindById.mockResolvedValue(null);
       const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);
@@ -114,7 +145,7 @@ describe('topic share management gate', () => {
 
   describe('updateShareVisibility', () => {
     it('allows a workspace member with co-edit access', async () => {
-      mockAssertCanUseTopicTargets.mockResolvedValue(undefined);
+      mockAssertCanUseTopicTargets.mockResolvedValue(RESOLVED_CONVERSATION);
       mockShareGetByTopicId.mockResolvedValue({ id: 'share-1', topicId, visibility: 'private' });
       const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);
 
@@ -146,7 +177,7 @@ describe('topic share management gate', () => {
 
   describe('disableSharing', () => {
     it('allows a workspace member with co-edit access', async () => {
-      mockAssertCanUseTopicTargets.mockResolvedValue(undefined);
+      mockAssertCanUseTopicTargets.mockResolvedValue(RESOLVED_CONVERSATION);
       mockShareGetByTopicId.mockResolvedValue({ id: 'share-1', topicId, visibility: 'link' });
       mockShareDeleteByTopicId.mockResolvedValue({ rowCount: 1 });
       const caller = topicRouter.createCaller({ userId: memberId, workspaceId } as any);

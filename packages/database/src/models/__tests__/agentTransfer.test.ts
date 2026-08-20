@@ -1429,6 +1429,94 @@ describe('AgentModel.transferAgent scope riders (connectors & documents)', () =>
     expect(pins).toHaveLength(0);
   });
 
+  it('should leave a document whose provenance names an agent outside the move', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const outsider = await model.create({ title: 'Outsider Agent' });
+    const agent = await model.create({ title: 'Borrower Agent' });
+
+    // Created for `outsider`, later associated to the moving agent. Provenance
+    // alone would read as "dedicated" and hand it over with the move.
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'foreign-provenance-doc',
+      source: `agent-document://${outsider.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'foreign-provenance-doc',
+      userId,
+    });
+    // The originating agent is gone, so no external binding holds it back.
+    await serverDB.delete(agents).where(eq(agents.id, outsider.id));
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'foreign-provenance-doc'));
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.userId).toBe(userId);
+
+    // Associated policy: the binding is detached, the document stays put.
+    const bindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(bindings).toHaveLength(0);
+  });
+
+  it("should drop the slug when it collides with another member's private document", async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Slug Agent' });
+
+    // Invisible to the mover through the read predicate, but the
+    // `documents_slug_workspace_id_unique` index still covers it.
+    await serverDB.insert(documents).values({
+      content: 'private',
+      fileType: 'text/markdown',
+      id: 'target-private-doc',
+      slug: 'shared-slug',
+      source: 'https://example.com/private',
+      sourceType: 'web',
+      title: 'Private',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId: targetUserId,
+      visibility: 'private',
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'slug-doc',
+      slug: 'shared-slug',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'slug-doc',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'slug-doc'));
+    expect(doc.workspaceId).toBe(wsId1);
+    expect(doc.slug).toBeNull();
+  });
+
   it('should rehome revision history to the new owner when moving to personal scope', async () => {
     const model = new AgentModel(serverDB, userId, wsId1);
     const agent = await model.create({ title: 'History Agent' });

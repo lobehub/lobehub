@@ -42,6 +42,7 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
   let workspaceId: string;
   let topicId: string;
   let privateTopicId: string;
+  let unboundTopicId: string;
 
   beforeEach(async () => {
     serverDB = await getTestDB();
@@ -105,6 +106,14 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
       })
       .returning();
     privateTopicId = privateTopic.id;
+
+    // Legacy shape: no agent, no group, no session — nothing for the
+    // conversation guard to resolve.
+    const [unboundTopic] = await serverDB
+      .insert(topics)
+      .values({ title: 'WS Unbound Topic', userId: creatorId, workspaceId })
+      .returning();
+    unboundTopicId = unboundTopic.id;
   });
 
   afterEach(async () => {
@@ -165,6 +174,27 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
       await expect(
         memberCaller.enableSharing({ topicId: privateTopicId, visibility: 'link' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('a member cannot share a topic that backs no conversation', async () => {
+      // The co-editing guard resolves zero resources here, and a share link
+      // reaches further than an edit — so it falls back to creator-or-owner
+      // instead of letting every member publish the conversation.
+      const memberCaller = topicRouter.createCaller(createWorkspaceContext(memberId, workspaceId));
+
+      await expect(
+        memberCaller.enableSharing({ topicId: unboundTopicId, visibility: 'link' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('workspace owner can still share a topic that backs no conversation', async () => {
+      const ownerCaller = topicRouter.createCaller(createWorkspaceContext(ownerId, workspaceId));
+
+      const created = await ownerCaller.enableSharing({
+        topicId: unboundTopicId,
+        visibility: 'private',
+      });
+      expect(created?.topicId).toBe(unboundTopicId);
     });
 
     it("workspace owner can manage a member's share", async () => {

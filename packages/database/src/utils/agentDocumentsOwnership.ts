@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, not, notExists, notInArray, or, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, not, notExists, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import {
@@ -30,6 +30,29 @@ const isDedicatedProvenance = (source: string | null, sourceType: string | null)
   (DEDICATED_AGENT_DOCUMENT_SOURCE_TYPES as readonly string[]).includes(sourceType) &&
   !!source &&
   (source.startsWith(AGENT_DOCUMENT_SOURCE_PREFIX) || source === SKILL_MANAGEMENT_SOURCE);
+
+/**
+ * Provenance alone says the file was made by *an* agent, not by one of THESE
+ * agents. `agent-document://<agentId>/<file>` carries that id, so an orphan
+ * created for a since-deleted agent and later associated to a moving one is
+ * correctly classified as associated — rehoming it would quietly take another
+ * member's resource out of the source scope.
+ *
+ * Skill-management documents carry no agent id in their source, so they rest on
+ * the binding evidence alone; the external-consumer checks at both call sites
+ * still hold back anything an agent outside the move also uses.
+ */
+const isDedicatedToAgents = (
+  source: string | null,
+  sourceType: string | null,
+  agentIds: Set<string>,
+) => {
+  if (!isDedicatedProvenance(source, sourceType)) return false;
+  if (source === SKILL_MANAGEMENT_SOURCE) return true;
+
+  const [provenanceAgentId] = source!.slice(AGENT_DOCUMENT_SOURCE_PREFIX.length).split('/');
+  return agentIds.has(provenanceAgentId);
+};
 
 interface AgentDocumentsHandoverParams {
   agentIds: string[];
@@ -81,6 +104,10 @@ export const rehomeAgentDocumentsForRecipient = async (
     .where(and(inArray(agentDocuments.agentId, agentIds), eq(agentDocuments.userId, fromUserId)));
   if (rows.length === 0) return;
 
+  // Provenance is not narrowed to `agentIds` here the way the scope transfer
+  // narrows it: `docUserId === fromUserId` already keeps the handover to the
+  // transferring member's own documents, and the SQL mirror in
+  // `countAssociatedAgentDocumentsToDetach` must stay predicate-identical.
   const dedicatedCandidates = rows.filter(
     (row) => row.docUserId === fromUserId && isDedicatedProvenance(row.source, row.sourceType),
   );
@@ -304,8 +331,9 @@ export const moveAgentDocumentsForScopeTransfer = async (
     .where(inArray(agentDocuments.agentId, agentIds));
   if (rows.length === 0) return [];
 
+  const movingAgentIds = new Set(agentIds);
   const dedicatedCandidates = rows.filter((row) =>
-    isDedicatedProvenance(row.source, row.sourceType),
+    isDedicatedToAgents(row.source, row.sourceType, movingAgentIds),
   );
 
   // External consumers pin a document to the source scope. Unlike the member
@@ -389,18 +417,23 @@ export const moveAgentDocumentsForScopeTransfer = async (
   // Dedicated agent files carry no slug today, but a slugged row colliding
   // with the target scope's unique index must not abort the whole transfer —
   // drop the slug instead (the agent reaches its files by binding, not slug).
+  //
+  // The probe mirrors the INDEX, not the read predicate: `documents_slug_*`
+  // covers every row in the target scope, so `buildWorkspaceWhere` would hide
+  // another member's private document behind its visibility clause and let the
+  // collision reach Postgres — aborting the entire transfer transaction.
   const sluggedDocs = dedicated.filter((row) => row.slug);
   const conflictedDocIds = new Set<string>();
   if (sluggedDocs.length > 0) {
+    const targetScope = targetWorkspaceId
+      ? eq(documents.workspaceId, targetWorkspaceId)
+      : and(isNull(documents.workspaceId), eq(documents.userId, targetUserId));
     const conflictRows = await db
       .select({ slug: documents.slug })
       .from(documents)
       .where(
         and(
-          buildWorkspaceWhere(
-            { userId: targetUserId, workspaceId: targetWorkspaceId ?? undefined },
-            documents,
-          ),
+          targetScope,
           notInArray(documents.id, dedicatedDocIds),
           inArray(documents.slug, [...new Set(sluggedDocs.map((row) => row.slug!))]),
         ),
