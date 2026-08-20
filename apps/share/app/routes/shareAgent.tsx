@@ -11,7 +11,7 @@ import SharedAgentView from '../../src/features/agent/SharedAgentView';
 import { loadShareResources } from '../../src/shell/createShareI18n';
 import { cloudflareContext } from '../lib/cloudflareContext';
 import { buildPageMeta, shareMetaDescription, truncateDescription } from '../lib/seo';
-import { createServerLambdaClient, isUnauthorizedTRPCError } from '../lib/serverTrpc';
+import { createServerLambdaClient, isExpectedShareAccessTRPCError } from '../lib/serverTrpc';
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const shareId = params.id!;
@@ -20,7 +20,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   const agent = await createServerLambdaClient(request, apiBase)
     .share.getSharedAgent.query({ shareId, trackView: false })
     .catch((error) => {
-      if (!isUnauthorizedTRPCError(error)) {
+      if (!isExpectedShareAccessTRPCError(error)) {
         console.error('[share] shared agent SSR fetch failed:', error);
       }
       return null;

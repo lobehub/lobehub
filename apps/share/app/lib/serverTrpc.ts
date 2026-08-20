@@ -3,12 +3,14 @@ import superjson from 'superjson';
 
 import type { LambdaRouter } from '@/server/routers/lambda';
 
-/** Expected signed-out share requests should degrade to client loading without noisy SSR logs. */
-export const isUnauthorizedTRPCError = (error: unknown): boolean => {
+const expectedShareAccessErrorCodes = new Set(['FORBIDDEN', 'NOT_FOUND', 'UNAUTHORIZED']);
+
+/** Expected inaccessible-share requests should degrade to client loading without noisy SSR logs. */
+export const isExpectedShareAccessTRPCError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false;
 
   return 'data' in error && error.data !== null && typeof error.data === 'object'
-    ? 'code' in error.data && error.data.code === 'UNAUTHORIZED'
+    ? 'code' in error.data && expectedShareAccessErrorCodes.has(String(error.data.code))
     : false;
 };
 

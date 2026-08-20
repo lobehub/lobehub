@@ -12,6 +12,7 @@ export type AgentShareConfigPatch =
 
 interface ConfigQueueState {
   config: AgentShareConfigInput;
+  deferredConfig?: AgentShareConfigInput;
   pending: number;
   queue: Promise<unknown>;
   shareId: string;
@@ -89,7 +90,12 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
     // Same-share SWR revalidation may carry another tab's committed patch.
     // Reconcile only while idle so an in-flight local queue keeps its own
     // ordered functional-update base until the server response replaces it.
-    if (state.pending === 0) state.config = shareInfo.shareConfig;
+    if (state.pending === 0) {
+      state.config = shareInfo.shareConfig;
+      state.deferredConfig = undefined;
+    } else {
+      state.deferredConfig = shareInfo.shareConfig;
+    }
   }, [agentId, shareInfo?.id, shareInfo?.shareConfig]);
 
   const retryCreate = useCallback(() => createShare(), [createShare]);
@@ -112,18 +118,31 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
       if (!state) return;
 
       state.pending += 1;
+      let committed = false;
       const request = state.queue.then(async () => {
         const resolvedPatch = typeof patch === 'function' ? patch(state.config) : patch;
         const updated = await agentShareService.updateShareConfig(agentId, resolvedPatch);
+        committed = true;
         state.config = updated.shareConfig;
+        state.deferredConfig = undefined;
         await mutate(updated, { revalidate: false });
       });
 
       // A failed write must reject its own caller, but must not poison later
-      // queued edits — a later patch can still proceed independently.
-      const trackedRequest = request.finally(() => {
-        state.pending -= 1;
-      });
+      // queued edits. If the server write failed, restore the newest SWR
+      // snapshot skipped while the queue was busy before the next functional
+      // patch resolves; otherwise that patch could overwrite another tab.
+      const trackedRequest = request
+        .catch((error) => {
+          if (!committed && state.deferredConfig) {
+            state.config = state.deferredConfig;
+            state.deferredConfig = undefined;
+          }
+          throw error;
+        })
+        .finally(() => {
+          state.pending -= 1;
+        });
       state.queue = trackedRequest.catch(() => undefined);
       return trackedRequest;
     },

@@ -247,4 +247,45 @@ describe('useAgentShare', () => {
       enabledToolIds: ['external-tool', 'local-tool'],
     });
   });
+
+  it('restores a skipped server snapshot after a queued write rejects', async () => {
+    mocks.getShareStatus.mockResolvedValue(shareRow('agent-rejected-revalidation'));
+
+    let rejectFirst!: (error: Error) => void;
+    mocks.updateShareConfig
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(async (agentId, config) => applyConfigPatch(agentId, config));
+
+    const { result } = renderHook(() => useAgentShare('agent-rejected-revalidation', true));
+    await waitFor(() => expect(result.current.shareInfo).toBeTruthy());
+
+    let rejectedWrite!: Promise<void>;
+    act(() => {
+      rejectedWrite = result.current.updateConfig({ allowReadMemory: true })!;
+    });
+    await waitFor(() => expect(mocks.updateShareConfig).toHaveBeenCalledOnce());
+
+    const externalUpdate = applyConfigPatch('agent-rejected-revalidation', {
+      enabledToolIds: ['external-tool'],
+    });
+    await act(async () => result.current.mutate(externalUpdate, { revalidate: false }));
+
+    rejectFirst(new Error('write failed'));
+    await act(async () => expect(rejectedWrite).rejects.toThrow('write failed'));
+
+    await act(async () => {
+      await result.current.updateConfig((current) => ({
+        enabledToolIds: [...(current.enabledToolIds ?? []), 'local-tool'],
+      }));
+    });
+
+    expect(mocks.updateShareConfig).toHaveBeenLastCalledWith('agent-rejected-revalidation', {
+      enabledToolIds: ['external-tool', 'local-tool'],
+    });
+  });
 });

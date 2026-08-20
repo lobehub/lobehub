@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { isUnauthorizedTRPCError } from './serverTrpc';
+import { isExpectedShareAccessTRPCError } from './serverTrpc';
 
-describe('isUnauthorizedTRPCError', () => {
-  it('recognizes the serialized TRPC unauthorized shape', () => {
-    expect(isUnauthorizedTRPCError({ data: { code: 'UNAUTHORIZED' } })).toBe(true);
+describe('isExpectedShareAccessTRPCError', () => {
+  it.each(['FORBIDDEN', 'NOT_FOUND', 'UNAUTHORIZED'])(
+    'recognizes the serialized TRPC %s shape',
+    (code) => {
+      expect(isExpectedShareAccessTRPCError({ data: { code } })).toBe(true);
+    },
+  );
+
+  it('does not accept partial code matches', () => {
+    expect(isExpectedShareAccessTRPCError({ data: { code: 'FS_NOT_FOUND' } })).toBe(false);
   });
 
   it.each([
@@ -13,6 +20,6 @@ describe('isUnauthorizedTRPCError', () => {
     { data: null },
     null,
   ])('keeps unexpected SSR failures visible', (error) => {
-    expect(isUnauthorizedTRPCError(error)).toBe(false);
+    expect(isExpectedShareAccessTRPCError(error)).toBe(false);
   });
 });
