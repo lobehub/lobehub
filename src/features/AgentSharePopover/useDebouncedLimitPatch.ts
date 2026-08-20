@@ -12,11 +12,14 @@ const LIMIT_COMMIT_DELAY = 500;
  */
 export const useDebouncedLimitPatch = (
   onCommit: (patch: AgentShareLimitPatch) => Promise<void> | void,
+  onCommitError?: (patch: AgentShareLimitPatch) => void,
 ) => {
   const onCommitRef = useRef(onCommit);
+  const onCommitErrorRef = useRef(onCommitError);
   const pendingPatchRef = useRef<AgentShareLimitPatch>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   onCommitRef.current = onCommit;
+  onCommitErrorRef.current = onCommitError;
 
   const flush = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -24,7 +27,15 @@ export const useDebouncedLimitPatch = (
 
     const patch = pendingPatchRef.current;
     pendingPatchRef.current = {};
-    if (Object.keys(patch).length > 0) void onCommitRef.current(patch);
+    if (Object.keys(patch).length > 0) {
+      try {
+        void Promise.resolve(onCommitRef.current(patch)).catch(() =>
+          onCommitErrorRef.current?.(patch),
+        );
+      } catch {
+        onCommitErrorRef.current?.(patch);
+      }
+    }
   }, []);
 
   useEffect(() => flush, [flush]);

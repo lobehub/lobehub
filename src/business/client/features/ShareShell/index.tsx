@@ -20,6 +20,7 @@ export interface ShareShellProps {
   aside?: ReactNode;
   children?: ReactNode;
   error?: unknown;
+  errorResource?: 'agent' | 'topic';
   loading?: boolean;
   share?: ShareShellShareInfo;
   title?: string | null;
@@ -47,9 +48,15 @@ export const ShareHero = ({ avatar, byline, title }: ShareHeroProps) => (
   </Flexbox>
 );
 
-export default function ShareShell({ aside, children, error, loading }: ShareShellProps) {
+export default function ShareShell({
+  aside,
+  children,
+  error,
+  errorResource,
+  loading,
+}: ShareShellProps) {
   let body = children;
-  if (error) body = <ShareErrorView error={error} />;
+  if (error) body = <ShareErrorView error={error} resource={errorResource} />;
   else if (loading) body = <Loading debugId="share shell" />;
 
   return (

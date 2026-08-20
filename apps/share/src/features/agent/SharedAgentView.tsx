@@ -15,7 +15,7 @@ const SharedAgentView = memo(() => {
   const { error, isLoading } = useSharedAgent(id);
 
   return (
-    <ShareShell error={error} loading={!error && isLoading}>
+    <ShareShell error={error} errorResource="agent" loading={!error && isLoading}>
       <SharedAgentBody />
     </ShareShell>
   );
