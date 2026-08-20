@@ -1,5 +1,5 @@
 import { lambdaClient } from '@/libs/trpc/client';
-import type { AgentShareConfigInput } from '@/server/routers/lambda/agentShare';
+import type { AgentShareConfigPatchInput } from '@/server/routers/lambda/agentShare';
 
 class AgentShareService {
   async disableShare(agentId: string) {
@@ -18,7 +18,7 @@ class AgentShareService {
     return lambdaClient.share.getSharedAgent.query({ shareId });
   }
 
-  async updateShareConfig(agentId: string, config: AgentShareConfigInput) {
+  async updateShareConfig(agentId: string, config: AgentShareConfigPatchInput) {
     return lambdaClient.agentShare.updateShareConfig.mutate({ agentId, config });
   }
 

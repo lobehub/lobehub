@@ -18,6 +18,11 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
+export type SessionOrphanDeletionGuard = (params: {
+  agentId: string;
+  executor: LobeChatDatabase;
+}) => Promise<void>;
+
 export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -363,7 +368,7 @@ export class SessionModel {
   /**
    * Delete a session and its associated agent data if no longer referenced.
    */
-  delete = async (id: string) => {
+  delete = async (id: string, assertOrphanDeletionAllowed?: SessionOrphanDeletionGuard) => {
     return this.db.transaction(async (trx) => {
       // First get the agent IDs associated with this session
       const links = await trx
@@ -382,7 +387,11 @@ export class SessionModel {
       const result = await trx.delete(sessions).where(and(eq(sessions.id, id), this.ownership()));
 
       // Delete orphaned agents
-      const orphanedAgentIds = await this.clearOrphanAgent(agentIds, trx);
+      const orphanedAgentIds = await this.clearOrphanAgent(
+        agentIds,
+        trx,
+        assertOrphanDeletionAllowed,
+      );
 
       return { orphanedAgentIds, result };
     });
@@ -391,7 +400,7 @@ export class SessionModel {
   /**
    * Batch delete sessions and their associated agent data if no longer referenced.
    */
-  batchDelete = async (ids: string[]) => {
+  batchDelete = async (ids: string[], assertOrphanDeletionAllowed?: SessionOrphanDeletionGuard) => {
     if (ids.length === 0) return { orphanedAgentIds: [] as string[], result: { count: 0 } };
 
     return this.db.transaction(async (trx) => {
@@ -414,7 +423,11 @@ export class SessionModel {
         .where(and(inArray(sessions.id, ids), this.ownership()));
 
       // Delete orphaned agents
-      const orphanedAgentIds = await this.clearOrphanAgent(agentIds, trx);
+      const orphanedAgentIds = await this.clearOrphanAgent(
+        agentIds,
+        trx,
+        assertOrphanDeletionAllowed,
+      );
 
       return { orphanedAgentIds, result };
     });
@@ -431,7 +444,11 @@ export class SessionModel {
     });
   };
 
-  clearOrphanAgent = async (agentIds: string[], trx: any): Promise<string[]> => {
+  clearOrphanAgent = async (
+    agentIds: string[],
+    trx: any,
+    assertOrphanDeletionAllowed?: SessionOrphanDeletionGuard,
+  ): Promise<string[]> => {
     if (agentIds.length === 0) return [];
 
     // Batch query to find which agents still have sessions
@@ -443,7 +460,11 @@ export class SessionModel {
     const linkedAgentIds = new Set(remainingLinks.map((link) => link.agentId));
 
     // Find orphaned agents (those not in the linked set)
-    const orphanedAgentIds = agentIds.filter((id) => !linkedAgentIds.has(id));
+    const orphanedAgentIds = [...new Set(agentIds)].filter((id) => !linkedAgentIds.has(id)).sort();
+
+    for (const agentId of orphanedAgentIds) {
+      await assertOrphanDeletionAllowed?.({ agentId, executor: trx as LobeChatDatabase });
+    }
 
     // Batch delete orphaned agents (this will cascade to agentsFiles, agentsKnowledgeBases, etc.)
     // and SET NULL on messages.agentId

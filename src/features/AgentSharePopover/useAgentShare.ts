@@ -96,11 +96,7 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
     [agentId, mutate],
   );
 
-  /**
-   * `updateShareConfig` replaces the whole config (`.strict()` schema). Keep a
-   * local latest snapshot and serialize writes so rapid controls cannot merge
-   * over the same stale SWR value and restore a sibling field.
-   */
+  /** Serialize same-context writes while the server atomically merges each patch. */
   const updateConfig = useCallback(
     async (patch: AgentShareConfigPatch) => {
       if (!agentId) return;
@@ -110,20 +106,13 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
 
       const request = state.queue.then(async () => {
         const resolvedPatch = typeof patch === 'function' ? patch(state.config) : patch;
-        const nextConfig = {
-          ...state.config,
-          ...resolvedPatch,
-          filePermissionConfig: resolvedPatch.filePermissionConfig
-            ? { ...state.config.filePermissionConfig, ...resolvedPatch.filePermissionConfig }
-            : state.config.filePermissionConfig,
-        };
-        const updated = await agentShareService.updateShareConfig(agentId, nextConfig);
+        const updated = await agentShareService.updateShareConfig(agentId, resolvedPatch);
         state.config = updated.shareConfig;
         await mutate(updated, { revalidate: false });
       });
 
       // A failed write must reject its own caller, but must not poison later
-      // queued edits — a subsequent complete snapshot can still recover it.
+      // queued edits — a later patch can still proceed independently.
       state.queue = request.catch(() => undefined);
       return request;
     },

@@ -695,6 +695,32 @@ describe('SessionModel', () => {
         await serverDB.select().from(agents).where(eq(agents.id, 'still-linked')),
       ).toHaveLength(1);
     });
+
+    it('guards every orphan in a multi-agent session and rolls back on rejection', async () => {
+      await serverDB.insert(sessions).values({ id: '1', userId });
+      await serverDB.insert(agents).values([
+        { id: 'agent-a', userId },
+        { id: 'agent-b', userId },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'agent-b', sessionId: '1', userId },
+        { agentId: 'agent-a', sessionId: '1', userId },
+      ]);
+      const guard = vi.fn(async ({ agentId }: { agentId: string }) => {
+        if (agentId === 'agent-b') throw new Error('Agent deletion blocked');
+      });
+
+      await expect(sessionModel.delete('1', guard)).rejects.toThrow('Agent deletion blocked');
+
+      expect(guard.mock.calls.map(([params]) => params.agentId)).toEqual(['agent-a', 'agent-b']);
+      expect(await serverDB.select().from(sessions).where(eq(sessions.id, '1'))).toHaveLength(1);
+      expect(
+        await serverDB
+          .select()
+          .from(agents)
+          .where(inArray(agents.id, ['agent-a', 'agent-b'])),
+      ).toHaveLength(2);
+    });
   });
 
   describe('batchDelete', () => {

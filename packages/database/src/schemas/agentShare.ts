@@ -18,6 +18,9 @@ export interface AgentShareConfig {
   // tipSplitRatio is platform-controlled, not configurable by the creator
 }
 
+/** Client-owned config fields accepted by atomic server-side patch updates. */
+export type AgentShareConfigPatch = Partial<AgentShareConfig>;
+
 export const agentShares = pgTable(
   'agent_shares',
   {

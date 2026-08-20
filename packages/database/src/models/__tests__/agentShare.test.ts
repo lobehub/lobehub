@@ -146,6 +146,29 @@ describe('AgentShareModel', () => {
       expect(readBack?.shareConfig).toEqual(config);
     });
 
+    it('atomically merges stale cross-context patches without losing sibling fields', async () => {
+      await agentShareModel.create(agentId);
+
+      await agentShareModel.updateConfig(agentId, {
+        filePermissionConfig: { agentFiles: 'read' },
+        maxTopicsPerVisitor: 10,
+      });
+      const updated = await agentShareModel.updateConfig(agentId, {
+        filePermissionConfig: { uploadAllowed: true },
+        maxTurnsPerTopic: 40,
+      });
+
+      expect(updated?.shareConfig).toMatchObject({
+        filePermissionConfig: {
+          agentFiles: 'read',
+          knowledgeBase: 'none',
+          uploadAllowed: true,
+        },
+        maxTopicsPerVisitor: 10,
+        maxTurnsPerTopic: 40,
+      });
+    });
+
     it('maps legacy topic limits and preserves non-client-owned config fields on update', async () => {
       await serverDB.insert(agentShares).values({
         agentId,

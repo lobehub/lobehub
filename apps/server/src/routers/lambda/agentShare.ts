@@ -24,6 +24,10 @@ export const agentShareConfigSchema = z
   })
   .strict();
 
+export const agentShareConfigPatchSchema = agentShareConfigSchema
+  .partial()
+  .refine((config) => Object.keys(config).length > 0, 'Config patch cannot be empty');
+
 const agentShareProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -60,7 +64,7 @@ export const agentShareRouter = router({
       z
         .object({
           agentId: z.string().trim().min(1),
-          config: agentShareConfigSchema,
+          config: agentShareConfigPatchSchema,
         })
         .strict(),
     )
@@ -85,4 +89,5 @@ export const agentShareRouter = router({
 });
 
 export type AgentShareConfigInput = z.infer<typeof agentShareConfigSchema>;
+export type AgentShareConfigPatchInput = z.infer<typeof agentShareConfigPatchSchema>;
 export type AgentShareRouter = typeof agentShareRouter;
