@@ -6,7 +6,16 @@ confused with the generic `M` catalogue.
 
 Keep this file at the level of durable LobeHub product and environment invariants.
 Exact copy, pixel values, component slot order, and one-off review directions belong
-in feature specifications or historical field notes, not in this living checklist.
+in feature specifications or in
+[the field notes](./references/common-mistakes-field-notes.md), not in this living
+checklist — the field notes keep the detailed incident narratives available without
+making them mandatory reading for every Acceptance run.
+
+Every entry lives under one of the three categories below, and its id prefix names
+that category: `L-E*` evidence and publication, `L-D*` product and interaction
+contracts, `L-S*` environment safety. Append a new entry inside the category it
+belongs to, with the next free number of that prefix — never after the last entry of
+the file.
 
 ## Evidence and publication
 
@@ -258,14 +267,24 @@ gateway/device route, then assert the complete persisted tree: original owner
 user, target assistant/tool call, tool result, and target final response. Also
 assert there is no owner assistant, `callAgent`, or synthetic target-user row.
 
-### L-E18 — 从「没有默认导入」推断某个 composer 表面是死代码
+### L-E18 — Concluding a composer surface is dead code because nothing imports it
 
-**Wrong approach:** 改动技能行这类被 ActionBar 复用的组件后，grep `ActionBar/Tools` 的默认导入没有命中，就断定该表面未挂载，只验证 `+` 菜单一条路径。
+**Wrong approach:** after changing a component the ActionBar reuses (a skill row, for
+instance), grep for a default import of `ActionBar/Tools`, find no hit, conclude the
+surface is not mounted, and verify only the `+` menu path.
 
-**Why it fails:** ActionBar 的表面不是靠直接 import 挂载的，而是靠 action key 注册表 + 各路由自己的 `leftActions` 数组启用。`ActionBar/config` 里 `tools: Tools` 一直注册着，真正决定它是否渲染的是
-`src/routes/(main)/**/MainChatInput` 里的 `leftActions`—— 群聊 composer 就启用了 `'tools'`，走的是 `PopoverContent → ToolsList` 这条与 `+` 菜单不同的组合路径。漏掉它会让一次绿色的验证只覆盖一半用户可见面。
+**Why it fails:** ActionBar surfaces are not mounted by a direct import. They are
+enabled by an action-key registry plus each route's own `leftActions` array.
+`ActionBar/config` registers `tools: Tools` at all times; what actually decides
+whether it renders is `leftActions` in `src/routes/(main)/**/MainChatInput` — the
+group-chat composer enables `'tools'` and reaches the component through
+`PopoverContent → ToolsList`, a different composition path from the `+` menu. Missing
+it makes a green verification cover only half of what users can see.
 
-**Correct approach:** 改动任何被 ActionBar 复用的组件后，先枚举 action key 的真实启用点（grep 各路由的 `leftActions` 数组，而不是组件的 import），对每个启用该 key 的表面分别取证；确实不打算验的表面要显式标记未测。
+**Correct approach:** after changing any component the ActionBar reuses, enumerate
+where the action key is actually enabled (grep each route's `leftActions` array, not
+the component's imports) and capture evidence for every surface that enables it. Mark
+any surface you deliberately skip as untested.
 
 ## Product and interaction contracts
 
@@ -377,6 +396,35 @@ the envelope so the target assistant reply remains independently visible.
 Never infer authorship from agent-id differences or a parent tool call: a real
 cross-Agent user follow-up can have the same tree shape.
 
+### L-D9 — A Project conversation must preserve Project identity across routing and history
+
+**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
+ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
+history.
+
+**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
+the visible owner and navigation contract, so users reasonably read the conversation as belonging
+to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
+
+**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
+route and Project sidebar. The coordinator may still execute the conversation internally, but the
+visible URL, active list, empty state, and navigation must consistently identify the Project.
+
+### L-D10 — Long `confirmModal` bodies overlay the footer
+
+**Wrong approach:** put a long list into `confirmModal({ content })` and assume the
+library pins Cancel / OK below a scroll area.
+
+**Why it fails:** `confirmModal` renders `ConfirmBody` (content + footer) inside
+`ModalContent`, which is itself `overflow: auto`. A tall list makes the dialog
+scroll as one column, or the footer paints over the last rows. Callers cannot pass
+content styles to change that.
+
+**Correct approach:** for any confirm body that can exceed a few lines, use
+`createModal` with a height-capped `ScrollArea` as `content` and put the actions in
+the modal `footer` slot. Assert `footer.top === scroller.bottom` at both ends of the
+list, not just that the dialog opened.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -472,6 +520,21 @@ the user's LobeHub instance may expose no debugging port at all.
 renderer marker before collecting evidence. If needed, start an isolated pool
 instance on a distinct port rather than guessing.
 
+**Same failure, second shape — the instance is LobeHub, but a different worktree.**
+A product-level marker passes for every worktree, so it cannot answer the question
+that matters: does this renderer serve _my_ working tree? Sibling worktrees each run
+their own `electron-dev.sh` legacy instance, and the first one started owns the
+default CDP 9222 and Vite 5173. Ask the renderer for the absolute source path of a
+module the change touches — the dev transform embeds it — and require both the
+worktree path and a marker unique to the change:
+
+```bash
+agent-browser --cdp 9222 eval "(async()=>{const t=await (await fetch('app://renderer/<repo-relative>.tsx')).text();return t.match(/_jsxFileName = \"[^\"]*\"/)[0]+' '+t.includes('<CHANGE_MARKER>')})()"
+```
+
+A wrong-worktree hit means the instance is someone else's session: do not restart or
+reuse it, start a pool instance (`electron-dev.sh start <id>`) or switch surface.
+
 ### L-S6 — Reading or writing the url from a portal'd sidebar on desktop
 
 **Wrong approach:** use `useSearchParams`, `useQueryState`, `useParams`,
@@ -554,20 +617,6 @@ to the code. Never attribute it to the change under test without that A/B — an
 note that `electron-dev.sh start` reports "Ready" even when the renderer never
 became interactive, so its own readiness line is not the gate.
 
-### L-P1 — A Project conversation must preserve Project identity across routing and history
-
-**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
-ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
-history.
-
-**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
-the visible owner and navigation contract, so users reasonably read the conversation as belonging
-to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
-
-**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
-route and Project sidebar. The coordinator may still execute the conversation internally, but the
-visible URL, active list, empty state, and navigation must consistently identify the Project.
-
 ### L-S9 — Trusting "migration pass" on the shared acceptance Postgres
 
 **Wrong approach:** run `init-dev-env.sh migrate` in a worktree whose branch adds a
@@ -614,22 +663,7 @@ input timing confirmed in a foreground tab — the user's window, or a screensho
 check that tolerates a frozen transition. A negative result from a hidden tab is not
 evidence of a defect.
 
-### L-S11 — Long `confirmModal` bodies overlay the footer
-
-**Wrong approach:** put a long list into `confirmModal({ content })` and assume the
-library pins Cancel / OK below a scroll area.
-
-**Why it fails:** `confirmModal` renders `ConfirmBody` (content + footer) inside
-`ModalContent`, which is itself `overflow: auto`. A tall list makes the dialog
-scroll as one column, or the footer paints over the last rows. Callers cannot pass
-content styles to change that.
-
-**Correct approach:** for any confirm body that can exceed a few lines, use
-`createModal` with a height-capped `ScrollArea` as `content` and put the actions in
-the modal `footer` slot. Assert `footer.top === scroller.bottom` at both ends of the
-list, not just that the dialog opened.
-
-### L-S12 — Bundled SPA HTML is not the whole site
+### L-S11 — Bundled SPA HTML is not the whole site
 
 **Wrong approach:** collect only tags and CSS `url()` from `index.html`, then treat
 a Vite/webpack `dist` as publishable.
@@ -645,7 +679,7 @@ references also cannot be inlined as data URIs: `import.meta.url` and SVG
 are under the inline size limit. Judge a Vite publish by the running page
 (images, icons, counter), not by whether `index.html` listed three tags.
 
-### L-S13 — macOS `/tmp` and `/private/tmp` are the same workspace
+### L-S12 — macOS `/tmp` and `/private/tmp` are the same workspace
 
 **Wrong approach:** treat a Files-tree path and the topic working directory as
 outside each other when one string starts with `/tmp` and the other with
@@ -661,8 +695,26 @@ containment. Prove a publish by fetching the public HTML (data URIs or 200
 sidecars) and opening the live page — in-app preview of the local file does not
 prove the hosted assets.
 
-## Historical source
+### L-S13 — Treating a workspace another session has rewritten as your own code
 
-Detailed incident narratives and retired pixel- or component-specific directions
-belong in [the field notes](./references/common-mistakes-field-notes.md), where they
-remain available without becoming mandatory rules for every Acceptance run.
+**Wrong approach:** edit and verify in place in this repo, and when the screenshots
+stop matching the source, suspect the Vite cache or your own CSS — restarting the
+dev server, adding more changes, and capturing again.
+
+**Why it fails:** a second session can be working on the same worktree. Its rebase
+helper stashes the **entire working tree** (stash message shaped like
+`pre-rebase2-<pr>-<sha>`), rebases the branch, and pops later; a conflicted pop
+leaves `<<<<<<<` markers inside the other session's files and breaks the whole SPA
+build. Both phases point away from the real cause: first "my change is written but
+has no effect" (the file was actually reverted to its HEAD version), then "the app
+will not open" (a conflict marker in someone else's file). Either one sends you
+debugging code you never broke.
+
+**Correct approach:** confirm your change is still on the tree both before and after
+capturing evidence — the file appears in `git status` and a marker unique to your
+change greps. On a mismatch, read `git stash list` timestamps and `git reflog`
+before suspecting the build cache. When your work has been stashed, recover only
+your own file with `git checkout stash@{n} -- <your file>`; **never pop or drop the
+whole stash** — it belongs to the other session, and popping it is that session's
+own action. When you find conflict markers in someone else's file, wait for them to
+resolve it rather than resolving it for them.
