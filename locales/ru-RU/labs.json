@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Развертывание артефактов",
   "features.assistantMessageGroup.desc": "Группируйте сообщения агента и результаты вызова инструментов для совместного отображения",
   "features.assistantMessageGroup.title": "Группировка сообщений агента",
+  "features.claudeCodeApiMode.desc": "Позвольте Claude Code использовать настроенного API-провайдера и модель на этом компьютере вместо подписки Claude. Только локальное выполнение на компьютере.",
+  "features.claudeCodeApiMode.title": "API-провайдер Claude Code",
   "features.claudeCodeSdk.desc": "Запускайте сеансы Claude Code через Claude Agent SDK вместо запуска CLI. Обеспечивает более богатую потоковую передачу и управление сеансами.",
   "features.claudeCodeSdk.title": "Среда выполнения Claude Code SDK",
   "features.codexAppServer.desc": "Запускайте сеансы Codex через локальный сервер приложений вместо одноразовых процессов CLI. Обеспечивает потоковую передачу токенов и управление поворотами на уровне приложения.",

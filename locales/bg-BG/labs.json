@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Деплоймент на артефакти",
   "features.assistantMessageGroup.desc": "Групиране на съобщенията от агента и резултатите от извикванията на инструменти заедно за показване",
   "features.assistantMessageGroup.title": "Групиране на съобщения от агент",
+  "features.claudeCodeApiMode.desc": "Позволете на Claude Code да използва конфигуриран API доставчик и модел на този настолен компютър вместо абонамент за Claude. Само локално изпълнение на настолния компютър.",
+  "features.claudeCodeApiMode.title": "Claude Code API доставчик",
   "features.claudeCodeSdk.desc": "Изпълнявайте сесии на Claude Code чрез Claude Agent SDK вместо да стартирате CLI. Осигурява по-богато стрийминг изживяване и контрол на сесиите.",
   "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
   "features.codexAppServer.desc": "Изпълнявайте Codex сесии чрез локалния app-сървър вместо чрез еднократни CLI процеси. Позволява поточно предаване на токени и естествен контрол на завоите.",

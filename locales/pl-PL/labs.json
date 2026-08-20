@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Wdrożenia Artefaktów",
   "features.assistantMessageGroup.desc": "Grupuj wiadomości agenta i wyniki wywołań narzędzi razem do wyświetlenia",
   "features.assistantMessageGroup.title": "Grupowanie Wiadomości Agenta",
+  "features.claudeCodeApiMode.desc": "Pozwól Claude Code korzystać ze skonfigurowanego dostawcy API i modelu na tym komputerze zamiast subskrypcji Claude. Tylko lokalne wykonywanie na komputerze.",
+  "features.claudeCodeApiMode.title": "Dostawca API Claude Code",
   "features.claudeCodeSdk.desc": "Uruchamiaj sesje Claude Code za pomocą Claude Agent SDK zamiast uruchamiania CLI. Umożliwia bardziej zaawansowane przesyłanie strumieniowe i kontrolę sesji.",
   "features.claudeCodeSdk.title": "Środowisko wykonawcze Claude Code SDK",
   "features.codexAppServer.desc": "Uruchamiaj sesje Codex za pośrednictwem lokalnego serwera aplikacji zamiast jednorazowych procesów CLI. Umożliwia strumieniowanie tokenów i natywną kontrolę tur.",

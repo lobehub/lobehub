@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "نشر العناصر",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
+  "features.claudeCodeApiMode.desc": "دع Claude Code يستخدم موفر API مُعد ونموذج على هذا الجهاز بدلاً من اشتراك Claude. التنفيذ المحلي على سطح المكتب فقط.",
+  "features.claudeCodeApiMode.title": "موفر Claude Code API",
   "features.claudeCodeSdk.desc": "قم بتشغيل جلسات Claude Code من خلال Claude Agent SDK بدلاً من تشغيل واجهة سطر الأوامر (CLI). يتيح ذلك بثًا أكثر ثراءً وتحكمًا أفضل في الجلسات.",
   "features.claudeCodeSdk.title": "وقت تشغيل Claude Code SDK",
   "features.codexAppServer.desc": "تشغيل جلسات Codex من خلال خادم التطبيق المحلي بدلاً من عمليات CLI الفردية. يتيح تدفق الرموز والتحكم الأصلي في الأدوار.",

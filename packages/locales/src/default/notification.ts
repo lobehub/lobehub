@@ -31,6 +31,7 @@ export default {
   'category.agent': 'Agent',
   'category.billing': 'Billing',
   'category.generation': 'Generation',
+  'category.mention': 'Mentions',
   'category.pending': 'Pending',
   'category.schedule': 'Scheduled tasks',
   'category.system': 'System notifications',
@@ -89,14 +90,25 @@ export default {
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',
   'subscription_payment_failed_title': 'Subscription renewal payment failed',
+  'subscription_plan_changed': 'Your subscription plan changed from {{oldPlan}} to {{newPlan}}.',
+  'subscription_plan_changed_downgraded':
+    'Your subscription changed from {{oldPlan}} to {{newPlan}} as scheduled. The new plan limits are now in effect.',
+  'subscription_plan_changed_downgraded_title': 'Subscription plan changed',
+  'subscription_plan_changed_title': 'Subscription plan changed',
+  'subscription_plan_changed_upgraded':
+    'Your subscription was upgraded from {{oldPlan}} to {{newPlan}}. Your new benefits are available now.',
+  'subscription_plan_changed_upgraded_title': 'Subscription upgraded',
+  'subscription_renewed':
+    'Your {{plan}} subscription has renewed and your subscription credits were reset for the new billing cycle.',
+  'subscription_renewed_title': 'Subscription renewed',
   'topic_comment_activity': '{{actorLabel}} commented in a topic you participate in.',
   'topic_comment_activity_message': '{{actorLabel}} commented on your message.',
   'topic_comment_activity_message_title': 'New comment on your message',
-  'topic_comment_activity_mentioned': '{{actorLabel}} mentioned you in a comment.',
-  'topic_comment_activity_mentioned_title': 'You were mentioned in a comment',
   'topic_comment_activity_replied': '{{actorLabel}} replied to your comment.',
   'topic_comment_activity_replied_title': 'New reply to your comment',
   'topic_comment_activity_title': 'New topic comment',
+  'topic_comment_mentioned': '{{actorLabel}} mentioned you in a comment.',
+  'topic_comment_mentioned_title': 'You were mentioned in a comment',
   'topic_comment_removed_by_workspace_owner':
     'Your comment was removed by a Workspace Owner. Open the discussion to view its place in the thread.',
   'topic_comment_removed_by_workspace_owner_title': 'Comment removed',
@@ -104,6 +116,10 @@ export default {
   'topic_comment_restored_by_workspace_owner_title': 'Comment restored',
   'video_generation_completed': 'Your video "{{prompt}}" is ready.',
   'video_generation_completed_title': 'Video generation completed',
+  'workspace_credit_balance_low':
+    'Workspace "{{workspaceName}}" is running low on credits — about {{balance}} remaining in the shared pool. Top up or turn on auto top-up to keep your team working.',
+  'workspace_credit_balance_low_action': 'Top up credits',
+  'workspace_credit_balance_low_title': 'Workspace credits running low',
   'workspace_member_invited':
     '{{inviterLabel}} invited you to join workspace "{{workspaceName}}" as a {{role}}.',
   'workspace_member_invited_title': 'Invitation to join {{workspaceName}}',

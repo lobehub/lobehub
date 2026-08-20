@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "Artefactimplementaties",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
+  "features.claudeCodeApiMode.desc": "Laat Claude Code een geconfigureerde API-provider en model op deze desktop gebruiken in plaats van een Claude-abonnement. Alleen lokale uitvoering op desktop.",
+  "features.claudeCodeApiMode.title": "Claude Code API-provider",
   "features.claudeCodeSdk.desc": "Voer Claude Code-sessies uit via de Claude Agent SDK in plaats van de CLI te starten. Biedt rijkere streaming en sessiebeheer.",
   "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
   "features.codexAppServer.desc": "Voer Codex-sessies uit via de lokale app-server in plaats van eenmalige CLI-processen. Hiermee wordt tokenstreaming en native beurtcontrole mogelijk gemaakt.",

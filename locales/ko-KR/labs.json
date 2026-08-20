@@ -8,6 +8,8 @@
   "features.artifactDeployment.title": "아티팩트 배포",
   "features.assistantMessageGroup.desc": "도우미 메시지와 해당 도구 호출 결과를 그룹으로 묶어 표시합니다",
   "features.assistantMessageGroup.title": "도우미 메시지 그룹화",
+  "features.claudeCodeApiMode.desc": "Claude Code가 Claude 구독 대신 이 데스크톱에서 구성된 API 제공자와 모델을 사용하도록 합니다. 데스크톱 로컬 실행 전용입니다.",
+  "features.claudeCodeApiMode.title": "Claude Code API 제공자",
   "features.claudeCodeSdk.desc": "Claude Agent SDK를 통해 Claude Code 세션을 실행하여 CLI를 생성하는 대신 사용합니다. 더 풍부한 스트리밍과 세션 제어를 가능하게 합니다.",
   "features.claudeCodeSdk.title": "Claude Code SDK 런타임",
   "features.codexAppServer.desc": "Codex 세션을 단발성 CLI 프로세스 대신 로컬 앱 서버를 통해 실행합니다. 토큰 스트리밍과 네이티브 턴 제어를 활성화합니다.",
