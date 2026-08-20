@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "Sie sind mit {{name}} verbunden. Klicken Sie hier, um die Verbindung zu trennen.",
   "providerModels.config.oauth.cancel": "Abbrechen",
   "providerModels.config.oauth.codeExpired": "Der Autorisierungscode ist abgelaufen. Bitte versuchen Sie es erneut.",
-  "providerModels.config.oauth.connect": "Mit {{name}} verbinden",
   "providerModels.config.oauth.connectDesc": "Klicken Sie hier, um sich über den Browser zu autorisieren. Kein API-Schlüssel erforderlich.",
   "providerModels.config.oauth.connected": "Verbunden",
   "providerModels.config.oauth.connecting": "Verbindung wird hergestellt...",

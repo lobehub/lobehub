@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "Изображение слишком большое (максимум 10 МБ).",
   "acceptance.review.confirmReject": "Отправить отзыв",
   "acceptance.review.detailPlaceholder": "Оставьте комментарий для этой проверки. Он будет отправлен вместе с вашим решением…",
-  "acceptance.review.feedbackLabel": "Ваш отзыв · раунд {{round}}",
   "acceptance.review.fullscreen": "Аннотировать на весь экран",
   "acceptance.review.fullscreenDone": "Аннотация завершена",
   "acceptance.review.ignore": "Игнорировать",

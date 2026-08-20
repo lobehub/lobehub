@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "Изображението е твърде голямо (максимум 10MB).",
   "acceptance.review.confirmReject": "Изпратете обратна връзка",
   "acceptance.review.detailPlaceholder": "Оставете коментар за тази проверка. Той ще бъде изпратен с вашето решение…",
-  "acceptance.review.feedbackLabel": "Вашата обратна връзка · кръг {{round}}",
   "acceptance.review.fullscreen": "Анотиране на цял екран",
   "acceptance.review.fullscreenDone": "Анотирането е завършено",
   "acceptance.review.ignore": "Игнориране",

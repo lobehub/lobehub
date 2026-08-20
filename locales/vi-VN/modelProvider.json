@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "Bạn đã kết nối với {{name}}. Nhấn để ngắt kết nối.",
   "providerModels.config.oauth.cancel": "Hủy",
   "providerModels.config.oauth.codeExpired": "Mã xác thực đã hết hạn. Vui lòng thử lại.",
-  "providerModels.config.oauth.connect": "Kết nối với {{name}}",
   "providerModels.config.oauth.connectDesc": "Nhấn để xác thực qua trình duyệt. Không cần khóa API.",
   "providerModels.config.oauth.connected": "Đã kết nối",
   "providerModels.config.oauth.connecting": "Đang kết nối...",

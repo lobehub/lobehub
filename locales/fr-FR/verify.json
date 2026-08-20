@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "L'image est trop grande (10 Mo max).",
   "acceptance.review.confirmReject": "Soumettre un retour",
   "acceptance.review.detailPlaceholder": "Laissez un commentaire pour cette vérification. Il sera soumis avec votre décision…",
-  "acceptance.review.feedbackLabel": "Votre retour · cycle {{round}}",
   "acceptance.review.fullscreen": "Annoter en plein écran",
   "acceptance.review.fullscreenDone": "Annotation terminée",
   "acceptance.review.ignore": "Ignorer",

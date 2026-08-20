@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "Hình ảnh quá lớn (tối đa 10MB).",
   "acceptance.review.confirmReject": "Gửi phản hồi",
   "acceptance.review.detailPlaceholder": "Để lại bình luận cho kiểm tra này. Nó sẽ được gửi cùng với quyết định của bạn...",
-  "acceptance.review.feedbackLabel": "Phản hồi của bạn · vòng {{round}}",
   "acceptance.review.fullscreen": "Chú thích toàn màn hình",
   "acceptance.review.fullscreenDone": "Hoàn tất chú thích",
   "acceptance.review.ignore": "Bỏ qua",

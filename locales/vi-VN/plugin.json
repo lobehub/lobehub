@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "Thêm tiêu chí chấp nhận",
   "builtins.lobe-task.goal.costBudget": "Ngân sách tổng chi phí",
   "builtins.lobe-task.goal.criteria": "Tiêu chí chấp nhận",
-  "builtins.lobe-task.goal.editCriterion": "Chỉnh sửa tiêu chí C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "Đã chấp nhận",
   "builtins.lobe-task.goal.phase.awaitingDecision": "Chưa đạt — bạn quyết định",
   "builtins.lobe-task.goal.phase.awaitingReview": "Đang chờ bạn xem xét",

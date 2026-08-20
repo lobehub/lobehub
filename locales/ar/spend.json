@@ -46,7 +46,7 @@
   "table.pagination.next": "الصفحة التالية",
   "table.pagination.perPage": "{{size}} / الصفحة",
   "table.pagination.prev": "الصفحة السابقة",
-  "table.pagination.range": "{{from}}-{{ar}} من {{total}} عنصر",
+  "table.pagination.range": "{{from}}-{{to}} من {{total}} عنصر",
   "table.title": "تفاصيل استخدام الاعتمادات الحاسوبية",
   "table.totalToken.input": "المدخلات",
   "table.totalToken.output": "المخرجات",

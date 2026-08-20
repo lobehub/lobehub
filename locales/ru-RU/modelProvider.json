@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "Вы подключены к {{name}}. Нажмите, чтобы отключиться.",
   "providerModels.config.oauth.cancel": "Отмена",
   "providerModels.config.oauth.codeExpired": "Срок действия кода авторизации истёк. Пожалуйста, попробуйте снова.",
-  "providerModels.config.oauth.connect": "Подключиться через {{name}}",
   "providerModels.config.oauth.connectDesc": "Нажмите, чтобы авторизоваться через браузер. API-ключ не требуется.",
   "providerModels.config.oauth.connected": "Подключено",
   "providerModels.config.oauth.connecting": "Подключение...",

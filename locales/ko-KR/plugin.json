@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "수락 기준 추가",
   "builtins.lobe-task.goal.costBudget": "총 비용 예산",
   "builtins.lobe-task.goal.criteria": "수락 기준",
-  "builtins.lobe-task.goal.editCriterion": "기준 C{{seq}} 수정",
   "builtins.lobe-task.goal.phase.accepted": "수락됨",
   "builtins.lobe-task.goal.phase.awaitingDecision": "통과하지 않음 — 결정 필요",
   "builtins.lobe-task.goal.phase.awaitingReview": "검토 대기 중",

@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "受け入れ基準を追加",
   "builtins.lobe-task.goal.costBudget": "総コスト予算",
   "builtins.lobe-task.goal.criteria": "受け入れ基準",
-  "builtins.lobe-task.goal.editCriterion": "基準 C{{seq}} を編集",
   "builtins.lobe-task.goal.phase.accepted": "承認済み",
   "builtins.lobe-task.goal.phase.awaitingDecision": "未承認 — あなたの判断次第",
   "builtins.lobe-task.goal.phase.awaitingReview": "レビュー待ち",

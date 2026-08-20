@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "Adicionar critério de aceitação",
   "builtins.lobe-task.goal.costBudget": "Orçamento total de custos",
   "builtins.lobe-task.goal.criteria": "Critérios de aceitação",
-  "builtins.lobe-task.goal.editCriterion": "Editar critério C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "Aceito",
   "builtins.lobe-task.goal.phase.awaitingDecision": "Não aprovado — sua decisão",
   "builtins.lobe-task.goal.phase.awaitingReview": "Aguardando sua revisão",

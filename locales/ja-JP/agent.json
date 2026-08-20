@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "ワークスペースメンバーを選択...",
   "transferRequest.resourceType.agent": "エージェント",
   "transferRequest.resourceType.agentGroup": "グループ",
-  "transferRequest.sectionTitle": "保留中の転送",
   "transferRequest.someone": "ワークスペースメンバー",
   "transferRequest.untitledResource": "無題",
   "transferRequest.withdraw": "撤回",

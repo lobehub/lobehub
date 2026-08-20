@@ -136,7 +136,6 @@
   "telemetry.rows.create.title": "創造 · インスピレーションを即実現",
   "telemetry.rows.evolve.desc": "すべての対話が、あなたをより深く理解する一歩に。応答だけでなく、理解も進化します。",
   "telemetry.rows.evolve.title": "進化 · 使うほどにあなたを理解",
-  "telemetry.rows.privacy.desc": "私たちは匿名化されたデータを使用して、{{appName}} の体験を継続的に改善しています。もちろん、プライバシー設定からいつでもこのオプションを変更できます。",
   "telemetry.rows.privacy.title": "一緒に {{appName}} をより良く",
   "telemetry.terms": "利用規約",
   "telemetry.title": "こんにちは、私は {{name}} です",

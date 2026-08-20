@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "إضافة معيار قبول",
   "builtins.lobe-task.goal.costBudget": "إجمالي ميزانية التكلفة",
   "builtins.lobe-task.goal.criteria": "معايير القبول",
-  "builtins.lobe-task.goal.editCriterion": "تعديل المعيار C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "مقبول",
   "builtins.lobe-task.goal.phase.awaitingDecision": "لم يتم اجتيازه — القرار لك",
   "builtins.lobe-task.goal.phase.awaitingReview": "في انتظار مراجعتك",

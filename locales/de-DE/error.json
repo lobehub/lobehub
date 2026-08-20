@@ -161,7 +161,6 @@
   "unlock.tabs.apiKey": "Benutzerdefinierter API-Schlüssel",
   "unlock.tabs.password": "Passwort",
   "upload.desc": "Details: {{detail}}",
-  "upload.fileOnlySupportInServerMode": "Im aktuellen Modus können keine Nicht-Bilddateien hochgeladen werden. Bitte wechseln Sie zum Server-Modus oder nutzen Sie den {{cloud}}-Dienst.",
   "upload.networkError": "Bitte überprüfen Sie Ihre Netzwerkverbindung und die CORS-Konfiguration des Speicherdienstes.",
   "upload.permissionDenied": "Sie haben keine Berechtigung, Dateien in diesem Workspace hochzuladen.",
   "upload.storageBlock.billingUnavailable": "Der Abrechnungsstatus Ihres Abonnements kann nicht überprüft werden. Bitte versuchen Sie es später erneut oder aktualisieren Sie Ihre Abrechnungsdaten.",

@@ -15,7 +15,6 @@
   "dbV1.title": "{{appName}} 資料進化",
   "dbV1.upgrade.error.subTitle": "非常抱歉，資料庫升級過程發生異常。請嘗試以下方案：A. 清空本地資料後，重新匯入備份資料； B. 點擊 「重新升級」按鈕。<br><br> 如仍然出錯，請 <1>提交問題</1> ，我們將會第一時間幫你排查",
   "dbV1.upgrade.error.title": "資料庫升級失敗",
-  "dbV1.upgrade.success.subTitle": "{{appName}} 的資料庫已經升級到最新版本，立即開始體驗吧",
   "dbV1.upgrade.success.title": "資料庫升級成功",
   "dbV1.upgradeTip": "升級大致需要 10~20 秒，升級過程中請不要關閉 {{appName}}",
   "migrateError.missVersion": "導入數據缺少版本號，請檢查文件後重試",

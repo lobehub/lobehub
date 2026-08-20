@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "{{name}}에 연결되었습니다. 연결을 해제하려면 클릭하세요.",
   "providerModels.config.oauth.cancel": "취소",
   "providerModels.config.oauth.codeExpired": "인증 코드가 만료되었습니다. 다시 시도해 주세요.",
-  "providerModels.config.oauth.connect": "{{name}}에 연결하기",
   "providerModels.config.oauth.connectDesc": "브라우저를 통해 인증하려면 클릭하세요. API 키는 필요하지 않습니다.",
   "providerModels.config.oauth.connected": "연결됨",
   "providerModels.config.oauth.connecting": "연결 중...",

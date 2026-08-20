@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "افزودن معیار پذیرش",
   "builtins.lobe-task.goal.costBudget": "بودجه کل هزینه",
   "builtins.lobe-task.goal.criteria": "معیارهای پذیرش",
-  "builtins.lobe-task.goal.editCriterion": "ویرایش معیار C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "پذیرفته شده",
   "builtins.lobe-task.goal.phase.awaitingDecision": "قبول نشده — تصمیم با شماست",
   "builtins.lobe-task.goal.phase.awaitingReview": "در انتظار بررسی شما",

@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "La imagen es demasiado grande (máximo 10MB).",
   "acceptance.review.confirmReject": "Enviar comentarios",
   "acceptance.review.detailPlaceholder": "Deja un comentario para esta verificación. Se enviará con tu decisión…",
-  "acceptance.review.feedbackLabel": "Tus comentarios · ronda {{round}}",
   "acceptance.review.fullscreen": "Anotar en pantalla completa",
   "acceptance.review.fullscreenDone": "Anotación completada",
   "acceptance.review.ignore": "Ignorar",

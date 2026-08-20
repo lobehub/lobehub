@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "A imagem é muito grande (máximo de 10MB).",
   "acceptance.review.confirmReject": "Enviar feedback",
   "acceptance.review.detailPlaceholder": "Deixe um comentário para esta verificação. Ele será enviado com sua decisão…",
-  "acceptance.review.feedbackLabel": "Seu feedback · rodada {{round}}",
   "acceptance.review.fullscreen": "Anotar em tela cheia",
   "acceptance.review.fullscreenDone": "Anotação concluída",
   "acceptance.review.ignore": "Ignorar",

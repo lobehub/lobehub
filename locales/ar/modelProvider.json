@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "لقد تم الاتصال بـ {{name}}. انقر لإلغاء الاتصال.",
   "providerModels.config.oauth.cancel": "إلغاء",
   "providerModels.config.oauth.codeExpired": "انتهت صلاحية رمز التفويض. يرجى المحاولة مرة أخرى.",
-  "providerModels.config.oauth.connect": "الاتصال بـ {{name}}",
   "providerModels.config.oauth.connectDesc": "انقر للتفويض عبر المتصفح. لا حاجة لمفتاح API.",
   "providerModels.config.oauth.connected": "متصل",
   "providerModels.config.oauth.connecting": "جارٍ الاتصال...",
