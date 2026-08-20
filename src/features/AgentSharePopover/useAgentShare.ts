@@ -13,6 +13,7 @@ export type AgentShareConfigPatch =
 interface ConfigQueueState {
   config: AgentShareConfigInput;
   deferredConfig?: AgentShareConfigInput;
+  localConfig?: AgentShareConfigInput;
   pending: number;
   queue: Promise<unknown>;
   shareId: string;
@@ -87,6 +88,12 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
       });
       return;
     }
+    // The optimistic SWR write below reuses the exact server config object.
+    // Do not mistake that local echo for a newer cross-tab snapshot.
+    if (state.localConfig === shareInfo.shareConfig) {
+      state.localConfig = undefined;
+      return;
+    }
     // Same-share SWR revalidation may carry another tab's committed patch.
     // Reconcile only while idle so an in-flight local queue keeps its own
     // ordered functional-update base until the server response replaces it.
@@ -124,8 +131,28 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
         const updated = await agentShareService.updateShareConfig(agentId, resolvedPatch);
         committed = true;
         state.config = updated.shareConfig;
-        state.deferredConfig = undefined;
+        state.localConfig = updated.shareConfig;
         await mutate(updated, { revalidate: false });
+        if (state.localConfig === updated.shareConfig) state.localConfig = undefined;
+
+        const deferredConfig = state.deferredConfig;
+        state.deferredConfig = undefined;
+        if (deferredConfig) {
+          try {
+            const latest = await mutate();
+            if (latest?.shareConfig) {
+              state.config = latest.shareConfig;
+              if (state.deferredConfig === latest.shareConfig) state.deferredConfig = undefined;
+            }
+          } catch {
+            // A cross-tab server snapshot is still safer than the delayed local
+            // response when revalidation is temporarily unavailable.
+            state.config = deferredConfig;
+            state.localConfig = deferredConfig;
+            await mutate({ ...updated, shareConfig: deferredConfig }, { revalidate: false });
+            if (state.localConfig === deferredConfig) state.localConfig = undefined;
+          }
+        }
       });
 
       // A failed write must reject its own caller, but must not poison later
