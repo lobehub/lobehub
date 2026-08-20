@@ -6,11 +6,13 @@ type NamespaceLoaderMap = Record<string, () => Promise<NamespaceModule>>;
 // (~1000 files). The client build keeps the generic loader — its graph
 // legitimately spans the whole conversation stack.
 const defaultLoaders = import.meta.glob([
+  '../../../../packages/locales/src/default/agent.ts',
   '../../../../packages/locales/src/default/chat.ts',
   '../../../../packages/locales/src/default/error.ts',
   '../../../../packages/locales/src/default/pageShare.ts',
 ]) as NamespaceLoaderMap;
 const localeLoaders = import.meta.glob([
+  '../../../../locales/*/agent.json',
   '../../../../locales/*/chat.json',
   '../../../../locales/*/error.json',
   '../../../../locales/*/pageShare.json',

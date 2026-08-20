@@ -23,7 +23,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { createAgentShareSettingsModal } from './SettingsModal';
 import { styles } from './style';
 import { type AgentShareVisibility, useAgentShare } from './useAgentShare';
-import { commitAgentShareVisibility } from './visibilityUpdate';
+import { commitAgentShareVisibility, copyAgentShareLink } from './visibilityUpdate';
 
 const PRIVACY_WARNING_ITEMS = [
   { icon: WrenchIcon, labelKey: 'share.privacyWarning.items.tools' },
@@ -130,8 +130,9 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
 
   const handleCopyLink = useCallback(async () => {
     if (!shareUrl) return;
-    await copyToClipboard(shareUrl);
-    toast.success(t('share.copyLinkSuccess'));
+    const copied = await copyAgentShareLink(() => copyToClipboard(shareUrl));
+    if (copied) toast.success(t('share.copyLinkSuccess'));
+    else toast.error(t('copyFail', { ns: 'common' }));
   }, [shareUrl, t]);
 
   const handleOpenSettings = useCallback(() => {
