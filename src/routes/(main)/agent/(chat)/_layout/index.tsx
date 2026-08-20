@@ -7,11 +7,10 @@ import { memo, useRef } from 'react';
 import { Outlet } from 'react-router';
 
 import ChatHeader from '@/features/AgentConversation/Header';
+import HeaderSlot from '@/features/AgentConversation/Header/HeaderSlot';
 import ChatTerminalPanel from '@/features/ChatTerminal';
 import AgentWorkingSidebar from '@/features/Conversation/WorkingSidebar';
 import Portal from '@/routes/(main)/agent/features/Portal';
-
-import HeaderSlot from './HeaderSlot';
 
 const styles = createStaticStyles(({ css }) => ({
   // Named container queried by ChatHeader and the list top spacer: when this
