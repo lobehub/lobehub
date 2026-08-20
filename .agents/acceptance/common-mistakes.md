@@ -661,6 +661,25 @@ containment. Prove a publish by fetching the public HTML (data URIs or 200
 sidecars) and opening the live page — in-app preview of the local file does not
 prove the hosted assets.
 
+### L-S15 — never rebuild an asset by keying it out of a screenshot
+
+**Wrong approach:** the real file was unreachable, so reconstruct the subject by
+flood-filling the flat background out of a screenshot of it, and submit the
+result as evidence of what the product produces.
+
+**Why it fails:** a screenshot composites the asset onto a surface colour, and
+anything in the subject that shares that colour is unrecoverable — not
+"needs a tighter tolerance", genuinely gone. Measured on one: the slot backdrop
+was rgb(13,13,13) and 40% of a black cat's pixels sat inside the key tolerance,
+some at distance 0. The cat and the shoes vanished, and the reviewer — correctly
+— read the damage as a product bug.
+
+**Correct approach:** evidence of an asset comes from the app rendering that
+asset, or from the raw file. If the file is gone, say the evidence is
+unavailable and what it would take to reshoot it; do not synthesize a
+replacement. When the claim under test is geometry, prove it on the frame (which
+is character-independent) rather than dressing it up with a damaged subject.
+
 ## Historical source
 
 Detailed incident narratives and retired pixel- or component-specific directions
