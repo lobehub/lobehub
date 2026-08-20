@@ -64,7 +64,15 @@ class MessengerService {
   };
 
   sendMessengerPush = async (params: {
-    content: string;
+    attachments?: {
+      data?: string;
+      fetchUrl?: string;
+      fileId?: string;
+      mimeType?: string;
+      name?: string;
+      type: 'image' | 'file' | 'video' | 'audio';
+    }[];
+    content?: string;
     platform: MessengerPlatform;
     tenantId?: string;
   }) => {

@@ -19,6 +19,7 @@ import {
   type MessengerPlatform,
 } from '@/config/messenger';
 import { AgentModel } from '@/database/models/agent';
+import { FileModel } from '@/database/models/file';
 import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import {
   MessengerAccountLinkConflictError,
@@ -42,6 +43,7 @@ import {
   wechatPendingPushKey,
   wechatWindowKey,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { FileService } from '@/server/services/file';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import {
@@ -842,14 +844,69 @@ export const messengerRouter = router({
    */
   sendMessengerPush: messengerProcedure
     .input(
-      z.object({
-        content: z.string().trim().min(1).max(MESSENGER_PUSH_CONTENT_MAX_LENGTH),
-        platform: z.enum(MESSENGER_PUSH_PLATFORMS),
-        tenantId: z.string().optional(),
-      }),
+      z
+        .object({
+          // Mirror of `SendMessageAttachment` (builtin-tool-message types),
+          // same shape as `attachmentsInputSchema` in botMessage.ts — plus
+          // `fileId`, which resolves to a server-side access URL below so the
+          // platform helpers downstream only see one shape.
+          attachments: z
+            .array(
+              z.object({
+                data: z.string().optional(),
+                fetchUrl: z.string().url().optional(),
+                fileId: z.string().optional(),
+                mimeType: z.string().optional(),
+                name: z.string().optional(),
+                type: z.enum(['image', 'file', 'video', 'audio']),
+              }),
+            )
+            .max(10)
+            .optional(),
+          content: z.string().trim().max(MESSENGER_PUSH_CONTENT_MAX_LENGTH).optional(),
+          platform: z.enum(MESSENGER_PUSH_PLATFORMS),
+          tenantId: z.string().optional(),
+        })
+        .refine((value) => !!value.content || !!value.attachments?.length, {
+          message: 'Either content or attachments is required',
+        }),
     )
     .mutation(async ({ input, ctx }) => {
+      let attachments = input.attachments;
+
+      // Resolve `fileId` references server-side: a client-supplied storage URL
+      // is a presigned snapshot that expires (typically 2h), so by the time
+      // the platform sender fetches it the download can 403 and the attachment
+      // silently degrades to a text-only message. `getFileAccessUrl` returns
+      // the stable anonymous file-proxy URL in production (storage URL in
+      // dev), and the ownership-scoped lookup keeps callers from attaching
+      // other users' files.
+      if (attachments?.some((attachment) => attachment.fileId)) {
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+        const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
+
+        attachments = await Promise.all(
+          attachments.map(async (attachment) => {
+            if (!attachment.fileId) return attachment;
+
+            const file = await fileModel.findById(attachment.fileId);
+            if (!file) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+            }
+
+            return {
+              fetchUrl: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+              mimeType: attachment.mimeType ?? file.fileType,
+              name: attachment.name ?? file.name,
+              type: attachment.type,
+            };
+          }),
+        );
+      }
+
       return sendMessengerPush({
+        attachments,
         content: input.content,
         platform: input.platform,
         serverDB: ctx.serverDB,
