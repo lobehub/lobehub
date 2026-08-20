@@ -35,13 +35,21 @@ vi.mock('@/database/schemas', () => ({
 vi.mock('@/utils/rbac', () => ({ getScopePermissions: () => [] }));
 // Values a caller could not have supplied by accident, so the assertions below
 // prove the service reads these constants rather than literals of its own.
+//
+// Mocked on `@lobechat/business-const`, which is where they are declared —
+// mocking them onto `@/const/settings` instead made these tests pass while the
+// build failed on `Export DEFAULT_PROVIDER doesn't exist in target module`:
+// that barrel re-exports `DEFAULT_MODEL` only, and a factory mock happily
+// invents any key asked of it.
 const DEFAULT_MODEL = 'default-model-from-const';
 const DEFAULT_PROVIDER = 'default-provider-from-const';
 
-vi.mock('@/const/settings', () => ({
-  DEFAULT_AGENT_CHAT_CONFIG: {},
+vi.mock('@lobechat/business-const', () => ({
   DEFAULT_MODEL: 'default-model-from-const',
   DEFAULT_PROVIDER: 'default-provider-from-const',
+}));
+vi.mock('@/const/settings', () => ({
+  DEFAULT_AGENT_CHAT_CONFIG: {},
   DEFAULT_SYSTEM_AGENT_CONFIG: {},
 }));
 vi.mock('@lobechat/model-runtime', () => ({ mergeModelRuntimeHooks: vi.fn() }));

@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { mergeModelRuntimeHooks } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
@@ -5,12 +6,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
-import {
-  DEFAULT_AGENT_CHAT_CONFIG,
-  DEFAULT_MODEL,
-  DEFAULT_PROVIDER,
-  DEFAULT_SYSTEM_AGENT_CONFIG,
-} from '@/const/settings';
+import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
 import { UserModel } from '@/database/models/user';
 import { agents, agentsToSessions, aiModels, aiProviders } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
