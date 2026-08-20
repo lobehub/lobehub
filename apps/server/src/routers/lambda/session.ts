@@ -1,6 +1,8 @@
 import { TRPCError } from '@trpc/server';
+import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
@@ -8,7 +10,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { SessionGroupModel } from '@/database/models/sessionGroup';
-import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
+import { agentsToSessions, insertAgentSchema, insertSessionSchema } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -221,7 +223,34 @@ export const sessionRouter = router({
         }
       }
 
-      const { orphanedAgentIds, result } = await ctx.sessionModel.delete(input.id);
+      const { orphanedAgentIds, result } = await ctx.serverDB.transaction(async (trx) => {
+        const transactionSessionModel = new SessionModel(
+          trx,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        const currentSession = await transactionSessionModel.findByIdOrSlug(input.id);
+        const agentId = currentSession?.agent?.id;
+
+        if (agentId) {
+          const [otherLink] = await trx
+            .select({ agentId: agentsToSessions.agentId })
+            .from(agentsToSessions)
+            .where(
+              and(
+                eq(agentsToSessions.agentId, agentId),
+                ne(agentsToSessions.sessionId, currentSession.id),
+              ),
+            )
+            .limit(1);
+
+          if (!otherLink) {
+            await assertAgentDeletionAllowed({ agentId, executor: trx, userId: ctx.userId });
+          }
+        }
+
+        return transactionSessionModel.delete(input.id);
+      });
 
       // Mirror `agent.removeAgent`: orphan-deleted shared agents must not
       // leave dangling resource_permissions rows behind.

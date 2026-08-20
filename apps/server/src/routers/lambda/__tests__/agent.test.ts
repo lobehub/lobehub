@@ -2,8 +2,10 @@
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { INBOX_SESSION_ID } from '@/const/session';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
@@ -32,6 +34,10 @@ import { KnowledgeType } from '@/types/knowledgeBase';
 import { agentRouter } from '../agent';
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+vi.mock('@/business/server/agent-share/assertAgentOwnershipTransferAllowed', () => ({
+  assertAgentDeletionAllowed: vi.fn(),
+  assertAgentOwnershipTransferAllowed: vi.fn(),
+}));
 vi.mock('../_helpers/workspaceAgentGuard', () => ({
   getWorkspaceAgentParentGroupIds: vi.fn().mockResolvedValue([]),
 }));
@@ -153,9 +159,11 @@ describe('agentRouter', () => {
     agentModelMock = {
       createAgentFiles: vi.fn(),
       createAgentKnowledgeBase: vi.fn(),
+      delete: vi.fn(),
       deleteAgentFile: vi.fn(),
       deleteAgentKnowledgeBase: vi.fn(),
       duplicate: vi.fn(),
+      existsById: vi.fn().mockResolvedValue(true),
       existsOwnedById: vi.fn().mockResolvedValue(false),
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
@@ -245,6 +253,24 @@ describe('agentRouter', () => {
 
       expect(agentModelMock.findBySessionId).toHaveBeenCalledWith('session1');
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
+    });
+  });
+
+  describe('removeAgent', () => {
+    it('holds the owner-scoped deletion guard through the agent delete transaction', async () => {
+      const trx = { execute: vi.fn() };
+      const transaction = vi.fn(async (callback) => callback(trx));
+      vi.mocked(getServerDB).mockResolvedValueOnce({ transaction } as never);
+
+      const caller = agentRouter.createCaller(mockCtx);
+      await caller.removeAgent({ agentId: 'agent-1' });
+
+      expect(assertAgentDeletionAllowed).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        executor: trx,
+        userId,
+      });
+      expect(agentModelMock.delete).toHaveBeenCalledWith('agent-1');
     });
   });
 

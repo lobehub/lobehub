@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo } from 'react';
 
-import AgentHome from '@/features/AgentHome';
+import ReadOnlyAgentHome from '@/features/AgentHome/ReadOnly';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -59,7 +59,7 @@ const ReadOnlyConversationArea = memo<ReadOnlyConversationAreaProps>(
           <ChatList
             disableActionsBar
             headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
-            welcome={<AgentHome readOnly />}
+            welcome={<ReadOnlyAgentHome />}
           />
         </Flexbox>
       </ConversationProvider>

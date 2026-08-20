@@ -18,6 +18,7 @@ import {
   upsertPluginMode,
 } from '@lobechat/types';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
 import { DiscoverService } from '@/server/services/discover';
@@ -35,12 +36,13 @@ const MAX_SEARCH_AGENT_LIMIT = 20;
 
 export const agentManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    if (!context.userId || !context.serverDB) {
+    const { serverDB, userId } = context;
+    if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Agent Management execution');
     }
 
-    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
+    const agentModel = new AgentModel(serverDB, userId, context.workspaceId);
+    const pluginModel = new PluginModel(serverDB, userId, context.workspaceId);
     const discoverService = new DiscoverService();
 
     return {
@@ -148,7 +150,17 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
       deleteAgent: async (params: DeleteAgentParams): Promise<ToolExecutionResult> => {
         try {
-          await agentModel.delete(params.agentId);
+          await serverDB.transaction(async (trx) => {
+            const transactionAgentModel = new AgentModel(trx, userId, context.workspaceId);
+            if (await transactionAgentModel.existsById(params.agentId)) {
+              await assertAgentDeletionAllowed({
+                agentId: params.agentId,
+                executor: trx,
+                userId,
+              });
+            }
+            await transactionAgentModel.delete(params.agentId);
+          });
           return {
             content: `Successfully deleted agent ${params.agentId}`,
             state: { agentId: params.agentId, success: true },
