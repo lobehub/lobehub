@@ -56,6 +56,32 @@ const diagnoseMissingSearch = (content: string, search: string): string | undefi
   return 'None of it appears in the file. The content may have changed since you last read it, or this may be the wrong file — read the file before retrying.';
 };
 
+/**
+ * Line numbers (1-indexed) of every non-overlapping occurrence of `search`,
+ * capped — the message only needs enough of them to be actionable.
+ */
+const findOccurrenceLines = (content: string, search: string, cap: number): number[] => {
+  const lines: number[] = [];
+  let from = 0;
+  let consumedLines = 0;
+  let consumedUpTo = 0;
+
+  while (lines.length < cap) {
+    const index = content.indexOf(search, from);
+    if (index === -1) break;
+
+    // Count newlines incrementally rather than slicing from 0 each time, so a
+    // string that occurs thousands of times stays linear in the file size.
+    for (let i = consumedUpTo; i < index; i++) if (content[i] === '\n') consumedLines++;
+    consumedUpTo = index;
+
+    lines.push(consumedLines + 1);
+    from = index + search.length;
+  }
+
+  return lines;
+};
+
 export async function editLocalFile({
   file_path: rawPath,
   old_string,
@@ -93,6 +119,27 @@ export async function editLocalFile({
         replacements: 0,
         success: false,
       };
+    }
+
+    // A single-occurrence edit whose old_string matches in more than one place
+    // is ambiguous, and picking the first match silently resolves that
+    // ambiguity in a way the caller never sees: the tool reports "Successfully
+    // replaced 1 occurrence(s)" while the edit may well have landed on the
+    // wrong one. Refuse instead, and say what would make the call unambiguous.
+    if (!replace_all) {
+      const occurrenceLines = findOccurrenceLines(content, search, 6);
+      if (occurrenceLines.length > 1) {
+        const shown = occurrenceLines
+          .slice(0, 5)
+          .map((n) => `L${n}`)
+          .join(', ');
+        const more = occurrenceLines.length > 5 ? ', …' : '';
+        return {
+          error: `The specified old_string is not unique in ${filePath} — it matches at ${shown}${more}. Include enough surrounding context to identify the one you mean, or pass replace_all: true to change every occurrence.`,
+          replacements: 0,
+          success: false,
+        };
+      }
     }
 
     let newContent: string;
