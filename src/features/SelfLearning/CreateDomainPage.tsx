@@ -534,6 +534,10 @@ const CreateDomainPage = memo(() => {
                   <TextArea
                     autoSize={{ maxRows: 8, minRows: 2 }}
                     className={styles.rationale}
+                    // An in-flight adjustment answers from the draft as it was when the
+                    // request left, so edits made meanwhile would be silently overwritten
+                    // when the response merges back.
+                    disabled={refiningTarget === 'rationale'}
                     placeholder={t('create.field.rationalePlaceholder')}
                     value={draft.rationale ?? ''}
                     variant={'borderless'}
