@@ -103,6 +103,11 @@ export class ClientToolTransport implements ToolTransport {
             toolOperationId,
           });
 
+      // The row exists now, but the executor only learns its id if this run
+      // settles. Report it so an abort mid-run settles this row instead of
+      // inserting a second one for the same tool_call_id.
+      context.onToolMessageCreated?.(toolMessageId);
+
       if (store.operations[toolOperationId]?.abortController.signal.aborted) {
         return this.createInterruptedExecution(toolMessageId);
       }

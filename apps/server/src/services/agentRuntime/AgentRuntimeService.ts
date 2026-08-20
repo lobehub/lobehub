@@ -852,6 +852,10 @@ export class AgentRuntimeService {
     // Hoisted so the shared `finally` can stop it on every exit path — an
     // orphaned interval would keep polling Redis for a step that is long gone.
     let stepAbortPoll: ReturnType<typeof setTimeout> | undefined;
+    // Clearing the timeout is not enough: a poll already awaiting the state read
+    // would schedule the next one after the step is gone, leaking a loop that
+    // re-reads the store forever for a finished operation.
+    let stepAbortPollStopped = false;
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -1057,7 +1061,7 @@ export class AgentRuntimeService {
             log('[%s][%d] Abort poll failed: %O', operationId, stepIndex, error);
           }
 
-          if (stepAbortController.signal.aborted) return;
+          if (stepAbortPollStopped || stepAbortController.signal.aborted) return;
 
           stepAbortPoll = setTimeout(
             pollForAbort,
@@ -1624,6 +1628,7 @@ export class AgentRuntimeService {
       throw error;
     } finally {
       invokeAgentSpan.end();
+      stepAbortPollStopped = true;
       if (stepAbortPoll) clearTimeout(stepAbortPoll);
       stopStepLockHeartbeat();
       await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);

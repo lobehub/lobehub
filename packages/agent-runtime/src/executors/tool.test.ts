@@ -424,6 +424,39 @@ describe('tool executors', () => {
     );
   });
 
+  it('settles the row the transport already created when a client tool is aborted', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    // The client transport persists its row before executing, and only surfaces
+    // the id through a settled run — which an abort never gives us.
+    runTool.mockImplementationOnce(
+      (_tool: any, context: any) =>
+        new Promise(() => {
+          context.onToolMessageCreated?.('optimistic-row');
+          // Abort only after the row exists — aborting earlier is a different
+          // case (nothing was created yet, so inserting a row IS correct).
+          controller.abort();
+        }),
+    );
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    await callTool(abortingHost)(instruction, createState());
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith('optimistic-row', {
+      content: 'Tool execution was aborted by user.',
+    });
+  });
+
   it('terminates removed client sub-agent stop states like other stop results', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
@@ -782,6 +815,38 @@ describe('tool executors', () => {
     const settledIds = createToolMessage.mock.calls.map((call: any) => call[0].tool_call_id);
     expect(settledIds).toEqual([a.id, b.id]);
     expect(result.newState.messages).toHaveLength(2);
+  });
+
+  it('settles approved client rows in a mixed batch rather than duplicating them', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const serverCall = createToolCall('server-call');
+    const clientCall = createToolCall('client-call', 'client-tool');
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: {
+        // An approved batch resume carries a pending row for EVERY call,
+        // including the client ones that never enter `toolsToExecute`.
+        existingToolMessageIds: { 'client-call': 'client-row', 'server-call': 'server-row' },
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [serverCall, clientCall],
+      },
+      type: 'call_tools_batch',
+    };
+
+    await callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolIntervention).toHaveBeenCalledWith('client-row', { status: 'aborted' });
+    expect(updateToolIntervention).toHaveBeenCalledWith('server-row', { status: 'aborted' });
   });
 
   describe('parallel batch parent chain', () => {
