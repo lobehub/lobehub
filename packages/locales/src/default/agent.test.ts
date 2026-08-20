@@ -4,8 +4,9 @@ import agent from './agent';
 
 describe('agent share copy', () => {
   it('exposes Agent Share budget copy through the shared locale pipeline', () => {
-    expect(agent['share.budget.title']).toBe('Share Budget');
+    expect(agent['share.budget.title']).toBe('Shared Usage');
     expect(agent['share.budget.confirm.content']).toContain('{{amount}}');
+    expect(agent['share.budget.confirm.rules.source']).not.toContain('subscription');
   });
 
   it('describes shared links as view-only until visitor conversations launch', () => {
