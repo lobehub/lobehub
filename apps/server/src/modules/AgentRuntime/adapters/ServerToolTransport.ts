@@ -353,6 +353,14 @@ export class ServerToolTransport implements ToolTransport {
     const { hookDispatcher, operationId, stepIndex, userId } = this.ctx;
     if (!hookDispatcher) return;
 
+    // A tool that outlives an abort still finishes in the background — we cannot
+    // recall work already handed to a process. Its hook must not be dispatched
+    // though: by now `executeStep` has emitted the terminal hooks and
+    // `CompletionLifecycle` has unregistered this operation, so a local consumer
+    // would silently drop it and a webhook consumer would receive `afterToolCall`
+    // AFTER `onComplete`.
+    if (context.abortSignal?.aborted) return;
+
     hookDispatcher
       .dispatch(
         operationId,

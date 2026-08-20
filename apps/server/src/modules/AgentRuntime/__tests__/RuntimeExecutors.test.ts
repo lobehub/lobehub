@@ -5740,6 +5740,42 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
       });
 
+      it('should not dispatch afterToolCall for a tool that outlived an abort', async () => {
+        // The tool keeps running after the abort — work already handed to a
+        // process cannot be recalled. Its hook must still be suppressed: by the
+        // time it lands, `executeStep` has emitted the terminal hooks and the
+        // operation is unregistered, so a local consumer drops it silently and a
+        // webhook consumer would see `afterToolCall` after `onComplete`.
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+
+        const controller = new AbortController();
+        mockToolExecutionService.executeTool.mockImplementationOnce(async () => {
+          controller.abort();
+          return { content: 'late result', success: true };
+        });
+
+        const ctxWithHooks = {
+          ...ctx,
+          abortSignal: controller.signal,
+          hookDispatcher: mockDispatcher as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState()).catch(
+          () => undefined,
+        );
+
+        expect(mockDispatcher.dispatch).not.toHaveBeenCalledWith(
+          expect.anything(),
+          'afterToolCall',
+          expect.anything(),
+          expect.anything(),
+        );
+      });
+
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
