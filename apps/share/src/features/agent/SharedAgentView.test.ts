@@ -9,6 +9,6 @@ describe('SharedAgentView client-only fallback', () => {
   it('keeps server-provided agent metadata visible while the visitor chunk loads', () => {
     expect(source).toContain('<ShareHero');
     expect(source).toContain('sharedAgentDisplayName(data.agentMeta)');
-    expect(source).toContain('<SharedAgentBody fallback={hero} />');
+    expect(source).toContain('<SharedAgentBody data={data} fallback={hero} />');
   });
 });

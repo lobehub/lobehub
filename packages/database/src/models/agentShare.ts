@@ -75,36 +75,54 @@ export class AgentShareModel {
         ),
     );
 
-  private findOwnedAgent = async (agentId: string) => {
-    const [agent] = await this.db
-      .select({ id: agents.id })
-      .from(agents)
-      .where(
-        and(eq(agents.id, agentId), eq(agents.userId, this.userId), isNull(agents.workspaceId)),
-      )
-      .limit(1);
+  /** Serialize share writes with scope transfers by locking the Agent row first. */
+  private withOwnedPersonalAgentLock = async <T>(
+    agentId: string,
+    mutation: (tx: LobeChatDatabase) => Promise<T>,
+  ): Promise<T | null> =>
+    this.db.transaction(async (transaction) => {
+      const tx = transaction as LobeChatDatabase;
+      const [agent] = await tx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(
+          and(eq(agents.id, agentId), eq(agents.userId, this.userId), isNull(agents.workspaceId)),
+        )
+        .for('update');
 
-    return agent ?? null;
-  };
+      if (!agent) return null;
+      return mutation(tx);
+    });
 
   /** Create a private share by default, or return the existing share for the agent. */
   create = async (agentId: string, visibility: ShareVisibility = 'private') => {
-    const agent = await this.findOwnedAgent(agentId);
+    const share = await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const [created] = await tx
+        .insert(agentShares)
+        .values({ agentId, shareConfig: DEFAULT_AGENT_SHARE_CONFIG, visibility })
+        .onConflictDoNothing({ target: agentShares.agentId })
+        .returning();
 
-    if (!agent) {
+      if (created) return created;
+
+      const [existing] = await tx
+        .select()
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId))
+        .limit(1);
+      return existing
+        ? { ...existing, shareConfig: normalizeAgentShareConfig(existing.shareConfig) }
+        : null;
+    });
+
+    if (!share) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Agent sharing is only available to personal agent owners',
       });
     }
 
-    const [created] = await this.db
-      .insert(agentShares)
-      .values({ agentId, shareConfig: DEFAULT_AGENT_SHARE_CONFIG, visibility })
-      .onConflictDoNothing({ target: agentShares.agentId })
-      .returning();
-
-    return created ?? this.getByAgentId(agentId);
+    return share;
   };
 
   /** Get a share by agent ID for its owner. */
@@ -121,41 +139,44 @@ export class AgentShareModel {
   };
 
   /** Replace client-owned fields while preserving platform and legacy JSON keys. */
-  updateConfig = async (agentId: string, config: AgentShareConfig) => {
-    const [updated] = await this.db
-      .update(agentShares)
-      .set({
-        shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(config)}::jsonb`,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(agentShares.agentId, agentId), this.ownership()))
-      .returning();
+  updateConfig = async (agentId: string, config: AgentShareConfig) =>
+    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const [updated] = await tx
+        .update(agentShares)
+        .set({
+          shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(config)}::jsonb`,
+          updatedAt: new Date(),
+        })
+        .where(eq(agentShares.agentId, agentId))
+        .returning();
 
-    return updated
-      ? { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) }
-      : null;
-  };
+      return updated
+        ? { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) }
+        : null;
+    });
 
   /** Update share visibility for a personally owned agent. */
-  updateVisibility = async (agentId: string, visibility: ShareVisibility) => {
-    const [updated] = await this.db
-      .update(agentShares)
-      .set({ updatedAt: new Date(), visibility })
-      .where(and(eq(agentShares.agentId, agentId), this.ownership()))
-      .returning();
+  updateVisibility = async (agentId: string, visibility: ShareVisibility) =>
+    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const [updated] = await tx
+        .update(agentShares)
+        .set({ updatedAt: new Date(), visibility })
+        .where(eq(agentShares.agentId, agentId))
+        .returning();
 
-    return updated ?? null;
-  };
+      return updated ?? null;
+    });
 
   /** Disable sharing by deleting the agent's share record. */
-  deleteByAgentId = async (agentId: string) => {
-    const [deleted] = await this.db
-      .delete(agentShares)
-      .where(and(eq(agentShares.agentId, agentId), this.ownership()))
-      .returning();
+  deleteByAgentId = async (agentId: string) =>
+    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const [deleted] = await tx
+        .delete(agentShares)
+        .where(eq(agentShares.agentId, agentId))
+        .returning();
 
-    return deleted ?? null;
-  };
+      return deleted ?? null;
+    });
 
   /** Resolve the public metadata required by an agent share page. */
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {

@@ -53,6 +53,11 @@ export interface ProjectWorkInput {
   workId: string;
 }
 
+export type ProjectCoordinatorDeletionGuard = (params: {
+  agentId: string;
+  executor: LobeChatDatabase;
+}) => Promise<void>;
+
 export class ProjectModel {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -114,7 +119,7 @@ export class ProjectModel {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string, assertCoordinatorDeletionAllowed?: ProjectCoordinatorDeletionGuard) {
     return this.db.transaction(async (tx) => {
       const [project] = await tx
         .select({ coordinatorAgentId: projects.coordinatorAgentId })
@@ -122,6 +127,11 @@ export class ProjectModel {
         .where(and(eq(projects.id, id), this.manageable()))
         .limit(1);
       if (!project) return null;
+
+      await assertCoordinatorDeletionAllowed?.({
+        agentId: project.coordinatorAgentId,
+        executor: tx as LobeChatDatabase,
+      });
 
       const [deleted] = await tx
         .delete(projects)

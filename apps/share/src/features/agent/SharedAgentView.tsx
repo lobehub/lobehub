@@ -37,7 +37,7 @@ const SharedAgentView = memo(() => {
       errorResource="agent"
       loading={!error && shouldShowSharedAgentLoader({ hasData: Boolean(data), isLoading })}
     >
-      <SharedAgentBody fallback={hero} />
+      {data ? <SharedAgentBody data={data} fallback={hero} /> : null}
     </ShareShell>
   );
 });
