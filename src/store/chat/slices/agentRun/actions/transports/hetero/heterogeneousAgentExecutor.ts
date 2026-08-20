@@ -1818,7 +1818,7 @@ export const executeHeterogeneousAgent = async (
 
   const providerBindingActive = heterogeneousProvider.authMode === 'api';
   if (providerBindingActive) {
-    if (!labPreferSelectors.enableClaudeCodeApiMode(useUserStore.getState())) {
+    if (!labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())) {
       await persistTerminalError(
         toHeterogeneousAgentMessageError(
           new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),

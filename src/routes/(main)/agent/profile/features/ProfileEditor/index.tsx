@@ -117,7 +117,7 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
+  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   const apiModeAvailable =
     isDesktop &&
     !!heterogeneousProvider &&

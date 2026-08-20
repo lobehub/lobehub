@@ -1,10 +1,13 @@
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { prepareHostedProviderBinding } from './providerBindingHost';
+import {
+  gcHostedProviderBindingProfiles,
+  prepareHostedProviderBinding,
+} from './providerBindingHost';
 import type { HeterogeneousAgentDriver } from './types';
 
 const roots: string[] = [];
@@ -78,5 +81,54 @@ describe('prepareHostedProviderBinding', () => {
     await expect(
       stat(path.join(params.appStoragePath, 'heteroAgent', 'runs', params.sessionId)),
     ).rejects.toThrow();
+  });
+});
+
+describe('gcHostedProviderBindingProfiles', () => {
+  const driver: HeterogeneousAgentDriver = {
+    buildSpawnPlan: async () => ({ args: [] }),
+    prepareProviderBinding: ({ profileDir }) => ({
+      args: [],
+      env: { CODEX_HOME: profileDir },
+      profileFiles: [{ content: 'state', path: 'config.toml' }],
+    }),
+  };
+
+  it('records last use on prepare and only removes profiles idle beyond the max age', async () => {
+    const params = await makeParams(driver);
+    const binding = await prepareHostedProviderBinding(params);
+    const marker = path.join(binding.profileDir, '.lobehub-last-used');
+    await expect(stat(marker)).resolves.toBeDefined();
+
+    // A freshly used profile survives the sweep.
+    const kept = await gcHostedProviderBindingProfiles(params.appStoragePath);
+    expect(kept).toEqual([]);
+    await expect(stat(binding.profileDir)).resolves.toBeDefined();
+
+    // The same profile, idle beyond the max age, is collected.
+    const staleTime = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await utimes(marker, staleTime, staleTime);
+    const removed = await gcHostedProviderBindingProfiles(params.appStoragePath);
+    expect(removed).toEqual([binding.profileDir]);
+    await expect(stat(binding.profileDir)).rejects.toThrow();
+  });
+
+  it('collects pre-marker profiles by directory mtime so legacy orphans are not immortal', async () => {
+    const params = await makeParams(driver);
+    const binding = await prepareHostedProviderBinding(params);
+    const { rm } = await import('node:fs/promises');
+    await rm(path.join(binding.profileDir, '.lobehub-last-used'), { force: true });
+
+    const staleTime = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await utimes(binding.profileDir, staleTime, staleTime);
+
+    const removed = await gcHostedProviderBindingProfiles(params.appStoragePath);
+    expect(removed).toEqual([binding.profileDir]);
+  });
+
+  it('returns nothing when no binding root exists yet', async () => {
+    const appStoragePath = await mkdtemp(path.join(tmpdir(), 'provider-binding-gc-'));
+    roots.push(appStoragePath);
+    await expect(gcHostedProviderBindingProfiles(appStoragePath)).resolves.toEqual([]);
   });
 });

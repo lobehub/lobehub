@@ -101,7 +101,10 @@ import {
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
-import { prepareHostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
+import {
+  gcHostedProviderBindingProfiles,
+  prepareHostedProviderBinding,
+} from '@/modules/heterogeneousAgent/providerBindingHost';
 import { getProviderBindingRuntime } from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
   HeterogeneousAgentBuildPlan,
@@ -1172,6 +1175,9 @@ export default class HeterogeneousAgentCtr {
         agentType,
         apiConfig: params.providerBinding.apiConfig,
         checkCredentials: true,
+        // Server-resolved list — makes main authoritative on model
+        // availability even when the renderer's store state is stale.
+        enabledModels: bindingRuntime.enabledModels,
         providerEnabled: bindingRuntime.enabled,
         runtimeConfig: bindingRuntime.runtimeConfig,
       });
@@ -1189,6 +1195,16 @@ export default class HeterogeneousAgentCtr {
         resolution: bindingResult.resolution,
         sessionId,
       });
+
+      // Opportunistic sweep of long-unused binding profiles (provider deleted,
+      // endpoint changed, identity version bumped). The profile in use was just
+      // touched by prepare, so it is never a candidate. Never blocks the run.
+      gcHostedProviderBindingProfiles(this.app.appStoragePath)
+        .then((removedProfiles) => {
+          if (removedProfiles.length > 0)
+            logger.info('Removed stale provider-binding profiles:', removedProfiles);
+        })
+        .catch((error) => logger.warn('Provider-binding profile GC failed:', error));
     }
 
     const resumeSessionId =

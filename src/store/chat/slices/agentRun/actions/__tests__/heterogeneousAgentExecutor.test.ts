@@ -665,7 +665,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       useUserStore.setState((state) => ({
         preference: {
           ...state.preference,
-          lab: { ...state.preference.lab, enableClaudeCodeApiMode: enabled },
+          lab: { ...state.preference.lab, enableAgentProviderBinding: enabled },
         },
       }));
     };

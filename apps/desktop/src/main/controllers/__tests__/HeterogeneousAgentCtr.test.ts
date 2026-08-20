@@ -1662,6 +1662,30 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('rejects a binding whose model the server reports as disabled, even when the renderer sent it', async () => {
+      getProviderBindingRuntimeMock.mockResolvedValue({
+        enabled: true,
+        enabledModels: [{ id: 'another-model', providerId: 'openai', type: 'chat' }],
+        runtimeConfig: {
+          config: { enableResponseApi: true },
+          keyVaults: { apiKey: 'provider-secret' },
+          settings: { sdkType: 'openai', supportResponsesApi: true },
+        },
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      await expect(
+        ctr.startSession({
+          agentType: 'codex',
+          command: 'codex',
+          providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        }),
+      ).rejects.toThrow('Model "openai/gpt-test" is disabled or unavailable.');
+    });
+
     it('cleans provider-binding run state when CLI preflight fails', async () => {
       const detect = vi.fn().mockResolvedValue({ available: false });
       const ctr = new HeterogeneousAgentCtr({

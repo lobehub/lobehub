@@ -1778,7 +1778,7 @@ describe('Generation Actions', () => {
       useUserStore.setState((state) => ({
         preference: {
           ...state.preference,
-          lab: { ...state.preference.lab, enableClaudeCodeApiMode: true },
+          lab: { ...state.preference.lab, enableAgentProviderBinding: true },
         },
       }));
       await setupHeteroChatStore({

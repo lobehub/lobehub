@@ -43,16 +43,18 @@ export const callLambdaMutation = async <T>(
   { accessToken, serverUrl }: LambdaCallContext,
   procedure: string,
   input: unknown,
-  workspaceId?: string,
 ): Promise<T> => {
   const base = serverUrl.replace(/\/$/, '');
 
+  // Deliberately no workspace header: every Desktop-main lambda call runs
+  // under the personal OIDC identity. Provider binding is personal-agent /
+  // local-execution only (workspace agents never spawn in-process — see
+  // `selectRuntimeType`), so a workspace scope must never leak in here.
   const response = await fetch(`${base}/trpc/lambda/${procedure}`, {
     body: JSON.stringify(superjson.serialize(input)),
     headers: {
       'Content-Type': 'application/json',
       'Oidc-Auth': accessToken,
-      ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
     },
     method: 'POST',
   });

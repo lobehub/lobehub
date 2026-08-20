@@ -197,7 +197,11 @@ export const aiProviderRouter = router({
   /**
    * Narrow credential-bearing endpoint for Desktop-local heterogeneous-agent
    * bindings. Desktop main calls this with the current OIDC identity and no
-   * workspace scope; renderer IPC receives only the provider/model reference.
+   * workspace scope — provider binding is personal-agent/local-execution only
+   * (workspace agents never spawn in-process, see `selectRuntimeType`) — and
+   * renderer IPC receives only the provider/model reference. `enabledModels`
+   * makes Desktop main the authority on model availability instead of the
+   * renderer's possibly stale store state.
    */
   getProviderBindingRuntime: aiProviderProcedure
     .input(z.object({ id: z.string() }))
@@ -207,15 +211,19 @@ export const aiProviderRouter = router({
       );
       const enabled = state.enabledAiProviders.some(({ id }) => id === input.id);
       const runtimeConfig = state.runtimeConfig[input.id];
+      const enabledModels = state.enabledAiModels
+        .filter((model) => model.providerId === input.id)
+        .map(({ id, providerId, type }) => ({ id, providerId, type }));
 
       if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
         return {
           enabled,
+          enabledModels,
           runtimeConfig: runtimeConfig ? { ...runtimeConfig, keyVaults: {} } : undefined,
         };
       }
 
-      return { enabled, runtimeConfig };
+      return { enabled, enabledModels, runtimeConfig };
     }),
 
   // Provider rows carry workspace-shared credentials and the model-layer where is

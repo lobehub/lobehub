@@ -102,9 +102,9 @@ const HeterogeneousChatInput = memo(() => {
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const providerType = heterogeneousProvider?.type;
-  const enableClaudeCodeApiMode = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
+  const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   const isApiAuth = heterogeneousProvider?.authMode === 'api';
-  const isApiModeActive = isApiAuth && enableClaudeCodeApiMode;
+  const isApiModeActive = isApiAuth && enableAgentProviderBinding;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
@@ -127,7 +127,7 @@ const HeterogeneousChatInput = memo(() => {
       providerType,
     });
   const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
-  const apiModeLabDisabled = isApiAuth && !enableClaudeCodeApiMode;
+  const apiModeLabDisabled = isApiAuth && !enableAgentProviderBinding;
   const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
   const isLocalApiMode = isApiModeActive && executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =

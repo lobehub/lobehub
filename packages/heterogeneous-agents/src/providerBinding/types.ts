@@ -12,6 +12,12 @@ export interface HeterogeneousProviderBindingCapability {
 
 export interface HeterogeneousProviderBindingRuntime {
   enabled: boolean;
+  /**
+   * Enabled models of the selected provider under the server-resolved scope.
+   * Lets Desktop main validate the bound model authoritatively instead of
+   * trusting the renderer's (possibly stale) store state.
+   */
+  enabledModels?: EnabledProviderBindingModelRef[];
   runtimeConfig?: AiProviderRuntimeConfig;
 }
 

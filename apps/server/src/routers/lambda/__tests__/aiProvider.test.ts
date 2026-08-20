@@ -305,8 +305,35 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.getProviderBindingRuntime({ id: mockProviderId });
 
-      expect(result).toEqual({ enabled: true, runtimeConfig: selectedRuntime });
+      expect(result).toEqual({ enabled: true, enabledModels: [], runtimeConfig: selectedRuntime });
       expect(JSON.stringify(result)).not.toContain('other-secret');
+    });
+
+    it('returns only the selected provider enabled models so Desktop main can validate the bound model', async () => {
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi.fn().mockResolvedValue({
+        ...mockRuntimeState,
+        enabledAiModels: [
+          { abilities: {}, id: 'claude-test', providerId: mockProviderId, type: 'chat' },
+          { abilities: {}, id: 'embed-test', providerId: mockProviderId, type: 'embedding' },
+          { abilities: {}, id: 'gpt-test', providerId: 'other', type: 'chat' },
+        ],
+        enabledAiProviders: [{ id: mockProviderId, source: 'custom' }],
+        runtimeConfig: {
+          [mockProviderId]: {
+            config: {},
+            keyVaults: { apiKey: 'selected-secret' },
+            settings: { sdkType: 'anthropic' as const },
+          },
+        },
+      });
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getProviderBindingRuntime({ id: mockProviderId });
+
+      expect(result.enabledModels).toEqual([
+        { id: 'claude-test', providerId: mockProviderId, type: 'chat' },
+        { id: 'embed-test', providerId: mockProviderId, type: 'embedding' },
+      ]);
     });
   });
 
