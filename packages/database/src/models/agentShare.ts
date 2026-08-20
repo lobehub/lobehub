@@ -20,6 +20,11 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   maxTurnsPerTopic: 20,
 } satisfies AgentShareConfig;
 
+interface LegacyAgentShareConfig extends AgentShareConfig {
+  /** @deprecated Renamed to maxTopicsPerVisitor. */
+  maxGuestTopics?: number;
+}
+
 /** Fill fields missing from rows created before the required v1 limits were introduced. */
 const normalizeAgentShareConfig = (config: AgentShareConfig | null): AgentShareConfig => ({
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
@@ -36,7 +41,9 @@ const normalizeAgentShareConfig = (config: AgentShareConfig | null): AgentShareC
       DEFAULT_AGENT_SHARE_CONFIG.filePermissionConfig.uploadAllowed,
   },
   maxTopicsPerVisitor:
-    config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
+    config?.maxTopicsPerVisitor ??
+    (config as LegacyAgentShareConfig | null)?.maxGuestTopics ??
+    DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
   maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
 });
 
@@ -113,15 +120,20 @@ export class AgentShareModel {
     return { ...share, shareConfig: normalizeAgentShareConfig(share.shareConfig) };
   };
 
-  /** Replace the complete share configuration. */
+  /** Replace client-owned fields while preserving platform and legacy JSON keys. */
   updateConfig = async (agentId: string, config: AgentShareConfig) => {
     const [updated] = await this.db
       .update(agentShares)
-      .set({ shareConfig: config, updatedAt: new Date() })
+      .set({
+        shareConfig: sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(config)}::jsonb`,
+        updatedAt: new Date(),
+      })
       .where(and(eq(agentShares.agentId, agentId), this.ownership()))
       .returning();
 
-    return updated ?? null;
+    return updated
+      ? { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) }
+      : null;
   };
 
   /** Update share visibility for a personally owned agent. */
