@@ -27,7 +27,12 @@ export interface MachinePaymentPrice {
 export interface MachinePaymentRecordParams {
   amount: string;
   currency: string;
-  /** Method-native settlement reference taken from the receipt. */
+  /**
+   * Method-native settlement reference taken from the receipt. Unique per
+   * settlement, so it doubles as the idempotency key: the middleware calls
+   * `recordPayment` exactly once and never retries, so an implementation that
+   * needs durability must dedupe and re-drive on this value.
+   */
   reference: string;
   route: string;
   /** Payer identity asserted by the credential (`source`). */

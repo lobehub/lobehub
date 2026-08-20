@@ -99,7 +99,13 @@ const PRICES: Record<string, { amount: string; currency: string } | null> = {
   'GET /search/free': { amount: '0', currency: 'usd' },
 };
 
-const createApp = (settlements: Settlement[], recorded: MachinePaymentRecordParams[] = []) => {
+const createApp = (
+  settlements: Settlement[],
+  recorded: MachinePaymentRecordParams[] = [],
+  recordPayment: (params: MachinePaymentRecordParams) => Promise<void> = async (params) => {
+    recorded.push(params);
+  },
+) => {
   const mppx = Mppx.create({
     methods: [createTestMethod(settlements)],
     realm: 'lobehub.test',
@@ -109,9 +115,7 @@ const createApp = (settlements: Settlement[], recorded: MachinePaymentRecordPara
   const pay = machinePayment({
     methodKey: METHOD_KEY,
     mppx: mppx as any,
-    recordPayment: async (params) => {
-      recorded.push(params);
-    },
+    recordPayment,
     resolvePrice: async ({ route }) => PRICES[route] ?? null,
   });
 
@@ -365,6 +369,39 @@ describe('machinePayment', () => {
       const res = await submit('/search/boom', mint(challenge));
 
       expect(res.status).toBeGreaterThanOrEqual(500);
+    });
+  });
+
+  describe('when ledger recording fails', () => {
+    const brokenLedger = () => {
+      const seen: Settlement[] = [];
+      const app = createApp(seen, [], async () => {
+        throw new Error('ledger unavailable');
+      });
+      return { app, seen };
+    };
+
+    it('still delivers the resource the caller paid for', async () => {
+      // The credential is spent either way, so withholding delivery would make
+      // the caller pay a second time to get what they already bought.
+      const { app: broken, seen } = brokenLedger();
+      const challenge = Challenge.fromResponse(await broken.request('/search'));
+      const res = await broken.request('/search', {
+        headers: { Authorization: mint(challenge) },
+      });
+
+      expect(res.status).toBe(200);
+      expect(seen).toHaveLength(1);
+    });
+
+    it('still returns the receipt so the settlement stays provable', async () => {
+      const { app: broken } = brokenLedger();
+      const challenge = Challenge.fromResponse(await broken.request('/search'));
+      const res = await broken.request('/search', {
+        headers: { Authorization: mint(challenge) },
+      });
+
+      expect(res.headers.get('Payment-Receipt')).toBeTruthy();
     });
   });
 });
