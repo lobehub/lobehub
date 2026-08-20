@@ -377,7 +377,7 @@ export default {
   'share.popover.visibility': 'Visibility',
   'share.privacyWarning.confirm': 'Share via link',
   'share.privacyWarning.content':
-    'Anyone with the link can view this agent. Visitor conversations are not available yet. Please note:',
+    'Signed-in users with the link can view this agent. Visitor conversations are not available yet. Please note:',
   'share.privacyWarning.doNotShowAgain': 'Do not show again',
   'share.privacyWarning.items.files':
     'Agent files and knowledge bases remain private while shared links are view-only',
@@ -408,9 +408,9 @@ export default {
   'share.settings.tools.title': 'Tool Whitelist',
   'share.settingsEntry': 'Share Settings',
   'share.updateError': 'Failed to update share settings',
-  'share.visibility.link': 'Anyone with the link',
+  'share.visibility.link': 'Signed-in users with the link',
   'share.visibility.linkHint':
-    'Anyone with the link can view this agent. Visitor chat is not available yet.',
+    'Signed-in users with the link can view this agent. Visitor chat is not available yet.',
   'share.visibility.private': 'Private',
   'share.visibility.privateHint': 'Only you can access this agent for now.',
   'share.visibilityUpdated': 'Share visibility updated',

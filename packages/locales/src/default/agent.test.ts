@@ -5,8 +5,10 @@ import agent from './agent';
 describe('agent share copy', () => {
   it('describes shared links as view-only until visitor conversations launch', () => {
     expect(agent['share.privacyWarning.content']).toContain('not available yet');
+    expect(agent['share.privacyWarning.content']).toContain('Signed-in users');
     expect(agent['share.privacyWarning.items.tools']).toContain('cannot invoke');
-    expect(agent['share.visibility.linkHint']).toContain('view this agent');
+    expect(agent['share.visibility.link']).toContain('Signed-in users');
+    expect(agent['share.visibility.linkHint']).toContain('Signed-in users');
 
     expect(agent['share.settings.limits.desc']).toContain('currently view-only');
     expect(agent['share.settings.permissions.desc']).toContain('currently view-only');
