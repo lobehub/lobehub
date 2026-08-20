@@ -58,7 +58,9 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     s.updateSystemStatus,
   ]);
 
-  const [createFailed, setCreateFailed] = useState(false);
+  // Scoped to the topic that failed: the popover is reused across topics, so a
+  // sticky boolean would keep showing the error on the next one.
+  const [failedTopicId, setFailedTopicId] = useState<string>();
   const {
     data: shareInfo,
     error: loadError,
@@ -73,13 +75,15 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
   // Auto-create share record if not exists. Surface failures (e.g. a 403 from
   // the share permission gate) instead of leaving the popover on the skeleton.
   useEffect(() => {
-    if (!isLoading && !loadError && !shareInfo && activeTopicId && canShare) {
-      topicService
-        .enableSharing(activeTopicId, 'private')
-        .then(() => mutate())
-        .catch(() => setCreateFailed(true));
-    }
-  }, [isLoading, loadError, shareInfo, activeTopicId, canShare, mutate]);
+    if (isLoading || loadError || shareInfo || !activeTopicId || !canShare) return;
+    // One attempt per topic — a rerender must not retry a create we know failed.
+    if (failedTopicId === activeTopicId) return;
+
+    topicService
+      .enableSharing(activeTopicId, 'private')
+      .then(() => mutate())
+      .catch(() => setFailedTopicId(activeTopicId));
+  }, [isLoading, loadError, shareInfo, activeTopicId, canShare, failedTopicId, mutate]);
 
   const shareUrl = shareInfo?.id ? `${appOrigin}/share/t/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as Visibility) || 'private';
@@ -177,7 +181,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     );
   }
 
-  if (loadError || createFailed) {
+  if (loadError || failedTopicId === activeTopicId) {
     return (
       <Flexbox className={styles.container} gap={8}>
         <Text strong>{t('share', { ns: 'common' })}</Text>

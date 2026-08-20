@@ -2227,29 +2227,21 @@ export class AgentModel {
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
         .where(topicCondition!)
         .returning({ id: topics.id, updatedAt: topics.updatedAt });
+      const movedTopicIds = movedTopics.map((topic) => topic.id);
 
       // 6a. Topic comments denormalize the topic's workspaceId — move them
       // with the topic (or drop them when leaving workspace scope entirely),
       // otherwise workspace-filtered comment reads go stale. See the helper doc.
-      await syncTopicCommentsOnTopicTransfer(
-        trx,
-        movedTopics.map((topic) => topic.id),
-        targetWorkspaceId,
-      );
+      await syncTopicCommentsOnTopicTransfer(trx, movedTopicIds, targetWorkspaceId);
 
       // 6b. Topic-document links denormalize the topic's scope the same way —
       // move them with their topic or workspace-filtered document panels on
       // the moved topics read stale rows.
-      if (movedTopics.length > 0) {
+      if (movedTopicIds.length > 0) {
         await trx
           .update(topicDocuments)
           .set(ownershipUpdate)
-          .where(
-            inArray(
-              topicDocuments.topicId,
-              movedTopics.map((topic) => topic.id),
-            ),
-          );
+          .where(inArray(topicDocuments.topicId, movedTopicIds));
       }
 
       // 7. Message scope rewrite — fast/slow split. Rewriting a message row
@@ -2267,7 +2259,6 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
           : inArray(messages.agentId, agentIds);
-      const movedTopicIds = movedTopics.map((topic) => topic.id);
       const [{ affectedMessages }] = await trx
         .select({ affectedMessages: count() })
         .from(messages)
