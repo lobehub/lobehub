@@ -13,6 +13,7 @@ import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import { sharedRendererDefine } from '../../plugins/vite/sharedRendererConfig';
 import { shikiCdnUrl } from './app/stubs/shikiCdn';
 import { isShikiSource } from './app/stubs/shikiSource';
+import { reportStubSurfaceGaps } from './app/stubs/surface';
 import { antdStaticCssOptions, themeVarsCssOptions } from './staticCssOptions.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
@@ -91,6 +92,41 @@ const I18N_NS_PATTERNS = [
   /\bt\(\s*['"]([A-Za-z]+):/g,
 ];
 const I18N_NS_ARRAY_PATTERN = /useTranslation\(\s*\[([^\]]*)\]/g;
+
+const stubSurfaceGuard = (env: 'client' | 'ssr', stubs: Record<string, string>): Plugin => ({
+  apply: 'build',
+  applyToEnvironment: (environment) => environment.name === env,
+  buildEnd() {
+    const stubEntries = Object.entries(stubs).map(([specifier, file]) => ({
+      source: readFileSync(file, 'utf8'),
+      specifier,
+    }));
+    const files: Array<{ rel: string; source: string }> = [];
+    for (const id of this.getModuleIds()) {
+      if (!id.startsWith(repoRoot) || id.includes('/node_modules/') || id.includes('\0')) continue;
+      const file = id.split('?')[0]!;
+      if (!/\.[cm]?[jt]sx?$/.test(file)) continue;
+      const rel = path.relative(repoRoot, file);
+      if (rel.startsWith('apps/workbench/app/stubs/')) continue;
+      let source: string;
+      try {
+        source = readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+      files.push({ rel, source });
+    }
+    const lines = reportStubSurfaceGaps(files, stubEntries);
+    if (lines.length > 0) {
+      this.error(
+        `Workbench ${env} stub is missing APIs used by the module graph:\n${lines.join('\n')}\n` +
+          `Add the export/member to the matching file in app/stubs/ (empty state or reject), ` +
+          `or keep the importer off this graph.`,
+      );
+    }
+  },
+  name: `workbench-${env}-stub-surface-guard`,
+});
 
 const clientI18nNsGuard = (): Plugin => ({
   apply: 'build',
@@ -274,6 +310,8 @@ export default defineConfig({
     workbenchSsrStubs(),
     workbenchClientStubs(),
     workbenchClientShikiCdn(),
+    stubSurfaceGuard('ssr', ssrStubs),
+    stubSurfaceGuard('client', clientStubs),
     clientI18nNsGuard(),
     buildInputsManifest(),
     viteMarkdownImport(),
