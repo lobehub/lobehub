@@ -1,5 +1,5 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import { resolveChiefAgentArtwork } from '@/features/ChiefAgent/artwork';
@@ -11,21 +11,30 @@ import { useResolvedHomeAgentId } from './AgentSelect/useResolvedHomeAgentId';
 const styles = createStaticStyles(({ css }) => ({
   // Anchored below the greeting row rather than above the rail, so the agent
   // stands the same distance into the first card however the greeting wraps.
+  /**
+   * The built-in catalog is framed as a bust — the character already fills the
+   * top of its own file — so it keeps the original small, shallow placement.
+   */
+  builtinImage: css`
+    inset-block-end: -64px;
+    width: 152px;
+    height: 152px;
+  `,
+  /**
+   * A generated character is head-to-toe, so it needs room to read at all and
+   * has to sit deep enough that its legs pass behind the first card instead of
+   * standing on top of it — while keeping the head clear of the header.
+   */
+  generatedImage: css`
+    inset-block-end: -240px;
+    width: 240px;
+    height: 320px;
+  `,
   image: css`
     pointer-events: none;
 
     position: absolute;
-    inset-block-end: -64px;
     inset-inline-end: 12px;
-
-    /*
-     * Portrait-shaped, because that is what the artwork is: a full-body 3:4
-     * character letterboxed into a square box renders at two thirds the width
-     * and floats away from the card it leans on. Anchored at the bottom, so a
-     * taller frame grows upward and keeps the same dip.
-     */
-    width: 152px;
-    height: 203px;
 
     object-fit: contain;
     object-position: bottom;
@@ -54,7 +63,13 @@ const HomePortrait = memo(() => {
 
   return (
     <div className={styles.root}>
-      <img aria-hidden alt="" className={styles.image} key={hero} src={hero} />
+      <img
+        aria-hidden
+        alt=""
+        className={cx(styles.image, fullBodyArtwork ? styles.generatedImage : styles.builtinImage)}
+        key={hero}
+        src={hero}
+      />
     </div>
   );
 });

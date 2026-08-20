@@ -434,12 +434,11 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                 <AvatarSlotImage avatar={avatar} />
                 {renderRemove('avatar', !!hasStoredAvatar)}
                 <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
-                  <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
+                  <Button icon={UploadIcon} loading={uploading} style={{ flex: 1 }}>
                     {t('artworkStudio.upload')}
                   </Button>
                   <Button
                     icon={WandSparkles}
-                    size={'small'}
                     style={{ flex: 1 }}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -485,12 +484,11 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                 )}
                 {renderRemove('fullBody', !!fullBody)}
                 <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
-                  <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
+                  <Button icon={UploadIcon} loading={uploading} style={{ flex: 1 }}>
                     {t('artworkStudio.upload')}
                   </Button>
                   <Button
                     icon={WandSparkles}
-                    size={'small'}
                     style={{ flex: 1 }}
                     onClick={(event) => {
                       event.stopPropagation();
