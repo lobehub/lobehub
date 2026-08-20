@@ -32,9 +32,10 @@ import { useChatStore } from '@/store/chat';
 import { threadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { resolveConversationMode } from './conversationMode';
 import ExposeMainEditor from './ExposeMainEditor';
 import HeterogeneousChatInput from './HeterogeneousChatInput';
-import MainChatInput, { type MainChatInputProps } from './MainChatInput';
+import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
@@ -64,8 +65,6 @@ export interface ConversationAreaProps {
    * dispatchers) are suppressed — visitors have no access to those APIs.
    */
   agentShareId?: string;
-  /** Forwarded to the standard chat input, e.g. the visitor share page disables send and hides pickers. */
-  mainChatInputProps?: MainChatInputProps;
 }
 
 /**
@@ -74,13 +73,14 @@ export interface ConversationAreaProps {
  * Main conversation area component using the new ConversationStore architecture.
  * Uses ChatList from @/features/Conversation and MainChatInput for custom features.
  */
-const Conversation = memo<ConversationAreaProps>(({ agentShareId, mainChatInputProps }) => {
+const Conversation = memo<ConversationAreaProps>(({ agentShareId }) => {
   const { t } = useTranslation('chat');
   const baseContext = useAgentContext();
   const context = useMemo(
     () => (agentShareId ? { ...baseContext, agentShareId } : baseContext),
     [baseContext, agentShareId],
   );
+  const conversationMode = resolveConversationMode(agentShareId);
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
@@ -172,7 +172,7 @@ const Conversation = memo<ConversationAreaProps>(({ agentShareId, mainChatInputP
             <ChatList
               defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
               headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
-              welcome={<AgentHome />}
+              welcome={<AgentHome readOnly={conversationMode.readOnly} />}
               footerSlot={
                 isSubagentThread ? (
                   <Flexbox
@@ -198,13 +198,9 @@ const Conversation = memo<ConversationAreaProps>(({ agentShareId, mainChatInputP
           )}
         </Flexbox>
       </SplitDropZone>
-      {!isSubagentThread && !topicPending && (
+      {conversationMode.showComposer && !isSubagentThread && !topicPending && (
         <MessageForwardFooter>
-          {isHeterogeneousAgent ? (
-            <HeterogeneousChatInput />
-          ) : (
-            <MainChatInput {...mainChatInputProps} />
-          )}
+          {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
         </MessageForwardFooter>
       )}
       {topicPending && (

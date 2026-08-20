@@ -73,6 +73,20 @@ describe('useAgentShare', () => {
     expect(mocks.enableShare).not.toHaveBeenCalled();
   });
 
+  it('keeps a committed visibility update when status revalidation would fail', async () => {
+    const initial = shareRow('agent-visibility');
+    const updated = { ...initial, visibility: 'link' };
+    mocks.getShareStatus.mockResolvedValueOnce(initial).mockRejectedValueOnce(new Error('offline'));
+    mocks.updateVisibility.mockResolvedValue(updated);
+
+    const { result } = renderHook(() => useAgentShare('agent-visibility', true));
+    await waitFor(() => expect(result.current.shareInfo).toEqual(initial));
+
+    await act(async () => result.current.updateVisibility('link'));
+
+    expect(result.current.shareInfo).toEqual(updated);
+  });
+
   it('merges config patches over the server-normalized config before submitting', async () => {
     mocks.getShareStatus.mockResolvedValue(shareRow('agent-merge'));
     mocks.updateShareConfig.mockImplementation(async (agentId, config) => ({

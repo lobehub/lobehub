@@ -7,18 +7,8 @@ import { memo, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ConversationArea from '@/features/AgentConversation/ConversationArea';
-import { type MainChatInputProps } from '@/features/AgentConversation/MainChatInput';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-
-// Sending goes live with the share execution chain (C4). The model picker /
-// "+" menu are owner-facing and the voice-message action sends through a path
-// that ignores `disableSend`, so both action groups stay hidden for visitors.
-const visitorChatInputProps: MainChatInputProps = {
-  disableSend: true,
-  leftActions: [],
-  rightActions: [],
-};
 
 /**
  * The visitor-facing conversation column: mounts the standard ConversationArea
@@ -61,7 +51,7 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
 
   return (
     <>
-      <ConversationArea agentShareId={shareId} mainChatInputProps={visitorChatInputProps} />
+      <ConversationArea agentShareId={shareId} />
       <Flexbox align={'center'} paddingBlock={4}>
         <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
           {t('share.visitor.sendDisabled')}

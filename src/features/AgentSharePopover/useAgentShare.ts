@@ -90,8 +90,8 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
   const updateVisibility = useCallback(
     async (visibility: AgentShareVisibility) => {
       if (!agentId) return;
-      await agentShareService.updateVisibility(agentId, visibility);
-      await mutate();
+      const updated = await agentShareService.updateVisibility(agentId, visibility);
+      await mutate(updated, { revalidate: false });
     },
     [agentId, mutate],
   );
