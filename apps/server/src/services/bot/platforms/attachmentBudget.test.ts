@@ -18,9 +18,9 @@ vi.mock('sharp', () => {
 
 const {
   compressImageToBudget,
-  joinFallbackLines,
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
+  splitFallbackMessages,
 } = await import('./attachmentBudget');
 
 const MB = 1024 * 1024;
@@ -115,6 +115,9 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.attachments[0]).toMatchObject({
       fetchUrl: undefined,
       mimeType: 'image/jpeg',
+      // Discord and Slack upload `name` verbatim, so JPEG bytes must not keep
+      // a `.png` extension.
+      name: 'big.jpg',
       size: 1 * MB,
       type: 'image',
     });
@@ -144,6 +147,29 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.fallbackLines).toHaveLength(1);
     expect(result.fallbackLines[0]).toContain('huge.png');
     expect(result.fallbackLines[0]).toContain('https://example.com/f/huge.png');
+  });
+
+  it('caps the displayed filename so one fallback line stays short', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/long',
+          name: `${'n'.repeat(300)}.zip`,
+          size: 40 * MB,
+          type: 'file' as const,
+        },
+      ],
+      budget,
+    );
+
+    expect(result.attachments).toEqual([]);
+    expect(result.fallbackLines).toHaveLength(1);
+    expect(result.fallbackLines[0]).toBe(
+      `📎 ${'n'.repeat(59)}\u2026 (40.0MB)\nhttps://example.com/f/long`,
+    );
   });
 
   it('degrades an over-budget file to a download link without fetching it', async () => {
@@ -183,10 +209,25 @@ describe('prepareAttachmentsForBudget', () => {
   });
 });
 
-describe('joinFallbackLines', () => {
-  it('joins fallback lines with a blank line and returns undefined when empty', () => {
-    expect(joinFallbackLines(['📎 a\nurl', '📎 b\nurl'])).toBe('📎 a\nurl\n\n📎 b\nurl');
-    expect(joinFallbackLines(['📎 a\nurl'])).toBe('📎 a\nurl');
-    expect(joinFallbackLines([])).toBeUndefined();
+describe('splitFallbackMessages', () => {
+  it('packs lines into one message while they fit', () => {
+    expect(splitFallbackMessages(['📎 a\nurl', '📎 b\nurl'], 2000)).toEqual([
+      '📎 a\nurl\n\n📎 b\nurl',
+    ]);
+    expect(splitFallbackMessages([], 2000)).toEqual([]);
+  });
+
+  it('starts a new message rather than exceeding the platform cap', () => {
+    const lines = ['a'.repeat(40), 'b'.repeat(40), 'c'.repeat(40)];
+
+    // Two 40-char lines plus the blank-line separator are 82 chars, so a
+    // 100-char cap fits two lines per message and never splits one.
+    expect(splitFallbackMessages(lines, 100)).toEqual([`${lines[0]}\n\n${lines[1]}`, lines[2]]);
+  });
+
+  it('never truncates a single line, even when it alone exceeds the cap', () => {
+    const line = 'x'.repeat(50);
+
+    expect(splitFallbackMessages([line], 10)).toEqual([line]);
   });
 });

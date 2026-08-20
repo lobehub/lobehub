@@ -6,9 +6,9 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
-  joinFallbackLines,
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
+  splitFallbackMessages,
 } from '@/server/services/bot/platforms/attachmentBudget';
 import type {
   WechatPendingPush,
@@ -115,9 +115,12 @@ const deliver = async (
   // download links. Send credits were already consumed per attachment, so
   // collapsing several links into a single message only under-counts — the
   // safe direction for window accounting.
-  const linkText = joinFallbackLines(prepared.fallbackLines);
-  if (linkText) {
-    await api.sendMessage(platformUserId, linkText, token);
+  const linkMessages = splitFallbackMessages(
+    prepared.fallbackLines,
+    PLATFORM_ATTACHMENT_BUDGETS.wechat.textMaxChars,
+  );
+  for (const message of linkMessages) {
+    await api.sendMessage(platformUserId, message, token);
   }
 };
 

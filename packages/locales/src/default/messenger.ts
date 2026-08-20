@@ -141,7 +141,7 @@ export default {
   'messenger.push.resource.oversizeFileHint':
     'This file exceeds the {{limit}} limit of {{platform}} and will be sent as a download link.',
   'messenger.push.resource.oversizeImageHint':
-    'This image exceeds the {{limit}} limit of {{platform}} and will be compressed automatically before sending.',
+    'This image exceeds the {{limit}} limit of {{platform}}. It will be compressed before sending, or sent as a download link if it still does not fit.',
   'messenger.push.resource.placeholder': 'Add a message (optional)…',
   'messenger.push.retry': 'Try again',
   'messenger.push.sectionTitle': 'Message Push',

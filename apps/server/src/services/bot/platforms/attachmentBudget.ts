@@ -43,6 +43,16 @@ const formatBytes = (bytes: number): string => {
 };
 
 /**
+ * Cap the displayed filename so one fallback line stays well inside every
+ * platform's message limit — a name can legitimately be 255 chars, and the
+ * URL after it is the part that must never be truncated.
+ */
+const MAX_FALLBACK_NAME_CHARS = 60;
+
+const truncateName = (name: string): string =>
+  name.length <= MAX_FALLBACK_NAME_CHARS ? name : `${name.slice(0, MAX_FALLBACK_NAME_CHARS - 1)}…`;
+
+/**
  * Language-neutral download-link line for an attachment that exceeds the
  * platform budget. In production `fetchUrl` is the stable anonymous
  * file-proxy URL (`/f/:id`), so the link keeps working after the presigned
@@ -52,9 +62,22 @@ export const buildAttachmentFallbackLine = (
   attachment: BotMessageAttachment,
   url: string,
 ): string => {
-  const name = attachment.name?.trim() || 'file';
+  const name = truncateName(attachment.name?.trim() || 'file');
   const size = attachment.size ? ` (${formatBytes(attachment.size)})` : '';
   return `📎 ${name}${size}\n${url}`;
+};
+
+/**
+ * Re-point a filename at the JPEG bytes we just produced. Discord and Slack
+ * upload `name` verbatim and Discord picks its preview from the extension,
+ * so leaving a recompressed PNG named `.png` ships JPEG bytes under a lying
+ * extension. `undefined` stays undefined — the platform senders then infer a
+ * generic name from `mimeType`, which is already `image/jpeg`.
+ */
+const toJpegFilename = (name: string | undefined): string | undefined => {
+  const trimmed = name?.trim();
+  if (!trimmed) return undefined;
+  return `${trimmed.replace(/\.[^./\\]*$/, '')}.jpg`;
 };
 
 /** Refuse to buffer arbitrarily large remote files into memory for compression. */
@@ -190,6 +213,7 @@ export const prepareAttachmentsForBudget = async (
           data: compressed.toString('base64'),
           fetchUrl: undefined,
           mimeType: 'image/jpeg',
+          name: toJpegFilename(attachment.name),
           size: compressed.length,
         });
         continue;
@@ -216,8 +240,26 @@ export const prepareAttachmentsForBudget = async (
 };
 
 /**
- * Collapse fallback link lines into the body of one follow-up text message,
- * or `undefined` when there is nothing to send.
+ * Pack fallback link lines into as few follow-up text messages as fit under
+ * `maxChars`. Batching is by whole line: Discord rejects a message over its
+ * limit outright and Telegram truncates at its own, either of which would
+ * cut a URL in half and hand the user a dead link. Lines are already length
+ * capped (see MAX_FALLBACK_NAME_CHARS), so a single line always fits.
  */
-export const joinFallbackLines = (fallbackLines: string[]): string | undefined =>
-  fallbackLines.join('\n\n') || undefined;
+export const splitFallbackMessages = (fallbackLines: string[], maxChars: number): string[] => {
+  const messages: string[] = [];
+  let current = '';
+
+  for (const line of fallbackLines) {
+    const candidate = current ? `${current}\n\n${line}` : line;
+    if (current && candidate.length > maxChars) {
+      messages.push(current);
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) messages.push(current);
+
+  return messages;
+};

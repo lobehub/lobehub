@@ -1,9 +1,9 @@
 import debug from 'debug';
 
 import {
-  joinFallbackLines,
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
+  splitFallbackMessages,
 } from '@/server/services/bot/platforms/attachmentBudget';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import {
@@ -54,10 +54,10 @@ export const sendOutboundDirectMessage = async (params: {
 
   // Fit attachments to the platform's size budget first: over-budget images
   // get recompressed; files that can't fit at all become download-link lines,
-  // delivered as a separate follow-up text message. A separate message —
-  // never merged into the text leg — because Telegram truncates captions at
-  // 1024 chars and Discord caps messages at 2000, and a truncated URL is a
-  // dead link. See attachmentBudget.ts for the budget rationale.
+  // delivered as separate follow-up text messages. Separate messages — never
+  // merged into the text leg — because Telegram truncates captions at 1024
+  // chars and Discord caps messages at 2000, and a truncated URL is a dead
+  // link. See attachmentBudget.ts for the budget rationale.
   const budget =
     platform in PLATFORM_ATTACHMENT_BUDGETS
       ? PLATFORM_ATTACHMENT_BUDGETS[platform as keyof typeof PLATFORM_ATTACHMENT_BUDGETS]
@@ -68,8 +68,12 @@ export const sendOutboundDirectMessage = async (params: {
       : { attachments: attachments ?? [], fallbackLines: [] };
 
   // Every prepared attachment lands in exactly one of these two legs, so the
-  // guard above already covers "nothing to send".
-  const linkText = joinFallbackLines(prepared.fallbackLines);
+  // guard above already covers "nothing to send". The link leg is batched to
+  // the platform's per-message character cap so a long list of fallbacks is
+  // never rejected or truncated mid-URL.
+  const linkMessages = budget
+    ? splitFallbackMessages(prepared.fallbackLines, budget.textMaxChars)
+    : [];
   const files = prepared.attachments.length ? prepared.attachments : undefined;
 
   log(
@@ -91,11 +95,11 @@ export const sendOutboundDirectMessage = async (params: {
         // still lands.
         const delivered = await sendTelegramAttachments(api, platformUserId, files, text);
         textDelivered = delivered > 0;
-        if (delivered === 0 && !text && !linkText)
+        if (delivered === 0 && !text && !linkMessages.length)
           throw new Error('All Telegram attachments failed to send');
       }
       if (text && !textDelivered) await api.sendMessage(platformUserId, text);
-      if (linkText) await api.sendMessage(platformUserId, linkText);
+      for (const message of linkMessages) await api.sendMessage(platformUserId, message);
       return;
     }
     case 'discord': {
@@ -114,12 +118,12 @@ export const sendOutboundDirectMessage = async (params: {
             await api.createMessage(channel.id, index === 0 ? (text ?? '') : '', batch);
           }
           textDelivered = true;
-        } else if (!text && !linkText) {
+        } else if (!text && !linkMessages.length) {
           throw new Error('All Discord attachments failed to materialize');
         }
       }
       if (text && !textDelivered) await api.createMessage(channel.id, text);
-      if (linkText) await api.createMessage(channel.id, linkText);
+      for (const message of linkMessages) await api.createMessage(channel.id, message);
       return;
     }
     case 'slack': {
@@ -135,12 +139,12 @@ export const sendOutboundDirectMessage = async (params: {
           initialComment: text,
         });
         textDelivered = uploaded > 0;
-        if (uploaded === 0 && !text && !linkText)
+        if (uploaded === 0 && !text && !linkMessages.length)
           throw new Error('All Slack attachments failed to upload');
       }
       // Slack resolves a user id passed as `channel` to that user's DM.
       if (text && !textDelivered) await api.postMessage(platformUserId, text);
-      if (linkText) await api.postMessage(platformUserId, linkText);
+      for (const message of linkMessages) await api.postMessage(platformUserId, message);
       return;
     }
     default: {
