@@ -11,6 +11,7 @@ import {
   sessions,
   topics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TopicModel } from '../topic';
@@ -1064,6 +1065,52 @@ describe('TopicModel', () => {
       ]);
       expect(mine?.metadata?.userMemoryExtractStatus).toBe('pending');
       expect(other?.metadata?.userMemoryExtractStatus).toBe('completed');
+    });
+
+    it('resets topics across personal and workspace scopes for the same user', async () => {
+      const workspaceId = 'topic-model-test-ws-reset';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'topic-model-test-ws-reset',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      await serverDB.insert(topics).values([
+        {
+          id: 'mem-reset-personal',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'personal scope',
+          userId,
+          workspaceId: null,
+        },
+        {
+          id: 'mem-reset-ws',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'workspace scope',
+          userId,
+          workspaceId,
+        },
+        // Another user's workspace topic must stay untouched.
+        {
+          id: 'mem-reset-ws-other-user',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'workspace scope other user',
+          userId: otherUserId,
+          workspaceId,
+        },
+      ]);
+
+      await topicModel.resetMemoryExtractStatus();
+
+      const [personal, ws, wsOther] = await Promise.all([
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-personal') }),
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-ws') }),
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-ws-other-user') }),
+      ]);
+      expect(personal?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(ws?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(wsOther?.metadata?.userMemoryExtractStatus).toBe('completed');
     });
   });
 
