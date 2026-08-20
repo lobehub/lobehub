@@ -13,6 +13,7 @@ import {
 } from '../../models/topicComment';
 import { agents } from '../../schemas/agent';
 import { agentHistoryJobAgents, agentHistoryJobs } from '../../schemas/agentHistoryJob';
+import { agentShares } from '../../schemas/agentShare';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { messagePlugins, messages } from '../../schemas/message';
 import { threads, topics } from '../../schemas/topic';
@@ -840,6 +841,32 @@ describe('AgentGroupRepository', () => {
       expect(virtualAgent).toBeDefined();
     });
 
+    it('rolls back member removal when the owned-agent deletion guard rejects', async () => {
+      const deletionGuard = vi.fn().mockRejectedValue(new Error('protected agent'));
+
+      await expect(
+        agentGroupRepo.removeAgentsFromGroup(
+          'remove-group',
+          ['remove-virtual'],
+          true,
+          deletionGuard,
+        ),
+      ).rejects.toThrow('protected agent');
+
+      expect(deletionGuard).toHaveBeenCalledWith('remove-virtual', expect.anything());
+      expect(
+        await serverDB.query.agents.findFirst({
+          where: (row, { eq }) => eq(row.id, 'remove-virtual'),
+        }),
+      ).toBeDefined();
+      expect(
+        await serverDB.query.chatGroupsAgents.findFirst({
+          where: (row, { and, eq }) =>
+            and(eq(row.chatGroupId, 'remove-group'), eq(row.agentId, 'remove-virtual')),
+        }),
+      ).toBeDefined();
+    });
+
     it('should return empty result for empty input', async () => {
       const result = await agentGroupRepo.removeAgentsFromGroup('remove-group', []);
 
@@ -1532,6 +1559,26 @@ describe('AgentGroupRepository', () => {
 
       const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
       expect(await wsRepo.findByIdWithAgents(group.id)).toBeNull();
+    });
+
+    it('keeps owned member shares private after a personal-workspace round trip', async () => {
+      const personalRepo = new AgentGroupRepository(serverDB, userId);
+      const { group, supervisorAgentId } = await personalRepo.createGroupWithSupervisor({
+        title: 'Shared Personal Group',
+      });
+      await serverDB.insert(agentShares).values({ agentId: supervisorAgentId, visibility: 'link' });
+
+      await personalRepo.transferToWorkspace(group.id, workspaceId, userId);
+      await new AgentGroupRepository(serverDB, userId, workspaceId).transferToWorkspace(
+        group.id,
+        null,
+        userId,
+      );
+
+      const share = await serverDB.query.agentShares.findFirst({
+        where: (row, { eq }) => eq(row.agentId, supervisorAgentId),
+      });
+      expect(share?.visibility).toBe('private');
     });
 
     it('transfers a workspace group with members and conversation data to the target scope', async () => {

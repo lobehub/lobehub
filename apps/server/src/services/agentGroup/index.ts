@@ -4,6 +4,7 @@ import { type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
 import { type PartialDeep } from 'type-fest';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { type UserModel } from '@/database/models/user';
@@ -20,11 +21,13 @@ type DefaultAgentConfig = Awaited<ReturnType<UserModel['getUserSettingsDefaultAg
  * Handles agent config merging for group members.
  */
 export class AgentGroupService {
+  private readonly userId: string;
   private readonly agentModel: AgentModel;
   private readonly chatGroupModel: ChatGroupModel;
   private readonly agentGroupRepo: AgentGroupRepository;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.userId = userId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.chatGroupModel = new ChatGroupModel(db, userId, workspaceId);
     this.agentGroupRepo = new AgentGroupRepository(db, userId, workspaceId);
@@ -58,7 +61,10 @@ export class AgentGroupService {
    * @returns The deleted group and list of deleted group-owned agent IDs
    */
   async deleteGroup(groupId: string) {
-    const { deletedOwnedAgentIds, group } = await this.chatGroupModel.delete(groupId);
+    const { deletedOwnedAgentIds, group } = await this.chatGroupModel.delete(
+      groupId,
+      (agentId, executor) => assertAgentDeletionAllowed({ agentId, executor, userId: this.userId }),
+    );
 
     return {
       deletedVirtualAgentIds: deletedOwnedAgentIds,
