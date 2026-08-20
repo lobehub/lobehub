@@ -2,12 +2,14 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
+import { expandTilde } from '@lobechat/local-file-shell/file';
 import { detectRepoType } from '@lobechat/local-file-shell/git';
 import matter from 'gray-matter';
 
 import type {
   InitWorkspaceParams,
   InitWorkspaceResult,
+  ListDirResult,
   ListProjectSkillsParams,
   ListProjectSkillsResult,
   ProjectSkillItem,
@@ -258,12 +260,55 @@ export const initWorkspace = async (
  * remote client before binding it, and to render the right dir icon.
  */
 export const statPath = async (params: { path: string }): Promise<StatPathResult> => {
+  const resolved = expandTilde(params.path) ?? params.path;
   try {
-    const stats = await stat(params.path);
-    if (!stats.isDirectory()) return { exists: true, isDirectory: false };
-    const repoType = await detectRepoType(params.path);
-    return { exists: true, isDirectory: true, repoType };
+    const stats = await stat(resolved);
+    if (!stats.isDirectory()) return { exists: true, isDirectory: false, path: resolved };
+    const repoType = await detectRepoType(resolved);
+    return { exists: true, isDirectory: true, path: resolved, repoType };
   } catch {
-    return { exists: false, isDirectory: false };
+    return { exists: false, isDirectory: false, path: resolved };
   }
+};
+
+const resolveListDirPath = (raw?: string): string => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return os.homedir();
+  return expandTilde(trimmed) ?? trimmed;
+};
+
+const resolveParentDir = (dir: string): string | null => {
+  const parent = path.dirname(dir);
+  return parent === dir ? null : parent;
+};
+
+const resolveExistingDir = async (dir: string): Promise<string> => {
+  try {
+    const stats = await stat(dir);
+    if (stats.isDirectory()) return dir;
+  } catch {
+    // Missing / unreadable path falls back to home so the picker still opens.
+  }
+  return os.homedir();
+};
+
+/**
+ * List immediate child directories of a path on this device. Used by the remote
+ * working-directory picker — files stay out so the caller cannot browse
+ * arbitrary file contents through this RPC. Empty / omitted / missing path
+ * starts at the device home.
+ */
+export const listDir = async (params: { path?: string } = {}): Promise<ListDirResult> => {
+  const resolved = await resolveExistingDir(resolveListDirPath(params.path));
+  const entries = await readdir(resolved, { withFileTypes: true });
+  const dirs = entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => ({ name: entry.name, path: path.join(resolved, entry.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    dirs,
+    parent: resolveParentDir(resolved),
+    path: resolved,
+  };
 };

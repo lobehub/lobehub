@@ -34,7 +34,7 @@ import type {
   ProjectFileSearchParams,
   UnenrollWorkspaceParams,
 } from './types';
-import { initWorkspace, listProjectSkills, statPath } from './workspace';
+import { initWorkspace, listDir, listProjectSkills, statPath } from './workspace';
 
 /**
  * Every method name the device-control RPC dispatcher understands. Mirrors the
@@ -51,6 +51,7 @@ export const DEVICE_RPC_METHODS = [
   'listProjectSkills',
   'prepareSkillDirectory',
   'statPath',
+  'listDir',
   'getProjectFileIndex',
   'searchProjectFiles',
   'getLocalFilePreview',
@@ -136,6 +137,10 @@ export const executeDeviceRpc = async (
 
     case 'statPath': {
       return statPath(params as { path: string });
+    }
+
+    case 'listDir': {
+      return listDir(params as { path?: string });
     }
 
     case 'getProjectFileIndex': {

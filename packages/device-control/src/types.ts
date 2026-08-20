@@ -61,7 +61,30 @@ export interface ListProjectSkillsResult {
 export interface StatPathResult {
   exists: boolean;
   isDirectory: boolean;
+  /**
+   * Path after expanding a leading `~`. Callers persist this so a pasted
+   * `~/projects` doesn't get stored as a literal tilde that later spawn
+   * cannot use as `cwd`.
+   */
+  path: string;
   repoType?: 'git' | 'github';
+}
+
+export interface ListDirEntry {
+  name: string;
+  path: string;
+}
+
+export interface ListDirResult {
+  dirs: ListDirEntry[];
+  /** Immediate parent, or `null` at a filesystem root (`/` / `C:\`). */
+  parent: string | null;
+  /**
+   * Directory after expanding a leading `~`. Empty / omitted path lists the
+   * device home so the picker has a starting folder without the caller knowing
+   * the remote home.
+   */
+  path: string;
 }
 
 // ─── File preview ───

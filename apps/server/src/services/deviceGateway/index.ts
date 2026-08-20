@@ -1239,7 +1239,7 @@ export class DeviceGateway {
    * generic `invokeRpc` channel as `gitInfo`. Lets a web / remote client
    * validate a manually-entered working directory before binding it. Returns
    * `undefined` when the gateway is unconfigured or the device is unreachable
-   * (the caller treats "can't verify" as non-blocking).
+   * (the caller treats "can't verify" as a blocking warning).
    */
   async statPath(params: {
     deviceId: string;
@@ -1247,7 +1247,9 @@ export class DeviceGateway {
     timeout?: number;
     userId: string;
     workspaceId?: string;
-  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' } | undefined> {
+  }): Promise<
+    { exists: boolean; isDirectory: boolean; path: string; repoType?: 'git' | 'github' } | undefined
+  > {
     const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
     const client = this.getClient();
     if (!client) return undefined;
@@ -1256,6 +1258,7 @@ export class DeviceGateway {
       const result = await client.invokeRpc<{
         exists: boolean;
         isDirectory: boolean;
+        path: string;
         repoType?: 'git' | 'github';
       }>({ deviceId, timeout, userId, workspaceId }, { method: 'statPath', params: { path } });
 
@@ -1267,6 +1270,42 @@ export class DeviceGateway {
       return result.data;
     } catch (error) {
       log('statPath: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * List immediate child directories on a remote device. Powers the remote
+   * working-directory picker. Returns `undefined` when the device is unreachable.
+   */
+  async listDir(params: {
+    deviceId: string;
+    path?: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<
+    { dirs: { name: string; path: string }[]; parent: string | null; path: string } | undefined
+  > {
+    const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<{
+        dirs: { name: string; path: string }[];
+        parent: string | null;
+        path: string;
+      }>({ deviceId, timeout, userId, workspaceId }, { method: 'listDir', params: { path } });
+
+      if (!result.success || !result.data) {
+        log('listDir: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listDir: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

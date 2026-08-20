@@ -744,12 +744,29 @@ export const deviceRouter = router({
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is
-   * unreachable (caller treats "can't verify" as non-blocking).
+   * unreachable (caller treats "can't verify" as a blocking warning).
    */
   statPath: deviceProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /**
+   * List immediate child directories on a remote device, via the device's
+   * `listDir` RPC. Powers the remote working-directory picker. Returns `null`
+   * when the device is unreachable.
+   */
+  listDir: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.listDir({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
