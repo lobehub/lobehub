@@ -10,6 +10,7 @@ Numbered operator runbook for Ubuntu 24.04. Assumes GitHub **repository** secret
 | Production | `https://chat.panafor.com`                   |
 | Preview    | `https://preview.panafor.com` (own database) |
 | Admin      | `https://adchat.panafor.com` (control plane) |
+| Dozzle     | `https://dozzle.panafor.com` (Docker logs)   |
 | Image      | `ghcr.io/panafor-ai-team/panachat`           |
 
 **Hard bans:** never `docker compose down -v`; never `docker volume rm panachat_*` or `panachat_preview_*`; never point preview env at prod volumes.
@@ -128,6 +129,7 @@ A records (or AAAA) pointing at `5.135.244.12`:
 - `s3.panafor.com`
 - `s3-preview.panafor.com`
 - `mailer.panafor.com` — **DNS-only** (never CDN-proxied). Used for Stalwart WebAdmin HTTPS and SMTP STARTTLS.
+- `dozzle.panafor.com` — **DNS-only** (never CDN-proxied / orange cloud). Dozzle via nginx `:443` → `127.0.0.1:8081`. Do not publish `:8081` on the public IP.
 
 Inbound MX for `panafor.com` currently points at `mail.panafor.com` (`194.180.11.117`). Keep that MX if that box still receives `@panafor.com` mail. Do **not** switch MX to `mailer.panafor.com` unless you are moving inboxes onto kamyar.
 
@@ -183,11 +185,14 @@ sudo cp docker-compose/deploy/nginx/panachat-admin-site.example.conf \
   /etc/nginx/sites-available/panachat-admin
 sudo cp docker-compose/deploy/nginx/panachat-s3-site.example.conf \
   /etc/nginx/sites-available/panachat-s3
+sudo cp docker-compose/deploy/nginx/panachat-dozzle-site.example.conf \
+  /etc/nginx/sites-available/panachat-dozzle
 sudo sed -i 's/chat.example.com/chat.panafor.com/g' /etc/nginx/sites-available/panachat
 sudo sed -i 's/preview.chat.example.com/preview.panafor.com/g' \
   /etc/nginx/sites-available/panachat-preview
 sudo sed -i 's/admin.example.com/adchat.panafor.com/g' /etc/nginx/sites-available/panachat-admin
 sudo sed -i 's/s3.example.com/s3.panafor.com/g' /etc/nginx/sites-available/panachat-s3
+sudo sed -i 's/dozzle.example.com/dozzle.panafor.com/g' /etc/nginx/sites-available/panachat-dozzle
 ```
 
 The examples 301 HTTP → HTTPS. Until Certbot has issued certs, comment out each `listen 443` server block and change the port-80 `return 301` to a `location /` that `proxy_pass`es `http://panachat_backend` (prod), `http://panachat_preview_backend` (preview), or `http://127.0.0.1:3020` (admin), matching the example `location /` headers.
@@ -197,6 +202,7 @@ sudo ln -sf /etc/nginx/sites-available/panachat /etc/nginx/sites-enabled/panacha
 sudo ln -sf /etc/nginx/sites-available/panachat-preview /etc/nginx/sites-enabled/panachat-preview
 sudo ln -sf /etc/nginx/sites-available/panachat-admin /etc/nginx/sites-enabled/panachat-admin
 sudo ln -sf /etc/nginx/sites-available/panachat-s3 /etc/nginx/sites-enabled/panachat-s3
+sudo ln -sf /etc/nginx/sites-available/panachat-dozzle /etc/nginx/sites-enabled/panachat-dozzle
 # This host already serves developer.panafor.com from sites-enabled/default — do not delete it.
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
@@ -213,6 +219,7 @@ sudo certbot --nginx -d adchat.panafor.com
 sudo certbot --nginx -d preview.panafor.com
 sudo certbot --nginx -d s3.panafor.com
 sudo certbot --nginx -d mailer.panafor.com
+sudo certbot --nginx -d dozzle.panafor.com
 # optional: sudo certbot --nginx -d s3-preview.panafor.com
 sudo /usr/sbin/nginx -t && sudo systemctl reload nginx
 ```
