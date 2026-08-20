@@ -56,11 +56,32 @@ describe('formatErrorForState', () => {
     });
 
     it('persists the stack of an unclassified Error so the throw site is locatable', () => {
-      // `name` + `message` alone are useless for a recurring
-      // `SyntaxError: Bad escaped character in JSON at position N` — the only
-      // thing that identifies which `JSON.parse` blew up is the stack.
-      const result = formatErrorForState(new SyntaxError('Bad escaped character in JSON'));
+      // `name` + `message` alone are useless for a recurring harness 500 — the
+      // only thing that identifies where it blew up is the stack.
+      const result = formatErrorForState(new Error('some opaque internal failure'));
 
+      expect(result.type).toBe(ChatErrorType.InternalServerError);
+      expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
+    });
+
+    it('classifies a harness JSON.parse throw instead of leaving a bare 500', () => {
+      // The production shape: `SyntaxError` out of a harness `JSON.parse`,
+      // previously stored as `{ type: 500, body: { name: 'SyntaxError' } }` with
+      // no attribution, category or failure accounting at all.
+      const result = formatErrorForState(
+        new SyntaxError('Bad escaped character in JSON at position 46269 (line 1 column 46270)'),
+      );
+
+      expect(result.type).toBe(AgentRuntimeErrorType.HarnessJsonParseError);
+      expect(result.attribution).toBe('harness');
+      expect(result.category).toBe('stream');
+      expect(result.numericId).toBe(7008);
+      expect(result.countAsFailure).toBe(true);
+      // Deterministic — the same corrupt payload re-parses to the same failure,
+      // so a transport retry would only re-burn the run's tokens.
+      expect(result.retryable).toBe(false);
+      // Classification must not cost us the throw site.
+      expect((result.body as { name?: string; stack?: string }).name).toBe('SyntaxError');
       expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
     });
 
