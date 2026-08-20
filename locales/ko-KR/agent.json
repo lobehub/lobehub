@@ -295,7 +295,7 @@
   "share.budget.confirm.content": "이 공유 에이전트에 {{amount}} 크레딧을 사용하시겠습니까?",
   "share.budget.confirm.ok": "계속",
   "share.budget.confirm.rules.irreversible": "계속하기 전에 금액을 확인하세요.",
-  "share.budget.confirm.rules.permanent": "이 할당량은 공유 에이전트에 영구적으로 할당됩니다.",
+  "share.budget.confirm.rules.permanent": "이 사용 한도는 공유 에이전트에 할당된 상태로 유지됩니다.",
   "share.budget.confirm.rules.source": "사용량은 이 공유 에이전트에 대해 추적됩니다.",
   "share.budget.confirm.title": "공유 사용량을 업데이트하시겠습니까?",
   "share.budget.consumed": "사용량",
