@@ -46,7 +46,8 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
     s.updateSystemStatus,
   ]);
 
-  const { isLoading, shareInfo, updateVisibility } = useAgentShare(agentId, canShare);
+  const { createError, isCreating, isLoading, retryCreate, shareInfo, updateVisibility } =
+    useAgentShare(agentId, canShare);
 
   const shareUrl = shareInfo?.id ? `${appOrigin}/share/a/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as AgentShareVisibility) || 'private';
@@ -138,6 +139,18 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
       <Flexbox className={styles.container} gap={8}>
         <Text strong>{t('share.popover.title')}</Text>
         <Text type="secondary">{reason}</Text>
+      </Flexbox>
+    );
+  }
+
+  if (createError) {
+    return (
+      <Flexbox className={styles.container} gap={12}>
+        <Text strong>{t('share.popover.title')}</Text>
+        <Text type="danger">{t('share.createError')}</Text>
+        <Button loading={isCreating} size="small" onClick={retryCreate}>
+          {t('retry', { ns: 'common' })}
+        </Button>
       </Flexbox>
     );
   }

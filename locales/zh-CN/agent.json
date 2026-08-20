@@ -291,6 +291,7 @@
   "channel.wechatUserIdHint": "通过授权流程返回的微信账号标识符。",
   "share.copyLink": "复制链接",
   "share.copyLinkSuccess": "分享链接已复制到剪贴板",
+  "share.createError": "分享准备失败，请重试。",
   "share.popover.title": "分享此智能体",
   "share.popover.visibility": "可见性",
   "share.privacyWarning.confirm": "通过链接分享",

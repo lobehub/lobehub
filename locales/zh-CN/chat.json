@@ -1370,6 +1370,7 @@
   "sharePage.menu.goToLobeHub": "前往 LobeHub",
   "sharePage.menu.more": "更多",
   "sharePage.menu.report": "举报",
+  "sharePage.meta.agentDescription": "分享自 {{appName}} 的智能体。",
   "sharePage.meta.artifactDescription": "分享自 {{appName}} 的 Artifact。",
   "sharePage.meta.pageDescription": "分享自 {{appName}} 的页面。",
   "sharePage.meta.topicDescription": "分享自 {{appName}} 的对话。",

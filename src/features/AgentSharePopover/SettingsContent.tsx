@@ -2,7 +2,7 @@
 
 import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Select, Switch, toast } from '@lobehub/ui/base-ui';
+import { Button, Select, Switch, toast } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useState } from 'react';
@@ -10,12 +10,11 @@ import { useTranslation } from 'react-i18next';
 
 import AgentShareSettingsExtension from '@/business/client/features/AgentShareSettingsExtension';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
-import type { AgentShareConfigInput } from '@/server/routers/lambda/agentShare';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { Section, SettingRow } from './SectionLayout';
-import { useAgentShare } from './useAgentShare';
+import { type AgentShareConfigPatch, useAgentShare } from './useAgentShare';
 import { useDebouncedLimitPatch } from './useDebouncedLimitPatch';
 
 type FileAccess = 'none' | 'read';
@@ -33,14 +32,15 @@ interface SettingsContentProps {
 const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
   const { t } = useTranslation('agent');
 
-  const { isLoading, shareInfo, updateConfig } = useAgentShare(agentId, true);
+  const { createError, isCreating, isLoading, retryCreate, shareInfo, updateConfig } =
+    useAgentShare(agentId, true);
   const shareConfig = shareInfo?.shareConfig;
 
   const agentConfig = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const candidateToolIds = getActivePluginIds(agentConfig?.plugins);
 
   const handleConfigChange = useCallback(
-    async (patch: Partial<AgentShareConfigInput>) => {
+    async (patch: AgentShareConfigPatch) => {
       try {
         await updateConfig(patch);
       } catch {
@@ -52,13 +52,17 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
 
   const toggleTool = useCallback(
     (toolId: string) => {
-      const current = shareConfig?.enabledToolIds ?? [];
-      const next = current.includes(toolId)
-        ? current.filter((id) => id !== toolId)
-        : [...current, toolId];
-      handleConfigChange({ enabledToolIds: next });
+      handleConfigChange((currentConfig) => {
+        const currentToolIds = currentConfig.enabledToolIds ?? [];
+
+        return {
+          enabledToolIds: currentToolIds.includes(toolId)
+            ? currentToolIds.filter((id) => id !== toolId)
+            : [...currentToolIds, toolId],
+        };
+      });
     },
-    [shareConfig?.enabledToolIds, handleConfigChange],
+    [handleConfigChange],
   );
 
   // Visitor limits keep a local draft so typing doesn't fire a request per
@@ -77,6 +81,17 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
     },
     [scheduleLimitCommit],
   );
+
+  if (createError) {
+    return (
+      <Flexbox gap={12} padding={16}>
+        <Text type="danger">{t('share.createError')}</Text>
+        <Button loading={isCreating} size="small" onClick={retryCreate}>
+          {t('retry', { ns: 'common' })}
+        </Button>
+      </Flexbox>
+    );
+  }
 
   if (isLoading || !shareConfig) {
     return (
@@ -114,7 +129,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
               value={filePermission?.agentFiles ?? 'none'}
               onChange={(value: FileAccess) =>
                 handleConfigChange({
-                  filePermissionConfig: { ...filePermission, agentFiles: value },
+                  filePermissionConfig: { agentFiles: value },
                 })
               }
             />
@@ -126,7 +141,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
               value={filePermission?.knowledgeBase ?? 'none'}
               onChange={(value: FileAccess) =>
                 handleConfigChange({
-                  filePermissionConfig: { ...filePermission, knowledgeBase: value },
+                  filePermissionConfig: { knowledgeBase: value },
                 })
               }
             />
@@ -136,7 +151,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
               checked={filePermission?.uploadAllowed ?? false}
               onChange={(checked) =>
                 handleConfigChange({
-                  filePermissionConfig: { ...filePermission, uploadAllowed: checked },
+                  filePermissionConfig: { uploadAllowed: checked },
                 })
               }
             />
