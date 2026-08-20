@@ -1,9 +1,8 @@
 import type {
-  I18nNamespaceModule,
   LoadI18nNamespaceModuleParams,
   LoadI18nNamespaceModuleWithFallbackParams,
 } from './loadI18nNamespaceModule';
-import { mergeBusinessI18nNamespace } from './loadI18nNamespaceModule';
+import { type I18nNamespaceModule, mergeBusinessI18nNamespace } from './mergeBusinessI18nNamespace';
 
 type NamespaceModule = I18nNamespaceModule;
 type NamespaceLoaderMap = Record<string, () => Promise<NamespaceModule>>;
