@@ -109,9 +109,10 @@ export const isResourceAccessLevelAllowed = (
  *   above the workspace-wide level. Grants only ever raise: evaluation
  *   resolves `max(workspace level, grant)`, so a grant at or below the
  *   workspace level is inert, never a demotion. Grants never pierce private
- *   resources or the RBAC capability ceiling. Rows of members who later
- *   leave the workspace stay behind but are inert — every evaluation path
- *   checks workspace membership first.
+ *   resources or the RBAC capability ceiling, and are revoked when the member
+ *   leaves the workspace — membership removal is a soft delete that
+ *   re-inviting reactivates, so a surviving grant would silently come back
+ *   with them.
  *
  * Every read of the workspace-wide policy MUST filter `userId IS NULL`
  * (`ResourcePermissionModel` centralizes this): a per-member grant leaking

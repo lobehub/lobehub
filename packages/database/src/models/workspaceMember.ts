@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid/non-secure';
 import { devices } from '../schemas/device';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+import { ResourcePermissionModel } from './resourcePermission';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
 
@@ -75,6 +76,13 @@ export class WorkspaceMemberModel {
         ),
       )
       .returning({ deviceId: devices.deviceId });
+
+    // Same reasoning one level up: a per-member resource grant only means
+    // anything while they belong to the workspace, and the soft delete below is
+    // reactivated by `addMember`, so a grant left behind would silently restore
+    // their old access on re-invite. Workspace-wide rows carry no subject and
+    // stay.
+    await new ResourcePermissionModel(this.db, workspaceId).removeMemberGrants(userId);
 
     await this.db
       .update(workspaceMembers)

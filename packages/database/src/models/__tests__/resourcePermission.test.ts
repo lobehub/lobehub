@@ -229,6 +229,31 @@ describe('ResourcePermissionModel collaborators', () => {
     expect(rows.map((r) => r.userId)).toEqual([memberB]);
   });
 
+  it('removeMemberGrants revokes one member across the workspace, sparing the workspace-wide row', async () => {
+    await model.setAccessLevel('knowledgeBase', kbId, 'use', ownerId);
+    await model.upsertCollaborators({
+      accessLevel: 'edit',
+      createdBy: ownerId,
+      resourceId: kbId,
+      resourceType: 'knowledgeBase',
+      userIds: [memberA, memberB],
+    });
+    await model.upsertCollaborators({
+      accessLevel: 'edit',
+      createdBy: ownerId,
+      resourceId: 'rp-test-kb-2',
+      resourceType: 'knowledgeBase',
+      userIds: [memberA],
+    });
+
+    await model.removeMemberGrants(memberA);
+
+    expect(await model.getCollaboratorLevel('knowledgeBase', kbId, memberA)).toBeNull();
+    expect(await model.getCollaboratorResourceIds('knowledgeBase', memberA, 'edit')).toEqual([]);
+    expect(await model.getCollaboratorLevel('knowledgeBase', kbId, memberB)).toBe('edit');
+    expect(await model.getAccessLevel('knowledgeBase', kbId)).toBe('use');
+  });
+
   it('removeAll clears the workspace-wide row and every grant together', async () => {
     await model.setAccessLevel('knowledgeBase', kbId, 'use', ownerId);
     await model.upsertCollaborators({

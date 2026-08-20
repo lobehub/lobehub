@@ -202,6 +202,23 @@ export class ResourcePermissionModel {
   };
 
   /**
+   * Revoke every grant the member holds across this workspace, e.g. when they
+   * leave it. Membership removal is a soft delete that re-inviting reactivates,
+   * so grants left behind would silently come back with the member. The
+   * workspace-wide rows carry no subject and are untouched.
+   */
+  removeMemberGrants = async (userId: string) => {
+    await this.db
+      .delete(resourcePermissions)
+      .where(
+        and(
+          eq(resourcePermissions.workspaceId, this.workspaceId),
+          eq(resourcePermissions.userId, userId),
+        ),
+      );
+  };
+
+  /**
    * Remove every permission row of a resource — the workspace-wide level and
    * its collaborator grants — e.g. when the resource is deleted or
    * transferred out of the workspace.
