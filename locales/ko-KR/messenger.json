@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "{{platform}}에 보낼 메시지를 작성하세요…",
   "messenger.push.queued": "{{count}}개의 대기 중인 메시지가 {{platform}}에서 봇에게 메시지를 보낸 후 전달됩니다.",
   "messenger.push.queuedToast": "전송 창이 닫혔습니다 — 메시지가 대기 중입니다. {{platform}}에서 봇에게 메시지를 보내면 받을 수 있습니다.",
+  "messenger.push.resource.description": "파일은 연결된 {{platform}} 계정에 첨부 파일로 전송됩니다.",
+  "messenger.push.resource.placeholder": "메시지를 추가하세요 (선택 사항)…",
   "messenger.push.retry": "다시 시도",
   "messenger.push.sectionTitle": "메시지 푸시",
   "messenger.push.send": "{{platform}}에 보내기",

@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "Escribe un mensaje para enviar a {{platform}}…",
   "messenger.push.queued": "{{count}} mensaje(s) en cola se entregarán después de que envíes un mensaje al bot en {{platform}}.",
   "messenger.push.queuedToast": "La ventana de envío está cerrada — tu mensaje está en cola. Envía un mensaje al bot en {{platform}} para recibirlo.",
+  "messenger.push.resource.description": "El archivo se enviará como un adjunto a tu cuenta vinculada de {{platform}}.",
+  "messenger.push.resource.placeholder": "Añade un mensaje (opcional)…",
   "messenger.push.retry": "Intentar de nuevo",
   "messenger.push.sectionTitle": "Envío de mensajes",
   "messenger.push.send": "Enviar a {{platform}}",

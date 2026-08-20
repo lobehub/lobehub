@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "Напишете съобщение за изпращане до {{platform}}…",
   "messenger.push.queued": "{{count}} съобщение(я) в опашката ще бъдат доставени, след като изпратите съобщение до бота в {{platform}}.",
   "messenger.push.queuedToast": "Прозорецът за изпращане е затворен — вашето съобщение е в опашката. Изпратете съобщение до бота в {{platform}}, за да го получите.",
+  "messenger.push.resource.description": "Файлът ще бъде изпратен като прикачен файл към свързания ви {{platform}} акаунт.",
+  "messenger.push.resource.placeholder": "Добавете съобщение (по избор)…",
   "messenger.push.retry": "Опитайте отново",
   "messenger.push.sectionTitle": "Изпращане на съобщения",
   "messenger.push.send": "Изпратете до {{platform}}",

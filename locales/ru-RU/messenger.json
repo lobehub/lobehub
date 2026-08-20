@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "Напишите сообщение для отправки в {{platform}}…",
   "messenger.push.queued": "{{count}} сообщение(й) в очереди будет доставлено после того, как вы отправите сообщение боту в {{platform}}.",
   "messenger.push.queuedToast": "Окно отправки закрыто — ваше сообщение добавлено в очередь. Отправьте сообщение боту в {{platform}}, чтобы получить его.",
+  "messenger.push.resource.description": "Файл будет отправлен в виде вложения на ваш связанный аккаунт {{platform}}.",
+  "messenger.push.resource.placeholder": "Добавьте сообщение (необязательно)…",
   "messenger.push.retry": "Попробовать снова",
   "messenger.push.sectionTitle": "Отправка сообщений",
   "messenger.push.send": "Отправить в {{platform}}",

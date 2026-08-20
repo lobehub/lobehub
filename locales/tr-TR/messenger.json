@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "{{platform}}'a göndermek için bir mesaj yazın…",
   "messenger.push.queued": "{{count}} bekleyen mesaj, {{platform}}'da bota mesaj gönderdikten sonra teslim edilecek.",
   "messenger.push.queuedToast": "Gönderim penceresi kapalı — mesajınız sıraya alındı. Mesajı almak için {{platform}}'da bota mesaj gönderin.",
+  "messenger.push.resource.description": "Dosya, bağlı {{platform}} hesabınıza ek olarak gönderilecektir.",
+  "messenger.push.resource.placeholder": "Bir mesaj ekleyin (isteğe bağlı)…",
   "messenger.push.retry": "Tekrar dene",
   "messenger.push.sectionTitle": "Mesaj Gönderimi",
   "messenger.push.send": "{{platform}}'a gönder",

@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "Schrijf een bericht om te verzenden naar {{platform}}…",
   "messenger.push.queued": "{{count}} bericht(en) in de wachtrij worden afgeleverd nadat je de bot een bericht stuurt in {{platform}}.",
   "messenger.push.queuedToast": "Het verzendvenster is gesloten — je bericht staat in de wachtrij. Stuur een bericht naar de bot in {{platform}} om het te ontvangen.",
+  "messenger.push.resource.description": "Het bestand wordt als bijlage verzonden naar je gekoppelde {{platform}} account.",
+  "messenger.push.resource.placeholder": "Voeg een bericht toe (optioneel)…",
   "messenger.push.retry": "Opnieuw proberen",
   "messenger.push.sectionTitle": "Bericht Push",
   "messenger.push.send": "Verstuur naar {{platform}}",

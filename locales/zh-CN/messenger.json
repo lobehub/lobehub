@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "输入要发送到 {{platform}} 的消息…",
   "messenger.push.queued": "{{count}} 条消息排队中，你在 {{platform}} 中给机器人发送消息后将自动送达。",
   "messenger.push.queuedToast": "发送窗口未打开，消息已排队。在 {{platform}} 中给机器人发送消息后即可收到。",
+  "messenger.push.resource.description": "文件将作为附件发送到你绑定的 {{platform}} 账号。",
+  "messenger.push.resource.placeholder": "附带一条消息（可选）…",
   "messenger.push.retry": "重试",
   "messenger.push.sectionTitle": "消息推送",
   "messenger.push.send": "发送到 {{platform}}",

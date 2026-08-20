@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "{{platform}}に送信するメッセージを入力してください…",
   "messenger.push.queued": "{{count}}件のキューに入ったメッセージは、{{platform}}でボットにメッセージを送信した後に配信されます。",
   "messenger.push.queuedToast": "送信ウィンドウが閉じています — メッセージはキューに入れられました。{{platform}}でボットにメッセージを送信すると受信できます。",
+  "messenger.push.resource.description": "ファイルはリンクされた{{platform}}アカウントに添付ファイルとして送信されます。",
+  "messenger.push.resource.placeholder": "メッセージを追加してください（任意）…",
   "messenger.push.retry": "再試行",
   "messenger.push.sectionTitle": "メッセージプッシュ",
   "messenger.push.send": "{{platform}}に送信",

@@ -74,6 +74,8 @@
   "messenger.push.placeholder": "اكتب رسالة لإرسالها إلى {{platform}}…",
   "messenger.push.queued": "{{count}} رسالة (رسائل) في الانتظار سيتم تسليمها بعد أن ترسل رسالة إلى الروبوت في {{platform}}.",
   "messenger.push.queuedToast": "نافذة الإرسال مغلقة — تم وضع رسالتك في الانتظار. أرسل رسالة إلى الروبوت في {{platform}} لاستلامها.",
+  "messenger.push.resource.description": "سيتم إرسال الملف كمرفق إلى حسابك المرتبط على {{platform}}.",
+  "messenger.push.resource.placeholder": "أضف رسالة (اختياري)…",
   "messenger.push.retry": "حاول مرة أخرى",
   "messenger.push.sectionTitle": "دفع الرسائل",
   "messenger.push.send": "إرسال إلى {{platform}}",
