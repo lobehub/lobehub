@@ -324,6 +324,26 @@ describe('sendProactiveWechatMessage', () => {
     ]);
   });
 
+  it('queues an upload failure for retry even when nothing else fails', async () => {
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
+    // Text lands; the upload fails inside sendWechatAttachments (the mocked
+    // client has no uploadCdnMedia) and there is no link leg at all.
+    const result = await sendProactiveWechatMessage({
+      attachments: [
+        { data: Buffer.alloc(1024, 1).toString('base64'), name: 'small.png', type: 'image' },
+      ],
+      content: 'here you go',
+      serverDB,
+      userId: LOBE_USER,
+    });
+
+    expect(result).toEqual({ status: 'queued' });
+    const queued = JSON.parse(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))![0]);
+    expect(queued.content).toBeUndefined();
+    expect(queued.attachments).toHaveLength(1);
+    expect(queued.attachments[0].name).toBe('small.png');
+  });
+
   it('reports unlinked when the user has no WeChat account link', async () => {
     mockFindByPlatform.mockResolvedValueOnce(undefined);
 

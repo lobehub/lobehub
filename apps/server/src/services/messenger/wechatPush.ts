@@ -180,24 +180,30 @@ const deliver = async (
     progress.contentDelivered = true;
   }
   // Per-item upload failures are swallowed inside `sendWechatAttachments` by
-  // design, but it reports which attachments never landed. Requeue those plus
-  // the degraded ones — mapping back to the untouched originals so a failed
-  // recompressed image does not put megabytes of base64 into Redis.
+  // design, but it reports which attachments never landed. Map them back to
+  // the untouched originals so a failed recompressed image is requeued as its
+  // small source rather than megabytes of base64.
   const failed = prepared.attachments.length
     ? await sendWechatAttachments(api, platformUserId, prepared.attachments, token)
     : [];
-  progress.undeliveredAttachments = [
-    ...failed.map(
-      (attachment) =>
-        prepared.keptOriginals[prepared.attachments.indexOf(attachment)] ?? attachment,
-    ),
-    ...prepared.degraded,
-  ];
+  const failedOriginals = failed.map(
+    (attachment) => prepared.keptOriginals[prepared.attachments.indexOf(attachment)] ?? attachment,
+  );
+  // Degraded attachments are owed their link until the loop below sends it.
+  progress.undeliveredAttachments = [...failedOriginals, ...prepared.degraded];
 
   for (const message of prepared.linkMessages) {
     await api.sendMessage(platformUserId, message, token);
   }
-  progress.undeliveredAttachments = [];
+  progress.undeliveredAttachments = failedOriginals;
+
+  // A reported upload failure is retried on the next inbound message rather
+  // than dropped — the same rule the link leg follows, so an attachment is
+  // never silently lost just because a *different* leg happened to succeed.
+  // Bounded by the queue's own 72h TTL and size cap, so a permanently
+  // unsendable attachment cannot retry forever.
+  if (failedOriginals.length > 0)
+    throw new Error(`${failedOriginals.length} WeChat attachment(s) failed to send`);
 };
 
 export interface WechatPushWindowStatus {
@@ -364,13 +370,9 @@ export const flushPendingWechatPushes = async (params: {
       return 'sent';
     } catch (error) {
       log('flushPendingWechatPushes: replay failed for %s: %O', platformUserId, error);
+      // Requeue only the legs still owed — `undefined` means everything landed.
       const remaining = undeliveredPayload(payload, progress);
-      if (!remaining) return 'sent';
-      // Requeue only the legs still owed; `stop` when nothing landed at all.
-      return remaining === payload ||
-        (!progress.contentDelivered && !progress.undeliveredAttachments)
-        ? 'stop'
-        : { requeue: remaining };
+      return remaining ? { requeue: remaining } : 'sent';
     }
   });
 };
