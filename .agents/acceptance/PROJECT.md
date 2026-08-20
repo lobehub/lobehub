@@ -156,8 +156,22 @@ stale standalone install: a recently added workspace package fails to resolve �
   and failure modes: `.agents/acceptance/references/auth.md`.
 
 - **Login-state check** is standardized — do NOT hand-roll a `window.__LOBE_STORES`
-  eval; use `.agents/acceptance/scripts/app-probe.sh auth` (returns `{ isSignedIn, userId }`,
-  works for Electron CDP and web sessions via `AB_TARGET`).
+  eval; use `.agents/acceptance/scripts/app-probe.sh auth` (returns
+  `{ isSignedIn, serverOk, serverStatus, userId }`, works for Electron CDP and web
+  sessions via `AB_TARGET`). Read BOTH fields: `isSignedIn: true` with
+  `serverOk: false` is not a login problem to debug — it means the app is holding a
+  session minted against a different backend, which the probe spells out in `hint`.
+
+- **"登录已过期" / `invalid_grant` on an Electron boot is an environment symptom, not
+  a product bug.** The app persists `dataSyncConfig.remoteServerUrl` plus its OAuth
+  tokens in the userData dir, and every worktree allocates its own server port, so a
+  carried-over profile points at the wrong backend and its proactive refresh fails on
+  every boot. `electron-dev.sh start` now runs legacy mode in its own profile
+  (`~/.lobehub/agent-testing/electron-userdata`) and repoints it at this run's
+  `SERVER_URL` before launch, dropping the previous server's tokens. If you still see
+  it: you are running with `LOBE_SHARED_PROFILE=1`, or you launched Electron without
+  the script. Do NOT edit the user's own profile by hand, and never drive the OAuth
+  flow to "fix" it.
 
 ## 4. Surfaces
 

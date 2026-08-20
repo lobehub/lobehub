@@ -35,6 +35,18 @@
 #   If an instance is killed instead of stopped (crash, command timeout), its
 #   rotated token dies with it — run `save-login` before anything risky.
 #
+# Why the profile is isolated (and the server URL rewritten on every start):
+#   The app persists `dataSyncConfig.remoteServerUrl` and its OAuth tokens in the
+#   userData dir. Legacy mode used to run in the user's OWN desktop profile, so
+#   every run inherited whatever backend ran last — and each worktree allocates a
+#   different server port (test-env.sh), so that pointer was stale nearly every
+#   time. Worse, the inherited tokens were minted by a DIFFERENT backend, whose
+#   grants do not exist in this database: the app then failed its proactive
+#   refresh with `invalid_grant` on every boot and raised "session expired",
+#   which costs a diagnosis every single run. Legacy mode now keeps its own
+#   profile and start() repoints it at THIS run's server, dropping tokens that
+#   belonged to the previous one.
+#
 # Environment variables:
 #   CDP_PORT          — (legacy only) CDP port (default: 9222)
 #   ELECTRON_LOG      — (legacy only) log file path (default: /tmp/electron-dev.log)
@@ -45,6 +57,11 @@
 #                       (default: ~/.lobehub/agent-testing/electron-login)
 #   LOBE_GOLDEN_PROFILE — userData to seed from when no snapshot exists yet
 #                       (default: ~/Library/Application Support/lobehub-desktop-dev)
+#   LOBE_AGENT_PROFILE — userData legacy mode runs in, kept out of the user's own
+#                       desktop app (default: ~/.lobehub/agent-testing/electron-userdata)
+#   LOBE_SHARED_PROFILE=1 — legacy mode runs in the user's own profile instead
+#                       (the pre-isolation behaviour; see "Why the profile is
+#                       isolated" below)
 #   KEEP_DATA=1       — on `stop <id>`, keep the instance's userData dir
 #   SKIP_LOGIN_SAVE=1 — on `stop <id>`, do not snapshot the login state
 #   ELECTRON_WAIT_S   — max seconds to wait for CDP (default: 90)
@@ -67,6 +84,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 POOL_DIR="${POOL_DIR:-/tmp/lobe-electron-pool}"
 GOLDEN_PROFILE="${LOBE_GOLDEN_PROFILE:-$HOME/Library/Application Support/lobehub-desktop-dev}"
+# Legacy mode's own userData. Persistent (never wiped by `stop`) so one sign-in
+# covers every later run, and separate from GOLDEN_PROFILE so the user's desktop
+# app and this one stop overwriting each other's server URL and tokens.
+AGENT_PROFILE="${LOBE_AGENT_PROFILE:-$HOME/.lobehub/agent-testing/electron-userdata}"
 # Persistent across runs AND across /tmp cleanup — the pool dir is not.
 LOGIN_STATE_DIR="${LOBE_LOGIN_STATE_DIR:-$HOME/.lobehub/agent-testing/electron-login}"
 
@@ -91,7 +112,10 @@ derive_instance() {
     POOL_MODE=0
     CDP_PORT="${ENV_CDP_PORT:-$CDP_BASE}"
     VITE_PORT="" # legacy: no override, config default applies
-    USER_DATA_DIR="" # legacy: default userData
+    # Own profile by default; LOBE_SHARED_PROFILE=1 restores the old behaviour of
+    # running inside the user's desktop app profile.
+    USER_DATA_DIR=""
+    [ "${LOBE_SHARED_PROFILE:-0}" = "1" ] || USER_DATA_DIR="$AGENT_PROFILE"
     IPC_ID="" # legacy: default IPC id
     ELECTRON_LOG="${ENV_ELECTRON_LOG:-/tmp/electron-dev.log}"
     PIDFILE="/tmp/electron-dev-cdp-${CDP_PORT}.pid"
@@ -266,6 +290,38 @@ profile_can_reauth() {
   [ "${state%% *}" = "1" ]
 }
 
+# Point a profile we own at THIS run's server, and drop tokens minted by another
+# one. Without this the app boots against whatever backend the previous run (or
+# worktree) used: a dead port raises "connection refused", and a live-but-different
+# backend has no matching grant, so the proactive refresh fails `invalid_grant`
+# and the app raises "session expired" while its cookie session still works —
+# an alarming symptom with a boring cause, rediscovered once per run.
+#
+# Never touches the user's own profile: LOBE_SHARED_PROFILE=1 opts out entirely.
+sync_profile_server() {
+  local profile="$1" server_url="" database_url=""
+
+  [ -n "$profile" ] || return 0
+
+  server_url="$("$SCRIPT_DIR/test-env.sh" --exports 2>/dev/null |
+    sed -n 's/^export SERVER_URL=//p' | head -1)"
+  if [ -z "$server_url" ]; then
+    echo "[electron-dev] WARNING: could not resolve SERVER_URL — leaving the profile's server URL as-is."
+    return 0
+  fi
+
+  # Which database the tokens were signed into is what decides whether they can
+  # still be refreshed; the port alone cannot tell us. Absent (e.g. the repo has
+  # its own .env and the bootstrap declines to answer) just means "unknown", and
+  # the helper falls back to dropping only unstamped tokens.
+  database_url="$("$SCRIPT_DIR/init-dev-env.sh" env 2>/dev/null |
+    sed -n 's/^export DATABASE_URL=//p' | head -1)"
+
+  mkdir -p "$profile"
+  echo "[electron-dev]   profile:   $(python3 "$SCRIPT_DIR/electron-profile-server.py" \
+    "$profile/lobehub-settings.json" "$server_url" "$database_url")"
+}
+
 describe_login() {
   local label="$1" profile="$2" state ms access
   if [ ! -d "$profile" ]; then
@@ -435,8 +491,9 @@ do_stop() {
   agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close --all 2>/dev/null || true
   rm -f "$PIDFILE"
 
-  # Pool mode: capture the (freshly rotated) login before touching the userData,
-  # then wipe it unless asked to keep it.
+  # Pool mode only: its userData is wiped below, so the snapshot is the only thing
+  # that survives it. Legacy keeps its own profile across runs, so saving from it
+  # would just risk overwriting a good snapshot with a worse one.
   if [ "$POOL_MODE" = "1" ] && [ -n "$USER_DATA_DIR" ]; then
     [ "${SKIP_LOGIN_SAVE:-0}" = "1" ] || save_login_state "$USER_DATA_DIR" "$authed"
     if [ "${KEEP_DATA:-0}" = "1" ]; then
@@ -482,13 +539,18 @@ do_start() {
     waited=$((waited + 1))
   done
 
-  # Env prefix + userData seeding for pool instances.
+  # Env prefix + userData seeding. Both modes now run in a profile we own, so
+  # both get seeded once and repointed at this run's server on every start.
   local env_assignments=""
   if [ "$POOL_MODE" = "1" ]; then
     mkdir -p "$POOL_DIR"
     seed_userdata "$USER_DATA_DIR"
     env_assignments="LOBE_DESKTOP_USER_DATA_DIR='$USER_DATA_DIR' LOBE_DESKTOP_VITE_PORT=$VITE_PORT LOBE_IPC_ID='$IPC_ID'"
+  elif [ -n "$USER_DATA_DIR" ]; then
+    seed_userdata "$USER_DATA_DIR"
+    env_assignments="LOBE_DESKTOP_USER_DATA_DIR='$USER_DATA_DIR'"
   fi
+  sync_profile_server "$USER_DATA_DIR"
 
   echo "[electron-dev] Starting Electron dev..."
   echo "[electron-dev]   Project:   $PROJECT_ROOT"

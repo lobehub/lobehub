@@ -194,12 +194,24 @@ Login state must be **injected directly**, never acquired through a login page:
    Electron surface needs one manual sign-in (once — the snapshot then covers
    future runs). Do not open any login page on their behalf.
 
-Three traps behind a signed-out instance:
+Four traps behind a signed-out instance:
+
+- **A profile carried over from another backend.** This is the common one, and it
+  does not look like a login problem: the app raises "登录已过期" and the main log
+  shows `Token refresh failed: 400 ... invalid_grant` on every boot. The tokens were
+  minted by whichever server the profile last pointed at, and that server's grants do
+  not exist in this run's database — check with
+  `psql -c 'select count(*) from oidc_refresh_tokens'` against the test DB; zero means
+  the token could never have worked here. `electron-dev.sh start` prevents it by
+  keeping legacy mode in its own profile and repointing it at this run's `SERVER_URL`
+  (dropping the old server's tokens) before launch. Signing in again does not fix it
+  and drags the user's real cloud login into a test run.
 
 - **The refresh token rotates on every boot.** Only the instance that booted last
   holds a usable one, so a `stop` is what keeps the snapshot alive. If an instance is
   _killed_ instead (crash, command timeout) its rotated token dies with it —
   `save-login <id>` before anything risky.
+
 - **`encryptedTokens.expiresAt` is the ACCESS token's expiry, not the refresh
   token's.** It is `Date.now() + data.expires_in * 1000` in
   `RemoteServerConfigCtr.saveTokens`, so it goes stale on a perfectly refreshable
@@ -207,6 +219,7 @@ Three traps behind a signed-out instance:
   signed out is a **missing `refreshToken`**: the app calls `clearTokens()` (deleting
   the whole `encryptedTokens` key) when a refresh fails non-retryably
   (`invalid_grant` \&co), and preserves it on transient failures.
+
 - **Even a missing token does not always mean signed out.** A better-auth cookie can
   outlive it. `stop` / `save-login` probe the _running renderer_ for a user id, so a
   live cookie-only session is captured too; the on-disk token alone would miss it.

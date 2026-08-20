@@ -26,6 +26,11 @@ if [[ "$*" == *"eval --stdin"* ]]; then
   source="$(cat)"
   case "$source" in
     *rootChildren*) echo '{"ok":true,"rootChildren":1,"storeCount":2,"stores":["chat","user"]}' ;;
+    # Must precede the server-auth branch: the auth probe fetches the same
+    # endpoint, and only its source mentions serverOk.
+    *serverOk*)
+      echo '{"ok":false,"isSignedIn":true,"serverOk":false,"serverStatus":401,"userId":"user_1","hint":"client store says signed in but the server rejects the session"}'
+      ;;
     *user.getUserState*) echo '{"ok":true,"authenticated":true,"status":200}' ;;
     *Object.keys\(stores\).sort*) echo '{"ok":true,"stores":["chat","user"]}' ;;
     *runningCount*)
@@ -65,6 +70,14 @@ assert_contains "$ready" '"rootChildren":1'
 
 server_auth="$("$SCRIPT" server-auth)"
 assert_contains "$server_auth" '"status":200'
+
+# A hydrated client store must never be reported as authenticated on its own:
+# the profile can hold a session minted against a different backend, and the
+# resulting false green costs a wrong-layer investigation on every run.
+auth="$("$SCRIPT" auth)"
+assert_contains "$auth" '"isSignedIn":true'
+assert_contains "$auth" '"serverOk":false'
+assert_contains "$auth" '"ok":false'
 
 stores="$("$SCRIPT" stores)"
 assert_contains "$stores" '"chat"'

@@ -49,12 +49,42 @@ case "${1:-}" in
 EVALEOF
     ;;
   auth)
+    # Reports BOTH truths on purpose. The client store can say "signed in" from a
+    # hydrated local profile while every server call is 401 — that false green
+    # sends you hunting the wrong layer. `serverOk: false` alongside
+    # `isSignedIn: true` means the app is holding a session this backend does not
+    # recognise: the profile was minted against another server (see
+    # electron-dev.sh, "Why the profile is isolated").
     run_eval << 'EVALEOF'
-(function () {
+(async function () {
   var stores = window.__LOBE_STORES;
   if (!stores || !stores.user) return JSON.stringify({ ok: false, reason: 'no user store — app not loaded yet?' });
   var u = stores.user();
-  return JSON.stringify({ ok: !!u.isSignedIn, isSignedIn: !!u.isSignedIn, userId: (u.user && u.user.id) || null });
+  var isSignedIn = !!u.isSignedIn;
+  var serverOk = null;
+  var serverStatus = null;
+  try {
+    var input = encodeURIComponent(JSON.stringify({ json: {} }));
+    var response = await fetch('/trpc/lambda/user.getUserState?input=' + input, {
+      credentials: 'include',
+    });
+    serverStatus = response.status;
+    serverOk = response.status === 200;
+  } catch (error) {
+    serverOk = false;
+    serverStatus = String((error && error.message) || error);
+  }
+  return JSON.stringify({
+    ok: isSignedIn && serverOk === true,
+    isSignedIn: isSignedIn,
+    serverOk: serverOk,
+    serverStatus: serverStatus,
+    userId: (u.user && u.user.id) || null,
+    hint:
+      isSignedIn && serverOk === false
+        ? 'client store says signed in but the server rejects the session — the profile belongs to another backend; restart via electron-dev.sh so it repoints at this run'
+        : undefined,
+  });
 })()
 EVALEOF
     ;;
