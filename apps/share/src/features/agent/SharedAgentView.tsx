@@ -7,15 +7,20 @@ import ShareShell from '@/business/client/features/ShareShell';
 import { useSharedAgent } from '@/features/AgentShareVisitor/useSharedAgent';
 
 import { clientOnly } from '../../shell/clientOnly';
+import { shouldShowSharedAgentLoader } from './loading';
 
 const SharedAgentBody = clientOnly(() => import('./SharedAgentBody.client'));
 
 const SharedAgentView = memo(() => {
   const { id } = useParams<{ id: string }>();
-  const { error, isLoading } = useSharedAgent(id);
+  const { data, error, isLoading } = useSharedAgent(id);
 
   return (
-    <ShareShell error={error} errorResource="agent" loading={!error && isLoading}>
+    <ShareShell
+      error={error}
+      errorResource="agent"
+      loading={!error && shouldShowSharedAgentLoader({ hasData: Boolean(data), isLoading })}
+    >
       <SharedAgentBody />
     </ShareShell>
   );
