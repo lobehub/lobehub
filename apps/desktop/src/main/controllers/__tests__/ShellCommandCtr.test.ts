@@ -38,6 +38,15 @@ vi.mock('../CliCtr', () => ({
   default: class CliCtr {},
 }));
 
+const { mockBinNames } = vi.hoisted(() => ({
+  // Upstream's own names, so every pre-existing expectation below is unchanged.
+  mockBinNames: vi.fn(() => ['lobehub', 'lh', 'lobe']),
+}));
+
+vi.mock('@/modules/cliEmbedding/generateCliWrapper', () => ({
+  binNames: () => mockBinNames(),
+}));
+
 const {
   mockCanInstallSandbox,
   mockCreateSandboxLaunchPlan,
@@ -80,6 +89,15 @@ describe('ShellCommandCtr (thin wrapper)', () => {
 
   const emitChildProcess = (event: string, ...args: any[]) => {
     for (const listener of listeners.get(event) ?? []) listener(...args);
+  };
+
+  /** Let the next spawned command exit cleanly, so the await can settle. */
+  const finishSpawnedProcess = () => {
+    setTimeout(() => {
+      mockChildProcess.exitCode = 0;
+      emitChildProcess('exit', 0);
+      emitChildProcess('close', 0);
+    }, 10);
   };
 
   beforeEach(async () => {
@@ -128,6 +146,9 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       return mockChildProcess;
     });
     ctr = new ShellCommandCtr(mockApp);
+    // `clearAllMocks` clears calls, not implementations — restore the default
+    // so a test that rebrands the CLI cannot leak into the next one.
+    mockBinNames.mockReturnValue(['lobehub', 'lh', 'lobe']);
   });
 
   it('should delegate handleRunCommand to shared runCommand', async () => {
@@ -195,6 +216,42 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     expect(result.success).toBe(true);
     expect(result.output).toContain('cli output');
     expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The carve-out is keyed to "this is our own control-plane CLI", which the
+   * hardcoded `lh|lobe|lobehub` answered wrongly for any build that embeds its
+   * CLI under a different name: that binary went down the sandboxed path, where
+   * the injected credentials and server URL it needs are stripped.
+   */
+  it('routes a rebranded CLI name to CliCtr.runCliCommand', async () => {
+    mockBinNames.mockReturnValue(['acme']);
+
+    const result = await ctr.handleRunCommand({ command: 'acme status --json' });
+
+    expect(mockCliCtr.runCliCommand).toHaveBeenCalledWith('status --json');
+    expect(result.success).toBe(true);
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('does not carve out upstream names a rebranded build does not install', async () => {
+    mockBinNames.mockReturnValue(['acme']);
+    finishSpawnedProcess();
+
+    await ctr.handleRunCommand({ command: 'lh status' });
+
+    expect(mockCliCtr.runCliCommand).not.toHaveBeenCalled();
+    expect(mockSpawn).toHaveBeenCalled();
+  });
+
+  it('matches only whole command names, not prefixes of other commands', async () => {
+    mockBinNames.mockReturnValue(['acme']);
+    finishSpawnedProcess();
+
+    await ctr.handleRunCommand({ command: 'acmex --version' });
+
+    expect(mockCliCtr.runCliCommand).not.toHaveBeenCalled();
+    expect(mockSpawn).toHaveBeenCalled();
   });
 
   it('should route lobehub commands to CliCtr.runCliCommand', async () => {

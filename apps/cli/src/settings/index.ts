@@ -3,13 +3,23 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { resolveCliDirName } from '../constants/identity';
+import { readCliCommandModeEnv, resolveCliDirName } from '../constants/identity';
 import { OFFICIAL_AGENT_GATEWAY_URL, OFFICIAL_SERVER_URL } from '../constants/urls';
 import { log } from '../utils/logger';
+import type { CommandMode } from './commandMode';
+import { DEFAULT_COMMAND_MODE, mergeCommandMode, parseCommandMode } from './commandMode';
 
 export interface StoredSettings {
   agentGatewayUrl?: string;
+  /** How commands dispatched to this device are fenced. See {@link CommandMode}. */
+  commandMode?: CommandMode;
   gatewayUrl?: string;
+  /**
+   * Whether a fence this device imposes itself may reach the package-registry
+   * allowlist. Only consulted when the device is the one imposing it — a run
+   * that asked to be sandboxed also decided its own network answer.
+   */
+  sandboxNetwork?: boolean;
   serverUrl?: string;
 }
 
@@ -42,17 +52,47 @@ export function resolveAgentGatewayUrl(): string | undefined {
   return envUrl || settingsUrl || OFFICIAL_AGENT_GATEWAY_URL;
 }
 
-export function saveSettings(settings: StoredSettings): void {
+function normalizeSettings(settings: StoredSettings): StoredSettings {
   const agentGatewayUrl = normalizeUrl(settings.agentGatewayUrl);
   const gatewayUrl = normalizeUrl(settings.gatewayUrl);
   const serverUrl = normalizeUrl(settings.serverUrl);
-  const normalized: StoredSettings = {
+  const commandMode = parseCommandMode(settings.commandMode);
+
+  return {
     agentGatewayUrl: agentGatewayUrl === OFFICIAL_AGENT_GATEWAY_URL ? undefined : agentGatewayUrl,
+    // The default carries no information — persisting it would keep a file
+    // alive that says nothing, and `isEmptySettings` treats it as absent.
+    commandMode: commandMode === DEFAULT_COMMAND_MODE ? undefined : commandMode,
     gatewayUrl,
+    sandboxNetwork: settings.sandboxNetwork === true ? true : undefined,
     serverUrl: serverUrl === OFFICIAL_SERVER_URL ? undefined : serverUrl,
   };
+}
 
-  if (!normalized.serverUrl && !normalized.gatewayUrl && !normalized.agentGatewayUrl) {
+/**
+ * Whether a normalized settings object still carries anything worth a file.
+ *
+ * Every field has to be listed here. The URL-only version of this check was
+ * load-bearing in a way that is easy to miss: a distribution that compiles its
+ * own server URL in has users whose URLs are all default, so the moment
+ * anything else was stored beside them, saving it deleted the file it had just
+ * been asked to write — and reading it back returned nothing, with no error on
+ * either side.
+ */
+function isEmptySettings(settings: StoredSettings): boolean {
+  return (
+    !settings.serverUrl &&
+    !settings.gatewayUrl &&
+    !settings.agentGatewayUrl &&
+    !settings.commandMode &&
+    !settings.sandboxNetwork
+  );
+}
+
+export function saveSettings(settings: StoredSettings): void {
+  const normalized = normalizeSettings(settings);
+
+  if (isEmptySettings(normalized)) {
     try {
       fs.unlinkSync(SETTINGS_FILE);
     } catch (error) {
@@ -138,17 +178,9 @@ export function loadSettings(): StoredSettings | null {
 
   try {
     const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
-    const parsed = JSON.parse(data) as StoredSettings;
-    const agentGatewayUrl = normalizeUrl(parsed.agentGatewayUrl);
-    const gatewayUrl = normalizeUrl(parsed.gatewayUrl);
-    const serverUrl = normalizeUrl(parsed.serverUrl);
-    const normalized: StoredSettings = {
-      agentGatewayUrl: agentGatewayUrl === OFFICIAL_AGENT_GATEWAY_URL ? undefined : agentGatewayUrl,
-      gatewayUrl,
-      serverUrl: serverUrl === OFFICIAL_SERVER_URL ? undefined : serverUrl,
-    };
+    const normalized = normalizeSettings(JSON.parse(data) as StoredSettings);
 
-    if (!normalized.serverUrl && !normalized.gatewayUrl && !normalized.agentGatewayUrl) return null;
+    if (isEmptySettings(normalized)) return null;
 
     return normalized;
   } catch {
@@ -157,4 +189,31 @@ export function loadSettings(): StoredSettings | null {
     );
     return null;
   }
+}
+
+/**
+ * The fencing mode in force on this device.
+ *
+ * The environment can only tighten what is stored, for the same reason a server
+ * push-down can only tighten it: an operator who set `sandbox` on a machine
+ * should not find it turned off by a variable that happened to be exported into
+ * some agent's shell. An unrecognised value is ignored rather than fatal —
+ * failing every command over a typo in an env var is a worse outcome than
+ * running with the stored mode and saying so.
+ */
+export function resolveCommandMode(pushed?: CommandMode): CommandMode {
+  const stored = parseCommandMode(loadSettings()?.commandMode) ?? DEFAULT_COMMAND_MODE;
+
+  const raw = readCliCommandModeEnv();
+  const fromEnv = parseCommandMode(raw);
+  if (raw && !fromEnv) {
+    log.warn(`Ignoring unrecognised command mode from the environment: ${raw}`);
+  }
+
+  return mergeCommandMode(mergeCommandMode(stored, fromEnv), pushed);
+}
+
+/** Whether a device-imposed fence may reach the package-registry allowlist. */
+export function resolveSandboxNetwork(): boolean {
+  return loadSettings()?.sandboxNetwork === true;
 }

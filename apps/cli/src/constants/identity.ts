@@ -71,6 +71,19 @@ export const CLI_CONNECT_SERVICE_NAME = 'lobehub-connect.service';
  */
 export const CLI_API_KEY_ENV_NAMES: readonly string[] = ['LOBEHUB_CLI_API_KEY'];
 export const CLI_HOME_ENV_NAMES: readonly string[] = ['LOBEHUB_CLI_HOME'];
+/**
+ * Overrides the stored `command-mode` for one invocation.
+ *
+ * A user-set variable, so it belongs in this list rather than in the
+ * cross-process contract: an image or CI job that wants every command fenced
+ * sets it in the environment instead of shipping a settings file, and an
+ * operator can tighten a running host without editing state on disk.
+ *
+ * It can only tighten. The env var goes through the same `mergeCommandMode`
+ * bound as a server push-down, so exporting it can never turn an operator's
+ * `sandbox` setting back off.
+ */
+export const CLI_COMMAND_MODE_ENV_NAMES: readonly string[] = ['LOBEHUB_CLI_COMMAND_MODE'];
 
 const firstEnvValue = (names: readonly string[]): string | undefined => {
   for (const name of names) {
@@ -82,6 +95,10 @@ const firstEnvValue = (names: readonly string[]): string | undefined => {
 
 /** API key from the environment, honouring every accepted variable name. */
 export const readCliApiKeyEnv = (): string | undefined => firstEnvValue(CLI_API_KEY_ENV_NAMES);
+
+/** Raw `command-mode` override from the environment, unvalidated. */
+export const readCliCommandModeEnv = (): string | undefined =>
+  firstEnvValue(CLI_COMMAND_MODE_ENV_NAMES);
 
 /** Config directory name, overridable per-install by the home env var. */
 export const resolveCliDirName = (): string =>

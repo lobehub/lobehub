@@ -65,10 +65,11 @@ import {
   loadWorkspaceEnrollments,
   normalizeUrl,
   removeWorkspaceEnrollment,
+  resolveCommandMode,
   saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
-import { cleanupAllProcesses } from '../tools/shell';
+import { cleanupAllProcesses, probeSandbox } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
@@ -316,6 +317,30 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 }
 
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
+  // Before anything else: if this device is configured to fence every command
+  // but cannot, say so here rather than accepting the connection and failing
+  // each command afterwards. A daemon that is online and refuses everything is
+  // the worst of both — it looks healthy to the server, and the reason is
+  // buried in per-command errors nobody reads.
+  //
+  // This is not connect taking over the execution decision. The decision stays
+  // in the stored config; connect only reads it and checks it can be honoured,
+  // the same way it validates a gateway URL before dialling one.
+  const commandMode = resolveCommandMode();
+  if (commandMode === 'sandbox') {
+    const capability = await probeSandbox();
+    if (!capability.available) {
+      log.error(
+        `This device is configured to run every command sandboxed, but the sandbox is unavailable: ${capability.reason ?? 'unsupported host'}.`,
+      );
+      log.error(
+        `Provision the sandbox, or run '${CLI_PRIMARY_BIN} config set command-mode auto' to honour each run's own setting instead.`,
+      );
+      process.exit(1);
+      throw new Error('process.exit');
+    }
+  }
+
   let auth = await resolveToken(options);
   const settings = loadSettings();
   const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;

@@ -7,6 +7,29 @@ export interface RunCommandParams {
   env?: Record<string, string>;
   run_in_background?: boolean;
   /**
+   * Run this command inside the device sandbox.
+   *
+   * Set by whoever knows the run's execution environment, never by the model:
+   * the server device-proxy for gateway-routed runs, the client executor for
+   * in-process desktop runs. A host that honours it and cannot provide a
+   * sandbox must fail the command rather than downgrade to an unfenced spawn,
+   * or the guarantee the user opted into was never real.
+   *
+   * Declared here — beside the params every host receives — rather than only in
+   * the Electron IPC copy, because the field travels to CLI-connected devices
+   * too. A host that reads these params off the wire and does not model the
+   * field silently drops it, which is exactly how a `sandbox: true` run ends up
+   * executing unfenced and reporting success.
+   */
+  sandbox?: boolean;
+  /**
+   * Let a sandboxed command reach the package-registry allowlist. Ignored
+   * unless the run is sandboxed. Never means "the network is open" — the
+   * backend refuses a catch-all allowlist, so this opens a fixed, named set of
+   * registries and forges and nothing else.
+   */
+  sandboxNetwork?: boolean;
+  /**
    * Maximum time to wait for this observation before returning.
    * Does not kill the process when the timeout elapses.
    */

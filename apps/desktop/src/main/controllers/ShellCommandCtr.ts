@@ -25,6 +25,7 @@ import {
   ShellProcessManager,
 } from '@lobechat/local-file-shell/shell';
 
+import { binNames } from '@/modules/cliEmbedding/generateCliWrapper';
 import { createLogger } from '@/utils/logger';
 
 import CliCtr from './CliCtr';
@@ -40,8 +41,24 @@ const processManager = new ShellProcessManager();
  */
 const safeSegment = (value: string): string => value.replaceAll(/[^\w-]/g, '') || 'default';
 
-/** Prefix for a simple `lh`/`lobe`/`lobehub` invocation (keyword + boundary, args via slice). */
-const SIMPLE_LH_PREFIX = /^\s*(?:lh|lobe|lobehub)(?=\s|$)/;
+/**
+ * Match a bare invocation of this build's own CLI (keyword + boundary, args via
+ * slice), or `undefined` when the command is something else.
+ *
+ * Built from the same bin names the wrapper installs rather than the literal
+ * `lh|lobe|lobehub`, because the carve-out below is keyed to "this is our own
+ * control-plane CLI" — a distribution that embeds its CLI under another name
+ * had a hardcoded list quietly answer "no" for its own binary, sending it down
+ * the sandboxed path where the injected credentials it needs are stripped.
+ */
+const matchOwnCliPrefix = (command: string): RegExpExecArray | null => {
+  const alternatives = binNames()
+    .map((name) => name.replaceAll(/[$()*+.?[\]\\^{|}]/g, String.raw`\$&`))
+    .filter(Boolean);
+  if (alternatives.length === 0) return null;
+
+  return new RegExp(String.raw`^\s*(?:${alternatives.join('|')})(?=\s|$)`).exec(command);
+};
 
 export default class ShellCommandCtr extends ControllerModule {
   static override readonly groupName = 'shellCommand';
@@ -241,7 +258,7 @@ export default class ShellCommandCtr extends ControllerModule {
 
   @IpcMethod()
   async handleRunCommand(params: RunCommandParams): Promise<RunCommandResult> {
-    const prefixMatch = SIMPLE_LH_PREFIX.exec(params.command);
+    const prefixMatch = matchOwnCliPrefix(params.command);
     if (prefixMatch) {
       const cliCtr = this.app.getController(CliCtr);
       if (cliCtr) {

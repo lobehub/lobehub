@@ -4,6 +4,7 @@ import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerAgentSignalCommand } from './commands/agent-signal';
 import { registerBotCommand } from './commands/bot';
+import { registerCliConfigCommand } from './commands/cliConfig';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
@@ -73,6 +74,7 @@ export function createProgram() {
   registerLogoutCommand(program);
   registerCompletionCommand(program);
   registerManCommand(program);
+  registerCliConfigCommand(program);
   registerConnectCommand(program);
   registerDeviceCommand(program);
   registerStatusCommand(program);

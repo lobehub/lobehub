@@ -9,6 +9,8 @@ import {
   loadOrCreateConnectionId,
   loadSettings,
   normalizeUrl,
+  resolveCommandMode,
+  resolveSandboxNetwork,
   resolveServerUrl,
   saveSettings,
 } from './index';
@@ -31,6 +33,9 @@ vi.mock('node:os', async (importOriginal) => {
 
 vi.mock('../utils/logger', () => ({
   log: {
+    // `saveSettings` debug-logs when there is no file to unlink, which is the
+    // ordinary path for a store holding only defaults.
+    debug: vi.fn(),
     warn: vi.fn(),
   },
 }));
@@ -39,11 +44,13 @@ describe('settings', () => {
   beforeEach(() => {
     fs.mkdirSync(tmpDir, { recursive: true });
     delete process.env.LOBEHUB_SERVER;
+    delete process.env.LOBEHUB_CLI_COMMAND_MODE;
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { force: true, recursive: true });
     process.env.LOBEHUB_SERVER = originalServer;
+    delete process.env.LOBEHUB_CLI_COMMAND_MODE;
     vi.clearAllMocks();
   });
 
@@ -114,5 +121,83 @@ describe('settings', () => {
 
     expect(fs.existsSync(settingsFile)).toBe(false);
     expect(loadOrCreateConnectionId()).toBe(id);
+  });
+  /**
+   * The store deletes itself when it holds nothing but defaults, and a
+   * distribution that compiles its own server URL in has users whose URLs are
+   * ALL default. Before `command-mode` was added to that emptiness check,
+   * saving it deleted the file it had just written — silently, on both the
+   * write and the read back.
+   */
+  describe('command mode', () => {
+    it('persists alongside default URLs rather than deleting the file', () => {
+      saveSettings({ commandMode: 'sandbox' });
+
+      expect(fs.existsSync(settingsFile)).toBe(true);
+      expect(loadSettings()?.commandMode).toBe('sandbox');
+      expect(resolveCommandMode()).toBe('sandbox');
+    });
+
+    it('survives an unrelated settings write', () => {
+      saveSettings({ commandMode: 'sandbox' });
+      const settings = loadSettings() ?? {};
+      saveSettings({ ...settings, gatewayUrl: 'https://gateway.example.com' });
+
+      expect(resolveCommandMode()).toBe('sandbox');
+    });
+
+    it('defaults to auto and stores nothing for it', () => {
+      expect(resolveCommandMode()).toBe('auto');
+
+      saveSettings({ commandMode: 'auto' });
+      expect(fs.existsSync(settingsFile)).toBe(false);
+    });
+
+    it('ignores an unparseable stored value instead of failing every command', () => {
+      fs.mkdirSync(settingsDir, { recursive: true });
+      fs.writeFileSync(settingsFile, JSON.stringify({ commandMode: 'nonsense' }));
+
+      expect(resolveCommandMode()).toBe('auto');
+    });
+
+    it('lets the environment tighten the stored mode', () => {
+      process.env.LOBEHUB_CLI_COMMAND_MODE = 'sandbox';
+
+      expect(resolveCommandMode()).toBe('sandbox');
+    });
+
+    it('does not let the environment loosen the stored mode', () => {
+      saveSettings({ commandMode: 'sandbox' });
+      process.env.LOBEHUB_CLI_COMMAND_MODE = 'host';
+
+      expect(resolveCommandMode()).toBe('sandbox');
+    });
+
+    it('ignores an unrecognised environment value', () => {
+      process.env.LOBEHUB_CLI_COMMAND_MODE = 'yes-please';
+
+      expect(resolveCommandMode()).toBe('auto');
+      expect(log.warn).toHaveBeenCalled();
+    });
+
+    it('lets a pushed mode tighten but never loosen', () => {
+      saveSettings({ commandMode: 'sandbox' });
+      expect(resolveCommandMode('host')).toBe('sandbox');
+      expect(resolveCommandMode('auto')).toBe('sandbox');
+
+      saveSettings({ commandMode: undefined });
+      expect(resolveCommandMode('sandbox')).toBe('sandbox');
+    });
+
+    it('persists the sandbox network preference on its own', () => {
+      saveSettings({ sandboxNetwork: true });
+
+      expect(fs.existsSync(settingsFile)).toBe(true);
+      expect(resolveSandboxNetwork()).toBe(true);
+
+      saveSettings({ sandboxNetwork: false });
+      expect(fs.existsSync(settingsFile)).toBe(false);
+      expect(resolveSandboxNetwork()).toBe(false);
+    });
   });
 });

@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveToken } from '../auth/resolveToken';
 import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, resolveCommandMode, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
-import { cleanupAllProcesses } from '../tools/shell';
+import { cleanupAllProcesses, probeSandbox } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { registerConnectCommand } from './connect';
 
@@ -39,6 +39,9 @@ vi.mock('../settings', () => ({
   loadWorkspaceEnrollments: vi.fn().mockReturnValue([]),
   normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
   removeWorkspaceEnrollment: vi.fn(),
+  // Default: this device has no opinion on fencing, so connect's readiness
+  // check is a no-op and every scenario below is unaffected by it.
+  resolveCommandMode: vi.fn().mockReturnValue('auto'),
   saveSettings: vi.fn(),
 }));
 
@@ -56,6 +59,7 @@ vi.mock('../utils/logger', () => ({
 
 vi.mock('../tools/shell', () => ({
   cleanupAllProcesses: vi.fn(),
+  probeSandbox: vi.fn().mockResolvedValue({ available: true }),
 }));
 
 let mockRunningPid: number | null = null;
@@ -191,6 +195,35 @@ describe('connect command', () => {
       "Current login uses custom --server https://self-hosted.example.com. Please also provide '--gateway <url>' for the device gateway.",
     );
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  /**
+   * A device configured to fence everything, on a host that cannot, would
+   * otherwise connect successfully and then refuse every command it is sent —
+   * online and healthy from the server's side, with the reason buried in
+   * per-command errors.
+   */
+  it('refuses to connect when it must sandbox but cannot', async () => {
+    vi.mocked(resolveCommandMode).mockReturnValueOnce('sandbox');
+    vi.mocked(probeSandbox).mockResolvedValueOnce({
+      available: false,
+      reason: 'unsupported host',
+    } as never);
+
+    const program = createProgram();
+    await expect(program.parseAsync(['node', 'test', 'connect'])).rejects.toThrow('process.exit');
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('unsupported host'));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('connects normally when it must sandbox and can', async () => {
+    vi.mocked(resolveCommandMode).mockReturnValueOnce('sandbox');
+    vi.mocked(probeSandbox).mockResolvedValueOnce({ available: true } as never);
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should use explicit gateway for custom login server', async () => {

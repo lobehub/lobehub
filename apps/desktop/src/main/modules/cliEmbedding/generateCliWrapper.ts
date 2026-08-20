@@ -34,7 +34,7 @@ const SERVER_ENV_VAR = 'LOBEHUB_SERVER';
  * something else — and on a machine that also has the real upstream CLI, the
  * two would fight over the same three names.
  */
-const binNames = (): string[] => {
+export const binNames = (): string[] => {
   const configured = getDesktopEnv()
     .DESKTOP_CLI_BIN_NAMES?.split(',')
     .map((name) => name.trim())
