@@ -40,11 +40,6 @@ vi.mock('@/features/Verify', () => ({
   OriginConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 
-vi.mock('@/store/task', () => ({
-  useTaskStore: (selector: (s: unknown) => unknown) =>
-    selector({ closeTopicDrawer: () => {}, openTopicDrawer: () => {} }),
-}));
-
 vi.mock('@/features/Verify/Acceptance/TopicPanel', () => ({ default: () => null }));
 
 describe('Portal Acceptance Body — draftToComposer via the global bus', () => {

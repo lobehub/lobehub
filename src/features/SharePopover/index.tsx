@@ -58,8 +58,12 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     s.updateSystemStatus,
   ]);
 
+  // Scoped to the topic that failed: the popover is reused across topics, so a
+  // sticky boolean would keep showing the error on the next one.
+  const [failedTopicId, setFailedTopicId] = useState<string>();
   const {
     data: shareInfo,
+    error: loadError,
     isLoading,
     mutate,
   } = useSWR(
@@ -68,12 +72,18 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     { revalidateOnFocus: false },
   );
 
-  // Auto-create share record if not exists
+  // Auto-create share record if not exists. Surface failures (e.g. a 403 from
+  // the share permission gate) instead of leaving the popover on the skeleton.
   useEffect(() => {
-    if (!isLoading && !shareInfo && activeTopicId && canShare) {
-      topicService.enableSharing(activeTopicId, 'private').then(() => mutate());
-    }
-  }, [isLoading, shareInfo, activeTopicId, canShare, mutate]);
+    if (isLoading || loadError || shareInfo || !activeTopicId || !canShare) return;
+    // One attempt per topic — a rerender must not retry a create we know failed.
+    if (failedTopicId === activeTopicId) return;
+
+    topicService
+      .enableSharing(activeTopicId, 'private')
+      .then(() => mutate())
+      .catch(() => setFailedTopicId(activeTopicId));
+  }, [isLoading, loadError, shareInfo, activeTopicId, canShare, failedTopicId, mutate]);
 
   const shareUrl = shareInfo?.id ? `${appOrigin}/share/t/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as Visibility) || 'private';
@@ -162,11 +172,32 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     onOpenModal?.();
   }, [close, onOpenModal]);
 
+  // Clearing the per-topic failure re-arms the create effect; `mutate` reruns
+  // the read so a transient load error clears with it.
+  const handleRetry = useCallback(() => {
+    setFailedTopicId(undefined);
+    void mutate();
+  }, [mutate]);
+
   if (!canShare) {
     return (
       <Flexbox className={styles.container} gap={8}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
         <Text type="secondary">{reason}</Text>
+      </Flexbox>
+    );
+  }
+
+  if (loadError || failedTopicId === activeTopicId) {
+    return (
+      <Flexbox className={styles.container} gap={8}>
+        <Text strong>{t('share', { ns: 'common' })}</Text>
+        <Text type="secondary">{t('shareModal.popover.loadError')}</Text>
+        <Flexbox horizontal justify={'flex-end'}>
+          <Button size="small" type="text" onClick={handleRetry}>
+            {t('retry', { ns: 'common' })}
+          </Button>
+        </Flexbox>
       </Flexbox>
     );
   }

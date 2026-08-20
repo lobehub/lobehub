@@ -288,6 +288,7 @@
   "actions.backToApp": "Powrót do {{name}}",
   "actions.cancel": "Anuluj",
   "actions.delete": "Usuń",
+  "actions.goToApp": "Przejdź do {{name}}",
   "badge.errored": "Nie można uruchomić sprawdzania",
   "badge.failed": "Sprawdzenie nie powiodło się",
   "badge.passed": "Sprawdzenie zakończone pomyślnie",

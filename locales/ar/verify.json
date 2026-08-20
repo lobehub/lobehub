@@ -288,6 +288,7 @@
   "actions.backToApp": "العودة إلى {{name}}",
   "actions.cancel": "إلغاء",
   "actions.delete": "حذف",
+  "actions.goToApp": "اذهب إلى {{name}}",
   "badge.errored": "تعذر تشغيل الفحص",
   "badge.failed": "فشل التحقق",
   "badge.passed": "تم اجتياز التحقق",

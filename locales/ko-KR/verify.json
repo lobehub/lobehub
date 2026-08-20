@@ -288,6 +288,7 @@
   "actions.backToApp": "{{name}}로 돌아가기",
   "actions.cancel": "취소",
   "actions.delete": "삭제",
+  "actions.goToApp": "{{name}}로 이동",
   "badge.errored": "검사를 실행할 수 없습니다",
   "badge.failed": "검사 실패",
   "badge.passed": "검사 통과",

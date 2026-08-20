@@ -288,6 +288,7 @@
   "actions.backToApp": "Zurück zu {{name}}",
   "actions.cancel": "Abbrechen",
   "actions.delete": "Löschen",
+  "actions.goToApp": "Gehe zu {{name}}",
   "badge.errored": "Überprüfung konnte nicht durchgeführt werden",
   "badge.failed": "Prüfung fehlgeschlagen",
   "badge.passed": "Prüfung bestanden",

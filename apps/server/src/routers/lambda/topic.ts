@@ -90,10 +90,18 @@ interface TopicShareCtx {
 }
 
 /**
- * Workspace share management is creator + workspace-owner only: a member may
- * manage shares of their own topics; managing someone else's requires the
- * `:all` scope (workspace owner). Personal mode needs no extra check — the
- * model's ownership filter already scopes mutations to the caller.
+ * Workspace share management follows the co-editing rule (same gate as
+ * `updateTopic`): any member with `use`-level General access on the topic's
+ * conversation may manage its share by default — view-only members stay
+ * read-only. Personal mode needs no extra check — the model's ownership
+ * filter already scopes mutations to the caller.
+ *
+ * A topic that backs no conversation at all (legacy rows carrying neither an
+ * agent, a group, nor a resolvable session) resolves to zero targets, so the
+ * guard would pass for every member. Sharing is a wider grant than editing —
+ * a link exposes the whole conversation to anyone holding it — so those fall
+ * back to the stricter creator-or-workspace-owner rule rather than inheriting
+ * the vacuous pass.
  */
 const assertCanManageTopicShare = async (ctx: TopicShareCtx, topicId: string) => {
   if (!ctx.workspaceId) return;
@@ -103,6 +111,9 @@ const assertCanManageTopicShare = async (ctx: TopicShareCtx, topicId: string) =>
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
   if (topic.userId === ctx.userId) return;
+
+  const guardedConversations = await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
+  if (guardedConversations.length > 0) return;
 
   const isWorkspaceAdmin = await new RbacModel(ctx.serverDB, ctx.userId).hasPermission(
     `${PERMISSION_ACTIONS.TOPIC_UPDATE}:all`,

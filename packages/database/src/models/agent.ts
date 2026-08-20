@@ -57,6 +57,7 @@ import {
   tasks,
   taskTopics,
   threads,
+  topicDocuments,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
@@ -64,8 +65,14 @@ import {
   collectBoundDeviceIds,
   sanitizeAgencyConfigsForWorkspace,
 } from '../utils/agencyConfigDevices';
-import { rehomeAgentConnectorsForRecipient } from '../utils/agentConnectors';
-import { rehomeAgentDocumentsForRecipient } from '../utils/agentDocumentsOwnership';
+import {
+  rehomeAgentConnectorsForRecipient,
+  rehomeAgentConnectorsForScopeTransfer,
+} from '../utils/agentConnectors';
+import {
+  moveAgentDocumentsForScopeTransfer,
+  rehomeAgentDocumentsForRecipient,
+} from '../utils/agentDocumentsOwnership';
 import { rehomeAgentExpertiseForRecipient } from '../utils/agentExpertise';
 import {
   detachAgentKnowledgeMountsForRecipient,
@@ -2220,15 +2227,12 @@ export class AgentModel {
         .set({ ...ownershipUpdate, updatedAt: topics.updatedAt })
         .where(topicCondition!)
         .returning({ id: topics.id, updatedAt: topics.updatedAt });
+      const movedTopicIds = movedTopics.map((topic) => topic.id);
 
       // 6a. Topic comments denormalize the topic's workspaceId — move them
       // with the topic (or drop them when leaving workspace scope entirely),
       // otherwise workspace-filtered comment reads go stale. See the helper doc.
-      await syncTopicCommentsOnTopicTransfer(
-        trx,
-        movedTopics.map((topic) => topic.id),
-        targetWorkspaceId,
-      );
+      await syncTopicCommentsOnTopicTransfer(trx, movedTopicIds, targetWorkspaceId);
 
       // 7. Message scope rewrite — fast/slow split. Rewriting a message row
       // maintains every message index (incl. the multi-GB BM25 index), so a
@@ -2245,7 +2249,6 @@ export class AgentModel {
         sessionIds.length > 0
           ? or(inArray(messages.sessionId, sessionIds), inArray(messages.agentId, agentIds))
           : inArray(messages.agentId, agentIds);
-      const movedTopicIds = movedTopics.map((topic) => topic.id);
       const [{ affectedMessages }] = await trx
         .select({ affectedMessages: count() })
         .from(messages)
@@ -2321,10 +2324,6 @@ export class AgentModel {
           .update(taskDependencies)
           .set({ ...ownershipUpdate, ...visibilityUpdate })
           .where(inArray(taskDependencies.taskId, movedTaskIds));
-        await trx
-          .update(taskDocuments)
-          .set({ ...ownershipUpdate, ...visibilityUpdate })
-          .where(inArray(taskDocuments.taskId, movedTaskIds));
         await trx
           .update(taskTopics)
           .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: taskTopics.updatedAt })
@@ -2412,6 +2411,72 @@ export class AgentModel {
         .update(agentBotProviders)
         .set({ ...ownershipUpdate, updatedAt: agentBotProviders.updatedAt })
         .where(inArray(agentBotProviders.agentId, agentIds));
+
+      // 14a. Agent-scoped connectors (custom plugins) ride along, or every
+      // custom tool the agent carries stops resolving in the target scope.
+      // Same-owner rows keep their credentials; a target owner change strips
+      // them to reauthorization shells (member-handover policy).
+      await rehomeAgentConnectorsForScopeTransfer(trx, {
+        agentIds,
+        targetUserId,
+        targetWorkspaceId,
+      });
+
+      // 14b. Agent documents (Skills / VFS files) ride along: dedicated
+      // agent-created documents move with binding + history, associated
+      // personal documents stay behind with their binding detached. Without
+      // this the agent's Documents list arrives empty and the files strand in
+      // the source scope's Resource list.
+      const movedDocumentIds = await moveAgentDocumentsForScopeTransfer(trx, {
+        agentIds,
+        movedTaskIds,
+        movedTopicIds,
+        targetUserId,
+        targetVisibility,
+        targetWorkspaceId,
+      });
+
+      // 14c. Topic- and task-document junction rows denormalize the owner
+      // scope, but a junction only resolves when BOTH it and its document pass
+      // the target predicate — `TopicDocumentModel.findByTopicId` and
+      // `TaskModel.getDocumentsPinnedSince` join the two. So the split can only
+      // be decided once 14b has said which documents actually moved: links
+      // whose document rode along follow their topic/task, and the rest are
+      // detached. Kept, they would be rows no scope can resolve — invisible in
+      // the target, orphaned in the source once their topic/task left it.
+      if (movedTopicIds.length > 0) {
+        const onMovedTopics = inArray(topicDocuments.topicId, movedTopicIds);
+        if (movedDocumentIds.length > 0) {
+          await trx
+            .update(topicDocuments)
+            .set(ownershipUpdate)
+            .where(and(onMovedTopics, inArray(topicDocuments.documentId, movedDocumentIds)));
+        }
+        await trx
+          .delete(topicDocuments)
+          .where(
+            movedDocumentIds.length > 0
+              ? and(onMovedTopics, notInArray(topicDocuments.documentId, movedDocumentIds))
+              : onMovedTopics,
+          );
+      }
+
+      if (movedTaskIds.length > 0) {
+        const onMovedTasks = inArray(taskDocuments.taskId, movedTaskIds);
+        if (movedDocumentIds.length > 0) {
+          await trx
+            .update(taskDocuments)
+            .set({ ...ownershipUpdate, ...visibilityUpdate })
+            .where(and(onMovedTasks, inArray(taskDocuments.documentId, movedDocumentIds)));
+        }
+        await trx
+          .delete(taskDocuments)
+          .where(
+            movedDocumentIds.length > 0
+              ? and(onMovedTasks, notInArray(taskDocuments.documentId, movedDocumentIds))
+              : onMovedTasks,
+          );
+      }
 
       // 15. Leave every chat group: a group belongs to the source scope, and a
       // roster row pointing at an agent that now lives elsewhere would render

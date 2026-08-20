@@ -288,6 +288,7 @@
   "actions.backToApp": "Torna a {{name}}",
   "actions.cancel": "Annulla",
   "actions.delete": "Elimina",
+  "actions.goToApp": "Vai a {{name}}",
   "badge.errored": "Impossibile eseguire il controllo",
   "badge.failed": "Controllo fallito",
   "badge.passed": "Controllo superato",

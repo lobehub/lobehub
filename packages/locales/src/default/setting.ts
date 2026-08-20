@@ -2501,7 +2501,7 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.memberGroup': 'Workspace members',
   'workspace.general.transferAgents.modal.moveAgent': 'Move Agent',
   'workspace.general.transferAgents.modal.moveAgentDesc':
-    'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, file and knowledge base links, scheduled jobs, and related tasks. Custom plugins may not be available and multi-agent group associations will be removed.',
+    'You can move to personal or workspaces that have permission to create an agent. All associated data moves with the agent: topics, documents, custom plugins, file and knowledge base links, scheduled jobs, and related tasks. Multi-agent group associations will be removed, and moved connectors may need to be reauthorized.',
   'workspace.general.transferAgents.modal.moveTitle': 'Move',
   'workspace.general.transferAgents.modal.noAgents': 'No agents in this workspace',
   'workspace.general.transferAgents.modal.requestSent': 'Transfer request sent',
@@ -2519,7 +2519,7 @@ When I am ___, I need ___
   'workspace.general.transferAgents.modal.title': 'Move Agents',
   'workspace.general.transferAgents.modal.transfer': 'Move {{count}} agent(s)',
   'workspace.general.transferAgents.modal.warning':
-    'Custom plugins may not be available and multi-agent group associations will be removed.',
+    'Multi-agent group associations will be removed, and moved connectors may need to be reauthorized.',
   'workspace.general.transferAgents.personalAccount': 'Personal Account',
   'workspace.general.transferScope.private.desc': 'Only accessible to you',
   'workspace.general.transferScope.private.label': 'Private',
