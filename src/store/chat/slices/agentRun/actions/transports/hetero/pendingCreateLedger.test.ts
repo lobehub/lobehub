@@ -137,7 +137,7 @@ describe('createPendingCreateLedger', () => {
       expect(ledger.size).toBe(0);
     });
 
-    it('preserves empty assistants that have a child or a pending content update', async () => {
+    it('preserves empty assistants that have a surviving child or a pending content update', async () => {
       const createMessage = vi.fn().mockResolvedValue(undefined);
       const ledger = createPendingCreateLedger({
         createMessage,
@@ -145,15 +145,37 @@ describe('createPendingCreateLedger', () => {
       });
 
       ledger.add('parent', row('parent'));
-      ledger.add('child', row('child', 'parent'));
+      // Carries real output, so it survives the sweep and keeps its parent anchored.
+      ledger.add('child', { ...row('child', 'parent'), content: 'answer' });
       ledger.add('with-update', row('with-update'));
       ledger.discardEmptyLeafAssistants((messageId) => messageId === 'with-update');
       await ledger.drain();
 
       expect(createMessage.mock.calls.map(([message]) => message.id)).toEqual([
         'parent',
+        'child',
         'with-update',
       ]);
+    });
+
+    it('peels an entire chain of empty creates, not just its tail', async () => {
+      const createMessage = vi.fn().mockResolvedValue(undefined);
+      const ledger = createPendingCreateLedger({
+        createMessage,
+        flush: vi.fn().mockResolvedValue(undefined),
+      });
+
+      // head <- middle <- tail, every link an empty assistant. Discarding only the
+      // tail would leave `head`/`middle` for drain() to replay as late empty
+      // assistants — the same disappearing-turn bug, one link up the chain.
+      ledger.add('head', row('head', 'stale-parent'));
+      ledger.add('middle', row('middle', 'head'));
+      ledger.add('tail', row('tail', 'middle'));
+      ledger.discardEmptyLeafAssistants(() => false);
+      await ledger.drain();
+
+      expect(createMessage).not.toHaveBeenCalled();
+      expect(ledger.size).toBe(0);
     });
 
     it('preserves a failed empty create after its payload update has already settled', async () => {

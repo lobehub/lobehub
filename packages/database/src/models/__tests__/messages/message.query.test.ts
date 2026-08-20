@@ -3345,6 +3345,37 @@ describe('MessageModel Query Tests', () => {
       );
     });
 
+    it('keeps an error-only assistant eligible as an anchor', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'real tail',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // Failed before emitting text, so content/tools/reasoning are all empty —
+          // but the renderer shows an error card for it, so it is a real turn the
+          // next user message must anchor to. Excluding it would fork the reply
+          // onto a sibling branch and hide the error.
+          id: 'errored',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '',
+          error: { message: 'boom', type: 'ProviderBizError' } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('errored');
+      expect(await messageModel.getLatestNonToolMessageId({ topicId: 'topic1' })).toBe('errored');
+    });
+
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);

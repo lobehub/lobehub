@@ -41,27 +41,44 @@ export const createPendingCreateLedger = (deps: {
   return {
     add: (messageId: string, message: CreateMessageRow) => pending.set(messageId, message),
 
+    /**
+     * Peel empty leaves until none are left, recomputing the parent set each pass.
+     * A single pass is not enough: when a run fails several empty creates in a row
+     * they form a chain, and discarding the tail orphans its parent. Computing
+     * `parentIds` once would keep that head — still an empty assistant, still
+     * replayed by `drain()`, still able to become the newest anchor. That is the
+     * exact turn-swallowing this sweep exists to prevent, just one link up.
+     *
+     * Terminates because every pass that sets `removed` shrinks `pending`.
+     */
     discardEmptyLeafAssistants: (hasPendingUpdate: (messageId: string) => boolean) => {
-      const parentIds = new Set(
-        [...pending.values()]
-          .map(({ parentId }) => parentId)
-          .filter((parentId): parentId is string => typeof parentId === 'string'),
-      );
+      const isEmptyAssistant = (message: CreateMessageRow) =>
+        message.role === 'assistant' &&
+        !message.content?.trim() &&
+        (message.tools?.length ?? 0) === 0;
 
-      for (const [messageId, message] of pending) {
-        const isEmptyAssistant =
-          message.role === 'assistant' &&
-          !message.content?.trim() &&
-          (message.tools?.length ?? 0) === 0;
+      let removed = true;
 
-        if (
-          isEmptyAssistant &&
-          !parentIds.has(messageId) &&
-          !hasPendingUpdate(messageId) &&
-          !messageIdsWithPayload.has(messageId)
-        ) {
-          pending.delete(messageId);
-          messageIdsWithPayload.delete(messageId);
+      while (removed) {
+        removed = false;
+
+        const parentIds = new Set(
+          [...pending.values()]
+            .map(({ parentId }) => parentId)
+            .filter((parentId): parentId is string => typeof parentId === 'string'),
+        );
+
+        for (const [messageId, message] of pending) {
+          if (
+            isEmptyAssistant(message) &&
+            !parentIds.has(messageId) &&
+            !hasPendingUpdate(messageId) &&
+            !messageIdsWithPayload.has(messageId)
+          ) {
+            pending.delete(messageId);
+            messageIdsWithPayload.delete(messageId);
+            removed = true;
+          }
         }
       }
     },

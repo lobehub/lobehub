@@ -3301,6 +3301,7 @@ export class MessageModel {
             AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
             AND ${messages.reasoning} IS NULL
+            AND ${messages.error} IS NULL
           )`,
           this.ownership(),
         ),
@@ -3346,6 +3347,7 @@ export class MessageModel {
             AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
             AND ${messages.reasoning} IS NULL
+            AND ${messages.error} IS NULL
           )`,
           this.ownership(),
         ),
