@@ -373,6 +373,30 @@ export default {
   'share.copyLink': 'Copy Link',
   'share.copyLinkSuccess': 'Share link copied to clipboard',
   'share.createError': 'Failed to prepare sharing. Please try again.',
+  'share.budget.amountPlaceholder': 'Credits to transfer',
+  'share.budget.availableToTransfer': 'Transferable from subscription: {{amount}} credits',
+  'share.budget.balance': 'Balance (credits)',
+  'share.budget.confirm.content':
+    "Transfer {{amount}} credits from your subscription into this agent's share budget?",
+  'share.budget.confirm.ok': 'Transfer',
+  'share.budget.confirm.rules.irreversible': 'Transfers cannot be moved back to your subscription.',
+  'share.budget.confirm.rules.permanent':
+    'The share budget never resets or expires — it stays with this agent permanently.',
+  'share.budget.confirm.rules.source':
+    "The amount counts toward this month's subscription usage; your subscription still resets as usual next cycle.",
+  'share.budget.confirm.title': 'Transfer to share budget?',
+  'share.budget.consumed': 'Consumed (credits)',
+  'share.budget.desc':
+    'Visitor conversations consume this budget. Transfer credits from your subscription to keep the share link usable.',
+  'share.budget.error.insufficient': 'Your subscription balance is insufficient for this transfer',
+  'share.budget.error.noSubscription': 'An active subscription is required to transfer credits',
+  'share.budget.noSubscription': 'An active subscription is required to fund the share budget.',
+  'share.budget.privacyNotice':
+    'Visitor conversations consume the share budget you allocate to this agent',
+  'share.budget.title': 'Share Budget',
+  'share.budget.transfer': 'Transfer',
+  'share.budget.transferError': 'Transfer failed, please try again later',
+  'share.budget.transferSuccess': 'Transfer completed',
   'share.popover.title': 'Share this Agent',
   'share.popover.visibility': 'Visibility',
   'share.privacyWarning.confirm': 'Share via link',

@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import agent from './agent';
 
 describe('agent share copy', () => {
+  it('exposes Agent Share budget copy through the shared locale pipeline', () => {
+    expect(agent['share.budget.title']).toBe('Share Budget');
+    expect(agent['share.budget.confirm.content']).toContain('{{amount}}');
+  });
+
   it('describes shared links as view-only until visitor conversations launch', () => {
     expect(agent['share.privacyWarning.content']).toContain('not available yet');
     expect(agent['share.privacyWarning.content']).toContain('Signed-in users');
