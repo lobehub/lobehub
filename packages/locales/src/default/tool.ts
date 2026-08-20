@@ -137,7 +137,9 @@ export default {
   'localFiles.editFile.newString': 'Replace with',
   'localFiles.editFile.oldString': 'Find',
   'localFiles.editFile.replaceAll': 'Replace all occurrences',
-  'localFiles.editFile.replaceFirst': 'Replace first occurrence only',
+  'localFiles.editFile.ambiguous':
+    'This text appears {{times}} times in the file. The edit will be refused — it needs enough surrounding context to identify one occurrence, or "replace all".',
+  'localFiles.editFile.replaceFirst': 'Replace the single occurrence',
   'localFiles.file': 'File',
   'localFiles.folder': 'Folder',
   'localFiles.globFiles.pattern': 'Pattern',
