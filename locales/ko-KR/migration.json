@@ -15,7 +15,6 @@
   "dbV1.title": "{{appName}} 데이터 진화",
   "dbV1.upgrade.error.subTitle": "죄송합니다. 데이터베이스 업그레이드 중 오류가 발생했습니다. 다음 방법을 시도해 보세요: A. 로컬 데이터를 초기화한 후 백업 데이터를 다시 가져오기; B. 「업그레이드 다시 시도」 버튼 클릭<br><br> 문제가 계속되면 <1>문제 제보</1>를 통해 알려주세요. 신속히 확인해 드리겠습니다.",
   "dbV1.upgrade.error.title": "데이터베이스 업그레이드 실패",
-  "dbV1.upgrade.success.subTitle": "{{appName}}의 데이터베이스가 최신 버전으로 업그레이드되었습니다. 지금 바로 새로운 경험을 시작해 보세요.",
   "dbV1.upgrade.success.title": "데이터베이스 업그레이드 성공",
   "dbV1.upgradeTip": "업그레이드는 약 10~20초 정도 소요됩니다. 업그레이드 중에는 {{appName}}을 종료하지 마세요.",
   "migrateError.missVersion": "가져온 데이터에 버전 정보가 없습니다. 파일을 확인한 후 다시 시도해 주세요.",

@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "{{name}} ile bağlantı kuruldu. Bağlantıyı kesmek için tıklayın.",
   "providerModels.config.oauth.cancel": "İptal",
   "providerModels.config.oauth.codeExpired": "Yetkilendirme kodunun süresi doldu. Lütfen tekrar deneyin.",
-  "providerModels.config.oauth.connect": "{{name}} ile Bağlan",
   "providerModels.config.oauth.connectDesc": "Tarayıcı üzerinden yetkilendirmek için tıklayın. API anahtarı gerekmez.",
   "providerModels.config.oauth.connected": "Bağlandı",
   "providerModels.config.oauth.connecting": "Bağlanıyor...",

@@ -247,7 +247,6 @@
   "mcp.details.deployment.table.name": "名前",
   "mcp.details.deployment.table.required": "必須",
   "mcp.details.deployment.table.type": "タイプ",
-  "mcp.details.deployment.title": "{{platform}}でのインストール",
   "mcp.details.githubBadge.desc": "LobeHub は定期的にリポジトリとドキュメントをスキャンし、以下を行います：\n\n- MCP サーバーが正常に稼働していることを確認します。\n- ツール、リソース、プロンプト情報、必要なパラメータなどのサーバー機能を抽出します。\n- バッジはユーザーが MCP サーバーの安全性、機能特性、インストールガイドを迅速に評価するのに役立ちます。\n\n以下のコードをあなたの `README.md` ファイルにコピーしてください：",
   "mcp.details.nav.needHelp": "ヘルプが必要ですか？",
   "mcp.details.nav.reportIssue": "問題を報告する",

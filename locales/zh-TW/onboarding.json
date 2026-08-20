@@ -136,7 +136,6 @@
   "telemetry.rows.create.title": "創造 · 靈感即刻實現",
   "telemetry.rows.evolve.desc": "每一次互動，都能更了解你。不只是回應，更是理解。",
   "telemetry.rows.evolve.title": "進化 · 越用越懂你",
-  "telemetry.rows.privacy.desc": "我們使用匿名化資料持續優化 {{appName}} 體驗。當然，你可以隨時在隱私設定中調整此選項。",
   "telemetry.rows.privacy.title": "一起讓 {{appName}} 更加完善",
   "telemetry.terms": "服務條款",
   "telemetry.title": "嘿，你好，我是 {{name}}",

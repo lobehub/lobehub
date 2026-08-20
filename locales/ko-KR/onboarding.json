@@ -136,7 +136,6 @@
   "telemetry.rows.create.title": "창조 · 영감이 현실로",
   "telemetry.rows.evolve.desc": "모든 상호작용이 당신을 더 잘 이해하게 만듭니다. 단순한 응답을 넘어, 진정한 이해로.",
   "telemetry.rows.evolve.title": "진화 · 쓸수록 더 잘 알아요",
-  "telemetry.rows.privacy.desc": "우리는 {{appName}}의 경험을 지속적으로 개선하기 위해 익명 데이터를 사용합니다. 물론, 언제든지 개인정보 설정에서 이 옵션을 조정할 수 있어요.",
   "telemetry.rows.privacy.title": "{{appName}}을 더 나은 서비스로 함께 만들어가요",
   "telemetry.terms": "이용 약관",
   "telemetry.title": "안녕하세요, 저는 {{name}}입니다",

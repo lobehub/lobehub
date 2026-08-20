@@ -6,7 +6,7 @@
   "consent.error.sessionInvalid.title": "授權會話無效",
   "consent.error.title": "發生錯誤",
   "consent.error.unknown.message": "取得授權詳情時發生未知錯誤",
-  "consent.error.unsupportedInteraction.message": "不支援的互動類型: {promptName}",
+  "consent.error.unsupportedInteraction.message": "不支援的互動類型: {{promptName}}",
   "consent.error.unsupportedInteraction.title": "不支援的互動類型",
   "consent.permissionsTitle": "請求以下權限：",
   "consent.redirectUri": "授權成功後將重定向到",

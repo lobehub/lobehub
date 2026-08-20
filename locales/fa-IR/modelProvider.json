@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "شما به {{name}} متصل شده‌اید. برای قطع اتصال کلیک کنید.",
   "providerModels.config.oauth.cancel": "لغو",
   "providerModels.config.oauth.codeExpired": "کد احراز هویت منقضی شده است. لطفاً دوباره تلاش کنید.",
-  "providerModels.config.oauth.connect": "اتصال به {{name}}",
   "providerModels.config.oauth.connectDesc": "برای احراز هویت از طریق مرورگر کلیک کنید. نیازی به کلید API نیست.",
   "providerModels.config.oauth.connected": "متصل شد",
   "providerModels.config.oauth.connecting": "در حال اتصال...",

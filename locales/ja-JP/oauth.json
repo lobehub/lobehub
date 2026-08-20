@@ -6,7 +6,7 @@
   "consent.error.sessionInvalid.title": "承認セッションが無効です",
   "consent.error.title": "エラーが発生しました",
   "consent.error.unknown.message": "認可の詳細を取得中に不明なエラーが発生しました",
-  "consent.error.unsupportedInteraction.message": "サポートされていないインタラクションタイプ: {promptName}",
+  "consent.error.unsupportedInteraction.message": "サポートされていないインタラクションタイプ: {{promptName}}",
   "consent.error.unsupportedInteraction.title": "サポートされていないインタラクションタイプ",
   "consent.permissionsTitle": "以下の権限をリクエストします：",
   "consent.redirectUri": "承認が成功した後、次の場所にリダイレクトされます",

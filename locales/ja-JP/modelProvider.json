@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "{{name}} に接続されています。クリックして接続を解除できます。",
   "providerModels.config.oauth.cancel": "キャンセル",
   "providerModels.config.oauth.codeExpired": "認証コードの有効期限が切れています。もう一度お試しください。",
-  "providerModels.config.oauth.connect": "{{name}} と接続する",
   "providerModels.config.oauth.connectDesc": "ブラウザ経由で認証を行います。APIキーは不要です。",
   "providerModels.config.oauth.connected": "接続済み",
   "providerModels.config.oauth.connecting": "接続中...",
