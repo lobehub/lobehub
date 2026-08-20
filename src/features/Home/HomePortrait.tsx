@@ -14,13 +14,16 @@ const styles = createStaticStyles(({ css }) => ({
    * subject, and the built-in catalog draws its character across the frame with
    * a few percent of margin, so sizing by height lands both at the same stature.
    * Anchored deep enough that the lower body passes behind the first card — the
-   * character leans on the surface instead of standing on it.
+   * character leans on the surface instead of standing on it. The offset is what
+   * sets how much shows: 94px leaves 65% of the character above the card, which
+   * clears the catalog mascot's head (it is half its own height) and reaches the
+   * hem on a standing figure, where 57% cut both at the collar and the waist.
    */
   image: css`
     pointer-events: none;
 
     position: absolute;
-    inset-block-end: -110px;
+    inset-block-end: -94px;
     inset-inline-end: 12px;
 
     width: 176px;
