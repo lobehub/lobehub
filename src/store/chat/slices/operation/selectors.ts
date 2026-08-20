@@ -238,6 +238,8 @@ const getOperationsByContext =
  * but its later registration in the context index still proves that the older
  * snapshot is superseded. The index is local insertion order, so it remains
  * monotonic even when restored server timestamps and the client clock differ.
+ * Child operations stay within their parent's turn and therefore cannot claim
+ * conversation ownership from that turn's terminal reconciliation.
  */
 const hasNewerConversationOperation =
   (operationId: string, context: Operation['context']) =>
@@ -251,7 +253,10 @@ const hasNewerConversationOperation =
 
     return operations
       .slice(operationIndex + 1)
-      .some((candidate) => QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type));
+      .some(
+        (candidate) =>
+          !candidate.parentOperationId && QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type),
+      );
   };
 
 /**
