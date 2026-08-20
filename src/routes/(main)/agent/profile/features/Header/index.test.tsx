@@ -44,6 +44,9 @@ const mocks = vi.hoisted(() => ({
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
     lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
+  serverConfigState: {
+    enableBusinessFeatures: false,
+  },
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -162,6 +165,10 @@ vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
   useHasActiveWorkspace: () => true,
 }));
 
+vi.mock('@/features/AgentSharePopover', () => ({
+  default: ({ children }: PropsWithChildren) => <>{children}</>,
+}));
+
 vi.mock('@/features/ResourcePermission/AccessLevelTag', () => ({
   default: ({ resourceId }: { resourceId?: string }) => (
     <span data-testid="access-level-resource-id">{resourceId}</span>
@@ -231,6 +238,17 @@ vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: {
     isStatusInit: (state: typeof mocks.globalState) => state.isStatusInit,
     showAgentBuilderPanel: (state: typeof mocks.globalState) => state.showAgentBuilderPanel,
+  },
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: typeof mocks.serverConfigState) => unknown) =>
+    selector(mocks.serverConfigState),
+}));
+
+vi.mock('@/store/serverConfig/selectors', () => ({
+  serverConfigSelectors: {
+    enableBusinessFeatures: (state: typeof mocks.serverConfigState) => state.enableBusinessFeatures,
   },
 }));
 

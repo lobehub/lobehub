@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
@@ -22,6 +22,22 @@ const promptTransformRightActions: ActionKeys[] = [
   'contextWindow',
 ];
 
+// Reasoning effort lives inside the "+" menu (Plus → 推理强度) rather than as
+// a standalone action — per the effort parameter refactoring.
+const defaultLeftActions: ActionKeys[] = ['model', 'plus', 'voiceDictation'];
+
+export interface MainChatInputProps {
+  /** Force-disable sending, e.g. on the visitor share page before the share execution chain lands. */
+  disableSend?: boolean;
+  /** Override the built-in left actions, e.g. to hide the model picker for share visitors. */
+  leftActions?: ActionKeys[];
+  /**
+   * Override the built-in right actions. Share visitors pass `[]` — the voice
+   * message action sends through its own path that ignores `disableSend`.
+   */
+  rightActions?: ActionKeys[];
+}
+
 /**
  * MainChatInput
  *
@@ -30,7 +46,7 @@ const promptTransformRightActions: ActionKeys[] = [
  * including error alerts display.
  * Only adds MessageFromUrl for desktop mode.
  */
-const MainChatInput = memo(() => {
+const MainChatInput = memo<MainChatInputProps>(({ disableSend, leftActions, rightActions }) => {
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const sendMenuItems = useSendMenuItems();
 
@@ -39,22 +55,19 @@ const MainChatInput = memo(() => {
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const isAgentConfigLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
   const supportsImageOutput = useModelSupportImageOutput(model, provider);
-  const rightActions = supportsImageOutput
+  const defaultRightActions = supportsImageOutput
     ? promptTransformRightActions
     : contextWindowRightActions;
-
-  // Reasoning effort lives inside the "+" menu (Plus → 推理强度) rather than as
-  // a standalone action — per the effort parameter refactoring.
-  const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus', 'voiceDictation'], []);
 
   return (
     <>
       <AgentConfigError />
       <ChatInput
         skipScrollMarginWithList
+        disableSend={disableSend}
         isConfigLoading={isAgentConfigLoading}
-        leftActions={leftActions}
-        rightActions={rightActions}
+        leftActions={leftActions ?? defaultLeftActions}
+        rightActions={rightActions ?? defaultRightActions}
         {...(isDevMode
           ? { sendMenu: { items: sendMenuItems } }
           : { sendButtonProps: { shape: 'round' } })}

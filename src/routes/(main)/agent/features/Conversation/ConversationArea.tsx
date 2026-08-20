@@ -34,7 +34,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ExposeMainEditor from './ExposeMainEditor';
 import HeterogeneousChatInput from './HeterogeneousChatInput';
-import MainChatInput from './MainChatInput';
+import MainChatInput, { type MainChatInputProps } from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
@@ -56,22 +56,35 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+export interface ConversationAreaProps {
+  /**
+   * Marks this mount as the visitor view of a shared agent (`/share/a/:id`).
+   * Stamped into the conversation context so owner-scoped side effects
+   * (agent-config fetch, transfer-job polling, URL/forward auto-send
+   * dispatchers) are suppressed — visitors have no access to those APIs.
+   */
+  agentShareId?: string;
+  /** Forwarded to the standard chat input, e.g. the visitor share page disables send and hides pickers. */
+  mainChatInputProps?: MainChatInputProps;
+}
+
 /**
  * ConversationArea
  *
  * Main conversation area component using the new ConversationStore architecture.
  * Uses ChatList from @/features/Conversation and MainChatInput for custom features.
  */
-const Conversation = memo(() => {
+const Conversation = memo<ConversationAreaProps>(({ agentShareId, mainChatInputProps }) => {
   const { t } = useTranslation('chat');
-  const context = useAgentContext();
+  const baseContext = useAgentContext();
+  const context = useMemo(
+    () => (agentShareId ? { ...baseContext, agentShareId } : baseContext),
+    [baseContext, agentShareId],
+  );
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
-  const chatKey = useMemo(
-    () => messageMapKey(context),
-    [context.agentId, context.topicId, context.threadId],
-  );
+  const chatKey = useMemo(() => messageMapKey(context), [context]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
 
@@ -121,7 +134,8 @@ const Conversation = memo(() => {
   // could not assemble the missing context anyway. Opening it jumps it to the
   // front of the backfill queue, so the wait is typically a few seconds.
   const { job: migrationJob, topicPending } = useTopicMigrationPending(
-    { agentId: context.agentId },
+    // Visitors of a shared agent cannot poll the owner-scoped transfer-job API.
+    { agentId: agentShareId ? null : context.agentId },
     context.topicId,
   );
 
@@ -186,7 +200,11 @@ const Conversation = memo(() => {
       </SplitDropZone>
       {!isSubagentThread && !topicPending && (
         <MessageForwardFooter>
-          {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
+          {isHeterogeneousAgent ? (
+            <HeterogeneousChatInput />
+          ) : (
+            <MainChatInput {...mainChatInputProps} />
+          )}
         </MessageForwardFooter>
       )}
       {topicPending && (
@@ -204,12 +222,15 @@ const Conversation = memo(() => {
       <ComposerDraftReceiver />
       <ThreadHydration />
       <ChatMiniMap />
-      <ForwardMessageDispatcher />
+      {/* Auto-send dispatchers bypass the chat input's disableSend gate, so a
+          share visitor must not mount them at all — e.g. `?message=` would
+          otherwise fire a real send into the shared agent. */}
+      {!agentShareId && <ForwardMessageDispatcher />}
       {/* Held back while the topic is still migrating: the composer above is
           already disabled, and letting `?message=` through would send into the
           not-yet-migrated history this screen is waiting for. The param stays
           in the URL, so the send fires once the backfill lands. */}
-      {!topicPending && (
+      {!agentShareId && !topicPending && (
         <Suspense>
           <MessageFromUrl />
         </Suspense>

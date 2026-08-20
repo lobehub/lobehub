@@ -12,7 +12,7 @@ export type ShareResources = Record<string, Record<string, string>>;
 // `error` is preloaded rather than fetched on demand: the boundary that needs
 // it renders when something already failed, and a chunk-load failure is exactly
 // the case where the client can never fetch the dictionary to correct itself.
-export const shareNamespaces = ['chat', 'error', 'pageShare'] as const;
+export const shareNamespaces = ['agent', 'chat', 'error', 'pageShare'] as const;
 
 export const loadShareNamespace = async (lng: string, ns: string) => {
   const locale = normalizeLocale(lng);

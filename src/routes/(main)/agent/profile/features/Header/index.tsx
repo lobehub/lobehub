@@ -10,6 +10,7 @@ import {
   Download,
   MoreHorizontal,
   Settings2Icon,
+  Share2,
   Trash,
   UserRound,
   UsersIcon,
@@ -25,6 +26,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import AgentSharePopover from '@/features/AgentSharePopover';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -37,6 +39,8 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -136,7 +140,9 @@ const Header = memo(() => {
   const editor = useProfileStore((s) => s.editor);
   const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
   const lockPending = useProfileStore(profileSelectors.lockPending);
-  const { allowed: hasEditPermission } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission, reason: editPermissionReason } =
+    usePermission('edit_own_content');
+  const enableAgentLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   // A workspace member without edit-level General access on this agent gets the
   // same disabled-with-tooltip treatment as a role viewer (server enforces).
   const { canEditResource, canManageResource } = useResourceAccess(
@@ -353,24 +359,25 @@ const Header = memo(() => {
     transferToMemberItem,
   ]);
 
+  // Agent link-share entry: personal agents only (the share model rejects
+  // workspace agents), never builtin/inbox rows, and only when the business
+  // link-share capability is enabled server-side (same gate as topic share).
+  const showShareEntry =
+    !!activeAgentId && !hasActiveWorkspace && !isBuiltinAgent && !isInbox && enableAgentLinkShare;
+
+  const shareIcon = (
+    <ActionIcon
+      disabled={!hasEditPermission}
+      icon={Share2}
+      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      title={hasEditPermission ? t('share', { ns: 'common' }) : editPermissionReason}
+      tooltipProps={{ placement: 'bottom' }}
+    />
+  );
+
   return (
     <NavHeader
       style={{ position: 'relative' }}
-      right={
-        <Flexbox horizontal align={'center'} gap={4}>
-          <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
-          </DropdownMenu>
-          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
-            <ToggleRightPanelButton
-              expand={showAgentBuilderPanel}
-              icon={BotMessageSquareIcon}
-              showActive={true}
-              onToggle={() => toggleAgentBuilderPanel()}
-            />
-          )}
-        </Flexbox>
-      }
       // `relative` anchors the absolutely-centered switcher below.
       left={
         <Flexbox horizontal align={'center'} gap={8}>
@@ -383,6 +390,29 @@ const Header = memo(() => {
             resourceId={showPermissionsEntry ? (activeAgentId ?? undefined) : undefined}
             resourceType={'agent'}
           />
+        </Flexbox>
+      }
+      right={
+        <Flexbox horizontal align={'center'} gap={4}>
+          {showShareEntry &&
+            (hasEditPermission ? (
+              <AgentSharePopover agentId={activeAgentId ?? undefined}>
+                {shareIcon}
+              </AgentSharePopover>
+            ) : (
+              shareIcon
+            ))}
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+          </DropdownMenu>
+          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
+            <ToggleRightPanelButton
+              expand={showAgentBuilderPanel}
+              icon={BotMessageSquareIcon}
+              showActive={true}
+              onToggle={() => toggleAgentBuilderPanel()}
+            />
+          )}
         </Flexbox>
       }
       styles={{

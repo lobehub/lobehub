@@ -29,7 +29,7 @@ interface ConversationContextPrefetcherProps {
 }
 
 const ConversationContextPrefetcher = memo<ConversationContextPrefetcherProps>(({ context }) => {
-  useFetchAvailableAgents(!context.topicShareId && !!context.agentId);
+  useFetchAvailableAgents(!context.topicShareId && !context.agentShareId && !!context.agentId);
 
   return null;
 });

@@ -53,7 +53,7 @@ const ShareErrorBoundary = () => {
         <button style={buttonStyle} type={'button'} onClick={() => window.location.reload()}>
           Retry
         </button>
-        <button style={buttonStyle} type={'button'} onClick={() => window.location.assign('/')}>
+        <button style={buttonStyle} type={'button'} onClick={() => window.location.replace('/')}>
           Back
         </button>
       </div>
@@ -72,6 +72,10 @@ const ExitShare = () => {
 export const shareRoutes: RouteObject[] = [
   {
     children: [
+      {
+        element: lazyElement(() => import('./features/agent/SharedAgentView')),
+        path: 'share/a/:id',
+      },
       {
         element: lazyElement(() => import('./features/topic/SharedTopicView')),
         path: 'share/t/:id',
