@@ -197,16 +197,31 @@ class ToolAbortedError extends Error {
   }
 }
 
-const isToolAbortError = (error: unknown): boolean =>
-  error instanceof Error && error.name === 'AbortError';
+/**
+ * Did this rejection come from the operation being aborted?
+ *
+ * Name-matching alone is wrong: a transport's own fetch timeout or an internal
+ * cancellation also rejects with `AbortError`, and treating that as "the user
+ * pressed Stop" would swallow `handleError`, drop the error telemetry, and
+ * persist a row claiming the user aborted a tool that actually failed.
+ *
+ * Our sentinel is definitive. A foreign `AbortError` only counts when the
+ * operation signal is genuinely aborted — that is a transport honouring the
+ * signal we handed it, which is the same event by another route.
+ */
+const isOperationAbort = (error: unknown, signal?: AbortSignal): boolean => {
+  if (error instanceof ToolAbortedError) return true;
+
+  return !!signal?.aborted && error instanceof Error && error.name === 'AbortError';
+};
 
 /**
  * Run a tool, but stop waiting the moment the operation is aborted.
  *
- * The transport keeps running in the background — we cannot cancel work it has
- * already handed to a device or a remote process (see the `unsettled` handling
- * below, which is what makes that safe). What we DO get is the step boundary
- * arriving immediately instead of after a multi-minute tool.
+ * The transport may keep running in the background — work already handed to a
+ * device or a remote process cannot be recalled. What this buys is the step
+ * boundary arriving at once instead of after a multi-minute tool, and the
+ * caller settling the call's row rather than leaving it open forever.
  */
 const raceToolAbort = async <T>(run: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
   if (!signal) return run();
@@ -226,14 +241,6 @@ const raceToolAbort = async <T>(run: () => Promise<T>, signal?: AbortSignal): Pr
   });
 };
 
-/**
- * Mark tool calls that no tool row settled, so `extractAbortInfo` can turn them
- * into `aborted` rows on the next step.
- *
- * Every unsettled `tool_call_id` MUST end up here: the assistant message that
- * requested them is already persisted, so a missing tool result leaves the
- * conversation in a shape providers reject on the next `call_llm`.
- */
 /**
  * Close out one call that an abort caught mid-flight.
  *
@@ -504,6 +511,20 @@ export const callTool =
     });
 
     if (runContext.toolSource === 'client' && !tools.canRunClientTools) {
+      // Parking is only meaningful if something will come back for it. Once the
+      // operation is aborted nothing resumes this run, so the pause would leave
+      // the call with no row at all — settle it instead.
+      if (host.operation.abortSignal?.aborted) {
+        return settleAbortedCall({
+          events,
+          existingToolMessageId: approvalResumeRowId,
+          host,
+          parentMessageId: payload.parentMessageId,
+          state,
+          tool,
+        });
+      }
+
       return pauseForTools({
         host,
         instruction,
@@ -697,7 +718,7 @@ export const callTool =
 
       // An abort is not a tool failure: no error row, no retry bookkeeping,
       // no `handleError`. Just close the call out with an aborted row.
-      if (isToolAbortError(error)) {
+      if (isOperationAbort(error, host.operation.abortSignal)) {
         return settleAbortedCall({
           events,
           existingToolMessageId: approvalResumeRowId,
@@ -740,6 +761,23 @@ export const callToolsBatch =
     }
 
     if (clientTools.length > 0 && serverTools.length === 0) {
+      // Same reasoning as the single-call path: an aborted run never comes back
+      // to collect these, so parking them strands every tool_call_id in the batch.
+      if (host.operation.abortSignal?.aborted) {
+        const { messages } = await settleAbortedToolRows({
+          existingToolMessageIds,
+          host,
+          parentMessageId,
+          state,
+          toolsCalling: clientTools,
+        });
+        const abortedState = structuredClone(state);
+        abortedState.messages.push(...messages);
+        abortedState.lastModified = nowIso();
+
+        return { events, newState: abortedState };
+      }
+
       return pauseForTools({
         host,
         reason: 'client_tool_execution',
@@ -873,8 +911,9 @@ export const callToolsBatch =
           if (isPersistFatal(error)) throw error;
 
           // Abort is not a tool failure — see `callTool`. Siblings that already
-          // settled keep their real results; only this call is left unsettled.
-          if (isToolAbortError(error)) {
+          // finished keep their real results; this one is collected for the
+          // aborted-row settle after the batch.
+          if (isOperationAbort(error, host.operation.abortSignal)) {
             abortedTools.push(tool);
             if (existingMessageId) abortedToolMessageIds[tool.id] = existingMessageId;
             return;

@@ -100,8 +100,14 @@ export const settleAbortedToolRows = async ({
 
   const messageIds: Record<string, string> = {};
   const messages: Array<{ content: string; role: 'tool'; tool_call_id: string }> = [];
+  const settled = new Set<string>();
 
   for (const toolPayload of toolsCalling) {
+    // "Exactly one row per tool_call_id" is the whole contract — callers merge
+    // several abort sources into one list, so a repeat here would break it.
+    if (settled.has(toolPayload.id)) continue;
+    settled.add(toolPayload.id);
+
     const existingMessageId = existingToolMessageIds[toolPayload.id];
     try {
       if (existingMessageId) {
