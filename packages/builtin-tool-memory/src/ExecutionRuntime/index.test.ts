@@ -81,4 +81,20 @@ describe('MemoryExecutionRuntime', () => {
     expect(result.content).toContain('addPreferenceMemory with error detail');
     expect(addPreferenceMemory).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { detail: 'network unavailable', error: new Error('network unavailable') },
+    { detail: 'network unavailable', error: 'network unavailable' },
+    { detail: 'null', error: null },
+  ])('preserves thrown error details for $error', async ({ detail, error }) => {
+    const searchMemory = vi.fn().mockRejectedValue(error);
+    const runtime = new MemoryExecutionRuntime({ service: createService({ searchMemory }) });
+
+    const result = await runtime.searchUserMemory({ queries: ['project'] });
+
+    expect(result).toEqual({
+      content: `searchUserMemory with error detail: ${detail}`,
+      success: false,
+    });
+  });
 });
