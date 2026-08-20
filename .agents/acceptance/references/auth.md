@@ -186,13 +186,18 @@ Login state must be **injected directly**, never acquired through a login page:
    from it. A signed-out boot usually means the snapshot is stale because a
    previous instance was killed instead of stopped (see the traps below) — a
    `save-login <id>` from any still-live signed-in instance repairs it.
-2. **Mint the state via CLI/API** — the same philosophy as `web-seed`: create
-   the session server-side (seeded better-auth session / dev token issuance)
-   and inject it into the app's storage, with zero UI login. Prefer building on
-   `setup-auth.sh` seeding over anything that renders a sign-in page.
-3. **Neither works → report auth as ❌ Blocked and stop.** Tell the user the
-   Electron surface needs one manual sign-in (once — the snapshot then covers
-   future runs). Do not open any login page on their behalf.
+2. **Seed the cookie into the app's Electron session** — `setup-auth.sh electron-seed`,
+   which `electron-dev.sh start` already runs for profiles it owns. This is a
+   COMPLETE login, not a workaround: the desktop's backend proxy calls `net.fetch`
+   on the app's own session, so that session's cookie jar is what `createContext`
+   reads once no OIDC header is present. Verified by deleting the cookie (every
+   tRPC call 401s) and setting it back (200 as the seeded user). The cookie is
+   host-scoped to `localhost`, and cookies ignore ports, so one seeded session
+   works against every worktree's server.
+3. **Nothing works → report auth as ❌ Blocked and stop.** Do not open any login
+   page on their behalf. Before concluding this, check that the dev server is up
+   and that `setup-auth.sh web-seed` can mint a session — it fails loudly when the
+   seed user is missing, which is the usual cause.
 
 Four traps behind a signed-out instance:
 

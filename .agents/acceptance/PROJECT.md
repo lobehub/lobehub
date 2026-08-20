@@ -140,11 +140,11 @@ stale standalone install: a recently added workspace package fails to resolve �
 
 - **Per-surface status check:**
 
-  | Surface  | Mechanism                                     | One-key path             | Standard check                            |
-  | -------- | --------------------------------------------- | ------------------------ | ----------------------------------------- |
-  | CLI      | Seeded API key, device-code fallback          | `setup-auth.sh cli-seed` | `setup-auth.sh status --surface cli`      |
-  | Web      | Seeded better-auth login into `agent-browser` | `setup-auth.sh web-seed` | `setup-auth.sh status --surface web`      |
-  | Electron | The app's own persistent login state          | log in once in the app   | `setup-auth.sh status --surface electron` |
+  | Surface  | Mechanism                                      | One-key path                  | Standard check                            |
+  | -------- | ---------------------------------------------- | ----------------------------- | ----------------------------------------- |
+  | CLI      | Seeded API key, device-code fallback           | `setup-auth.sh cli-seed`      | `setup-auth.sh status --surface cli`      |
+  | Web      | Seeded better-auth login into `agent-browser`  | `setup-auth.sh web-seed`      | `setup-auth.sh status --surface web`      |
+  | Electron | Seeded better-auth cookie in the app's session | `setup-auth.sh electron-seed` | `setup-auth.sh status --surface electron` |
 
 - **Chrome-cookie fallback (Web only):** ordinary Chrome is only a source for
   copying the better-auth session cookie into the `agent-browser` session
@@ -171,7 +171,14 @@ stale standalone install: a recently added workspace package fails to resolve �
   `SERVER_URL` before launch, dropping the previous server's tokens. If you still see
   it: you are running with `LOBE_SHARED_PROFILE=1`, or you launched Electron without
   the script. Do NOT edit the user's own profile by hand, and never drive the OAuth
-  flow to "fix" it.
+  flow to "fix" it — Electron does not need it (see below).
+
+- **Electron logs in without any human step.** Its backend proxy fetches on the
+  app's own Electron session, so seeding that session's better-auth cookie IS the
+  login; `Oidc-Auth` is only an additional path. `electron-dev.sh start` seeds it
+  automatically for profiles it owns (`setup-auth.sh electron-seed` does it on
+  demand, minting the session with `web-seed` first if needed). The cookie is
+  host-scoped, so one seeded login covers every worktree's port.
 
 ## 4. Surfaces
 
@@ -238,17 +245,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   `SKIP_LOGIN_SAVE`). Connect with `agent-browser --cdp 9222 snapshot -i`.
 - Stop: `.agents/acceptance/scripts/electron-dev.sh stop` — always use this;
   `pkill -f "Electron"` leaves helper processes (GPU, renderer, network) alive.
-- Login persistence: `stop` snapshots the login to
-  `~/.lobehub/agent-testing/electron-login`; `start` seeds each new instance
-  from it (`login-status` inspects it, `save-login <id>` captures a live one).
-  Sign in once, not once per run — and if an instance comes up signed out,
-  **inject the login state directly** (restore the snapshot, or mint it via
-  CLI/API seeding; recipes and the three token-rotation traps are in
-  `.agents/acceptance/references/auth.md`). **Never trigger the OAuth flow
-  (`requestAuthorization`)** — it opens a login page in the user's default
-  browser, against a per-instance localhost origin that usually can't even
-  complete. If no injectable state exists, report auth as blocked and ask for
-  one manual sign-in instead.
+- Login: `start` seeds the app's Electron session with the same better-auth
+  cookie `web-seed` mints, so a wiped profile comes up signed in with no human
+  step (`setup-auth.sh electron-seed` does it on demand). `stop` also snapshots
+  the login to `~/.lobehub/agent-testing/electron-login` for pool instances
+  (`login-status` inspects it, `save-login <id>` captures a live one).
+  **Never trigger the OAuth flow (`requestAuthorization`)** — not because auth is
+  otherwise impossible, but because it opens a login page in the user's default
+  browser for a login the seeding already covers. Recipes and the traps behind a
+  signed-out instance are in `.agents/acceptance/references/auth.md`.
 - Concurrent instances (N worktrees / parallel runs): `electron-dev.sh` drives a
   pool — `start <id>` gives each its own CDP port, userData dir (with copied
   login), Vite port, and IPC id. Drive each with a distinct

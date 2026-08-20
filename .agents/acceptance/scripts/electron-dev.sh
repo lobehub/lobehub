@@ -585,6 +585,16 @@ do_start() {
   fi
   wait_for_renderer || true
 
+  # A profile we own must come up authenticated without anyone typing a password.
+  # The desktop proxy fetches on the app's own Electron session, so seeding that
+  # session's better-auth cookie is a complete login — the OAuth flow is not the
+  # only route, and must never be driven on the user's behalf. Skipped for the
+  # shared profile, which carries the user's own real login.
+  if [ -n "$USER_DATA_DIR" ] && [ "${SKIP_AUTH_SEED:-0}" != "1" ]; then
+    CDP_PORT="$CDP_PORT" "$SCRIPT_DIR/setup-auth.sh" electron-seed 2>&1 |
+      sed 's/^/[electron-dev]   auth: /' || true
+  fi
+
   if [ "$POOL_MODE" = "1" ]; then
     echo "[electron-dev] Ready! Drive it with: agent-browser --session s$CDP_PORT --cdp $CDP_PORT snapshot -i"
   else

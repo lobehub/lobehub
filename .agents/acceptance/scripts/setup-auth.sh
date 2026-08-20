@@ -22,7 +22,8 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 workspace_root_for_port() {
   local root="$REPO_ROOT"
@@ -502,6 +503,45 @@ PY
   printf '%s\n' "$cookie_header" | cmd_web
 }
 
+# Seed the running Electron app from the same better-auth login as the browser.
+# The desktop proxy fetches on the app's own Electron session, so its cookie jar
+# is what authenticates it — no OAuth flow and no login page involved.
+cmd_electron_seed() {
+  local cdp_port="${CDP_PORT:-9222}"
+
+  if ! curl -sf "http://127.0.0.1:${cdp_port}/json/version" > /dev/null 2>&1; then
+    bad "electron not running (CDP $cdp_port unreachable) — start it with electron-dev.sh"
+    return 1
+  fi
+
+  # Mint the session first if we have none; the cookie is host-scoped, so one
+  # seeded login covers every worktree's server port.
+  if [[ ! -f "$STATE_FILE" ]]; then
+    note "no seeded web session yet — running web-seed first"
+    cmd_web_seed || return 1
+  fi
+
+  local out
+  out="$(node "$SCRIPT_DIR/electron-seed-auth.mjs" --state "$STATE_FILE" --port "$cdp_port" 2>&1)"
+  local rc=$?
+  if [[ $rc -eq 0 ]]; then
+    ok "$out"
+    return 0
+  fi
+
+  # A stale seeded session is the other likely cause; re-mint once and retry.
+  note "$out"
+  note "re-minting the seeded session and retrying"
+  cmd_web_seed || return 1
+  out="$(node "$SCRIPT_DIR/electron-seed-auth.mjs" --state "$STATE_FILE" --port "$cdp_port" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    ok "$out"
+    return 0
+  fi
+  bad "$out"
+  return 1
+}
+
 cmd_web_verify() {
   local skip_server_check="${1:-}"
   if [[ "$skip_server_check" != "--skip-server-check" ]]; then
@@ -550,11 +590,12 @@ case "${1:-status}" in
     cmd_open_chrome "$@"
     ;;
   web-seed) cmd_web_seed ;;
+  electron-seed) cmd_electron_seed ;;
   web) cmd_web ;;
   web-verify) cmd_web_verify ;;
   -h|--help) usage ;;
   *)
-    echo "Usage: $0 {status|cli-seed|cli|open-chrome|web-seed|web|web-verify}" >&2
+    echo "Usage: $0 {status|cli-seed|cli|open-chrome|web-seed|web|web-verify|electron-seed}" >&2
     exit 2
     ;;
 esac

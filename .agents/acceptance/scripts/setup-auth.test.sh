@@ -194,4 +194,11 @@ if printf 'foo=bar\n' | "$SCRIPT" web > "$tmp_dir/invalid.out" 2> "$tmp_dir/inva
 fi
 assert_contains "$tmp_dir/invalid.err" "no better-auth cookies found"
 
+# electron-seed must refuse clearly when there is no app to seed, rather than
+# silently "succeeding" and leaving a run to discover the 401s later.
+if CDP_PORT=59999 "$SCRIPT" electron-seed > "$tmp_dir/eseed.out" 2>&1; then
+  fail "electron-seed unexpectedly passed with no Electron running"
+fi
+assert_contains "$tmp_dir/eseed.out" "electron not running"
+
 echo "setup-auth tests passed"
