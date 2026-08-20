@@ -307,11 +307,8 @@ deploy_control_plane() {
   fi
   persist_infra_kv "PANACHAT_CONTROL_PLANE_IMAGE" "$PANACHAT_CONTROL_PLANE_IMAGE"
   persist_infra_kv "PANACHAT_CONTROL_PLANE_PORT" "$CONTROL_PLANE_PORT"
-  if ! docker_pull_safe "$PANACHAT_CONTROL_PLANE_IMAGE"; then
-    err "Control-plane pull failed — main app deploy already succeeded and stays live;"
-    err "skipping control-plane start this round. Re-run deploy to retry it."
-    return 0
-  fi
+  log "Pulling control-plane ${PANACHAT_CONTROL_PLANE_IMAGE}"
+  docker pull "$PANACHAT_CONTROL_PLANE_IMAGE"
   log "Starting ${PANACHAT_STACK}-control-plane"
   compose_with_profile control-plane up -d --no-deps --force-recreate panachat-control-plane
   wait_control_plane
@@ -481,82 +478,10 @@ flip_nginx() {
   fi
 }
 
-# --- Disk protection ---------------------------------------------------------
-# A failed/interrupted `docker pull` (extraction aborting mid-layer) can leave
-# orphaned containerd overlayfs snapshot data behind that plain `df` doesn't
-# explain and that neither the app volumes nor image list account for. These
-# helpers keep enough headroom before we pull, and clean up if a pull fails,
-# without ever touching named volumes or running containers.
-
-docker_root_free_mb() {
-  local root
-  root="$(docker info -f '{{.DockerRootDir}}' 2>/dev/null || true)"
-  [[ -n "$root" ]] || root="/var/lib/docker"
-  df -Pm "$root" 2>/dev/null | awk 'NR==2{print $4}'
-}
-
-# Safe to run at any time: only removes stopped containers older than 24h,
-# dangling/unreferenced images and layers, and build cache older than the
-# retention window. Never touches named volumes or currently-running
-# containers (blue-green always keeps the active slot running).
-cleanup_docker_disk() {
-  local reason="${1:-scheduled}"
-  log "Docker/containerd disk cleanup (${reason})"
-  docker container prune -f --filter "until=24h" >/dev/null 2>&1 || true
-  docker image prune -f >/dev/null 2>&1 || true
-  docker builder prune -f --filter "until=${PANACHAT_BUILD_CACHE_RETENTION:-72h}" >/dev/null 2>&1 || true
-  # `docker system prune` (without -a) is the supported way to ask the docker/
-  # containerd daemon to reconcile and garbage-collect unreferenced overlayfs
-  # snapshots left by a failed pull; it still only targets dangling resources.
-  docker system prune -f >/dev/null 2>&1 || true
-}
-
-# Call before every `docker pull`. If free space on the docker data root is
-# below PANACHAT_MIN_FREE_DISK_MB, clean up unused resources first; if it's
-# still below PANACHAT_HARD_MIN_FREE_DISK_MB after cleanup, abort the deploy
-# rather than let a pull fail mid-extraction and leave more orphaned data.
-ensure_disk_space() {
-  local min_mb="${PANACHAT_MIN_FREE_DISK_MB:-8192}"
-  local hard_min_mb="${PANACHAT_HARD_MIN_FREE_DISK_MB:-3072}"
-  local free_mb
-  free_mb="$(docker_root_free_mb || true)"
-  if [[ -z "$free_mb" ]]; then
-    log "Could not determine docker root free space — skipping disk guard"
-    return 0
-  fi
-  if ((free_mb >= min_mb)); then
-    return 0
-  fi
-  log "Low disk on docker root (${free_mb}MB free, want >=${min_mb}MB) — cleaning unused docker resources before pull"
-  cleanup_docker_disk "low-disk-pre-pull"
-  free_mb="$(docker_root_free_mb || echo "$free_mb")"
-  log "Docker root free space after cleanup: ${free_mb}MB"
-  if ((free_mb < hard_min_mb)); then
-    err "Only ${free_mb}MB free on docker root after cleanup (need >=${hard_min_mb}MB) — aborting before pull"
-    err "Volumes and running containers were left untouched. Free space manually, or raise"
-    err "PANACHAT_HARD_MIN_FREE_DISK_MB only if you are sure that's safe."
-    return 1
-  fi
-}
-
-# Wraps `docker pull` with the pre-flight disk guard and failure cleanup, so a
-# failed/interrupted extraction never leaves orphaned containerd overlayfs
-# snapshot data lying around for the next deploy to trip over.
-docker_pull_safe() {
-  local image="$1"
-  ensure_disk_space || return 1
-  log "Pulling $image"
-  if ! docker pull "$image"; then
-    err "docker pull failed for $image — cleaning dangling docker/containerd resources"
-    cleanup_docker_disk "failed-pull:${image}"
-    err "Pull failed for $image; not retrying automatically."
-    return 1
-  fi
-}
-
-prune_repo_images() {
-  local image="$1" keep="$2" repo
-  repo="$(echo "${image:-}" | sed 's/:.*//')"
+prune_old_images() {
+  local keep="$IMAGE_KEEP"
+  local repo
+  repo="$(echo "${PANACHAT_IMAGE:-}" | sed 's/:.*//')"
   [[ -n "$repo" ]] || return 0
   mapfile -t ids < <(docker images "$repo" --format '{{.ID}}' 2>/dev/null | awk -v k="$keep" 'NR>k')
   if ((${#ids[@]} == 0)); then
@@ -567,19 +492,6 @@ prune_repo_images() {
     [[ -n "$id" ]] || continue
     docker rmi "$id" 2>/dev/null || true
   done
-}
-
-# Post-deploy cleanup: keep the last PANACHAT_IMAGE_KEEP tagged images per repo
-# (chat app + control-plane) for rollback, and sweep now-dangling
-# layers/build-cache left behind by superseded generations. Only ever targets
-# untagged/dangling resources — active slot, its image, and all volumes are
-# untouched, so blue-green rollback keeps working.
-prune_old_images() {
-  local keep="$IMAGE_KEEP"
-  prune_repo_images "${PANACHAT_IMAGE:-}" "$keep"
-  prune_repo_images "${PANACHAT_CONTROL_PLANE_IMAGE:-}" "$keep"
-  docker image prune -f >/dev/null 2>&1 || true
-  docker builder prune -f --filter "until=${PANACHAT_BUILD_CACHE_RETENTION:-72h}" >/dev/null 2>&1 || true
 }
 
 image_sha_tag() {
@@ -695,7 +607,8 @@ cmd_deploy() {
   set_image_env "$image"
   sync_app_url_to_slot "$inactive"
 
-  docker_pull_safe "$image" || exit 1
+  log "Pulling $image"
+  docker pull "$image"
 
   log "Starting inactive slot $inactive_svc"
   compose_with_profile "$inactive_profile" up -d --no-deps --force-recreate "$inactive_compose"
