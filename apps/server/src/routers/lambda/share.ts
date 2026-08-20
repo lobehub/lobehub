@@ -10,7 +10,7 @@ export const shareRouter = router({
   /** Resolve the metadata for an agent share after enforcing signed-in access. */
   getSharedAgent: authedProcedure
     .use(serverDatabase)
-    .input(z.object({ shareId: z.string() }))
+    .input(z.object({ shareId: z.string(), trackView: z.boolean().default(true) }))
     .query(async ({ input, ctx }): Promise<SharedAgentData> => {
       const share = await AgentShareModel.findByShareIdWithAccessCheck(
         ctx.serverDB,
@@ -18,7 +18,9 @@ export const shareRouter = router({
         ctx.userId,
       );
 
-      await AgentShareModel.incrementUserViewCount(ctx.serverDB, input.shareId);
+      if (input.trackView) {
+        await AgentShareModel.incrementUserViewCount(ctx.serverDB, input.shareId);
+      }
 
       return {
         agentId: share.agentId,

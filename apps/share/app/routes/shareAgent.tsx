@@ -7,8 +7,9 @@ import { shareKeys } from '@/libs/swr/keys';
 import { resolveRequestLocale } from '@/locales/requestLocale';
 
 import SharedAgentView from '../../src/features/agent/SharedAgentView';
+import { loadShareResources } from '../../src/shell/createShareI18n';
 import { cloudflareContext } from '../lib/cloudflareContext';
-import { buildPageMeta, truncateDescription } from '../lib/seo';
+import { buildPageMeta, shareMetaDescription, truncateDescription } from '../lib/seo';
 import { createServerLambdaClient } from '../lib/serverTrpc';
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
@@ -16,13 +17,18 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   const locale = resolveRequestLocale(request);
   const apiBase = context.get(cloudflareContext).env.SHARE_API_BASE as string | undefined;
   const agent = await createServerLambdaClient(request, apiBase)
-    .share.getSharedAgent.query({ shareId })
+    .share.getSharedAgent.query({ shareId, trackView: false })
     .catch((error) => {
       console.error('[share] shared agent SSR fetch failed:', error);
       return null;
     });
 
-  return { agent, locale, shareId };
+  return {
+    agent,
+    description: shareMetaDescription(await loadShareResources(locale), 'agentDescription'),
+    locale,
+    shareId,
+  };
 };
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -31,7 +37,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   return buildPageMeta({
     description:
       truncateDescription(loaderData?.agent?.agentMeta.description) ??
-      `An agent shared from ${BRANDING_NAME}.`,
+      loaderData?.description ??
+      '',
     locale: loaderData?.locale,
     title: title ? `${title} · ${BRANDING_NAME}` : BRANDING_NAME,
   });

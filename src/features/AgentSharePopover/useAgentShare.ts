@@ -1,11 +1,20 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { shareKeys } from '@/libs/swr/keys';
 import type { AgentShareConfigInput } from '@/server/routers/lambda/agentShare';
 import { agentShareService } from '@/services/agentShare';
 
 export type AgentShareVisibility = 'link' | 'private';
+export type AgentShareConfigPatch =
+  | Partial<AgentShareConfigInput>
+  | ((current: AgentShareConfigInput) => Partial<AgentShareConfigInput>);
+
+interface ConfigQueueState {
+  config: AgentShareConfigInput;
+  queue: Promise<unknown>;
+}
 
 /**
  * Creator-side share state for one agent. Mirrors the topic SharePopover data
@@ -14,6 +23,12 @@ export type AgentShareVisibility = 'link' | 'private';
  * no exposure side effect and lets every control below assume the row exists.
  */
 export const useAgentShare = (agentId: string | undefined, enabled: boolean) => {
+  const [createError, setCreateError] = useState<unknown>();
+  const [isCreating, setIsCreating] = useState(false);
+  const activeAgentRef = useRef<string>();
+  const creatingAgentRef = useRef<string>();
+  const configQueueByAgent = useSingleton(() => new Map<string, ConfigQueueState>());
+  activeAgentRef.current = enabled ? agentId : undefined;
   const {
     data: shareInfo,
     isLoading,
@@ -24,11 +39,52 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
     { revalidateOnFocus: false },
   );
 
-  useEffect(() => {
-    if (enabled && !isLoading && !shareInfo && agentId) {
-      agentShareService.enableShare(agentId).then(() => mutate());
+  const createShare = useCallback(async () => {
+    if (!enabled || !agentId || creatingAgentRef.current === agentId) return;
+
+    creatingAgentRef.current = agentId;
+    setIsCreating(true);
+    setCreateError(undefined);
+    try {
+      const created = await agentShareService.enableShare(agentId);
+      await mutate(created, { revalidate: false });
+    } catch (error) {
+      if (activeAgentRef.current === agentId) setCreateError(error);
+    } finally {
+      // A quick agent switch may already have started another creation. Do
+      // not let the older request clear the newer request's loading guard.
+      if (creatingAgentRef.current === agentId) {
+        creatingAgentRef.current = undefined;
+        setIsCreating(false);
+      }
     }
-  }, [enabled, isLoading, shareInfo, agentId, mutate]);
+  }, [agentId, enabled, mutate]);
+
+  useEffect(() => {
+    setCreateError(undefined);
+  }, [agentId, enabled]);
+
+  useEffect(() => {
+    if (enabled && !isLoading && !shareInfo && !createError && agentId) {
+      void createShare();
+    }
+  }, [agentId, createError, createShare, enabled, isLoading, shareInfo]);
+
+  useEffect(() => {
+    if (!agentId || !shareInfo?.shareConfig) return;
+
+    const state = configQueueByAgent.get(agentId);
+    if (state) {
+      state.config = shareInfo.shareConfig;
+    } else {
+      configQueueByAgent.set(agentId, {
+        config: shareInfo.shareConfig,
+        queue: Promise.resolve(),
+      });
+    }
+  }, [agentId, configQueueByAgent, shareInfo?.shareConfig]);
+
+  const retryCreate = useCallback(() => createShare(), [createShare]);
 
   const updateVisibility = useCallback(
     async (visibility: AgentShareVisibility) => {
@@ -39,19 +95,48 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
     [agentId, mutate],
   );
 
-  // `updateShareConfig` replaces the whole config (`.strict()` schema), so
-  // merge each patch over the server-normalized config before submitting.
+  /**
+   * `updateShareConfig` replaces the whole config (`.strict()` schema). Keep a
+   * local latest snapshot and serialize writes so rapid controls cannot merge
+   * over the same stale SWR value and restore a sibling field.
+   */
   const updateConfig = useCallback(
-    async (patch: Partial<AgentShareConfigInput>) => {
-      if (!agentId || !shareInfo?.shareConfig) return;
-      await agentShareService.updateShareConfig(agentId, {
-        ...shareInfo.shareConfig,
-        ...patch,
+    async (patch: AgentShareConfigPatch) => {
+      if (!agentId) return;
+
+      const state = configQueueByAgent.get(agentId);
+      if (!state) return;
+
+      const request = state.queue.then(async () => {
+        const resolvedPatch = typeof patch === 'function' ? patch(state.config) : patch;
+        const nextConfig = {
+          ...state.config,
+          ...resolvedPatch,
+          filePermissionConfig: resolvedPatch.filePermissionConfig
+            ? { ...state.config.filePermissionConfig, ...resolvedPatch.filePermissionConfig }
+            : state.config.filePermissionConfig,
+        };
+        const updated = await agentShareService.updateShareConfig(agentId, nextConfig);
+        state.config = updated.shareConfig;
+        await mutate(updated, { revalidate: false });
       });
-      await mutate();
+
+      // A failed write must reject its own caller, but must not poison later
+      // queued edits — a subsequent complete snapshot can still recover it.
+      state.queue = request.catch(() => undefined);
+      return request;
     },
-    [agentId, shareInfo?.shareConfig, mutate],
+    [agentId, configQueueByAgent, mutate],
   );
 
-  return { isLoading, mutate, shareInfo, updateConfig, updateVisibility };
+  return {
+    createError,
+    isCreating,
+    isLoading,
+    mutate,
+    retryCreate,
+    shareInfo,
+    updateConfig,
+    updateVisibility,
+  };
 };

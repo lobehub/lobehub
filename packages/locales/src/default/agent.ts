@@ -372,6 +372,7 @@ export default {
 
   'share.copyLink': 'Copy Link',
   'share.copyLinkSuccess': 'Share link copied to clipboard',
+  'share.createError': 'Failed to prepare sharing. Please try again.',
   'share.popover.title': 'Share this Agent',
   'share.popover.visibility': 'Visibility',
   'share.privacyWarning.confirm': 'Share via link',

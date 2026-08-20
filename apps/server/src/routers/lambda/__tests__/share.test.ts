@@ -123,6 +123,14 @@ describe('shareRouter', () => {
       expect(AgentShareModel.incrementUserViewCount).toHaveBeenCalledOnce();
     });
 
+    it('can resolve SSR metadata without counting a second client visit', async () => {
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      await caller.getSharedAgent({ shareId: agentShare.shareId, trackView: false });
+
+      expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['FORBIDDEN', agentShare.shareId, 'This share is private'],
       ['NOT_FOUND', 'not-a-uuid', 'Share not found'],
