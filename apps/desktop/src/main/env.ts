@@ -59,6 +59,7 @@ const getRuntimeEnv = () => ({
   ...process.env,
   DESKTOP_APP_ID: process.env.DESKTOP_APP_ID,
   DESKTOP_CLI_BIN_NAMES: process.env.DESKTOP_CLI_BIN_NAMES,
+  DESKTOP_PRODUCT_NAME: process.env.DESKTOP_PRODUCT_NAME,
   DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: process.env.DESKTOP_BACKEND_PROXY_RETHROW_ERRORS,
   DESKTOP_DISABLE_UPDATES: process.env.DESKTOP_DISABLE_UPDATES,
   DESKTOP_EXTERNAL_NAVIGATION_HOSTS: process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS,
@@ -105,6 +106,12 @@ export const getDesktopEnv = memoize(() =>
        * Unset keeps the built-in `lobehub,lh,lobe`.
        */
       DESKTOP_CLI_BIN_NAMES: z.string().optional(),
+      /**
+       * The app's own name, used for the per-user data directory. Unset keeps
+       * Electron's default, which is `productName ?? name` from the packaged
+       * manifest — this repository's package name.
+       */
+      DESKTOP_PRODUCT_NAME: z.string().optional(),
 
       DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: envBoolean(false),
 

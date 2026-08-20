@@ -114,6 +114,11 @@ export default defineConfig(async (env) => {
       // AppUserModelID, which has to match the one the installer stamped on the
       // shortcut.
       'process.env.DESKTOP_APP_ID': JSON.stringify(process.env.DESKTOP_APP_ID),
+      // Names the per-user data directory. `electron-builder.mjs` reads this
+      // too, for the executable and installer, but that never reaches the
+      // packaged manifest Electron resolves `app.getName()` from — so the app
+      // has to set its own name, and needs the value baked in to do it.
+      'process.env.DESKTOP_PRODUCT_NAME': JSON.stringify(process.env.DESKTOP_PRODUCT_NAME),
       // Same trap as the two below. This one also has to reach the main process
       // because `electron-builder.mjs` reads it independently: dropping the
       // publish config alone leaves the updater free to call setFeedURL with the
