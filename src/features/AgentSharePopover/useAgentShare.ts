@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
-import { useSingleton } from '@/hooks/useSingleton';
 import { shareKeys } from '@/libs/swr/keys';
 import type { AgentShareConfigInput } from '@/server/routers/lambda/agentShare';
 import { agentShareService } from '@/services/agentShare';
@@ -14,7 +13,11 @@ export type AgentShareConfigPatch =
 interface ConfigQueueState {
   config: AgentShareConfigInput;
   queue: Promise<unknown>;
+  shareId: string;
 }
+
+/** One queue per share record, shared across popover/settings remounts. */
+const configQueueByAgent = new Map<string, ConfigQueueState>();
 
 /**
  * Creator-side share state for one agent. Mirrors the topic SharePopover data
@@ -27,7 +30,6 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
   const [isCreating, setIsCreating] = useState(false);
   const activeAgentRef = useRef<string>();
   const creatingAgentRef = useRef<string>();
-  const configQueueByAgent = useSingleton(() => new Map<string, ConfigQueueState>());
   activeAgentRef.current = enabled ? agentId : undefined;
   const {
     data: shareInfo,
@@ -74,15 +76,14 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
     if (!agentId || !shareInfo?.shareConfig) return;
 
     const state = configQueueByAgent.get(agentId);
-    if (state) {
-      state.config = shareInfo.shareConfig;
-    } else {
+    if (!state || state.shareId !== shareInfo.id) {
       configQueueByAgent.set(agentId, {
         config: shareInfo.shareConfig,
         queue: Promise.resolve(),
+        shareId: shareInfo.id,
       });
     }
-  }, [agentId, configQueueByAgent, shareInfo?.shareConfig]);
+  }, [agentId, shareInfo?.id, shareInfo?.shareConfig]);
 
   const retryCreate = useCallback(() => createShare(), [createShare]);
 
@@ -126,7 +127,7 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
       state.queue = request.catch(() => undefined);
       return request;
     },
-    [agentId, configQueueByAgent, mutate],
+    [agentId, mutate],
   );
 
   return {
