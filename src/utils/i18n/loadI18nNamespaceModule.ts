@@ -1,4 +1,7 @@
-import { loadBusinessI18nNamespace } from '@/business/locales';
+import { mergeBusinessI18nNamespace } from './mergeBusinessI18nNamespace';
+
+export type { I18nNamespaceModule } from './mergeBusinessI18nNamespace';
+export { mergeBusinessI18nNamespace } from './mergeBusinessI18nNamespace';
 
 export interface LoadI18nNamespaceModuleParams {
   defaultLang: string;
@@ -6,20 +9,6 @@ export interface LoadI18nNamespaceModuleParams {
   normalizeLocale: (locale?: string) => string;
   ns: string;
 }
-
-export interface I18nNamespaceModule {
-  default: Record<string, unknown>;
-}
-
-export const mergeBusinessI18nNamespace = async (
-  module: I18nNamespaceModule,
-  params: LoadI18nNamespaceModuleParams,
-): Promise<I18nNamespaceModule> => ({
-  default: {
-    ...module.default,
-    ...(await loadBusinessI18nNamespace(params)),
-  },
-});
 
 export const loadI18nNamespaceModule = async (params: LoadI18nNamespaceModuleParams) => {
   const { defaultLang, normalizeLocale, lng, ns } = params;
