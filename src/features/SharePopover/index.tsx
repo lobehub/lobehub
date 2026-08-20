@@ -172,6 +172,13 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     onOpenModal?.();
   }, [close, onOpenModal]);
 
+  // Clearing the per-topic failure re-arms the create effect; `mutate` reruns
+  // the read so a transient load error clears with it.
+  const handleRetry = useCallback(() => {
+    setFailedTopicId(undefined);
+    void mutate();
+  }, [mutate]);
+
   if (!canShare) {
     return (
       <Flexbox className={styles.container} gap={8}>
@@ -186,6 +193,11 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
       <Flexbox className={styles.container} gap={8}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
         <Text type="secondary">{t('shareModal.popover.loadError')}</Text>
+        <Flexbox horizontal justify={'flex-end'}>
+          <Button size="small" type="text" onClick={handleRetry}>
+            {t('retry', { ns: 'common' })}
+          </Button>
+        </Flexbox>
       </Flexbox>
     );
   }

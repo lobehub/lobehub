@@ -261,6 +261,10 @@ export const countAssociatedAgentDocumentsToDetach = async (
  *   dedicated files that grew external consumers): the backing document stays
  *   where it lives; the binding is detached — kept, it would be a dead link
  *   no scope can resolve (same rationale as the knowledge-mount detach).
+ *
+ * @returns the ids of the documents that actually moved, so the caller can
+ *   split the topic/task junction rows the same way — a junction only resolves
+ *   when both it and its document pass the target scope's predicate.
  */
 export const moveAgentDocumentsForScopeTransfer = async (
   db: Db,
@@ -274,7 +278,7 @@ export const moveAgentDocumentsForScopeTransfer = async (
     targetVisibility?: 'private' | 'public';
     targetWorkspaceId: string | null;
   },
-): Promise<void> => {
+): Promise<string[]> => {
   const {
     agentIds,
     movedTaskIds,
@@ -283,7 +287,7 @@ export const moveAgentDocumentsForScopeTransfer = async (
     targetVisibility,
     targetWorkspaceId,
   } = params;
-  if (agentIds.length === 0) return;
+  if (agentIds.length === 0) return [];
 
   const rows = await db
     .select({
@@ -298,7 +302,7 @@ export const moveAgentDocumentsForScopeTransfer = async (
     .from(agentDocuments)
     .innerJoin(documents, eq(documents.id, agentDocuments.documentId))
     .where(inArray(agentDocuments.agentId, agentIds));
-  if (rows.length === 0) return;
+  if (rows.length === 0) return [];
 
   const dedicatedCandidates = rows.filter((row) =>
     isDedicatedProvenance(row.source, row.sourceType),
@@ -380,7 +384,7 @@ export const moveAgentDocumentsForScopeTransfer = async (
       .where(inArray(agentDocuments.id, [...keptByPair.values()]));
   }
 
-  if (dedicatedDocIds.length === 0) return;
+  if (dedicatedDocIds.length === 0) return [];
 
   // Dedicated agent files carry no slug today, but a slugged row colliding
   // with the target scope's unique index must not abort the whole transfer —
@@ -425,11 +429,21 @@ export const moveAgentDocumentsForScopeTransfer = async (
       .where(inArray(documents.id, [...conflictedDocIds]));
   }
 
-  // Revision history denormalizes the scope — left behind, workspace-filtered
+  // Revision history denormalizes the scope — left behind, scope-filtered
   // history reads for the moved document go stale. Author attribution
-  // (`user_id`) is kept.
+  // (`user_id`) survives a WORKSPACE target, which filters on `workspace_id`
+  // alone; a PERSONAL target reads `user_id = owner AND workspace_id IS NULL`,
+  // so another member's revisions would be invisible to the new owner and
+  // would cascade away the day that member's account is deleted. Rehoming the
+  // owner there mirrors the member handover above.
   await db
     .update(documentHistories)
-    .set({ workspaceId: targetWorkspaceId })
+    .set(
+      targetWorkspaceId
+        ? { workspaceId: targetWorkspaceId }
+        : { userId: targetUserId, workspaceId: null },
+    )
     .where(inArray(documentHistories.documentId, dedicatedDocIds));
+
+  return dedicatedDocIds;
 };

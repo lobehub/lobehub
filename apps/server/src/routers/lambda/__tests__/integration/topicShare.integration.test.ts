@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  agents,
   topics,
   workspaceAuditLogs,
   workspaceMembers,
@@ -40,6 +41,7 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
   let ownerId: string;
   let workspaceId: string;
   let topicId: string;
+  let privateTopicId: string;
 
   beforeEach(async () => {
     serverDB = await getTestDB();
@@ -65,11 +67,44 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
       { role: 'owner', userId: ownerId, workspaceId },
     ]);
 
+    // Share management follows the topic's conversation, so the topics must be
+    // bound to one: a shared agent (every member holds `use` by default) and a
+    // private one (nobody but its creator can reach it).
+    const [sharedAgent] = await serverDB
+      .insert(agents)
+      .values({
+        slug: `share-perm-shared-${creatorId.slice(0, 8)}`,
+        userId: creatorId,
+        visibility: 'public',
+        workspaceId,
+      })
+      .returning();
+    const [privateAgent] = await serverDB
+      .insert(agents)
+      .values({
+        slug: `share-perm-private-${creatorId.slice(0, 8)}`,
+        userId: creatorId,
+        visibility: 'private',
+        workspaceId,
+      })
+      .returning();
+
     const [topic] = await serverDB
       .insert(topics)
-      .values({ title: 'WS Perm Topic', userId: creatorId, workspaceId })
+      .values({ agentId: sharedAgent.id, title: 'WS Perm Topic', userId: creatorId, workspaceId })
       .returning();
     topicId = topic.id;
+
+    const [privateTopic] = await serverDB
+      .insert(topics)
+      .values({
+        agentId: privateAgent.id,
+        title: 'WS Private Topic',
+        userId: creatorId,
+        workspaceId,
+      })
+      .returning();
+    privateTopicId = privateTopic.id;
   });
 
   afterEach(async () => {
@@ -87,7 +122,7 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
       where: eq(workspaceAuditLogs.workspaceId, workspaceId),
     });
 
-  describe('management permission: creator + workspace owner only', () => {
+  describe('management permission: co-editing rule (same gate as updateTopic)', () => {
     it('creator can enable and switch their own share', async () => {
       const caller = topicRouter.createCaller(createWorkspaceContext(creatorId, workspaceId));
 
@@ -98,7 +133,7 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
       expect(updated?.visibility).toBe('link');
     });
 
-    it("another member cannot manage the creator's share", async () => {
+    it("a co-editing member can manage the creator's share", async () => {
       const creatorCaller = topicRouter.createCaller(
         createWorkspaceContext(creatorId, workspaceId),
       );
@@ -106,14 +141,29 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
 
       const memberCaller = topicRouter.createCaller(createWorkspaceContext(memberId, workspaceId));
 
+      // A member who may edit the conversation may share it: gating on the
+      // creator instead left co-editors staring at a button that always 403'd.
+      const updated = await memberCaller.updateShareVisibility({ topicId, visibility: 'link' });
+      expect(updated?.visibility).toBe('link');
+      await expect(memberCaller.disableSharing({ topicId })).resolves.not.toThrow();
+    });
+
+    it('a member without access to the conversation cannot manage its share', async () => {
+      const creatorCaller = topicRouter.createCaller(
+        createWorkspaceContext(creatorId, workspaceId),
+      );
+      await creatorCaller.enableSharing({ topicId: privateTopicId, visibility: 'private' });
+
+      const memberCaller = topicRouter.createCaller(createWorkspaceContext(memberId, workspaceId));
+
       await expect(
-        memberCaller.updateShareVisibility({ topicId, visibility: 'link' }),
+        memberCaller.updateShareVisibility({ topicId: privateTopicId, visibility: 'link' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-      await expect(memberCaller.disableSharing({ topicId })).rejects.toMatchObject({
+      await expect(memberCaller.disableSharing({ topicId: privateTopicId })).rejects.toMatchObject({
         code: 'FORBIDDEN',
       });
       await expect(
-        memberCaller.enableSharing({ topicId, visibility: 'link' }),
+        memberCaller.enableSharing({ topicId: privateTopicId, visibility: 'link' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 

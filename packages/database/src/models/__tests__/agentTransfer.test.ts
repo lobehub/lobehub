@@ -673,15 +673,24 @@ describe('AgentModel.transferAgent', () => {
       userId,
       workspaceId: wsId1,
     });
+    // Dedicated agent provenance + binding, so the document itself rides along
+    // and its pin survives the move (a pin whose document stays behind is
+    // detached instead — see the scope-riders suite).
     await serverDB.insert(documents).values({
       content: '',
       fileType: 'text/plain',
       id: 'task-doc',
-      source: 'test',
-      sourceType: 'file',
+      source: `agent-document://${agent.id}/task-doc.md`,
+      sourceType: 'agent',
       title: 'Task doc',
       totalCharCount: 0,
       totalLineCount: 0,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'task-doc',
       userId,
       workspaceId: wsId1,
     });
@@ -801,11 +810,16 @@ describe('AgentModel.transferAgent', () => {
       content: '',
       fileType: 'text/plain',
       id: 'task-vis-doc',
-      source: 'test',
-      sourceType: 'file',
+      source: `agent-document://${agent.id}/vis.md`,
+      sourceType: 'agent',
       title: 'Doc',
       totalCharCount: 0,
       totalLineCount: 0,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'task-vis-doc',
       userId,
     });
     await serverDB.insert(taskDocuments).values({
@@ -1332,6 +1346,175 @@ describe('AgentModel.transferAgent scope riders (connectors & documents)', () =>
       .where(eq(topicDocuments.topicId, 'moving-topic'));
     expect(link.workspaceId).toBe(wsId1);
     expect(link.userId).toBe(userId);
+  });
+
+  it('should detach a moved topic link whose document stays in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Assoc Topic Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ agentId: agent.id, id: 'assoc-link-topic', title: 'T', userId });
+    // Not agent provenance: an ordinary personal document the user attached to
+    // the conversation, so it stays behind when the agent moves.
+    await serverDB.insert(documents).values({
+      content: 'notes',
+      fileType: 'text/plain',
+      id: 'stays-doc',
+      source: 'https://example.com/notes',
+      sourceType: 'web',
+      title: 'Personal notes',
+      totalCharCount: 5,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(topicDocuments).values({
+      documentId: 'stays-doc',
+      topicId: 'assoc-link-topic',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'stays-doc'));
+    expect(doc.workspaceId).toBeNull();
+
+    // A link carried into the target would resolve in neither scope: the read
+    // path joins the junction AND the document against the same predicate.
+    const links = await serverDB
+      .select()
+      .from(topicDocuments)
+      .where(eq(topicDocuments.topicId, 'assoc-link-topic'));
+    expect(links).toHaveLength(0);
+  });
+
+  it('should detach a moved task pin whose document stays in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Assoc Task Agent' });
+
+    await serverDB.insert(tasks).values({
+      createdByAgentId: agent.id,
+      createdByUserId: userId,
+      id: 'assoc-link-task',
+      identifier: 'T-assoc',
+      instruction: 'Do the thing',
+      seq: 1,
+    });
+    await serverDB.insert(documents).values({
+      content: 'notes',
+      fileType: 'text/plain',
+      id: 'task-stays-doc',
+      source: 'https://example.com/notes',
+      sourceType: 'web',
+      title: 'Personal notes',
+      totalCharCount: 5,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(taskDocuments).values({
+      documentId: 'task-stays-doc',
+      taskId: 'assoc-link-task',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'task-stays-doc'));
+    expect(doc.workspaceId).toBeNull();
+
+    const pins = await serverDB
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.taskId, 'assoc-link-task'));
+    expect(pins).toHaveLength(0);
+  });
+
+  it('should rehome revision history to the new owner when moving to personal scope', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'History Agent' });
+
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'history-doc',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'history-doc',
+      userId,
+      workspaceId: wsId1,
+    });
+    // Authored by the member who is NOT the transfer target.
+    await serverDB.insert(documentHistories).values({
+      documentId: 'history-doc',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: new Date(),
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, null, targetUserId);
+
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'history-doc'));
+    // Personal reads are `user_id = owner AND workspace_id IS NULL`; keeping
+    // the author here would hide the history from its new owner and let it
+    // cascade away with the author's account.
+    expect(history.workspaceId).toBeNull();
+    expect(history.userId).toBe(targetUserId);
+  });
+
+  it('should keep revision authorship when the document lands in a workspace', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'History WS Agent' });
+
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'history-ws-doc',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'history-ws-doc',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(documentHistories).values({
+      documentId: 'history-ws-doc',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: new Date(),
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'history-ws-doc'));
+    // A workspace target filters on `workspace_id` alone, so the revision keeps
+    // pointing at whoever actually wrote it.
+    expect(history.workspaceId).toBe(wsId2);
+    expect(history.userId).toBe(userId);
   });
 });
 
