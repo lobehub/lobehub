@@ -278,6 +278,7 @@ describe('desktop router shared definition', () => {
     expect(webPaths).toContain('/verify-im');
     // `/share/*` moved to the standalone Share app (apps/share).
     expect(webPaths).not.toContain('/share/t');
+    expect(webPaths).not.toContain('/share/a');
     expect(webPaths).not.toContain('/share/page');
     expect(webPaths).not.toContain('/verify');
     expect(webPaths).toContain('/acceptance');
@@ -285,6 +286,7 @@ describe('desktop router shared definition', () => {
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');
     expect(electronPaths).not.toContain('/share/t');
+    expect(electronPaths).not.toContain('/share/a');
     expect(electronPaths).not.toContain('/share/page');
     expect(electronPaths).not.toContain('/verify');
     expect(electronPaths).not.toContain('/acceptance');

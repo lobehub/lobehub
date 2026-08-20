@@ -1,9 +1,11 @@
 import type {
+  I18nNamespaceModule,
   LoadI18nNamespaceModuleParams,
   LoadI18nNamespaceModuleWithFallbackParams,
 } from './loadI18nNamespaceModule';
+import { mergeBusinessI18nNamespace } from './loadI18nNamespaceModule';
 
-type NamespaceModule = { default: Record<string, unknown> };
+type NamespaceModule = I18nNamespaceModule;
 type NamespaceLoaderMap = Record<string, () => Promise<NamespaceModule>>;
 
 // Use import.meta.glob so Vite can statically analyze and avoid CJS/dynamic import issues.
@@ -30,19 +32,19 @@ export const loadI18nNamespaceModule = async (
     const key = getDefaultKey(ns);
     const load = defaultLoaders[key];
     if (!load) throw new Error(`Missing default namespace: ${ns}`);
-    return load();
+    return mergeBusinessI18nNamespace(await load(), params);
   }
 
   const normalizedLng = normalizeLocale(lng);
   const localeKey = getLocaleKey(normalizedLng, ns);
   const loadLocale = localeLoaders[localeKey];
   if (loadLocale) {
-    return loadLocale();
+    return mergeBusinessI18nNamespace(await loadLocale(), params);
   }
 
   const loadDefault = defaultLoaders[getDefaultKey(ns)];
   if (!loadDefault) throw new Error(`Missing default namespace: ${ns}`);
-  return loadDefault();
+  return mergeBusinessI18nNamespace(await loadDefault(), params);
 };
 
 export type {
@@ -60,6 +62,6 @@ export const loadI18nNamespaceModuleWithFallback = async (
     onFallback?.({ error, lng: rest.lng, ns: rest.ns });
     const loadDefault = defaultLoaders[getDefaultKey(rest.ns)];
     if (!loadDefault) throw error;
-    return loadDefault();
+    return mergeBusinessI18nNamespace(await loadDefault(), rest);
   }
 };

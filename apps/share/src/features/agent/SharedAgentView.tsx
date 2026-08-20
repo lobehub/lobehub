@@ -1,0 +1,26 @@
+'use client';
+
+import { memo } from 'react';
+import { useParams } from 'react-router';
+
+import ShareShell from '@/business/client/features/ShareShell';
+import { useSharedAgent } from '@/features/AgentShareVisitor/useSharedAgent';
+
+import { clientOnly } from '../../shell/clientOnly';
+
+const SharedAgentBody = clientOnly(() => import('./SharedAgentBody.client'));
+
+const SharedAgentView = memo(() => {
+  const { id } = useParams<{ id: string }>();
+  const { error, isLoading } = useSharedAgent(id);
+
+  return (
+    <ShareShell error={error} loading={!error && isLoading}>
+      <SharedAgentBody />
+    </ShareShell>
+  );
+});
+
+SharedAgentView.displayName = 'SharedAgentView';
+
+export default SharedAgentView;

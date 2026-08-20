@@ -34,7 +34,10 @@ import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
-import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
+import {
+  type BusinessModelRuntimeContext,
+  getBusinessModelRuntimeHooks,
+} from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
@@ -478,6 +481,7 @@ export const initModelRuntimeFromDB = async (
   userId: string,
   provider: string,
   workspaceId?: string,
+  context?: BusinessModelRuntimeContext,
 ): Promise<ModelRuntime> => {
   // 1. Get user's provider configuration from database
   const aiProviderModel = new AiProviderModel(db, userId, workspaceId);
@@ -519,7 +523,7 @@ export const initModelRuntimeFromDB = async (
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)
-  const businessHooks = getBusinessModelRuntimeHooks(userId, provider, workspaceId);
+  const businessHooks = getBusinessModelRuntimeHooks(userId, provider, workspaceId, context);
 
   // 5. Compose with the per-call llm_generation_tracing hook (no-op when the
   //    service is unconfigured, so OSS / self-hosted setups pay nothing for it).

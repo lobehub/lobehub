@@ -1,9 +1,11 @@
 import type {
+  I18nNamespaceModule,
   LoadI18nNamespaceModuleParams,
   LoadI18nNamespaceModuleWithFallbackParams,
 } from './loadI18nNamespaceModule';
+import { mergeBusinessI18nNamespace } from './loadI18nNamespaceModule';
 
-type NamespaceModule = { default: Record<string, unknown> };
+type NamespaceModule = I18nNamespaceModule;
 type NamespaceLoaderMap = Record<string, () => Promise<NamespaceModule>>;
 
 const defaultLoaders = import.meta.glob([
@@ -24,16 +26,16 @@ export const loadI18nNamespaceModule = async (
   if (lng === defaultLang) {
     const load = defaultLoaders[getDefaultKey(ns)];
     if (!load) throw new Error(`Missing default namespace: ${ns}`);
-    return load();
+    return mergeBusinessI18nNamespace(await load(), params);
   }
 
   const normalizedLng = normalizeLocale(lng);
   const loadLocale = localeLoaders[getLocaleKey(normalizedLng, ns)];
-  if (loadLocale) return loadLocale();
+  if (loadLocale) return mergeBusinessI18nNamespace(await loadLocale(), params);
 
   const loadDefault = defaultLoaders[getDefaultKey(ns)];
   if (!loadDefault) throw new Error(`Missing default namespace: ${ns}`);
-  return loadDefault();
+  return mergeBusinessI18nNamespace(await loadDefault(), params);
 };
 
 export type {
@@ -51,6 +53,6 @@ export const loadI18nNamespaceModuleWithFallback = async (
     onFallback?.({ error, lng: rest.lng, ns: rest.ns });
     const loadDefault = defaultLoaders[getDefaultKey(rest.ns)];
     if (!loadDefault) throw error;
-    return loadDefault();
+    return mergeBusinessI18nNamespace(await loadDefault(), rest);
   }
 };

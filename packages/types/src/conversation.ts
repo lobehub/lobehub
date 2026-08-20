@@ -129,6 +129,13 @@ export interface ConversationContext {
   agentDocumentId?: string;
   agentId: string;
   /**
+   * Agent share ID for the visitor view of a shared agent (`/share/a/:id`).
+   * When present, the conversation is mounted for a non-owner visitor: all
+   * owner-scoped side effects (agent-config fetch, transfer-job polling,
+   * URL/forward auto-send dispatchers) must be suppressed.
+   */
+  agentShareId?: string;
+  /**
    * Optional default assignee candidate for task manager conversations.
    * This is a prompt hint only; task tools still require an explicit assigneeAgentId.
    */

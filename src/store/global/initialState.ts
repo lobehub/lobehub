@@ -213,6 +213,7 @@ export interface SystemStatus {
    * Hidden sidebar sections
    */
   hiddenSidebarSections?: string[];
+  hideAgentSharePrivacyWarning?: boolean;
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
@@ -538,6 +539,7 @@ export const INITIAL_STATUS = {
   filePanelWidth: 320,
   groupAgentBuilderPanelWidth: 360,
   hiddenHomeWidgets: [],
+  hideAgentSharePrivacyWarning: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,

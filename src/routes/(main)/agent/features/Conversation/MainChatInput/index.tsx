@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
@@ -23,6 +23,21 @@ const promptTransformRightActions: ActionKeys[] = [
   'contextWindow',
 ];
 
+// The model chip lives on the right, next to Send (see the right-action lists).
+const defaultLeftActions: ActionKeys[] = ['plus', 'voiceDictation'];
+
+export interface MainChatInputProps {
+  /** Force-disable sending, e.g. on the visitor share page before the share execution chain lands. */
+  disableSend?: boolean;
+  /** Override the built-in left actions, e.g. to hide owner controls for share visitors. */
+  leftActions?: ActionKeys[];
+  /**
+   * Override the built-in right actions. Share visitors pass `[]` — the voice
+   * message action sends through its own path that ignores `disableSend`.
+   */
+  rightActions?: ActionKeys[];
+}
+
 /**
  * MainChatInput
  *
@@ -31,7 +46,7 @@ const promptTransformRightActions: ActionKeys[] = [
  * including error alerts display.
  * Only adds MessageFromUrl for desktop mode.
  */
-const MainChatInput = memo(() => {
+const MainChatInput = memo<MainChatInputProps>(({ disableSend, leftActions, rightActions }) => {
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const sendMenuItems = useSendMenuItems();
 
@@ -40,22 +55,19 @@ const MainChatInput = memo(() => {
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const isAgentConfigLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
   const supportsImageOutput = useModelSupportImageOutput(model, provider);
-  const rightActions = supportsImageOutput
+  const defaultRightActions = supportsImageOutput
     ? promptTransformRightActions
     : contextWindowRightActions;
-
-  // The model chip lives on the right, next to Send (see rightActions); the
-  // left bar keeps the "+" menu, dictation and the expand toggle.
-  const leftActions: ActionKeys[] = useMemo(() => ['plus', 'voiceDictation'], []);
 
   return (
     <>
       <AgentConfigError />
       <ChatInput
         skipScrollMarginWithList
+        disableSend={disableSend}
         isConfigLoading={isAgentConfigLoading}
-        leftActions={leftActions}
-        rightActions={rightActions}
+        leftActions={leftActions ?? defaultLeftActions}
+        rightActions={rightActions ?? defaultRightActions}
         {...(isDevMode
           ? { sendMenu: { items: sendMenuItems } }
           : { sendButtonProps: { shape: 'round' } })}

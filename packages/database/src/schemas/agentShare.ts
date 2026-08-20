@@ -5,13 +5,16 @@ import { agents } from './agent';
 
 export interface AgentShareConfig {
   allowReadMemory?: boolean;
+  enabledToolIds?: string[];
   filePermissionConfig?: {
     agentFiles?: 'none' | 'read';
     knowledgeBase?: 'none' | 'read';
     uploadAllowed?: boolean;
   };
-  guestEnabled?: boolean;
-  maxGuestTopics?: number;
+  /** Maximum number of topics each signed-in visitor can create for this share. */
+  maxTopicsPerVisitor: number;
+  /** Maximum number of message turns allowed in each shared topic. */
+  maxTurnsPerTopic: number;
   // tipSplitRatio is platform-controlled, not configurable by the creator
 }
 
@@ -28,7 +31,7 @@ export const agentShares = pgTable(
 
     shareConfig: jsonb('share_config').$type<AgentShareConfig>(),
 
-    /** Unique visitor count — incremented by the application layer on each new visitor session. */
+    /** Successful share-page visits; this counter records page views, not unique visitors. */
     userViewCount: integer('user_view_count').default(0).notNull(),
 
     ...timestamps,

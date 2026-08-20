@@ -1,3 +1,5 @@
+import { loadBusinessI18nNamespace } from '@/business/locales';
+
 export interface LoadI18nNamespaceModuleParams {
   defaultLang: string;
   lng: string;
@@ -5,15 +7,34 @@ export interface LoadI18nNamespaceModuleParams {
   ns: string;
 }
 
+export interface I18nNamespaceModule {
+  default: Record<string, unknown>;
+}
+
+export const mergeBusinessI18nNamespace = async (
+  module: I18nNamespaceModule,
+  params: LoadI18nNamespaceModuleParams,
+): Promise<I18nNamespaceModule> => ({
+  default: {
+    ...module.default,
+    ...(await loadBusinessI18nNamespace(params)),
+  },
+});
+
 export const loadI18nNamespaceModule = async (params: LoadI18nNamespaceModuleParams) => {
   const { defaultLang, normalizeLocale, lng, ns } = params;
 
-  if (lng === defaultLang) return import(`@/locales/default/${ns}`);
+  if (lng === defaultLang) {
+    return mergeBusinessI18nNamespace(await import(`@/locales/default/${ns}`), params);
+  }
 
   try {
-    return import(`@/../locales/${normalizeLocale(lng)}/${ns}.json`);
+    return mergeBusinessI18nNamespace(
+      await import(`@/../locales/${normalizeLocale(lng)}/${ns}.json`),
+      params,
+    );
   } catch {
-    return import(`@/locales/default/${ns}`);
+    return mergeBusinessI18nNamespace(await import(`@/locales/default/${ns}`), params);
   }
 };
 
@@ -30,6 +51,6 @@ export const loadI18nNamespaceModuleWithFallback = async (
     return await loadI18nNamespaceModule(rest);
   } catch (error) {
     onFallback?.({ error, lng: rest.lng, ns: rest.ns });
-    return import(`@/locales/default/${rest.ns}`);
+    return mergeBusinessI18nNamespace(await import(`@/locales/default/${rest.ns}`), rest);
   }
 };
