@@ -1,9 +1,10 @@
 'use client';
 
 import { Avatar as LobeAvatar, type AvatarProps as LobeAvatarProps } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 
 import { remoteAvatarSrc, resolveAvatar } from './fallback';
+import { useBrokenSrc } from './useBrokenSrc';
 
 export interface AvatarProps extends LobeAvatarProps {
   /**
@@ -29,9 +30,7 @@ export interface AvatarProps extends LobeAvatarProps {
 const Avatar = memo<AvatarProps>(
   ({ alt, avatar, background, name, size = 48, title, unoptimized, ...rest }) => {
     const src = remoteAvatarSrc(avatar);
-    // Keyed by url, so switching to a different avatar retries on its own.
-    const [brokenSrc, setBrokenSrc] = useState<string>();
-    const isBroken = !!src && brokenSrc === src;
+    const [isBroken, markBroken] = useBrokenSrc(src);
 
     const imgAlt = alt || name || title || 'avatar';
     const resolved = resolveAvatar({
@@ -44,7 +43,7 @@ const Avatar = memo<AvatarProps>(
             loading={'lazy'}
             src={src}
             width={size}
-            onError={() => setBrokenSrc(src)}
+            onError={markBroken}
           />
         ) : (
           avatar
