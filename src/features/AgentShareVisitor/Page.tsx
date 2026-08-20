@@ -10,6 +10,7 @@ import { useParams } from 'react-router';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
+import { sharedAgentDisplayName } from './displayName';
 import { navigateFromShareToAgent } from './navigation';
 import TopicPanel from './TopicPanel';
 import { useSharedAgent } from './useSharedAgent';
@@ -66,7 +67,7 @@ const AgentShareVisitorPage = memo(() => {
           />
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <Text ellipsis weight={500}>
-              {data.agentMeta.title}
+              {sharedAgentDisplayName(data.agentMeta)}
             </Text>
             {data.agentMeta.description && (
               <Text ellipsis fontSize={12} type={'secondary'}>

@@ -7,6 +7,12 @@ import { TransferErrorCode } from '@/types/transferError';
 
 import { assertTransferRecipientValid, executeAcceptedTransfer } from './index';
 
+const assertAgentOwnershipTransferAllowed = vi.fn();
+vi.mock('@/business/server/agent-share/assertAgentOwnershipTransferAllowed', () => ({
+  assertAgentOwnershipTransferAllowed: (...args: unknown[]) =>
+    assertAgentOwnershipTransferAllowed(...args),
+}));
+
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn(),
 }));
@@ -28,6 +34,7 @@ const baseParams = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  assertAgentOwnershipTransferAllowed.mockResolvedValue(undefined);
   vi.mocked(WorkspaceMemberModel).mockImplementation(() => ({ getMember }) as any);
 });
 
@@ -114,6 +121,26 @@ describe('executeAcceptedTransfer recipient recheck', () => {
       }),
     ).rejects.toMatchObject({
       cause: { data: { code: TransferErrorCode.TargetNotWorkspaceMember } },
+    });
+  });
+
+  it('rechecks owner-scoped agent state before accepting a pending handover', async () => {
+    assertAgentOwnershipTransferAllowed.mockRejectedValue(
+      new TRPCError({ code: 'CONFLICT', message: 'funded share budget' }),
+    );
+
+    await expect(
+      executeAcceptedTransfer({
+        db: dbWithLockedMemberRows([{ role: 'member' }]),
+        recipientId: 'recipient-1',
+        request: { ...request, initiatorId: 'owner-1' },
+        workspaceId: 'ws-1',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(assertAgentOwnershipTransferAllowed).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      fromUserId: 'owner-1',
+      toUserId: 'recipient-1',
     });
   });
 

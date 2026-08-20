@@ -6,6 +6,7 @@ import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { assertAgentOwnershipTransferAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import {
   prioritizeAgentTransferTopic,
   startAgentTransferJob,
@@ -1022,6 +1023,11 @@ export const agentRouter = router({
           initiatorId: ctx.userId,
           recipientId: input.targetMemberId,
           workspaceId: ctx.workspaceId,
+        });
+        await assertAgentOwnershipTransferAllowed({
+          agentId: input.agentId,
+          fromUserId: agent.userId,
+          toUserId: input.targetMemberId,
         });
 
         try {

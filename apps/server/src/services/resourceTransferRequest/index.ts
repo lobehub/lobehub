@@ -2,6 +2,7 @@ import type { TransferResourceType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, isNull } from 'drizzle-orm';
 
+import { assertAgentOwnershipTransferAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
@@ -183,12 +184,22 @@ export const executeAcceptedTransfer = async (params: {
       }
     }
 
-    await requestModel.accept(request.id, recipientId, trx);
-
     // A null previousOwnerId means the owner's account was deleted after the
     // request was created; the resource row's FK cascade removed it too, so
     // the per-type staleness check will reject with a precise error.
     const fromUserId = request.previousOwnerId ?? '';
+
+    if (request.resourceType === 'agent') {
+      // Re-check at acceptance because the owner may fund sharing while the
+      // transfer request is pending.
+      await assertAgentOwnershipTransferAllowed({
+        agentId: request.resourceId,
+        fromUserId,
+        toUserId: recipientId,
+      });
+    }
+
+    await requestModel.accept(request.id, recipientId, trx);
 
     switch (request.resourceType) {
       case 'agentGroup': {

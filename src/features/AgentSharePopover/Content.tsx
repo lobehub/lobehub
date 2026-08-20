@@ -23,6 +23,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { createAgentShareSettingsModal } from './SettingsModal';
 import { styles } from './style';
 import { type AgentShareVisibility, useAgentShare } from './useAgentShare';
+import { commitAgentShareVisibility } from './visibilityUpdate';
 
 const PRIVACY_WARNING_ITEMS = [
   { icon: WrenchIcon, labelKey: 'share.privacyWarning.items.tools' },
@@ -56,13 +57,17 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
     async (visibility: AgentShareVisibility) => {
       setUpdating(true);
       try {
-        await updateVisibility(visibility);
-        // Auto-copy the share link the moment link sharing is enabled
-        if (visibility === 'link' && shareUrl) {
-          await copyToClipboard(shareUrl);
+        const result = await commitAgentShareVisibility({
+          copyLink: () => copyToClipboard(shareUrl),
+          shouldCopyLink: visibility === 'link' && Boolean(shareUrl),
+          updateVisibility: () => updateVisibility(visibility),
+        });
+
+        if (result === 'copied') {
           toast.success(t('share.copyLinkSuccess'));
         } else {
           toast.success(t('share.visibilityUpdated'));
+          if (result === 'updated-copy-failed') toast.error(t('copyFail', { ns: 'common' }));
         }
       } catch {
         toast.error(t('share.updateError'));
