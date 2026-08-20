@@ -310,9 +310,9 @@ export default {
   'limitation.insufficientBudget.rescue.referral.benefit':
     'Invite a friend — you both get {{reward}}M credits',
   'limitation.agentShare.budgetExhausted.desc':
-    "This shared agent has used up the budget its creator provided, so new conversations are paused. Please try again later — topping up or upgrading your own plan won't restore it.",
+    'This shared agent is temporarily unavailable. Please try again later.',
   'limitation.agentShare.budgetExhausted.retry': 'Retry',
-  'limitation.agentShare.budgetExhausted.title': 'Agent Budget Exhausted',
+  'limitation.agentShare.budgetExhausted.title': 'Shared Agent Unavailable',
   'limitation.insufficientBudget.rescue.referral.cta': 'Invite friends',
   'limitation.insufficientBudget.rescue.referral.title': 'Invite friends',
   'limitation.insufficientBudget.rescue.title': 'Out of credits',
