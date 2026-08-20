@@ -264,6 +264,34 @@ describe('sendProactiveWechatMessage', () => {
     expect(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))).toHaveLength(1);
   });
 
+  it('requeues only the undelivered leg when the link follow-up fails', async () => {
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
+    // First call is the text leg (succeeds), second is the download-link
+    // follow-up for the over-budget attachment (fails).
+    mockSendMessage.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('iLink down'));
+
+    const result = await sendProactiveWechatMessage({
+      attachments: [
+        {
+          fetchUrl: 'https://example.com/f/big.mp4',
+          name: 'big.mp4',
+          size: 100 * 1024 * 1024,
+          type: 'video',
+        },
+      ],
+      content: 'here is the video',
+      serverDB,
+      userId: LOBE_USER,
+    });
+
+    expect(result).toEqual({ status: 'queued' });
+    const queued = redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))!;
+    expect(queued).toHaveLength(1);
+    // The text already arrived — replaying it would show it twice.
+    expect(JSON.parse(queued[0]).content).toBeUndefined();
+    expect(JSON.parse(queued[0]).attachments).toHaveLength(1);
+  });
+
   it('reports unlinked when the user has no WeChat account link', async () => {
     mockFindByPlatform.mockResolvedValueOnce(undefined);
 

@@ -89,11 +89,32 @@ const resolveWechatTarget = async (
   };
 };
 
+/**
+ * Which legs of a push have already landed. A push is delivered in up to three
+ * calls (text, attachment uploads, download-link follow-ups) and any of them
+ * can fail after an earlier one succeeded — without this, requeueing the whole
+ * payload would re-send text the user already has on every replay.
+ */
+interface DeliveryProgress {
+  contentDelivered: boolean;
+}
+
+/** The part of a payload still owed to the user after a failed `deliver`. */
+const undeliveredPayload = (
+  payload: WechatPendingPush,
+  progress: DeliveryProgress,
+): WechatPendingPush | undefined => {
+  const remaining = progress.contentDelivered ? { ...payload, content: undefined } : payload;
+  if (!remaining.content?.trim() && !remaining.attachments?.length) return undefined;
+  return remaining;
+};
+
 const deliver = async (
   api: WechatApiClient,
   platformUserId: string,
   token: string,
   payload: Pick<WechatPendingPush, 'attachments' | 'content'>,
+  progress: DeliveryProgress,
 ): Promise<void> => {
   // Budget pass runs at deliver time (not enqueue time) so both the immediate
   // send and the queued-replay path get it, and so the Redis-queued payload
@@ -107,6 +128,7 @@ const deliver = async (
 
   if (payload.content?.trim()) {
     await api.sendMessage(platformUserId, payload.content, token);
+    progress.contentDelivered = true;
   }
   if (prepared.attachments.length) {
     await sendWechatAttachments(api, platformUserId, prepared.attachments, token);
@@ -225,14 +247,17 @@ export const sendProactiveWechatMessage = async (params: {
     return { status: 'queued' };
   }
 
+  const progress: DeliveryProgress = { contentDelivered: false };
   try {
-    await deliver(target.api, target.platformUserId, credit.token, payload);
+    await deliver(target.api, target.platformUserId, credit.token, payload, progress);
     return { remaining: credit.remaining, status: 'sent' };
   } catch (error) {
     // The consumed credit is intentionally not refunded — a rejected send
     // usually means the token is stale, so undercounting is the safe side.
     log('sendProactiveWechatMessage: send failed, queueing for replay: %O', error);
-    await enqueuePendingPush(redis, target.applicationId, target.platformUserId, payload);
+    const remaining = undeliveredPayload(payload, progress);
+    if (!remaining) return { remaining: credit.remaining, status: 'sent' };
+    await enqueuePendingPush(redis, target.applicationId, target.platformUserId, remaining);
     return { status: 'queued' };
   }
 };
@@ -262,12 +287,16 @@ export const flushPendingWechatPushes = async (params: {
     const credit = await consumeSendCredits(redis, applicationId, platformUserId, count);
     if (credit.status !== 'ok') return 'stop';
 
+    const progress: DeliveryProgress = { contentDelivered: false };
     try {
-      await deliver(api, platformUserId, credit.token, payload);
+      await deliver(api, platformUserId, credit.token, payload, progress);
       return 'sent';
     } catch (error) {
       log('flushPendingWechatPushes: replay failed for %s: %O', platformUserId, error);
-      return 'stop';
+      const remaining = undeliveredPayload(payload, progress);
+      if (!remaining) return 'sent';
+      // Requeue only the legs still owed; `stop` when nothing landed at all.
+      return progress.contentDelivered ? { requeue: remaining } : 'stop';
     }
   });
 };
