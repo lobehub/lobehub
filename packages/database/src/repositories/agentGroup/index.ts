@@ -17,6 +17,7 @@ import {
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
 } from '../../models/agentTransferJob';
+import type { AgentDeletionGuard } from '../../models/chatGroup';
 import {
   hasForeignTopicComments,
   syncTopicCommentsOnTopicTransfer,
@@ -32,6 +33,7 @@ import type {
 import {
   agentLabelAssignments,
   agents,
+  agentShares,
   chatGroups,
   chatGroupsAgents,
   messages,
@@ -652,6 +654,7 @@ export class AgentGroupRepository {
     groupId: string,
     agentIds: string[],
     deleteVirtualAgents: boolean = true,
+    deletionGuard?: AgentDeletionGuard,
   ): Promise<RemoveAgentsFromGroupResult> {
     if (agentIds.length === 0) {
       return { deletedVirtualAgentIds: [], removedFromGroup: 0 };
@@ -713,6 +716,11 @@ export class AgentGroupRepository {
       // Note: Virtual agents are standalone (no associated sessions), so we can delete them directly
       // The messages sent by these agents in the group chat will remain (orphaned agentId reference)
       if (deleteVirtualAgents && virtualAgentIds.length > 0) {
+        if (deletionGuard) {
+          for (const agentId of [...virtualAgentIds].sort()) {
+            await deletionGuard(agentId, trx);
+          }
+        }
         await trx.delete(agents).where(
           and(
             this.agentOwnership(),
@@ -1194,6 +1202,16 @@ export class AgentGroupRepository {
       // field is ignored.
       const visibilityUpdate =
         targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {};
+
+      // Group-owned agents bypass AgentModel.transferAgents and therefore
+      // need the same personal-scope share reset here. Otherwise a round trip
+      // through a workspace silently revives an old distributed link.
+      if (!this.workspaceId && targetWorkspaceId && ownedAgentIds.length > 0) {
+        await trx
+          .update(agentShares)
+          .set({ updatedAt: new Date(), visibility: 'private' })
+          .where(inArray(agentShares.agentId, ownedAgentIds));
+      }
 
       await trx
         .update(chatGroups)

@@ -2,6 +2,7 @@ import { AgentPluginEntrySchema, InsertChatGroupSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -719,6 +720,8 @@ export const agentGroupRouter = router({
           input.groupId,
           input.agentIds,
           input.deleteVirtualAgents,
+          (agentId, executor) =>
+            assertAgentDeletionAllowed({ agentId, executor, userId: ctx.userId }),
         );
       } catch (error) {
         // A backfill still maps these agents' message rows — removing a member

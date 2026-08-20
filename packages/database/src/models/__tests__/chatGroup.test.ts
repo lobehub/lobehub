@@ -2,7 +2,7 @@
 import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -1152,6 +1152,39 @@ describe('ChatGroupModel', () => {
         .from(agentsTable)
         .where(inArray(agentsTable.id, ['owned-supervisor', 'owned-member', 'referenced-member']));
       expect(survivors).toEqual([{ id: 'referenced-member' }]);
+    });
+
+    it('rolls back group deletion when an owned-agent deletion guard rejects', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: 'protected-group', title: 'Protected Group', userId });
+        await trx
+          .insert(agentsTable)
+          .values({ id: 'protected-member', title: 'Protected Member', userId, virtual: true });
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'protected-member',
+          chatGroupId: 'protected-group',
+          userId,
+        });
+      });
+      const deletionGuard = vi.fn().mockRejectedValue(new Error('protected agent'));
+
+      await expect(chatGroupModel.delete('protected-group', deletionGuard)).rejects.toThrow(
+        'protected agent',
+      );
+
+      expect(deletionGuard).toHaveBeenCalledWith('protected-member', expect.anything());
+      expect(
+        await serverDB.query.chatGroups.findFirst({
+          where: (row, { eq }) => eq(row.id, 'protected-group'),
+        }),
+      ).toBeDefined();
+      expect(
+        await serverDB.query.agents.findFirst({
+          where: (row, { eq }) => eq(row.id, 'protected-member'),
+        }),
+      ).toBeDefined();
     });
 
     it('should classify members by agents.virtual', async () => {

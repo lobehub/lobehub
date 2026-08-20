@@ -596,6 +596,7 @@ describe('agentGroupRouter', () => {
         'group-1',
         ['agent-1', 'agent-2'],
         undefined,
+        expect.any(Function),
       );
       expect(result).toEqual(mockResult);
     });

@@ -57,6 +57,8 @@ export const CHAT_GROUP_OWNERSHIP_STALE = 'CHAT_GROUP_OWNERSHIP_STALE';
  */
 export const CHAT_GROUP_TRANSFER_HIDDEN_MEMBER = 'CHAT_GROUP_TRANSFER_HIDDEN_MEMBER';
 
+export type AgentDeletionGuard = (agentId: string, executor: LobeChatDatabase) => Promise<void>;
+
 export class ChatGroupModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -771,8 +773,17 @@ export class ChatGroupModel {
   private deleteOwnedMemberAgents = async (
     executor: LobeChatDatabase,
     agentIds: string[],
+    deletionGuard?: AgentDeletionGuard,
   ): Promise<string[]> => {
     if (agentIds.length === 0) return [];
+
+    if (deletionGuard) {
+      // Stable ordering prevents two group deletions with overlapping members
+      // from taking product-specific ownership locks in opposite order.
+      for (const agentId of [...agentIds].sort()) {
+        await deletionGuard(agentId, executor);
+      }
+    }
 
     const deleted = await executor
       .delete(agents)
@@ -796,7 +807,10 @@ export class ChatGroupModel {
    * Returns the deleted owned-agent ids so callers can report them; the delete
    * itself needs no follow-up.
    */
-  async delete(id: string): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
+  async delete(
+    id: string,
+    deletionGuard?: AgentDeletionGuard,
+  ): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
     return this.db.transaction(async (trx) => {
       // Collect BEFORE the delete: the junction rows cascade away with the
       // group, taking the only record of which agents were group-owned.
@@ -813,13 +827,17 @@ export class ChatGroupModel {
 
       // Same transaction as the group delete: a cleanup that can be interrupted
       // between the two statements is a leak with extra steps.
-      const deletedOwnedAgentIds = await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+      const deletedOwnedAgentIds = await this.deleteOwnedMemberAgents(
+        trx,
+        ownedAgentIds,
+        deletionGuard,
+      );
 
       return { deletedOwnedAgentIds, group: result };
     });
   }
 
-  async deleteAll(): Promise<void> {
+  async deleteAll(deletionGuard?: AgentDeletionGuard): Promise<void> {
     await this.db.transaction(async (trx) => {
       const groupIds = await trx
         .select({ id: chatGroups.id })
@@ -833,7 +851,7 @@ export class ChatGroupModel {
 
       await trx.delete(chatGroups).where(this.ownership());
 
-      await this.deleteOwnedMemberAgents(trx, ownedAgentIds);
+      await this.deleteOwnedMemberAgents(trx, ownedAgentIds, deletionGuard);
     });
   }
 
