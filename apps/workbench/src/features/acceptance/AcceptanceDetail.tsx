@@ -48,7 +48,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Title = () => {
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
-  const { data } = useAcceptanceBundle(extractUuid(acceptanceId));
+  const { data } = useAcceptanceBundle(extractUuid(acceptanceId) ?? null);
   return (
     <Text ellipsis strong style={{ minWidth: 0 }}>
       {data?.subject.title ?? acceptanceId}
