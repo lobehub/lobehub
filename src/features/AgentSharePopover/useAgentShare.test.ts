@@ -288,4 +288,51 @@ describe('useAgentShare', () => {
       enabledToolIds: ['external-tool', 'local-tool'],
     });
   });
+
+  it('revalidates a deferred server snapshot after a delayed write succeeds', async () => {
+    const initial = shareRow('agent-delayed-success');
+    const authoritative = applyConfigPatch('agent-delayed-success', {
+      allowReadMemory: true,
+      enabledToolIds: ['external-tool'],
+    });
+    mocks.getShareStatus.mockResolvedValueOnce(initial).mockResolvedValueOnce(authoritative);
+
+    let resolveFirst!: (value: ReturnType<typeof shareRow>) => void;
+    mocks.updateShareConfig
+      .mockImplementationOnce(
+        (agentId, config) =>
+          new Promise((resolve) => {
+            resolveFirst = () => resolve(applyConfigPatch(agentId, config));
+          }),
+      )
+      .mockImplementationOnce(async (agentId, config) => applyConfigPatch(agentId, config));
+
+    const { result } = renderHook(() => useAgentShare('agent-delayed-success', true));
+    await waitFor(() => expect(result.current.shareInfo).toEqual(initial));
+
+    let delayedWrite!: Promise<void>;
+    act(() => {
+      delayedWrite = result.current.updateConfig({ allowReadMemory: true })!;
+    });
+    await waitFor(() => expect(mocks.updateShareConfig).toHaveBeenCalledOnce());
+
+    const externalUpdate = applyConfigPatch('agent-delayed-success', {
+      enabledToolIds: ['external-tool'],
+    });
+    await act(async () => result.current.mutate(externalUpdate, { revalidate: false }));
+
+    resolveFirst(initial);
+    await act(async () => delayedWrite);
+
+    await act(async () => {
+      await result.current.updateConfig((current) => ({
+        enabledToolIds: [...(current.enabledToolIds ?? []), 'local-tool'],
+      }));
+    });
+
+    expect(mocks.getShareStatus).toHaveBeenCalledTimes(2);
+    expect(mocks.updateShareConfig).toHaveBeenLastCalledWith('agent-delayed-success', {
+      enabledToolIds: ['external-tool', 'local-tool'],
+    });
+  });
 });
