@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 
+import type { MachinePaymentRecordParams } from '@lobechat/business-server/machine-payments/types';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { Challenge, Credential, Method, Store, z } from 'mppx';
 import { Mppx } from 'mppx/server';
@@ -94,10 +95,11 @@ const fakeAuth: MiddlewareHandler = async (c, next) =>
 const PRICES: Record<string, { amount: string; currency: string } | null> = {
   'GET /ping': null,
   'GET /search': { amount: '0.02', currency: 'usd' },
+  'GET /search/boom': { amount: '0.05', currency: 'usd' },
   'GET /search/free': { amount: '0', currency: 'usd' },
 };
 
-const createApp = (settlements: Settlement[]) => {
+const createApp = (settlements: Settlement[], recorded: MachinePaymentRecordParams[] = []) => {
   const mppx = Mppx.create({
     methods: [createTestMethod(settlements)],
     realm: 'lobehub.test',
@@ -107,6 +109,9 @@ const createApp = (settlements: Settlement[]) => {
   const pay = machinePayment({
     methodKey: METHOD_KEY,
     mppx: mppx as any,
+    recordPayment: async (params) => {
+      recorded.push(params);
+    },
     resolvePrice: async ({ route }) => PRICES[route] ?? null,
   });
 
@@ -116,6 +121,9 @@ const createApp = (settlements: Settlement[]) => {
   app.get('/ping', pay, requirePaymentOr(fakeAuth), handler);
   app.get('/search/free', pay, requirePaymentOr(fakeAuth), handler);
   app.get('/search', pay, requirePaymentOr(fakeAuth), handler);
+  app.get('/search/boom', pay, requirePaymentOr(fakeAuth), () => {
+    throw new Error('handler exploded after settlement');
+  });
 
   return app;
 };
@@ -123,10 +131,12 @@ const createApp = (settlements: Settlement[]) => {
 describe('machinePayment', () => {
   let app: ReturnType<typeof createApp>;
   let settlements: Settlement[];
+  let recorded: MachinePaymentRecordParams[];
 
   beforeEach(() => {
     settlements = [];
-    app = createApp(settlements);
+    recorded = [];
+    app = createApp(settlements, recorded);
   });
 
   /** Reads the 402 challenge for a route without answering it. */
@@ -274,6 +284,87 @@ describe('machinePayment', () => {
       expect(first.status).toBe(200);
       expect(second.status).toBe(402);
       expect(settlements).toHaveLength(1);
+    });
+  });
+
+  describe('authenticated callers on a priced route', () => {
+    it('serves an API-key caller without demanding payment', async () => {
+      // Pricing an existing route must not replace authentication: its current
+      // authenticated clients would all start getting 402.
+      const res = await app.request('/search', { headers: { Authorization: 'Bearer sk-lh-test' } });
+
+      expect(res.status).toBe(200);
+      expect(settlements).toHaveLength(0);
+    });
+
+    it('reports the request as authenticated rather than paid', async () => {
+      const res = await app.request('/search', { headers: { Authorization: 'Bearer sk-lh-test' } });
+
+      expect(await res.json()).toEqual({ ok: true, tier: 'authenticated' });
+    });
+
+    it('still rejects a bad Bearer token instead of letting it skip both gates', async () => {
+      const res = await app.request('/search', { headers: { Authorization: 'Bearer nope' } });
+
+      expect(res.status).toBe(401);
+      expect(settlements).toHaveLength(0);
+    });
+
+    it('challenges a caller that presents no credential at all', async () => {
+      const res = await app.request('/search');
+
+      expect(res.status).toBe(402);
+    });
+  });
+
+  describe('ledger recording', () => {
+    it('records a paid settlement with its route, price, reference and payer', async () => {
+      const challenge = await challengeFor('/search');
+      await submit('/search', mint(challenge));
+
+      expect(recorded).toEqual([
+        {
+          amount: '0.02',
+          currency: 'usd',
+          reference: expect.stringContaining('ref_'),
+          route: 'GET /search',
+          source: 'did:test:agent-001',
+        },
+      ]);
+    });
+
+    it('records a zero-amount free-tier call so the tier stays metered', async () => {
+      const challenge = await challengeFor('/search/free');
+      await submit('/search/free', mint(challenge));
+
+      expect(recorded).toEqual([
+        expect.objectContaining({ amount: '0', route: 'GET /search/free' }),
+      ]);
+    });
+
+    it('records nothing when no payment settled', async () => {
+      await app.request('/ping', { headers: { Authorization: 'Bearer sk-lh-test' } });
+
+      expect(recorded).toHaveLength(0);
+    });
+  });
+
+  describe('settled requests that fail downstream', () => {
+    it('still returns the receipt when the handler throws', async () => {
+      const challenge = await challengeFor('/search/boom');
+      const res = await submit('/search/boom', mint(challenge));
+
+      // The credential already settled and cannot be replayed, so an
+      // unreceipted error would leave the payer unable to prove the charge.
+      expect(settlements).toHaveLength(1);
+      expect(res.headers.get('Payment-Receipt')).toBeTruthy();
+    });
+
+    it('surfaces the failure rather than reporting success', async () => {
+      const challenge = await challengeFor('/search/boom');
+      const res = await submit('/search/boom', mint(challenge));
+
+      expect(res.status).toBeGreaterThanOrEqual(500);
     });
   });
 });
