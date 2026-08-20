@@ -34,6 +34,7 @@ import {
   agentLabelAssignments,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
@@ -2077,6 +2078,16 @@ export class AgentModel {
         .for('update');
       if (foundAgents.length !== new Set(agentIds).size) throw new Error('Agent not found');
       const agentById = new Map(foundAgents.map((agent) => [agent.id, agent]));
+
+      // A link share belongs to the personal scope in which it was enabled.
+      // Reset it before leaving that scope so moving the same agent back later
+      // cannot silently reactivate a previously distributed URL.
+      if (!this.workspaceId && targetWorkspaceId) {
+        await trx
+          .update(agentShares)
+          .set({ updatedAt: new Date(), visibility: 'private' })
+          .where(inArray(agentShares.agentId, agentIds));
+      }
 
       // 1a. An unfinished backfill still owns these agents' message rewrite —
       // a second transfer would race it (and re-enqueue topics the first job

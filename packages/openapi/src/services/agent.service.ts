@@ -1,5 +1,6 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
@@ -248,44 +249,57 @@ export class AgentService extends BaseService {
         );
       }
 
-      // Check if the Agent to be deleted exists
-      const targetAgent = await this.db.query.agents.findFirst({
-        where: and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)),
-      });
-
-      if (!targetAgent) {
-        throw this.createBusinessError(`Agent ID ${request.agentId} not found`);
-      }
-
-      if (request.migrateSessionTo) {
-        // Validate that the migration target Agent exists and belongs to the current user
-        const migrateTarget = await this.db.query.agents.findFirst({
-          where: and(eq(agents.id, request.migrateSessionTo), this.buildWorkspaceWhere(agents)),
+      await this.db.transaction(async (tx) => {
+        // Re-read inside the lock-holding transaction so an OpenAPI delete has
+        // the same owner-scoped-state invariant as the lambda and tool paths.
+        const targetAgent = await tx.query.agents.findFirst({
+          where: and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)),
         });
-
-        if (!migrateTarget) {
-          throw this.createBusinessError(
-            `Migration target agent ID ${request.migrateSessionTo} not found`,
-          );
+        if (!targetAgent) {
+          throw this.createBusinessError(`Agent ID ${request.agentId} not found`);
         }
 
-        // Migrate session associations to the target Agent
-        await this.migrateAgentSessions(request.agentId, request.migrateSessionTo);
-
-        this.log('info', 'session migration completed', {
-          from: request.agentId,
-          to: request.migrateSessionTo,
+        await assertAgentDeletionAllowed({
+          agentId: request.agentId,
+          executor: tx,
+          userId: this.userId,
         });
 
-        // After migration, delete the agent itself directly; sessions have been transferred so cascade delete is not needed
-        await this.db
-          .delete(agents)
-          .where(and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)));
-      } else {
-        // No migration: reuse AgentModel.delete, which cascades deletion of associated sessions, messages, topics, etc.
-        const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
-        await agentModel.delete(request.agentId);
-      }
+        if (request.migrateSessionTo) {
+          // Validate the migration target against the same transaction snapshot.
+          const migrateTarget = await tx.query.agents.findFirst({
+            where: and(eq(agents.id, request.migrateSessionTo), this.buildWorkspaceWhere(agents)),
+          });
+          if (!migrateTarget) {
+            throw this.createBusinessError(
+              `Migration target agent ID ${request.migrateSessionTo} not found`,
+            );
+          }
+
+          await this.migrateAgentSessions(
+            request.agentId,
+            request.migrateSessionTo,
+            tx as unknown as LobeChatDatabase,
+          );
+          this.log('info', 'session migration completed', {
+            from: request.agentId,
+            to: request.migrateSessionTo,
+          });
+
+          // Sessions already moved; delete only the source agent while the
+          // durable-state guard remains locked in the outer transaction.
+          await tx
+            .delete(agents)
+            .where(and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)));
+          return;
+        }
+
+        await new AgentModel(
+          tx as unknown as LobeChatDatabase,
+          this.userId,
+          this.workspaceId,
+        ).delete(request.agentId);
+      });
 
       this.log('info', 'agent deleted successfully', { agentId: request.agentId });
     } catch (error) {
@@ -352,11 +366,15 @@ export class AgentService extends BaseService {
    * @param toAgentId Target Agent ID
    * @private
    */
-  private async migrateAgentSessions(fromAgentId: string, toAgentId: string): Promise<void> {
+  private async migrateAgentSessions(
+    fromAgentId: string,
+    toAgentId: string,
+    db: LobeChatDatabase = this.db,
+  ): Promise<void> {
     this.log('info', 'start migrating sessions', { fromAgentId, toAgentId });
 
     try {
-      await this.db.transaction(async (tx) => {
+      await db.transaction(async (tx) => {
         // Get all sessionIds associated with the source Agent
         const links = await tx
           .select({ sessionId: agentsToSessions.sessionId })
