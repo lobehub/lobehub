@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 
 import AuthCard from '@/features/AuthCard';
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 
 import { ResetPasswordContent } from './ResetPasswordContent';
 
