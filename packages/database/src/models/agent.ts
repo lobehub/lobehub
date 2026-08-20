@@ -1388,6 +1388,14 @@ export class AgentModel {
       }
     }
 
+    // A character sheet is authored as a whole: the studio reads the current
+    // profile and writes the version it wants. Deep-merging it would make a
+    // cleared trait or a removed artwork impossible to express, since a missing
+    // key reads as "leave it alone". Same reasoning as the graph below.
+    if (Object.hasOwn(data, 'profile')) {
+      mergedValue.profile = data.profile as AgentItem['profile'];
+    }
+
     // A AgentGraph is a complete executable document, not a partial config
     // patch — replace it wholesale instead of deep-merging. The Graph Agent
     // (agencyConfig.graph) is the agent's behavior body; legacy clients may

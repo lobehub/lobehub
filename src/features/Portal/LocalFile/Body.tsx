@@ -497,7 +497,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
           {/* Key by source + path: without a remount, switching between two files of
               the same document type reuses the pane instance, whose local
               loading/parse state isn't reset on blob change — the previous file's
-              rendered content lingers until the new one finishes (LOBE-13010). */}
+              rendered content lingers until the new one finishes. */}
           <DocumentPreview
             blob={preview.blob}
             contentType={preview.contentType}
