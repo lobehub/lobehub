@@ -8,6 +8,7 @@ const readSource = (name: string) => readFileSync(path.join(import.meta.dirname,
 
 describe('shared-agent visitor import boundary', () => {
   it('keeps the owner composer graph out of the visitor entry path', () => {
+    const pageSource = readSource('Page.tsx');
     const visitorSource = readSource('VisitorConversation.tsx');
     const readOnlySource = readSource('ReadOnlyConversationArea.tsx');
     const welcomeSource = readFileSync(
@@ -16,6 +17,8 @@ describe('shared-agent visitor import boundary', () => {
     );
 
     expect(visitorSource).not.toContain('AgentConversation/ConversationArea');
+    expect(pageSource).not.toContain('useSharedAgent');
+    expect(pageSource).toContain('memo<{ data: SharedAgentData }>');
     expect(readOnlySource).not.toContain('AgentConversation/ConversationArea');
     expect(readOnlySource).not.toContain('MainChatInput');
     expect(readOnlySource).not.toContain('HeterogeneousChatInput');

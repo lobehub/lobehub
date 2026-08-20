@@ -2,6 +2,7 @@ import { PROJECT_IDENTIFIER_REGEX, PROJECT_STATUSES, PROJECT_VISIBILITIES } from
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ProjectModel } from '@/database/models/project';
@@ -138,7 +139,11 @@ export const projectRouter = router({
   delete: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
-        data: requireResult(await ctx.projectModel.delete(input.id)),
+        data: requireResult(
+          await ctx.projectModel.delete(input.id, ({ agentId, executor }) =>
+            assertAgentDeletionAllowed({ agentId, executor, userId: ctx.userId }),
+          ),
+        ),
         message: 'Project deleted',
         success: true,
       };

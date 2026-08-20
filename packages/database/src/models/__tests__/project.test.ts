@@ -71,6 +71,22 @@ describe('ProjectModel', () => {
     ).toHaveLength(0);
   });
 
+  it('rolls back project deletion when coordinator durable state blocks it', async () => {
+    const project = await createProject(model, { name: 'Funded coordinator' });
+    const guard = vi.fn().mockRejectedValue(new Error('Coordinator deletion blocked'));
+
+    await expect(model.delete(project.id, guard)).rejects.toThrow('Coordinator deletion blocked');
+
+    expect(guard).toHaveBeenCalledWith({
+      agentId: project.coordinatorAgentId,
+      executor: expect.anything(),
+    });
+    expect(await model.findById(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(
+      await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
+    ).toHaveLength(1);
+  });
+
   it('resolves a project by slug without escaping the current scope', async () => {
     const project = await createProject(model, { name: 'Apollo', slug: 'apollo' });
     await createProject(otherModel, { name: 'Other Apollo', slug: 'other-apollo' });

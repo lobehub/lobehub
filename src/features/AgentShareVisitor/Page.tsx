@@ -1,29 +1,26 @@
 'use client';
 
+import type { SharedAgentData } from '@lobechat/types';
 import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { Drawer } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { PanelLeftOpen } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { sharedAgentDisplayName } from './displayName';
 import { navigateFromShareToAgent } from './navigation';
 import TopicPanel from './TopicPanel';
-import { useSharedAgent } from './useSharedAgent';
 import VisitorConversation from './VisitorConversation';
 
 /**
  * Visitor landing page of an agent share: topic list on the left (drawer on
  * mobile), the shared agent's conversation on the right.
  */
-const AgentShareVisitorPage = memo(() => {
-  const { id } = useParams<{ id: string }>();
+const AgentShareVisitorPage = memo<{ data: SharedAgentData }>(({ data }) => {
   const { t } = useTranslation('agent');
-  const { data } = useSharedAgent(id);
   const isMobile = useIsMobile();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -33,7 +30,7 @@ const AgentShareVisitorPage = memo(() => {
 
   // Loading and error states render in the route layout's ShareShell.
   // Owners also stay empty while the hard navigation exits the Share router.
-  if (!data || data.isOwner) return null;
+  if (data.isOwner) return null;
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
