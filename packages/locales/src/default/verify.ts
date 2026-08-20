@@ -321,6 +321,7 @@ export default {
   'acceptance.workspace.statusSuccess': 'Status updated',
   'acceptance.workspace.title': 'Deliveries',
   'actions.backToApp': 'Back to {{name}}',
+  'actions.goToApp': 'Go to {{name}}',
   'meta.description': 'Verification runs, delivery reports, and acceptance reviews.',
   'actions.cancel': 'Cancel',
   'actions.delete': 'Delete',

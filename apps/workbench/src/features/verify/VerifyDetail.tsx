@@ -11,7 +11,7 @@ import { useVerifyReportBundle } from '@/features/Verify/hooks';
 import ReportViewer from '@/features/Verify/ReportViewer';
 import { extractUuid } from '@/features/Verify/utils';
 
-import WorkbenchBrandLink from '../../shell/WorkbenchBrandLink';
+import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 import SWRMutateInitializer from '../acceptance/SWRMutateInitializer';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -45,11 +45,12 @@ const WorkbenchVerifyDetail = memo(() => {
   return (
     <Flexbox className={styles.page}>
       <SWRMutateInitializer />
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        <WorkbenchBrandLink />
-        <Text ellipsis strong style={{ minWidth: 0 }}>
-          {data?.run.title ?? t('report.titleFallback')}
-        </Text>
+      <Flexbox className={styles.header} justify={'center'}>
+        <WorkbenchHeader>
+          <Text ellipsis strong style={{ minWidth: 0 }}>
+            {data?.run.title ?? t('report.titleFallback')}
+          </Text>
+        </WorkbenchHeader>
       </Flexbox>
       <div className={styles.body}>
         <ReportViewer />

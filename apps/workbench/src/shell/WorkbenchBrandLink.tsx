@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const WorkbenchBrandLink = memo(() => {
   const { t } = useTranslation('verify');
-  const label = t('actions.backToApp', { name: BRANDING_NAME });
+  const label = t('actions.goToApp', { name: BRANDING_NAME });
 
   return (
     <>

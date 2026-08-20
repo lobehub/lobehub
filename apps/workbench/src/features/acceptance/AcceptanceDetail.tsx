@@ -14,7 +14,7 @@ import {
 import { useAcceptanceBundle } from '@/features/Verify/Acceptance/useAcceptanceBundle';
 import { extractUuid } from '@/features/Verify/utils';
 
-import WorkbenchBrandLink from '../../shell/WorkbenchBrandLink';
+import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -64,9 +64,10 @@ const WorkbenchAcceptanceDetail = () => {
   return (
     <AcceptanceScope acceptanceId={acceptanceId}>
       <Flexbox className={styles.page}>
-        <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-          <WorkbenchBrandLink />
-          <Title />
+        <Flexbox className={styles.header} justify={'center'}>
+          <WorkbenchHeader>
+            <Title />
+          </WorkbenchHeader>
         </Flexbox>
         <div className={styles.body}>
           <AcceptanceBundleGate height={'100%'}>

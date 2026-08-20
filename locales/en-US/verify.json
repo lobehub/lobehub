@@ -288,6 +288,7 @@
   "actions.backToApp": "Back to {{name}}",
   "actions.cancel": "Cancel",
   "actions.delete": "Delete",
+  "actions.goToApp": "Go to {{name}}",
   "badge.errored": "Check could not run",
   "badge.failed": "Check failed",
   "badge.passed": "Check passed",

@@ -288,6 +288,7 @@
   "actions.backToApp": "返回 {{name}}",
   "actions.cancel": "取消",
   "actions.delete": "删除",
+  "actions.goToApp": "前往 {{name}}",
   "badge.errored": "检查无法运行",
   "badge.failed": "检查未通过",
   "badge.passed": "检查通过",
