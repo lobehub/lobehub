@@ -5740,6 +5740,35 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
       });
 
+      it('should not launch the tool when Stop lands during the preflight hook', async () => {
+        // Every await between entering `run` and the actual launch reopens the
+        // cancellation window. The executor's race settles the call the moment
+        // the signal fires, so anything launched after that is side-effecting
+        // work for an operation that is already over.
+        const controller = new AbortController();
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockImplementation(async () => {
+            controller.abort();
+            return null;
+          }),
+        };
+
+        const ctxWithHooks = {
+          ...ctx,
+          abortSignal: controller.signal,
+          hookDispatcher: mockDispatcher as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithHooks);
+
+        await executors.call_tool!(createToolInstruction(), createToolState()).catch(
+          () => undefined,
+        );
+
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalled();
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+      });
+
       it('should not dispatch afterToolCall for a tool that outlived an abort', async () => {
         // The tool keeps running after the abort — work already handed to a
         // process cannot be recalled. Its hook must still be suppressed: by the

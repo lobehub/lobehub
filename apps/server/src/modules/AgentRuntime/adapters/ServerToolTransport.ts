@@ -154,6 +154,12 @@ export class ServerToolTransport implements ToolTransport {
           args: context.parsedArgs,
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
+        // The preflight above (`dispatchBeforeToolCall`, policy checks) is async,
+        // so Stop can land between entering `run` and reaching this line. The
+        // executor's race has already settled the call by then — launching now
+        // would start side-effecting work for a cancelled operation.
+        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.metadata?.agentId,
           assistantMessageId: context.parentMessageId,
@@ -181,6 +187,10 @@ export class ServerToolTransport implements ToolTransport {
           manifest: context.effectiveManifestMap[chatToolPayload.identifier],
         });
         const agentVisibility = await this.resolveAgentVisibility(context);
+
+        // Re-checked after the visibility await for the same reason as above:
+        // every await between entry and launch reopens the cancellation window.
+        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
 
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
         execution = await executeToolWithRetry(
@@ -312,6 +322,21 @@ export class ServerToolTransport implements ToolTransport {
     } finally {
       executeToolSpan.end();
     }
+  }
+
+  /**
+   * Result for a call the abort caught before anything was launched.
+   *
+   * Returned rather than thrown: by this point the executor's race has already
+   * rejected and moved on, so this promise is detached — throwing would only
+   * surface as an unhandled rejection.
+   */
+  private abortedBeforeLaunch(): ToolRunExecution {
+    return {
+      attempts: 0,
+      interrupted: true,
+      result: { content: '', success: false },
+    };
   }
 
   private async dispatchBeforeToolCall(chatToolPayload: ChatToolPayload, context: ToolRunContext) {
