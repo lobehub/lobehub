@@ -76,6 +76,7 @@ export { LobeSuperGrokAI } from './providers/superGrok';
 export { LobeTogetherAI } from './providers/togetherai';
 export { LobeVolcengineAI } from './providers/volcengine';
 export { LobeVolcengineCodingPlanAI } from './providers/volcengineCodingPlan';
+export { LobeWaveSpeedAI } from './providers/wavespeed';
 export { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
 export { LobeZenMuxAI } from './providers/zenmux';
 export { LobeZeroOneAI } from './providers/zeroone';

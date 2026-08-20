@@ -768,6 +768,24 @@ The above example disables all models first, then enables `fal-ai/flux/schnell` 
 
 The above example disables all models first, then enables `flux-pro-1.1` and `flux-kontext-pro` (displayed as `FLUX.1 Kontext [pro]`).
 
+## WaveSpeed AI
+
+### `WAVESPEED_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the WaveSpeed AI service.
+- Default: -
+- Example: `1234567890abcdef1234567890abcdef`
+
+### `WAVESPEED_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the WaveSpeed AI model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+bytedance/seedream-v5.0-pro,+google/nano-banana-2/text-to-image=Nano Banana 2`
+
+The above example disables all models first, then enables `bytedance/seedream-v5.0-pro` and `google/nano-banana-2/text-to-image` (displayed as `Nano Banana 2`).
+
 ## NewAPI
 
 ### `NEWAPI_API_KEY`
