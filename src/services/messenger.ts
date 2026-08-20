@@ -64,12 +64,13 @@ class MessengerService {
   };
 
   sendMessengerPush = async (params: {
+    /**
+     * Referenced by id only — the server resolves each file to a stable access
+     * URL from the owned row. Deliberately no caller-supplied URL: the platform
+     * senders fetch it server-side.
+     */
     attachments?: {
-      data?: string;
-      fetchUrl?: string;
-      fileId?: string;
-      mimeType?: string;
-      name?: string;
+      fileId: string;
       type: 'image' | 'file' | 'video' | 'audio';
     }[];
     content?: string;

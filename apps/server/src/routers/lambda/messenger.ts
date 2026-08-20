@@ -38,6 +38,7 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
+import type { BotMessageAttachment } from '@/server/services/bot/platforms/types';
 import {
   wechatLegacyTokenKey,
   wechatPendingPushKey,
@@ -846,18 +847,17 @@ export const messengerRouter = router({
     .input(
       z
         .object({
-          // Mirror of `SendMessageAttachment` (builtin-tool-message types),
-          // same shape as `attachmentsInputSchema` in botMessage.ts — plus
-          // `fileId`, which resolves to a server-side access URL below so the
-          // platform helpers downstream only see one shape.
+          // Attachments are referenced by `fileId` only — deliberately NOT the
+          // `attachmentsInputSchema` shape from botMessage.ts, which also
+          // accepts `data` / `fetchUrl`. The platform senders materialize
+          // `fetchUrl` with a server-side `fetch`, so accepting one here would
+          // let any authenticated caller aim that fetch at an internal address
+          // and have the response uploaded into their own DM. Every field the
+          // senders need is read from the owned file row below instead.
           attachments: z
             .array(
               z.object({
-                data: z.string().optional(),
-                fetchUrl: z.string().url().optional(),
-                fileId: z.string().optional(),
-                mimeType: z.string().optional(),
-                name: z.string().optional(),
+                fileId: z.string().min(1),
                 type: z.enum(['image', 'file', 'video', 'audio']),
               }),
             )
@@ -872,24 +872,24 @@ export const messengerRouter = router({
         }),
     )
     .mutation(async ({ input, ctx }) => {
-      let attachments = input.attachments;
+      let attachments: BotMessageAttachment[] | undefined;
 
-      // Resolve `fileId` references server-side: a client-supplied storage URL
-      // is a presigned snapshot that expires (typically 2h), so by the time
-      // the platform sender fetches it the download can 403 and the attachment
-      // silently degrades to a text-only message. `getFileAccessUrl` returns
-      // the stable anonymous file-proxy URL in production (storage URL in
-      // dev), and the ownership-scoped lookup keeps callers from attaching
-      // other users' files.
-      if (attachments?.some((attachment) => attachment.fileId)) {
+      // Resolve each `fileId` server-side. Two reasons the URL is not taken
+      // from the client: a client-held storage URL is a presigned snapshot
+      // that expires (typically 2h), so by the time the platform sender
+      // fetches it the download can 403 and the attachment silently degrades
+      // to a text-only message; and an arbitrary caller-supplied URL would
+      // turn the sender's `fetch` into an SSRF primitive. `getFileAccessUrl`
+      // returns the stable anonymous file-proxy URL in production (storage URL
+      // in dev), and the ownership-scoped lookup keeps callers from attaching
+      // other users' files. Name and MIME type come from the same owned row.
+      if (input.attachments?.length) {
         const workspaceId = ctx.workspaceId ?? undefined;
         const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
         const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
 
         attachments = await Promise.all(
-          attachments.map(async (attachment) => {
-            if (!attachment.fileId) return attachment;
-
+          input.attachments.map(async (attachment) => {
             const file = await fileModel.findById(attachment.fileId);
             if (!file) {
               throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
@@ -897,8 +897,8 @@ export const messengerRouter = router({
 
             return {
               fetchUrl: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
-              mimeType: attachment.mimeType ?? file.fileType,
-              name: attachment.name ?? file.name,
+              mimeType: file.fileType,
+              name: file.name,
               type: attachment.type,
             };
           }),

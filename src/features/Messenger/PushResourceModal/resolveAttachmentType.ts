@@ -30,7 +30,13 @@ export const resolveAttachmentType = (
   if (mime?.startsWith('video/')) return 'video';
   if (mime?.startsWith('audio/')) return 'audio';
 
-  const candidates = [mime, filename.split('.').pop()?.toLowerCase()].filter(Boolean) as string[];
+  // `split('.').pop()` returns the whole string when there is no dot, which
+  // would read an extension-less file named e.g. `png` as an image — only take
+  // the tail when the name actually carries an extension.
+  const dot = filename.lastIndexOf('.');
+  const extension = dot > 0 ? filename.slice(dot + 1).toLowerCase() : undefined;
+
+  const candidates = [mime, extension].filter(Boolean) as string[];
   for (const ext of candidates) {
     if (IMAGE_EXTENSIONS.has(ext)) return 'image';
     if (VIDEO_EXTENSIONS.has(ext)) return 'video';

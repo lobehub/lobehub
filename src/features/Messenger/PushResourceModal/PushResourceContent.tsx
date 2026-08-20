@@ -69,13 +69,13 @@ export const PushResourceContent = memo<PushResourceModalProps>(
       setSending(true);
       try {
         // Send the file by id — the server resolves it to a stable access URL
-        // (a client-side presigned URL can expire before the platform sender
-        // downloads it, silently dropping the attachment).
+        // and reads the name/MIME type off the owned row (a client-side
+        // presigned URL can expire before the platform sender downloads it,
+        // silently dropping the attachment).
         const result = await messengerService.sendMessengerPush({
           attachments: [
             {
               fileId: file.id,
-              name: file.name,
               type: resolveAttachmentType(file.name, file.fileType),
             },
           ],
