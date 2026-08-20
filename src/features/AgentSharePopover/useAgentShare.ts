@@ -12,6 +12,7 @@ export type AgentShareConfigPatch =
 
 interface ConfigQueueState {
   config: AgentShareConfigInput;
+  pending: number;
   queue: Promise<unknown>;
   shareId: string;
 }
@@ -79,10 +80,16 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
     if (!state || state.shareId !== shareInfo.id) {
       configQueueByAgent.set(agentId, {
         config: shareInfo.shareConfig,
+        pending: 0,
         queue: Promise.resolve(),
         shareId: shareInfo.id,
       });
+      return;
     }
+    // Same-share SWR revalidation may carry another tab's committed patch.
+    // Reconcile only while idle so an in-flight local queue keeps its own
+    // ordered functional-update base until the server response replaces it.
+    if (state.pending === 0) state.config = shareInfo.shareConfig;
   }, [agentId, shareInfo?.id, shareInfo?.shareConfig]);
 
   const retryCreate = useCallback(() => createShare(), [createShare]);
@@ -104,6 +111,7 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
       const state = configQueueByAgent.get(agentId);
       if (!state) return;
 
+      state.pending += 1;
       const request = state.queue.then(async () => {
         const resolvedPatch = typeof patch === 'function' ? patch(state.config) : patch;
         const updated = await agentShareService.updateShareConfig(agentId, resolvedPatch);
@@ -113,8 +121,11 @@ export const useAgentShare = (agentId: string | undefined, enabled: boolean) => 
 
       // A failed write must reject its own caller, but must not poison later
       // queued edits — a later patch can still proceed independently.
-      state.queue = request.catch(() => undefined);
-      return request;
+      const trackedRequest = request.finally(() => {
+        state.pending -= 1;
+      });
+      state.queue = trackedRequest.catch(() => undefined);
+      return trackedRequest;
     },
     [agentId, mutate],
   );

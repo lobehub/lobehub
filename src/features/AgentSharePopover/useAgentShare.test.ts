@@ -221,4 +221,30 @@ describe('useAgentShare', () => {
       enabledToolIds: ['dalle', 'search'],
     });
   });
+
+  it('reconciles an idle queue from same-share SWR revalidation before a functional patch', async () => {
+    mocks.getShareStatus.mockResolvedValue(shareRow('agent-revalidate'));
+    mocks.updateShareConfig.mockImplementation(async (agentId, config) =>
+      applyConfigPatch(agentId, config),
+    );
+
+    const { result } = renderHook(() => useAgentShare('agent-revalidate', true));
+    await waitFor(() => expect(result.current.shareInfo).toBeTruthy());
+
+    const externalUpdate = applyConfigPatch('agent-revalidate', {
+      enabledToolIds: ['external-tool'],
+    });
+    await act(async () => result.current.mutate(externalUpdate, { revalidate: false }));
+    await waitFor(() => expect(result.current.shareInfo).toEqual(externalUpdate));
+
+    await act(async () => {
+      await result.current.updateConfig((current) => ({
+        enabledToolIds: [...(current.enabledToolIds ?? []), 'local-tool'],
+      }));
+    });
+
+    expect(mocks.updateShareConfig).toHaveBeenLastCalledWith('agent-revalidate', {
+      enabledToolIds: ['external-tool', 'local-tool'],
+    });
+  });
 });
