@@ -9,6 +9,7 @@ import {
   agentDocuments,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   agentsToSessions,
   briefs,
@@ -42,6 +43,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { AgentShareModel } from '../agentShare';
 import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
@@ -84,6 +86,25 @@ describe('AgentModel.transferAgent', () => {
     });
     expect(updated?.workspaceId).toBe(wsId1);
     expect(updated?.userId).toBe(userId);
+  });
+
+  it('should make an existing link share private before leaving personal scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Shared Agent' });
+    const share = await new AgentShareModel(serverDB, userId).create(agent.id, 'link');
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [movedShare] = await serverDB
+      .select()
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agent.id));
+    expect(movedShare.visibility).toBe('private');
+
+    await new AgentModel(serverDB, userId, wsId1).transferAgent(agent.id, null, userId);
+    await expect(
+      AgentShareModel.findByShareIdWithAccessCheck(serverDB, share!.id, targetUserId),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('should transfer agent from workspace to personal', async () => {
