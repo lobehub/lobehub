@@ -11,6 +11,7 @@ import {
 import {
   agentDisplayName,
   type AgentMode,
+  type AgentProfile,
   type KnowledgeItem,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
@@ -105,6 +106,21 @@ const getAgentMetaById =
       title: data.title || undefined,
     };
   };
+
+/**
+ * Full-body artwork of the agent's character, or `undefined` when it has none.
+ * Kept out of {@link getAgentMetaById} because `MetaData` is shared with
+ * sessions and groups, which have no character sheet.
+ */
+const getAgentProfileById =
+  (agentId: string) =>
+  (s: AgentStoreState): AgentProfile | undefined =>
+    s.agentMap[agentId]?.profile ?? undefined;
+
+const getAgentFullBodyArtworkById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.profile?.fullBodyArtwork || undefined;
 
 // ==========   Config   ============== //
 
@@ -380,7 +396,9 @@ export const agentSelectors = {
   displayableAgentPlugins,
   getAgentConfigById,
   getAgentDocumentsById,
+  getAgentFullBodyArtworkById,
   getAgentMetaById,
+  getAgentProfileById,
   getAgentSlugById,
   hasEnabledKnowledge,
   hasEnabledKnowledgeBases,

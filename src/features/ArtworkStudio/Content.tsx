@@ -1,37 +1,55 @@
 'use client';
 
 import { imageUrl } from '@lobechat/const';
-import {
-  AGENT_ARTWORK_STYLES,
-  type AgentArtworkStyle,
-  DEFAULT_AGENT_ARTWORK_STYLE,
-} from '@lobechat/prompts';
-import { Avatar, Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
+import { AGENT_ARTWORK_STYLES } from '@lobechat/prompts';
+import { Accordion, AccordionItem, Avatar, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Alert, Button, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Check, SettingsIcon, UploadIcon, WandSparkles } from 'lucide-react';
+import {
+  Check,
+  CircleUserRound,
+  PersonStanding,
+  SettingsIcon,
+  UploadIcon,
+  WandSparkles,
+} from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { avatarRemountKey, openFilePicker } from '@/features/AgentProfileArtwork/utils';
+import { CHIEF_AGENT_ARTWORKS, DEFAULT_CHIEF_AGENT_ARTWORK } from '@/features/ChiefAgent/artwork';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 
-import { LOBE_STYLE_REFERENCE_IMAGE_URLS } from './styleReferences';
+const GALLERY_STYLES = AGENT_ARTWORK_STYLES;
+const LOBE_STYLE_PREVIEW =
+  CHIEF_AGENT_ARTWORKS.find((item) => item.id === 'sienna')?.avatar ??
+  DEFAULT_CHIEF_AGENT_ARTWORK.avatar;
 
-const GALLERY_STYLES = AGENT_ARTWORK_STYLES.filter((item) => item !== 'lobe');
+/** Both slots share this height so the two cards read as one row. */
+const PREVIEW_HEIGHT = 280;
+/** Keeps the avatar's inset inside its slot proportional to the slot itself. */
+const AVATAR_SIZE = PREVIEW_HEIGHT - 40;
+/**
+ * The style gallery is a picker, not content. At full-bleed thumbnail size its
+ * five saturated images outweighed the artwork the modal is actually about, so
+ * it is sized as a control strip.
+ */
+const STYLE_THUMB_SIZE = 64;
+const GENERATE_SECTION_KEY = 'generate';
 
 const styles = createStaticStyles(({ css }) => ({
   galleryCheck: css`
     position: absolute;
     z-index: 1;
-    inset-block-start: 6px;
-    inset-inline-end: 6px;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
 
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
 
     color: ${cssVar.colorTextLightSolid};
@@ -39,28 +57,40 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorPrimary};
   `,
   galleryGrid: css`
-    display: grid;
-
-    /* One row of five, per review: the set is curated to exactly five styles. */
-    grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: start;
   `,
   galleryItem: css`
     cursor: pointer;
+
+    width: ${STYLE_THUMB_SIZE + 8}px;
+    padding: 4px;
+    border: 1px solid transparent;
     border-radius: ${cssVar.borderRadiusLG};
+
+    transition:
+      border-color ${cssVar.motionDurationFast},
+      background ${cssVar.motionDurationFast};
 
     &:hover img {
       filter: brightness(1.06);
     }
   `,
+  galleryItemActive: css`
+    border-color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorFillTertiary};
+  `,
   galleryLabel: css`
     font-size: 12px;
+    line-height: 16px;
     color: ${cssVar.colorTextSecondary};
     text-align: center;
   `,
   galleryThumb: css`
     aspect-ratio: 1;
-    width: 100%;
+    width: ${STYLE_THUMB_SIZE}px;
     border-radius: ${cssVar.borderRadiusLG};
 
     object-fit: cover;
@@ -75,49 +105,89 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 2;
     inset: 0;
 
+    padding: 12px;
     border-radius: calc(${cssVar.borderRadiusLG} - 1px);
 
     background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
     backdrop-filter: blur(12px);
   `,
+  generationOverlayTitle: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    text-align: center;
+  `,
   hint: css`
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};
-  `,
-  lobeCard: css`
-    cursor: pointer;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  lobeCardActive: css`
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
   `,
   noModelBlock: css`
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
-  preview: css`
+  outputCard: css`
+    cursor: pointer;
+    padding-block: 0;
+    padding-inline: 8px;
+  `,
+  outputActions: css`
+    width: 100%;
+  `,
+  /** Each column is exactly as wide as its own preview, so nothing overhangs. */
+  outputColumnAvatar: css`
+    width: ${PREVIEW_HEIGHT}px;
+    max-width: 100%;
+  `,
+  outputColumnFullBody: css`
+    width: ${Math.round((PREVIEW_HEIGHT * 3) / 4)}px;
+    max-width: 100%;
+  `,
+  outputGrid: css`
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  `,
+  outputPreview: css`
     position: relative;
 
     overflow: hidden;
-    flex: none;
 
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${cssVar.colorFillQuaternary};
+    background: ${cssVar.colorBgContainer};
+  `,
+  outputPreviewAvatar: css`
+    aspect-ratio: 1;
+    height: ${PREVIEW_HEIGHT}px;
+  `,
+  outputPreviewFullBody: css`
+    aspect-ratio: 3 / 4;
+    height: ${PREVIEW_HEIGHT}px;
+  `,
+  previewBodyImage: css`
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  `,
+  controlLabel: css`
+    font-size: 12px;
+    line-height: 16px;
+    color: ${cssVar.colorTextTertiary};
   `,
   sectionTitle: css`
     font-weight: 500;
+  `,
+  uploadSpec: css`
+    font-size: 12px;
+    line-height: 16px;
+    color: ${cssVar.colorTextQuaternary};
+    text-align: center;
   `,
   visuallyHiddenInput: css`
     pointer-events: none;
@@ -136,35 +206,43 @@ const styles = createStaticStyles(({ css }) => ({
 export interface ArtworkStudioContentProps {
   /** Current avatar url; falsy renders the empty avatar placeholder. */
   avatar?: string | null;
-  /** Copy under the "make your own" heading — names the subject being dressed. */
-  diyHint: string;
-  /** Copy under the "generate with AI" heading. */
-  generateHint: string;
+  /** Current or freshly generated full-body artwork. */
+  fullBody?: string | null;
   generating?: boolean;
+  generatingTarget?: AgentArtworkComposition | 'both';
   /** Headline shown over the preview while a generation runs. */
   generatingTitle: string;
   /** True when the last generation attempt failed and can be retried. */
   generationFailed?: boolean;
+  /** Free-text direction the subject was last generated with. */
+  initialDirection?: string;
+  /** Style preset the subject was last generated with. */
+  initialStyle?: string;
   onCancel: () => void;
-  onGenerate: (style: AgentArtworkStyle) => void;
-  onUpload: (file: File) => void;
+  onGenerate: (
+    style: AgentArtworkStyle,
+    composition?: AgentArtworkComposition,
+    direction?: string,
+  ) => void;
+  onUpload: (file: File, composition: AgentArtworkComposition) => void;
   uploading?: boolean;
 }
 
 /**
- * Avatar workshop shared by every subject that can own one (Agents, workspaces):
- * make your own on the left, one-click generation in a preset style on the
- * right. Purely presentational — the caller owns the avatar value, the
- * generation lifecycle, and where the result is persisted.
+ * Artwork workshop shared by every subject that can own one (Agents, workspaces).
+ * The same underlying image is shown in its two product crops so users can
+ * choose the intended generation composition without hiding either result.
  */
 const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
   ({
     avatar,
-    diyHint,
-    generateHint,
+    fullBody,
     generatingTitle,
     generating,
+    generatingTarget,
     generationFailed,
+    initialDirection,
+    initialStyle,
     onCancel,
     onGenerate,
     onUpload,
@@ -177,9 +255,17 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
       (state) => aiProviderSelectors.enabledImageModelList(state).length > 0,
     );
 
-    const uploadInputRef = useRef<HTMLInputElement>(null);
-    const [style, setStyle] = useState<AgentArtworkStyle>(DEFAULT_AGENT_ARTWORK_STYLE);
-
+    const avatarInputRef = useRef<HTMLInputElement>(null);
+    const fullBodyInputRef = useRef<HTMLInputElement>(null);
+    // Resume the subject's own last choice; a preset that no longer exists
+    // falls back rather than leaving the gallery with nothing selected.
+    const [style, setStyle] = useState<AgentArtworkStyle>(() =>
+      GALLERY_STYLES.includes(initialStyle as AgentArtworkStyle)
+        ? (initialStyle as AgentArtworkStyle)
+        : 'anime',
+    );
+    const [direction, setDirection] = useState(initialDirection ?? '');
+    const [generateExpanded, setGenerateExpanded] = useState(true);
     const selectStyle = useCallback((next: AgentArtworkStyle) => setStyle(next), []);
 
     const keySelect = useCallback(
@@ -192,183 +278,244 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
       [],
     );
 
+    const isGenerating = (composition: AgentArtworkComposition) =>
+      !!generating && (generatingTarget === composition || generatingTarget === 'both');
+
+    // The slot is only ~200px wide, so the overlay carries the headline and the
+    // cancel affordance; the duration hint sits under the row where it has space.
+    const renderGenerationOverlay = (composition: AgentArtworkComposition) =>
+      isGenerating(composition) ? (
+        <Center className={styles.generationOverlay} gap={8}>
+          <NeuralNetworkLoading size={28} />
+          <Text className={styles.generationOverlayTitle}>{generatingTitle}</Text>
+          <Button size={'small'} type={'fill'} onClick={onCancel}>
+            {t('artworkStudio.cancel')}
+          </Button>
+        </Center>
+      ) : null;
+
     return (
-      <Flexbox horizontal gap={32} padding={24} wrap={'wrap'}>
-        {/* DIY path: the live avatar plus upload. The preview doubles as the
-            generation stage so both paths land on the same picture. */}
-        <Flexbox gap={16} style={{ flex: 'none', width: 232 }}>
-          <Center className={styles.preview} height={232} width={232}>
-            {/* Keyed by the url: Avatar latches an internal `isImgError` on the
-                first failed load and never clears it when `avatar` changes, so a
-                previously broken avatar would keep the freshly generated one
-                invisible until a reload. */}
-            <Avatar
-              avatar={avatar || undefined}
-              key={avatarRemountKey(avatar)}
-              shape={'square'}
-              size={180}
-            />
-            {generating ? (
-              <Center className={styles.generationOverlay}>
-                <Flexbox align={'center'} gap={10}>
-                  <NeuralNetworkLoading size={32} />
-                  <Flexbox align={'center'} gap={4}>
-                    <Text className={styles.sectionTitle}>{generatingTitle}</Text>
-                    <Text className={styles.hint} style={{ textAlign: 'center' }}>
-                      {t('artworkStudio.generatingHint')}
-                    </Text>
+      <Flexbox gap={24} padding={24}>
+        <div className={styles.outputGrid}>
+          <Flexbox
+            align={'center'}
+            className={styles.outputCard}
+            gap={10}
+            role={'button'}
+            tabIndex={0}
+            onClick={() => avatarInputRef.current && openFilePicker(avatarInputRef.current)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                if (avatarInputRef.current) openFilePicker(avatarInputRef.current);
+              }
+            }}
+          >
+            <Flexbox horizontal align={'center'} gap={6}>
+              <Icon icon={CircleUserRound} size={16} />
+              <Text className={styles.sectionTitle}>{t('artworkStudio.composition.avatar')}</Text>
+            </Flexbox>
+            <Flexbox align={'center'} className={styles.outputColumnAvatar} gap={10}>
+              <Center className={`${styles.outputPreview} ${styles.outputPreviewAvatar}`}>
+                <Avatar
+                  avatar={avatar || undefined}
+                  key={avatarRemountKey(avatar)}
+                  shape={'square'}
+                  size={AVATAR_SIZE}
+                />
+                {renderGenerationOverlay('avatar')}
+              </Center>
+              <Flexbox horizontal className={styles.outputActions} gap={8}>
+                <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
+                  {t('artworkStudio.upload')}
+                </Button>
+                <Button
+                  icon={WandSparkles}
+                  size={'small'}
+                  style={{ flex: 1 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onGenerate(style, 'avatar', direction);
+                  }}
+                >
+                  {t('artworkStudio.generate.avatar')}
+                </Button>
+              </Flexbox>
+              <Text className={styles.uploadSpec}>{t('artworkStudio.uploadSpec.avatar')}</Text>
+            </Flexbox>
+          </Flexbox>
+          <Flexbox
+            align={'center'}
+            className={styles.outputCard}
+            gap={10}
+            role={'button'}
+            tabIndex={0}
+            onClick={() => fullBodyInputRef.current && openFilePicker(fullBodyInputRef.current)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                if (fullBodyInputRef.current) openFilePicker(fullBodyInputRef.current);
+              }
+            }}
+          >
+            <Flexbox horizontal align={'center'} gap={6}>
+              <Icon icon={PersonStanding} size={16} />
+              <Text className={styles.sectionTitle}>{t('artworkStudio.composition.fullBody')}</Text>
+            </Flexbox>
+            <Flexbox align={'center'} className={styles.outputColumnFullBody} gap={10}>
+              <Center className={`${styles.outputPreview} ${styles.outputPreviewFullBody}`}>
+                {fullBody ? (
+                  <img
+                    alt={t('artworkStudio.preview.fullBody')}
+                    className={styles.previewBodyImage}
+                    src={fullBody}
+                  />
+                ) : (
+                  <Icon icon={PersonStanding} size={64} />
+                )}
+                {renderGenerationOverlay('fullBody')}
+              </Center>
+              <Flexbox horizontal className={styles.outputActions} gap={8}>
+                <Button icon={UploadIcon} loading={uploading} size={'small'} style={{ flex: 1 }}>
+                  {t('artworkStudio.upload')}
+                </Button>
+                <Button
+                  icon={WandSparkles}
+                  size={'small'}
+                  style={{ flex: 1 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onGenerate(style, 'fullBody', direction);
+                  }}
+                >
+                  {t('artworkStudio.generate.fullBody')}
+                </Button>
+              </Flexbox>
+              <Text className={styles.uploadSpec}>{t('artworkStudio.uploadSpec.fullBody')}</Text>
+            </Flexbox>
+          </Flexbox>
+        </div>
+
+        {generating ? (
+          <Text className={styles.hint} style={{ textAlign: 'center' }}>
+            {t('artworkStudio.generatingHint')}
+          </Text>
+        ) : null}
+
+        {canGenerate ? (
+          <>
+            <Accordion
+              expandedKeys={generateExpanded ? [GENERATE_SECTION_KEY] : []}
+              gap={4}
+              onExpandedChange={(keys) => setGenerateExpanded(keys.length > 0)}
+            >
+              <AccordionItem
+                itemKey={GENERATE_SECTION_KEY}
+                paddingBlock={2}
+                paddingInline={0}
+                title={
+                  <Text className={styles.controlLabel}>{t('artworkStudio.generateTitle')}</Text>
+                }
+              >
+                <Flexbox gap={12} paddingBlock={'4px 0'}>
+                  <div className={styles.galleryGrid}>
+                    {GALLERY_STYLES.map((item) => (
+                      <Flexbox
+                        className={`${styles.galleryItem} ${style === item ? styles.galleryItemActive : ''}`}
+                        gap={6}
+                        key={item}
+                        role={'button'}
+                        tabIndex={0}
+                        onClick={() => selectStyle(item)}
+                        onKeyDown={keySelect(item)}
+                      >
+                        <div className={styles.galleryThumbWrap}>
+                          <img
+                            alt={t(`artworkStudio.style.${item}`)}
+                            className={styles.galleryThumb}
+                            src={
+                              item === 'lobe'
+                                ? LOBE_STYLE_PREVIEW
+                                : imageUrl(`agent-artwork-styles/style-${item}.webp`)
+                            }
+                          />
+                          {style === item ? (
+                            <Center className={styles.galleryCheck}>
+                              <Icon icon={Check} size={13} />
+                            </Center>
+                          ) : null}
+                        </div>
+                        <Text ellipsis className={styles.galleryLabel}>
+                          {t(`artworkStudio.style.${item}`)}
+                        </Text>
+                      </Flexbox>
+                    ))}
+                  </div>
+                  <Input
+                    disabled={generating}
+                    placeholder={t('artworkStudio.direction.placeholder')}
+                    value={direction}
+                    onChange={(event) => setDirection(event.target.value)}
+                  />
+                  <Flexbox horizontal>
                     <Button
-                      size={'small'}
-                      style={{ marginBlockStart: 4 }}
+                      disabled={generating}
+                      icon={WandSparkles}
                       type={'fill'}
-                      onClick={onCancel}
+                      onClick={() => onGenerate(style, undefined, direction)}
                     >
-                      {t('artworkStudio.cancel')}
+                      {t('artworkStudio.generate.characterSet')}
                     </Button>
                   </Flexbox>
+                  {generationFailed ? (
+                    <Alert showIcon title={t('artworkStudio.generateFailed')} type={'error'} />
+                  ) : null}
                 </Flexbox>
-              </Center>
-            ) : null}
-          </Center>
-          <Flexbox gap={8}>
-            <Text className={styles.sectionTitle}>{t('artworkStudio.diyTitle')}</Text>
-            <Text className={styles.hint}>{diyHint}</Text>
+              </AccordionItem>
+            </Accordion>
+          </>
+        ) : (
+          <Center className={styles.noModelBlock} flex={1} gap={12} padding={24}>
+            <Text className={styles.hint} style={{ textAlign: 'center' }}>
+              {t('artworkStudio.noModel')}
+            </Text>
             <Button
-              icon={UploadIcon}
-              loading={uploading}
+              icon={SettingsIcon}
+              type={'fill'}
               onClick={() => {
-                const input = uploadInputRef.current;
-                if (input) openFilePicker(input);
+                close();
+                navigate('/settings/provider/all');
               }}
             >
-              {t('artworkStudio.upload')}
+              {t('artworkStudio.enableModel')}
             </Button>
-          </Flexbox>
-        </Flexbox>
-
-        {/* One-click path: brand style first, then the generated style gallery. */}
-        <Flexbox gap={16} style={{ flex: 1, minWidth: 280 }}>
-          <Flexbox gap={4}>
-            <Text className={styles.sectionTitle}>{t('artworkStudio.generateTitle')}</Text>
-            <Text className={styles.hint}>{generateHint}</Text>
-          </Flexbox>
-
-          {canGenerate ? (
-            <>
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={`${styles.lobeCard} ${style === 'lobe' ? styles.lobeCardActive : ''}`}
-                gap={12}
-                padding={12}
-                role={'button'}
-                tabIndex={0}
-                onClick={() => selectStyle('lobe')}
-                onKeyDown={keySelect('lobe')}
-              >
-                <Flexbox horizontal flex={'none'} gap={4}>
-                  {LOBE_STYLE_REFERENCE_IMAGE_URLS.map((url) => (
-                    <Avatar avatar={url} key={url} shape={'square'} size={40} />
-                  ))}
-                </Flexbox>
-                <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text className={styles.sectionTitle}>{t('artworkStudio.lobeStyle')}</Text>
-                    <Tag color={'processing'} size={'small'}>
-                      {t('artworkStudio.recommended')}
-                    </Tag>
-                  </Flexbox>
-                  <Text ellipsis className={styles.hint}>
-                    {t('artworkStudio.style.lobe')}
-                  </Text>
-                </Flexbox>
-                {style === 'lobe' ? (
-                  <Icon
-                    color={cssVar.colorPrimary}
-                    icon={Check}
-                    size={18}
-                    style={{ flex: 'none' }}
-                  />
-                ) : null}
-              </Flexbox>
-
-              <Flexbox gap={8}>
-                <Text className={styles.hint}>{t('artworkStudio.moreStyles')}</Text>
-                <div className={styles.galleryGrid}>
-                  {GALLERY_STYLES.map((item) => (
-                    <Flexbox
-                      className={styles.galleryItem}
-                      gap={6}
-                      key={item}
-                      role={'button'}
-                      tabIndex={0}
-                      onClick={() => selectStyle(item)}
-                      onKeyDown={keySelect(item)}
-                    >
-                      <div className={styles.galleryThumbWrap}>
-                        <img
-                          alt={t(`artworkStudio.style.${item}`)}
-                          className={styles.galleryThumb}
-                          src={imageUrl(`agent-artwork-styles/style-${item}.jpg`)}
-                        />
-                        {style === item ? (
-                          <Center className={styles.galleryCheck}>
-                            <Icon icon={Check} size={13} />
-                          </Center>
-                        ) : null}
-                      </div>
-                      <Text ellipsis className={styles.galleryLabel}>
-                        {t(`artworkStudio.style.${item}`)}
-                      </Text>
-                    </Flexbox>
-                  ))}
-                </div>
-              </Flexbox>
-
-              <Flexbox gap={8} style={{ marginBlockStart: 'auto' }}>
-                <Button
-                  disabled={generating}
-                  icon={WandSparkles}
-                  type={'primary'}
-                  onClick={() => onGenerate(style)}
-                >
-                  {t('artworkStudio.generate')}
-                </Button>
-                {generationFailed ? (
-                  <Alert showIcon title={t('artworkStudio.generateFailed')} type={'error'} />
-                ) : null}
-              </Flexbox>
-            </>
-          ) : (
-            <Center className={styles.noModelBlock} flex={1} gap={12} padding={24}>
-              <Text className={styles.hint} style={{ textAlign: 'center' }}>
-                {t('artworkStudio.noModel')}
-              </Text>
-              <Button
-                icon={SettingsIcon}
-                type={'primary'}
-                onClick={() => {
-                  close();
-                  navigate('/settings/provider/all');
-                }}
-              >
-                {t('artworkStudio.enableModel')}
-              </Button>
-            </Center>
-          )}
-        </Flexbox>
+          </Center>
+        )}
 
         <input
           accept="image/*"
           aria-label={t('artworkStudio.upload')}
           className={styles.visuallyHiddenInput}
-          ref={uploadInputRef}
+          ref={avatarInputRef}
           tabIndex={-1}
           type="file"
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = '';
-            if (file) onUpload(file);
+            if (file) onUpload(file, 'avatar');
+          }}
+        />
+        <input
+          accept="image/*"
+          aria-label={t('artworkStudio.upload')}
+          className={styles.visuallyHiddenInput}
+          ref={fullBodyInputRef}
+          tabIndex={-1}
+          type="file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) onUpload(file, 'fullBody');
           }}
         />
       </Flexbox>
