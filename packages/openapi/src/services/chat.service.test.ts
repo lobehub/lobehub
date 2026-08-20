@@ -98,3 +98,53 @@ describe('ChatService payload construction', () => {
     expect(chatMock.mock.calls[0][0]).toMatchObject({ temperature: 0.7 });
   });
 });
+
+/**
+ * A provider row whose `keyVaults` is null is the ordinary shape for a
+ * deployment that supplies credentials through the environment: the row exists
+ * so the provider can be enabled, and no per-user vault is ever written.
+ *
+ * `decrypt` splits its argument on `:` in its first statement, so handing that
+ * null straight to it — which a `!` assertion used to allow — threw
+ * `Cannot read properties of null (reading 'split')` out of every
+ * `/api/v1/chat*` call, from inside a helper whose name gives no hint that a
+ * credential lookup is what failed.
+ */
+describe('ChatService.getApiKey provider credentials', () => {
+  const decrypt = vi.fn();
+
+  const serviceWith = (rows: unknown[]) => {
+    const service = new ChatService(
+      { query: { aiProviders: { findMany: vi.fn().mockResolvedValue(rows) } } } as any,
+      'user-1',
+    );
+    (service as any).buildWorkspaceWhere = vi.fn();
+    return service;
+  };
+
+  const apiKey = (service: ChatService) => (service as any).getApiKey('openai');
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    decrypt.mockResolvedValue({ plaintext: '{"apiKey":"from-vault"}' });
+    const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
+    (KeyVaultsGateKeeper.initWithEnvKey as any).mockResolvedValue({ decrypt });
+  });
+
+  it('falls back to an empty vault when the row stores no key', async () => {
+    await expect(apiKey(serviceWith([{ id: 'openai', keyVaults: null }]))).resolves.toBe('{}');
+    expect(decrypt).not.toHaveBeenCalled();
+  });
+
+  it('falls back to an empty vault when no row exists', async () => {
+    await expect(apiKey(serviceWith([]))).resolves.toBe('{}');
+    expect(decrypt).not.toHaveBeenCalled();
+  });
+
+  it('still decrypts a row that does store a key', async () => {
+    await expect(apiKey(serviceWith([{ id: 'openai', keyVaults: 'iv:tag:data' }]))).resolves.toBe(
+      '{"apiKey":"from-vault"}',
+    );
+    expect(decrypt).toHaveBeenCalledWith('iv:tag:data');
+  });
+});

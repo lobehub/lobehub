@@ -186,8 +186,28 @@ export class ChatService extends BaseService {
       where: and(eq(aiProviders.id, provider), this.buildWorkspaceWhere(aiProviders)),
     });
 
-    if (!aiProviderConfigs || aiProviderConfigs.length === 0) {
+    const providerConfig = aiProviderConfigs?.[0];
+
+    /**
+     * No row, or a row that stores no key of its own.
+     *
+     * The second case is the ordinary one for a deployment whose provider
+     * credentials come from the environment rather than from per-user vaults:
+     * the row exists so the provider can be enabled and ordered in the UI,
+     * and `keyVaults` stays null. `decrypt` splits its argument on `:` as its
+     * very first statement, so passing that null through — which the `!` below
+     * used to assert away — threw `Cannot read properties of null (reading
+     * 'split')` out of every `/api/v1/chat*` call, from inside a helper whose
+     * name gives no hint that a credential lookup is what failed.
+     *
+     * Both cases mean the same thing to the caller: this provider has no
+     * user-supplied key, so hand back an empty vault and let the model runtime
+     * fall back to the environment, exactly as it already did when no row
+     * existed at all.
+     */
+    if (!providerConfig?.keyVaults) {
       this.log('info', '未找到有效的AI Provider配置，使用兜底环境变量配置', {
+        hasRow: !!providerConfig,
         provider,
         userId: this.userId,
       });
@@ -195,8 +215,7 @@ export class ChatService extends BaseService {
       return '{}';
     }
 
-    const providerConfig = aiProviderConfigs[0];
-    const { plaintext } = await gateKeeper.decrypt(providerConfig.keyVaults!);
+    const { plaintext } = await gateKeeper.decrypt(providerConfig.keyVaults);
 
     return plaintext;
   }
