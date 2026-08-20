@@ -33,9 +33,13 @@ let mockAgentVisibility: 'private' | 'public' = 'public';
 let mockIsWorkspaceAgent = false;
 let mockSharedExecutionTarget: 'device' | 'local' = 'local';
 let mockWorkspaceOverride: { boundDeviceId: string; executionTarget: 'local' } | undefined;
-vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
-  resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: mockResumeSessionId }),
-}));
+vi.mock(
+  '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: mockResumeSessionId }),
+  }),
+);
 
 vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
   mergeAgentRuntimeInitialContexts: () => undefined,
