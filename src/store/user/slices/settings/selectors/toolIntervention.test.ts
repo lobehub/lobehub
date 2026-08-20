@@ -1,3 +1,5 @@
+import { DEFAULT_TOOL_APPROVAL_MODE } from '@lobechat/business-const';
+
 import { type UserStore } from '@/store/user';
 import { type UserState } from '@/store/user/initialState';
 import { initialState } from '@/store/user/initialState';
@@ -7,14 +9,32 @@ import { toolInterventionSelectors } from './toolIntervention';
 
 describe('toolInterventionSelectors', () => {
   describe('approvalMode', () => {
-    it('should return "manual" by default when no config exists', () => {
+    /**
+     * Asserted against the slot rather than the literal `manual`, because the
+     * value is the distribution's to choose — a build that ships a different
+     * default is configured, not broken, and hard-coding the expectation here
+     * would fail that build for doing the supported thing.
+     */
+    it('falls back to the distribution default when no config exists', () => {
       const s: UserState = merge(initialState, {
         settings: {},
       });
 
       const result = toolInterventionSelectors.approvalMode(s as UserStore);
 
-      expect(result).toBe('manual');
+      expect(result).toBe(DEFAULT_TOOL_APPROVAL_MODE);
+    });
+
+    it('lets an explicit choice win over the distribution default', () => {
+      // Whichever way the default points, the other two modes must still be
+      // reachable — the setting is a default, not a policy.
+      for (const mode of ['auto-run', 'allow-list', 'manual'] as const) {
+        const s: UserState = merge(initialState, {
+          settings: { tool: { humanIntervention: { approvalMode: mode } } },
+        });
+
+        expect(toolInterventionSelectors.approvalMode(s as UserStore)).toBe(mode);
+      }
     });
 
     it('should return "auto-run" when configured', () => {

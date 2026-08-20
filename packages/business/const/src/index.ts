@@ -197,6 +197,27 @@ export const AGENT_GROUP_CREATION_ENABLED = true;
 export const HOME_PORTRAIT_ENABLED = true;
 
 /**
+ * How tool calls are approved when the user has not chosen a mode.
+ *
+ * `manual` — every call waits for a confirmation — is the right default for a
+ * product whose users arrive one at a time and may not know what a tool call
+ * can do. A managed deployment is a different situation: the operator has
+ * already decided what its agents may reach, the people using it were given
+ * accounts for exactly this work, and a confirmation on every step is friction
+ * rather than protection.
+ *
+ * Only the DEFAULT moves. The picker still offers all three modes and a user's
+ * own choice always wins, so this changes what someone gets before they have an
+ * opinion, not what they are allowed to have.
+ *
+ * A distribution turning this to `auto-run` is deciding that model-authored
+ * tool calls may run unattended on its users' behalf. Worth pairing with the
+ * device sandbox (`command-mode`) where those calls reach a shell.
+ */
+export type ToolApprovalMode = 'auto-run' | 'allow-list' | 'manual';
+export const DEFAULT_TOOL_APPROVAL_MODE: ToolApprovalMode = 'manual';
+
+/**
  * Service identifier returned by `GET /api/v1/health`.
  *
  * That endpoint is public and unauthenticated, so this string is readable by

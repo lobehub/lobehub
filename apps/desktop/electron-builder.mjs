@@ -173,6 +173,12 @@ const companyName = process.env.DESKTOP_COMPANY_NAME;
  */
 const extraMetadata = {
   ...(companyName ? { author: { name: companyName } } : {}),
+  // Electron resolves `app.getName()` to `productName ?? name`, and `name` is
+  // this repository's package name — so without this every distribution's
+  // per-user data directory is named after this project, `-dev` suffix and all.
+  // The electron-builder `productName` option above only names the executable
+  // and the installer; it does not reach the packaged manifest.
+  productName,
   ...(process.env.DESKTOP_APP_DESCRIPTION
     ? { description: process.env.DESKTOP_APP_DESCRIPTION }
     : {}),
