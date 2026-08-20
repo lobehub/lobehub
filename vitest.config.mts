@@ -32,6 +32,9 @@ const alias = {
   '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
   '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
   '@/utils/server': resolve(__dirname, './src/utils/server'),
+  // apps/auth sits outside the root tsconfig's include, so its files get no path
+  // mapping from tsconfigPaths — pin the one server util its worker shares.
+  '@/server/utils/serializeForHtml': resolve(__dirname, './apps/server/src/utils/serializeForHtml'),
   '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
   '@/utils/electron': resolve(__dirname, './src/utils/electron'),
   '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
@@ -46,11 +49,11 @@ const alias = {
 
 export default defineConfig({
   define: {
-    '__CI__': process.env.CI === 'true' ? 'true' : 'false',
-    '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
-    '__ELECTRON__': 'false',
-    '__MOBILE__': 'false',
-    '__TEST__': 'true',
+    __CI__: process.env.CI === 'true' ? 'true' : 'false',
+    __DEV__: process.env.NODE_ENV !== 'production' ? 'true' : 'false',
+    __ELECTRON__: 'false',
+    __MOBILE__: 'false',
+    __TEST__: 'true',
   },
   optimizeDeps: {
     exclude: ['crypto', 'util', 'tty'],
@@ -63,8 +66,7 @@ export default defineConfig({
     {
       name: 'raw-md',
       transform(_, id) {
-        if (id.endsWith('.md'))
-          return { code: 'export default ""', map: null };
+        if (id.endsWith('.md')) return { code: 'export default ""', map: null };
       },
     },
     /**
