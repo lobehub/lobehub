@@ -12,6 +12,7 @@
   "dependencies": {
     "@hono/standard-validator": "^0.3.0",
     "@hono/zod-validator": "^0.7.6",
+    "@lobechat/business-server": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@types/formidable": "^3.5.1",
+    "mppx": "^0.8.17",
     "yaml": "^2.9.0"
   }
 }
