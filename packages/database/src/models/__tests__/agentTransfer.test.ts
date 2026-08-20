@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -1470,6 +1470,147 @@ describe('AgentModel.transferAgent scope riders (connectors & documents)', () =>
       .from(agentDocuments)
       .where(eq(agentDocuments.agentId, agent.id));
     expect(bindings).toHaveLength(0);
+  });
+
+  it("should leave another member's skill bundle that was only associated", async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Skill Borrower' });
+
+    // Skill-management provenance carries no agent id; only the create/convert
+    // flows stamp the binding, and `associate` does not.
+    await serverDB.insert(documents).values({
+      content: '',
+      fileType: 'skills/bundle',
+      id: 'borrowed-skill-doc',
+      source: 'agent-signal:skill-management',
+      sourceType: 'agent-signal',
+      title: 'Borrowed skill',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: targetUserId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'borrowed-skill-doc',
+      templateId: null,
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'borrowed-skill-doc'));
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.userId).toBe(targetUserId);
+
+    const bindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(bindings).toHaveLength(0);
+  });
+
+  it("should move an agent's own skill bundle together with its index", async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Skill Owner' });
+
+    await serverDB.insert(documents).values([
+      {
+        content: '',
+        fileType: 'skills/bundle',
+        id: 'own-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'Own skill',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+      {
+        content: '# skill',
+        fileType: 'skills/index',
+        id: 'own-skill-index',
+        parentId: 'own-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'SKILL.md',
+        totalCharCount: 7,
+        totalLineCount: 1,
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentDocuments).values([
+      { agentId: agent.id, documentId: 'own-skill-bundle', templateId: 'agent-skill', userId },
+      { agentId: agent.id, documentId: 'own-skill-index', templateId: 'agent-skill', userId },
+    ]);
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const docs = await serverDB
+      .select()
+      .from(documents)
+      .where(inArray(documents.id, ['own-skill-bundle', 'own-skill-index']));
+    expect(docs).toHaveLength(2);
+    for (const doc of docs) expect(doc.workspaceId).toBe(wsId1);
+  });
+
+  it('should hold a whole skill tree back when one node is pinned outside the move', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Pinned Skill Owner' });
+
+    // A task that is NOT moving with this transfer pins the index alone.
+    await serverDB.insert(tasks).values({
+      createdByUserId: userId,
+      id: 'outside-task',
+      identifier: 'T-outside',
+      instruction: 'Unrelated',
+      seq: 1,
+    });
+    await serverDB.insert(documents).values([
+      {
+        content: '',
+        fileType: 'skills/bundle',
+        id: 'pinned-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'Pinned skill',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+      {
+        content: '# skill',
+        fileType: 'skills/index',
+        id: 'pinned-skill-index',
+        parentId: 'pinned-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'SKILL.md',
+        totalCharCount: 7,
+        totalLineCount: 1,
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentDocuments).values([
+      { agentId: agent.id, documentId: 'pinned-skill-bundle', templateId: 'agent-skill', userId },
+      { agentId: agent.id, documentId: 'pinned-skill-index', templateId: 'agent-skill', userId },
+    ]);
+    await serverDB
+      .insert(taskDocuments)
+      .values({ documentId: 'pinned-skill-index', taskId: 'outside-task', userId });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    // `parent_id` is never rewritten, so moving the bundle without its pinned
+    // index would leave a tree straddling two scopes.
+    const docs = await serverDB
+      .select()
+      .from(documents)
+      .where(inArray(documents.id, ['pinned-skill-bundle', 'pinned-skill-index']));
+    expect(docs).toHaveLength(2);
+    for (const doc of docs) expect(doc.workspaceId).toBeNull();
   });
 
   it("should drop the slug when it collides with another member's private document", async () => {

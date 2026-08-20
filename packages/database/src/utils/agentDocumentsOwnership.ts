@@ -2,6 +2,7 @@ import { and, count, eq, inArray, isNull, not, notExists, notInArray, or, sql } 
 import { alias } from 'drizzle-orm/pg-core';
 
 import {
+  AGENT_SKILL_TEMPLATE_ID,
   agentDocuments,
   documentHistories,
   documents,
@@ -33,25 +34,67 @@ const isDedicatedProvenance = (source: string | null, sourceType: string | null)
 
 /**
  * Provenance alone says the file was made by *an* agent, not by one of THESE
- * agents. `agent-document://<agentId>/<file>` carries that id, so an orphan
- * created for a since-deleted agent and later associated to a moving one is
- * correctly classified as associated — rehoming it would quietly take another
+ * agents. Each shape carries its own origin evidence, and a binding without any
+ * fails safe as associated — rehoming on a guess would quietly take another
  * member's resource out of the source scope.
  *
- * Skill-management documents carry no agent id in their source, so they rest on
- * the binding evidence alone; the external-consumer checks at both call sites
- * still hold back anything an agent outside the move also uses.
+ * - `agent-document://<agentId>/<file>` names the agent it was created for, so
+ *   an orphan created for a since-deleted agent and later associated to a
+ *   moving one stays put.
+ * - Skill-management documents carry no id in their source, but only the
+ *   skill-management create/convert flows stamp `AGENT_SKILL_TEMPLATE_ID` on
+ *   the BINDING they open; `AgentDocumentModel.associate` leaves it null. So a
+ *   borrowed skill — someone else's bundle made visible to this agent — stays
+ *   distinguishable from one the agent actually owns.
  */
 const isDedicatedToAgents = (
-  source: string | null,
-  sourceType: string | null,
+  row: { bindingTemplateId: string | null; source: string | null; sourceType: string | null },
   agentIds: Set<string>,
 ) => {
+  const { bindingTemplateId, source, sourceType } = row;
   if (!isDedicatedProvenance(source, sourceType)) return false;
-  if (source === SKILL_MANAGEMENT_SOURCE) return true;
+  if (source === SKILL_MANAGEMENT_SOURCE) return bindingTemplateId === AGENT_SKILL_TEMPLATE_ID;
 
   const [provenanceAgentId] = source!.slice(AGENT_DOCUMENT_SOURCE_PREFIX.length).split('/');
   return agentIds.has(provenanceAgentId);
+};
+
+/**
+ * A document tree moves or stays as a WHOLE.
+ *
+ * `documents.parent_id` is never rewritten by a transfer, and agent-document
+ * traversal applies one scope predicate along the entire path — so a tree split
+ * across scopes is unreachable from both ends: the parent loses the child, and
+ * the child hangs under a parent the target cannot see. Managed skills are
+ * exactly this shape (a `skills/bundle` parent over its `SKILL.md` index), so a
+ * single external pin on either node has to hold the other one back too.
+ *
+ * Shrinks `movable` in place until every remaining tree is whole. Each pass can
+ * only remove ids, so the loop terminates.
+ */
+const dropSplitTrees = async (db: Db, movable: Set<string>): Promise<void> => {
+  while (movable.size > 0) {
+    const ids = [...movable];
+    const [moving, children] = await Promise.all([
+      db
+        .select({ id: documents.id, parentId: documents.parentId })
+        .from(documents)
+        .where(inArray(documents.id, ids)),
+      db
+        .select({ id: documents.id, parentId: documents.parentId })
+        .from(documents)
+        .where(inArray(documents.parentId, ids)),
+    ]);
+
+    const blocked = new Set<string>();
+    // An ancestor staying behind pins everything under it.
+    for (const row of moving) if (row.parentId && !movable.has(row.parentId)) blocked.add(row.id);
+    // A descendant staying behind pins everything above it.
+    for (const row of children) if (!movable.has(row.id)) blocked.add(row.parentId!);
+
+    if (blocked.size === 0) return;
+    for (const id of blocked) movable.delete(id);
+  }
 };
 
 interface AgentDocumentsHandoverParams {
@@ -320,6 +363,7 @@ export const moveAgentDocumentsForScopeTransfer = async (
     .select({
       agentId: agentDocuments.agentId,
       bindingId: agentDocuments.id,
+      bindingTemplateId: agentDocuments.templateId,
       bindingUserId: agentDocuments.userId,
       documentId: agentDocuments.documentId,
       slug: documents.slug,
@@ -332,9 +376,7 @@ export const moveAgentDocumentsForScopeTransfer = async (
   if (rows.length === 0) return [];
 
   const movingAgentIds = new Set(agentIds);
-  const dedicatedCandidates = rows.filter((row) =>
-    isDedicatedToAgents(row.source, row.sourceType, movingAgentIds),
-  );
+  const dedicatedCandidates = rows.filter((row) => isDedicatedToAgents(row, movingAgentIds));
 
   // External consumers pin a document to the source scope. Unlike the member
   // handover, topic/task references only count when the referencing row is
@@ -377,7 +419,14 @@ export const moveAgentDocumentsForScopeTransfer = async (
       externallyBound.add(row.documentId);
   }
 
-  const dedicated = dedicatedCandidates.filter((row) => !externallyBound.has(row.documentId));
+  const movable = new Set(
+    dedicatedCandidates
+      .filter((row) => !externallyBound.has(row.documentId))
+      .map((row) => row.documentId),
+  );
+  await dropSplitTrees(db, movable);
+
+  const dedicated = dedicatedCandidates.filter((row) => movable.has(row.documentId));
   const dedicatedDocIds = [...new Set(dedicated.map((row) => row.documentId))];
   const dedicatedBindingIds = new Set(dedicated.map((row) => row.bindingId));
   const associated = rows.filter((row) => !dedicatedBindingIds.has(row.bindingId));
