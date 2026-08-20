@@ -13,7 +13,7 @@ import { resolveRoundParam } from '../utils';
 import { useAcceptanceScope } from './AcceptanceScope';
 import { checkFilterState } from './CheckList';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
-import { useOriginConversation } from './originConversation';
+import { originTopicPanelProps, useOriginConversation } from './originConversation';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { canViewAcceptanceHistory } from './visibility';
 
@@ -43,8 +43,8 @@ const AcceptanceLedgerRail = () => {
   const { acceptanceId, embedded } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);
   const originConversation = useOriginConversation();
+  const originTopicOpen = Boolean(originConversation?.isOpen);
   const [expand, setExpand] = useState(!embedded);
-  const [topicPanelOpen, setTopicPanelOpen] = useState(false);
   const highlightRound = null;
   const focused = Boolean(params.checkId);
 
@@ -55,6 +55,10 @@ const AcceptanceLedgerRail = () => {
   useEffect(() => {
     if (focused) setExpand(false);
   }, [focused]);
+
+  useEffect(() => {
+    if (originTopicOpen && !focused) setExpand(true);
+  }, [focused, originTopicOpen]);
 
   if (!data || !canViewAcceptanceHistory(data.isOwner)) return null;
 
@@ -88,18 +92,19 @@ const AcceptanceLedgerRail = () => {
   };
 
   const TopicPanel = originConversation?.TopicPanel;
-  const origin = data.origin;
+  const topicProps = originTopicPanelProps({
+    isOpen: originTopicOpen,
+    origin: data.origin,
+    subjectTitle: data.subject.title,
+  });
   const topic =
-    topicPanelOpen && origin?.agent?.id && origin.topic && TopicPanel ? (
+    topicProps && TopicPanel ? (
       <TopicPanel
-        agentId={origin.agent.id}
-        title={origin.topic.title ?? data.subject.title ?? origin.topic.id}
-        topicId={origin.topic.id}
+        agentId={topicProps.agentId}
+        title={topicProps.title}
+        topicId={topicProps.topicId}
+        onBack={() => originConversation?.closeTopicDrawer()}
         onCollapse={() => setExpand(false)}
-        onBack={() => {
-          setTopicPanelOpen(false);
-          originConversation?.closeTopicDrawer();
-        }}
       />
     ) : null;
 

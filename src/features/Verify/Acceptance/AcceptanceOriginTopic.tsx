@@ -1,6 +1,8 @@
 'use client';
 
+import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { MessagesSquare } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +18,7 @@ const styles = createStaticStyles(({ css }) => ({
     border: 0;
 
     font: inherit;
-    font-size: 12px;
+    font-size: 14px;
     color: ${cssVar.colorTextSecondary};
 
     background: none;
@@ -50,7 +52,10 @@ const AcceptanceOriginTopic = () => {
       type={'button'}
       onClick={openTopic}
     >
-      {data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id}
+      <Flexbox horizontal align={'center'} gap={4}>
+        <Icon icon={MessagesSquare} size={13} />
+        {data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id}
+      </Flexbox>
     </button>
   );
 };
