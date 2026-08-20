@@ -52,6 +52,8 @@ const createToolCall = (id = 'tool-call-1', identifier = 'web-search') => ({
 
 describe('tool executors', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
+  let updateToolIntervention: ReturnType<typeof vi.fn>;
+  let updateToolMessage: ReturnType<typeof vi.fn>;
   let publishChunk: ReturnType<typeof vi.fn>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
@@ -61,6 +63,8 @@ describe('tool executors', () => {
 
   beforeEach(() => {
     createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
+    updateToolIntervention = vi.fn().mockResolvedValue(undefined);
+    updateToolMessage = vi.fn().mockResolvedValue(undefined);
     publishChunk = vi.fn().mockResolvedValue(undefined);
     publishError = vi.fn().mockResolvedValue(undefined);
     publishEvent = vi.fn().mockResolvedValue(undefined);
@@ -89,7 +93,8 @@ describe('tool executors', () => {
           query,
           update: vi.fn(),
           updatePluginState: vi.fn(),
-          updateToolMessage: vi.fn(),
+          updateToolIntervention,
+          updateToolMessage,
         },
         stream: {
           publishChunk,
@@ -218,7 +223,7 @@ describe('tool executors', () => {
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'client-tool-msg' });
   });
 
-  it('does not advance after the transport reports cancellation', async () => {
+  it('settles the existing row when the transport reports cancellation', async () => {
     runTool.mockResolvedValueOnce({
       attempts: 0,
       interrupted: true,
@@ -226,16 +231,71 @@ describe('tool executors', () => {
       resultPersisted: true,
       toolMessageId: 'cancelled-tool-msg',
     });
+    const toolCall = createToolCall();
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
-      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
       type: 'call_tool',
     };
-    const state = createState();
 
-    const result = await callTool(host)(instruction, state);
+    const result = await callTool(host)(instruction, createState());
 
-    expect(result).toEqual({ events: [], newState: state });
+    // The transport already made a row for this call — settle THAT one rather
+    // than inserting a second one beside it.
     expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith('cancelled-tool-msg', {
+      content: 'Tool execution was aborted by user.',
+    });
+    expect(updateToolIntervention).toHaveBeenCalledWith('cancelled-tool-msg', {
+      status: 'aborted',
+    });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+  });
+
+  it('writes an aborted row when the operation aborts mid-run', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    runTool.mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          // never settles — the abort is what ends the wait
+        }),
+    );
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const pending = callTool(abortingHost)(instruction, createState());
+    controller.abort();
+    const result = await pending;
+
+    // Every tool_call_id gets exactly one row, even one that never returned.
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        parentId: 'assistant-msg-1',
+        pluginIntervention: { status: 'aborted' },
+        role: 'tool',
+        tool_call_id: toolCall.id,
+      }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+    // An abort is not a tool failure: no error event, no handleError bookkeeping.
+    expect(result.events).toEqual([]);
+    expect(host.transports.tools!.handleError).not.toHaveBeenCalled();
+    // Whether the run ends is the caller's call — a user Stop persists
+    // `interrupted` on its own; this executor must not decide it.
+    expect(result.newState.status).toBe('running');
   });
 
   it('terminates removed client sub-agent stop states like other stop results', async () => {
@@ -463,6 +523,53 @@ describe('tool executors', () => {
       phase: 'tool_message_persist',
       stepIndex: 2,
     });
+  });
+
+  it('keeps finished batch results and writes aborted rows only for the rest', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const settled = createToolCall('settled-call');
+    const stuck = createToolCall('stuck-call');
+
+    runTool.mockImplementation((tool: any) =>
+      tool.id === settled.id
+        ? Promise.resolve({
+            attempts: 1,
+            result: { content: 'done', executionTime: 1, success: true },
+          })
+        : new Promise(() => {
+            // never settles — abort is what ends the wait
+          }),
+    );
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [settled, stuck] },
+      type: 'call_tools_batch',
+    };
+
+    const pending = callToolsBatch(abortingHost)(instruction, createState());
+    // Let the settled tool resolve and persist its row before the abort lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+    const result = await pending;
+
+    // The finished tool keeps its real result...
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ id: settled.id, type: 'tool_result' }),
+    );
+    // ...and only the in-flight one gets an aborted row. Two rows total, one
+    // per tool_call_id — a partially settled batch must not lose either half.
+    expect(createToolMessage).toHaveBeenCalledTimes(2);
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Tool execution was aborted by user.',
+        tool_call_id: stuck.id,
+      }),
+    );
   });
 
   describe('parallel batch parent chain', () => {

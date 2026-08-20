@@ -1500,6 +1500,14 @@ describe('AgentRuntimeService', () => {
         expect(shouldContinue).toBe(false);
       });
 
+      it('should return false for a plain interrupt with nothing left to settle', () => {
+        const shouldContinue = (service as any).shouldContinueExecution(
+          { status: 'interrupted' },
+          { phase: 'tool_result' },
+        );
+        expect(shouldContinue).toBe(false);
+      });
+
       it('should return false when waiting for human input', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           { status: 'waiting_for_human' },

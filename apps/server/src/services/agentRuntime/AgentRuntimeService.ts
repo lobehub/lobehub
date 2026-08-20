@@ -126,6 +126,12 @@ const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
 
 const STEP_LOCK_TTL_SECONDS = 120;
+/**
+ * How often a live step re-reads its own operation state to notice an
+ * interrupt. Interrupts are persisted by a different invocation, so this poll
+ * is the only way a running tool learns it should stop.
+ */
+const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
 
 /**
@@ -841,6 +847,10 @@ export class AgentRuntimeService {
       stepLockOwner,
     );
 
+    // Hoisted so the shared `finally` can stop it on every exit path — an
+    // orphaned interval would keep polling Redis for a step that is long gone.
+    let stepAbortPoll: ReturnType<typeof setInterval> | undefined;
+
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
     // runtime.step() call site stays as the authoritative start for the
@@ -1020,7 +1030,25 @@ export class AgentRuntimeService {
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
+        // Interrupts arrive as a flag on the persisted state — the request that
+        // asked for the stop runs in a different invocation, so there is no
+        // in-process controller to share. Poll for it while the step is alive
+        // and cancel locally, otherwise a multi-minute tool would keep running
+        // long after the user asked it to stop.
+        const stepAbortController = new AbortController();
+        stepAbortPoll = setInterval(() => {
+          void this.coordinator
+            .loadAgentState(operationId)
+            .then((latest) => {
+              if (latest?.status === 'interrupted') stepAbortController.abort();
+            })
+            .catch((error) => {
+              log('[%s][%d] Abort poll failed: %O', operationId, stepIndex, error);
+            });
+        }, STEP_ABORT_POLL_INTERVAL_MS);
+
         const { runtime } = await this.createAgentRuntime({
+          abortSignal: stepAbortController.signal,
           agentState,
           metadata: agentState?.metadata,
           operationId,
@@ -1576,6 +1604,7 @@ export class AgentRuntimeService {
       throw error;
     } finally {
       invokeAgentSpan.end();
+      if (stepAbortPoll) clearInterval(stepAbortPoll);
       stopStepLockHeartbeat();
       await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
@@ -2737,12 +2766,15 @@ export class AgentRuntimeService {
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
+    abortSignal,
     agentState,
     metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
   }: {
+    /** Cancels in-flight tool work when this step's operation is interrupted. */
+    abortSignal?: AbortSignal;
     /**
      * Current runtime state, when the caller has it. Only consulted to decide
      * whether the early final-answer `visible_output_end` must be suppressed
@@ -2783,6 +2815,7 @@ export class AgentRuntimeService {
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
+      abortSignal,
       agentConfig: metadata?.agentConfig,
       // The factory may be a Graph-aware dispatcher that still returns the
       // default agent for ordinary conversations. Keep the early visible
