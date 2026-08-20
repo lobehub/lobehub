@@ -168,7 +168,10 @@ export class AcceptanceModel {
   update = async (
     id: string,
     value: Partial<
-      Pick<NewAcceptance, 'config' | 'metadata' | 'requirement' | 'visibility' | 'visualRender'>
+      Pick<
+        NewAcceptance,
+        'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility' | 'visualRender'
+      >
     >,
   ): Promise<AcceptanceItem | undefined> => {
     const [row] = await this.db

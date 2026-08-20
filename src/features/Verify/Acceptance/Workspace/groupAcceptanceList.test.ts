@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { AcceptanceListItem } from '@/services/verify';
 
-import { groupAcceptanceList, hasProjectAcceptanceGroups } from './groupAcceptanceList';
+import {
+  expandedAcceptanceGroupKeys,
+  groupAcceptanceList,
+  hasProjectAcceptanceGroups,
+} from './groupAcceptanceList';
 
 const item = (id: string, project: { id: string; name: string } | null): AcceptanceListItem =>
   ({ id, project }) as AcceptanceListItem;
@@ -31,5 +35,25 @@ describe('groupAcceptanceList', () => {
         groupAcceptanceList([item('one', null), item('two', { id: 'project', name: 'Project' })]),
       ),
     ).toBe(true);
+  });
+
+  it('keeps a group that appears after mount expanded, and remembers manual collapses', () => {
+    const groups = groupAcceptanceList([
+      item('one', { id: 'p1', name: 'Alpha' }),
+      item('two', { id: 'p2', name: 'Beta' }),
+    ]);
+
+    expect(expandedAcceptanceGroupKeys(groups, [])).toEqual(['p1', 'p2']);
+    expect(expandedAcceptanceGroupKeys(groups, ['p1'])).toEqual(['p2']);
+
+    // A delivery filed into a brand-new project adds a group the user has never
+    // seen: it must come in expanded, or the row they just moved vanishes.
+    const withNewGroup = groupAcceptanceList([
+      item('one', { id: 'p1', name: 'Alpha' }),
+      item('two', { id: 'p2', name: 'Beta' }),
+      item('three', { id: 'p3', name: 'Gamma' }),
+    ]);
+
+    expect(expandedAcceptanceGroupKeys(withNewGroup, ['p1'])).toEqual(['p2', 'p3']);
   });
 });

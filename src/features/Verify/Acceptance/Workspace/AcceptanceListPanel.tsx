@@ -47,7 +47,11 @@ import {
   normalizeAcceptanceListFilter,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
-import { groupAcceptanceList, hasProjectAcceptanceGroups } from './groupAcceptanceList';
+import {
+  expandedAcceptanceGroupKeys,
+  groupAcceptanceList,
+  hasProjectAcceptanceGroups,
+} from './groupAcceptanceList';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
@@ -250,6 +254,9 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       ACCEPTANCE_LIST_FILTER_STORAGE_KEY,
       DEFAULT_ACCEPTANCE_LIST_FILTER,
     );
+    // Collapsed (not expanded) is the tracked set: a group that appears after
+    // mount — the project a delivery was just filed into — must come in open.
+    const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
     const filter = normalizeAcceptanceListFilter(storedFilter);
     const filtered = filterAcceptanceList(data ?? [], filter, query);
     const groups = groupAcceptanceList(filtered);
@@ -400,7 +407,15 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             ) : (
               <div className={styles.list}>
                 {showGroups ? (
-                  <Accordion defaultExpandedKeys={groups.map(({ key }) => key)} gap={4}>
+                  <Accordion
+                    expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
+                    gap={4}
+                    onExpandedChange={(keys) =>
+                      setCollapsedGroups(
+                        groups.map(({ key }) => key).filter((key) => !keys.includes(key)),
+                      )
+                    }
+                  >
                     {groups.map((group) => (
                       <AccordionItem
                         action={renderProjectActions?.(group.projectName ? group.key : undefined)}

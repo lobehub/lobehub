@@ -16,6 +16,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
@@ -823,6 +824,36 @@ export const acceptanceRouter = router({
       return ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
         metadata: { ...acceptance.metadata, title: input.title },
       });
+    }),
+
+  /**
+   * File the acceptance under a project (or take it out of one) from the list.
+   * Only the grouping pointer moves: the delivery, its rounds and its subject
+   * are untouched, so this is reversible and never rewrites history.
+   *
+   * The bar is READABLE, not manageable: a delivery may be filed under any
+   * project the caller can see — the same set the list already groups by — so
+   * a workspace member is not blocked from filing under a teammate's project.
+   */
+  setProject: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const acceptance = await resolveAcceptance(ctx, input.id);
+      assertWorkspaceRowManageable(ctx, acceptance.userId, 'acceptance');
+
+      if (input.projectId) {
+        const project = await new ProjectModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.projectId);
+        if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      }
+
+      await ctx.acceptanceService.acceptanceModel.update(acceptance.id, {
+        projectId: input.projectId,
+      });
+      return { success: true };
     }),
 
   /**

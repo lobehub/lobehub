@@ -262,6 +262,13 @@ export class VerifyService {
   renameAcceptance = (id: string, title: string) =>
     lambdaClient.acceptance.rename.mutate({ id, title });
 
+  /**
+   * File the acceptance under a project (`null` takes it out of one). Only the
+   * grouping moves — the delivery and its rounds stay exactly where they are.
+   */
+  setAcceptanceProject = (id: string, projectId: string | null) =>
+    lambdaClient.acceptance.setProject.mutate({ id, projectId });
+
   /** Owner override of the acceptance's decision state from the list. */
   updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });

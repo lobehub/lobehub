@@ -31,6 +31,7 @@ import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 import { getAcceptanceStatusActions } from '../statusActions';
+import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 
 const styles = createStaticStyles(({ css }) => ({
   editRow: css`
@@ -187,6 +188,33 @@ const AcceptanceRow = memo<{
     }
   };
 
+  const assignProject = async (projectId: string | null) => {
+    setMutating(true);
+    try {
+      await verifyService.setAcceptanceProject(item.id, projectId);
+      await refresh();
+      toast.success(
+        projectId
+          ? t(
+              item.project?.id
+                ? 'acceptance.workspace.project.moveSuccess'
+                : 'acceptance.workspace.project.addSuccess',
+            )
+          : t('acceptance.workspace.project.removeSuccess'),
+      );
+    } catch (error) {
+      console.error('[acceptance:project]', error);
+      toast.error(t('acceptance.workspace.project.error'));
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const projectItem = useAcceptanceProjectMenuItem({
+    currentProjectId: item.project?.id,
+    onSelect: (projectId) => void assignProject(projectId),
+  });
+
   const removeAcceptance = () => {
     confirmModal({
       cancelText: t('actions.cancel'),
@@ -243,6 +271,7 @@ const AcceptanceRow = memo<{
       label: t('acceptance.workspace.actions.rename'),
       onClick: startRename,
     },
+    projectItem,
     ...(statusItems.length > 0
       ? [
           {

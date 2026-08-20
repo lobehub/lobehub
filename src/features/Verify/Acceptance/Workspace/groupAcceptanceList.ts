@@ -35,3 +35,14 @@ export const groupAcceptanceList = (items: AcceptanceListItem[]): AcceptanceList
 
 export const hasProjectAcceptanceGroups = (groups: AcceptanceListGroup[]) =>
   groups.some(({ projectName }) => projectName !== null);
+
+/**
+ * Which groups the accordion shows open. Expressed as "everything except what
+ * the user collapsed" on purpose: a group that appears AFTER mount — the one
+ * the user just filed a delivery into — must be open, or the row they moved
+ * silently disappears behind a collapsed header.
+ */
+export const expandedAcceptanceGroupKeys = (
+  groups: AcceptanceListGroup[],
+  collapsedKeys: string[],
+) => groups.map(({ key }) => key).filter((key) => !collapsedKeys.includes(key));

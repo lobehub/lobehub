@@ -232,7 +232,7 @@ const ProjectListPage = memo(() => {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} onClick={openCreateProjectModal}>
+          <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
             {t('create.action')}
           </Button>
         </Flexbox>
