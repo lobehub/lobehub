@@ -72,7 +72,21 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
     maxTopicsPerVisitor?: number | null;
     maxTurnsPerTopic?: number | null;
   }>({});
-  const scheduleLimitCommit = useDebouncedLimitPatch(handleConfigChange);
+  const handleLimitCommitError = useCallback(
+    (patch: Partial<Record<'maxTopicsPerVisitor' | 'maxTurnsPerTopic', number>>) => {
+      setLimitDraft((draft) => {
+        const next = { ...draft };
+        for (const [field, value] of Object.entries(patch)) {
+          const limitField = field as 'maxTopicsPerVisitor' | 'maxTurnsPerTopic';
+          if (next[limitField] === value) delete next[limitField];
+        }
+        return next;
+      });
+      toast.error(t('share.updateError'));
+    },
+    [t],
+  );
+  const scheduleLimitCommit = useDebouncedLimitPatch(updateConfig, handleLimitCommitError);
 
   const handleLimitChange = useCallback(
     (field: 'maxTopicsPerVisitor' | 'maxTurnsPerTopic', value: number | null) => {

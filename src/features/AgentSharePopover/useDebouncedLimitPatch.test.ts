@@ -53,4 +53,18 @@ describe('useDebouncedLimitPatch', () => {
 
     expect(onCommit).toHaveBeenCalledWith({ maxTopicsPerVisitor: 12 });
   });
+
+  it('reports the exact patch when a debounced commit fails', async () => {
+    const onCommit = vi.fn().mockRejectedValue(new Error('network down'));
+    const onCommitError = vi.fn();
+    const { result } = renderHook(() => useDebouncedLimitPatch(onCommit, onCommitError));
+
+    act(() => {
+      result.current('maxTurnsPerTopic', 40);
+      vi.advanceTimersByTime(500);
+    });
+    await act(async () => {});
+
+    expect(onCommitError).toHaveBeenCalledWith({ maxTurnsPerTopic: 40 });
+  });
 });
