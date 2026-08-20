@@ -177,6 +177,33 @@ describe('sendProactiveWechatMessage', () => {
     expect(mockSendMessage).toHaveBeenCalledWith(WECHAT_USER, 'hello', 'token-1');
   });
 
+  it('degrades an over-budget attachment to a download-link message at deliver time', async () => {
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
+
+    const result = await sendProactiveWechatMessage({
+      attachments: [
+        {
+          fetchUrl: 'https://example.com/f/big.mp4',
+          name: 'big.mp4',
+          size: 100 * 1024 * 1024,
+          type: 'video',
+        },
+      ],
+      content: 'here is the video',
+      serverDB,
+      userId: LOBE_USER,
+    });
+
+    expect(result.status).toBe('sent');
+    expect(mockSendMessage).toHaveBeenNthCalledWith(1, WECHAT_USER, 'here is the video', 'token-1');
+    expect(mockSendMessage).toHaveBeenNthCalledWith(
+      2,
+      WECHAT_USER,
+      expect.stringContaining('https://example.com/f/big.mp4'),
+      'token-1',
+    );
+  });
+
   it('delivers the displayed final send before queueing the next message', async () => {
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
     await consumeSendCredits(redis, APP, WECHAT_USER, WECHAT_WINDOW_MAX_SENDS - 1);

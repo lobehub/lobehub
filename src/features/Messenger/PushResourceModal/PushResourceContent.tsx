@@ -1,5 +1,6 @@
 'use client';
 
+import { MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
 import { Block, Flexbox, Input, Text } from '@lobehub/ui';
 import { Alert, Button, ModalFooter, Select, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { memo, useState } from 'react';
@@ -9,6 +10,7 @@ import useSWR from 'swr';
 import FileIcon from '@/components/FileIcon';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
+import { formatSize } from '@/utils/format';
 
 import type { MessengerPlatform } from '../constants';
 import { getMessengerErrorMessage } from '../i18n';
@@ -21,6 +23,12 @@ export interface PushResourceFile {
   fileType?: string;
   id: string;
   name: string;
+  /**
+   * Byte size when the caller has it — drives the pre-send oversize hint
+   * (image → "will be compressed", file → "sent as a link"). When absent the
+   * hint is skipped; the server still applies the same budget on send.
+   */
+  size?: number;
 }
 
 export interface PushResourceTarget {
@@ -63,6 +71,24 @@ export const PushResourceContent = memo<PushResourceModalProps>(
 
     const canPush = status?.deliverability === 'always' ? status.linked : !!status?.windowOpen;
 
+    // Pre-send oversize hint: with the file size and the platform budget both
+    // known here, tell the user up front whether the server will compress the
+    // image or degrade the file to a download link (mirrors attachmentBudget
+    // on the server). Size unknown → no hint; the result toast still reports
+    // what actually happened.
+    const attachmentType = resolveAttachmentType(file.name, file.fileType);
+    const budget = MESSENGER_ATTACHMENT_BUDGETS[platform];
+    const budgetLimit = attachmentType === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
+    const oversizeHint =
+      file.size && file.size > budgetLimit
+        ? t(
+            attachmentType === 'image'
+              ? 'messenger.push.resource.oversizeImageHint'
+              : 'messenger.push.resource.oversizeFileHint',
+            { limit: formatSize(budgetLimit, 0), platform: platformName },
+          )
+        : undefined;
+
     const handleSend = async () => {
       if (sending || !canPush) return;
 
@@ -76,7 +102,7 @@ export const PushResourceContent = memo<PushResourceModalProps>(
           attachments: [
             {
               fileId: file.id,
-              type: resolveAttachmentType(file.name, file.fileType),
+              type: attachmentType,
             },
           ],
           content: content.trim() || undefined,
@@ -134,6 +160,8 @@ export const PushResourceContent = memo<PushResourceModalProps>(
               </Flexbox>
             </Flexbox>
           </Block>
+
+          {oversizeHint && <Alert showIcon message={oversizeHint} type="info" />}
 
           {targets && targets.length > 1 && (
             <Flexbox gap={6}>

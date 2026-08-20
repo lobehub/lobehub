@@ -1,5 +1,10 @@
 import debug from 'debug';
 
+import {
+  joinFallbackLines,
+  PLATFORM_ATTACHMENT_BUDGETS,
+  prepareAttachmentsForBudget,
+} from '@/server/services/bot/platforms/attachmentBudget';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import {
   batchDiscordFiles,
@@ -43,25 +48,54 @@ export const sendOutboundDirectMessage = async (params: {
   const { attachments, content, credentials, platformUserId } = params;
   const { botToken, platform } = credentials;
   const text = content?.trim();
-  const files = attachments?.length ? attachments : undefined;
 
-  if (!text && !files) throw new Error('Outbound direct message requires content or attachments');
+  if (!text && !attachments?.length)
+    throw new Error('Outbound direct message requires content or attachments');
 
-  log('sending %s DM to %s (attachments=%d)', platform, platformUserId, files?.length ?? 0);
+  // Fit attachments to the platform's size budget first: over-budget images
+  // get recompressed; files that can't fit at all become download-link lines,
+  // delivered as a separate follow-up text message. A separate message —
+  // never merged into the text leg — because Telegram truncates captions at
+  // 1024 chars and Discord caps messages at 2000, and a truncated URL is a
+  // dead link. See attachmentBudget.ts for the budget rationale.
+  const budget =
+    platform in PLATFORM_ATTACHMENT_BUDGETS
+      ? PLATFORM_ATTACHMENT_BUDGETS[platform as keyof typeof PLATFORM_ATTACHMENT_BUDGETS]
+      : undefined;
+  const prepared =
+    attachments?.length && budget
+      ? await prepareAttachmentsForBudget(attachments, budget)
+      : { attachments: attachments ?? [], fallbackLines: [] };
+
+  // Every prepared attachment lands in exactly one of these two legs, so the
+  // guard above already covers "nothing to send".
+  const linkText = joinFallbackLines(prepared.fallbackLines);
+  const files = prepared.attachments.length ? prepared.attachments : undefined;
+
+  log(
+    'sending %s DM to %s (attachments=%d, link-fallbacks=%d)',
+    platform,
+    platformUserId,
+    files?.length ?? 0,
+    prepared.fallbackLines.length,
+  );
 
   switch (platform) {
     case 'telegram': {
       // A Telegram private chat id *is* the user id, so no DM to open.
       const api = new TelegramApi(botToken);
+      let textDelivered = false;
       if (files) {
         // The first attachment carries the text as its caption; if every
         // attachment fails, fall back to a plain message so the text leg
         // still lands.
         const delivered = await sendTelegramAttachments(api, platformUserId, files, text);
-        if (delivered > 0) return;
-        if (!text) throw new Error('All Telegram attachments failed to send');
+        textDelivered = delivered > 0;
+        if (delivered === 0 && !text && !linkText)
+          throw new Error('All Telegram attachments failed to send');
       }
-      await api.sendMessage(platformUserId, text!);
+      if (text && !textDelivered) await api.sendMessage(platformUserId, text);
+      if (linkText) await api.sendMessage(platformUserId, linkText);
       return;
     }
     case 'discord': {
@@ -69,6 +103,7 @@ export const sendOutboundDirectMessage = async (params: {
       // existing channel when one is already open.
       const api = new DiscordApi(botToken);
       const channel = await api.createDMChannel(platformUserId);
+      let textDelivered = false;
       if (files) {
         const rawFiles = await materializeAttachmentsForDiscord(files);
         if (rawFiles.length > 0) {
@@ -78,15 +113,18 @@ export const sendOutboundDirectMessage = async (params: {
           for (const [index, batch] of batches.entries()) {
             await api.createMessage(channel.id, index === 0 ? (text ?? '') : '', batch);
           }
-          return;
+          textDelivered = true;
+        } else if (!text && !linkText) {
+          throw new Error('All Discord attachments failed to materialize');
         }
-        if (!text) throw new Error('All Discord attachments failed to materialize');
       }
-      await api.createMessage(channel.id, text!);
+      if (text && !textDelivered) await api.createMessage(channel.id, text);
+      if (linkText) await api.createMessage(channel.id, linkText);
       return;
     }
     case 'slack': {
       const api = new SlackApi(botToken);
+      let textDelivered = false;
       if (files) {
         // `files.completeUploadExternal` needs a real channel id (unlike
         // `chat.postMessage`, which resolves a user id), so open the DM first.
@@ -96,11 +134,13 @@ export const sendOutboundDirectMessage = async (params: {
           channelId: channel.id,
           initialComment: text,
         });
-        if (uploaded > 0) return;
-        if (!text) throw new Error('All Slack attachments failed to upload');
+        textDelivered = uploaded > 0;
+        if (uploaded === 0 && !text && !linkText)
+          throw new Error('All Slack attachments failed to upload');
       }
       // Slack resolves a user id passed as `channel` to that user's DM.
-      await api.postMessage(platformUserId, text!);
+      if (text && !textDelivered) await api.postMessage(platformUserId, text);
+      if (linkText) await api.postMessage(platformUserId, linkText);
       return;
     }
     default: {

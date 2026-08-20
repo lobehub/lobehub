@@ -5,6 +5,11 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  joinFallbackLines,
+  PLATFORM_ATTACHMENT_BUDGETS,
+  prepareAttachmentsForBudget,
+} from '@/server/services/bot/platforms/attachmentBudget';
 import type {
   WechatPendingPush,
   WechatWindowRedis,
@@ -90,11 +95,29 @@ const deliver = async (
   token: string,
   payload: Pick<WechatPendingPush, 'attachments' | 'content'>,
 ): Promise<void> => {
+  // Budget pass runs at deliver time (not enqueue time) so both the immediate
+  // send and the queued-replay path get it, and so the Redis-queued payload
+  // keeps carrying a small URL instead of megabytes of recompressed base64.
+  // WeChat iLink silently drops over-budget media — the upload and send both
+  // return 200 yet the message never renders — so this is the only reliable
+  // way to make a large image arrive at all.
+  const prepared = payload.attachments?.length
+    ? await prepareAttachmentsForBudget(payload.attachments, PLATFORM_ATTACHMENT_BUDGETS.wechat)
+    : { attachments: [], fallbackLines: [] };
+
   if (payload.content?.trim()) {
     await api.sendMessage(platformUserId, payload.content, token);
   }
-  if (payload.attachments?.length) {
-    await sendWechatAttachments(api, platformUserId, payload.attachments, token);
+  if (prepared.attachments.length) {
+    await sendWechatAttachments(api, platformUserId, prepared.attachments, token);
+  }
+  // Over-budget attachments degrade to one text message carrying stable
+  // download links. Send credits were already consumed per attachment, so
+  // collapsing several links into a single message only under-counts — the
+  // safe direction for window accounting.
+  const linkText = joinFallbackLines(prepared.fallbackLines);
+  if (linkText) {
+    await api.sendMessage(platformUserId, linkText, token);
   }
 };
 

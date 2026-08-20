@@ -899,6 +899,10 @@ export const messengerRouter = router({
               fetchUrl: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
               mimeType: file.fileType,
               name: file.name,
+              // Byte size from the owned row — the send path uses it to apply
+              // per-platform budgets (compress / degrade-to-link) without
+              // having to download URL-sourced attachments first.
+              size: file.size,
               type: attachment.type,
             };
           }),

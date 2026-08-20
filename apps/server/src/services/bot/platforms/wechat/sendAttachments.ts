@@ -2,6 +2,12 @@ import type { MessageItem, WechatApiClient } from '@lobechat/chat-adapter-wechat
 import { MessageItemType, WechatUploadMediaType } from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
+import {
+  buildAttachmentFallbackLine,
+  compressImageToBudget,
+  PLATFORM_ATTACHMENT_BUDGETS,
+} from '../attachmentBudget';
+
 const log = debug('bot-platform:wechat:send-attachments');
 
 /**
@@ -19,6 +25,8 @@ export interface WechatOutboundAttachment {
   fetchUrl?: string;
   mimeType?: string;
   name?: string;
+  /** Byte size when known — lets the push path apply size budgets up front. */
+  size?: number;
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
@@ -124,13 +132,44 @@ export const sendWechatAttachments = async (
   attachments: WechatOutboundAttachment[],
   contextToken: string,
 ): Promise<void> => {
+  const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
+
   for (const attachment of attachments) {
     try {
-      const buffer = await loadAttachmentBuffer(attachment);
+      let buffer = await loadAttachmentBuffer(attachment);
       if (!buffer) {
         log('sendWechatAttachments: skipping attachment without resolvable bytes');
         continue;
       }
+
+      // Enforcement backstop for callers that reach this helper without the
+      // push path's budget pass (bot replies, queued payloads with no size):
+      // iLink accepts over-budget media with a 200 on every call and then
+      // never renders the message, so an unchecked upload is a silent loss.
+      const limit = attachment.type === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
+      if (buffer.length > limit && attachment.type === 'image') {
+        const compressed = await compressImageToBudget(buffer, budget.imageMaxBytes);
+        if (compressed) buffer = compressed;
+      }
+      if (buffer.length > limit) {
+        if (attachment.fetchUrl) {
+          log(
+            'sendWechatAttachments: "%s" (%d bytes) over %d-byte budget — sending link instead',
+            attachment.name ?? '(unnamed)',
+            buffer.length,
+            limit,
+          );
+          await api.sendMessage(
+            toUserId,
+            buildAttachmentFallbackLine(attachment, attachment.fetchUrl),
+            contextToken,
+          );
+        } else {
+          log('sendWechatAttachments: skipping over-budget attachment without fetchUrl');
+        }
+        continue;
+      }
+
       const mediaType = mapAttachmentTypeToUploadMediaType(attachment.type);
       const uploadResult = await api.uploadCdnMedia(toUserId, mediaType, buffer);
       const cdnMedia = {
