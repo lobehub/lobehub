@@ -448,17 +448,13 @@ export class ChatService extends BaseService {
       targetModelId: finalModel,
     });
 
+    // Only `translate` carried a second, target-less retry here. It existed to
+    // work around the gate treating an unowned model as somebody else's, which
+    // `resolveOperationPermission` now distinguishes — so the retry can never
+    // change the outcome, and keeping it would suggest the two sibling
+    // endpoints in this file were simply missing it.
     if (!modelScopedPermission.isPermitted) {
-      const fallbackPermission = await this.resolveOperationPermission('AI_MODEL_INVOKE');
-      if (!fallbackPermission.isPermitted) {
-        throw this.createAuthorizationError(modelScopedPermission.message || '无权限操作');
-      }
-
-      this.log('warn', '模型级权限校验失败，已回退到通用模型调用权限校验', {
-        model: finalModel,
-        provider: finalProvider,
-        userId: this.userId,
-      });
+      throw this.createAuthorizationError(modelScopedPermission.message || '无权限操作');
     }
 
     this.log('info', '开始翻译文本', {
