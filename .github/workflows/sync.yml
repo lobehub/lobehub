@@ -25,6 +25,6 @@ jobs:
         with:
           upstream_sync_repo: lobehub/lobehub
           upstream_sync_branch: main
-          target_sync_branch: main
+          target_sync_branch: canary
           target_repo_token: ${{ secrets.GITHUB_TOKEN }} # automatically generated, no need to set
           test_mode: false
