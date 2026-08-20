@@ -159,7 +159,7 @@ describe('ResourcePermissionModel collaborators', () => {
     expect(await model.getCollaboratorResourceIds('knowledgeBase', memberA, 'use')).toEqual([]);
   });
 
-  it('workspace-wide row and grants upsert independently through one conflict target', async () => {
+  it('workspace-wide row and grants upsert independently on their own indexes', async () => {
     await model.setAccessLevel('knowledgeBase', kbId, 'use', ownerId);
     await model.setAccessLevel('knowledgeBase', kbId, 'edit', ownerId);
     await model.upsertCollaborators({
@@ -177,8 +177,8 @@ describe('ResourcePermissionModel collaborators', () => {
       userIds: [memberA],
     });
 
-    // NULLS NOT DISTINCT keeps the workspace-wide row unique: two sets = one
-    // row updated, and the re-graded grant stays one row too.
+    // The workspace-wide partial index keeps that subject unique: two sets =
+    // one row updated, and the re-graded grant stays one row too.
     const rows = await serverDB.select().from(resourcePermissions);
     expect(rows).toHaveLength(2);
     expect(await model.getAccessLevel('knowledgeBase', kbId)).toBe('edit');

@@ -2554,7 +2554,8 @@ table resource_permissions {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (workspace_id, resource_type, resource_id, user_id) [name: 'resource_permissions_workspace_resource_subject_unique', unique]
+    (workspace_id, resource_type, resource_id) [name: 'resource_permissions_workspace_resource_unique', unique]
+    (workspace_id, resource_type, resource_id, user_id) [name: 'resource_permissions_workspace_resource_user_id_unique', unique]
     (resource_type, resource_id) [name: 'resource_permissions_resource_idx']
     workspace_id [name: 'resource_permissions_workspace_idx']
     (workspace_id, user_id) [name: 'resource_permissions_workspace_user_idx']

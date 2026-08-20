@@ -78,14 +78,16 @@ export class ResourcePermissionModel {
         resourceType,
         workspaceId: this.workspaceId,
       })
+      // The workspace-wide subject has its own partial unique index, whose
+      // predicate must be repeated in `targetWhere` to be inferred.
       .onConflictDoUpdate({
         set: { accessLevel, createdBy, updatedAt: new Date() },
         target: [
           resourcePermissions.workspaceId,
           resourcePermissions.resourceType,
           resourcePermissions.resourceId,
-          resourcePermissions.userId,
         ],
+        targetWhere: isNull(resourcePermissions.userId),
       });
   };
 
@@ -168,6 +170,7 @@ export class ResourcePermissionModel {
           workspaceId: this.workspaceId,
         })),
       )
+      // Mirror of `setAccessLevel`, against the per-member partial index.
       .onConflictDoUpdate({
         set: { accessLevel, createdBy, updatedAt: new Date() },
         target: [
@@ -176,6 +179,7 @@ export class ResourcePermissionModel {
           resourcePermissions.resourceId,
           resourcePermissions.userId,
         ],
+        targetWhere: isNotNull(resourcePermissions.userId),
       });
   };
 

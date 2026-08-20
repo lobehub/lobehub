@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "2e825f77-6bf5-4290-ae3f-8f928a84933c",
+  "id": "9fd6fdeb-015d-419a-81f8-eaf4257fd9fc",
   "policies": {},
   "prevId": "83521620-0e13-4e2d-8dc5-5d8477b0ec1c",
   "roles": {},
@@ -21260,6 +21260,68 @@
         }
       },
       "indexes": {
+        "resource_permissions_workspace_resource_unique": {
+          "name": "resource_permissions_workspace_resource_unique",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"resource_permissions\".\"user_id\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "resource_permissions_workspace_resource_user_id_unique": {
+          "name": "resource_permissions_workspace_resource_user_id_unique",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"resource_permissions\".\"user_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "resource_permissions_resource_idx": {
           "name": "resource_permissions_resource_idx",
           "columns": [
@@ -21348,13 +21410,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "resource_permissions_workspace_resource_subject_unique": {
-          "name": "resource_permissions_workspace_resource_subject_unique",
-          "nullsNotDistinct": true,
-          "columns": ["workspace_id", "resource_type", "resource_id", "user_id"]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

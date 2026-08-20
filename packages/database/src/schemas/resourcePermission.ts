@@ -1,4 +1,5 @@
-import { index, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import { isNotNull, isNull } from 'drizzle-orm';
+import { index, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { timestamps } from './_helpers';
 import { users } from './user';
@@ -114,9 +115,9 @@ export const isResourceAccessLevelAllowed = (
  *
  * Every read of the workspace-wide policy MUST filter `userId IS NULL`
  * (`ResourcePermissionModel` centralizes this): a per-member grant leaking
- * into a workspace-wide read is a permission bug. The unique constraint is
- * NULLS NOT DISTINCT so the workspace-wide row stays unique alongside the
- * per-member rows and both shapes upsert through the same conflict target.
+ * into a workspace-wide read is a permission bug. Each subject gets its own
+ * partial unique index so the workspace-wide row stays unique alongside the
+ * per-member rows; upserts repeat the matching predicate in `targetWhere`.
  *
  * Visibility itself stays on the resources' own `visibility` column; this
  * table only grades what visible workspace members may do. Rows staged on a
@@ -145,9 +146,12 @@ export const resourcePermissions = pgTable(
     ...timestamps,
   },
   (t) => [
-    unique('resource_permissions_workspace_resource_subject_unique')
+    uniqueIndex('resource_permissions_workspace_resource_unique')
+      .on(t.workspaceId, t.resourceType, t.resourceId)
+      .where(isNull(t.userId)),
+    uniqueIndex('resource_permissions_workspace_resource_user_id_unique')
       .on(t.workspaceId, t.resourceType, t.resourceId, t.userId)
-      .nullsNotDistinct(),
+      .where(isNotNull(t.userId)),
     index('resource_permissions_resource_idx').on(t.resourceType, t.resourceId),
     index('resource_permissions_workspace_idx').on(t.workspaceId),
     index('resource_permissions_workspace_user_idx').on(t.workspaceId, t.userId),
