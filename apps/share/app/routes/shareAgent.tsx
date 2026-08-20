@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
 import { useLoaderData } from 'react-router';
 import { SWRConfig, unstable_serialize } from 'swr';
 
+import { sharedAgentDisplayName } from '@/features/AgentShareVisitor/displayName';
 import { shareKeys } from '@/libs/swr/keys';
 import { resolveRequestLocale } from '@/locales/requestLocale';
 
@@ -32,7 +33,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
 };
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
-  const title = loaderData?.agent?.agentMeta.title;
+  const title = sharedAgentDisplayName(loaderData?.agent?.agentMeta);
 
   return buildPageMeta({
     description:
