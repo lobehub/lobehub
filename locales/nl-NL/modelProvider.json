@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "Je bent verbonden met {{name}}. Klik om de verbinding te verbreken.",
   "providerModels.config.oauth.cancel": "Annuleren",
   "providerModels.config.oauth.codeExpired": "De autorisatiecode is verlopen. Probeer het opnieuw.",
-  "providerModels.config.oauth.connect": "Verbind met {{name}}",
   "providerModels.config.oauth.connectDesc": "Klik om via de browser te autoriseren. Geen API-sleutel nodig.",
   "providerModels.config.oauth.connected": "Verbonden",
   "providerModels.config.oauth.connecting": "Bezig met verbinden...",

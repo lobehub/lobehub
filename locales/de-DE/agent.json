@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "Wählen Sie ein Arbeitsbereichsmitglied aus...",
   "transferRequest.resourceType.agent": "Agent",
   "transferRequest.resourceType.agentGroup": "Gruppe",
-  "transferRequest.sectionTitle": "Ausstehende Übertragungen",
   "transferRequest.someone": "Ein Arbeitsbereichsmitglied",
   "transferRequest.untitledResource": "Unbenannt",
   "transferRequest.withdraw": "Zurückziehen",

@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "Выберите участника рабочего пространства...",
   "transferRequest.resourceType.agent": "Агент",
   "transferRequest.resourceType.agentGroup": "Группа",
-  "transferRequest.sectionTitle": "Ожидающие передачи",
   "transferRequest.someone": "Участник рабочего пространства",
   "transferRequest.untitledResource": "Без названия",
   "transferRequest.withdraw": "Отозвать",

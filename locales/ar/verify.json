@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "الصورة كبيرة جدًا (10 ميجابايت كحد أقصى).",
   "acceptance.review.confirmReject": "إرسال الملاحظات",
   "acceptance.review.detailPlaceholder": "اترك تعليقًا لهذا الفحص. سيتم تقديمه مع قرارك...",
-  "acceptance.review.feedbackLabel": "ملاحظاتك · الجولة {{round}}",
   "acceptance.review.fullscreen": "تعليق على الشاشة الكاملة",
   "acceptance.review.fullscreenDone": "تم الانتهاء من التعليق",
   "acceptance.review.ignore": "تجاهل",

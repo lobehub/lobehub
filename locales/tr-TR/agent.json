@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "Bir çalışma alanı üyesi seçin...",
   "transferRequest.resourceType.agent": "Ajan",
   "transferRequest.resourceType.agentGroup": "Grup",
-  "transferRequest.sectionTitle": "Bekleyen transferler",
   "transferRequest.someone": "Bir çalışma alanı üyesi",
   "transferRequest.untitledResource": "Başlıksız",
   "transferRequest.withdraw": "Geri çek",

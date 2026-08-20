@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "Selecciona un miembro del espacio de trabajo...",
   "transferRequest.resourceType.agent": "Agente",
   "transferRequest.resourceType.agentGroup": "Grupo",
-  "transferRequest.sectionTitle": "Transferencias pendientes",
   "transferRequest.someone": "Un miembro del espacio de trabajo",
   "transferRequest.untitledResource": "Sin título",
   "transferRequest.withdraw": "Retirar",

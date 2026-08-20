@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "이미지가 너무 큽니다 (최대 10MB).",
   "acceptance.review.confirmReject": "피드백 제출",
   "acceptance.review.detailPlaceholder": "이 검사에 대한 의견을 남기세요. 결정과 함께 제출됩니다…",
-  "acceptance.review.feedbackLabel": "귀하의 피드백 · {{round}} 라운드",
   "acceptance.review.fullscreen": "전체 화면 주석",
   "acceptance.review.fullscreenDone": "주석 완료",
   "acceptance.review.ignore": "무시",

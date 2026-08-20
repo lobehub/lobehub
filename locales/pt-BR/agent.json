@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "Selecione um membro do workspace...",
   "transferRequest.resourceType.agent": "Agente",
   "transferRequest.resourceType.agentGroup": "Grupo",
-  "transferRequest.sectionTitle": "Transferências pendentes",
   "transferRequest.someone": "Um membro do workspace",
   "transferRequest.untitledResource": "Sem título",
   "transferRequest.withdraw": "Retirar",

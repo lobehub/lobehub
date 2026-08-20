@@ -2580,7 +2580,6 @@
   "workspace.members.invite.partialSuccess": "{{success}} 已邀请，{{failed}} 失败。请检查地址并重试。",
   "workspace.members.invite.roleLabel": "角色",
   "workspace.members.invite.seatInsufficient": "仅剩 {{remaining}} 个席位，不足以邀请 {{required}} 名新成员。请购买更多席位，或将部分角色改为查看者（不占席位）。",
-  "workspace.members.invite.seatInsufficientNoBuy": "仅剩 {{remaining}} 个席位，不足以邀请 {{required}} 名新成员。请联系工作区所有者购买更多席位，或将部分角色改为查看者（不占席位）。",
   "workspace.members.invite.submit": "邀请",
   "workspace.members.invite.success": "邀请已发送。邀请链接将在 1 周后过期。",
   "workspace.members.invite.title": "邀请成员",

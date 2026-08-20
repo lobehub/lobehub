@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "Obraz jest za duży (maks. 10 MB).",
   "acceptance.review.confirmReject": "Prześlij opinię",
   "acceptance.review.detailPlaceholder": "Zostaw komentarz do tej kontroli. Zostanie on przesłany wraz z Twoją decyzją…",
-  "acceptance.review.feedbackLabel": "Twoja opinia · runda {{round}}",
   "acceptance.review.fullscreen": "Adnotuj w trybie pełnoekranowym",
   "acceptance.review.fullscreenDone": "Zakończono adnotacje",
   "acceptance.review.ignore": "Ignoruj",

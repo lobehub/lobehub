@@ -350,7 +350,6 @@
   "transferRequest.recipientPlaceholder": "워크스페이스 멤버 선택...",
   "transferRequest.resourceType.agent": "에이전트",
   "transferRequest.resourceType.agentGroup": "그룹",
-  "transferRequest.sectionTitle": "대기 중인 이전",
   "transferRequest.someone": "워크스페이스 멤버",
   "transferRequest.untitledResource": "제목 없음",
   "transferRequest.withdraw": "철회",

@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "Görsel çok büyük (maksimum 10MB).",
   "acceptance.review.confirmReject": "Geri bildirimi gönder",
   "acceptance.review.detailPlaceholder": "Bu kontrol için bir yorum bırakın. Kararınızla birlikte gönderilecektir…",
-  "acceptance.review.feedbackLabel": "Geri bildiriminiz · {{round}} tur",
   "acceptance.review.fullscreen": "Tam ekran açıklama ekle",
   "acceptance.review.fullscreenDone": "Açıklama ekleme tamamlandı",
   "acceptance.review.ignore": "Yoksay",

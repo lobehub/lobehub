@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "De afbeelding is te groot (maximaal 10MB).",
   "acceptance.review.confirmReject": "Feedback indienen",
   "acceptance.review.detailPlaceholder": "Laat een opmerking achter voor deze controle. Het wordt samen met uw beslissing ingediend…",
-  "acceptance.review.feedbackLabel": "Jouw feedback · ronde {{round}}",
   "acceptance.review.fullscreen": "Annoteren in volledig scherm",
   "acceptance.review.fullscreenDone": "Annoteren voltooid",
   "acceptance.review.ignore": "Negeren",

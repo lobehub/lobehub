@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "画像が大きすぎます (最大10MB)。",
   "acceptance.review.confirmReject": "フィードバックを送信",
   "acceptance.review.detailPlaceholder": "このチェックにコメントを残してください。決定とともに送信されます…",
-  "acceptance.review.feedbackLabel": "あなたのフィードバック · ラウンド {{round}}",
   "acceptance.review.fullscreen": "全画面で注釈を追加",
   "acceptance.review.fullscreenDone": "注釈付け完了",
   "acceptance.review.ignore": "無視",

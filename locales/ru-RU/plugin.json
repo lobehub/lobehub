@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "Добавить критерий приемки",
   "builtins.lobe-task.goal.costBudget": "Общий бюджет затрат",
   "builtins.lobe-task.goal.criteria": "Критерии приемки",
-  "builtins.lobe-task.goal.editCriterion": "Редактировать критерий C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "Принято",
   "builtins.lobe-task.goal.phase.awaitingDecision": "Не пройдено — ваше решение",
   "builtins.lobe-task.goal.phase.awaitingReview": "Ожидает вашего рассмотрения",

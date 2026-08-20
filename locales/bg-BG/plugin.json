@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "Добави критерий за приемане",
   "builtins.lobe-task.goal.costBudget": "Общ бюджет на разходите",
   "builtins.lobe-task.goal.criteria": "Критерии за приемане",
-  "builtins.lobe-task.goal.editCriterion": "Редактирай критерий C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "Прието",
   "builtins.lobe-task.goal.phase.awaitingDecision": "Не е преминало — вашето решение",
   "builtins.lobe-task.goal.phase.awaitingReview": "Очаква вашия преглед",

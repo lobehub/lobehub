@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "Połączono z {{name}}. Kliknij, aby odłączyć.",
   "providerModels.config.oauth.cancel": "Anuluj",
   "providerModels.config.oauth.codeExpired": "Kod autoryzacyjny wygasł. Spróbuj ponownie.",
-  "providerModels.config.oauth.connect": "Połącz z {{name}}",
   "providerModels.config.oauth.connectDesc": "Kliknij, aby autoryzować przez przeglądarkę. Klucz API nie jest wymagany.",
   "providerModels.config.oauth.connected": "Połączono",
   "providerModels.config.oauth.connecting": "Łączenie...",

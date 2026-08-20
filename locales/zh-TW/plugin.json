@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "新增驗收標準",
   "builtins.lobe-task.goal.costBudget": "總成本預算",
   "builtins.lobe-task.goal.criteria": "驗收標準",
-  "builtins.lobe-task.goal.editCriterion": "編輯標準 C{{seq}}",
   "builtins.lobe-task.goal.phase.accepted": "已接受",
   "builtins.lobe-task.goal.phase.awaitingDecision": "未通過 — 由您決定",
   "builtins.lobe-task.goal.phase.awaitingReview": "等待您的審核",

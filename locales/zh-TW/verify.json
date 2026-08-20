@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "圖片太大（最大 10MB）。",
   "acceptance.review.confirmReject": "提交反饋",
   "acceptance.review.detailPlaceholder": "為此檢查留下評論。它將與您的決定一起提交…",
-  "acceptance.review.feedbackLabel": "您的反饋 · 第 {{round}} 回合",
   "acceptance.review.fullscreen": "全屏註解",
   "acceptance.review.fullscreenDone": "完成註解",
   "acceptance.review.ignore": "忽略",

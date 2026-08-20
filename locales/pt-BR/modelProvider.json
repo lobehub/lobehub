@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "Você se conectou ao {{name}}. Clique para desconectar.",
   "providerModels.config.oauth.cancel": "Cancelar",
   "providerModels.config.oauth.codeExpired": "O código de autorização expirou. Por favor, tente novamente.",
-  "providerModels.config.oauth.connect": "Conectar com {{name}}",
   "providerModels.config.oauth.connectDesc": "Clique para autorizar via navegador. Nenhuma chave de API é necessária.",
   "providerModels.config.oauth.connected": "Conectado",
   "providerModels.config.oauth.connecting": "Conectando...",

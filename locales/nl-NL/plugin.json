@@ -425,7 +425,6 @@
   "builtins.lobe-task.goal.addCriterion": "Acceptatiecriterium toevoegen",
   "builtins.lobe-task.goal.costBudget": "Totale kostenbegroting",
   "builtins.lobe-task.goal.criteria": "Acceptatiecriteria",
-  "builtins.lobe-task.goal.editCriterion": "Criterium C{{seq}} bewerken",
   "builtins.lobe-task.goal.phase.accepted": "Geaccepteerd",
   "builtins.lobe-task.goal.phase.awaitingDecision": "Niet geslaagd — uw beslissing",
   "builtins.lobe-task.goal.phase.awaitingReview": "Wacht op uw beoordeling",

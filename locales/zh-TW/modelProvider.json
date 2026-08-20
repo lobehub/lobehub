@@ -190,7 +190,6 @@
   "providerModels.config.oauth.authorizedDesc": "您已連接至 {{name}}。點擊以中斷連線。",
   "providerModels.config.oauth.cancel": "取消",
   "providerModels.config.oauth.codeExpired": "授權碼已過期。請再試一次。",
-  "providerModels.config.oauth.connect": "透過 {{name}} 連接",
   "providerModels.config.oauth.connectDesc": "點擊以透過瀏覽器授權。無需 API 金鑰。",
   "providerModels.config.oauth.connected": "已連接",
   "providerModels.config.oauth.connecting": "連接中...",

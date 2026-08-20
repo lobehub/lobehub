@@ -172,7 +172,6 @@
   "acceptance.review.attachTooLarge": "تصویر بیش از حد بزرگ است (حداکثر ۱۰ مگابایت).",
   "acceptance.review.confirmReject": "ارسال بازخورد",
   "acceptance.review.detailPlaceholder": "برای این بررسی نظر بگذارید. این نظر همراه با تصمیم شما ارسال خواهد شد...",
-  "acceptance.review.feedbackLabel": "بازخورد شما · دور {{round}}",
   "acceptance.review.fullscreen": "حاشیه‌نویسی تمام‌صفحه",
   "acceptance.review.fullscreenDone": "حاشیه‌نویسی تمام شد",
   "acceptance.review.ignore": "نادیده گرفتن",
