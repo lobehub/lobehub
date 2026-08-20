@@ -235,7 +235,9 @@ const getOperationsByContext =
  * which intentionally lets the next send start. The old snapshot must not then
  * replace the newer turn's optimistic messages. Status is deliberately ignored:
  * the newer send may already have handed off to its runtime (or even settled),
- * but its later start time still proves that the older snapshot is superseded.
+ * but its later registration in the context index still proves that the older
+ * snapshot is superseded. The index is local insertion order, so it remains
+ * monotonic even when restored server timestamps and the client clock differ.
  */
 const hasNewerConversationOperation =
   (operationId: string, context: Operation['context']) =>
@@ -243,12 +245,13 @@ const hasNewerConversationOperation =
     const operation = s.operations[operationId];
     if (!operation || !context.agentId) return false;
 
-    return getOperationsByContext({ ...context, agentId: context.agentId })(s).some(
-      (candidate) =>
-        candidate.id !== operationId &&
-        QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type) &&
-        candidate.metadata.startTime > operation.metadata.startTime,
-    );
+    const operations = getOperationsByContext({ ...context, agentId: context.agentId })(s);
+    const operationIndex = operations.findIndex((candidate) => candidate.id === operationId);
+    if (operationIndex < 0) return false;
+
+    return operations
+      .slice(operationIndex + 1)
+      .some((candidate) => QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type));
   };
 
 /**
