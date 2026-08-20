@@ -403,6 +403,33 @@ describe('flushPendingWechatPushes', () => {
     expect(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))).toHaveLength(1);
   });
 
+  it('replays a backlog of oversized attachments that collapse into one link message', async () => {
+    // 9 over-budget attachments would need 9 credits counted raw, so with a
+    // 10-credit window and 2 reserved for replies the item could never pass
+    // its own quota check and would sit queued until it expired. Degradation
+    // collapses them into a single download-link message — 1 credit.
+    await enqueuePendingPush(redis, APP, WECHAT_USER, {
+      attachments: Array.from({ length: 9 }, (_, index) => ({
+        fetchUrl: `https://example.com/f/big-${index}.mp4`,
+        name: `big-${index}.mp4`,
+        size: 100 * 1024 * 1024,
+        type: 'video' as const,
+      })),
+      enqueuedAt: 1,
+    });
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-2');
+
+    const sent = await flushPendingWechatPushes({ ...flushParams, redis });
+
+    expect(sent).toBe(1);
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    expect(mockSendMessage.mock.calls[0][1]).toContain('big-8.mp4');
+    expect(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))).toHaveLength(0);
+    expect((await peekWindow(redis, APP, WECHAT_USER))?.remaining).toBe(
+      WECHAT_WINDOW_MAX_SENDS - 1,
+    );
+  });
+
   it('does nothing when the window never reopened', async () => {
     await enqueuePendingPush(redis, APP, WECHAT_USER, { content: 'first', enqueuedAt: 1 });
 

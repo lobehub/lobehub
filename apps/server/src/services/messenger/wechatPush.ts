@@ -1,4 +1,4 @@
-import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import { getWechatTextSendCount, WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
@@ -19,7 +19,6 @@ import {
   drainPendingPushes,
   enqueuePendingPush,
   peekWindow,
-  pendingPushSendCount,
   WECHAT_WINDOW_MAX_SENDS,
   wechatPendingPushKey,
   wechatWindowKey,
@@ -90,13 +89,66 @@ const resolveWechatTarget = async (
 };
 
 /**
+ * A push resolved into the exact iLink calls it will take.
+ *
+ * The budget pass runs *before* window quota is reserved, not at send time:
+ * degradation collapses N over-budget attachments into one download-link
+ * message, so counting the raw attachments would reserve credits for sends
+ * that never happen — with a 10-credit window and 2 reserved for replies, a
+ * 9-attachment push would fail its own quota check on every replay and expire
+ * undelivered. It also keeps the Redis-queued payload carrying small URLs
+ * instead of megabytes of recompressed base64, since only the original payload
+ * is ever enqueued.
+ */
+interface PreparedWechatDelivery {
+  /** In-budget attachments, uploaded as media. */
+  attachments: WechatOutboundAttachment[];
+  content?: string;
+  /** Originals behind `linkMessages`, requeued when the link leg fails. */
+  degraded: WechatOutboundAttachment[];
+  /** Download-link follow-ups, batched to the platform's text limit. */
+  linkMessages: string[];
+}
+
+const prepareWechatDelivery = async (
+  payload: Pick<WechatPendingPush, 'attachments' | 'content'>,
+): Promise<PreparedWechatDelivery> => {
+  const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
+  const prepared = payload.attachments?.length
+    ? await prepareAttachmentsForBudget(payload.attachments, budget)
+    : { attachments: [], degraded: [], fallbackLines: [] };
+
+  return {
+    attachments: prepared.attachments,
+    content: payload.content?.trim() ? payload.content : undefined,
+    degraded: prepared.degraded,
+    linkMessages: splitFallbackMessages(prepared.fallbackLines, budget.textMaxChars),
+  };
+};
+
+/** Window credits this delivery will actually consume. */
+const wechatDeliverySendCount = (prepared: PreparedWechatDelivery): number =>
+  Math.max(
+    1,
+    (prepared.content ? getWechatTextSendCount(prepared.content) : 0) +
+      prepared.attachments.length +
+      prepared.linkMessages.length,
+  );
+
+/**
  * Which legs of a push have already landed. A push is delivered in up to three
  * calls (text, attachment uploads, download-link follow-ups) and any of them
  * can fail after an earlier one succeeded — without this, requeueing the whole
- * payload would re-send text the user already has on every replay.
+ * payload would re-send content the user already has on every replay.
  */
 interface DeliveryProgress {
   contentDelivered: boolean;
+  /**
+   * Attachments still owed. Starts as the whole input and narrows to just the
+   * degraded ones once the upload leg is done, so a failing link message never
+   * requeues an attachment that already arrived.
+   */
+  undeliveredAttachments?: WechatOutboundAttachment[];
 }
 
 /** The part of a payload still owed to the user after a failed `deliver`. */
@@ -104,7 +156,11 @@ const undeliveredPayload = (
   payload: WechatPendingPush,
   progress: DeliveryProgress,
 ): WechatPendingPush | undefined => {
-  const remaining = progress.contentDelivered ? { ...payload, content: undefined } : payload;
+  const remaining = {
+    ...payload,
+    attachments: progress.undeliveredAttachments ?? payload.attachments,
+    content: progress.contentDelivered ? undefined : payload.content,
+  };
   if (!remaining.content?.trim() && !remaining.attachments?.length) return undefined;
   return remaining;
 };
@@ -113,37 +169,25 @@ const deliver = async (
   api: WechatApiClient,
   platformUserId: string,
   token: string,
-  payload: Pick<WechatPendingPush, 'attachments' | 'content'>,
+  prepared: PreparedWechatDelivery,
   progress: DeliveryProgress,
 ): Promise<void> => {
-  // Budget pass runs at deliver time (not enqueue time) so both the immediate
-  // send and the queued-replay path get it, and so the Redis-queued payload
-  // keeps carrying a small URL instead of megabytes of recompressed base64.
-  // WeChat iLink silently drops over-budget media — the upload and send both
-  // return 200 yet the message never renders — so this is the only reliable
-  // way to make a large image arrive at all.
-  const prepared = payload.attachments?.length
-    ? await prepareAttachmentsForBudget(payload.attachments, PLATFORM_ATTACHMENT_BUDGETS.wechat)
-    : { attachments: [], fallbackLines: [] };
-
-  if (payload.content?.trim()) {
-    await api.sendMessage(platformUserId, payload.content, token);
+  if (prepared.content) {
+    await api.sendMessage(platformUserId, prepared.content, token);
     progress.contentDelivered = true;
   }
   if (prepared.attachments.length) {
     await sendWechatAttachments(api, platformUserId, prepared.attachments, token);
   }
-  // Over-budget attachments degrade to one text message carrying stable
-  // download links. Send credits were already consumed per attachment, so
-  // collapsing several links into a single message only under-counts — the
-  // safe direction for window accounting.
-  const linkMessages = splitFallbackMessages(
-    prepared.fallbackLines,
-    PLATFORM_ATTACHMENT_BUDGETS.wechat.textMaxChars,
-  );
-  for (const message of linkMessages) {
+  // Per-item upload failures are swallowed inside `sendWechatAttachments` by
+  // design, so reaching here means the upload leg is finished either way —
+  // only the degraded attachments still owe the user their link.
+  progress.undeliveredAttachments = prepared.degraded;
+
+  for (const message of prepared.linkMessages) {
     await api.sendMessage(platformUserId, message, token);
   }
+  progress.undeliveredAttachments = [];
 };
 
 export interface WechatPushWindowStatus {
@@ -229,12 +273,22 @@ export const sendProactiveWechatMessage = async (params: {
   }
 
   const payload: WechatPendingPush = { attachments, content, enqueuedAt: Date.now() };
-  const count = pendingPushSendCount(payload);
+
+  // Skip the budget pass entirely when the window is already closed: the queue
+  // stores the untouched payload and the replay prepares it again.
+  const window = await peekWindow(redis, target.applicationId, target.platformUserId);
+  if (!window || window.remaining <= 0) {
+    await enqueuePendingPush(redis, target.applicationId, target.platformUserId, payload);
+    log('sendProactiveWechatMessage: window closed for user %s — queued', target.platformUserId);
+    return { status: 'queued' };
+  }
+
+  const prepared = await prepareWechatDelivery(payload);
   const credit = await consumeSendCredits(
     redis,
     target.applicationId,
     target.platformUserId,
-    count,
+    wechatDeliverySendCount(prepared),
   );
 
   if (credit.status !== 'ok') {
@@ -249,7 +303,7 @@ export const sendProactiveWechatMessage = async (params: {
 
   const progress: DeliveryProgress = { contentDelivered: false };
   try {
-    await deliver(target.api, target.platformUserId, credit.token, payload, progress);
+    await deliver(target.api, target.platformUserId, credit.token, prepared, progress);
     return { remaining: credit.remaining, status: 'sent' };
   } catch (error) {
     // The consumed credit is intentionally not refunded — a rejected send
@@ -280,23 +334,33 @@ export const flushPendingWechatPushes = async (params: {
   const api = new WechatApiClient(params.botToken, params.botId, params.baseUrl);
 
   return drainPendingPushes(redis, applicationId, platformUserId, async (payload) => {
-    const count = pendingPushSendCount(payload);
     const sendWindow = await peekWindow(redis, applicationId, platformUserId);
-    if (!sendWindow || sendWindow.remaining - count < RESERVED_REPLY_CREDITS) return 'stop';
+    if (!sendWindow || sendWindow.remaining <= RESERVED_REPLY_CREDITS) return 'stop';
+
+    // Prepare before the quota check: degradation collapses over-budget
+    // attachments into a single link message, and counting the raw payload
+    // would reserve credits for sends that never happen — enough to make a
+    // large backlog item fail its own check forever.
+    const prepared = await prepareWechatDelivery(payload);
+    const count = wechatDeliverySendCount(prepared);
+    if (sendWindow.remaining - count < RESERVED_REPLY_CREDITS) return 'stop';
 
     const credit = await consumeSendCredits(redis, applicationId, platformUserId, count);
     if (credit.status !== 'ok') return 'stop';
 
     const progress: DeliveryProgress = { contentDelivered: false };
     try {
-      await deliver(api, platformUserId, credit.token, payload, progress);
+      await deliver(api, platformUserId, credit.token, prepared, progress);
       return 'sent';
     } catch (error) {
       log('flushPendingWechatPushes: replay failed for %s: %O', platformUserId, error);
       const remaining = undeliveredPayload(payload, progress);
       if (!remaining) return 'sent';
       // Requeue only the legs still owed; `stop` when nothing landed at all.
-      return progress.contentDelivered ? { requeue: remaining } : 'stop';
+      return remaining === payload ||
+        (!progress.contentDelivered && !progress.undeliveredAttachments)
+        ? 'stop'
+        : { requeue: remaining };
     }
   });
 };

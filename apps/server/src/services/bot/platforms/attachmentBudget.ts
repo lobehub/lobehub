@@ -30,6 +30,12 @@ const MB = 1024 * 1024;
 export interface PreparedAttachments {
   attachments: BotMessageAttachment[];
   /**
+   * The original attachments behind `fallbackLines`. Callers with a replay
+   * queue requeue these (rather than the whole input) when the link leg fails,
+   * so an attachment that already uploaded is not sent twice.
+   */
+  degraded: BotMessageAttachment[];
+  /**
    * One line per attachment that could not be delivered as a file within the
    * platform budget. Callers append these to the outbound text leg so the
    * recipient still gets the resource as a download link.
@@ -138,6 +144,16 @@ export const compressImageToBudget = async (
 ): Promise<Buffer | undefined> => {
   try {
     const { default: sharp } = await import('sharp');
+
+    // An animated GIF or WebP re-encodes to a single static frame, silently
+    // turning the user's animation into a still. There is no JPEG that can
+    // carry it, so refuse and let the caller fall back to a download link.
+    const { pages } = await sharp(source).metadata();
+    if (pages && pages > 1) {
+      log('refusing to flatten a %d-page animated image — falling back to a link', pages);
+      return undefined;
+    }
+
     for (const [dimension, quality] of COMPRESSION_LADDER) {
       const result = await sharp(source)
         .rotate() // apply EXIF orientation before it is stripped by re-encode
@@ -190,6 +206,7 @@ export const prepareAttachmentsForBudget = async (
   budget: PlatformAttachmentBudget,
 ): Promise<PreparedAttachments> => {
   const kept: BotMessageAttachment[] = [];
+  const degraded: BotMessageAttachment[] = [];
   const fallbackLines: string[] = [];
 
   for (const attachment of attachments) {
@@ -228,6 +245,7 @@ export const prepareAttachmentsForBudget = async (
         limit,
       );
       fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
+      degraded.push(attachment);
       continue;
     }
 
@@ -236,7 +254,7 @@ export const prepareAttachmentsForBudget = async (
     kept.push(attachment);
   }
 
-  return { attachments: kept, fallbackLines };
+  return { attachments: kept, degraded, fallbackLines };
 };
 
 /**

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sharpMocks = vi.hoisted(() => ({
+  metadata: vi.fn(),
   toBuffer: vi.fn(),
 }));
 
@@ -9,6 +10,7 @@ vi.mock('sharp', () => {
   const chain = {
     flatten: vi.fn(() => chain),
     jpeg: vi.fn(() => chain),
+    metadata: sharpMocks.metadata,
     resize: vi.fn(() => chain),
     rotate: vi.fn(() => chain),
     toBuffer: sharpMocks.toBuffer,
@@ -28,6 +30,7 @@ const MB = 1024 * 1024;
 describe('compressImageToBudget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sharpMocks.metadata.mockResolvedValue({ pages: 1 });
   });
 
   it('returns the first ladder rung that fits the budget', async () => {
@@ -49,6 +52,13 @@ describe('compressImageToBudget', () => {
     expect(result).toBeUndefined();
   });
 
+  it('refuses an animated image instead of flattening it to one frame', async () => {
+    sharpMocks.metadata.mockResolvedValue({ pages: 24 });
+
+    expect(await compressImageToBudget(Buffer.alloc(64), 1024)).toBeUndefined();
+    expect(sharpMocks.toBuffer).not.toHaveBeenCalled();
+  });
+
   it('returns undefined when sharp cannot decode the source', async () => {
     sharpMocks.toBuffer.mockRejectedValue(new Error('unsupported image format'));
 
@@ -64,6 +74,7 @@ describe('prepareAttachmentsForBudget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    sharpMocks.metadata.mockResolvedValue({ pages: 1 });
   });
 
   it('passes attachments within budget through untouched', async () => {
