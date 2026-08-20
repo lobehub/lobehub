@@ -1007,6 +1007,66 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('resetMemoryExtractStatus', () => {
+    it('resets completed topics back to pending and clears the run state', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'mem-reset-done',
+          metadata: {
+            userMemoryExtractRunState: {
+              lastRunAt: '2026-08-19T01:00:00.000Z',
+              messageCount: 3,
+              processedMemoryCount: 2,
+            },
+            userMemoryExtractStatus: 'completed',
+          },
+          title: 'done',
+          userId,
+        },
+        { id: 'mem-reset-pending', title: 'pending', userId },
+      ]);
+
+      await topicModel.resetMemoryExtractStatus();
+
+      const done = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, 'mem-reset-done'),
+      });
+      expect(done?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(done?.metadata?.userMemoryExtractRunState).toEqual({});
+
+      const pending = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, 'mem-reset-pending'),
+      });
+      expect(pending?.metadata?.userMemoryExtractStatus).toBeUndefined();
+    });
+
+    it('does not touch topics owned by other users', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'mem-reset-mine',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'mine',
+          userId,
+        },
+        {
+          id: 'mem-reset-other',
+          metadata: { userMemoryExtractStatus: 'completed' },
+          title: 'other',
+          userId: otherUserId,
+        },
+      ]);
+
+      await topicModel.resetMemoryExtractStatus();
+
+      const [mine, other] = await Promise.all([
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-mine') }),
+        serverDB.query.topics.findFirst({ where: eq(topics.id, 'mem-reset-other') }),
+      ]);
+      expect(mine?.metadata?.userMemoryExtractStatus).toBe('pending');
+      expect(other?.metadata?.userMemoryExtractStatus).toBe('completed');
+    });
+  });
+
   describe('scheduled run', () => {
     const scheduledRun = {
       createdAt: '2026-07-12T00:00:00.000Z',

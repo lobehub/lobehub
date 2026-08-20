@@ -1897,6 +1897,26 @@ export class TopicModel {
     return result[0]?.total ?? 0;
   };
 
+  /**
+   * Resets the memory-extraction state of all the caller's topics back to
+   * `pending`, clearing any previous run summary. Used by "purge all
+   * memories": after memories are deleted, topics keep `userMemoryExtractStatus =
+   * 'completed'`, so `isTopicExtracted()` skips them forever and nothing can
+   * ever be re-extracted. Resetting to `pending` makes the next memory
+   * analysis re-process them. Fixes #18498.
+   */
+  resetMemoryExtractStatus = async () => {
+    return this.db
+      .update(topics)
+      .set({
+        metadata: sql`jsonb_set(
+          jsonb_set(${topics.metadata}, '{userMemoryExtractStatus}', to_jsonb('pending'::text), true),
+          '{userMemoryExtractRunState}', '{}'::jsonb, true
+        )`,
+      })
+      .where(this.mine());
+  };
+
   // **************** Scheduled run (backend cron) *************** //
 
   /**
