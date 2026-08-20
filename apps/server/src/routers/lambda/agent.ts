@@ -6,7 +6,10 @@ import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { assertAgentOwnershipTransferAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
+import {
+  assertAgentDeletionAllowed,
+  assertAgentOwnershipTransferAllowed,
+} from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import {
   prioritizeAgentTransferTopic,
   startAgentTransferJob,
@@ -785,7 +788,22 @@ export const agentRouter = router({
       }
       let result;
       try {
-        result = await ctx.agentModel.delete(input.agentId);
+        result = await ctx.serverDB.transaction(async (trx) => {
+          const transactionAgentModel = new AgentModel(
+            trx,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          );
+          if (await transactionAgentModel.existsById(input.agentId)) {
+            await assertAgentDeletionAllowed({
+              agentId: input.agentId,
+              executor: trx,
+              userId: ctx.userId,
+            });
+          }
+
+          return transactionAgentModel.delete(input.agentId);
+        });
       } catch (error) {
         if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
           throw new TRPCError({

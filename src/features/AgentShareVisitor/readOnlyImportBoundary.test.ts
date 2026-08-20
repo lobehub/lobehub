@@ -10,11 +10,20 @@ describe('shared-agent visitor import boundary', () => {
   it('keeps the owner composer graph out of the visitor entry path', () => {
     const visitorSource = readSource('VisitorConversation.tsx');
     const readOnlySource = readSource('ReadOnlyConversationArea.tsx');
+    const welcomeSource = readFileSync(
+      path.join(import.meta.dirname, '..', 'AgentHome', 'ReadOnly.tsx'),
+      'utf8',
+    );
 
     expect(visitorSource).not.toContain('AgentConversation/ConversationArea');
     expect(readOnlySource).not.toContain('AgentConversation/ConversationArea');
     expect(readOnlySource).not.toContain('MainChatInput');
     expect(readOnlySource).not.toContain('HeterogeneousChatInput');
     expect(readOnlySource).not.toContain('ComposerDraftReceiver');
+    expect(readOnlySource).toContain('AgentHome/ReadOnly');
+    expect(readOnlySource).not.toContain("from '@/features/AgentHome';");
+    expect(welcomeSource).not.toContain('OpeningQuestions');
+    expect(welcomeSource).not.toContain('ToolAuthAlert');
+    expect(welcomeSource).not.toContain('WelcomeExtraContext');
   });
 });

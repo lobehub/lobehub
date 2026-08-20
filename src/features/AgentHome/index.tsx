@@ -12,12 +12,7 @@ import AgentInfo from './AgentInfo';
 import OpeningQuestions from './OpeningQuestions';
 import { useWelcomeExtra } from './WelcomeExtraContext';
 
-interface AgentHomeProps {
-  /** Omits owner-only and interactive welcome content on view-only share surfaces. */
-  readOnly?: boolean;
-}
-
-const AgentHome = memo<AgentHomeProps>(({ readOnly = false }) => {
+const AgentHome = memo(() => {
   const openingQuestions = useAgentStore(agentSelectors.openingQuestions, isEqual);
   const extra = useWelcomeExtra();
 
@@ -26,11 +21,9 @@ const AgentHome = memo<AgentHomeProps>(({ readOnly = false }) => {
       <Flexbox flex={1} />
       <Flexbox gap={32} style={{ paddingBottom: 'max(4vh, 16px)' }} width={'100%'}>
         <AgentInfo />
-        {!readOnly && extra}
-        {!readOnly && openingQuestions.length > 0 && (
-          <OpeningQuestions questions={openingQuestions} />
-        )}
-        {!readOnly && <ToolAuthAlert />}
+        {extra}
+        {openingQuestions.length > 0 && <OpeningQuestions questions={openingQuestions} />}
+        <ToolAuthAlert />
       </Flexbox>
     </>
   );
