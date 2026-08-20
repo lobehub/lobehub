@@ -5,7 +5,12 @@ import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
-import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
+import {
+  DEFAULT_AGENT_CHAT_CONFIG,
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER,
+  DEFAULT_SYSTEM_AGENT_CONFIG,
+} from '@/const/settings';
 import { UserModel } from '@/database/models/user';
 import { agents, agentsToSessions, aiModels, aiProviders } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -42,8 +47,24 @@ export class ChatService extends BaseService {
 
     super(db, userId, workspaceId);
     this.config = {
-      defaultModel: 'gpt-3.5-turbo',
-      defaultProvider: 'openai',
+      /**
+       * The product's own defaults, not literals of this file's own.
+       *
+       * These were `gpt-3.5-turbo` / `openai`, which no caller could change:
+       * `ChatServiceConfig` is only reachable through the constructor and the
+       * controller never passes one, so a request that named no model always
+       * asked for OpenAI. Any deployment that does not run OpenAI — including
+       * the default one, whose `DEFAULT_PROVIDER` is `deepseek` — answered
+       * such a request with a credential error naming a provider the caller
+       * never mentioned.
+       *
+       * `DEFAULT_MODEL` / `DEFAULT_PROVIDER` are what `DEFAULT_AGENT_CONFIG`
+       * and the rest of the product already resolve to, so `/api/v1/chat`
+       * without a model now behaves like the rest of the product instead of
+       * disagreeing with it.
+       */
+      defaultModel: DEFAULT_MODEL,
+      defaultProvider: DEFAULT_PROVIDER,
       timeout: 30_000,
       ...serviceConfig,
     };
