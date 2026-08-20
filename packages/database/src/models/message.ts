@@ -3298,7 +3298,7 @@ export class MessageModel {
           // to it creates a dead branch that the conversation-flow renderer drops.
           sql`NOT (
             ${messages.role} = 'assistant'
-            AND COALESCE(BTRIM(${messages.content}), '') = ''
+            AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
             AND ${messages.reasoning} IS NULL
           )`,
@@ -3343,7 +3343,7 @@ export class MessageModel {
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
           sql`NOT (
             ${messages.role} = 'assistant'
-            AND COALESCE(BTRIM(${messages.content}), '') = ''
+            AND COALESCE(${messages.content}, '') !~ '[^[:space:]]'
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
             AND ${messages.reasoning} IS NULL
           )`,

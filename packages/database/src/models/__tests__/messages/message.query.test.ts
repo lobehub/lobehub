@@ -3327,6 +3327,17 @@ describe('MessageModel Query Tests', () => {
           content: '   ',
           createdAt: new Date('2023-01-01T00:00:02'),
         },
+        {
+          // Tabs and newlines, not spaces: one-argument BTRIM only strips spaces,
+          // so a predicate written that way keeps this row while the ledger's
+          // String.trim() calls it empty. The two sides have to agree.
+          id: 'ghost-ws',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '\n\t\r ',
+          createdAt: new Date('2023-01-01T00:00:03'),
+        },
       ]);
 
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe(
@@ -3475,6 +3486,14 @@ describe('MessageModel Query Tests', () => {
           role: 'assistant',
           content: '',
           createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          id: 'ghost-ws',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '\n\t\r ',
+          createdAt: new Date('2023-01-01T00:00:02'),
         },
       ]);
 
