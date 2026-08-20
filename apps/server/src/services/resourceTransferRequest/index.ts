@@ -194,6 +194,7 @@ export const executeAcceptedTransfer = async (params: {
       // transfer request is pending.
       await assertAgentOwnershipTransferAllowed({
         agentId: request.resourceId,
+        executor: trx,
         fromUserId,
         toUserId: recipientId,
       });

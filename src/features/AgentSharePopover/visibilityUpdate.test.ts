@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { commitAgentShareVisibility } from './visibilityUpdate';
+import { commitAgentShareVisibility, copyAgentShareLink } from './visibilityUpdate';
+
+describe('copyAgentShareLink', () => {
+  it('reports clipboard failures without rejecting the click handler', async () => {
+    await expect(
+      copyAgentShareLink(vi.fn().mockRejectedValue(new Error('clipboard denied'))),
+    ).resolves.toBe(false);
+  });
+});
 
 describe('commitAgentShareVisibility', () => {
   it('keeps the committed visibility result when copying the link fails', async () => {

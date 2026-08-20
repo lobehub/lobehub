@@ -6,6 +6,16 @@ interface CommitAgentShareVisibilityOptions {
   updateVisibility: () => Promise<unknown>;
 }
 
+/** Copy a share link without leaking clipboard rejection into an event handler. */
+export const copyAgentShareLink = async (copyLink: () => Promise<void>): Promise<boolean> => {
+  try {
+    await copyLink();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Commit visibility before attempting the convenience clipboard write.
  * Clipboard permission failures must not be reported as a failed visibility
@@ -19,10 +29,5 @@ export const commitAgentShareVisibility = async ({
   await updateVisibility();
   if (!shouldCopyLink) return 'updated';
 
-  try {
-    await copyLink();
-    return 'copied';
-  } catch {
-    return 'updated-copy-failed';
-  }
+  return (await copyAgentShareLink(copyLink)) ? 'copied' : 'updated-copy-failed';
 };

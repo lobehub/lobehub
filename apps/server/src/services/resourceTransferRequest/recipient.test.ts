@@ -139,6 +139,7 @@ describe('executeAcceptedTransfer recipient recheck', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(assertAgentOwnershipTransferAllowed).toHaveBeenCalledWith({
       agentId: 'agent-1',
+      executor: expect.anything(),
       fromUserId: 'owner-1',
       toUserId: 'recipient-1',
     });
