@@ -146,6 +146,40 @@ describe('AgentShareModel', () => {
       expect(readBack?.shareConfig).toEqual(config);
     });
 
+    it('maps legacy topic limits and preserves non-client-owned config fields on update', async () => {
+      await serverDB.insert(agentShares).values({
+        agentId,
+        shareConfig: {
+          guestEnabled: true,
+          maxGuestTopics: 12,
+          maxTurnsPerTopic: 30,
+          tipSplitRatio: 0.2,
+        } as unknown as AgentShareConfig,
+      });
+
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig).toMatchObject({
+        maxTopicsPerVisitor: 12,
+        maxTurnsPerTopic: 30,
+      });
+
+      await agentShareModel.updateConfig(agentId, {
+        maxTopicsPerVisitor: 12,
+        maxTurnsPerTopic: 40,
+      });
+
+      const [persisted] = await serverDB
+        .select({ shareConfig: agentShares.shareConfig })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId));
+      expect(persisted.shareConfig).toMatchObject({
+        guestEnabled: true,
+        maxGuestTopics: 12,
+        maxTopicsPerVisitor: 12,
+        maxTurnsPerTopic: 40,
+        tipSplitRatio: 0.2,
+      });
+    });
+
     it('updates visibility and deletes the share', async () => {
       const created = await agentShareModel.create(agentId);
 
