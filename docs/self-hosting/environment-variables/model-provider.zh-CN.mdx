@@ -721,6 +721,29 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`-`
 - 示例：`-all,+qwq-32b,+deepseek-r1`
 
+## Jalapeno Cloud 50%off
+
+### `JALAPENOCLOUD_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 [Jalapeno Cloud 50%off](https://www.jalapeno-cloud.ai) 申请的 API 密钥。
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `JALAPENOCLOUD_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
+- 默认值：`-`
+- 示例：`-all,+DeepSeek-V4-Pro`
+
+### `JALAPENOCLOUD_PROXY_URL`
+
+- 类型：可选
+- 描述：如果你手动配置了 Jalapeno Cloud 50%off 接口代理，可以使用此配置项来覆盖默认的 Jalapeno Cloud 50%off API 请求基础 URL
+- 默认值：`https://api.jalapeno-cloud.ai/v1`
+- 示例：`https://api.jalapeno-cloud.ai/v1`
+
 ## FAL
 
 ### `ENABLED_FAL`

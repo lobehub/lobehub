@@ -34,6 +34,7 @@ import { default as huggingface } from './huggingface';
 import { default as hunyuan } from './hunyuan';
 import { default as infiniai } from './infiniai';
 import { default as internlm } from './internlm';
+import { default as jalapenocloud } from './jalapenocloud';
 import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
@@ -144,6 +145,7 @@ const staticModelMap: ModelsMap = {
   hunyuan,
   infiniai,
   internlm,
+  jalapenocloud,
   jina,
   kimicodingplan,
   lmstudio,
@@ -260,6 +262,7 @@ export { default as huggingface } from './huggingface';
 export { default as hunyuan } from './hunyuan';
 export { default as infiniai } from './infiniai';
 export { default as internlm } from './internlm';
+export { default as jalapenocloud } from './jalapenocloud';
 export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';

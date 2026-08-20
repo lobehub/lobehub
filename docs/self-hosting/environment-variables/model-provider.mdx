@@ -663,6 +663,29 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `-`
 - Example: `-all,+qwq-32b,+deepseek-r1`
 
+## Jalapeno Cloud 50%off
+
+### `JALAPENOCLOUD_API_KEY`
+
+- Type: Required
+- Description: API key from [Jalapeno Cloud 50%off](https://www.jalapeno-cloud.ai)
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `JALAPENOCLOUD_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+DeepSeek-V4-Pro`
+
+### `JALAPENOCLOUD_PROXY_URL`
+
+- Type: Optional
+- Description: If you manually configure the Jalapeno Cloud 50%off interface proxy, you can use this configuration item to override the default Jalapeno Cloud 50%off API request base URL
+- Default: `https://api.jalapeno-cloud.ai/v1`
+- Example: `https://api.jalapeno-cloud.ai/v1`
+
 ## FAL
 
 ### `ENABLED_FAL`

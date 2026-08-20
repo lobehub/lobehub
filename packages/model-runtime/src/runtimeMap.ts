@@ -31,6 +31,7 @@ import { LobeHuggingFaceAI } from './providers/huggingface';
 import { LobeHunyuanAI } from './providers/hunyuan';
 import { LobeInfiniAI } from './providers/infiniai';
 import { LobeInternLMAI } from './providers/internlm';
+import { LobeJalapenoCloudAI } from './providers/jalapenocloud';
 import { LobeJinaAI } from './providers/jina';
 import { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 import { LobeLMStudioAI } from './providers/lmstudio';
@@ -116,6 +117,7 @@ export const providerRuntimeMap = {
   hunyuan: LobeHunyuanAI,
   infiniai: LobeInfiniAI,
   internlm: LobeInternLMAI,
+  jalapenocloud: LobeJalapenoCloudAI,
   jina: LobeJinaAI,
   kimicodingplan: LobeKimiCodingPlanAI,
   lmstudio: LobeLMStudioAI,

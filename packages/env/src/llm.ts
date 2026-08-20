@@ -255,6 +255,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTGROUP: z.boolean(),
       ANTGROUP_API_KEY: z.string().optional(),
+
+      ENABLED_JALAPENOCLOUD: z.boolean(),
+      JALAPENOCLOUD_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -509,6 +512,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTGROUP: !!process.env.ANTGROUP_API_KEY,
       ANTGROUP_API_KEY: process.env.ANTGROUP_API_KEY,
+
+      ENABLED_JALAPENOCLOUD: !!process.env.JALAPENOCLOUD_API_KEY,
+      JALAPENOCLOUD_API_KEY: process.env.JALAPENOCLOUD_API_KEY,
     },
   });
 };

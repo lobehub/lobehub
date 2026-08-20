@@ -34,6 +34,7 @@ import HuggingFaceProvider from './huggingface';
 import HunyuanProvider from './hunyuan';
 import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
+import JalapenoCloudProvider from './jalapenocloud';
 import JinaProvider from './jina';
 import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
@@ -227,6 +228,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   LongCatProvider,
   StreamLakeProvider,
   AntGroupProvider,
+  JalapenoCloudProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -278,6 +280,7 @@ export { default as HuggingFaceProviderCard } from './huggingface';
 export { default as HunyuanProviderCard } from './hunyuan';
 export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
+export { default as JalapenoCloudProviderCard } from './jalapenocloud';
 export { default as JinaProviderCard } from './jina';
 export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
