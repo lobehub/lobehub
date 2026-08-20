@@ -54,6 +54,19 @@ describe('useDebouncedLimitPatch', () => {
     expect(onCommit).toHaveBeenCalledWith({ maxTopicsPerVisitor: 12 });
   });
 
+  it('cancels a pending field when a later edit to that field is invalid', () => {
+    const onCommit = vi.fn();
+    const { result } = renderHook(() => useDebouncedLimitPatch(onCommit));
+
+    act(() => {
+      result.current('maxTopicsPerVisitor', 12);
+      result.current('maxTopicsPerVisitor', null);
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it('reports the exact patch when a debounced commit fails', async () => {
     const onCommit = vi.fn().mockRejectedValue(new Error('network down'));
     const onCommitError = vi.fn();

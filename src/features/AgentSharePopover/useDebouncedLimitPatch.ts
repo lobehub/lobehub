@@ -42,7 +42,17 @@ export const useDebouncedLimitPatch = (
 
   return useCallback(
     (field: AgentShareLimitField, value: number | null) => {
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) return;
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+        const nextPatch = { ...pendingPatchRef.current };
+        delete nextPatch[field];
+        pendingPatchRef.current = nextPatch;
+
+        if (Object.keys(nextPatch).length === 0 && timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        return;
+      }
 
       pendingPatchRef.current = { ...pendingPatchRef.current, [field]: value };
       if (timerRef.current) clearTimeout(timerRef.current);

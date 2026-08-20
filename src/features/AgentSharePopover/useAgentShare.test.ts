@@ -138,6 +138,51 @@ describe('useAgentShare', () => {
     });
   });
 
+  it('shares the config queue when settings remount during a pending write', async () => {
+    mocks.getShareStatus.mockResolvedValue(shareRow('agent-remount'));
+
+    let resolveFirst!: (value: ReturnType<typeof shareRow>) => void;
+    mocks.updateShareConfig
+      .mockImplementationOnce(
+        (agentId, config) =>
+          new Promise((resolve) => {
+            resolveFirst = () => resolve({ ...shareRow(agentId), shareConfig: config });
+          }),
+      )
+      .mockImplementationOnce(async (agentId, config) => ({
+        ...shareRow(agentId),
+        shareConfig: config,
+      }));
+
+    const firstMount = renderHook(() => useAgentShare('agent-remount', true));
+    await waitFor(() => expect(firstMount.result.current.shareInfo).toBeTruthy());
+
+    let first!: Promise<void>;
+    act(() => {
+      first = firstMount.result.current.updateConfig({ allowReadMemory: true })!;
+    });
+    await waitFor(() => expect(mocks.updateShareConfig).toHaveBeenCalledOnce());
+    firstMount.unmount();
+
+    const secondMount = renderHook(() => useAgentShare('agent-remount', true));
+    await waitFor(() => expect(secondMount.result.current.shareInfo).toBeTruthy());
+
+    let second!: Promise<void>;
+    act(() => {
+      second = secondMount.result.current.updateConfig({ maxTurnsPerTopic: 50 })!;
+    });
+
+    expect(mocks.updateShareConfig).toHaveBeenCalledOnce();
+    resolveFirst(shareRow('agent-remount'));
+    await act(async () => Promise.all([first, second]));
+
+    expect(mocks.updateShareConfig).toHaveBeenNthCalledWith(
+      2,
+      'agent-remount',
+      expect.objectContaining({ allowReadMemory: true, maxTurnsPerTopic: 50 }),
+    );
+  });
+
   it('resolves functional patches from the latest queued config', async () => {
     mocks.getShareStatus.mockResolvedValue(shareRow('agent-functional'));
     mocks.updateShareConfig.mockImplementation(async (agentId, config) => ({
