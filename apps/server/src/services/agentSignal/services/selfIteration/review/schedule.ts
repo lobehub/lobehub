@@ -19,6 +19,17 @@ const FALLBACK_TIMEZONE = 'UTC';
 const NIGHT_WINDOW_START_HOUR = 2;
 const NIGHT_WINDOW_END_HOUR_EXCLUSIVE = 4;
 
+/**
+ * How far back the candidate scan looks for user activity.
+ *
+ * A user is dispatched only if their local previous day had activity, and that day can start
+ * at most `NIGHT_WINDOW_END_HOUR_EXCLUSIVE + 24` hours before the cron instant. Rounding up
+ * keeps the floor a strict superset of every per-user window regardless of timezone.
+ */
+const ACTIVITY_LOOKBACK_HOURS = 30;
+
+const HOUR_IN_MS = 60 * 60 * 1000;
+
 /** Active agent target returned by the nightly review scheduler data boundary. */
 export interface NightlyReviewAgentTarget {
   /** Agent id that should receive one nightly review source event. */
@@ -45,6 +56,8 @@ export interface NightlyReviewScheduleCursor {
 
 /** Options for listing users during one nightly review dispatch pass. */
 export interface ListNightlyReviewEligibleUsersInput {
+  /** Activity floor below which a user cannot have anything to review. */
+  activeSince?: Date;
   /** Cursor returned by the previous scheduler page. */
   cursor?: NightlyReviewScheduleCursor;
   /** Maximum eligible users to return. */
@@ -89,6 +102,8 @@ export interface NightlyReviewScheduleAdapters {
 export interface ListNightlyReviewEligibleUsersPageOptions extends ListNightlyReviewEligibleUsersInput {
   /** Maximum eligible users returned by this page. */
   limit: number;
+  /** UTC instant shared by the whole pagination tree, used to narrow the candidate scan. */
+  requestedAt?: Date;
 }
 
 /** One cursor-paginated page of nightly review user candidates. */
@@ -147,6 +162,8 @@ export interface NightlyReviewScheduleService {
    * Expects:
    * - `limit` is a positive, externally bounded page size
    * - The adapter sorts users by `createdAt, id`
+   * - `requestedAt` narrows the scan to users with recent activity;
+   *   {@link dispatchNightlyReviewForUser} remains the only authority on the local window
    *
    * Returns:
    * - The current users and a next cursor only when the page is full
@@ -299,7 +316,18 @@ export const createSelfReviewScheduleService = (
         },
         async (span) => {
           try {
-            const users = await adapters.listEligibleUsers(options);
+            const users = await adapters.listEligibleUsers({
+              ...options,
+              // Without `requestedAt` the caller is a test or a legacy path; fall back to the
+              // unnarrowed scan rather than inventing a floor from wall-clock time.
+              ...(options.requestedAt
+                ? {
+                    activeSince: new Date(
+                      options.requestedAt.getTime() - ACTIVITY_LOOKBACK_HOURS * HOUR_IN_MS,
+                    ),
+                  }
+                : {}),
+            });
             const lastUser = users.at(-1);
             const nextCursor =
               users.length === options.limit && lastUser
@@ -361,6 +389,12 @@ export const createServerNightlyReviewScheduleService = (
         windowEnd,
         windowStart,
       }),
-    listEligibleUsers: (input) => model.listEligibleUsers(input),
+    listEligibleUsers: (input) =>
+      model.listEligibleUsers({
+        activeSince: input?.activeSince,
+        cursor: input?.cursor,
+        limit: input?.limit,
+        whitelist: input?.whitelist,
+      }),
   });
 };

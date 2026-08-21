@@ -126,6 +126,7 @@ export const paginateNightlyReviewUsers = async (
       return service.listEligibleUsersPage({
         cursor,
         limit: pageSize,
+        requestedAt: parseWorkflowDate(payload.requestedAt, 'Invalid nightly review requestedAt'),
         whitelist: payload.whitelist,
       });
     },
