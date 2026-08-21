@@ -15,6 +15,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { RECEIVED_REACTION_EMOJI, THINKING_REACTION_EMOJI, WORKING_REACTION_EMOJI } from '../const';
 import { stripMarkdown } from '../stripMarkdown';
 import {
   type BotPlatformRuntimeContext,
@@ -31,6 +32,20 @@ import { FeishuWSConnection } from './gateway';
 import { sendFeishuAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:feishu:client');
+
+/**
+ * Map the bot pipeline's status-emoji constants to Feishu reaction
+ * `emoji_type` identifiers (see 表情文案说明). Keyed by the same consts the
+ * bridge uses — an unknown status emoji surfaces as a skipped reaction (the
+ * API rejects invalid types with 231001) instead of a silent mismatch.
+ * Verified against the official 表情文案说明 table: 👀→Get (received),
+ * 🤔→THINKING, ⚡→OnIt (working on it).
+ */
+const FEISHU_EMOJI_TYPES: Record<string, string> = {
+  [RECEIVED_REACTION_EMOJI]: 'Get',
+  [THINKING_REACTION_EMOJI]: 'THINKING',
+  [WORKING_REACTION_EMOJI]: 'OnIt',
+};
 
 const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -84,7 +99,11 @@ function createMessenger(
       if (prevEmoji === nextEmoji) return;
       // No remove API upstream — we can only add. Step swaps therefore stack
       // emoji on the user's message. Final cleanup is a no-op.
-      if (nextEmoji) await api.addReaction(messageId, nextEmoji);
+      // Feishu reactions take an `emoji_type` identifier (Get, THINKING…),
+      // NOT the Unicode emoji other platforms use — map, and skip unknown
+      // ones (the API rejects invalid types with 231001).
+      const emojiType = FEISHU_EMOJI_TYPES[nextEmoji!];
+      if (emojiType) await api.addReaction(messageId, emojiType);
     },
   };
 }
