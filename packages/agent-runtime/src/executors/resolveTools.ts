@@ -155,9 +155,8 @@ export const resolveAbortedTools =
 
     const newState = structuredClone(state);
 
-    // `payload.existingToolMessageIds` is no longer forwarded: the settle finds
-    // the row itself, for every source rather than the one the planner knew about.
     const { messages } = await settleAbortedToolRows({
+      existingToolMessageIds: payload.existingToolMessageIds,
       host,
       parentMessageId: payload.parentMessageId,
       state,

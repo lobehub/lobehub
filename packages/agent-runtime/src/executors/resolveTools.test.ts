@@ -232,13 +232,14 @@ describe('resolveTools executors', () => {
     const updateToolIntervention = vi.fn().mockResolvedValue(undefined);
     host.transports.messages.updateToolMessage = updateToolMessage;
     host.transports.messages.updateToolIntervention = updateToolIntervention;
-    // The pause wrote this row before parking; the settle discovers it rather
-    // than being handed the id.
+    // A single approval resume uses the pending row itself as parentMessageId,
+    // while the row's real parent remains the assistant that requested it.
     toolRows.set('tool-call-1', { id: 'pending-msg-1', parentId: 'assistant-msg-1' });
 
     const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
       payload: {
-        parentMessageId: 'assistant-msg-1',
+        existingToolMessageIds: { 'tool-call-1': 'pending-msg-1' },
+        parentMessageId: 'pending-msg-1',
         toolsCalling: [createToolCall('tool-call-1'), createToolCall('tool-call-2')],
       },
       type: 'resolve_aborted_tools',
@@ -250,6 +251,8 @@ describe('resolveTools executors', () => {
       content: 'Tool execution was aborted by user.',
     });
     expect(updateToolIntervention).toHaveBeenCalledWith('pending-msg-1', { status: 'aborted' });
+    expect(findToolMessageIdByToolCallId).toHaveBeenCalledTimes(1);
+    expect(findToolMessageIdByToolCallId).toHaveBeenCalledWith('tool-call-2', 'pending-msg-1');
 
     // The call with no existing row still gets one created — mixed batches are
     // resolved per call, not all-or-nothing.

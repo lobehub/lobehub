@@ -1174,7 +1174,7 @@ export class AgentRuntimeService {
           forcedFinish: Boolean(forcedFinishState),
           stateStatus: currentState.status,
         }));
-        const stepResult = forcedFinishState
+        let stepResult = forcedFinishState
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
           : await runtime.step(currentState, currentContext);
 
@@ -1200,6 +1200,24 @@ export class AgentRuntimeService {
           interrupted: latestState?.status === 'interrupted',
         }));
         if (latestState?.status === 'interrupted') {
+          // Stop can be persisted after a client-tool executor's last local
+          // signal check but before this reconciliation read. If that executor
+          // just returned a parked state, run the agent's existing abort path
+          // once so every pending tool call gets a terminal row before the
+          // interrupted state is saved.
+          if (
+            stepResult.newState.status === 'waiting_for_async_tool' &&
+            stepResult.newState.pendingToolsCalling?.length
+          ) {
+            const interruptedState = structuredClone(stepResult.newState);
+            interruptedState.status = 'interrupted';
+            const abortResult = await runtime.step(interruptedState, currentContext);
+            stepResult = {
+              ...abortResult,
+              events: [...stepResult.events, ...abortResult.events],
+            };
+          }
+
           stepResult.newState.status = 'interrupted';
           stepResult.newState.lastModified = new Date().toISOString();
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);

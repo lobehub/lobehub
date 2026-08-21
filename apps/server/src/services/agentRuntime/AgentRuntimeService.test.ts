@@ -910,6 +910,61 @@ describe('AgentRuntimeService', () => {
         }),
       );
     });
+
+    it('should resolve pending client tools when interruption races the parked result', async () => {
+      const pendingTool = {
+        apiName: 'search',
+        arguments: '{}',
+        id: 'client-tool-call',
+        identifier: 'client-tool',
+        type: 'default' as const,
+      };
+      const parkedResult = {
+        events: [{ type: 'interrupted' as const }],
+        newState: {
+          ...mockState,
+          pendingToolsCalling: [pendingTool],
+          status: 'waiting_for_async_tool' as const,
+          stepCount: 2,
+        },
+        nextContext: undefined,
+      };
+      const resolvedResult = {
+        events: [{ type: 'done' as const }],
+        newState: {
+          ...parkedResult.newState,
+          messages: [
+            {
+              content: 'Tool execution was aborted by user.',
+              role: 'tool' as const,
+              tool_call_id: pendingTool.id,
+            },
+          ],
+          status: 'done' as const,
+        },
+      };
+      const mockRuntime = {
+        step: vi.fn().mockResolvedValueOnce(parkedResult).mockResolvedValueOnce(resolvedResult),
+      };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+      mockCoordinator.loadAgentState
+        .mockResolvedValueOnce(mockState)
+        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result.state).toEqual(
+        expect.objectContaining({
+          messages: [expect.objectContaining({ tool_call_id: pendingTool.id })],
+          status: 'interrupted',
+        }),
+      );
+      expect(mockRuntime.step).toHaveBeenCalledTimes(2);
+      expect(mockRuntime.step).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'interrupted' }),
+        mockParams.context,
+      );
+    });
   });
 
   describe('executeStep - tool result extraction', () => {
