@@ -9,6 +9,8 @@ import {
   resolveServerModel,
 } from '@/server/modules/ModelRuntime';
 
+import type { BaseStreamEvent } from '../types/responses.type';
+
 export const SERVER_DEFAULT_MODEL_ALIAS = 'lobehub-default';
 
 const textFromParts = (content: unknown): string => {
@@ -266,7 +268,9 @@ const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.str
 
 export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
   const messageId = `msg_${randomUUID().replaceAll('-', '')}`;
+  let finalized = false;
   let nextIndex = 0;
+  let stopReason: string | undefined;
   let textIndex: number | undefined;
   let thinkingIndex: number | undefined;
   let usage = { input_tokens: 0, output_tokens: 0 };
@@ -278,6 +282,31 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
     }
     textIndex = undefined;
     thinkingIndex = undefined;
+  };
+  const finalize = (controller: TransformStreamDefaultController<string>) => {
+    if (finalized) return;
+    finalized = true;
+    closeTextBlocks(controller);
+    for (const { blockIndex } of tools.values()) {
+      controller.enqueue(
+        sse('content_block_stop', { index: blockIndex, type: 'content_block_stop' }),
+      );
+    }
+    controller.enqueue(
+      sse('message_delta', {
+        delta: {
+          stop_reason: tools.size
+            ? 'tool_use'
+            : stopReason === 'max_tokens'
+              ? 'max_tokens'
+              : 'end_turn',
+          stop_sequence: null,
+        },
+        type: 'message_delta',
+        usage: { output_tokens: usage.output_tokens },
+      }),
+    );
+    controller.enqueue(sse('message_stop', { type: 'message_stop' }));
   };
   return parseProtocolStream(source)
     .pipeThrough(
@@ -299,6 +328,7 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
           );
         },
         transform(event, controller) {
+          if (finalized) return;
           if (event.type === 'text' || event.type === 'reasoning') {
             const isThinking = event.type === 'reasoning';
             let index = isThinking ? thinkingIndex : textIndex;
@@ -369,36 +399,11 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
               input_tokens: Number(event.data.totalInputTokens || 0),
               output_tokens: Number(event.data.totalOutputTokens || 0),
             };
-            controller.enqueue(
-              sse('message_delta', {
-                delta: {},
-                type: 'message_delta',
-                usage,
-              }),
-            );
           } else if (event.type === 'stop') {
-            closeTextBlocks(controller);
-            for (const { blockIndex } of tools.values()) {
-              controller.enqueue(
-                sse('content_block_stop', { index: blockIndex, type: 'content_block_stop' }),
-              );
-            }
-            controller.enqueue(
-              sse('message_delta', {
-                delta: {
-                  stop_reason: tools.size
-                    ? 'tool_use'
-                    : event.data === 'max_tokens'
-                      ? 'max_tokens'
-                      : 'end_turn',
-                  stop_sequence: null,
-                },
-                type: 'message_delta',
-                usage: { output_tokens: usage.output_tokens },
-              }),
-            );
-            controller.enqueue(sse('message_stop', { type: 'message_stop' }));
+            const reason = typeof event.data === 'string' ? event.data : undefined;
+            if (!stopReason && reason && reason !== 'message_stop') stopReason = reason;
           } else if (event.type === 'error') {
+            finalized = true;
             controller.enqueue(
               sse('error', {
                 error: {
@@ -412,6 +417,9 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
             );
           }
         },
+        flush(controller) {
+          finalize(controller);
+        },
       }),
     )
     .pipeThrough(new TextEncoderStream());
@@ -419,10 +427,13 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
 
 export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
   const responseId = `resp_${randomUUID().replaceAll('-', '')}`;
+  let finalized = false;
   let nextOutputIndex = 0;
   const outputItems: unknown[] = [];
   let reasoningOutputIndex: number | undefined;
   let reasoningText = '';
+  let sequenceNumber = 0;
+  let stopReason: unknown;
   let textOutputIndex: number | undefined;
   let outputText = '';
   let usage: { input_tokens: number; output_tokens: number; total_tokens: number } | undefined;
@@ -441,19 +452,137 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
     output: [],
     status: 'in_progress',
   };
+  const responseSse = (
+    event: BaseStreamEvent['type'],
+    data: Omit<BaseStreamEvent, 'sequence_number'> & Record<string, unknown>,
+  ) => {
+    const sequencedData = {
+      ...data,
+      sequence_number: sequenceNumber++,
+    } satisfies BaseStreamEvent;
+    return sse(event, sequencedData);
+  };
+  const finalize = (controller: TransformStreamDefaultController<string>) => {
+    if (finalized) return;
+    finalized = true;
+    if (reasoningOutputIndex !== undefined) {
+      const item = {
+        id: `rs_${responseId}`,
+        status: 'completed',
+        summary: [{ text: reasoningText, type: 'summary_text' }],
+        type: 'reasoning',
+      };
+      outputItems[reasoningOutputIndex] = item;
+      controller.enqueue(
+        responseSse('response.reasoning_summary_text.done', {
+          item_id: `rs_${responseId}`,
+          output_index: reasoningOutputIndex,
+          summary_index: 0,
+          text: reasoningText,
+          type: 'response.reasoning_summary_text.done',
+        }),
+      );
+      controller.enqueue(
+        responseSse('response.output_item.done', {
+          item,
+          output_index: reasoningOutputIndex,
+          type: 'response.output_item.done',
+        }),
+      );
+    }
+    if (textOutputIndex !== undefined) {
+      const item = {
+        content: [{ annotations: [], text: outputText, type: 'output_text' }],
+        id: `msg_${responseId}`,
+        role: 'assistant',
+        status: 'completed',
+        type: 'message',
+      };
+      outputItems[textOutputIndex] = item;
+      controller.enqueue(
+        responseSse('response.output_text.done', {
+          content_index: 0,
+          item_id: `msg_${responseId}`,
+          output_index: textOutputIndex,
+          text: outputText,
+          type: 'response.output_text.done',
+        }),
+      );
+      controller.enqueue(
+        responseSse('response.content_part.done', {
+          content_index: 0,
+          item_id: `msg_${responseId}`,
+          output_index: textOutputIndex,
+          part: { annotations: [], text: outputText, type: 'output_text' },
+          type: 'response.content_part.done',
+        }),
+      );
+      controller.enqueue(
+        responseSse('response.output_item.done', {
+          item,
+          output_index: textOutputIndex,
+          type: 'response.output_item.done',
+        }),
+      );
+    }
+    for (const tool of toolItems.values()) {
+      const item = {
+        arguments: tool.arguments,
+        call_id: tool.callId,
+        id: tool.id,
+        name: tool.name,
+        status: 'completed',
+        type: 'function_call',
+      };
+      outputItems[tool.outputIndex] = item;
+      controller.enqueue(
+        responseSse('response.function_call_arguments.done', {
+          arguments: tool.arguments,
+          item_id: tool.id,
+          output_index: tool.outputIndex,
+          type: 'response.function_call_arguments.done',
+        }),
+      );
+      controller.enqueue(
+        responseSse('response.output_item.done', {
+          item,
+          output_index: tool.outputIndex,
+          type: 'response.output_item.done',
+        }),
+      );
+    }
+    const incomplete = stopReason === 'max_tokens';
+    const type = incomplete ? 'response.incomplete' : 'response.completed';
+    controller.enqueue(
+      responseSse(type, {
+        response: {
+          ...response,
+          incomplete_details: incomplete ? { reason: 'max_output_tokens' } : null,
+          output: outputItems.filter(Boolean),
+          status: incomplete ? 'incomplete' : 'completed',
+          usage,
+        },
+        type,
+      }),
+    );
+    controller.enqueue('data: [DONE]\n\n');
+  };
   return parseProtocolStream(source)
     .pipeThrough(
       new TransformStream<ProtocolEvent, string>({
         start(controller) {
-          controller.enqueue(sse('response.created', { response, type: 'response.created' }));
+          controller.enqueue(
+            responseSse('response.created', { response, type: 'response.created' }),
+          );
         },
         transform(event, controller) {
+          if (finalized) return;
           if (event.type === 'text') {
             outputText += String(event.data);
             if (textOutputIndex === undefined) {
               textOutputIndex = nextOutputIndex++;
               controller.enqueue(
-                sse('response.output_item.added', {
+                responseSse('response.output_item.added', {
                   item: {
                     content: [],
                     id: `msg_${responseId}`,
@@ -466,7 +595,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
                 }),
               );
               controller.enqueue(
-                sse('response.content_part.added', {
+                responseSse('response.content_part.added', {
                   content_index: 0,
                   item_id: `msg_${responseId}`,
                   output_index: textOutputIndex,
@@ -476,7 +605,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
               );
             }
             controller.enqueue(
-              sse('response.output_text.delta', {
+              responseSse('response.output_text.delta', {
                 content_index: 0,
                 delta: String(event.data),
                 item_id: `msg_${responseId}`,
@@ -489,7 +618,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
             if (reasoningOutputIndex === undefined) {
               reasoningOutputIndex = nextOutputIndex++;
               controller.enqueue(
-                sse('response.output_item.added', {
+                responseSse('response.output_item.added', {
                   item: {
                     id: `rs_${responseId}`,
                     status: 'in_progress',
@@ -502,7 +631,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
               );
             }
             controller.enqueue(
-              sse('response.reasoning_summary_text.delta', {
+              responseSse('response.reasoning_summary_text.delta', {
                 delta: String(event.data),
                 item_id: `rs_${responseId}`,
                 output_index: reasoningOutputIndex,
@@ -515,14 +644,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
             const item = isRecord(event.data) ? { ...event.data, status: 'completed' } : event.data;
             outputItems[outputIndex] = item;
             controller.enqueue(
-              sse('response.output_item.added', {
+              responseSse('response.output_item.added', {
                 item: isRecord(event.data) ? { ...event.data, status: 'in_progress' } : event.data,
                 output_index: outputIndex,
                 type: 'response.output_item.added',
               }),
             );
             controller.enqueue(
-              sse('response.output_item.done', {
+              responseSse('response.output_item.done', {
                 item,
                 output_index: outputIndex,
                 type: 'response.output_item.done',
@@ -543,7 +672,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
                 };
                 toolItems.set(chunk.index, tool);
                 controller.enqueue(
-                  sse('response.output_item.added', {
+                  responseSse('response.output_item.added', {
                     item: {
                       arguments: '',
                       call_id: tool.callId,
@@ -560,7 +689,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
               if (typeof fn.arguments === 'string') {
                 tool.arguments += fn.arguments;
                 controller.enqueue(
-                  sse('response.function_call_arguments.delta', {
+                  responseSse('response.function_call_arguments.delta', {
                     delta: fn.arguments,
                     item_id: tool.id,
                     output_index: tool.outputIndex,
@@ -578,112 +707,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
               total_tokens: inputTokens + outputTokens,
             };
           } else if (event.type === 'stop') {
-            if (reasoningOutputIndex !== undefined) {
-              const item = {
-                id: `rs_${responseId}`,
-                status: 'completed',
-                summary: [{ text: reasoningText, type: 'summary_text' }],
-                type: 'reasoning',
-              };
-              outputItems[reasoningOutputIndex] = item;
-              controller.enqueue(
-                sse('response.reasoning_summary_text.done', {
-                  item_id: `rs_${responseId}`,
-                  output_index: reasoningOutputIndex,
-                  summary_index: 0,
-                  text: reasoningText,
-                  type: 'response.reasoning_summary_text.done',
-                }),
-              );
-              controller.enqueue(
-                sse('response.output_item.done', {
-                  item,
-                  output_index: reasoningOutputIndex,
-                  type: 'response.output_item.done',
-                }),
-              );
-            }
-            if (textOutputIndex !== undefined) {
-              const item = {
-                content: [{ annotations: [], text: outputText, type: 'output_text' }],
-                id: `msg_${responseId}`,
-                role: 'assistant',
-                status: 'completed',
-                type: 'message',
-              };
-              outputItems[textOutputIndex] = item;
-              controller.enqueue(
-                sse('response.output_text.done', {
-                  content_index: 0,
-                  item_id: `msg_${responseId}`,
-                  output_index: textOutputIndex,
-                  text: outputText,
-                  type: 'response.output_text.done',
-                }),
-              );
-              controller.enqueue(
-                sse('response.content_part.done', {
-                  content_index: 0,
-                  item_id: `msg_${responseId}`,
-                  output_index: textOutputIndex,
-                  part: { annotations: [], text: outputText, type: 'output_text' },
-                  type: 'response.content_part.done',
-                }),
-              );
-              controller.enqueue(
-                sse('response.output_item.done', {
-                  item,
-                  output_index: textOutputIndex,
-                  type: 'response.output_item.done',
-                }),
-              );
-            }
-            for (const tool of toolItems.values()) {
-              const item = {
-                arguments: tool.arguments,
-                call_id: tool.callId,
-                id: tool.id,
-                name: tool.name,
-                status: 'completed',
-                type: 'function_call',
-              };
-              outputItems[tool.outputIndex] = item;
-              controller.enqueue(
-                sse('response.function_call_arguments.done', {
-                  arguments: tool.arguments,
-                  item_id: tool.id,
-                  output_index: tool.outputIndex,
-                  type: 'response.function_call_arguments.done',
-                }),
-              );
-              controller.enqueue(
-                sse('response.output_item.done', {
-                  item,
-                  output_index: tool.outputIndex,
-                  type: 'response.output_item.done',
-                }),
-              );
-            }
-            const incomplete = event.data === 'max_tokens';
-            controller.enqueue(
-              sse(incomplete ? 'response.incomplete' : 'response.completed', {
-                response: {
-                  ...response,
-                  incomplete_details: incomplete ? { reason: 'max_output_tokens' } : null,
-                  output: outputItems.filter(Boolean),
-                  status: incomplete ? 'incomplete' : 'completed',
-                  usage,
-                },
-                type: incomplete ? 'response.incomplete' : 'response.completed',
-              }),
-            );
-            controller.enqueue('data: [DONE]\n\n');
+            if (stopReason === undefined && event.data) stopReason = event.data;
           } else if (event.type === 'error') {
             const message = isRecord(event.data)
               ? String(event.data.message || 'Model request failed')
               : String(event.data);
+            finalized = true;
             controller.enqueue(
-              sse('response.failed', {
+              responseSse('response.failed', {
                 response: {
                   ...response,
                   error: { code: 'server_error', message },
@@ -695,6 +726,9 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
             );
             controller.enqueue('data: [DONE]\n\n');
           }
+        },
+        flush(controller) {
+          finalize(controller);
         },
       }),
     )

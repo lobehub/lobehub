@@ -28,6 +28,17 @@ const protocolStream = (events: Array<{ data: unknown; type: string }>) => {
 
 const readText = async (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
 
+const parseSseEvents = (output: string) =>
+  output
+    .split('\n\n')
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split('\n');
+      const data = lines.find((line) => line.startsWith('data: '))?.slice(6);
+      const type = lines.find((line) => line.startsWith('event: '))?.slice(7);
+      return { data: data === '[DONE]' ? data : JSON.parse(data || 'null'), type };
+    });
+
 describe('heterogeneous direct invocation protocol', () => {
   it('normalizes Anthropic images, tool calls, and tool results', () => {
     const payload = normalizeAnthropicRequest(
@@ -164,41 +175,85 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(output).toContain('"stop_reason":"tool_use"');
   });
 
-  it('preserves Anthropic terminal cumulative usage', async () => {
+  it('finalizes Anthropic stop, usage, and message_stop exactly once', async () => {
     const output = await readText(
       encodeAnthropicStream(
         protocolStream([
+          { data: 'hello', type: 'text' },
+          { data: 'end_turn', type: 'stop' },
           { data: { totalInputTokens: 7, totalOutputTokens: 4 }, type: 'usage' },
-          { data: 'stop', type: 'stop' },
+          { data: 'message_stop', type: 'stop' },
         ]),
       ),
     );
 
-    const messageDeltas = [...output.matchAll(/event: message_delta\ndata: ([^\n]+)/g)].map(
-      (match) => JSON.parse(match[1]),
-    );
-    expect(messageDeltas.at(-1).usage).toEqual({ output_tokens: 4 });
+    const events = parseSseEvents(output);
+    expect(events.slice(-3).map(({ type }) => type)).toEqual([
+      'content_block_stop',
+      'message_delta',
+      'message_stop',
+    ]);
+    expect(events.filter(({ type }) => type === 'content_block_stop')).toHaveLength(1);
+    expect(events.filter(({ type }) => type === 'message_delta')).toHaveLength(1);
+    expect(events.filter(({ type }) => type === 'message_stop')).toHaveLength(1);
+    expect(events.at(-2)?.data).toMatchObject({
+      delta: { stop_reason: 'end_turn' },
+      usage: { output_tokens: 4 },
+    });
   });
 
-  it('encodes Responses text, usage, and terminal events', async () => {
-    const output = await readText(
-      encodeResponsesStream(
-        protocolStream([
-          { data: 'hello', type: 'text' },
-          { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
-          { data: 'stop', type: 'stop' },
-        ]),
-      ),
+  it.each([
+    {
+      events: [
+        { data: 'hello', type: 'text' },
+        { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+      ],
+      name: 'usage without stop',
+    },
+    {
+      events: [
+        { data: 'hello', type: 'text' },
+        { data: 'stop', type: 'stop' },
+        { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+      ],
+      name: 'stop before usage',
+    },
+    {
+      events: [
+        { data: 'hello', type: 'text' },
+        { data: 'end_turn', type: 'stop' },
+        { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+        { data: 'message_stop', type: 'stop' },
+      ],
+      name: 'duplicate stop sentinels',
+    },
+  ])('finalizes Responses $name exactly once', async ({ events: protocolEvents }) => {
+    const output = await readText(encodeResponsesStream(protocolStream(protocolEvents)));
+    const events = parseSseEvents(output);
+    const nativeEvents = events.filter(({ type }) => type);
+    const terminalEvents = nativeEvents.filter(({ type }) =>
+      ['response.completed', 'response.failed', 'response.incomplete'].includes(type!),
     );
 
     expect(output).toContain('event: response.output_text.delta');
     expect(output).toContain('event: response.content_part.done');
     expect(output).toContain('event: response.output_item.done');
-    expect(output).toContain('"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}');
     expect(output).not.toContain('totalInputTokens');
-    expect(output).toContain('event: response.completed');
     expect(output).toContain('"output":[{"content":[{"annotations":[],"text":"hello"');
-    expect(output).toContain('data: [DONE]');
+    expect(terminalEvents).toHaveLength(1);
+    expect(terminalEvents[0]).toMatchObject({
+      data: {
+        response: { usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 } },
+        type: 'response.completed',
+      },
+      type: 'response.completed',
+    });
+    expect(nativeEvents.map(({ data }) => data.sequence_number)).toEqual(
+      nativeEvents.map((_, index) => index),
+    );
+    expect(events.slice(events.indexOf(terminalEvents[0]) + 1)).toEqual([
+      { data: '[DONE]', type: undefined },
+    ]);
   });
 
   it('encodes Responses incomplete and failed terminal lifecycle events', async () => {
@@ -223,6 +278,8 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(failed).toContain('event: response.failed');
     expect(failed).toContain('"error":{"code":"server_error","message":"provider unavailable"}');
     expect(failed).toContain('data: [DONE]');
+    const failedEvents = parseSseEvents(failed).filter(({ type }) => type);
+    expect(failedEvents.map(({ data }) => data.sequence_number)).toEqual([0, 1]);
   });
 
   it('assigns distinct Responses output indexes to reasoning, text, and tools', async () => {
