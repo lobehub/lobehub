@@ -5,9 +5,10 @@ import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
+import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 import { BaseService } from '../common/base.service';
-import { retainAgentPermissionPolicies } from '../helpers/agent-policy-keys';
+import { resolveClearedAgencyConfig } from '../helpers/agent-policy-keys';
 import { mergeJsonPatch } from '../helpers/json-patch';
 import { processPaginationConditions } from '../helpers/pagination';
 import {
@@ -164,17 +165,26 @@ export class AgentService extends BaseService {
           // written elsewhere — so replacing the object would silently delete
           // every one of them, including the topic-share policy that keeps a
           // restricted agent's conversations from being published.
-          // An explicit `null` still clears the column, exactly as before: that
-          // is a caller deliberately asking for it, unlike a partial edit that
-          // simply has no way to name the other keys. The member permission
-          // policies survive that clear regardless — this endpoint authorizes
-          // on `AGENT_UPDATE`, which workspace Admins hold for everyone's
-          // agents, while writing those keys is reserved to the agent's creator
-          // and the workspace primary owner. Clearing what the schema cannot
-          // even express would be a way around that gate.
+          //
+          // An explicit `null` still clears the column, as it always did. What
+          // survives that clear depends on authority: this endpoint authorizes
+          // on `AGENT_UPDATE`, which workspace Admins hold for *everyone's*
+          // agents, while the policy keys are the agent creator's and the
+          // workspace primary owner's alone — the same gate `updateAgentConfig`
+          // applies. Without this an Admin could reset a `restricted` policy by
+          // clearing a column whose policy keys the schema cannot even express.
+          const canWritePolicies =
+            existingAgent.userId === this.userId ||
+            (!!existingAgent.workspaceId &&
+              (await isWorkspacePrimaryOwner({
+                db: tx,
+                userId: this.userId,
+                workspaceId: existingAgent.workspaceId,
+              })));
+
           updateData.agencyConfig =
             request.agencyConfig === null
-              ? retainAgentPermissionPolicies(existingAgent.agencyConfig)
+              ? resolveClearedAgencyConfig(existingAgent.agencyConfig, canWritePolicies)
               : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
         }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
