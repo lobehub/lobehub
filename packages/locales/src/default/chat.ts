@@ -767,9 +767,9 @@ export default {
   'messages.tokenDetails.outputText': 'Text Output',
   'messages.tokenDetails.outputTitle': 'Output Details',
   'messages.tokenDetails.reasoning': 'Deep Thinking',
-  'messages.tokenDetails.speed.tps.title': 'TPS',
+  'messages.tokenDetails.speed.tps.title': 'tok/s',
   'messages.tokenDetails.speed.tps.tooltip':
-    'Tokens Per Second (TPS). This indicates the average speed of AI-generated content (Tokens/second), calculated from the moment the first Token is received.',
+    'Tokens Per Second (tok/s). This indicates the average speed of AI-generated content (Tokens/second), calculated from the moment the first Token is received.',
   'messages.tokenDetails.speed.ttft.title': 'TTFT',
   'messages.tokenDetails.speed.ttft.tooltip':
     'Time To First Token (TTFT). This refers to the time interval from when you send a message to when the client receives the first Token.',

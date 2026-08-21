@@ -92,7 +92,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       justify={'space-between'}
     >
       {/* The speed describes how this model ran, so it sits with the model name
-          rather than in the token/cost cluster. A spelled-out "TPS" unit rather
+          rather than in the token/cost cluster. A spelled-out "tok/s" unit rather
           than an icon: at 12px a gauge glyph is indistinguishable from the
           neighbouring coin, so the reader can't tell what the number measures.
           TTFT rides in the hover instead of taking a second inline slot — it's a
