@@ -6,6 +6,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
+  buildAttachmentFallbackLine,
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
@@ -45,7 +46,23 @@ export type WechatPushStatus =
   /** Redis (window state) is unavailable — cannot deliver or queue. */
   | 'unavailable';
 
+/**
+ * Why a push ended up `queued`. The client picks its toast off this — telling
+ * a user whose window is visibly open that "the send window is closed" reads
+ * as a bug (and was reported as one), so the three queue paths are kept
+ * distinguishable.
+ */
+export type WechatPushQueueReason =
+  /** No open send window — the classic "message the bot to receive it" case. */
+  | 'window_closed'
+  /** Window open but not enough sends left for this delivery. */
+  | 'quota_exhausted'
+  /** Delivery was attempted and partially failed; the rest is queued for retry. */
+  | 'send_failed';
+
 export interface WechatPushResult {
+  /** Set when `status` is `queued` — why delivery had to wait. */
+  reason?: WechatPushQueueReason;
   /** Remaining locally tracked sends after delivery (only for `sent`). */
   remaining?: number;
   status: WechatPushStatus;
@@ -197,13 +214,45 @@ const deliver = async (
   }
   progress.undeliveredAttachments = failedOriginals;
 
-  // A reported upload failure is retried on the next inbound message rather
-  // than dropped — the same rule the link leg follows, so an attachment is
-  // never silently lost just because a *different* leg happened to succeed.
-  // Bounded by the queue's own 72h TTL and size cap, so a permanently
-  // unsendable attachment cannot retry forever.
-  if (failedOriginals.length > 0)
-    throw new Error(`${failedOriginals.length} WeChat attachment(s) failed to send`);
+  // An attachment can pass the byte budget yet still be unsendable through
+  // iLink (observed: an ~11MB MP4 where every upload attempt fails). Blindly
+  // requeueing such an attachment retries it on every inbound message and it
+  // NEVER reaches the user — not even as a link — until the 72h queue TTL
+  // silently drops it. So degrade upload failures with a `fetchUrl` to a
+  // download-link message right now, exactly what the budget pass would have
+  // produced had it known the platform would refuse the file. The extra link
+  // sends are not pre-reserved against the window quota; the quota is
+  // best-effort bookkeeping (WeChat enforces the real limit) and undercounting
+  // here beats losing the attachment.
+  if (failedOriginals.length > 0) {
+    const linkable = failedOriginals.filter((attachment) => attachment.fetchUrl);
+    const unlinkable = failedOriginals.filter((attachment) => !attachment.fetchUrl);
+
+    if (linkable.length > 0) {
+      const rescueMessages = splitFallbackMessages(
+        linkable.map((attachment) => buildAttachmentFallbackLine(attachment, attachment.fetchUrl!)),
+        PLATFORM_ATTACHMENT_BUDGETS.wechat.textMaxChars,
+      );
+      try {
+        for (const message of rescueMessages) {
+          await api.sendMessage(platformUserId, message, token);
+        }
+        progress.undeliveredAttachments = unlinkable;
+      } catch (error) {
+        // The rescue leg itself failed — keep the linkable originals owed so
+        // the replay path can try the degrade again (bounded by the queue TTL).
+        log('deliver: link fallback for failed uploads also failed: %O', error);
+      }
+    }
+
+    // Only attachments with no smaller representation left (no fetchUrl, or a
+    // failed rescue leg) are retried on the next inbound message — the queue's
+    // 72h TTL and size cap bound the retries.
+    if (progress.undeliveredAttachments.length > 0)
+      throw new Error(
+        `${progress.undeliveredAttachments.length} WeChat attachment(s) failed to send`,
+      );
+  }
 };
 
 export interface WechatPushWindowStatus {
@@ -296,8 +345,20 @@ export const sendProactiveWechatMessage = async (params: {
   if (!window || window.remaining <= 0) {
     await enqueuePendingPush(redis, target.applicationId, target.platformUserId, payload);
     log('sendProactiveWechatMessage: window closed for user %s — queued', target.platformUserId);
-    return { status: 'queued' };
+    return { reason: 'window_closed', status: 'queued' };
   }
+
+  // The window is open: drain any backlog queued while it was closed BEFORE
+  // sending the new message. Without this the settings UI can show an open
+  // window sitting next to "N messages queued" (the queue only replays on the
+  // next INBOUND message), and a fresh push would overtake the backlog,
+  // breaking FIFO delivery.
+  await drainQueuedPushes({
+    api: target.api,
+    applicationId: target.applicationId,
+    platformUserId: target.platformUserId,
+    redis,
+  });
 
   const prepared = await prepareWechatDelivery(payload);
   const credit = await consumeSendCredits(
@@ -314,7 +375,12 @@ export const sendProactiveWechatMessage = async (params: {
       credit.status,
       target.platformUserId,
     );
-    return { status: 'queued' };
+    // `missing` means the window vanished between the peek and the consume
+    // (TTL expiry) — from the user's perspective the window closed.
+    return {
+      reason: credit.status === 'exhausted' ? 'quota_exhausted' : 'window_closed',
+      status: 'queued',
+    };
   }
 
   const progress: DeliveryProgress = { contentDelivered: false };
@@ -328,26 +394,24 @@ export const sendProactiveWechatMessage = async (params: {
     const remaining = undeliveredPayload(payload, progress);
     if (!remaining) return { remaining: credit.remaining, status: 'sent' };
     await enqueuePendingPush(redis, target.applicationId, target.platformUserId, remaining);
-    return { status: 'queued' };
+    return { reason: 'send_failed', status: 'queued' };
   }
 };
 
 /**
- * Replay pushes queued while the window was closed. Called after an inbound
- * message refreshes the window (see WechatInstallationStore.resolveByPayload).
- * Stops early when the backlog would eat into the credits reserved for the
- * live reply.
+ * Replay pushes queued while the window was closed, against an existing API
+ * client. Shared by the inbound-message flush (`flushPendingWechatPushes`)
+ * and the proactive-push path, which drains the backlog before sending a new
+ * message whenever it finds the window already open. Stops early when the
+ * backlog would eat into the credits reserved for the live reply.
  */
-export const flushPendingWechatPushes = async (params: {
+const drainQueuedPushes = async (params: {
+  api: WechatApiClient;
   applicationId: string;
-  baseUrl?: string;
-  botId?: string;
-  botToken: string;
   platformUserId: string;
   redis: WechatWindowRedis;
 }): Promise<number> => {
-  const { redis, applicationId, platformUserId } = params;
-  const api = new WechatApiClient(params.botToken, params.botId, params.baseUrl);
+  const { api, redis, applicationId, platformUserId } = params;
 
   return drainPendingPushes(redis, applicationId, platformUserId, async (payload) => {
     const sendWindow = await peekWindow(redis, applicationId, platformUserId);
@@ -369,10 +433,29 @@ export const flushPendingWechatPushes = async (params: {
       await deliver(api, platformUserId, credit.token, prepared, progress);
       return 'sent';
     } catch (error) {
-      log('flushPendingWechatPushes: replay failed for %s: %O', platformUserId, error);
+      log('drainQueuedPushes: replay failed for %s: %O', platformUserId, error);
       // Requeue only the legs still owed — `undefined` means everything landed.
       const remaining = undeliveredPayload(payload, progress);
       return remaining ? { requeue: remaining } : 'sent';
     }
   });
 };
+
+/**
+ * Replay pushes queued while the window was closed. Called after an inbound
+ * message refreshes the window (see WechatInstallationStore.resolveByPayload).
+ */
+export const flushPendingWechatPushes = async (params: {
+  applicationId: string;
+  baseUrl?: string;
+  botId?: string;
+  botToken: string;
+  platformUserId: string;
+  redis: WechatWindowRedis;
+}): Promise<number> =>
+  drainQueuedPushes({
+    api: new WechatApiClient(params.botToken, params.botId, params.baseUrl),
+    applicationId: params.applicationId,
+    platformUserId: params.platformUserId,
+    redis: params.redis,
+  });

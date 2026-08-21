@@ -11,8 +11,18 @@ const log = debug('bot-platform:telegram:send-attachments');
  * bytes server-side, saving us a round-trip + base64 inflation.
  */
 type TelegramMediaSource =
-  | { url: string }
-  | { buffer: Buffer; filename: string; mimeType?: string };
+  { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
+
+/**
+ * Refuse to buffer arbitrarily large remote files into memory for a multipart
+ * upload. Matches the Bot API's 50MB upload cap; the attachment-budget pass
+ * has already degraded anything over the platform budget to a download link,
+ * so this only guards attachments whose size was unknown up front.
+ */
+const MAX_UPLOAD_SOURCE_BYTES = 50 * 1024 * 1024;
+
+/** Download timeout for materializing an attachment (up to ~50MB). */
+const DOWNLOAD_TIMEOUT_MS = 30_000;
 
 const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
   if (att.name) return att.name;
@@ -27,31 +37,77 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
   return `attachment-${index + 1}`;
 };
 
-/**
- * Resolve a `BotMessageAttachment` into a Telegram-ready source. Prefers
- * `fetchUrl` so Telegram fetches the bytes server-side. Falls back to
- * materializing `data` (base64) as a Buffer for multipart upload. Returns
- * `undefined` when neither source is usable so the caller can skip the item.
- */
-const resolveTelegramSource = (
+const decodeDataSource = (
   att: BotMessageAttachment,
   index: number,
 ): TelegramMediaSource | undefined => {
+  if (!att.data) return undefined;
+  try {
+    return {
+      buffer: Buffer.from(att.data, 'base64'),
+      filename: fallbackFilename(att, index),
+      mimeType: att.mimeType,
+    };
+  } catch (error) {
+    log('decodeDataSource: failed to decode base64 for "%s": %O', att.name, error);
+    return undefined;
+  }
+};
+
+const downloadSource = async (
+  att: BotMessageAttachment,
+  index: number,
+): Promise<TelegramMediaSource | undefined> => {
+  if (!att.fetchUrl) return undefined;
+  try {
+    const response = await fetch(att.fetchUrl, {
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      log('downloadSource: HTTP %d for %s', response.status, att.fetchUrl);
+      return undefined;
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_UPLOAD_SOURCE_BYTES) {
+      log('downloadSource: %d bytes exceeds the 50MB Bot API upload cap', buffer.length);
+      return undefined;
+    }
+    return { buffer, filename: fallbackFilename(att, index), mimeType: att.mimeType };
+  } catch (error) {
+    log('downloadSource: fetch failed for %s: %O', att.fetchUrl, error);
+    return undefined;
+  }
+};
+
+/**
+ * Resolve a `BotMessageAttachment` into a Telegram-ready source.
+ *
+ * Images and audio prefer `fetchUrl` — Telegram fetches the bytes
+ * server-side, saving a round-trip + base64 inflation, and those endpoints
+ * accept arbitrary URLs.
+ *
+ * Documents and videos are ALWAYS materialized into a Buffer for multipart
+ * upload instead:
+ * - `sendDocument` by URL only works for .pdf/.zip per the Bot API, and the
+ *   stable file-proxy URL (`/f/:id`) carries no extension and answers with a
+ *   302 — Telegram rejects it for every document type, including PDFs.
+ * - Videos ride `sendDocument` too (see `dispatch`), so they need bytes for
+ *   the same reason.
+ *
+ * Returns `undefined` when no source is usable so the caller can skip the
+ * item without aborting the whole batch.
+ */
+const resolveTelegramSource = async (
+  att: BotMessageAttachment,
+  index: number,
+): Promise<TelegramMediaSource | undefined> => {
+  if (att.type === 'file' || att.type === 'video') {
+    return decodeDataSource(att, index) ?? (await downloadSource(att, index));
+  }
   if (att.fetchUrl) {
     return { url: att.fetchUrl };
   }
-  if (att.data) {
-    try {
-      return {
-        buffer: Buffer.from(att.data, 'base64'),
-        filename: fallbackFilename(att, index),
-        mimeType: att.mimeType,
-      };
-    } catch (error) {
-      log('resolveTelegramSource: failed to decode base64 for "%s": %O', att.name, error);
-    }
-  }
-  return undefined;
+  return decodeDataSource(att, index);
 };
 
 const dispatch = async (
@@ -67,7 +123,13 @@ const dispatch = async (
       return;
     }
     case 'video': {
-      await api.sendVideo({ caption, chatId, source });
+      // Deliberately `sendDocument`, not `sendVideo`: Telegram re-encodes a
+      // soundless MP4 sent as "video" into an animation (rendered with a GIF
+      // badge, original audio-less file lost). Product/screen-recording videos
+      // routinely have no audio track, and we cannot detect that server-side
+      // without ffprobe. A document upload preserves the original bytes and
+      // Telegram still inline-plays MP4 documents.
+      await api.sendDocument({ caption, chatId, source });
       return;
     }
     case 'audio': {
@@ -99,7 +161,7 @@ export const sendTelegramAttachments = async (
 ): Promise<number> => {
   let delivered = 0;
   for (const [index, att] of attachments.entries()) {
-    const source = resolveTelegramSource(att, index);
+    const source = await resolveTelegramSource(att, index);
     if (!source) {
       log('sendTelegramAttachments: skipping attachment without resolvable source');
       continue;

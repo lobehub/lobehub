@@ -36,6 +36,26 @@ const getMessengerTranslationKey = (error: unknown): MessengerTranslationKey | u
   }
 };
 
+/**
+ * Toast key for a `queued` push result. The server distinguishes WHY the
+ * message had to queue (`reason`); the default key claims "the send window is
+ * closed", which is a lie for the quota / partial-failure paths and confused
+ * users whose window was visibly open.
+ */
+export const getMessengerQueuedToast = (
+  t: MessengerT,
+  platform: string,
+  reason?: 'quota_exhausted' | 'send_failed' | 'window_closed',
+): string => {
+  const key: MessengerTranslationKey =
+    reason === 'quota_exhausted'
+      ? 'messenger.push.queuedQuotaToast'
+      : reason === 'send_failed'
+        ? 'messenger.push.queuedRetryToast'
+        : 'messenger.push.queuedToast';
+  return t(key as any, { platform });
+};
+
 export const getMessengerErrorMessage = (
   error: unknown,
   t: MessengerT,

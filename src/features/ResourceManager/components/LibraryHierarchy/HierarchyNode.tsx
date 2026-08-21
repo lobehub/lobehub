@@ -109,6 +109,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }, [item.name]);
 
     const { menuItems } = useFileItemDropdown({
+      fileId: item.fileId,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,

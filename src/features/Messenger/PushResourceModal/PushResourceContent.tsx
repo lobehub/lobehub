@@ -13,7 +13,7 @@ import { messengerService } from '@/services/messenger';
 import { formatSize } from '@/utils/format';
 
 import type { MessengerPlatform } from '../constants';
-import { getMessengerErrorMessage } from '../i18n';
+import { getMessengerErrorMessage, getMessengerQueuedToast } from '../i18n';
 import { MessengerPushWindowState } from '../IntegrationDetail/MessengerPushWindowState';
 import { resolveAttachmentType } from './resolveAttachmentType';
 
@@ -123,7 +123,7 @@ export const PushResourceContent = memo<PushResourceModalProps>(
             break;
           }
           case 'queued': {
-            toast.info(t('messenger.push.queuedToast', { platform: platformName }));
+            toast.info(getMessengerQueuedToast(t, platformName, result.reason));
             close();
             break;
           }

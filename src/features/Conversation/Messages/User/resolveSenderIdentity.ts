@@ -32,8 +32,8 @@ export const resolveSenderIdentity = ({
   const senderName = sender?.fullName || sender?.username || '';
   const title = isOwn ? senderName || selfTitle || '' : senderName || unknownLabel;
   // Left undefined on purpose for an avatar-less other member: `@/components/Avatar`
-  // derives initials and a hashed background from the resolved `title`, which is a
-  // far better placeholder than borrowing the viewer's picture.
+  // derives initials from the resolved `title`, which is a far better
+  // placeholder than borrowing the viewer's picture.
   const avatar = sender?.avatar || (isOwn ? selfAvatar : undefined);
 
   return { avatar, isOwn, title };

@@ -237,6 +237,7 @@ const FileListItem = ({
     slug,
   });
   const { menuItems } = useFileItemDropdown({
+    fileId,
     fileType,
     filename: name,
     id,

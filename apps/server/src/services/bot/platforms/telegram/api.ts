@@ -12,6 +12,15 @@ export const TELEGRAM_API_BASE = 'https://api.telegram.org';
  */
 const TELEGRAM_FETCH_TIMEOUT_MS = 8000;
 
+/**
+ * Multipart uploads carry up to tens of MB of binary payload, which cannot
+ * fit inside the 8s JSON-call budget — a 20MB document upload alone can take
+ * longer than that on a cold serverless egress path. Uploads happen on the
+ * proactive-push path (one per request), not the per-chunk reply loop, so a
+ * generous cap does not threaten the function budget the same way.
+ */
+const TELEGRAM_UPLOAD_TIMEOUT_MS = 60_000;
+
 const isParseEntitiesError = (error: unknown): boolean => {
   const msg = (error as { message?: string } | null)?.message;
   return typeof msg === 'string' && msg.includes("can't parse entities");
@@ -491,7 +500,7 @@ export class TelegramApi {
         body: buildForm(),
         method: 'POST',
         // Let undici set the multipart boundary header automatically.
-        signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(file ? TELEGRAM_UPLOAD_TIMEOUT_MS : TELEGRAM_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
