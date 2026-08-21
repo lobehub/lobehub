@@ -2,7 +2,8 @@
 
 import { Flexbox, Hotkey, Icon, KeyMapEnum, Text, TextArea } from '@lobehub/ui';
 import { Button, Tabs } from '@lobehub/ui/base-ui';
-import { Check, PenLine, Send, X } from 'lucide-react';
+import { createStaticStyles } from 'antd-style';
+import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -11,6 +12,18 @@ import { formatRemaining, isQuestionAnswered } from './draft';
 import QuestionPanel from './QuestionPanel';
 import type { AskUserQuestionItem } from './types';
 import type { AskUserFormApi } from './useAskUserForm';
+
+const styles = createStaticStyles(({ css }) => ({
+  tabs: css`
+    [role='tablist'] {
+      width: 100%;
+
+      > [role='tab']:last-of-type {
+        margin-inline-start: auto;
+      }
+    }
+  `,
+}));
 
 /**
  * A focused interactive control keeps its native key activation — hijacking
@@ -168,7 +181,12 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
 
       const q = activeQuestion;
       const rowNavEnabled =
-        !!q && !escapeActive && !supplementActive && !submitting && !expired && q.options.length > 0;
+        !!q &&
+        !escapeActive &&
+        !supplementActive &&
+        !submitting &&
+        !expired &&
+        q.options.length > 0;
 
       // Digit keys pick the matching numbered row directly; the row after the
       // last option is the "write your own" line, which focuses its textarea.
@@ -288,6 +306,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       {isMulti && (
         <Tabs
           activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
+          className={styles.tabs}
           variant="square"
           items={[
             ...questions.map((q, idx) => {
@@ -317,7 +336,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
               key: 'escape',
               label: (
                 <Flexbox horizontal align="center" gap={6}>
-                  <Icon icon={PenLine} size={12} />
+                  <Icon icon={Replace} size={12} />
                   <Text>{labels.escapeEnter}</Text>
                 </Flexbox>
               ),
@@ -341,9 +360,9 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         <TextArea
           autoSize={{ maxRows: 8, minRows: 3 }}
           disabled={expired || submitting}
+          placeholder={supplementActive ? labels.supplementPlaceholder : labels.escapePlaceholder}
           value={supplementActive ? supplementText : escapeText}
           variant="filled"
-          placeholder={supplementActive ? labels.supplementPlaceholder : labels.escapePlaceholder}
           onChange={(e) =>
             supplementActive
               ? handleSupplementTextChange(e.target.value)

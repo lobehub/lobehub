@@ -22,7 +22,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 100%;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: calc(${cssVar.borderRadiusLG} + 4px);
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
