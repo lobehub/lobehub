@@ -4,6 +4,9 @@ import { Flexbox, SkeletonParagraph, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { previewSections } from '../helpers';
 import { useExpertiseLesson } from '../hooks';
@@ -20,6 +23,12 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: min(380px, calc(100vw - 32px));
 
     /* less the popup's own chrome, which sits outside this element */
+
+    /*
+     * The card is anchored above the row, and this stack never flips a popup to the opposite
+     * side — an explicit collisionAvoidance side:'flip' was measured to do nothing. So for a row
+     * high on the page the card has to fit in the space above it or its tail becomes unreachable.
+     */
     max-height: calc(var(--available-height, 100dvh) - 16px);
   `,
   section: css`
@@ -33,18 +42,31 @@ const styles = createStaticStyles(({ css }) => ({
     height: 1px;
     background: ${cssVar.colorBorderSecondary};
   `,
+  open: css`
+    flex: none;
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   title: css`
     text-wrap: balance;
   `,
 }));
 
-const MAX_EVIDENCE = 3;
+/** Kept low so the card fits above the row it describes; the rest is one line away. */
+const MAX_EVIDENCE = 2;
 
 interface LessonPreviewProps {
   /** Carried from the list row so the card has a header before the fetch lands. */
   code: string;
   layer?: string | null;
   lessonId: string;
+  /** The card outlives the pointer leaving the row, so it carries its own way in. */
+  lessonPath: string;
   title: string;
 }
 
@@ -55,8 +77,9 @@ interface LessonPreviewProps {
  * 那些原来得逐条点进详情页。这里按需拉同一份详情（SWR 缓存，真点进去时不会再请求一次），
  * 只截取判断需要的部分：为什么、怎么用、最近在哪几次实践里验证过。
  */
-const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, title }) => {
+const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonPath, title }) => {
   const { t } = useTranslation('selfLearning');
+  const navigate = useWorkspaceAwareNavigate();
   const { data, isLoading } = useExpertiseLesson(lessonId);
 
   const sections = previewSections(data?.lesson.sections);
@@ -65,9 +88,22 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, title }
   return (
     <Flexbox className={styles.root} gap={10} padding={4}>
       <Flexbox gap={6}>
-        <Text fontSize={12} type={'secondary'} weight={600}>
-          {t('rules.detail.eyebrow', { code })}
-        </Text>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <Text fontSize={12} type={'secondary'} weight={600}>
+            {t('rules.detail.eyebrow', { code })}
+          </Text>
+          {/* The row underneath is no longer under the pointer once it moves in here. */}
+          <Link
+            className={styles.open}
+            to={lessonPath}
+            onClick={(event) => {
+              event.preventDefault();
+              navigate(lessonPath);
+            }}
+          >
+            {t('preview.open')}
+          </Link>
+        </Flexbox>
         <Text className={styles.title} fontSize={15} lineHeight={1.45} weight={600}>
           {title}
         </Text>
@@ -95,7 +131,7 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, title }
                 <Text fontSize={12} type={'secondary'} weight={600}>
                   {label ? t(label) : section.key}
                 </Text>
-                <Text fontSize={12.5} lineClamp={4} lineHeight={1.6}>
+                <Text fontSize={12.5} lineClamp={3} lineHeight={1.6}>
                   {section.body}
                 </Text>
               </div>
@@ -133,10 +169,6 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, title }
           </Flexbox>
         </>
       )}
-
-      <Text fontSize={11.5} type={'secondary'}>
-        {t('preview.openHint')}
-      </Text>
     </Flexbox>
   );
 });

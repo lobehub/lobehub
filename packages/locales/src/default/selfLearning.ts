@@ -152,7 +152,7 @@ export default {
 
   'preview.loading': 'loading…',
   'preview.moreEvidence': '+{{count}} more recorded',
-  'preview.openHint': 'Click to open the full lesson',
+  'preview.open': 'Open full lesson',
 
   'profile.counts': '{{count}} experiences',
   'profile.fresh': '{{count}} new',

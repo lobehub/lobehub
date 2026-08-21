@@ -163,9 +163,9 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
         <Popover
           // Long enough that dragging the pointer down the list does not fetch every row.
           openDelay={420}
-          // The list fills the content column, so a side-anchored card has nowhere to go and
-          // collides with the page header. Below-left keeps it next to the row it describes.
-          placement={'bottomLeft'}
+          // Above the row rather than below it: the row's own hint sits directly beneath the
+          // title, so a card there buries the line the reader just came from.
+          placement={'topRight'}
           // Rows near the fold would otherwise push the card past the viewport, putting its
           // evidence and the click hint out of reach; padding lets it flip above the row instead.
           positionerProps={{ collisionPadding: 12 }}
@@ -175,6 +175,7 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
               code={habit.code}
               layer={habit.layer}
               lessonId={habit.id}
+              lessonPath={lessonPath}
               title={habit.title}
             />
           }
