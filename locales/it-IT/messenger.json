@@ -73,6 +73,8 @@
   "messenger.push.loadFailed": "Impossibile caricare lo stato del messaggio proattivo.",
   "messenger.push.placeholder": "Scrivi un messaggio da inviare a {{platform}}…",
   "messenger.push.queued": "{{count}} messaggio/i in coda verrà/verranno consegnato/i dopo che avrai inviato un messaggio al bot su {{platform}}.",
+  "messenger.push.queuedQuotaToast": "Nessun invio rimasto in questa finestra temporale — il tuo messaggio è in coda. Invia un messaggio al bot su {{platform}} per reimpostare la finestra e riceverlo.",
+  "messenger.push.queuedRetryToast": "Parte del tuo messaggio non è stata consegnata — il resto è in coda e verrà ritentato dopo che avrai inviato un messaggio al bot su {{platform}}.",
   "messenger.push.queuedToast": "La finestra di invio è chiusa — il tuo messaggio è in coda. Invia un messaggio al bot su {{platform}} per riceverlo.",
   "messenger.push.resource.description": "Il file verrà inviato come allegato al tuo account {{platform}} collegato.",
   "messenger.push.resource.oversizeFileHint": "Questo file supera il limite di {{limit}} di {{platform}} e verrà inviato come link per il download.",
