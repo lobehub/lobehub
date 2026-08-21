@@ -50,7 +50,7 @@ describe('resolveTools executors', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
   let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
   /** `tool_call_id → row id` the store already holds. */
-  let toolRows: Map<string, string>;
+  let toolRows: Map<string, { id: string; parentId: string }>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
   let host: AgentRuntimeHost;
@@ -58,12 +58,17 @@ describe('resolveTools executors', () => {
   beforeEach(() => {
     toolRows = new Map();
     createToolMessage = vi.fn().mockImplementation(async (params: any) => {
-      if (params?.tool_call_id) toolRows.set(params.tool_call_id, 'tool-msg-1');
+      if (params?.tool_call_id) {
+        toolRows.set(params.tool_call_id, { id: 'tool-msg-1', parentId: params.parentId });
+      }
       return { id: 'tool-msg-1' };
     });
     findToolMessageIdByToolCallId = vi
       .fn()
-      .mockImplementation(async (toolCallId: string) => toolRows.get(toolCallId));
+      .mockImplementation(async (toolCallId: string, parentMessageId: string) => {
+        const row = toolRows.get(toolCallId);
+        return row && row.parentId === parentMessageId ? row.id : undefined;
+      });
     publishError = vi.fn().mockResolvedValue(undefined);
     publishEvent = vi.fn().mockResolvedValue(undefined);
 
@@ -229,7 +234,7 @@ describe('resolveTools executors', () => {
     host.transports.messages.updateToolIntervention = updateToolIntervention;
     // The pause wrote this row before parking; the settle discovers it rather
     // than being handed the id.
-    toolRows.set('tool-call-1', 'pending-msg-1');
+    toolRows.set('tool-call-1', { id: 'pending-msg-1', parentId: 'assistant-msg-1' });
 
     const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
       payload: {

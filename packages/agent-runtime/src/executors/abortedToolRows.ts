@@ -106,6 +106,7 @@ export const settleAbortedToolRows = async ({
     // was added for. One indexed read makes the invariant hold for all of them.
     const existingMessageId = await transports.messages.findToolMessageIdByToolCallId(
       toolPayload.id,
+      parentMessageId,
     );
     try {
       if (existingMessageId) {

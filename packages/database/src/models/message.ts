@@ -2958,13 +2958,38 @@ export class MessageModel {
    * time (e.g. the goal loop updating the `createGoal` card via
    * `task.context.origin.toolCallId`).
    */
-  findToolMessageIdByToolCallId = async (toolCallId: string): Promise<string | null> => {
-    const [row] = await this.db
-      .select({ id: messagePlugins.id })
-      .from(messagePlugins)
-      .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
-      .limit(1);
-    return row?.id ?? null;
+  findToolMessageIdByToolCallId = async (
+    toolCallId: string,
+    /**
+     * Restrict the match to calls made by one assistant message.
+     *
+     * `tool_call_id` is provider-supplied and only unique in practice — the
+     * column carries a plain index, not a unique constraint. Callers that act
+     * on the row (rather than just reading it) should scope the match, or a
+     * reused id from another turn resolves to an unrelated historical result.
+     */
+    parentId?: string,
+  ): Promise<string | null> => {
+    const rows = parentId
+      ? await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .innerJoin(messages, eq(messages.id, messagePlugins.id))
+          .where(
+            and(
+              eq(messagePlugins.toolCallId, toolCallId),
+              eq(messages.parentId, parentId),
+              this.pluginsOwnership(),
+            ),
+          )
+          .limit(1)
+      : await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
+          .limit(1);
+
+    return rows[0]?.id ?? null;
   };
 
   /**

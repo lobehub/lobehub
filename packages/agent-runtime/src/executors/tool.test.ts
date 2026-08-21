@@ -60,7 +60,7 @@ describe('tool executors', () => {
    * Writes register here so a later lookup finds them — the same reason the real
    * settle can ask instead of being told.
    */
-  let toolRows: Map<string, string>;
+  let toolRows: Map<string, { id: string; parentId: string }>;
   let publishChunk: ReturnType<typeof vi.fn>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
@@ -71,12 +71,17 @@ describe('tool executors', () => {
   beforeEach(() => {
     toolRows = new Map();
     createToolMessage = vi.fn().mockImplementation(async (params: any) => {
-      if (params?.tool_call_id) toolRows.set(params.tool_call_id, 'tool-msg-1');
+      if (params?.tool_call_id) {
+        toolRows.set(params.tool_call_id, { id: 'tool-msg-1', parentId: params.parentId });
+      }
       return { id: 'tool-msg-1' };
     });
     findToolMessageIdByToolCallId = vi
       .fn()
-      .mockImplementation(async (toolCallId: string) => toolRows.get(toolCallId));
+      .mockImplementation(async (toolCallId: string, parentMessageId: string) => {
+        const row = toolRows.get(toolCallId);
+        return row && row.parentId === parentMessageId ? row.id : undefined;
+      });
     updateToolIntervention = vi.fn().mockResolvedValue(undefined);
     updateToolMessage = vi.fn().mockResolvedValue(undefined);
     publishChunk = vi.fn().mockResolvedValue(undefined);
@@ -247,7 +252,7 @@ describe('tool executors', () => {
       toolMessageId: 'cancelled-tool-msg',
     });
     const toolCall = createToolCall();
-    toolRows.set(toolCall.id, 'cancelled-tool-msg');
+    toolRows.set(toolCall.id, { id: 'cancelled-tool-msg', parentId: 'assistant-msg-1' });
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
       type: 'call_tool',
@@ -360,7 +365,7 @@ describe('tool executors', () => {
 
     const toolCall = createToolCall();
     // The approval pause wrote this row before parking.
-    toolRows.set(toolCall.id, 'pending-tool-row');
+    toolRows.set(toolCall.id, { id: 'pending-tool-row', parentId: 'pending-tool-row' });
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: {
         // On an approval resume this IS the pending tool row, not an assistant.
@@ -457,7 +462,7 @@ describe('tool executors', () => {
         new Promise(() => {
           // The client transport persists its row before executing, so by the
           // time the abort lands the store already knows about it.
-          toolRows.set(toolCall.id, 'optimistic-row');
+          toolRows.set(toolCall.id, { id: 'optimistic-row', parentId: 'assistant-msg-1' });
           controller.abort();
         }),
     );
@@ -848,8 +853,8 @@ describe('tool executors', () => {
 
     // An approved batch resume left a pending row for EVERY call, including the
     // client ones that never enter `toolsToExecute`.
-    toolRows.set(serverCall.id, 'server-row');
-    toolRows.set(clientCall.id, 'client-row');
+    toolRows.set(serverCall.id, { id: 'server-row', parentId: 'assistant-msg-1' });
+    toolRows.set(clientCall.id, { id: 'client-row', parentId: 'assistant-msg-1' });
     const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
       payload: {
         parentMessageId: 'assistant-msg-1',
@@ -866,6 +871,33 @@ describe('tool executors', () => {
     expect(createToolMessage).not.toHaveBeenCalled();
     expect(updateToolIntervention).toHaveBeenCalledWith('client-row', { status: 'aborted' });
     expect(updateToolIntervention).toHaveBeenCalledWith('server-row', { status: 'aborted' });
+  });
+
+  it('ignores a reused tool_call_id that belongs to another turn', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+
+    const toolCall = createToolCall();
+    // Same id, different assistant — `tool_call_id` is provider-supplied and
+    // only indexed, so a reuse across turns is possible. Settling that row would
+    // overwrite a real historical result AND leave this call without one.
+    toolRows.set(toolCall.id, { id: 'older-turn-row', parentId: 'assistant-msg-OLD' });
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    await callTool(abortingHost)(instruction, createState());
+
+    expect(updateToolMessage).not.toHaveBeenCalledWith('older-turn-row', expect.anything());
+    expect(createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'assistant-msg-1', tool_call_id: toolCall.id }),
+    );
   });
 
   describe('parallel batch parent chain', () => {

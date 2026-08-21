@@ -80,7 +80,16 @@ export interface MessageTransport {
    * caller having to know the whole history, which is how duplicate rows and
    * stranded approval cards happen.
    */
-  findToolMessageIdByToolCallId: (toolCallId: string) => Promise<string | undefined>;
+  findToolMessageIdByToolCallId: (
+    toolCallId: string,
+    /**
+     * The assistant message that made the call. Required scope, not a hint:
+     * `tool_call_id` is provider-supplied and merely indexed, so an unscoped
+     * match can resolve to a reused id from an unrelated turn — and this lookup
+     * feeds a write.
+     */
+    parentMessageId: string,
+  ) => Promise<string | undefined>;
   query: (params?: QueryMessagesInput, options?: QueryMessagesOptions) => Promise<UIChatMessage[]>;
   update: (id: string, params: Partial<UpdateMessageParams>) => Promise<void>;
   updatePluginState: (id: string, state: Record<string, any>) => Promise<void>;

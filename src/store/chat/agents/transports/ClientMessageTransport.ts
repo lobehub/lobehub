@@ -184,12 +184,18 @@ export class ClientMessageTransport implements MessageTransport {
     return message;
   }
 
-  async findToolMessageIdByToolCallId(toolCallId: string): Promise<string | undefined> {
+  async findToolMessageIdByToolCallId(
+    toolCallId: string,
+    parentMessageId: string,
+  ): Promise<string | undefined> {
     // Deliberately the store, not the database: client rows are created
     // optimistically and may not have been persisted yet, so a DB read would
     // miss exactly the row this lookup exists to find.
     const match = this.getMessages().find(
-      (message) => message.role === 'tool' && message.tool_call_id === toolCallId,
+      (message) =>
+        message.role === 'tool' &&
+        message.tool_call_id === toolCallId &&
+        message.parentId === parentMessageId,
     );
 
     return match?.id;
