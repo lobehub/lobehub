@@ -3,6 +3,7 @@ import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { LOADING_FLAT } from '@lobechat/const';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 
@@ -134,6 +135,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
       itemKey={id}
       paddingBlock={4}
       paddingInline={4}
+      styles={{ header: { borderRadius: cssVar.borderRadiusLG } }}
       action={
         !disableEditing && (
           <Actions
