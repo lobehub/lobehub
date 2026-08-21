@@ -1,8 +1,19 @@
+import { stat } from 'node:fs/promises';
+
 import fg from 'fast-glob';
 
 import type { GlobFilesParams, GlobFilesResult } from '../types';
 import { expandTilde } from './expandTilde';
 import { hasHiddenSegment } from './hasHiddenSegment';
+
+const exists = async (target: string): Promise<boolean> => {
+  try {
+    await stat(target);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Lightweight glob — backed by `fast-glob` only. For the platform-aware
@@ -14,10 +25,24 @@ export async function globLocalFiles({
   cwd,
   scope,
 }: GlobFilesParams): Promise<GlobFilesResult> {
+  // `fast-glob` answers a non-existent root with an empty list, which reads as
+  // "the pattern matched nothing" — the caller then revises the pattern instead
+  // of the path. Name the missing scope.
+  const searchRoot = expandTilde(scope ?? cwd);
+  if (searchRoot && !(await exists(searchRoot))) {
+    return {
+      engine: 'fast-glob',
+      error: `Search scope does not exist: ${searchRoot}`,
+      files: [],
+      success: false,
+      total_files: 0,
+    };
+  }
+
   try {
     const wantsHidden = hasHiddenSegment(pattern);
     const files = await fg(pattern, {
-      cwd: expandTilde(scope ?? cwd) || process.cwd(),
+      cwd: searchRoot || process.cwd(),
       dot: wantsHidden,
       ignore: ['**/node_modules/**', '**/.git/**'],
     });

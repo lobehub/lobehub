@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 
 import fg from 'fast-glob';
 
+import { expandTilde } from '../file/expandTilde';
 import { createLogger } from '../logger';
 import type { ToolDetector } from '../toolDetector';
 import type { GrepContentParams, GrepContentResult } from '../types';
@@ -63,6 +64,34 @@ export abstract class BaseContentSearch {
    */
   protected resolveSearchPath(params: GrepContentParams): string {
     return params.path ?? params.scope ?? params.cwd ?? process.cwd();
+  }
+
+  /**
+   * The result to return when `scope` points at nothing.
+   *
+   * Every engine answers a non-existent search root with "no matches": `rg` gets
+   * an unusable `cwd` and produces empty stdout, the Node fallback throws and is
+   * swallowed by the caller's catch. An agent that mistypes a directory
+   * (`src/locales` instead of `locales/`) therefore reads "Found 0 matches" and
+   * concludes the CODE doesn't exist — the one answer the search cannot support.
+   * Report the missing scope by name so the next call fixes the path instead of
+   * the hypothesis.
+   */
+  protected async missingScopeResult(
+    params: GrepContentParams,
+  ): Promise<GrepContentResult | undefined> {
+    const searchPath = expandTilde(this.resolveSearchPath(params))!;
+    try {
+      await stat(searchPath);
+      return undefined;
+    } catch {
+      return {
+        error: `Search scope does not exist: ${searchPath}`,
+        matches: [],
+        success: false,
+        total_matches: 0,
+      };
+    }
   }
 
   /**

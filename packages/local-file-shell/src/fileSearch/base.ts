@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { expandTilde } from '../file/expandTilde';
 import type { ToolDetector } from '../toolDetector';
 import type { FileResult, GlobFilesParams, GlobFilesResult, SearchFilesParams } from '../types';
 
@@ -156,6 +157,32 @@ export abstract class BaseFileSearch {
   protected normalizePositiveLimit(limit?: number): number | undefined {
     if (!Number.isFinite(limit) || !limit || limit < 1) return undefined;
     return Math.floor(limit);
+  }
+
+  /**
+   * The result to return when the glob `scope` points at nothing.
+   *
+   * `fast-glob` (and `fd`) answer a non-existent root with an empty list, which
+   * is indistinguishable from "the pattern matched nothing" — so an agent that
+   * mistypes a directory reads the answer as "these files don't exist" and
+   * revises the wrong hypothesis. Name the missing scope instead.
+   */
+  protected async missingScopeResult(
+    params: GlobFilesParams,
+  ): Promise<GlobFilesResult | undefined> {
+    const searchPath = expandTilde(params.scope || params.cwd);
+    if (!searchPath) return undefined;
+    try {
+      await stat(searchPath);
+      return undefined;
+    } catch {
+      return {
+        error: `Search scope does not exist: ${searchPath}`,
+        files: [],
+        success: false,
+        total_files: 0,
+      };
+    }
   }
 
   abstract search(options: SearchFilesParams): Promise<FileResult[]>;
