@@ -57,8 +57,8 @@ export interface AskUserFormApi {
   picks: Record<string, string | string[]>;
   questions: AskUserQuestionItem[];
   remainingMs: number;
-  setActiveTab: (key: string) => void;
   setEscapeMode: (next: boolean) => void;
+  setQuestionMode: (key: string) => void;
   setSupplementMode: (next: boolean) => void;
   submitting: boolean;
   supplementActive: boolean;
@@ -179,7 +179,11 @@ export const useAskUserForm = ({
         const wasUnanswered = !isQuestionAnswered(q, picks, custom);
         const allAnswered = questions.every((qq) => isQuestionAnswered(qq, nextPicks, nextCustom));
         if (options?.submitOnComplete && wasUnanswered && allAnswered) {
-          void submitWith(buildSubmitPayload(questions, nextPicks, nextCustom));
+          const payload = buildSubmitPayload(questions, nextPicks, nextCustom);
+          if (supplementText.trim()) {
+            payload[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
+          }
+          void submitWith(payload);
           return;
         }
 
@@ -297,12 +301,33 @@ export const useAskUserForm = ({
     [custom, escapeActive, escapeText, picks, supplementText, writeDraft],
   );
 
+  // Returning to a question clears both whole-form modes and persists one
+  // coherent snapshot. Calling the two mode setters back-to-back would let the
+  // second stale closure restore the mode the first setter just cleared.
+  const setQuestionMode = useCallback(
+    (key: string) => {
+      setActiveTab(key);
+      setEscapeActive(false);
+      setSupplementActive(false);
+      writeDraft({
+        custom,
+        escapeActive: false,
+        escapeText,
+        picks,
+        supplementActive: false,
+        supplementText,
+      });
+    },
+    [custom, escapeText, picks, supplementText, writeDraft],
+  );
+
   // Whole-form freeform only makes sense with more than one question — with a
   // single question the per-question custom box already IS the full custom
   // answer, so escape is redundant there and never offered.
   const escapeAvailable = questions.length > 1;
+  const supplementAvailable = questions.length > 0;
   const inEscape = escapeActive && escapeAvailable;
-  const inSupplement = supplementActive && escapeAvailable;
+  const inSupplement = supplementActive && supplementAvailable;
 
   const handleSubmit = useCallback(() => {
     if (escapeActive && escapeAvailable) {
@@ -364,7 +389,7 @@ export const useAskUserForm = ({
         fallback[q.question] = q.multiSelect ? [first] : first;
       }
     }
-    if (supplementActive && escapeAvailable && supplementText.trim()) {
+    if (supplementActive && supplementAvailable && supplementText.trim()) {
       fallback[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
     }
     void submitWith(fallback);
@@ -378,6 +403,7 @@ export const useAskUserForm = ({
     picks,
     custom,
     supplementActive,
+    supplementAvailable,
     supplementText,
     submitWith,
   ]);
@@ -409,8 +435,8 @@ export const useAskUserForm = ({
     picks,
     questions,
     remainingMs: deadline - now,
-    setActiveTab,
     setEscapeMode,
+    setQuestionMode,
     setSupplementMode,
     submitting,
     supplementActive: inSupplement,

@@ -18,7 +18,7 @@ const styles = createStaticStyles(({ css }) => ({
     [role='tablist'] {
       width: 100%;
 
-      > [role='tab']:last-of-type {
+      > [role='tab']:has([data-replace-all]) {
         margin-inline-start: auto;
       }
     }
@@ -97,8 +97,8 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     picks,
     questions,
     remainingMs,
-    setActiveTab,
     setEscapeMode,
+    setQuestionMode,
     setSupplementMode,
     showCountdown,
     submitting,
@@ -303,7 +303,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
 
   return (
     <Flexbox gap={12} ref={rootRef}>
-      {isMulti && (
+      {questions.length > 0 && (
         <Tabs
           activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
           className={styles.tabs}
@@ -330,17 +330,21 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
                 </Flexbox>
               ),
             },
-            // Replace-all stays at the far right because it discards the
-            // structured selections, unlike the adjacent additional-notes tab.
-            {
-              key: 'escape',
-              label: (
-                <Flexbox horizontal align="center" gap={6}>
-                  <Icon icon={Replace} size={12} />
-                  <Text>{labels.escapeEnter}</Text>
-                </Flexbox>
-              ),
-            },
+            ...(isMulti
+              ? [
+                  // Replace-all stays at the far right because it discards the
+                  // structured selections, unlike additional notes.
+                  {
+                    key: 'escape',
+                    label: (
+                      <Flexbox data-replace-all horizontal align="center" gap={6}>
+                        <Icon icon={Replace} size={12} />
+                        <Text>{labels.escapeEnter}</Text>
+                      </Flexbox>
+                    ),
+                  },
+                ]
+              : []),
           ]}
           onChange={(key: string) => {
             if (key === 'escape') {
@@ -348,9 +352,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
             } else if (key === 'supplement') {
               setSupplementMode(true);
             } else {
-              setEscapeMode(false);
-              setSupplementMode(false);
-              setActiveTab(key);
+              setQuestionMode(key);
             }
           }}
         />

@@ -34,15 +34,16 @@ const twoQuestionArgs: AskUserQuestionArgs = {
 
 const setup = (args: AskUserQuestionArgs, persistedDraft?: unknown) => {
   const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+  const writeDraft = vi.fn();
   const hook = renderHook(() =>
     useAskUserForm({
       args,
       onInteractionAction,
       persistedDraft,
-      writeDraft: vi.fn(),
+      writeDraft,
     }),
   );
-  return { hook, onInteractionAction };
+  return { hook, onInteractionAction, writeDraft };
 };
 
 describe('useAskUserForm select-to-submit', () => {
@@ -155,6 +156,24 @@ describe('useAskUserForm select-to-submit', () => {
 });
 
 describe('useAskUserForm additional notes', () => {
+  it('allows additional notes on a single-question prompt', () => {
+    const { hook, onInteractionAction } = setup(singleQuestionArgs);
+
+    act(() => hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Full'));
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('One-question context.'));
+    act(() => hook.result.current.handleSubmit());
+
+    expect(hook.result.current.supplementActive).toBe(true);
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: {
+        'How broad?': 'Full',
+        '__supplement__': 'One-question context.',
+      },
+      type: 'submit',
+    });
+  });
+
   it('keeps structured answers and appends additional notes', () => {
     const { hook, onInteractionAction } = setup(twoQuestionArgs);
 
@@ -214,5 +233,41 @@ describe('useAskUserForm additional notes', () => {
     expect(hook.result.current.supplementActive).toBe(true);
     expect(hook.result.current.supplementText).toBe('Preserve this note');
     expect(hook.result.current.isSubmitDisabled).toBe(false);
+  });
+
+  it('persists one atomic snapshot when returning from replace-all to a question', () => {
+    const { hook, writeDraft } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.setEscapeMode(true));
+    act(() => hook.result.current.setQuestionMode('0'));
+
+    expect(hook.result.current.escapeActive).toBe(false);
+    expect(hook.result.current.supplementActive).toBe(false);
+    expect(writeDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ escapeActive: false, supplementActive: false }),
+    );
+  });
+
+  it('includes existing notes in keyboard select-to-submit', () => {
+    const { hook, onInteractionAction } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('Keep this note.'));
+    act(() => hook.result.current.setQuestionMode('1'));
+    act(() =>
+      hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto', {
+        submitOnComplete: true,
+      }),
+    );
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: {
+        'How broad?': 'Narrow',
+        'Which mode?': 'Auto',
+        '__supplement__': 'Keep this note.',
+      },
+      type: 'submit',
+    });
   });
 });
