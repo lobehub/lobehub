@@ -64,6 +64,35 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: ${cssVar.fontWeightStrong};
     line-height: 1.3;
   `,
+  actionSlot: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+
+    margin-block-start: auto;
+  `,
+  cell: css`
+    min-height: 260px;
+    padding: 28px;
+    background: ${cssVar.colorBgContainer};
+
+    @media (width <= 860px) {
+      min-height: 220px;
+      padding: 24px;
+    }
+  `,
+  cellBody: css`
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-block: 34px 28px;
+  `,
+  cellMeta: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  `,
   channelRow: css`
     display: flex;
     gap: 12px;
@@ -164,6 +193,23 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       grid-template-columns: 1fr;
     }
   `,
+  header: css`
+    grid-column: 1 / -1;
+    min-height: 180px;
+    padding: 32px;
+    background: ${cssVar.colorBgContainer};
+
+    @media (width <= 860px) {
+      min-height: 150px;
+      padding: 24px;
+    }
+  `,
+  headerTop: css`
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-block-end: 28px;
+  `,
   headline: css`
     margin-block: 8px 28px;
 
@@ -187,6 +233,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     @media (width <= 860px) {
       grid-template-columns: 1fr;
     }
+  `,
+  iconBox: css`
+    display: block;
+
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+
+    background: ${cssVar.colorFillQuaternary};
   `,
   mobileStage: css`
     position: relative;
