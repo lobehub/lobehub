@@ -137,7 +137,7 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
-    ...(!isDesktop ? getApp : []),
+    ...getApp,
   ]
     .filter(Boolean)
     // Remove consecutive dividers to prevent double divider lines
