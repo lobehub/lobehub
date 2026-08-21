@@ -204,6 +204,7 @@ Note: CallAgent hooks require `parentOperationId` in `ExecSubAgentTaskParams`.
 - **Scoped per operation**: Auto-cleaned via `hookDispatcher.unregister()` on completion.
 - **Sandbox/MCP**: No separate hooks — they go through `executeTool`, so `beforeToolCall`/`afterToolCall` cover them. Use `event.identifier` to filter.
 
-## Real-World Example: agent-evals
+## Repository Examples
 
-See `devtools/agent-evals/helpers/runner.ts` — `createEvalHooks()` uses `afterStep`, `onComplete`, `afterToolCall`, and `beforeToolCall` (for mock).
+- `apps/server/src/services/agentRuntime/hooks/__tests__/HookDispatcher.test.ts` covers hook registration, lifecycle dispatch, and `beforeToolCall` mocking.
+- `apps/server/src/services/agentRuntime/__tests__/hooksIntegration.test.ts` covers step presentation data and terminal lifecycle events.
