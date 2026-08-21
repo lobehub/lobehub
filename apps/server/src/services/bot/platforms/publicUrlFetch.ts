@@ -2,7 +2,7 @@ import { promises as dns } from 'node:dns';
 import { isIP } from 'node:net';
 
 import debug from 'debug';
-import { Agent } from 'undici';
+import { Agent, EnvHttpProxyAgent, getGlobalDispatcher, ProxyAgent } from 'undici';
 
 import { appEnv } from '@/envs/app';
 import { fileEnv } from '@/envs/file';
@@ -188,15 +188,23 @@ const resolveSafeUrl = async (
 };
 
 /**
- * A configured HTTP proxy resolves DNS at the proxy, not here — pinning an
- * address we resolved locally would both bypass the proxy (and whatever egress
- * policy it enforces, see the global `EnvHttpProxyAgent`) and mean nothing,
- * since the proxy would do its own lookup anyway.
+ * Whether this process actually routes requests through a proxy.
+ *
+ * Decided from the dispatcher in force, NOT from proxy environment variables:
+ * `setGlobalDispatcher(EnvHttpProxyAgent)` only happens under
+ * `NODE_ENV === 'development'` (see `libs/better-auth/define-config.ts`), so in
+ * production a stray `HTTPS_PROXY` in the environment proxies nothing — and
+ * skipping the pin on that basis would hand the hostname back to undici to
+ * resolve a second time, reopening the rebinding hole.
+ *
+ * When a proxy IS in force, the proxy resolves DNS itself; pinning a locally
+ * resolved address would bypass it along with the egress policy it enforces,
+ * and would mean nothing anyway.
  */
-const proxyConfigured = (): boolean =>
-  ['ALL_PROXY', 'HTTPS_PROXY', 'HTTP_PROXY'].some(
-    (name) => process.env[name] || process.env[name.toLowerCase()],
-  );
+const requestsAreProxied = (): boolean => {
+  const dispatcher = getGlobalDispatcher();
+  return dispatcher instanceof ProxyAgent || dispatcher instanceof EnvHttpProxyAgent;
+};
 
 /** Redirect hops to follow before giving up. */
 const MAX_REDIRECTS = 5;
@@ -231,6 +239,7 @@ export interface PublicFetchResult {
 export const fetchPublicUrl = async (
   rawUrl: string,
   timeoutMs: number,
+  method: 'GET' | 'HEAD' = 'GET',
 ): Promise<PublicFetchResult | undefined> => {
   const trusted = trustedOrigins();
   const pools: Agent[] = [];
@@ -249,7 +258,7 @@ export const fetchPublicUrl = async (
       }
 
       let dispatcher: Agent | undefined;
-      if (safe.pinned && !proxyConfigured()) {
+      if (safe.pinned && !requestsAreProxied()) {
         const { address, family } = safe.pinned;
         dispatcher = new Agent({
           connect: {
@@ -263,6 +272,7 @@ export const fetchPublicUrl = async (
 
       const response = await fetch(safe.url, {
         dispatcher,
+        method,
         redirect: 'manual',
         signal: AbortSignal.timeout(timeoutMs),
       } as RequestInit);

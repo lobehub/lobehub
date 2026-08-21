@@ -101,12 +101,73 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.fallbackLines).toEqual([]);
   });
 
-  it('passes attachments with unknown size through untouched', async () => {
+  it('probes an unmeasured attachment and keeps it when it fits', async () => {
+    // `attachmentsInputSchema` carries no `size`, so raw botMessage attachments
+    // arrive unmeasured — the budget has to establish the size itself.
     const attachment = {
-      fetchUrl: 'https://example.com/f/unknown.mp4',
-      name: 'unknown.mp4',
+      fetchUrl: 'https://example.com/f/small.mp4',
+      name: 'small.mp4',
       type: 'video' as const,
     };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-length': String(1 * MB) }),
+        ok: true,
+        status: 200,
+      }),
+    );
+
+    const result = await prepareAttachmentsForBudget([attachment], budget);
+
+    expect(result.attachments).toEqual([attachment]);
+    expect(result.fallbackLines).toEqual([]);
+  });
+
+  it('degrades an unmeasured attachment the probe reports as over budget', async () => {
+    const attachment = {
+      fetchUrl: 'https://example.com/f/huge.mp4',
+      name: 'huge.mp4',
+      type: 'video' as const,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-length': String(500 * MB) }),
+        ok: true,
+        status: 200,
+      }),
+    );
+
+    const result = await prepareAttachmentsForBudget([attachment], budget);
+
+    expect(result.attachments).toEqual([]);
+    expect(result.fallbackLines[0]).toContain('https://example.com/f/huge.mp4');
+  });
+
+  it('degrades rather than silently dropping when the size cannot be established', async () => {
+    // Regression: an unmeasurable attachment used to skip every budget rule and
+    // then be refused by the loader's in-memory cap during materialization —
+    // the sender skipped it, still posted the text, and reported success, so it
+    // vanished with neither file nor link.
+    const attachment = {
+      fetchUrl: 'https://example.com/f/chunked.mp4',
+      name: 'chunked.mp4',
+      type: 'video' as const,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ headers: new Headers(), ok: true, status: 200 }),
+    );
+
+    const result = await prepareAttachmentsForBudget([attachment], budget);
+
+    expect(result.attachments).toEqual([]);
+    expect(result.fallbackLines[0]).toContain('https://example.com/f/chunked.mp4');
+  });
+
+  it('keeps an unmeasurable attachment that has no link to fall back to', async () => {
+    const attachment = { data: 'AAAA', name: 'inline.bin', type: 'file' as const };
 
     const result = await prepareAttachmentsForBudget([attachment], budget);
 

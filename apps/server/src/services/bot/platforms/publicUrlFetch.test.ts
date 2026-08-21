@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { EnvHttpProxyAgent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn() }));
@@ -116,18 +117,40 @@ describe('fetchPublicUrl', () => {
     await result!.dispose();
   });
 
-  it('does not pin behind a proxy, which resolves DNS itself', async () => {
-    // Pinning a locally resolved address would bypass the proxy and whatever
-    // egress policy it enforces.
+  it('keeps pinning when a proxy env var is set but nothing is actually proxied', async () => {
+    // Regression: the decision used to read HTTPS_PROXY directly. The global
+    // proxy dispatcher is only installed under NODE_ENV=development, so in
+    // production a stray env var proxies nothing — and skipping the pin on that
+    // basis handed the hostname back to undici, reopening the rebinding hole.
     vi.stubEnv('HTTPS_PROXY', 'http://proxy.internal:3128');
     const fetchMock = vi.fn().mockResolvedValue(ok());
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
 
-    expect(fetchMock.mock.calls[0][1].dispatcher).toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
     await result!.dispose();
     vi.unstubAllEnvs();
+  });
+
+  it('does not pin when a proxy dispatcher is actually installed', async () => {
+    // The proxy resolves DNS itself, so pinning a locally resolved address
+    // would bypass it and the egress policy it enforces, and mean nothing.
+    const previous = getGlobalDispatcher();
+    const proxy = new EnvHttpProxyAgent({ httpsProxy: 'http://proxy.internal:3128' });
+    setGlobalDispatcher(proxy);
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+      expect(fetchMock.mock.calls[0][1].dispatcher).toBeUndefined();
+      await result!.dispose();
+    } finally {
+      setGlobalDispatcher(previous);
+      await proxy.close();
+    }
   });
 
   it('hands back a dispose hook so the pinned pool is released', async () => {
