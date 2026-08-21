@@ -66,7 +66,9 @@ describe('sendWechatAttachments', () => {
       expect.any(Buffer),
       PLATFORM_ATTACHMENT_BUDGETS.wechat.imageMaxBytes,
     );
-    expect(api.uploadCdnMedia).toHaveBeenCalledWith('user-1', expect.anything(), compressed);
+    const [uploadTarget, , uploadedBytes] = api.uploadCdnMedia.mock.calls[0];
+    expect(uploadTarget).toBe('user-1');
+    expect(uploadedBytes).toBe(compressed);
     expect(api.sendItem).toHaveBeenCalledTimes(1);
   });
 
