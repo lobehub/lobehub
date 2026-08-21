@@ -323,8 +323,12 @@ export default {
   'acceptance.workspace.project.remove': 'Remove from project',
   'acceptance.workspace.project.removeSuccess': 'Removed from the project',
   'acceptance.workspace.merge.title': 'Merge acceptance',
+  'acceptance.workspace.merge.windowHint':
+    'Only the {{count}} most recent acceptances are listed here.',
+
   'acceptance.workspace.merge.description':
     'Move the {{count}} checks of “{{title}}” into another acceptance. Pick where they should land.',
+  'acceptance.workspace.merge.noSearchResults': 'No acceptance matches “{{query}}”.',
   'acceptance.workspace.merge.searchPlaceholder': 'Search acceptances',
   'acceptance.workspace.merge.noCandidates': 'No other acceptance to merge into.',
   'acceptance.workspace.merge.settledHint': 'settled — reopen it first',

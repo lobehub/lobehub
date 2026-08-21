@@ -49,6 +49,43 @@ export const collectCheckIds = (
 };
 
 /**
+ * How many CHECKS the source chain holds, as the acceptance union counts rows.
+ *
+ * Deliberately not `collectCheckIds().size`: that set is the collision domain,
+ * where one generated check contributes BOTH its plan-item id and the
+ * `sourceCriterionId` it resolves to. Counting it would report a single check
+ * twice — and this number is what the user is told moved ("N 项验收项").
+ *
+ * So it counts the same way the union builds rows: logical ids, with the
+ * generations folded away by `supersedes` removed (they render inside their
+ * successor's timeline, not as rows of their own).
+ */
+export const countLogicalChecks = (
+  runs: Pick<VerifyRunItem, 'plan'>[],
+  results: Pick<VerifyCheckResultItem, 'checkItemId'>[],
+): number => {
+  const logical = new Set<string>();
+  const superseded = new Set<string>();
+  const logicalByItemId = new Map<string, string>();
+
+  for (const run of runs) {
+    for (const item of (run.plan ?? []) as VerifyCheckItem[]) {
+      const id = item.sourceCriterionId ?? item.id;
+      logicalByItemId.set(item.id, id);
+      logical.add(id);
+      for (const replaced of item.supersedes ?? []) superseded.add(replaced);
+    }
+  }
+  // A result may name an item no plan carries (a direct ingest).
+  for (const result of results) {
+    logical.add(logicalByItemId.get(result.checkItemId) ?? result.checkItemId);
+  }
+  for (const id of superseded) logical.delete(id);
+
+  return logical.size;
+};
+
+/**
  * Assign a fresh id to every source check id the target already uses.
  *
  * Check ids are harness-authored strings (`case-1`, a slug, a uuid), so two
@@ -142,6 +179,7 @@ export const mergeAcceptanceRounds = async ({
   ]);
 
   const sourceIds = collectCheckIds(sourceRuns, sourceResults);
+  const movedChecks = countLogicalChecks(sourceRuns, sourceResults);
   const remap = planCheckIdRemap(
     sourceIds,
     collectCheckIds(targetRuns, targetResults),
@@ -223,12 +261,12 @@ export const mergeAcceptanceRounds = async ({
     source.id,
     target.id,
     sourceRuns.length,
-    sourceIds.size,
+    movedChecks,
     remap.size,
   );
 
   return {
-    movedChecks: sourceIds.size,
+    movedChecks,
     movedRounds: sourceRuns.length,
     rekeyedChecks: remap.size,
   };

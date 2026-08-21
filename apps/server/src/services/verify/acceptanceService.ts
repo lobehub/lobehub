@@ -577,7 +577,17 @@ export class AcceptanceService {
       workspaceId: this.workspaceId,
     });
 
-    await this.recomputeStatus(targetId);
+    // Past this point the merge is COMMITTED and the source no longer exists —
+    // so a failure here must not be reported as a failed merge. The caller
+    // would surface a retry that can only ever fail ("Acceptance not found"),
+    // for a rollup that is derived and re-derived by every later round,
+    // decision and sweep. Log it and return the merge that did happen.
+    try {
+      await this.recomputeStatus(targetId);
+    } catch (error) {
+      log('acceptance %s merged, but status recompute failed (non-fatal): %O', targetId, error);
+    }
+
     return summary;
   };
 

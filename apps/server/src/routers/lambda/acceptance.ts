@@ -486,8 +486,17 @@ export const acceptanceRouter = router({
       };
     }),
 
-  /** Recent acceptances (with subject headers), newest first — list panel + CLI. */
-  list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
+  /**
+   * Recent acceptances (with subject headers), newest first — list panel + CLI.
+   *
+   * `limit` is capped rather than open: the read resolves each row's subject
+   * title one by one, so an unbounded window would fan out. The merge picker
+   * asks for the wide end because a target it cannot list is a target the user
+   * cannot merge into.
+   */
+  list: acceptanceProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200) }).optional())
+    .query(async ({ ctx, input }) => ctx.acceptanceService.listWithSubjects(input?.limit)),
 
   /**
    * Fold one acceptance into another: the source's verification rounds (and

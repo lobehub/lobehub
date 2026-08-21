@@ -11,6 +11,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import {
   collectCheckIds,
+  countLogicalChecks,
   mergeAcceptanceRounds,
   planCheckIdRemap,
   remapPlanItem,
@@ -130,6 +131,35 @@ describe('collectCheckIds', () => {
   });
 });
 
+describe('countLogicalChecks', () => {
+  it('counts one check once even when it carries a separate criterion id', () => {
+    // `collectCheckIds` holds both ids for collision purposes — the user-facing
+    // count must not read that as two checks.
+    const runs = [run('run-1', 1, [planItem('plan-1', { sourceCriterionId: 'criterion-a' })])];
+
+    expect(collectCheckIds(runs, []).size).toBe(2);
+    expect(countLogicalChecks(runs, [])).toBe(1);
+  });
+
+  it('does not count a generation folded away by supersedes', () => {
+    const runs = [
+      run('run-1', 1, [planItem('old')]),
+      run('run-2', 2, [planItem('new', { supersedes: ['old'] })]),
+    ];
+
+    expect(countLogicalChecks(runs, [])).toBe(1);
+  });
+
+  it('counts a result that names an item no plan carries', () => {
+    expect(
+      countLogicalChecks(
+        [run('run-1', 1, [planItem('planned')])],
+        [result('res-1', 'run-1', 'ingested-only')],
+      ),
+    ).toBe(2);
+  });
+});
+
 describe('remapPlanItem', () => {
   it('rewrites the item id, its criterion id and its supersedes references', () => {
     const remap = new Map([
@@ -166,6 +196,19 @@ describe('mergeAcceptanceRounds', () => {
     ]);
     expect(mocks.acceptanceDelete).toHaveBeenCalledWith(SOURCE_ID);
     expect(summary).toMatchObject({ movedChecks: 2, movedRounds: 2, rekeyedChecks: 0 });
+  });
+
+  it('reports the logical check count, not the raw identifier set', async () => {
+    mocks.listByAcceptance.mockImplementation(async (id: string) =>
+      id === SOURCE_ID
+        ? [run('run-a', 1, [planItem('plan-1', { sourceCriterionId: 'criterion-a' })])]
+        : [],
+    );
+
+    const summary = await mergeWith(acceptance(SOURCE_ID), acceptance(TARGET_ID));
+
+    // One check that happens to speak two ids is still one moved check.
+    expect(summary.movedChecks).toBe(1);
   });
 
   it('re-keys colliding check ids on both the plan and its results', async () => {

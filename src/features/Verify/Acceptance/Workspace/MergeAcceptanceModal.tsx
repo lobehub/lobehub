@@ -1,10 +1,10 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
-import { Search } from 'lucide-react';
+import { Search, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +16,16 @@ import { frostedModalStyles } from '../modals';
 
 /** A settled aggregate cannot receive checks — the server refuses it too. */
 const SETTLED_STATUSES = new Set(['accepted', 'closed']);
+
+/**
+ * How far back the picker reaches (the server caps the list read at 200).
+ *
+ * The sidebar's own feed stops at the newest 50, which is fine for a panel you
+ * scroll — but a merge target that is not listed is a merge you cannot perform,
+ * so this surface asks for the wide end. The list still has an end: when it is
+ * reached, the footer says so instead of implying "this is everything".
+ */
+const TARGET_WINDOW = 200;
 
 const styles = createStaticStyles(({ css }) => ({
   search: css`
@@ -115,6 +125,32 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
+  errorState: css`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+
+    padding-block: 20px;
+  `,
+  retryBtn: css`
+    cursor: pointer;
+
+    padding-block: 4px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: 4px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    &:hover {
+      border-color: ${cssVar.colorTextTertiary};
+      color: ${cssVar.colorText};
+    }
+  `,
 }));
 
 const titleOf = (item: AcceptanceListItem) => item.subject.title || item.subjectId;
@@ -129,15 +165,24 @@ interface MergeContentProps {
 const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
-  const { data, isLoading } = useAcceptanceList(true);
+  // Revalidate on open: the dialog is a decision surface, and the list's own
+  // invalidations do not reach this wider window's cache key.
+  const { data, error, isLoading, mutate } = useAcceptanceList(true, {
+    limit: TARGET_WINDOW,
+    revalidateOnMount: true,
+  });
   const [query, setQuery] = useState('');
   const [targetId, setTargetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const keyword = query.trim().toLowerCase();
-  const candidates = (data ?? [])
-    .filter((item) => item.id !== source.id)
-    .filter((item) => !keyword || titleOf(item).toLowerCase().includes(keyword));
+  const others = (data ?? []).filter((item) => item.id !== source.id);
+  const candidates = others.filter(
+    (item) => !keyword || titleOf(item).toLowerCase().includes(keyword),
+  );
+  // The window has an end, and a target past it is unreachable from here — say
+  // so rather than letting the list read as the complete set.
+  const windowFull = (data?.length ?? 0) >= TARGET_WINDOW;
 
   const handleConfirm = async () => {
     if (!targetId) return;
@@ -169,10 +214,30 @@ const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
         />
       </label>
 
-      {isLoading ? (
+      {error ? (
+        // A failed list read must not read as "there is nothing to merge into":
+        // the two states lead to opposite conclusions about the delivery.
+        <div className={styles.errorState}>
+          <Empty
+            description={translate('workspace.loadError')}
+            icon={TriangleAlert}
+            title={translate('workspace.loadErrorTitle')}
+          />
+          <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
+            {translate('workspace.retry')}
+          </button>
+        </div>
+      ) : isLoading ? (
         <SkeletonList rows={4} />
       ) : candidates.length === 0 ? (
-        <div className={styles.empty}>{translate('acceptance.workspace.merge.noCandidates')}</div>
+        <div className={styles.empty}>
+          {translate(
+            others.length === 0
+              ? 'acceptance.workspace.merge.noCandidates'
+              : 'acceptance.workspace.merge.noSearchResults',
+            { query: query.trim() },
+          )}
+        </div>
       ) : (
         <div className={styles.list}>
           {candidates.map((item) => {
@@ -206,6 +271,9 @@ const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
 
       <Text fontSize={12} type={'secondary'}>
         {translate('acceptance.workspace.merge.hint')}
+        {windowFull
+          ? ` ${translate('acceptance.workspace.merge.windowHint', { count: TARGET_WINDOW })}`
+          : ''}
       </Text>
 
       <Flexbox horizontal gap={8} justify={'flex-end'}>
