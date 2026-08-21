@@ -42,6 +42,12 @@ const styles = createStaticStyles(({ css }) => ({
     height: 1px;
     background: ${cssVar.colorBorderSecondary};
   `,
+  retry: css`
+    cursor: pointer;
+    align-self: flex-start;
+    border: 0;
+    background: none;
+  `,
   open: css`
     flex: none;
     font-size: 12px;
@@ -80,7 +86,7 @@ interface LessonPreviewProps {
 const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonPath, title }) => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
-  const { data, isLoading } = useExpertiseLesson(lessonId);
+  const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);
 
   const sections = previewSections(data?.lesson.sections);
   const evidence = data?.hits.slice(0, MAX_EVIDENCE) ?? [];
@@ -114,13 +120,28 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
                   hits: data.lesson.hitCount,
                   runs: data.lesson.hitRunCount,
                 })
-              : t('preview.loading')}
+              : error
+                ? t('preview.failed')
+                : t('preview.loading')}
           </Text>
           {layer && <Tag size={'small'}>{layer}</Tag>}
         </Flexbox>
       </Flexbox>
 
       {isLoading && !data && <SkeletonParagraph rows={3} />}
+
+      {/* Without this the card sits on "loading…" forever: SWR clears isLoading on failure. */}
+      {!!error && !data && (
+        <Text
+          as={'button'}
+          className={styles.retry}
+          fontSize={12}
+          type={'info'}
+          onClick={() => void mutate()}
+        >
+          {t('rules.detail.retry')}
+        </Text>
+      )}
 
       {sections.length > 0 && (
         <>

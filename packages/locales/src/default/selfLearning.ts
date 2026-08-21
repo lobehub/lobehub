@@ -150,6 +150,7 @@ export default {
   'nav.teach': 'Teach it one',
   'nav.warmup': 'Review past conversations',
 
+  'preview.failed': 'Could not load this lesson',
   'preview.loading': 'loading…',
   'preview.moreEvidence': '+{{count}} more recorded',
   'preview.open': 'Open full lesson',

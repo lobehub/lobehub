@@ -166,8 +166,8 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
           // Above the row rather than below it: the row's own hint sits directly beneath the
           // title, so a card there buries the line the reader just came from.
           placement={'topRight'}
-          // Rows near the fold would otherwise push the card past the viewport, putting its
-          // evidence and the click hint out of reach; padding lets it flip above the row instead.
+          // This stack never flips a popup to the opposite side, so the card has to fit in the
+          // space above the row; the padding keeps it clear of the viewport edge.
           positionerProps={{ collisionPadding: 12 }}
           trigger={'hover'}
           content={
@@ -185,6 +185,13 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
             gap={2}
             style={{ flex: 1, minWidth: 0 }}
             onClick={() => navigate(lessonPath)}
+            // base-ui gives the trigger role="button" and focus, but brings no activation of
+            // its own, so a keyboard user could tab here and have Enter do nothing.
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              navigate(lessonPath);
+            }}
           >
             <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
               <Text fontSize={13.5} weight={500}>
