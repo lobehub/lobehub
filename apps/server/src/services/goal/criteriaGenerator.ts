@@ -5,6 +5,9 @@ import {
   chainGoalCriteriaDraft,
   GOAL_CRITERIA_DRAFT_JSON_SCHEMA,
   GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
+  VERIFY_EVIDENCE_MODALITIES,
+  VERIFY_EVIDENCE_SCOPES,
+  VERIFY_EVIDENCE_TYPES,
   VERIFY_ON_FAIL_ACTIONS,
   VERIFY_VERIFIER_TYPES,
 } from '@lobechat/prompts';
@@ -30,9 +33,9 @@ const generatedCriteriaSchema = z.object({
         .array(
           z.object({
             hint: z.string().optional(),
-            modality: z.string().optional(),
-            scope: z.string().optional(),
-            type: z.string(),
+            modality: z.enum(VERIFY_EVIDENCE_MODALITIES).optional(),
+            scope: z.enum(VERIFY_EVIDENCE_SCOPES).optional(),
+            type: z.enum(VERIFY_EVIDENCE_TYPES),
           }),
         )
         .optional(),
@@ -93,8 +96,6 @@ export class GoalCriteriaGeneratorService {
 
     return parsed.data.criteria
       .slice(0, maxCriteria)
-      .filter(
-        (criterion) => !isProgrammaticTestCheck(criterion.title, criterion.description),
-      ) as GoalCriterionDraft[];
+      .filter((criterion) => !isProgrammaticTestCheck(criterion.title, criterion.description));
   }
 }

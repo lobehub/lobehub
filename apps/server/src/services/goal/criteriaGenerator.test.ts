@@ -41,4 +41,26 @@ describe('GoalCriteriaGeneratorService', () => {
       }),
     );
   });
+
+  it('rejects criteria containing evidence values outside the supported enums', async () => {
+    generateObject.mockResolvedValue({
+      criteria: [
+        {
+          description: 'The release is visible',
+          instruction: 'Inspect the release.',
+          onFail: 'auto_repair',
+          required: true,
+          requiredEvidence: [
+            { hint: 'Capture it', modality: 'hologram', scope: 'somewhere', type: 'binary' },
+          ],
+          title: 'Release shipped',
+          verifierType: 'agent',
+        },
+      ],
+    });
+
+    await expect(
+      new GoalCriteriaGeneratorService({} as any, 'user-1').generate({ goal: 'Ship it' }),
+    ).resolves.toEqual([]);
+  });
 });
