@@ -11,6 +11,10 @@ import {
 import { extractBearerToken } from '@/utils/server/auth';
 
 export const requireHeteroModelInvocation = async (c: Context, next: Next) => {
+  if (process.env.ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT === '0') {
+    throw new HTTPException(403, { message: 'Server-default agents are disabled' });
+  }
+
   const token = extractBearerToken(c.req.header('Authorization'));
   const claims = token ? await validateHeteroOperationJWT(token) : null;
   if (!claims) throw new HTTPException(401, { message: 'Invalid operation token' });

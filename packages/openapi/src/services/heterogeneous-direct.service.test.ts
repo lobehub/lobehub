@@ -18,13 +18,15 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   resolveServerModel: vi.fn(),
 }));
 
-const protocolStream = (events: Array<{ data: unknown; type: string }>) => {
+const protocolStream = (events: Array<{ data: unknown; id?: string; type: string }>) => {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     start(controller) {
       for (const event of events) {
         controller.enqueue(
-          encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`),
+          encoder.encode(
+            `${event.id ? `id: ${event.id}\n` : ''}event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`,
+          ),
         );
       }
       controller.close();
@@ -157,6 +159,36 @@ describe('heterogeneous direct invocation protocol', () => {
       ],
       role: 'tool',
       tool_call_id: 'call-1',
+    });
+  });
+
+  it('preserves Anthropic thinking history across tool rounds', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              { signature: 'signed-thinking', thinking: 'private thought', type: 'thinking' },
+              { data: 'encrypted-redacted-thought', type: 'redacted_thinking' },
+              { text: 'I will inspect it.', type: 'text' },
+              { id: 'call-1', input: { path: '/tmp' }, name: 'read', type: 'tool_use' },
+            ],
+            role: 'assistant',
+          },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages[0]).toMatchObject({
+      content: [
+        { signature: 'signed-thinking', thinking: 'private thought', type: 'thinking' },
+        { data: 'encrypted-redacted-thought', type: 'redacted_thinking' },
+        { text: 'I will inspect it.', type: 'text' },
+      ],
+      provider: 'anthropic',
+      role: 'assistant',
+      tool_calls: [{ id: 'call-1' }],
     });
   });
 
@@ -391,5 +423,44 @@ describe('heterogeneous direct invocation protocol', () => {
     ].map((match) => JSON.parse(match[1]).item);
 
     expect(doneItems).toContainEqual(reasoningItem);
+  });
+
+  it('completes streamed reasoning with its encrypted response item only once', async () => {
+    const reasoningItem = {
+      encrypted_content: 'encrypted-current',
+      id: 'reasoning-current',
+      status: 'completed',
+      summary: [{ text: 'thinking', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const events = parseSseEvents(
+      await readText(
+        encodeResponsesStream(
+          protocolStream([
+            { data: 'thinking', id: 'reasoning-current', type: 'reasoning' },
+            {
+              data: reasoningItem,
+              id: 'reasoning-current',
+              type: 'reasoning_response_item',
+            },
+            { data: 'stop', type: 'stop' },
+          ]),
+        ),
+      ),
+    );
+    const reasoningAdded = events.filter(
+      ({ data, type }) => type === 'response.output_item.added' && data.item.type === 'reasoning',
+    );
+    const reasoningDone = events.filter(
+      ({ data, type }) => type === 'response.output_item.done' && data.item.type === 'reasoning',
+    );
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(reasoningAdded).toHaveLength(1);
+    expect(reasoningDone).toHaveLength(1);
+    expect(reasoningAdded[0].data.output_index).toBe(reasoningDone[0].data.output_index);
+    expect(reasoningAdded[0].data.item.id).toBe('reasoning-current');
+    expect(reasoningDone[0].data.item).toEqual(reasoningItem);
+    expect(completed?.data.response.output).toEqual([reasoningItem]);
   });
 });

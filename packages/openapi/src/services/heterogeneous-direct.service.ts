@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ChatStreamPayload, OpenAIChatMessage } from '@lobechat/model-runtime';
+import type {
+  ChatStreamPayload,
+  OpenAIChatMessage,
+  UserMessageContentPart,
+} from '@lobechat/model-runtime';
 import { RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
@@ -52,6 +56,38 @@ const contentWithImages = (content: unknown): OpenAIChatMessage['content'] => {
   return images.length > 0 ? [...(text ? [{ text, type: 'text' as const }] : []), ...images] : text;
 };
 
+const anthropicThinkingParts = (content: unknown): UserMessageContentPart[] => {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap<UserMessageContentPart>((part) => {
+    if (!isRecord(part)) return [];
+    if (
+      part.type === 'thinking' &&
+      typeof part.thinking === 'string' &&
+      typeof part.signature === 'string'
+    ) {
+      return [{ signature: part.signature, thinking: part.thinking, type: 'thinking' as const }];
+    }
+    if (part.type === 'redacted_thinking' && typeof part.data === 'string') {
+      return [{ data: part.data, type: 'redacted_thinking' as const }];
+    }
+    return [];
+  });
+};
+
+const contentWithAnthropicThinking = (content: unknown): OpenAIChatMessage['content'] => {
+  const thinking = anthropicThinkingParts(content);
+  if (thinking.length === 0) return contentWithImages(content);
+  const visible = contentWithImages(content);
+  return [
+    ...thinking,
+    ...(typeof visible === 'string'
+      ? visible
+        ? [{ text: visible, type: 'text' as const }]
+        : []
+      : visible),
+  ];
+};
+
 export const normalizeAnthropicRequest = (request: Record<string, unknown>, model: string) => {
   const messages: OpenAIChatMessage[] = [];
   const system = textFromParts(request.system);
@@ -94,8 +130,16 @@ export const normalizeAnthropicRequest = (request: Record<string, unknown>, mode
       if (remaining.length) messages.push({ content: remaining, role: 'user' });
       continue;
     }
+    const normalizedContent =
+      role === 'assistant' ? contentWithAnthropicThinking(content) : contentWithImages(content);
+    const hasAnthropicThinking =
+      Array.isArray(normalizedContent) &&
+      normalizedContent.some(
+        (part) => part.type === 'thinking' || part.type === 'redacted_thinking',
+      );
     messages.push({
-      content: contentWithImages(content),
+      content: normalizedContent,
+      ...(hasAnthropicThinking ? { provider: 'anthropic' } : {}),
       role,
       ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
     });
@@ -219,20 +263,29 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
 
 interface ProtocolEvent {
   data: unknown;
+  id?: string;
   type: string;
 }
 
 const parseProtocolStream = (stream: ReadableStream<Uint8Array>) => {
   let buffer = '';
+  let eventId = '';
   let eventType = '';
   const decoder = new TextDecoder();
   const processLine = (
     line: string,
     controller: TransformStreamDefaultController<ProtocolEvent>,
   ) => {
+    if (line.startsWith('id:')) eventId = line.slice(3).trim();
     if (line.startsWith('event:')) eventType = line.slice(6).trim();
     if (line.startsWith('data:')) {
-      controller.enqueue({ data: JSON.parse(line.slice(5).trim()), type: eventType });
+      controller.enqueue({
+        data: JSON.parse(line.slice(5).trim()),
+        ...(eventId ? { id: eventId } : {}),
+        type: eventType,
+      });
+      eventId = '';
+      eventType = '';
     }
   };
   return stream
@@ -430,6 +483,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
   let finalized = false;
   let nextOutputIndex = 0;
   const outputItems: unknown[] = [];
+  let reasoningItemId: string | undefined;
   let reasoningOutputIndex: number | undefined;
   let reasoningText = '';
   let sequenceNumber = 0;
@@ -462,34 +516,70 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
     } satisfies BaseStreamEvent;
     return sse(event, sequencedData);
   };
-  const finalize = (controller: TransformStreamDefaultController<string>) => {
-    if (finalized) return;
-    finalized = true;
-    if (reasoningOutputIndex !== undefined) {
-      const item = {
-        id: `rs_${responseId}`,
-        status: 'completed',
-        summary: [{ text: reasoningText, type: 'summary_text' }],
-        type: 'reasoning',
-      };
-      outputItems[reasoningOutputIndex] = item;
+  const completeReasoning = (
+    controller: TransformStreamDefaultController<string>,
+    responseItem?: unknown,
+  ) => {
+    if (reasoningOutputIndex === undefined) {
+      if (responseItem === undefined) return;
+      const outputIndex = nextOutputIndex++;
+      const item = isRecord(responseItem) ? { ...responseItem, status: 'completed' } : responseItem;
+      outputItems[outputIndex] = item;
       controller.enqueue(
-        responseSse('response.reasoning_summary_text.done', {
-          item_id: `rs_${responseId}`,
-          output_index: reasoningOutputIndex,
-          summary_index: 0,
-          text: reasoningText,
-          type: 'response.reasoning_summary_text.done',
+        responseSse('response.output_item.added', {
+          item: isRecord(responseItem) ? { ...responseItem, status: 'in_progress' } : responseItem,
+          output_index: outputIndex,
+          type: 'response.output_item.added',
         }),
       );
       controller.enqueue(
         responseSse('response.output_item.done', {
           item,
-          output_index: reasoningOutputIndex,
+          output_index: outputIndex,
           type: 'response.output_item.done',
         }),
       );
+      return;
     }
+
+    const outputIndex = reasoningOutputIndex;
+    const itemId =
+      isRecord(responseItem) && typeof responseItem.id === 'string'
+        ? responseItem.id
+        : reasoningItemId || `rs_${responseId}`;
+    const item = isRecord(responseItem)
+      ? { ...responseItem, status: 'completed' }
+      : {
+          id: itemId,
+          status: 'completed',
+          summary: [{ text: reasoningText, type: 'summary_text' }],
+          type: 'reasoning',
+        };
+    outputItems[outputIndex] = item;
+    controller.enqueue(
+      responseSse('response.reasoning_summary_text.done', {
+        item_id: itemId,
+        output_index: outputIndex,
+        summary_index: 0,
+        text: reasoningText,
+        type: 'response.reasoning_summary_text.done',
+      }),
+    );
+    controller.enqueue(
+      responseSse('response.output_item.done', {
+        item,
+        output_index: outputIndex,
+        type: 'response.output_item.done',
+      }),
+    );
+    reasoningItemId = undefined;
+    reasoningOutputIndex = undefined;
+    reasoningText = '';
+  };
+  const finalize = (controller: TransformStreamDefaultController<string>) => {
+    if (finalized) return;
+    finalized = true;
+    completeReasoning(controller);
     if (textOutputIndex !== undefined) {
       const item = {
         content: [{ annotations: [], text: outputText, type: 'output_text' }],
@@ -616,11 +706,12 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
           } else if (event.type === 'reasoning') {
             reasoningText += String(event.data);
             if (reasoningOutputIndex === undefined) {
+              reasoningItemId = event.id || `rs_${responseId}`;
               reasoningOutputIndex = nextOutputIndex++;
               controller.enqueue(
                 responseSse('response.output_item.added', {
                   item: {
-                    id: `rs_${responseId}`,
+                    id: reasoningItemId,
                     status: 'in_progress',
                     summary: [],
                     type: 'reasoning',
@@ -633,30 +724,14 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
             controller.enqueue(
               responseSse('response.reasoning_summary_text.delta', {
                 delta: String(event.data),
-                item_id: `rs_${responseId}`,
+                item_id: reasoningItemId,
                 output_index: reasoningOutputIndex,
                 summary_index: 0,
                 type: 'response.reasoning_summary_text.delta',
               }),
             );
           } else if (event.type === 'reasoning_response_item') {
-            const outputIndex = nextOutputIndex++;
-            const item = isRecord(event.data) ? { ...event.data, status: 'completed' } : event.data;
-            outputItems[outputIndex] = item;
-            controller.enqueue(
-              responseSse('response.output_item.added', {
-                item: isRecord(event.data) ? { ...event.data, status: 'in_progress' } : event.data,
-                output_index: outputIndex,
-                type: 'response.output_item.added',
-              }),
-            );
-            controller.enqueue(
-              responseSse('response.output_item.done', {
-                item,
-                output_index: outputIndex,
-                type: 'response.output_item.done',
-              }),
-            );
+            completeReasoning(controller, event.data);
           } else if (event.type === 'tool_calls' && Array.isArray(event.data)) {
             for (const chunk of event.data) {
               if (!isRecord(chunk) || typeof chunk.index !== 'number') continue;
