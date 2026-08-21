@@ -268,6 +268,22 @@ export const drainPendingPushes = async (
   const locked = await redis.set(lockKey, token, 'EX', FLUSH_LOCK_TTL_SECONDS, 'NX');
   if (locked !== 'OK') return { drained: false, remaining: 0, sent: 0 };
 
+  const stillOurs = async () => (await redis.get(lockKey)) === token;
+
+  // Renew DURING the delivery, not after it: one send can outlast the lease on
+  // its own (probe + download + upload), and a renewal that only runs once the
+  // send returns is too late to have kept it alive. Ownership-checked, so a
+  // lapsed holder never extends the lease of whoever took over.
+  const heartbeat = setInterval(
+    () => {
+      void (async () => {
+        if (await stillOurs()) await redis.expire(lockKey, FLUSH_LOCK_TTL_SECONDS);
+      })();
+    },
+    Math.floor((FLUSH_LOCK_TTL_SECONDS / 3) * 1000),
+  );
+  heartbeat.unref?.();
+
   let sent = 0;
   try {
     const pendingKey = wechatPendingPushKey(applicationId, userId);
@@ -284,8 +300,15 @@ export const drainPendingPushes = async (
       }
 
       const result = await send(payload);
-      // Renew after each delivery so a slow attachment leg cannot let the lease
-      // lapse mid-drain and admit a second drainer.
+
+      // If the lease lapsed and someone else took over mid-delivery, stop:
+      // continuing would pop items a second drainer is also popping, and
+      // renewing here would extend THEIR lease, not ours.
+      if (!(await stillOurs())) {
+        log('drainPendingPushes: lost the lease for %s:%s mid-drain', applicationId, userId);
+        if (result === 'sent') sent++;
+        return { drained: true, remaining: await redis.llen(pendingKey), sent };
+      }
       await redis.expire(lockKey, FLUSH_LOCK_TTL_SECONDS);
       if (result === 'stop') {
         await redis.lpush(pendingKey, raw);
@@ -304,8 +327,9 @@ export const drainPendingPushes = async (
     // still releases the lock on the way out of this return.
     return { drained: true, remaining: await redis.llen(pendingKey), sent };
   } finally {
+    clearInterval(heartbeat);
     // Only release a lease we still own: if it expired and someone else took
     // it, an unconditional DEL would drop THEIR lock and admit a third drainer.
-    if ((await redis.get(lockKey)) === token) await redis.del(lockKey);
+    if (await stillOurs()) await redis.del(lockKey);
   }
 };

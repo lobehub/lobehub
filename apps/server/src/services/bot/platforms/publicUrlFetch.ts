@@ -205,9 +205,9 @@ const bypassesProxy = (hostname: string): boolean => {
     .filter(Boolean)
     .some((entry) => {
       if (entry === '*') return true;
-      // Entries may carry a port and may or may not lead with a dot; both forms
-      // mean "this host and anything under it".
-      const bare = entry.replace(/:\d+$/, '').replace(/^\./, '');
+      // Entries may carry a port and may lead with `.` or `*.`; all of those
+      // forms mean "this host and anything under it".
+      const bare = entry.replace(/:\d+$/, '').replace(/^\*?\./, '');
       return host === bare || host.endsWith(`.${bare}`);
     });
 };

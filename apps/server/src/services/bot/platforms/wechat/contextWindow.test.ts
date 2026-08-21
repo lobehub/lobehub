@@ -270,6 +270,30 @@ describe('pending push queue', () => {
     expect(await redis.get(lockKey)).toBe('someone-elses-token');
   });
 
+  it('stops draining when the lease is lost mid-delivery', async () => {
+    // Regression: a send that outlasts the lease lets a second drainer in. The
+    // first must not keep popping items the second is also popping, and must
+    // not renew the lease that now belongs to the new owner.
+    const redis = new FakeRedis();
+    await enqueuePendingPush(redis, APP, USER, payload('first'));
+    await enqueuePendingPush(redis, APP, USER, payload('second'));
+    const lockKey = `wechat:pending-flush:${APP}:${USER}`;
+
+    const delivered: string[] = [];
+    const result = await drainPendingPushes(redis, APP, USER, async (p) => {
+      delivered.push(p.content!);
+      // The lease lapsed while this delivery ran and another drainer took it.
+      await redis.set(lockKey, 'new-owner-token', 'EX', 30);
+      return 'sent';
+    });
+
+    expect(delivered).toEqual(['first']);
+    expect(result.sent).toBe(1);
+    // The newer item is left for the drainer that now owns the lease.
+    expect(redis.lists.get(wechatPendingPushKey(APP, USER))).toHaveLength(1);
+    expect(await redis.get(lockKey)).toBe('new-owner-token');
+  });
+
   it('renews its own lease across deliveries and releases it at the end', async () => {
     const redis = new FakeRedis();
     await enqueuePendingPush(redis, APP, USER, payload('first'));

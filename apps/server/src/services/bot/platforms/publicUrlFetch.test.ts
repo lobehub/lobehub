@@ -205,6 +205,28 @@ describe('fetchPublicUrl', () => {
     }
   });
 
+  it('still pins when NO_PROXY uses a wildcard suffix', async () => {
+    // Regression: `*.example.com` kept its `*` through normalization, so the
+    // bypass went unrecognized and the direct request lost its pin.
+    const previous = getGlobalDispatcher();
+    const proxy = new EnvHttpProxyAgent({ httpsProxy: 'http://proxy.internal:3128' });
+    setGlobalDispatcher(proxy);
+    vi.stubEnv('NO_PROXY', '*.example.com');
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+      expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
+      await result!.dispose();
+    } finally {
+      vi.unstubAllEnvs();
+      setGlobalDispatcher(previous);
+      await proxy.close();
+    }
+  });
+
   it('does not pin a host the proxy actually handles', async () => {
     const previous = getGlobalDispatcher();
     const proxy = new EnvHttpProxyAgent({ httpsProxy: 'http://proxy.internal:3128' });
