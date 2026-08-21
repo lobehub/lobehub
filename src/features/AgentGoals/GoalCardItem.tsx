@@ -55,14 +55,12 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
     <GoalAcceptance taskId={task.id}>
       {({ bundle, error, isLoading, retry }) => {
         const presentation = getGoalPresentation({
-          acceptanceStatus: bundle?.acceptance.status,
           checks: bundle?.checks,
-          goalStatus: goal?.status,
-          maxRounds: goal?.maxRounds,
+          goalStatus: goal?.status ?? 'planning',
+          maxRounds: goal?.maxRounds ?? null,
           rounds: task.totalTopics ?? 0,
-          taskStatus: task.status,
         });
-        if (!isLoading && !shouldShowGoal(presentation.statusKey, hideAchieved ? 'active' : 'all'))
+        if (!isLoading && !shouldShowGoal(goal?.status ?? 'planning', hideAchieved ? 'active' : 'all'))
           return null;
 
         return (

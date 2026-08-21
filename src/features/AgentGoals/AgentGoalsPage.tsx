@@ -97,15 +97,13 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
       const acceptance = acceptanceBySubjectMap[`task:${goal.id}`];
       const bundle = acceptance ? acceptanceBundleMap[acceptance.id] : undefined;
       const presentation = getGoalPresentation({
-        acceptanceStatus: bundle?.acceptance.status,
         checks: bundle?.checks,
-        goalStatus: goal.goal?.status,
-        maxRounds: goal.goal?.maxRounds,
+        goalStatus: goal.goal?.status ?? 'planning',
+        maxRounds: goal.goal?.maxRounds ?? null,
         rounds: goal.totalTopics ?? 0,
-        taskStatus: goal.status,
       });
 
-      return shouldShowGoal(presentation.statusKey, 'active');
+      return shouldShowGoal(goal.goal?.status ?? 'planning', 'active');
     });
   }, [acceptanceBundleMap, acceptanceBySubjectMap, filter, goals]);
   const visibleGoalCount = filteredGoals.length;

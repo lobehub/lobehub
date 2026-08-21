@@ -1,8 +1,10 @@
+import { goalStatuses } from '@lobechat/const/goal';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { GoalModel } from '@/database/models/goal';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
@@ -10,6 +12,11 @@ import { GoalService } from '@/server/services/goal';
 const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   opts.next({
     ctx: {
+      goalModel: new GoalModel(
+        opts.ctx.serverDB,
+        opts.ctx.userId,
+        opts.ctx.workspaceId ?? undefined,
+      ),
       goalService: new GoalService(
         opts.ctx.serverDB,
         opts.ctx.userId,
@@ -140,6 +147,23 @@ export const goalRouter = router({
       mapGoalError(error, 'graph');
     }
   }),
+
+  /**
+   * List goals. Each item is the execution-carrier task with the goal row
+   * attached (`goal`) plus subtree run statistics (`totalRunCost` /
+   * `totalRunDuration`), shaped TaskItem-compatible for the existing goal UI.
+   */
+  list: goalProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+        projectId: z.string().optional(),
+        statuses: z.array(z.enum(goalStatuses)).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => ctx.goalModel.list(input)),
 
   pause: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {

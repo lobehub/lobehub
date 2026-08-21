@@ -12,9 +12,7 @@ import {
 const goal = (overrides: Partial<GoalListItem> & Pick<GoalListItem, 'id'>): GoalListItem =>
   ({
     assigneeAgentId: 'agt_1',
-    // No `status` on the entity here: these cases exercise the task-status
-    // fallback tier of the derivation (legacy rows before the backfill ran).
-    goal: { maxRounds: 3 },
+    goal: { id: `g-${overrides.id}`, maxRounds: 3, status: 'running' },
     identifier: `T-${overrides.id}`,
     instruction: 'do the thing',
     name: `goal ${overrides.id}`,
