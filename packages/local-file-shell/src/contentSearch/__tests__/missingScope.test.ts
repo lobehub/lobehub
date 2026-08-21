@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -69,6 +70,44 @@ describe('missing search scope', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe(`Search scope does not exist: ${missingScope}`);
   });
+
+  // `stat` failing is not the same as the path being gone. An unreadable parent
+  // (EACCES), a symlink loop, a transient fd exhaustion — all throw for a scope
+  // that exists, and answering "does not exist" there is a confidently wrong
+  // diagnosis, which is worse than the vague one this guard replaces. Those
+  // reach the engine, whose own error is the accurate one.
+  it.skipIf(process.getuid?.() === 0)(
+    'should not claim a scope is missing when it merely cannot be read',
+    async () => {
+      const lockedParent = fs.mkdtempSync(path.join(os.tmpdir(), 'lobehub-locked-'));
+      const child = path.join(lockedParent, 'repo');
+      fs.mkdirSync(child);
+      fs.chmodSync(lockedParent, 0o000);
+
+      try {
+        // Precondition: the scope EXISTS, but stat'ing it fails with something
+        // other than ENOENT — otherwise this case proves nothing.
+        const statCode = await stat(child).then(
+          () => undefined,
+          (error: NodeJS.ErrnoException) => error.code,
+        );
+        expect(statCode).toBe('EACCES');
+
+        const grep = await new MacOSContentSearchImpl().grep({
+          output_mode: 'content',
+          pattern: 'anything',
+          scope: child,
+        });
+        const glob = await globLocalFiles({ pattern: '**/*', scope: child });
+
+        expect(grep.error ?? '').not.toContain('does not exist');
+        expect(glob.error ?? '').not.toContain('does not exist');
+      } finally {
+        fs.chmodSync(lockedParent, 0o700);
+        fs.rmSync(lockedParent, { force: true, recursive: true });
+      }
+    },
+  );
 
   // A file-scoped search is a documented call shape, not a missing scope.
   it('should accept a scope pointing at a single file', async () => {

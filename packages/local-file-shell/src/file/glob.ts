@@ -1,19 +1,9 @@
-import { stat } from 'node:fs/promises';
-
 import fg from 'fast-glob';
 
 import type { GlobFilesParams, GlobFilesResult } from '../types';
 import { expandTilde } from './expandTilde';
 import { hasHiddenSegment } from './hasHiddenSegment';
-
-const exists = async (target: string): Promise<boolean> => {
-  try {
-    await stat(target);
-    return true;
-  } catch {
-    return false;
-  }
-};
+import { isMissingPath } from './isMissingPath';
 
 /**
  * Lightweight glob — backed by `fast-glob` only. For the platform-aware
@@ -27,9 +17,10 @@ export async function globLocalFiles({
 }: GlobFilesParams): Promise<GlobFilesResult> {
   // `fast-glob` answers a non-existent root with an empty list, which reads as
   // "the pattern matched nothing" — the caller then revises the pattern instead
-  // of the path. Name the missing scope.
+  // of the path. Name the missing scope; a root that merely cannot be stat'd is
+  // left for `fg` to fail on, since only it knows what actually went wrong.
   const searchRoot = expandTilde(scope ?? cwd);
-  if (searchRoot && !(await exists(searchRoot))) {
+  if (searchRoot && (await isMissingPath(searchRoot))) {
     return {
       engine: 'fast-glob',
       error: `Search scope does not exist: ${searchRoot}`,

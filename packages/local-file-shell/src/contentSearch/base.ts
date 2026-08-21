@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import fg from 'fast-glob';
 
 import { expandTilde } from '../file/expandTilde';
+import { isMissingPath } from '../file/isMissingPath';
 import { createLogger } from '../logger';
 import type { ToolDetector } from '../toolDetector';
 import type { GrepContentParams, GrepContentResult } from '../types';
@@ -76,22 +77,25 @@ export abstract class BaseContentSearch {
    * concludes the CODE doesn't exist — the one answer the search cannot support.
    * Report the missing scope by name so the next call fixes the path instead of
    * the hypothesis.
+   *
+   * Only a path that is definitively absent short-circuits: a scope that exists
+   * but cannot be stat'd (an unreadable parent, a transient fd exhaustion) still
+   * goes to the engine, whose own error is the accurate one. Claiming "does not
+   * exist" there would be a confidently wrong diagnosis — exactly what this
+   * guard exists to remove.
    */
   protected async missingScopeResult(
     params: GrepContentParams,
   ): Promise<GrepContentResult | undefined> {
     const searchPath = expandTilde(this.resolveSearchPath(params))!;
-    try {
-      await stat(searchPath);
-      return undefined;
-    } catch {
-      return {
-        error: `Search scope does not exist: ${searchPath}`,
-        matches: [],
-        success: false,
-        total_matches: 0,
-      };
-    }
+    if (!(await isMissingPath(searchPath))) return undefined;
+
+    return {
+      error: `Search scope does not exist: ${searchPath}`,
+      matches: [],
+      success: false,
+      total_matches: 0,
+    };
   }
 
   /**
