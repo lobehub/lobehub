@@ -1,6 +1,7 @@
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
+import { useChatInputStore } from '@/features/ChatInput/store';
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files';
 
@@ -23,6 +24,7 @@ const FileItem = memo<FileItemProps>((props) => {
     s.removeChatUploadFile,
     s.retryChatUploadFile,
   ]);
+  const contextKey = useChatInputStore((s) => s.contextSelectionKey);
 
   if (file.type.startsWith('image')) {
     return (
@@ -33,10 +35,10 @@ const FileItem = memo<FileItemProps>((props) => {
         loading={status === 'pending'}
         src={previewUrl}
         onRemove={() => {
-          removeFile(id);
+          removeFile({ contextKey, id });
         }}
         onRetry={() => {
-          void retryFile(id);
+          void retryFile({ contextKey, id });
         }}
       />
     );
@@ -45,9 +47,9 @@ const FileItem = memo<FileItemProps>((props) => {
   return (
     <File
       {...props}
-      onRemove={() => removeFile(id)}
+      onRemove={() => removeFile({ contextKey, id })}
       onRetry={() => {
-        void retryFile(id);
+        void retryFile({ contextKey, id });
       }}
     />
   );

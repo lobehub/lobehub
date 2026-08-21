@@ -97,7 +97,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
       // `onChange`, so a fast type-then-Enter sequence can fire before the
       // cache catches up and the empty-message guard would bail incorrectly.
       const typed = (getMarkdownContent?.() ?? inputMessage ?? '').trim();
-      const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
+      const fileList = fileChatSelectors.chatUploadFileList(contextSelectionKey)(
+        useFileStore.getState(),
+      );
       const contextList = fileChatSelectors.chatContextSelections(contextSelectionKey)(
         useFileStore.getState(),
       );
@@ -262,7 +264,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // Preserve the complete draft when creation or execution fails. The
         // editor, files and context are one unit from the user's perspective.
         if (submitted) {
-          clearChatUploadFileList();
+          clearChatUploadFileList(contextSelectionKey);
           clearChatContextSelections(contextSelectionKey);
           mainInputEditor?.clearContent();
         }

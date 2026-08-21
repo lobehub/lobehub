@@ -39,6 +39,7 @@ const FileUpload = memo(() => {
   );
 
   const upload = useFileStore((s) => s.uploadChatFiles);
+  const contextKey = useChatInputStore((s) => s.contextSelectionKey);
   const editor = useChatInputStore((s) => s.editor);
 
   const agentId = useAgentId();
@@ -94,7 +95,7 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
+            await upload({ agentId, contextKey, files: [file] });
 
             return false;
           }}
@@ -137,7 +138,7 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
+            await upload({ agentId, contextKey, files: [file] });
 
             return false;
           }}
@@ -177,7 +178,7 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
+            await upload({ agentId, contextKey, files: [file] });
 
             return false;
           }}

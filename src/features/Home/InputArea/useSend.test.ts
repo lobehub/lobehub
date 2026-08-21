@@ -34,7 +34,7 @@ const chatState = vi.hoisted(() => ({
 
 const fileState = vi.hoisted(() => ({
   chatContextSelectionsByContext: {} as Record<string, any[]>,
-  chatUploadFileList: [],
+  chatUploadFileListByContext: {} as Record<string, any[]>,
   clearChatContextSelections: clearChatContextSelectionsMock,
   clearChatUploadFileList: clearChatUploadFileListMock,
   restoreChatContextSelections: restoreChatContextSelectionsMock,
@@ -159,7 +159,8 @@ vi.mock('@/store/file', () => {
     fileChatSelectors: {
       chatContextSelections: (contextKey: string) => (state: typeof fileState) =>
         state.chatContextSelectionsByContext[contextKey] ?? [],
-      chatUploadFileList: (state: typeof fileState) => state.chatUploadFileList,
+      chatUploadFileList: (contextKey: string) => (state: typeof fileState) =>
+        state.chatUploadFileListByContext[contextKey] ?? [],
     },
     useFileStore,
   };
@@ -193,7 +194,7 @@ describe('Home InputArea useSend', () => {
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
     fileState.chatContextSelectionsByContext = {};
-    fileState.chatUploadFileList = [];
+    fileState.chatUploadFileListByContext = {};
     homeState.inputActiveMode = null;
     homeState.ungroupedAgents = [];
     globalState.systemStatus.homeSelectedAgentId = undefined;
@@ -306,7 +307,7 @@ describe('Home InputArea useSend', () => {
   });
 
   it('does not discard attachments that Task mode cannot persist', async () => {
-    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+    fileState.chatUploadFileListByContext = { 'home:task:agt_inbox': [{ id: 'file-1' }] } as any;
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
@@ -326,7 +327,7 @@ describe('Home InputArea useSend', () => {
 
   it('explains why an attachment-only Task submission cannot proceed', async () => {
     chatState.inputMessage = '';
-    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+    fileState.chatUploadFileListByContext = { 'home:task:agt_inbox': [{ id: 'file-1' }] } as any;
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),

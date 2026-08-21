@@ -9,6 +9,11 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useFileStore as useStore } from '../../store';
 
 const AGENT_ID = 'agent-1';
+const CONTEXT_KEY = 'main_agent-1_new';
+
+/** Pending uploads filed under one composer's context. */
+const uploads = (store: ReturnType<typeof useStore.getState>, contextKey: string) =>
+  store.chatUploadFileListByContext[contextKey] ?? [];
 
 /** Force the conversation agent into chat / agent / heterogeneous mode for the by-id selectors. */
 const mockAgentMode = ({
@@ -176,20 +181,44 @@ describe('useFileStore:chat', () => {
     });
   });
 
-  it('clearChatUploadFileList should clear the inputFilesList', () => {
+  it('clearChatUploadFileList should clear only the requested conversation', () => {
     const { result } = renderHook(() => useStore());
 
     act(() => {
-      useStore.setState({ chatUploadFileList: [{ id: 'abc' }] as any });
+      useStore.setState({
+        chatUploadFileListByContext: {
+          other: [{ id: 'other' }],
+          topic: [{ id: 'abc' }],
+        } as any,
+      });
     });
 
-    expect(result.current.chatUploadFileList).toEqual([{ id: 'abc' }]);
+    expect(uploads(result.current, 'topic')).toEqual([{ id: 'abc' }]);
 
     act(() => {
-      result.current.clearChatUploadFileList();
+      result.current.clearChatUploadFileList('topic');
     });
 
-    expect(result.current.chatUploadFileList).toEqual([]);
+    expect(uploads(result.current, 'topic')).toEqual([]);
+    // Sending in one composer must not wipe another composer's draft.
+    expect(uploads(result.current, 'other')).toEqual([{ id: 'other' }]);
+  });
+
+  it('moveChatUploadFileList carries pending uploads to the minted topic key', () => {
+    const { result } = renderHook(() => useStore());
+
+    act(() => {
+      useStore.setState({
+        chatUploadFileListByContext: { main_agt_new: [{ id: 'abc' }] } as any,
+      });
+    });
+
+    act(() => {
+      result.current.moveChatUploadFileList('main_agt_new', 'main_agt_tpc_1');
+    });
+
+    expect(uploads(result.current, 'main_agt_new')).toEqual([]);
+    expect(uploads(result.current, 'main_agt_tpc_1')).toEqual([{ id: 'abc' }]);
   });
 
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
@@ -201,23 +230,24 @@ describe('useFileStore:chat', () => {
 
     act(() => {
       useStore.setState({
-        chatUploadFileList: [],
+        chatUploadFileListByContext: {},
         uploadWithProgress: uploadWithProgress as any,
       });
     });
 
     await act(async () => {
-      await result.current.uploadChatFiles(
-        [
+      await result.current.uploadChatFiles({
+        agentId: AGENT_ID,
+        contextKey: CONTEXT_KEY,
+        files: [
           new File(['<svg />'], 'icon.svg', { type: 'image/svg+xml' }),
           new File(['zip'], 'archive.zip', { type: 'application/zip' }),
         ],
-        AGENT_ID,
-      );
+      });
     });
 
     expect(uploadWithProgress).not.toHaveBeenCalled();
-    expect(result.current.chatUploadFileList).toEqual([]);
+    expect(uploads(result.current, CONTEXT_KEY)).toEqual([]);
     expect(toast.error).toHaveBeenCalledWith(expect.any(String));
   });
 
@@ -229,16 +259,17 @@ describe('useFileStore:chat', () => {
 
     act(() => {
       useStore.setState({
-        chatUploadFileList: [],
+        chatUploadFileListByContext: {},
         uploadWithProgress: uploadWithProgress as any,
       });
     });
 
     await act(async () => {
-      await result.current.uploadChatFiles(
-        [new File(['zip'], 'archive.zip', { type: 'application/zip' })],
-        AGENT_ID,
-      );
+      await result.current.uploadChatFiles({
+        agentId: AGENT_ID,
+        contextKey: CONTEXT_KEY,
+        files: [new File(['zip'], 'archive.zip', { type: 'application/zip' })],
+      });
     });
 
     expect(toast.error).not.toHaveBeenCalled();
@@ -253,16 +284,17 @@ describe('useFileStore:chat', () => {
 
     act(() => {
       useStore.setState({
-        chatUploadFileList: [],
+        chatUploadFileListByContext: {},
         uploadWithProgress: uploadWithProgress as any,
       });
     });
 
     await act(async () => {
-      await result.current.uploadChatFiles(
-        [new File(['profile'], 'Communication_Notifications.provisionprofile')],
-        AGENT_ID,
-      );
+      await result.current.uploadChatFiles({
+        agentId: AGENT_ID,
+        contextKey: CONTEXT_KEY,
+        files: [new File(['profile'], 'Communication_Notifications.provisionprofile')],
+      });
     });
 
     expect(toast.error).not.toHaveBeenCalled();
@@ -281,10 +313,14 @@ describe('useFileStore:chat', () => {
     });
 
     await act(async () => {
-      await result.current.uploadChatFiles([file], AGENT_ID);
+      await result.current.uploadChatFiles({
+        agentId: AGENT_ID,
+        contextKey: CONTEXT_KEY,
+        files: [file],
+      });
     });
 
-    expect(result.current.chatUploadFileList).toEqual([
+    expect(uploads(result.current, CONTEXT_KEY)).toEqual([
       expect.objectContaining({
         agentId: AGENT_ID,
         error: 'You do not have permission to upload files in this workspace.',
@@ -300,14 +336,14 @@ describe('useFileStore:chat', () => {
       const { result } = renderHook(() => useStore());
 
       act(() => {
-        useStore.setState({ chatUploadFileList: [{ id: 'file-1' }] as any });
+        useStore.setState({ chatUploadFileListByContext: { topic: [{ id: 'file-1' }] } as any });
       });
 
       await act(async () => {
-        await result.current.removeChatUploadFile('file-1');
+        await result.current.removeChatUploadFile({ contextKey: 'topic', id: 'file-1' });
       });
 
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploads(result.current, 'topic')).toEqual([]);
       expect(removeFile).toHaveBeenCalledWith('file-1');
     });
 
@@ -317,17 +353,17 @@ describe('useFileStore:chat', () => {
 
       act(() => {
         useStore.setState({
-          chatUploadFileList: [{ id: 'file-1', skipRemoveFile: true }] as any,
+          chatUploadFileListByContext: { topic: [{ id: 'file-1', skipRemoveFile: true }] } as any,
         });
       });
 
       await act(async () => {
-        await result.current.removeChatUploadFile('file-1');
+        await result.current.removeChatUploadFile({ contextKey: 'topic', id: 'file-1' });
       });
 
       // draft entry is dropped, but the persisted file backing the original
       // message must NOT be deleted
-      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(uploads(result.current, 'topic')).toEqual([]);
       expect(removeFile).not.toHaveBeenCalled();
     });
   });

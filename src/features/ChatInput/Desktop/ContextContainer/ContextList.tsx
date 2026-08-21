@@ -25,8 +25,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 const ContextList = memo(() => {
   const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
-  const inputFilesList = useFileStore(fileChatSelectors.chatUploadFileList);
-  const showFileList = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
+  const inputFilesList = useFileStore(fileChatSelectors.chatUploadFileList(contextSelectionKey));
+  const showFileList = useFileStore(
+    fileChatSelectors.chatUploadFileListHasItem(contextSelectionKey),
+  );
   const rawSelectionList = useFileStore(
     fileChatSelectors.chatContextSelections(contextSelectionKey),
   );

@@ -302,6 +302,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
+  const contextKey = useChatInputStore((s) => s.contextSelectionKey);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const defaultDisableGatewayMode = useUserStore(
@@ -508,7 +509,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               }
               close();
               editor?.focus();
-              await upload([file], agentId);
+              await upload({ agentId, contextKey, files: [file] });
               return false;
             }}
           >
@@ -746,6 +747,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     agentId,
     activeSearchOption,
     canConfigureResource,
+    contextKey,
     effortItem,
     enableTopicAcceptance,
     canUploadImage,

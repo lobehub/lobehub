@@ -65,7 +65,12 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
+  const { handleUploadFiles } = useUploadFiles({
+    agentId: resolvedAgentId,
+    contextKey: contextSelectionKey,
+    model,
+    provider,
+  });
 
   // Daily-generated input hint paired with the fixed Home greeting.
   const { currentPair } = useHomeDailyBrief();

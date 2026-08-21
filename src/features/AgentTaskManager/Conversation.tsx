@@ -17,6 +17,7 @@ import {
   ChatInput,
   ChatList,
   conversationSelectors,
+  useConversationContextKey,
   useConversationStore,
 } from '@/features/Conversation';
 import CopilotModelSelect from '@/features/PageEditor/Copilot/CopilotModelSelect';
@@ -55,7 +56,13 @@ const Conversation = memo(() => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+  const contextKey = useConversationContextKey();
+  const { handleUploadFiles } = useUploadFiles({
+    agentId: currentAgentId,
+    contextKey,
+    model,
+    provider,
+  });
 
   const handleAgentChange = useCallback(
     (id: string) => {

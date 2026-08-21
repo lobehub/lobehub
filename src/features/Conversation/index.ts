@@ -1,6 +1,6 @@
 // Re-export types, provider, hooks, store, and components for convenience
 export { ConversationProvider, type ConversationProviderProps } from './ConversationProvider';
-export { useDoubleClickEdit } from './hooks';
+export { useConversationContextKey, useDoubleClickEdit } from './hooks';
 export {
   conversationSelectors,
   type ConversationStore,

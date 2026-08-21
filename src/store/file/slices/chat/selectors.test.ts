@@ -13,9 +13,9 @@ describe('filesSelectors', () => {
     it('should return the chatUploadFileList from state', () => {
       const state = {
         ...initialState,
-        chatUploadFileList: [{ id: '1' }] as UploadFileItem[],
+        chatUploadFileListByContext: { 'topic-a': [{ id: '1' }] as UploadFileItem[] },
       } as FilesStoreState;
-      expect(filesSelectors.chatUploadFileList(state)).toEqual([{ id: '1' }]);
+      expect(filesSelectors.chatUploadFileList('topic-a')(state)).toEqual([{ id: '1' }]);
     });
   });
 
@@ -72,13 +72,15 @@ describe('fileChatSelectors', () => {
   describe('chatRawFileList', () => {
     it('should return a list of raw files', () => {
       const state = {
-        chatUploadFileList: [
-          { file: { name: 'test1.jpg' } },
-          { file: { name: 'test2.jpg' } },
-        ] as UploadFileItem[],
-      } as FilesStoreState;
+        chatUploadFileListByContext: {
+          'topic-a': [
+            { file: { name: 'test1.jpg' } },
+            { file: { name: 'test2.jpg' } },
+          ] as UploadFileItem[],
+        },
+      } as unknown as FilesStoreState;
 
-      expect(fileChatSelectors.chatRawFileList(state)).toEqual([
+      expect(fileChatSelectors.chatRawFileList('topic-a')(state)).toEqual([
         { name: 'test1.jpg' },
         { name: 'test2.jpg' },
       ]);
@@ -86,55 +88,81 @@ describe('fileChatSelectors', () => {
   });
 
   describe('chatUploadFileList', () => {
-    it('should return the chatUploadFileList from state', () => {
+    it('should return only the requested conversation pending uploads', () => {
       const state = {
-        chatUploadFileList: [{ id: '1' }] as UploadFileItem[],
-      } as FilesStoreState;
-      expect(fileChatSelectors.chatUploadFileList(state)).toEqual([{ id: '1' }]);
+        chatUploadFileListByContext: {
+          'topic-a': [{ id: '1' }] as UploadFileItem[],
+          'topic-b': [{ id: '2' }] as UploadFileItem[],
+        },
+      } as unknown as FilesStoreState;
+
+      expect(fileChatSelectors.chatUploadFileList('topic-a')(state)).toEqual([{ id: '1' }]);
+      expect(fileChatSelectors.chatUploadFileList('topic-b')(state)).toEqual([{ id: '2' }]);
+      // A composer with nothing pending must not inherit its neighbour's draft.
+      expect(fileChatSelectors.chatUploadFileList('topic-c')(state)).toEqual([]);
+    });
+
+    it('returns the same empty list for an unknown conversation', () => {
+      const first = fileChatSelectors.chatUploadFileList('topic-a')(initialState);
+      const second = fileChatSelectors.chatUploadFileList('topic-b')(initialState);
+
+      expect(first).toBe(second);
     });
   });
 
   describe('chatUploadFileListHasItem', () => {
     it('should return true if chatUploadFileList has items', () => {
-      const state = { chatUploadFileList: [{ id: '1' }] as UploadFileItem[] } as FilesStoreState;
-      expect(fileChatSelectors.chatUploadFileListHasItem(state)).toBe(true);
+      const state = {
+        chatUploadFileListByContext: { 'topic-a': [{ id: '1' }] as UploadFileItem[] },
+      } as unknown as FilesStoreState;
+      expect(fileChatSelectors.chatUploadFileListHasItem('topic-a')(state)).toBe(true);
     });
 
     it('should return false if chatUploadFileList is empty', () => {
-      const state = { chatUploadFileList: [] as UploadFileItem[] } as FilesStoreState;
-      expect(fileChatSelectors.chatUploadFileListHasItem(state)).toBe(false);
+      const state = {
+        chatUploadFileListByContext: { 'topic-a': [] as UploadFileItem[] },
+      } as unknown as FilesStoreState;
+      expect(fileChatSelectors.chatUploadFileListHasItem('topic-a')(state)).toBe(false);
     });
   });
 
   describe('isUploadingFiles', () => {
     it('should return true if any file is in uploading status', () => {
       const state = {
-        chatUploadFileList: [
-          { status: Array.from(UPLOAD_STATUS_SET)[0] },
-          { status: 'completed' },
-        ] as UploadFileItem[],
-      } as FilesStoreState;
-      expect(fileChatSelectors.isUploadingFiles(state)).toBe(true);
+        chatUploadFileListByContext: {
+          'topic-a': [
+            { status: Array.from(UPLOAD_STATUS_SET)[0] },
+            { status: 'completed' },
+          ] as UploadFileItem[],
+        },
+      } as unknown as FilesStoreState;
+      expect(fileChatSelectors.isUploadingFiles('topic-a')(state)).toBe(true);
+      // Another composer must not be blocked by this one's upload.
+      expect(fileChatSelectors.isUploadingFiles('topic-b')(state)).toBe(false);
     });
 
     it('should return true if any file has unfinished embedding tasks', () => {
       const state = {
-        chatUploadFileList: [
-          { status: 'success', tasks: { finishEmbedding: false } },
-          { status: 'success', tasks: { finishEmbedding: true } },
-        ] as UploadFileItem[],
-      } as FilesStoreState;
-      expect(fileChatSelectors.isUploadingFiles(state)).toBe(true);
+        chatUploadFileListByContext: {
+          'topic-a': [
+            { status: 'success', tasks: { finishEmbedding: false } },
+            { status: 'success', tasks: { finishEmbedding: true } },
+          ] as UploadFileItem[],
+        },
+      } as unknown as FilesStoreState;
+      expect(fileChatSelectors.isUploadingFiles('topic-a')(state)).toBe(true);
     });
 
     it('should return false if no files are uploading or have unfinished tasks', () => {
-      const state: FilesStoreState = {
-        chatUploadFileList: [
-          { status: 'success', tasks: { finishEmbedding: true } },
-          { status: 'success' },
-        ] as UploadFileItem[],
-      } as FilesStoreState;
-      expect(fileChatSelectors.isUploadingFiles(state)).toBe(false);
+      const state = {
+        chatUploadFileListByContext: {
+          'topic-a': [
+            { status: 'success', tasks: { finishEmbedding: true } },
+            { status: 'success' },
+          ] as UploadFileItem[],
+        },
+      } as unknown as FilesStoreState;
+      expect(fileChatSelectors.isUploadingFiles('topic-a')(state)).toBe(false);
     });
   });
 });

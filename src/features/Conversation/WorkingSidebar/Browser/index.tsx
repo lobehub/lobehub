@@ -244,8 +244,14 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
 
       const file = dataUrlToFile(result.dataUrl, buildScreenshotFileName(result.title));
       // The attachment appears in the input immediately (pending state); the
-      // upload itself reports its own progress and errors.
-      void useFileStore.getState().uploadChatFiles([file], agentId);
+      // upload itself reports its own progress and errors. `composerTarget` is
+      // the composer this sidebar writes into (a thread's, when opened from one),
+      // so the screenshot lands in the file list the user is looking at.
+      void useFileStore.getState().uploadChatFiles({
+        agentId,
+        contextKey: composerTarget.writable ? composerTarget.contextKey : undefined,
+        files: [file],
+      });
       toast.success(t('workingPanel.browser.actions.captured'));
       focusChatInput();
     } catch (error) {
