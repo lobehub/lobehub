@@ -495,6 +495,43 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
       });
 
+      it('should not restore the composer when gateway setup fails after message acceptance', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(async (params) => {
+          params.onMessageAccepted();
+          throw new Error('gateway client initialization failed');
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: 'Already persisted',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalledOnce();
+        expect(setDocument).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
+      });
+
       it('should restore the pre-send editor snapshot when a hetero send fails', async () => {
         // Same silent-discard shape as the gateway branch above: persistence
         // throws, the temp rows are cleaned up, and the typed text is gone.

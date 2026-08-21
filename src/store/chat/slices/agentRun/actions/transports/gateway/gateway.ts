@@ -850,39 +850,19 @@ export class GatewayActionImpl {
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
-          // A later run already took this topic over — its start wrote the new
-          // `runningOperation`, and this close is just our own session winding
-          // down. Both writes below are unconditional stomps, so they'd retire a
-          // run that is still going: the status write kills its sidebar/home
-          // "running" state and the metadata clear drops the marker
-          // `useGatewayReconnect` needs to resume it after a reload.
-          const superseded = this.#isSupersededRunningOperation({
-            agentId: resolvedMessageContext.agentId,
-            groupId: resolvedMessageContext.groupId,
-            operationId: result.operationId,
-            topicId: result.topicId,
-          });
-
           // A clean completion the user isn't watching is owned by
-          // `markTopicUnread` (status: 'unread'); skip the 'active' write so
-          // the two never race over the status field. Every other case (viewing,
-          // error, abort) clears the running state back to 'active' as before.
+          // `markTopicUnread` (status: 'unread'). Every other case (viewing,
+          // error, abort) settles the running state back to 'active'. The server
+          // compares the operation id under the topic row lock so a late close
+          // from another tab cannot clear or settle a newer run.
           const viewing = this.#get().activeTopicId === result.topicId;
-          if (!superseded && (viewing || !succeeded)) {
-            void this.#get().updateTopicStatus?.({
-              agentId: resolvedMessageContext.agentId,
-              groupId: resolvedMessageContext.groupId,
-              status: 'active',
-              topicId: result.topicId,
-            });
-          }
-          // Clear running operation from topic metadata (best-effort from frontend;
-          // if browser was closed, reconnect logic will handle stale entries)
-          if (!superseded) {
-            topicService
-              .updateTopicMetadata(result.topicId, { runningOperation: null })
-              .catch(() => {});
-          }
+          topicService
+            .settleRunningOperation(
+              result.topicId,
+              result.operationId,
+              viewing || !succeeded ? 'active' : 'unread',
+            )
+            .catch(console.error);
           // Also clear the local store copy — the server clear above does NOT touch
           // the Zustand topic map that useGatewayReconnect reads. Ownership-guarded
           // on its own, so it is safe to call either way.

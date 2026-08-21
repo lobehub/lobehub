@@ -605,6 +605,22 @@ describe('TopicModel', () => {
       expect(row?.status).toBe('unread');
     });
 
+    it('uses the requested terminal status only for the matching operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'active matching operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('active');
+    });
+
     it('atomically removes only a matching child operation', async () => {
       const childHooks = [
         {

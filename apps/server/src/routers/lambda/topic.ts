@@ -1032,6 +1032,21 @@ export const topicRouter = router({
 
       return ctx.topicModel.updateMetadata(input.id, input.metadata);
     }),
+
+  settleRunningOperation: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        operationId: z.string(),
+        status: chatTopicStatusSchema.optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+
+      return ctx.topicModel.settleRunningOperation(input.id, input.operationId, input.status);
+    }),
 });
 
 export type TopicRouter = typeof topicRouter;

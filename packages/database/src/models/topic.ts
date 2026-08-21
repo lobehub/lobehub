@@ -1335,7 +1335,11 @@ export class TopicModel {
    * already cleared their marker, while a callback that observes a newer
    * operation must stop before dispatching lifecycle hooks for the wrong run.
    */
-  settleRunningOperation = async (id: string, operationId: string) => {
+  settleRunningOperation = async (
+    id: string,
+    operationId: string,
+    status: TopicItem['status'] = 'unread',
+  ) => {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata, status: topics.status })
@@ -1376,7 +1380,7 @@ export class TopicModel {
         .update(topics)
         .set({
           metadata,
-          ...(isRoot && existing.status === 'running' ? { status: 'unread' as const } : {}),
+          ...(isRoot && existing.status === 'running' ? { status } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, id), this.ownership()));

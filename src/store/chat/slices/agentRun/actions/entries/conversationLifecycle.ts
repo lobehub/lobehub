@@ -829,7 +829,7 @@ export class ConversationLifecycleActionImpl {
      * indistinguishable from the message being silently swallowed.
      */
     const restoreComposerAfterFailedSend = (error: unknown) => {
-      if (preserveComposer) return;
+      if (preserveComposer || hasNotifiedMessageAccepted) return;
 
       // Cancellation is a deliberate user action with its own restore path
       // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
