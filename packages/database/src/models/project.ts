@@ -1,5 +1,5 @@
 import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
-import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
+import type { ProjectEnvironmentType, ProjectStatus, ProjectVisibility } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
@@ -8,6 +8,7 @@ import { goals } from '../schemas/goal';
 import {
   projectAgents,
   projectCompletionReviews,
+  projectDirectories,
   projectKnowledgeBases,
   projects,
   projectWorks,
@@ -171,6 +172,97 @@ export class ProjectModel {
       .orderBy(desc(projects.updatedAt))
       .limit(limit)
       .offset(offset);
+  }
+
+  // ===================== Working-directory bindings =====================
+  //
+  // A project owns many (environment, directory) bindings: the same repo may
+  // be checked out on several devices, plus worktrees and gateway sandboxes.
+  // The mapping table is deliberately non-unique — one path can legitimately
+  // appear for multiple environments of the same project — and `deviceId` is
+  // NULL for sandbox/web bindings that have no persistent device row.
+
+  /** Bind a working directory to a project under an execution environment. */
+  async bindDirectory(
+    projectId: string,
+    input: {
+      environmentType: ProjectEnvironmentType;
+      deviceId?: string | null;
+      workingDirectory: string;
+    },
+  ) {
+    const [binding] = await this.db
+      .insert(projectDirectories)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            deviceId: input.deviceId ?? null,
+            environmentType: input.environmentType,
+            projectId,
+            workingDirectory: input.workingDirectory,
+          },
+        ),
+      )
+      .returning();
+    return binding ?? null;
+  }
+
+  /** Remove a single directory binding by its row id (owner-scoped). */
+  async unbindDirectory(bindingId: string) {
+    const [binding] = await this.db
+      .delete(projectDirectories)
+      .where(
+        and(
+          eq(projectDirectories.id, bindingId),
+          this.workspaceId
+            ? eq(projectDirectories.workspaceId, this.workspaceId)
+            : eq(projectDirectories.userId, this.userId),
+        ),
+      )
+      .returning();
+    return binding ?? null;
+  }
+
+  /** All directory bindings of a project the caller can see. */
+  async listDirectories(projectId: string) {
+    return this.db
+      .select()
+      .from(projectDirectories)
+      .where(
+        and(
+          eq(projectDirectories.projectId, projectId),
+          this.workspaceId
+            ? eq(projectDirectories.workspaceId, this.workspaceId)
+            : eq(projectDirectories.userId, this.userId),
+        ),
+      )
+      .orderBy(asc(projectDirectories.createdAt));
+  }
+
+  /**
+   * Resolve the project bound to a working directory, if any. The lookup
+   * matches the path alone (device is optional): the sidebar groups topics by
+   * directory path without knowing the device up front, so a bound directory
+   * must resolve on path alone. Returns the first bound project when several
+   * environments bind the same path.
+   */
+  async findProjectByWorkingDirectory(workingDirectory: string) {
+    const [row] = await this.db
+      .select({ projectId: projectDirectories.projectId })
+      .from(projectDirectories)
+      .where(
+        and(
+          eq(projectDirectories.workingDirectory, workingDirectory),
+          this.workspaceId
+            ? eq(projectDirectories.workspaceId, this.workspaceId)
+            : eq(projectDirectories.userId, this.userId),
+        ),
+      )
+      .orderBy(asc(projectDirectories.createdAt))
+      .limit(1);
+    if (!row) return null;
+    return this.findById(row.projectId);
   }
 
   async update(id: string, input: UpdateProjectInput) {

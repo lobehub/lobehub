@@ -1,4 +1,9 @@
-import type { ProjectCompletionDecision, ProjectStatus, ProjectVisibility } from '@lobechat/types';
+import type {
+  ProjectCompletionDecision,
+  ProjectEnvironmentType,
+  ProjectStatus,
+  ProjectVisibility,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -16,6 +21,7 @@ import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
+import { devices } from './device';
 import { knowledgeBases } from './file';
 import { users } from './user';
 import { works } from './work';
@@ -88,6 +94,51 @@ export const projects = pgTable(
       'projects_completed_requires_human_review',
       sql`${t.status} <> 'completed' OR (${t.completedReviewId} IS NOT NULL AND ${t.completedAt} IS NOT NULL)`,
     ),
+  ],
+);
+
+/**
+ * A working-directory binding between a project and an execution environment.
+ * One project may bind many directories across many environments: the same
+ * repo checked out on a desktop device, a worktree, a remote `lh connect`
+ * machine, or a gateway sandbox each get their own row. A directory can
+ * likewise stay bound to the same project from several environments.
+ *
+ * `deviceId` is NULL for sandbox environments (server-spawned, no persistent
+ * device row) and for web-only bindings. No uniqueness is enforced on purpose:
+ * the same physical path may legitimately appear for more than one environment
+ * of a project (source checkout + worktree), and the bindings are owned by the
+ * project rather than competing for a global directory namespace.
+ */
+export const projectDirectories = pgTable(
+  'project_directories',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    projectId: text('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Which kind of environment the directory lives in. */
+    environmentType: text('environment_type').$type<ProjectEnvironmentType>().notNull(),
+
+    /** Bound device for `device` environments; NULL for sandbox/web bindings. */
+    deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+
+    /** Absolute path of the bound working directory (device-local). */
+    workingDirectory: text('working_directory').notNull(),
+
+    ...timestamps,
+  },
+  (t) => [
+    index('project_directories_project_id_idx').on(t.projectId),
+    index('project_directories_device_id_idx').on(t.deviceId),
+    index('project_directories_working_directory_idx').on(t.workingDirectory),
+    index('project_directories_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

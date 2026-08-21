@@ -7,6 +7,7 @@ import {
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import type { ProjectDirectoryBindingInput, ProjectDirectoryBindingItem } from '@/services/project';
 import { projectService } from '@/services/project';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
@@ -22,15 +23,20 @@ const PERSONAL_SCOPE = 'personal';
 const projectScopeKey = (workspaceId: string | null) => workspaceId ?? PERSONAL_SCOPE;
 
 interface ProjectStore {
+  bindDirectory: (id: string, input: ProjectDirectoryBindingInput) => Promise<void>;
   createProject: (input: {
+    bindings?: ProjectDirectoryBindingInput[];
     identifier: string;
     name: string;
     slug?: string;
   }) => Promise<ProjectListItem>;
   deleteProject: (id: string) => Promise<void>;
+  findProjectByWorkingDirectory: (workingDirectory: string) => Promise<ProjectListItem | null>;
+  listDirectories: (id: string) => Promise<ProjectDirectoryBindingItem[]>;
   projectDetails: Record<string, Record<string, ProjectDetail>>;
   projectLists: Record<string, ProjectListItem[]>;
   refreshProjectList: () => Promise<void>;
+  unbindDirectory: (bindingId: string) => Promise<void>;
   updateProject: (id: string, input: { name: string }) => Promise<ProjectListItem>;
   useFetchProjectDetail: (id?: string) => SWRResponse<ProjectDetailResponse>;
   useFetchProjectList: (enabled?: boolean) => SWRResponse<ProjectListResponse>;
@@ -48,6 +54,22 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
     deleteProject: async (id) => {
       await projectService.delete(id);
       await get().refreshProjectList();
+    },
+    bindDirectory: async (id, input) => {
+      await projectService.bindDirectory(id, input);
+      await get().refreshProjectList();
+    },
+    listDirectories: async (id) => {
+      const response = await projectService.listDirectories(id);
+      return response.data;
+    },
+    unbindDirectory: async (bindingId) => {
+      await projectService.unbindDirectory(bindingId);
+      await get().refreshProjectList();
+    },
+    findProjectByWorkingDirectory: async (workingDirectory) => {
+      const response = await projectService.findProjectByWorkingDirectory(workingDirectory);
+      return response.data;
     },
     projectDetails: {},
     projectLists: {},

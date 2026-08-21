@@ -1036,6 +1036,13 @@
       "when": 1787239313202,
       "tag": "0147_resource_permissions_per_member_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1787321322387,
+      "tag": "0148_project_directories",
+      "breakpoints": true
     }
   ],
   "version": "6"

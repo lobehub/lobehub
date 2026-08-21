@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
+  devices,
   knowledgeBases,
   projectCompletionReviews,
   projects,
@@ -97,6 +98,74 @@ describe('ProjectModel', () => {
       ]),
     );
     expect(await model.findByIds([first.id, second.id, hidden.id])).toHaveLength(2);
+  });
+
+  it('binds multiple working directories to one project and resolves by path', async () => {
+    const project = await createProject(model, { name: 'Apollo' });
+    const [device] = await serverDB
+      .insert(devices)
+      .values({
+        deviceId: 'device-1',
+        identitySource: 'machine-id',
+        userId,
+      })
+      .returning();
+    const first = await model.bindDirectory(project.id, {
+      environmentType: 'device',
+      deviceId: device.id,
+      workingDirectory: '/Users/me/code/apollo',
+    });
+    const second = await model.bindDirectory(project.id, {
+      environmentType: 'sandbox',
+      workingDirectory: '/Users/me/code/apollo-worktree',
+    });
+
+    // One project owns both bindings; a device and a sandbox can coexist.
+    expect(await model.listDirectories(project.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: first!.id, workingDirectory: '/Users/me/code/apollo' }),
+        expect.objectContaining({
+          id: second!.id,
+          environmentType: 'sandbox',
+          workingDirectory: '/Users/me/code/apollo-worktree',
+        }),
+      ]),
+    );
+    // Path lookup works for both, ignoring the environment dimension.
+    expect(await model.findProjectByWorkingDirectory('/Users/me/code/apollo')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(await model.findProjectByWorkingDirectory('/Users/me/code/apollo-worktree')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+  });
+
+  it('keeps directory bindings scoped to the owning user', async () => {
+    const project = await createProject(model, { name: 'Scoped' });
+    const binding = await model.bindDirectory(project.id, {
+      environmentType: 'device',
+      workingDirectory: '/Users/me/code/scoped',
+    });
+
+    // A different user cannot see or unbind this binding.
+    expect(await otherModel.findProjectByWorkingDirectory('/Users/me/code/scoped')).toBeNull();
+    expect(await otherModel.unbindDirectory(binding!.id)).toBeNull();
+    expect(await model.findProjectByWorkingDirectory('/Users/me/code/scoped')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+  });
+
+  it('unbinds a directory and stops resolving it by path', async () => {
+    const project = await createProject(model, { name: 'Unbind' });
+    const binding = await model.bindDirectory(project.id, {
+      environmentType: 'device',
+      workingDirectory: '/Users/me/code/unbind',
+    });
+
+    expect(await model.unbindDirectory(binding!.id)).toEqual(
+      expect.objectContaining({ id: binding!.id }),
+    );
+    expect(await model.findProjectByWorkingDirectory('/Users/me/code/unbind')).toBeNull();
   });
 
   it('normalizes identifiers and enforces uniqueness within their ownership scope', async () => {

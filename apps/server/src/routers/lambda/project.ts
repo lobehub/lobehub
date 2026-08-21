@@ -121,12 +121,33 @@ export const projectRouter = router({
         name: z.string().min(1).max(255),
         slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
+        bindings: z
+          .array(
+            z.object({
+              environmentType: z.enum(['device', 'sandbox']),
+              deviceId: z.string().nullish(),
+              workingDirectory: z.string().min(1).max(1024),
+            }),
+          )
+          .max(20)
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        const { bindings, ...projectInput } = input;
+        const project = await ctx.projectModel.create(projectInput);
+        if (bindings?.length) {
+          for (const binding of bindings) {
+            await ctx.projectModel.bindDirectory(project.id, {
+              environmentType: binding.environmentType,
+              deviceId: binding.deviceId,
+              workingDirectory: binding.workingDirectory,
+            });
+          }
+        }
         return {
-          data: await ctx.projectModel.create(input),
+          data: project,
           message: 'Project created',
           success: true,
         };
@@ -174,6 +195,70 @@ export const projectRouter = router({
       };
     } catch (error) {
       mapProjectError(error, 'find');
+    }
+  }),
+
+  /**
+   * Resolve the project bound to a working directory, if any. Used by the
+   * sidebar's by-directory topic groups: an unbound directory offers "create
+   * project", a bound one offers "view project". The path matches alone —
+   * device context is optional because the sidebar groups by path only.
+   */
+  findProjectByWorkingDirectory: projectProcedure
+    .input(z.object({ workingDirectory: z.string().min(1).max(1024) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return {
+          data: await ctx.projectModel.findProjectByWorkingDirectory(input.workingDirectory),
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'findProjectByWorkingDirectory');
+      }
+    }),
+
+  bindDirectory: projectWriteProcedure
+    .input(
+      idInput.extend({
+        deviceId: z.string().nullish(),
+        environmentType: z.enum(['device', 'sandbox']),
+        workingDirectory: z.string().min(1).max(1024),
+      }),
+    )
+    .mutation(async ({ ctx, input: { id, ...input } }) => {
+      try {
+        return {
+          data: requireResult(await ctx.projectModel.bindDirectory(id, input)),
+          message: 'Directory bound to project',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'bindDirectory');
+      }
+    }),
+
+  unbindDirectory: projectWriteProcedure
+    .input(z.object({ bindingId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return {
+          data: requireResult(await ctx.projectModel.unbindDirectory(input.bindingId)),
+          message: 'Directory unbound from project',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'unbindDirectory');
+      }
+    }),
+
+  listDirectories: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
+    try {
+      return {
+        data: await ctx.projectModel.listDirectories(input.id),
+        success: true,
+      };
+    } catch (error) {
+      mapProjectError(error, 'listDirectories');
     }
   }),
 

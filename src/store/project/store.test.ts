@@ -91,6 +91,79 @@ describe('project store workspace scope', () => {
     );
   });
 
+  it('forwards directory bindings when creating a project from a folder', async () => {
+    const project = { id: 'project-1' } as ProjectListItem;
+    vi.spyOn(projectService, 'create').mockResolvedValue({
+      data: project,
+      message: 'Project created',
+      success: true,
+    });
+
+    await useProjectStore.getState().createProject({
+      bindings: [{ environmentType: 'device', workingDirectory: '/Users/me/code/app' }],
+      identifier: 'APP',
+      name: 'App',
+    });
+
+    expect(projectService.create).toHaveBeenCalledWith(
+      {
+        bindings: [{ environmentType: 'device', workingDirectory: '/Users/me/code/app' }],
+        identifier: 'APP',
+        name: 'App',
+      },
+      null,
+    );
+  });
+
+  it('resolves the project bound to a working directory by path alone', async () => {
+    const project = { id: 'project-1', name: 'App' } as ProjectListItem;
+    vi.spyOn(projectService, 'findProjectByWorkingDirectory').mockResolvedValue({
+      data: project,
+      success: true,
+    });
+
+    await expect(
+      useProjectStore.getState().findProjectByWorkingDirectory('/Users/me/code/app'),
+    ).resolves.toEqual(project);
+    expect(projectService.findProjectByWorkingDirectory).toHaveBeenCalledWith('/Users/me/code/app');
+  });
+
+  it('binds a directory and refreshes the list', async () => {
+    const refreshProjectList = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(projectService, 'bindDirectory').mockResolvedValue({
+      data: { id: 'binding-1' } as never,
+      message: 'Directory bound to project',
+      success: true,
+    });
+    useProjectStore.setState({ refreshProjectList });
+
+    await useProjectStore.getState().bindDirectory('project-1', {
+      environmentType: 'device',
+      workingDirectory: '/Users/me/code/app',
+    });
+
+    expect(projectService.bindDirectory).toHaveBeenCalledWith('project-1', {
+      environmentType: 'device',
+      workingDirectory: '/Users/me/code/app',
+    });
+    expect(refreshProjectList).toHaveBeenCalledOnce();
+  });
+
+  it('unbinds a directory and refreshes the list', async () => {
+    const refreshProjectList = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(projectService, 'unbindDirectory').mockResolvedValue({
+      data: { id: 'binding-1' } as never,
+      message: 'Directory unbound from project',
+      success: true,
+    });
+    useProjectStore.setState({ refreshProjectList });
+
+    await useProjectStore.getState().unbindDirectory('binding-1');
+
+    expect(projectService.unbindDirectory).toHaveBeenCalledWith('binding-1');
+    expect(refreshProjectList).toHaveBeenCalledOnce();
+  });
+
   it('refreshes the project list after deletion', async () => {
     const refreshProjectList = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(projectService, 'delete').mockResolvedValue({

@@ -67,6 +67,7 @@ vi.mock('antd-style', () => ({
     unreadRipple: 'unreadRipple',
     unreadWrapper: 'unreadWrapper',
   }),
+  createGlobalStyle: () => () => null,
   cssVar: {
     colorError: '#f00',
     colorInfo: '#00f',
@@ -76,6 +77,45 @@ vi.mock('antd-style', () => ({
   },
   cx: (...classes: Array<string | undefined>) => classes.filter(Boolean).join(' '),
   keyframes: () => 'keyframes',
+}));
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  DropdownMenu: ({ children }: { children?: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@lobehub/ui/es/ActionIcon/index', () => ({
+  default: ({ title }: { title?: string }) => (
+    <button aria-label={title} type="button">
+      {title}
+    </button>
+  ),
+}));
+
+vi.mock('@lobehub/ui/es/Icon/index', () => ({
+  default: () => <span />,
+}));
+
+vi.mock('@/features/Projects/CreateProjectModal', () => ({
+  openCreateProjectModal: vi.fn(),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => ({ push: vi.fn() }),
+}));
+
+vi.mock('@/libs/swr', () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: () => ({ data: null, error: undefined, isLoading: false }),
+}));
+
+vi.mock('@/services/project', () => ({
+  projectService: {
+    listAll: vi.fn().mockResolvedValue({ data: [], success: true }),
+  },
+}));
+
+vi.mock('@/store/project', () => ({
+  useProjectStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
 vi.mock('react-i18next', () => ({

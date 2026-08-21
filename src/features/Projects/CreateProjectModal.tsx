@@ -4,6 +4,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { type ProjectDirectoryBindingInput } from '@/services/project';
 import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
@@ -14,6 +15,16 @@ import {
 } from './createProjectForm';
 
 interface CreateProjectOptions {
+  /**
+   * Bind the created project to working directories on creation. Each entry
+   * is one (environment, directory) binding; a project may bind many.
+   */
+  bindings?: ProjectDirectoryBindingInput[];
+  /**
+   * Prefill the project name (and derive identifier/slug suggestions) from a
+   * source label, for example the folder name that triggered creation.
+   */
+  initialName?: string;
   /**
    * Handle the created project instead of opening it. Callers that create a
    * project as a step of another action (filing a delivery under a new one)
@@ -37,17 +48,18 @@ const CreateProjectTitle = memo(() => {
   return t('create.title');
 });
 
-const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
+const CreateProjectContent = memo<CreateProjectOptions>(({ bindings, initialName, onCreated }) => {
   const { t } = useTranslation(['project', 'common']);
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const createProject = useProjectStore((s) => s.createProject);
+  const initialSuggestions = getProjectFieldSuggestions(initialName ?? '');
   const [form, setForm] = useState<CreateProjectFormState>({
-    identifier: '',
+    identifier: initialSuggestions.identifier,
     identifierEdited: false,
     loading: false,
-    name: '',
-    slug: '',
+    name: initialName ?? '',
+    slug: initialSuggestions.slug,
     slugEdited: false,
   });
   const createInput = getCreateProjectInput(form);
@@ -74,7 +86,10 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     if (!createInput || form.loading) return;
     updateForm({ loading: true });
     try {
-      const project = await createProject(createInput);
+      const project = await createProject({
+        ...createInput,
+        ...(bindings?.length ? { bindings } : {}),
+      });
       close();
       if (onCreated) onCreated(project);
       else navigate(`/project/${project.slug ?? project.id}`);
@@ -113,7 +128,10 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             value={form.identifier}
             onPressEnter={handleCreate}
             onChange={(event) =>
-              updateForm({ identifier: event.target.value.toUpperCase(), identifierEdited: true })
+              updateForm({
+                identifier: event.target.value.toUpperCase(),
+                identifierEdited: true,
+              })
             }
           />
           <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>

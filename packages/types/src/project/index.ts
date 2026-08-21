@@ -19,3 +19,8 @@ export type ProjectVisibility = (typeof PROJECT_VISIBILITIES)[number];
 export const PROJECT_COMPLETION_DECISIONS = ['accepted', 'rejected'] as const;
 
 export type ProjectCompletionDecision = (typeof PROJECT_COMPLETION_DECISIONS)[number];
+
+export const PROJECT_ENVIRONMENT_TYPES = ['device', 'sandbox'] as const;
+
+/** Execution environment a project directory binding lives in. */
+export type ProjectEnvironmentType = (typeof PROJECT_ENVIRONMENT_TYPES)[number];

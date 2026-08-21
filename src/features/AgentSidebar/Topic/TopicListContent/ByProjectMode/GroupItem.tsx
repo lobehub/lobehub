@@ -25,6 +25,7 @@ import { operationSelectors } from '@/store/chat/selectors';
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
+import DirectoryProjectActions from './DirectoryProjectActions';
 import {
   getProjectTopicStatusCounts,
   hasProjectTopicStatusCounts,
@@ -224,7 +225,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const hasCollapsedIndicators = hasCollapsedStatus || hasCollapsedUnread;
   const ProjectFolderIcon = expanded ? FolderOpenIcon : FolderClosedIcon;
   const action =
-    canAddTopic || hasCollapsedIndicators ? (
+    canAddTopic || hasCollapsedIndicators || workingDirectory ? (
       <Flexbox horizontal align={'center'} gap={4}>
         {hasCollapsedStatus && <CollapsedStatusBadges counts={statusCounts} />}
         {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
@@ -242,6 +243,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
             />
           </span>
         )}
+        {workingDirectory && <DirectoryProjectActions workingDirectory={workingDirectory} />}
       </Flexbox>
     ) : undefined;
 
