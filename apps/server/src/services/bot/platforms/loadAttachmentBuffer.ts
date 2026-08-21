@@ -1,5 +1,7 @@
 import debug from 'debug';
 
+import { fetchPublicUrl } from './publicUrlFetch';
+
 const log = debug('bot-platform:load-attachment');
 
 const MB = 1024 * 1024;
@@ -110,7 +112,10 @@ export const fetchCappedBuffer = async (
   }: LoadAttachmentOptions = {},
 ): Promise<Buffer | undefined> => {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    // Caller-supplied URLs reach here (see `botMessage`'s `fetchUrl` input), so
+    // the fetch must refuse anything pointing inside the network.
+    const response = await fetchPublicUrl(url, timeoutMs);
+    if (!response) return undefined;
     if (!response.ok) {
       log('fetchCappedBuffer: HTTP %d for %s', response.status, url);
       return undefined;

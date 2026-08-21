@@ -1,0 +1,138 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ lookup: vi.fn() }));
+
+vi.mock('node:dns', () => ({ promises: { lookup: mocks.lookup } }));
+vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com' } }));
+vi.mock('@/envs/file', () => ({
+  fileEnv: { S3_ENDPOINT: 'http://minio.internal:9000', S3_PUBLIC_DOMAIN: undefined },
+}));
+
+const { fetchPublicUrl } = await import('./publicUrlFetch');
+
+const ok = () => ({ headers: new Headers(), ok: true, status: 200 }) as any;
+
+describe('fetchPublicUrl', () => {
+  beforeEach(() => {
+    mocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('fetches a public host', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('https://cdn.example.com/a.png', 1000)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['loopback', 'http://127.0.0.1/admin'],
+    ['cloud metadata', 'http://169.254.169.254/latest/meta-data/'],
+    ['RFC1918', 'http://10.1.2.3/internal'],
+    ['RFC1918 (192.168)', 'http://192.168.0.1/'],
+    ['IPv6 loopback', 'http://[::1]/'],
+    ['IPv6 unique-local', 'http://[fd00::1]/'],
+  ])('refuses a literal %s address', async (_label, url) => {
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl(url, 1000)).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a public hostname that resolves to a private address', async () => {
+    // The classic DNS-based bypass: the name looks fine, the answer does not.
+    mocks.lookup.mockResolvedValue([{ address: '169.254.169.254', family: 4 }]);
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('https://evil.example.com/x', 1000)).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses when any resolved address is private', async () => {
+    mocks.lookup.mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+      { address: '10.0.0.5', family: 4 },
+    ]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
+
+    expect(await fetchPublicUrl('https://evil.example.com/x', 1000)).toBeUndefined();
+  });
+
+  it.each([
+    ['a non-HTTP protocol', 'file:///etc/passwd'],
+    ['embedded credentials', 'https://user:pw@cdn.example.com/a.png'],
+  ])('refuses %s', async (_label, url) => {
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl(url, 1000)).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('trusts our own app origin even though it is ours to serve', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('https://app.example.com/f/file_1', 1000)).toBeTruthy();
+    // Trusted origins skip resolution entirely.
+    expect(mocks.lookup).not.toHaveBeenCalled();
+  });
+
+  it('trusts a private storage endpoint we configured ourselves', async () => {
+    // Self-hosted deployments legitimately run object storage on the LAN, and
+    // dev hands back a localhost storage URL.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
+
+    expect(await fetchPublicUrl('http://minio.internal:9000/bucket/k', 1000)).toBeTruthy();
+  });
+
+  it('re-validates every redirect hop', async () => {
+    // Regression: our file proxy answers /f/:id with a 302, so redirects must be
+    // followed — which means a public host could bounce us to the metadata IP.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        body: null,
+        headers: new Headers({ location: 'http://169.254.169.254/latest/' }),
+        status: 302,
+      } as any)
+      .mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('https://cdn.example.com/a.png', 1000)).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows a redirect that stays public', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        body: null,
+        headers: new Headers({ location: 'https://cdn.example.com/real.png' }),
+        status: 302,
+      } as any)
+      .mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('https://cdn.example.com/a.png', 1000)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up on a redirect loop', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      body: null,
+      headers: new Headers({ location: 'https://cdn.example.com/loop' }),
+      status: 302,
+    } as any);
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('https://cdn.example.com/loop', 1000)).toBeUndefined();
+  });
+});

@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sendFeishuAttachments } from './sendAttachments';
 
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', () => ({
+  fetchPublicUrl: (url: string, timeoutMs: number) =>
+    fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+}));
+
 const makeApi = () => ({
   sendMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-1', raw: {} }),
   uploadFile: vi.fn().mockResolvedValue({ file_key: 'file_xyz' }),
