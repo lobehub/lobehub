@@ -347,6 +347,12 @@ export default {
   'permission.page.groupModelPolicyFixedDesc':
     'Members can only use the model you set for this group',
   'permission.page.groupModelPolicyMemberDesc': 'Members can use a model they set themselves',
+  'permission.page.groupTopicSharePolicyDesc':
+    "Whether members can publish share links for this group's topics.",
+  'permission.page.groupTopicSharePolicyMemberDesc':
+    "Members can publish share links for any of this group's topics",
+  'permission.page.groupTopicSharePolicyRestrictedDesc':
+    'Only you and workspace owners can publish share links for this group',
   'permission.page.memberGroup': 'Access',
   'permission.page.modelPolicyFixedDesc': 'Members can only use the model you set',
   'permission.page.modelPolicyMemberDesc': 'Members can use a model they set themselves',
@@ -358,6 +364,12 @@ export default {
   'permission.page.privateNotice':
     'This agent is still private. Everything here takes effect once you publish it to the workspace.',
   'permission.page.title': 'Permissions',
+  'permission.page.topicSharePolicyDesc':
+    "Whether members can publish share links for this agent's topics.",
+  'permission.page.topicSharePolicyMemberDesc':
+    "Members can publish share links for any of this agent's topics",
+  'permission.page.topicSharePolicyRestrictedDesc':
+    'Only you and workspace owners can publish share links',
   'permission.page.usableWhenShared': 'Can use when shared',
   'permission.page.viewableWhenShared': 'Can view when shared',
   'permission.saveNoEditPermission':
@@ -973,6 +985,11 @@ export default {
   'settingAgent.selectionPolicy.membersCannotSwitchWhenShared': 'Locked when shared',
   'settingAgent.selectionPolicy.membersCanSwitch': 'Can switch',
   'settingAgent.selectionPolicy.membersCanSwitchWhenShared': 'Can switch when shared',
+  // Not a Can-switch / Locked pair like the policies above: sharing is a
+  // capability rather than a setting members flip, so the labels name who holds it.
+  'settingAgent.topicSharePolicy.membersCanShare': 'Members can share',
+  'settingAgent.topicSharePolicy.membersCannotShare': 'Creator and owners only',
+  'settingAgent.topicSharePolicy.title': 'Topic sharing',
   'settingAgent.toolsConfig.title': 'Tools',
   'settingAgent.submit': 'Update Agent',
   'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
@@ -3100,6 +3117,9 @@ When I am ___, I need ___
     'Only workspace owners can do this. Ask an owner if you need this changed.',
   'workspace.permission.requiresPrimaryOwner':
     'Only the workspace Owner can delete this workspace. Transfer ownership first if needed.',
+  // Not a role gate: the agent's author reserved topic sharing on the Permission page.
+  'workspace.permission.topicShareRestricted':
+    'This agent only lets its creator and workspace owners share topics. Ask them if you need a link.',
   'workspace.onboarding.title': 'Set up your workspace',
   'workspace.onboarding.stepLabel': 'Step {{current}} of {{total}}',
   'workspace.onboarding.skip': 'Skip',

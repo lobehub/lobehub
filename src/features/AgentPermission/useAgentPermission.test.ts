@@ -104,6 +104,27 @@ describe('useAgentPermission', () => {
     expect(result.current.executionTargetPolicy).toBe('member');
   });
 
+  it('defaults topic sharing to member, so legacy agents keep sharing', () => {
+    const { result } = setup();
+
+    expect(result.current.topicSharePolicy).toBe('member');
+  });
+
+  it('reads and saves the topic-share policy through the agent config', () => {
+    mocks.agentMap = {
+      'agent-1': workspaceAgent({ agencyConfig: { topicSharePolicy: 'restricted' } }),
+    };
+
+    const { result } = setup();
+    expect(result.current.topicSharePolicy).toBe('restricted');
+
+    result.current.setTopicSharePolicy('member');
+
+    expect(mocks.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
+      agencyConfig: { topicSharePolicy: 'member' },
+    });
+  });
+
   it('reads the stored intent on a private agent instead of the run-time resolution', () => {
     // `resolveAgentModelSelectionPolicy` would answer `fixed` here (a private
     // agent has no members), which would strand the control on "can't switch".

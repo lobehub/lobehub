@@ -1,6 +1,10 @@
 'use client';
 
-import type { AgentModelSelectionPolicy, LobeAgentAgencyConfig } from '@lobechat/types';
+import type {
+  AgentModelSelectionPolicy,
+  AgentTopicSharePolicy,
+  LobeAgentAgencyConfig,
+} from '@lobechat/types';
 import { useCallback, useMemo } from 'react';
 
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
@@ -19,11 +23,14 @@ export interface AgentSelectionPoliciesState {
   modelPolicy: AgentModelSelectionPolicy;
   setExecutionTargetPolicy: (policy: AgentModelSelectionPolicy) => void;
   setModelPolicy: (policy: AgentModelSelectionPolicy) => void;
+  setTopicSharePolicy: (policy: AgentTopicSharePolicy) => void;
+  topicSharePolicy: AgentTopicSharePolicy;
 }
 
 /**
- * The "Editable settings" half of a Permission page: what a workspace member
- * may switch for their own conversations / runs with ONE agent.
+ * The member-facing policies of a Permission page: what a workspace member may
+ * switch for their own conversations / runs with ONE agent, plus whether they
+ * may publish that agent's topics as share links.
  *
  * Shared by the Agent page and the Agent Group page, because a group's
  * conversation *is* a conversation with its supervisor agent — the group chat
@@ -86,6 +93,11 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     [saveAgencyConfig],
   );
 
+  const setTopicSharePolicy = useCallback(
+    (policy: AgentTopicSharePolicy) => void saveAgencyConfig({ topicSharePolicy: policy }),
+    [saveAgencyConfig],
+  );
+
   return {
     canFixExecutionTarget:
       !!executionSelection &&
@@ -95,5 +107,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     modelPolicy: agencyConfig?.modelSelectionPolicy ?? 'member',
     setExecutionTargetPolicy,
     setModelPolicy,
+    setTopicSharePolicy,
+    topicSharePolicy: agencyConfig?.topicSharePolicy ?? 'member',
   };
 };

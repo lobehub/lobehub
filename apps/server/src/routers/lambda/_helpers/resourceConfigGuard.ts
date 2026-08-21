@@ -155,15 +155,18 @@ export const redactAgentConfig = <T extends Record<string, any>>(agent: T): T =>
 
   // Selection policies are authorization metadata, not executable Agent
   // config. Use/view members need them so the chat controls cannot mistake a
-  // redacted fixed Agent for the legacy `member` default. The execution target
-  // is a safe semantic summary shown by use-only members; keep every other
-  // agency field (device ids, provider args/env, working directories, etc.)
-  // behind edit-level config access.
+  // redacted fixed Agent for the legacy `member` default — same for
+  // `topicSharePolicy`, without which the share button would offer a member a
+  // link the server then refuses. The execution target is a safe semantic
+  // summary shown by use-only members; keep every other agency field (device
+  // ids, provider args/env, working directories, etc.) behind edit-level
+  // config access.
   if (agencyConfig) {
     const safeAgencySummary = pick(agencyConfig, [
       'executionTarget',
       'executionTargetSelectionPolicy',
       'modelSelectionPolicy',
+      'topicSharePolicy',
     ]);
     // The hetero marker is identity, not executable config: without it,
     // use/view members render an external-CLI agent as a plain runtime agent

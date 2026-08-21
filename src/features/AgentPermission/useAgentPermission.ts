@@ -1,6 +1,6 @@
 'use client';
 
-import type { AgentModelSelectionPolicy } from '@lobechat/types';
+import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
 
 import { useAgentSelectionPolicies } from '@/features/ResourcePermission/useAgentSelectionPolicies';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
@@ -26,6 +26,9 @@ export interface AgentPermissionState {
   setAccessLevel: (level: ResourceAccessLevel) => void;
   setExecutionTargetPolicy: (policy: AgentModelSelectionPolicy) => void;
   setModelPolicy: (policy: AgentModelSelectionPolicy) => void;
+  setTopicSharePolicy: (policy: AgentTopicSharePolicy) => void;
+  /** Whether members may publish share links for the topics held here. */
+  topicSharePolicy: AgentTopicSharePolicy;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { PERMISSION_ACTIONS } from '@lobechat/const/rbac';
 import {
+  canPublishAgentTopicLink,
   chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
   type HeteroSessionImportPayload,
@@ -83,18 +84,45 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 const topicBulkDeleteScopeSchema = z.enum(['own', 'workspace']).default('own');
 
 interface TopicShareCtx {
+  agentModel: AgentModel;
   serverDB: LobeChatDatabase;
   topicModel: TopicModel;
   userId: string;
   workspaceId?: string | null;
 }
 
+/** Workspace owners hold the `:all` scope; everyone else is capped to `:owner`. */
+const isWorkspaceTopicOwner = (ctx: TopicShareCtx) =>
+  new RbacModel(ctx.serverDB, ctx.userId).hasPermission(`${PERMISSION_ACTIONS.TOPIC_UPDATE}:all`, {
+    workspaceId: ctx.workspaceId!,
+  });
+
 /**
- * Workspace share management follows the co-editing rule (same gate as
- * `updateTopic`): any member with `use`-level General access on the topic's
- * conversation may manage its share by default — view-only members stay
- * read-only. Personal mode needs no extra check — the model's ownership
- * filter already scopes mutations to the caller.
+ * The agent an agent-held topic answers to. Agent-native topics carry
+ * `agentId` directly; legacy session-only rows predate that column, so resolve
+ * through the session rather than letting them slip past the policy.
+ */
+const resolveTopicShareAgent = async (
+  ctx: TopicShareCtx,
+  topic: { agentId?: string | null; sessionId?: string | null },
+) => {
+  const agentId =
+    topic.agentId ??
+    (topic.sessionId
+      ? await resolveAgentIdFromSession(topic.sessionId, ctx.serverDB, ctx.userId, ctx.workspaceId!)
+      : undefined);
+  if (!agentId) return null;
+
+  return ctx.agentModel.getTopicShareSubject(agentId);
+};
+
+/**
+ * Workspace gate for topic-share management.
+ *
+ * The baseline is the co-editing rule (same gate as `updateTopic`): any member
+ * with `use`-level General access on the topic's conversation may manage its
+ * share — view-only members stay read-only. Personal mode needs no extra check
+ * — the model's ownership filter already scopes mutations to the caller.
  *
  * A topic that backs no conversation at all (legacy rows carrying neither an
  * agent, a group, nor a resolvable session) resolves to zero targets, so the
@@ -102,23 +130,52 @@ interface TopicShareCtx {
  * a link exposes the whole conversation to anyone holding it — so those fall
  * back to the stricter creator-or-workspace-owner rule rather than inheriting
  * the vacuous pass.
+ *
+ * *Publishing* narrows that further, governed by the owning agent's
+ * `topicSharePolicy`. Under `restricted` only the agent's creator and
+ * workspace owners may publish, which overrides even topic ownership — that is
+ * the whole point of the policy. Revoking a link, and the `private`
+ * placeholder the share popover creates when it opens, are never restricted:
+ * pulling a topic out of circulation is always safe, and gating the
+ * placeholder would leave a restricted member with a popover that cannot even
+ * load its state. Pass `targetVisibility: 'link'` when the operation would
+ * publish.
  */
-const assertCanManageTopicShare = async (ctx: TopicShareCtx, topicId: string) => {
+const assertCanManageTopicShare = async (
+  ctx: TopicShareCtx,
+  topicId: string,
+  targetVisibility?: 'link' | 'private',
+) => {
   if (!ctx.workspaceId) return;
 
   const topic = await ctx.topicModel.findById(topicId);
   if (!topic) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
+
+  // Publishing under a restricted agent overrides even topic ownership —
+  // that is the whole point of the policy. Resolved only on the publish path
+  // so the common case keeps the query count it had.
+  if (targetVisibility === 'link') {
+    const agent = await resolveTopicShareAgent(ctx, topic);
+
+    if (agent && !canPublishAgentTopicLink(agent, { userId: ctx.userId })) {
+      if (await isWorkspaceTopicOwner(ctx)) return;
+
+      throw new TRPCError({
+        cause: { data: { code: 'TopicShareRestrictedByAgent' } },
+        code: 'FORBIDDEN',
+        message: "Only the agent creator or a workspace owner can share this agent's topics",
+      });
+    }
+  }
+
   if (topic.userId === ctx.userId) return;
 
   const guardedConversations = await assertCanUseTopicTargets(guardCtx(ctx), [topicId]);
   if (guardedConversations.length > 0) return;
 
-  const isWorkspaceAdmin = await new RbacModel(ctx.serverDB, ctx.userId).hasPermission(
-    `${PERMISSION_ACTIONS.TOPIC_UPDATE}:all`,
-    { workspaceId: ctx.workspaceId },
-  );
+  const isWorkspaceAdmin = await isWorkspaceTopicOwner(ctx);
   if (!isWorkspaceAdmin) {
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -452,7 +509,7 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      await assertCanManageTopicShare(ctx, input.topicId);
+      await assertCanManageTopicShare(ctx, input.topicId, input.visibility);
 
       const previous = await ctx.topicShareModel.getByTopicId(input.topicId);
       const result = await ctx.topicShareModel.create(input.topicId, input.visibility);
@@ -888,7 +945,7 @@ export const topicRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      await assertCanManageTopicShare(ctx, input.topicId);
+      await assertCanManageTopicShare(ctx, input.topicId, input.visibility);
 
       const previous = await ctx.topicShareModel.getByTopicId(input.topicId);
       const result = await ctx.topicShareModel.updateVisibility(input.topicId, input.visibility);

@@ -1,6 +1,6 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
-import type { AgentRankItem, LobeAgentAgencyConfig } from '@lobechat/types';
+import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   pruneWorkingDirByDeviceDeletes,
@@ -1216,6 +1216,34 @@ export class AgentModel {
    * creator, slug and current visibility, scoped by the ownership predicate
    * (other members' private agents resolve to `null`).
    */
+  /**
+   * The topic-share policy and creator of one agent.
+   *
+   * Deliberately scoped by workspace rather than by {@link ownership}: this
+   * answers "what did the author decide for this agent", which must not depend
+   * on whether the *caller* can see the row. A visibility-scoped miss would
+   * return `null` and fail open, handing a restricted agent's topics back to
+   * every member.
+   */
+  getTopicShareSubject = async (id: string): Promise<AgentTopicShareSubject | null> => {
+    const rows = await this.db
+      .select({
+        agencyConfig: agents.agencyConfig,
+        userId: agents.userId,
+        workspaceId: agents.workspaceId,
+      })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.id, id),
+          this.workspaceId ? eq(agents.workspaceId, this.workspaceId) : this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  };
+
   getAgentVisibilityMeta = async (
     id: string,
   ): Promise<{ slug: string | null; userId: string; visibility: 'private' | 'public' } | null> => {

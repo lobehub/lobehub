@@ -6,7 +6,15 @@ import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, copyToClipboard, DropdownMenu, Flexbox, Freeze, Tag, Text } from '@lobehub/ui';
 import { confirmModal, FloatingPanel, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Copy, ExternalLink, Maximize2, Minimize2, MoreHorizontal, Share2, Trash } from 'lucide-react';
+import {
+  Copy,
+  ExternalLink,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Share2,
+  Trash,
+} from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -300,7 +308,7 @@ const TopicChatDrawer = memo(() => {
         onClick={() => setExpanded((value) => !value)}
       />
       {enableTopicLinkShare && canShare ? (
-        <SharePopover topicId={topicId} onOpenModal={openShareModal}>
+        <SharePopover agentId={agentId ?? undefined} topicId={topicId} onOpenModal={openShareModal}>
           {shareIcon}
         </SharePopover>
       ) : (

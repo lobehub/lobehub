@@ -670,6 +670,24 @@ export type ExecutionTargetSelectionPolicy = 'fixed' | 'member';
 export type AgentModelSelectionPolicy = 'fixed' | 'member';
 
 /**
+ * Controls who may publish a share link for the topics a workspace agent
+ * holds.
+ *
+ * The permission is about the AGENT's topics, not just one's own: `member`
+ * (the default, which missing values resolve to) lets every workspace member
+ * publish any of this agent's topics they can open — including topics other
+ * members created. `restricted` narrows publishing to the agent's creator and
+ * workspace owners, the same "creator or workspace owner" bucket the
+ * Permission page's `canManage` uses.
+ *
+ * Only *publishing* is gated. Revoking a link (or the private placeholder the
+ * share popover creates on open) is never restricted: taking a topic back out
+ * of circulation is always safe, and blocking the placeholder would leave a
+ * restricted member staring at a popover that cannot load.
+ */
+export type AgentTopicSharePolicy = 'member' | 'restricted';
+
+/**
  * Agent agency configuration.
  * Contains settings for agent execution modes and device binding.
  */
@@ -769,6 +787,15 @@ export interface LobeAgentAgencyConfig {
     provider?: string | null;
   };
   /**
+   * Who may publish a share link for this agent's topics. Missing values
+   * resolve to `member` for legacy rows — see {@link AgentTopicSharePolicy}.
+   *
+   * Enforced server-side in the topic share procedures; the share controls only
+   * mirror it so a restricted member sees a disabled button with a reason
+   * instead of a request that fails.
+   */
+  topicSharePolicy?: AgentTopicSharePolicy;
+  /**
    * Ad-hoc verify criteria mounted directly on this agent, in addition to any
    * `verifyRubricId`. Use for one-off checks that don't warrant a reusable
    * rubric. References `verify_criteria.id`.
@@ -803,17 +830,61 @@ export interface LobeAgentAgencyConfig {
 /**
  * Explicit defaults written when a workspace agent is created.
  *
- * Members may choose their own model and execution environment by default.
- * Legacy public Workspace rows without a model policy resolve to the same
- * `member` default at runtime.
+ * Members may choose their own model and execution environment, and may share
+ * the agent's topics, by default. Legacy public Workspace rows without these
+ * policies resolve to the same `member` defaults at runtime.
  */
 export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
   executionTargetSelectionPolicy: 'member',
   modelSelectionPolicy: 'member',
+  topicSharePolicy: 'member',
 } as const satisfies Pick<
   LobeAgentAgencyConfig,
-  'executionTargetSelectionPolicy' | 'modelSelectionPolicy'
+  'executionTargetSelectionPolicy' | 'modelSelectionPolicy' | 'topicSharePolicy'
 >;
+
+/**
+ * Resolve who may publish a share link for a topic held by this agent.
+ *
+ * Personal (non-workspace) agents are never restricted — there is no one else
+ * to restrict — and legacy workspace rows without the field keep the `member`
+ * behaviour they were created with.
+ */
+export const resolveAgentTopicSharePolicy = (
+  shared: Pick<AgentTopicShareSubject, 'agencyConfig' | 'workspaceId'>,
+): AgentTopicSharePolicy => {
+  if (!shared.workspaceId) return 'member';
+
+  return shared.agencyConfig?.topicSharePolicy ?? 'member';
+};
+
+/** The agent fields a topic-share decision reads. */
+export interface AgentTopicShareSubject {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'topicSharePolicy'> | null;
+  /** Creator of the agent — always allowed to publish its topics. */
+  userId?: string | null;
+  workspaceId?: string | null;
+}
+
+/**
+ * Whether `viewerId` may publish a share link for a topic held by this agent.
+ *
+ * The bypass bucket is deliberately the same one the Permission page calls
+ * `canManage`: the agent's creator, or a workspace owner (which the caller
+ * resolves — server-side from RBAC, client-side from the workspace role).
+ */
+export const canPublishAgentTopicLink = (
+  agent: AgentTopicShareSubject | null | undefined,
+  viewer: { isWorkspaceOwner?: boolean; userId?: string | null },
+): boolean => {
+  // No agent resolved (legacy session-only topic, or a row this caller cannot
+  // see): there is no policy to apply, so fall back to the role gate alone.
+  if (!agent) return true;
+  if (resolveAgentTopicSharePolicy(agent) === 'member') return true;
+  if (viewer.isWorkspaceOwner) return true;
+
+  return !!agent.userId && agent.userId === viewer.userId;
+};
 
 /**
  * The workspace-shared `agencyConfig` on the agent row is one row per agent —

@@ -66,6 +66,7 @@ import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceC
 const AGENT_PERMISSION_POLICY_KEYS = [
   'executionTargetSelectionPolicy',
   'modelSelectionPolicy',
+  'topicSharePolicy',
 ] as const;
 
 const getAgentPermissionPolicyPatch = (value: Record<string, unknown>) => {
@@ -83,6 +84,7 @@ const stripAgentPermissionPolicies = (value: Record<string, unknown>) => {
   const {
     executionTargetSelectionPolicy: _executionTargetSelectionPolicy,
     modelSelectionPolicy: _modelSelectionPolicy,
+    topicSharePolicy: _topicSharePolicy,
     ...safeAgencyConfig
   } = policyPatch;
 
@@ -1388,7 +1390,7 @@ export const agentRouter = router({
 
       let safeValue = input.value;
 
-      // Model / execution-environment selection policies govern every member.
+      // Model / execution-environment / topic-share policies govern every member.
       // Only the creator or workspace primary owner may write them; other
       // collaborators send a fully merged agencyConfig, so strip the protected
       // keys instead of comparing and later merging stale values over a newer

@@ -1485,6 +1485,7 @@ describe('AgentModel', () => {
       expect(workspaceAgent.agencyConfig).toEqual({
         executionTargetSelectionPolicy: 'member',
         modelSelectionPolicy: 'member',
+        topicSharePolicy: 'member',
       });
       expect(personalAgent.agencyConfig).toBeNull();
     });
@@ -1699,6 +1700,7 @@ describe('AgentModel', () => {
         executionTarget: 'none',
         executionTargetSelectionPolicy: 'fixed',
         modelSelectionPolicy: 'member',
+        topicSharePolicy: 'member',
       });
     });
 
@@ -1930,6 +1932,7 @@ describe('AgentModel', () => {
         expect(result?.agencyConfig).toEqual({
           executionTargetSelectionPolicy: 'member',
           modelSelectionPolicy: 'member',
+          topicSharePolicy: 'member',
         });
       });
 
