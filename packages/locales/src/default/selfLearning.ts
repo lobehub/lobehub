@@ -150,6 +150,10 @@ export default {
   'nav.teach': 'Teach it one',
   'nav.warmup': 'Review past conversations',
 
+  'preview.loading': 'loading…',
+  'preview.moreEvidence': '+{{count}} more recorded',
+  'preview.openHint': 'Click to open the full lesson',
+
   'profile.counts': '{{count}} experiences',
   'profile.fresh': '{{count}} new',
   'profile.recurring': '{{count}} recurring',

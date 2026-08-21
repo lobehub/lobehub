@@ -2,7 +2,7 @@
 
 import { ActionIcon, Block, Flexbox, Icon, SearchBar, Tag, Text, Tooltip } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { Button, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu, Popover, toast } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import {
   ArchiveIcon,
@@ -22,6 +22,7 @@ import type { ExpertiseHabit } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 
 import { countTiers, type HabitTier, habitTier, TIER_ORDER } from '../helpers';
+import LessonPreview from './LessonPreview';
 import { portraitStyles as styles } from './styles';
 import TeachBox from './TeachBox';
 
@@ -159,22 +160,44 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
         <Text code fontSize={12} style={{ flex: 'none', marginTop: 2 }} type={'secondary'}>
           {habit.code}
         </Text>
-        <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
-          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-            <Text fontSize={13.5} weight={500}>
-              {habit.title}
+        <Popover
+          // Long enough that dragging the pointer down the list does not fetch every row.
+          openDelay={420}
+          // The list fills the content column, so a side-anchored card has nowhere to go and
+          // collides with the page header. Below-left keeps it next to the row it describes.
+          placement={'bottomLeft'}
+          trigger={'hover'}
+          content={
+            <LessonPreview
+              code={habit.code}
+              layer={habit.layer}
+              lessonId={habit.id}
+              title={habit.title}
+            />
+          }
+        >
+          <Flexbox
+            className={styles.previewTarget}
+            gap={2}
+            style={{ flex: 1, minWidth: 0 }}
+            onClick={() => navigate(lessonPath)}
+          >
+            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+              <Text fontSize={13.5} weight={500}>
+                {habit.title}
+              </Text>
+              {habit.taughtByUser && (
+                <Tag>
+                  {t('habit.taughtTag')} · {dayjs(habit.createdAt).fromNow()}
+                </Tag>
+              )}
+              {domainTitle && <Tag>{domainTitle}</Tag>}
+            </Flexbox>
+            <Text fontSize={12} type={'secondary'}>
+              {hint}
             </Text>
-            {habit.taughtByUser && (
-              <Tag>
-                {t('habit.taughtTag')} · {dayjs(habit.createdAt).fromNow()}
-              </Tag>
-            )}
-            {domainTitle && <Tag>{domainTitle}</Tag>}
           </Flexbox>
-          <Text fontSize={12} type={'secondary'}>
-            {hint}
-          </Text>
-        </Flexbox>
+        </Popover>
         <RecentDots recent={habit.recent} />
         <Flexbox horizontal align={'center'} className={'teach'} gap={4} style={{ flex: 'none' }}>
           {(tier === 'recurring' || tier === 'shaky') && (
