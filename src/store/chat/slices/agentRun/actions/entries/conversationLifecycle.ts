@@ -411,11 +411,12 @@ export class ConversationLifecycleActionImpl {
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode,
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent: !!agent?.workspaceId,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
       parentRuntime: forceRuntime,
+      workspaceScoped,
     });
 
     // ── Command Bus: extract and process built-in commands from editorData ──

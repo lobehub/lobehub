@@ -198,7 +198,8 @@ export const aiProviderRouter = router({
    * Narrow credential-bearing endpoint for Desktop-local heterogeneous-agent
    * bindings. Desktop main calls this with the current OIDC identity and no
    * workspace scope — provider binding is personal-agent/local-execution only
-   * (workspace agents never spawn in-process, see `selectRuntimeType`) — and
+   * (`selectRuntimeType` rejects API-mode runs for workspace agents, even for
+   * the author who can spawn them in-process) — and
    * renderer IPC receives only the provider/model reference. `enabledModels`
    * makes Desktop main the authority on model availability instead of the
    * renderer's possibly stale store state.

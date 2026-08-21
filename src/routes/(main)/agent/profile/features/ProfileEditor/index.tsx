@@ -118,8 +118,13 @@ const ProfileEditor = memo(() => {
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
   const apiModeLabEnabled = useUserStore(labPreferSelectors.enableAgentProviderBinding);
+  // Workspace agents are excluded even when the author could spawn them
+  // locally: the binding UI would list workspace-scoped providers, but Desktop
+  // main resolves the reference in the personal scope only (see
+  // `selectRuntimeType`'s personal-scope guard).
   const apiModeAvailable =
     isDesktop &&
+    !isWorkspaceAgent &&
     !!heterogeneousProvider &&
     isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
     resolveExecutionTarget(effectiveAgencyConfig, {
@@ -151,6 +156,7 @@ const ProfileEditor = memo(() => {
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
               apiModeLabEnabled={apiModeLabEnabled}
+              apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}

@@ -117,6 +117,8 @@ const getEffectiveAgencyConfig = (agentId: string) => {
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     }),
+    /** True workspace membership — stays true for the author, unlike `workspaceScoped`. */
+    isWorkspaceAgent: !!agent?.workspaceId,
     workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   };
 };
@@ -373,14 +375,17 @@ const regenerateUserMessageFromSource = async (
     const postSwitchOp = operationSelectors.getOperationById(operationId)(useChatStore.getState());
     if (postSwitchOp && postSwitchOp.status !== 'running') return;
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
+      context.agentId,
+    );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
 
     // ── Gateway mode: trigger server-side regeneration ──
@@ -759,13 +764,16 @@ export const generationSlice: StateCreator<
       if (shouldProceed === false) return false;
     }
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
+      context.agentId,
+    );
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider: agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -846,14 +854,17 @@ export const generationSlice: StateCreator<
     // tool/provider error on a grouped reply is not resumable this way.
     if (!isHeterogeneousAgentStatusGuideError(erroredStep.error?.body)) return;
 
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(context.agentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
+      context.agentId,
+    );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
     const agentId = context.agentId;
 

@@ -469,6 +469,7 @@
   "heterogeneousStatus.apiMode.smallFastModel": "后台模型",
   "heterogeneousStatus.apiMode.smallFastModelDesc": "Claude Code 用来生成会话标题、摘要等后台任务，不影响主对话。",
   "heterogeneousStatus.apiMode.smallFastModelPlaceholder": "不设置则与主模型相同",
+  "heterogeneousStatus.apiMode.workspaceUnsupported": "工作区 Agent 暂不支持服务商绑定",
   "heterogeneousStatus.auth.api": "API",
   "heterogeneousStatus.auth.label": "认证方式",
   "heterogeneousStatus.auth.subscription": "订阅",

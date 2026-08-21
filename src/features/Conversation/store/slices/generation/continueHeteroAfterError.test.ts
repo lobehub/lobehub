@@ -22,7 +22,7 @@ vi.mock(
 // private local override runs in-process even if the shared workspace row points
 // at the gateway.
 const mockSelectRuntimeType = vi.fn((ctx: any) =>
-  ctx?.executionTarget === 'local' && !ctx?.isWorkspaceAgent ? 'hetero' : 'gateway',
+  ctx?.executionTarget === 'local' && !ctx?.workspaceScoped ? 'hetero' : 'gateway',
 );
 vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => ({
   selectRuntimeType: (ctx: any) => mockSelectRuntimeType(ctx),
@@ -273,7 +273,8 @@ describe('continueHeteroAfterError', () => {
       expect.objectContaining({
         boundDeviceId: 'personal-device',
         executionTarget: 'local',
-        isWorkspaceAgent: false,
+        isWorkspaceAgent: true,
+        workspaceScoped: false,
       }),
     );
     expect(mockUpdateMessage).not.toHaveBeenCalled();
@@ -301,6 +302,7 @@ describe('continueHeteroAfterError', () => {
         boundDeviceId: 'workspace-device',
         executionTarget: 'local',
         isWorkspaceAgent: true,
+        workspaceScoped: true,
       }),
     );
     expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
@@ -330,7 +332,8 @@ describe('continueHeteroAfterError', () => {
       expect.objectContaining({
         boundDeviceId: 'workspace-device',
         executionTarget: 'device',
-        isWorkspaceAgent: false,
+        isWorkspaceAgent: true,
+        workspaceScoped: false,
       }),
     );
   });
