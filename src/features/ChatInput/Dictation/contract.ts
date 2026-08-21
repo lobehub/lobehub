@@ -107,7 +107,19 @@ export interface RealtimeDictationSnapshot {
 }
 
 const OPAQUE_ID_PATTERN = /^[\w-]+$/;
-const TOKEN_PATTERN = /^[\w-]{43}$/;
+const SESSION_ID_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/;
+const JWT_PATTERN = /^[\w-]+\.[\w-]+\.[\w-]+$/;
+const MAX_JWT_LENGTH = 4096;
+const REALTIME_ASR_WEBSOCKET_PATH = '/api/v1/realtime/ws';
+const SESSION_RESPONSE_KEYS = [
+  'audio',
+  'expiresAt',
+  'limits',
+  'protocolVersion',
+  'sessionId',
+  'token',
+  'websocketUrl',
+];
 const ERROR_CODES = new Set<RealtimeAsrErrorCode>([
   'AUDIO_FORMAT_INVALID',
   'AUTH_FAILED',
@@ -129,14 +141,51 @@ const ERROR_CODES = new Set<RealtimeAsrErrorCode>([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
+const hasExactKeys = (value: Record<string, unknown>, expectedKeys: string[]) => {
+  const actualKeys = Object.keys(value);
+  return (
+    actualKeys.length === expectedKeys.length &&
+    expectedKeys.every((key) => Object.hasOwn(value, key))
+  );
+};
+
 const isOpaqueId = (value: unknown): value is string =>
   typeof value === 'string' &&
   value.length > 0 &&
   value.length <= 128 &&
   OPAQUE_ID_PATTERN.test(value);
 
+const isSessionId = (value: unknown): value is string =>
+  typeof value === 'string' && SESSION_ID_PATTERN.test(value);
+
+const isLoopbackHostname = (hostname: string) =>
+  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+
+const isValidWebsocketUrl = (value: unknown, sessionId: string): value is string => {
+  if (typeof value !== 'string') return false;
+
+  try {
+    const websocketUrl = new URL(value);
+    const allowsInsecureDevelopmentSocket =
+      process.env.NODE_ENV === 'development' &&
+      websocketUrl.protocol === 'ws:' &&
+      isLoopbackHostname(websocketUrl.hostname);
+    return (
+      (websocketUrl.protocol === 'wss:' || allowsInsecureDevelopmentSocket) &&
+      !websocketUrl.username &&
+      !websocketUrl.password &&
+      websocketUrl.pathname === REALTIME_ASR_WEBSOCKET_PATH &&
+      !websocketUrl.hash &&
+      websocketUrl.search === `?sessionId=${sessionId}`
+    );
+  } catch {
+    return false;
+  }
+};
+
 const isExactAudio = (value: unknown): value is typeof REALTIME_ASR_AUDIO =>
   isRecord(value) &&
+  hasExactKeys(value, Object.keys(REALTIME_ASR_AUDIO)) &&
   value.channels === REALTIME_ASR_AUDIO.channels &&
   value.encoding === REALTIME_ASR_AUDIO.encoding &&
   value.frameBytes === REALTIME_ASR_AUDIO.frameBytes &&
@@ -145,12 +194,15 @@ const isExactAudio = (value: unknown): value is typeof REALTIME_ASR_AUDIO =>
 
 const isExactLimits = (value: unknown): value is typeof REALTIME_ASR_LIMITS =>
   isRecord(value) &&
+  hasExactKeys(value, Object.keys(REALTIME_ASR_LIMITS)) &&
   Object.entries(REALTIME_ASR_LIMITS).every(([key, expected]) => value[key] === expected);
 
 const hasValidEnvelope = (
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & ServerEventBase =>
-  isOpaqueId(value.sessionId) && Number.isSafeInteger(value.sequence) && Number(value.sequence) > 0;
+  isSessionId(value.sessionId) &&
+  Number.isSafeInteger(value.sequence) &&
+  Number(value.sequence) > 0;
 
 export class RealtimeDictationError extends Error {
   constructor(
@@ -165,12 +217,13 @@ export class RealtimeDictationError extends Error {
 export const parseRealtimeAsrSessionResponse = (value: unknown): RealtimeAsrSessionResponse => {
   if (
     !isRecord(value) ||
+    !hasExactKeys(value, SESSION_RESPONSE_KEYS) ||
     value.protocolVersion !== REALTIME_ASR_PROTOCOL_VERSION ||
-    !isOpaqueId(value.sessionId) ||
+    !isSessionId(value.sessionId) ||
     typeof value.token !== 'string' ||
-    !TOKEN_PATTERN.test(value.token) ||
-    typeof value.websocketUrl !== 'string' ||
-    !value.websocketUrl.startsWith('wss://') ||
+    value.token.length > MAX_JWT_LENGTH ||
+    !JWT_PATTERN.test(value.token) ||
+    !isValidWebsocketUrl(value.websocketUrl, value.sessionId) ||
     typeof value.expiresAt !== 'string' ||
     !Number.isFinite(Date.parse(value.expiresAt)) ||
     !isExactAudio(value.audio) ||
@@ -216,7 +269,11 @@ export const parseRealtimeAsrServerEvent = (raw: unknown): RealtimeAsrServerEven
     }
     case 'session.completed':
     case 'session.cancelled': {
-      if (Number.isSafeInteger(value.forwardedAudioMs) && Number(value.forwardedAudioMs) >= 0) {
+      if (
+        Number.isSafeInteger(value.forwardedAudioMs) &&
+        Number(value.forwardedAudioMs) >= 0 &&
+        Number(value.forwardedAudioMs) <= REALTIME_ASR_LIMITS.maxSessionMs
+      ) {
         return value as unknown as RealtimeAsrCompletedEvent | RealtimeAsrCancelledEvent;
       }
       break;
