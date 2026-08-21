@@ -115,10 +115,21 @@ const MemberRow = memo<{
     <Flexbox
       horizontal
       align={'center'}
+      aria-selected={selected}
       className={cx(styles.row, selected && styles.rowSelected)}
       gap={12}
       ref={ref}
+      role={'option'}
+      tabIndex={0}
       onClick={() => onToggle(member.userId)}
+      onKeyDown={(e) => {
+        // Focus lands here by Tab out of the search field; Enter and Space are
+        // what a listbox option is expected to answer to. Space would scroll
+        // the list without the preventDefault.
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        onToggle(member.userId);
+      }}
     >
       <Avatar
         animation={isHovering}
@@ -224,7 +235,12 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
             onChange={(e) => setQuery(e.target.value)}
           />
         </Flexbox>
-        <Flexbox className={styles.list}>
+        <Flexbox
+          aria-multiselectable
+          aria-label={t('permission.collaborators.addModal.title')}
+          className={styles.list}
+          role={'listbox'}
+        >
           {isInitialLoading ? (
             [0, 1, 2].map((key) => (
               <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={key}>

@@ -129,11 +129,40 @@ describe('resourcePermissionRouter.setGeneralAccess', () => {
   });
 });
 
-/** Fake drizzle db resolving one prepared result per `select()` call, in order. */
+/**
+ * Fake drizzle db resolving one prepared result per `select()` call, in order.
+ * Records whether a query was locked (`.for('update')`) and whether it ran
+ * inside a transaction, so the serialisation contract can be asserted — the
+ * fake cannot reproduce real locking, but it can prove the query asks for it.
+ */
 const dbWithResults = (...results: unknown[][]) => {
   let call = 0;
-  const next = () => Promise.resolve(results[call++] ?? []);
-  return { select: () => ({ from: () => ({ where: next }) }) };
+  const calls: { inTransaction: boolean; locked: boolean }[] = [];
+  let depth = 0;
+  const next = () => {
+    const index = calls.length;
+    calls.push({ inTransaction: depth > 0, locked: false });
+    const promise = Promise.resolve(results[call++] ?? []);
+    return Object.assign(promise, {
+      for: () => {
+        calls[index].locked = true;
+        return promise;
+      },
+    });
+  };
+  const db: any = {
+    calls,
+    select: () => ({ from: () => ({ where: next }) }),
+    transaction: async (cb: (tx: unknown) => unknown) => {
+      depth += 1;
+      try {
+        return await cb(db);
+      } finally {
+        depth -= 1;
+      }
+    },
+  };
+  return db;
 };
 
 describe('resourcePermissionRouter collaborators', () => {
@@ -180,6 +209,21 @@ describe('resourcePermissionRouter collaborators', () => {
       resourceType: 'knowledgeBase',
       userIds: ['member_a', 'member_b'],
     });
+  });
+
+  it('locks the membership rows it checks, inside the transaction that writes the grants', async () => {
+    const db = dbWithResults([{ userId: 'member_a' }]);
+
+    await caller(db).addCollaborators({
+      accessLevel: 'edit',
+      resourceId: 'kb-1',
+      resourceType: 'knowledgeBase',
+      userIds: ['member_a'],
+    });
+
+    // Without both, a membership removal committing between the check and the
+    // upsert leaves a grant that re-inviting the member would revive.
+    expect(db.calls).toEqual([{ inTransaction: true, locked: true }]);
   });
 
   it('rejects a target that is not an active workspace member', async () => {

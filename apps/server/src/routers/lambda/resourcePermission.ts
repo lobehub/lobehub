@@ -121,29 +121,40 @@ export const resourcePermissionRouter = router({
       const targetIds = [...new Set(input.userIds)].filter((id) => id !== meta.userId);
       if (targetIds.length === 0) return { success: true };
 
-      const activeMembers = await ctx.serverDB
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, ctx.workspaceId),
-            inArray(workspaceMembers.userId, targetIds),
-            isNull(workspaceMembers.deletedAt),
-          ),
-        );
-      if (activeMembers.length !== targetIds.length) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Every collaborator must be an active member of the workspace',
-        });
-      }
+      // Check membership and write the grants under one transaction, holding a
+      // row lock on the membership rows for its duration. `removeMember` takes
+      // the same locks before revoking a departing member's grants, so the two
+      // serialise: either this commits first and the revoke sweeps up what it
+      // wrote, or the removal commits first and the locked read below sees the
+      // soft delete and refuses. Without the lock the check could pass against
+      // a membership that is deleted before the upsert lands, leaving a grant
+      // that re-inviting the member silently revives.
+      await ctx.serverDB.transaction(async (tx) => {
+        const activeMembers = await tx
+          .select({ userId: workspaceMembers.userId })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, ctx.workspaceId),
+              inArray(workspaceMembers.userId, targetIds),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          )
+          .for('update');
+        if (activeMembers.length !== targetIds.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Every collaborator must be an active member of the workspace',
+          });
+        }
 
-      await ctx.permissionModel.upsertCollaborators({
-        accessLevel: input.accessLevel,
-        createdBy: ctx.userId,
-        resourceId: input.resourceId,
-        resourceType: input.resourceType,
-        userIds: targetIds,
+        await new ResourcePermissionModel(tx, ctx.workspaceId).upsertCollaborators({
+          accessLevel: input.accessLevel,
+          createdBy: ctx.userId,
+          resourceId: input.resourceId,
+          resourceType: input.resourceType,
+          userIds: targetIds,
+        });
       });
 
       return { success: true };
