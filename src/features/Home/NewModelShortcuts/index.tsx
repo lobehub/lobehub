@@ -1,10 +1,8 @@
-import { Jimeng, Moonshot, OpenAI, ZAI } from '@lobehub/icons';
+import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import { Bot } from 'lucide-react';
-import type { ComponentType } from 'react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,7 +18,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import { trackHomeModelShortcutClicked } from './analytics';
-import { NEW_GLM_MODEL, NEW_IMAGE_MODEL, NEW_KIMI_MODEL, NEW_VIDEO_MODEL } from './starterModels';
+import { getShortcutIconModelId } from './getShortcutIconModelId';
 import { useStarterModelDefaults } from './useStarterModelDefaults';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -59,12 +57,6 @@ const getShortcutKey = (item: HomeNewModelItem) => `${item.type}:${item.model}`;
 const getShortcutProvider = (item: HomeNewModelItem, fallbackProvider: string) =>
   item.provider ?? fallbackProvider;
 const skeletonWidths = [112, 150, 126, 138];
-const modelIcons: Record<string, ComponentType<{ size: number }>> = {
-  [NEW_GLM_MODEL]: ZAI.Avatar,
-  [NEW_IMAGE_MODEL]: OpenAI.Avatar,
-  [NEW_KIMI_MODEL]: Moonshot.Avatar,
-  [NEW_VIDEO_MODEL]: Jimeng.Avatar,
-};
 
 export const NewModelShortcuts = () => {
   const { t } = useTranslation('home');
@@ -179,13 +171,12 @@ export const NewModelShortcuts = () => {
             const isCurrent =
               item.type === 'chat' && item.model === currentModel && provider === currentProvider;
             const isSwitching = switchingKey === key;
-            const ModelIcon = modelIcons[item.iconModel ?? item.model] ?? Bot;
             const button = (
               <Button
                 aria-pressed={item.type === 'chat' ? isCurrent : undefined}
                 className={cx(styles.button, isCurrent && styles.active)}
                 disabled={!!switchingKey && !isSwitching}
-                icon={<ModelIcon size={18} />}
+                icon={<ModelIcon model={getShortcutIconModelId(item)} size={18} />}
                 key={key}
                 loading={isSwitching}
                 type={'text'}
