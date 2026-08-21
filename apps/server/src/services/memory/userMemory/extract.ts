@@ -1630,10 +1630,10 @@ export class MemoryExtractionExecutor {
             conversations,
             extractorContextLimit,
           );
-          const embeddingConversations = await this.trimConversationsToTokenLimit(
-            conversations,
-            embeddingContextLimit,
-          );
+          // NOTE: embeddingConversations must stay UNTRIMMED. long topics are chunked
+          // inside listRelevantUserMemories via chunkByTokens so the head of the
+          // conversation is still retrievable; trimming here would drop it.
+          const embeddingConversations = conversations;
 
           const messageIds = extractorConversations.map((item) => item.id);
 

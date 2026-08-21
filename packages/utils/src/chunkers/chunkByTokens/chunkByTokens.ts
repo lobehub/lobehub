@@ -51,6 +51,22 @@ export const chunkByTokens = async (
   const aligned: string[] = [];
   let carry = '';
 
+  const pushAligned = (piece: string) => {
+    const trimmed = piece.trim();
+    if (!trimmed) return;
+
+    // Re-check the token count after sentence-boundary alignment: `head` can
+    // combine a carried tail with most of the next hard chunk and exceed the
+    // limit (up to ~1.7×). Re-split oversized pieces token-wise so every
+    // emitted chunk is bounded and safe for embedding providers.
+    if (estimateTokenCount(trimmed) > tokenLimit) {
+      aligned.push(...splitWithinLimit(trimmed, tokenLimit));
+      return;
+    }
+
+    aligned.push(trimmed);
+  };
+
   for (const chunk of hardChunks) {
     // Prepend any text carried over from the previous chunk's tail alignment.
     const combined = carry ? carry + '\n' + chunk : chunk;
@@ -62,14 +78,14 @@ export const chunkByTokens = async (
         const head = combined.slice(0, boundaryMatch);
         const tail = combined.slice(boundaryMatch);
         if (head.trim().length > 0 && tail.trim().length > 0) {
-          aligned.push(head.trim());
+          pushAligned(head);
           carry = tail.trim();
           continue;
         }
       }
     }
 
-    aligned.push(combined.trim());
+    pushAligned(combined);
   }
 
   if (carry) {
@@ -82,7 +98,77 @@ export const chunkByTokens = async (
     }
   }
 
-  return aligned.filter(Boolean);
+  // Final boundedness pass. tokenx.splitByTokens estimates loosely and can
+  // emit chunks above `tokenLimit` for CJK text without spaces (measured up
+  // to ~1.2x); the in-loop guard re-splits but inherits the same bias. Iterate
+  // the re-split here so every emitted chunk is strictly under the limit,
+  // which embedding providers enforce per-input.
+  const bounded = aligned.flatMap((chunk) => splitWithinLimit(chunk, tokenLimit));
+
+  return bounded.filter(Boolean);
+};
+
+const splitWithinLimit = (text: string, tokenLimit: number, attempts = 8): string[] => {
+  const trimmed = text.trim();
+  if (!trimmed || estimateTokenCount(trimmed) <= tokenLimit) return [text];
+  // Pathological one-char input; nothing left to split.
+  if (trimmed.length <= 1) return [text];
+
+  let pieces: string[] = [];
+  if (attempts > 0) {
+    pieces = splitByTokens(trimmed, tokenLimit)
+      .map((piece) => piece.trim())
+      .filter(Boolean);
+  }
+
+  // tokenx returned the input unchanged (no-space CJK text) or we ran out of
+  // attempts: binary-split the text, preferring a sentence boundary.
+  if (pieces.length <= 1) {
+    const cut = preferredCut(trimmed);
+    return [
+      ...splitWithinLimit(trimmed.slice(0, cut), tokenLimit, attempts - 1),
+      ...splitWithinLimit(trimmed.slice(cut), tokenLimit, attempts - 1),
+    ];
+  }
+
+  // Re-anchor pieces to sentence boundaries across piece boundaries: any
+  // dangling sentence tail is carried into the next piece so emitted chunks
+  // never end mid-sentence (tokenx itself splits blindly at token counts).
+  const parts: string[] = [];
+  let pending = '';
+  for (const raw of pieces) {
+    const piece = pending ? `${pending}${raw}` : raw;
+    pending = '';
+    const boundary = findLastBoundary(piece);
+    const tail = boundary === -1 ? '' : piece.slice(boundary);
+    if (boundary === -1 || boundary >= piece.length || tail.trim().length === 0) {
+      if (piece) parts.push(piece);
+    } else {
+      const headPiece = piece.slice(0, boundary);
+      if (headPiece.trim()) parts.push(headPiece.trim());
+      pending = tail.trim();
+    }
+  }
+  if (pending) parts.push(pending);
+
+  // Recurse into pieces that are still over the limit; sub-limit pieces were
+  // already re-anchored and are kept as-is.
+  return parts.flatMap((part) => splitWithinLimit(part, tokenLimit, attempts - 1));
+};
+
+// Chooses a binary-split point for text that tokenx could not handle: the
+// last sentence boundary when one exists, otherwise the last whitespace,
+// otherwise the character midpoint. Always strictly inside the text.
+const preferredCut = (text: string): number => {
+  const boundary = findLastBoundary(text);
+  if (boundary !== -1 && boundary > 0 && boundary < text.length) return boundary;
+
+  let cut = -1;
+  const wsMatches = [...text.matchAll(/\s/g)];
+  if (wsMatches.length > 0) cut = wsMatches.at(-1)!.index! + 1;
+  if (cut > 0 && cut < text.length) return cut;
+
+  return Math.ceil(Math.max(1, text.length) / 2);
 };
 
 const findLastBoundary = (text: string): number => {
