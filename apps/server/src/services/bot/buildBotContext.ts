@@ -12,6 +12,13 @@ export interface BuildBotContextParams {
   operatorUserId: string | undefined;
   platform: string;
   platformThreadId: string;
+  /**
+   * Platform message id of the triggering inbound message, when the platform
+   * assigns one (Feishu/Lark `om_xxx` = the Chat SDK `message.id`). Reply-
+   * capable platforms thread outbound against it. Optional — command
+   * dispatch and non-message triggers have none.
+   */
+  triggerMessageId?: string;
 }
 
 /**
@@ -37,5 +44,6 @@ export const buildBotContext = (params: BuildBotContextParams): ChatTopicBotCont
     platform: params.platform,
     platformThreadId: params.platformThreadId,
     senderExternalUserId,
+    ...(params.triggerMessageId ? { triggerMessageId: params.triggerMessageId } : {}),
   };
 };

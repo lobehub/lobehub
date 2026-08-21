@@ -122,6 +122,14 @@ export interface BotCallbackBody {
   totalSteps?: number;
   totalTokens?: number;
   totalToolCalls?: any;
+  /**
+   * Platform message id of the inbound message that triggered this run
+   * (Feishu/Lark `om_xxx`). Reply-capable platforms build the outbound
+   * messenger with it so every outbound message lands as a reply to the
+   * trigger (inside its topic thread). Optional — absent on runs not
+   * triggered by a specific message.
+   */
+  triggerMessageId?: string;
   type: 'completion' | 'step';
   userId?: string;
   userMessageId?: string;
@@ -151,6 +159,7 @@ export class BotCallbackService {
       platformThreadId,
       progressMessageId,
       messengerInstallationKey,
+      triggerMessageId,
       userId,
     } = body;
     const platform = platformThreadId.split(':')[0];
@@ -161,6 +170,7 @@ export class BotCallbackService {
         messengerInstallationKey,
         platform,
         platformThreadId,
+        triggerMessageId,
         userId,
         workspaceId: body.workspaceId,
       });
@@ -216,6 +226,7 @@ export class BotCallbackService {
     messengerInstallationKey?: string;
     platform: string;
     platformThreadId: string;
+    triggerMessageId?: string;
     userId?: string;
     workspaceId?: string;
   }): Promise<{
@@ -226,7 +237,14 @@ export class BotCallbackService {
     settings: Record<string, unknown>;
     workspaceId?: string | null;
   }> {
-    const { applicationId, messengerInstallationKey, platform, platformThreadId, userId } = params;
+    const {
+      applicationId,
+      messengerInstallationKey,
+      platform,
+      platformThreadId,
+      triggerMessageId,
+      userId,
+    } = params;
 
     // Deterministic discriminator: any run originated from the shared
     // Messenger bot is tagged by `MessengerRouter` with the install key. We
@@ -239,6 +257,7 @@ export class BotCallbackService {
         platformThreadId,
         userId,
         params.workspaceId,
+        triggerMessageId,
       );
     }
 
@@ -276,7 +295,10 @@ export class BotCallbackService {
       redisClient: getAgentRuntimeRedisClient() as any,
       userId: row.userId ?? userId,
     });
-    const messenger = client.getMessenger(platformThreadId);
+    const messenger = client.getMessenger(
+      platformThreadId,
+      triggerMessageId ? { replyToMessageId: triggerMessageId } : undefined,
+    );
 
     return {
       charLimit,
@@ -307,6 +329,7 @@ export class BotCallbackService {
     platformThreadId: string,
     userId?: string,
     workspaceId?: string,
+    triggerMessageId?: string,
   ): Promise<{
     charLimit?: number;
     connectionId: string;
@@ -337,7 +360,10 @@ export class BotCallbackService {
       );
     }
 
-    const messenger = client.getMessenger(platformThreadId);
+    const messenger = client.getMessenger(
+      platformThreadId,
+      triggerMessageId ? { replyToMessageId: triggerMessageId } : undefined,
+    );
 
     // Pull the SystemBot's connectionMode from the messenger definition (NOT
     // `bot/platforms`) — SystemBot's transport is fixed per platform and may

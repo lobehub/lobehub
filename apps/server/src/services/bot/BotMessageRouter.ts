@@ -229,6 +229,11 @@ export class BotMessageRouter {
 
     log('invalidateBot: removing cached bot %s', key);
     this.bots.delete(key);
+    try {
+      await existing.client.stop();
+    } catch (error) {
+      log('invalidateBot: old client stop failed (continuing eviction): %O', error);
+    }
   }
 
   // ------------------------------------------------------------------
@@ -497,8 +502,16 @@ export class BotMessageRouter {
       .join('\n');
     const mergedAttachments = allMessages.flatMap((m) => (m as any).attachments || []);
 
+    // Preserve every message's raw payload so platform extractFiles can
+    // download media from ALL merged messages, not just the triggering one
+    // (e.g. image sent first, then the @mention text — the image's keys live
+    // in the skipped message's raw, which the merged message's own `raw`
+    // would otherwise lose).
+    const mergedRaws = allMessages.map((m) => (m as any).raw).filter(Boolean);
+
     return Object.assign(Object.create(Object.getPrototypeOf(message)), message, {
       attachments: mergedAttachments,
+      raws: mergedRaws.length > 0 ? mergedRaws : undefined,
       text: mergedText,
     });
   }
@@ -1140,6 +1153,7 @@ export class BotMessageRouter {
             operatorUserId,
             platform,
             platformThreadId: thread.id,
+            triggerMessageId: merged.id,
           }),
           charLimit,
           client,
@@ -1328,6 +1342,7 @@ export class BotMessageRouter {
             operatorUserId,
             platform,
             platformThreadId: thread.id,
+            triggerMessageId: merged.id,
           }),
           charLimit,
           client,
@@ -1551,6 +1566,7 @@ export class BotMessageRouter {
               operatorUserId,
               platform,
               platformThreadId: thread.id,
+              triggerMessageId: merged.id,
             }),
             charLimit,
             client,
