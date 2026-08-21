@@ -1429,6 +1429,7 @@ export class AgentBridgeService {
       files,
       gatewayConnectionId,
       prompt,
+      replyDelivery,
       replyLocale,
       toolModeOverride,
       topicId,
@@ -1779,11 +1780,17 @@ export class AgentBridgeService {
               result.error,
             );
 
-            if (progressMessage) {
+            if (replyDelivery) {
               try {
-                await replyDelivery
-                  ? replyDelivery.edit(renderError(result.operationId, replyLocale))
-                  : progressMessage.edit({ markdown: renderError(result.operationId, replyLocale) });
+                await replyDelivery.edit(renderError(result.operationId, replyLocale));
+              } catch (error) {
+                log('executeWithCallback[local]: failed to edit startup error: %O', error);
+              }
+            } else if (progressMessage) {
+              try {
+                await progressMessage.edit({
+                  markdown: renderError(result.operationId, replyLocale),
+                });
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
               }
@@ -1819,13 +1826,17 @@ export class AgentBridgeService {
           clearTimeout(timeout);
 
           if (isAbortError(error)) {
-            if (progressMessage) {
+            if (replyDelivery) {
               try {
-                await replyDelivery
-                  ? replyDelivery.edit(renderStopped(error.message, replyLocale))
-                  : progressMessage.edit({
-                      markdown: renderStopped(error.message, replyLocale),
-                    });
+                await replyDelivery.edit(renderStopped(error.message, replyLocale));
+              } catch (editError) {
+                log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
+              }
+            } else if (progressMessage) {
+              try {
+                await progressMessage.edit({
+                  markdown: renderStopped(error.message, replyLocale),
+                });
               } catch (editError) {
                 log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
               }
@@ -1858,11 +1869,17 @@ export class AgentBridgeService {
           // is traceable instead of opaque.
           const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
 
-          if (progressMessage) {
+          if (replyDelivery) {
             try {
-              await replyDelivery
-                ? replyDelivery.edit(renderError(fallbackOperationId, replyLocale))
-                : progressMessage.edit({ markdown: renderError(fallbackOperationId, replyLocale) });
+              await replyDelivery.edit(renderError(fallbackOperationId, replyLocale));
+            } catch (editError) {
+              log('executeWithCallback[local]: failed to edit startup error: %O', editError);
+            }
+          } else if (progressMessage) {
+            try {
+              await progressMessage.edit({
+                markdown: renderError(fallbackOperationId, replyLocale),
+              });
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }

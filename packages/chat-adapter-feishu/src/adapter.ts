@@ -145,15 +145,15 @@ function postElements(content: Record<string, unknown>): Array<Record<string, an
 function postMediaItems(
   content: Record<string, unknown>,
 ): Array<{ kind: 'image' | 'media'; key: string }> {
-  return postElements(content).flatMap((ele) => {
+  const items: Array<{ kind: 'image' | 'media'; key: string }> = [];
+  for (const ele of postElements(content)) {
     if (ele.tag === 'img' && typeof ele.image_key === 'string') {
-      return [{ kind: 'image' as const, key: ele.image_key }];
+      items.push({ kind: 'image', key: ele.image_key });
+    } else if (ele.tag === 'media' && typeof ele.file_key === 'string') {
+      items.push({ kind: 'media', key: ele.file_key });
     }
-    if (ele.tag === 'media' && typeof ele.file_key === 'string') {
-      return [{ kind: 'media' as const, key: ele.file_key }];
-    }
-    return [];
-  });
+  }
+  return items;
 }
 
 /** Text of a post body: title + concatenated `text` elements. */
@@ -260,11 +260,12 @@ export async function downloadMediaFromRawMessage(
           item.key,
           item.kind === 'media' ? 'file' : 'image',
         );
-        attachments.push(
-          (item.kind === 'media'
-            ? { buffer, mimeType: 'video/mp4', name: 'video.mp4', type: 'video' }
-            : { buffer, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' }) as Attachment,
-        );
+        attachments.push({
+          buffer,
+          mimeType: item.kind === 'media' ? 'video/mp4' : 'image/jpeg',
+          name: item.kind === 'media' ? 'video.mp4' : 'image.jpg',
+          type: item.kind === 'media' ? 'video' : 'image',
+        } as Attachment);
       } catch (error) {
         warn('Failed to download post media %s for message %s: %s', item.key, messageId, error);
       }
