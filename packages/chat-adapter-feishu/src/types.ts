@@ -32,6 +32,13 @@ export interface LarkThreadId {
   chatType?: 'p2p' | 'group';
   /** Platform variant */
   platform: 'lark' | 'feishu';
+  /**
+   * Feishu topic (thread) ID (`omt_…`) from im.message.receive_v1. Present
+   * only for messages inside a topic-group thread; absent for plain groups
+   * and DMs. Encoded as a 4th segment so each topic gets its own Chat SDK
+   * thread (and therefore its own conversation topic).
+   */
+  threadId?: string;
 }
 
 /**
@@ -58,6 +65,10 @@ export interface LarkMessageBody {
   mentions?: LarkMention[];
   message_id: string;
   message_type: string;
+  /** Quoted/replied message id — present when this message is a reply */
+  parent_id?: string;
+  /** Feishu topic ID (`omt_…`) — set when the message is inside a topic-group thread */
+  thread_id?: string;
 }
 
 export interface LarkMention {

@@ -17,6 +17,13 @@ export const feishu: PlatformDefinition = {
   },
   schema: sharedSchema,
   supportsMarkdown: false,
+  // Un-@-mentioned group chatter never reaches the bot's event stream —
+  // pre-inject recent thread messages on every group wake-up (watermark-
+  // incremental; group threads only).
+  preInjectGroupHistory: true,
+  // Outbound threads as replies to the triggering message (topic-group
+  // replies land inside the topic instead of the group's main timeline).
+  supportsReplyThreading: true,
   unsupportedMessageApis: PLATFORM_UNSUPPORTED_MESSAGE_APIS.feishu,
   clientFactory: sharedClientFactory,
 };

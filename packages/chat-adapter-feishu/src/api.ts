@@ -37,6 +37,24 @@ export class LarkApiClient {
     return { messageId: data.data.message_id, raw: data.data };
   }
 
+  /**
+   * Send a text DM directly to a user (open_id / union_id / user_id) without a
+   * pre-existing chat_id. Feishu creates (or reuses) the p2p chat implicitly.
+   */
+  async sendDirectMessage(userId: string, text: string): Promise<{ messageId: string; raw: any }> {
+    const userIdType = userId.startsWith('ou_')
+      ? 'open_id'
+      : userId.startsWith('on_')
+        ? 'union_id'
+        : 'user_id';
+    const data = await this.call('POST', `/im/v1/messages?receive_id_type=${userIdType}`, {
+      content: JSON.stringify({ text: this.truncateText(text) }),
+      msg_type: 'text',
+      receive_id: userId,
+    });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
   async editMessage(messageId: string, text: string): Promise<{ raw: any }> {
     const data = await this.call('PUT', `/im/v1/messages/${messageId}`, {
       content: JSON.stringify({ text: this.truncateText(text) }),
@@ -56,9 +74,19 @@ export class LarkApiClient {
 
   async listMessages(
     chatId: string,
-    options?: { pageSize?: number; pageToken?: string; startTime?: string; endTime?: string },
+    options?: {
+      /** Message container dimension: 'chat' (default) lists the whole chat; 'thread' lists a topic (chatId = omt_ id). */
+      containerType?: 'chat' | 'thread';
+      pageSize?: number;
+      pageToken?: string;
+      startTime?: string;
+      endTime?: string;
+    },
   ): Promise<{ items: any[]; hasMore: boolean; pageToken?: string }> {
-    const params = new URLSearchParams({ container_id_type: 'chat', container_id: chatId });
+    const params = new URLSearchParams({
+      container_id_type: options?.containerType ?? 'chat',
+      container_id: chatId,
+    });
     if (options?.pageSize) params.set('page_size', String(options.pageSize));
     if (options?.pageToken) params.set('page_token', options.pageToken);
     if (options?.startTime) params.set('start_time', options.startTime);
@@ -76,6 +104,25 @@ export class LarkApiClient {
     const data = await this.call('POST', `/im/v1/messages/${messageId}/reply`, {
       content: JSON.stringify({ text: this.truncateText(text) }),
       msg_type: 'text',
+    });
+    return { messageId: data.data.message_id, raw: data.data };
+  }
+
+  /**
+   * Reply with a non-text message (image / file / audio / media) to a
+   * message — the reply-API twin of `sendMessageWithMsgType`. `content` must
+   * already be the platform-specific JSON-stringified payload.
+   *
+   * See: https://open.feishu.cn/document/server-docs/im-v1/message/reply
+   */
+  async replyMessageWithMsgType(
+    messageId: string,
+    msgType: 'image' | 'file' | 'audio' | 'media',
+    content: string,
+  ): Promise<{ messageId: string; raw: any }> {
+    const data = await this.call('POST', `/im/v1/messages/${messageId}/reply`, {
+      content,
+      msg_type: msgType,
     });
     return { messageId: data.data.message_id, raw: data.data };
   }
@@ -104,7 +151,9 @@ export class LarkApiClient {
     return data.bot;
   }
 
-  async getUserInfo(openId: string): Promise<{ name?: string } | null> {
+  async getUserInfo(
+    openId: string,
+  ): Promise<{ email?: string; enterpriseEmail?: string; name?: string } | null> {
     const userIdType = openId.startsWith('ou_')
       ? 'open_id'
       : openId.startsWith('on_')
@@ -119,8 +168,14 @@ export class LarkApiClient {
     const user = data.data?.user;
     if (!user) return null;
 
-    const name = user.name || user.display_name || user.nickname || user.en_name;
-    return name ? { name } : null;
+    // `enterprise_email` (org-assigned) is usually populated even when the
+    // personal `email` field is empty. Both need the contact:user.email:readonly
+    // scope; absent scope yields empty strings.
+    return {
+      email: user.email || undefined,
+      enterpriseEmail: user.enterprise_email || undefined,
+      name: user.name || user.display_name || user.nickname || user.en_name,
+    };
   }
 
   // ------------------------------------------------------------------

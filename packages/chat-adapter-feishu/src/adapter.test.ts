@@ -173,6 +173,47 @@ describe('LarkAdapter', () => {
       };
       expect(adapter.decodeThreadId(adapter.encodeThreadId(original))).toEqual(original);
     });
+
+    // ---------- topic (thread_id) 4th segment ----------
+
+    it('should encode 4-segment format with threadId', () => {
+      const encoded = adapter.encodeThreadId({
+        chatId: 'oc_chat1',
+        chatType: 'group',
+        platform: 'feishu',
+        threadId: 'omt_topic1',
+      });
+      expect(encoded).toBe('feishu:group:oc_chat1:omt_topic1');
+    });
+
+    it('should omit 4th segment when threadId absent (plain group unchanged)', () => {
+      const encoded = adapter.encodeThreadId({
+        chatId: 'oc_chat1',
+        chatType: 'group',
+        platform: 'feishu',
+      });
+      expect(encoded).toBe('feishu:group:oc_chat1');
+    });
+
+    it('should decode 4-segment topic format', () => {
+      const decoded = adapter.decodeThreadId('feishu:group:oc_chat1:omt_topic1');
+      expect(decoded).toEqual({
+        chatId: 'oc_chat1',
+        chatType: 'group',
+        platform: 'feishu',
+        threadId: 'omt_topic1',
+      });
+    });
+
+    it('should round-trip encode/decode for topic format', () => {
+      const original = {
+        chatId: 'oc_abc',
+        chatType: 'group' as const,
+        platform: 'feishu' as const,
+        threadId: 'omt_xyz',
+      };
+      expect(adapter.decodeThreadId(adapter.encodeThreadId(original))).toEqual(original);
+    });
   });
 
   // ---------- handleWebhook ----------
@@ -209,6 +250,45 @@ describe('LarkAdapter', () => {
 
       expect(res.status).toBe(200);
       expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should process post message (@mention + inline image) instead of dropping it', async () => {
+      // Regression: @bot + pasted image is a rich-text (post) message; the
+      // webhook switch only knew 'text' + pure-media types, so posts fell to
+      // the default branch and were silently dropped (`ok:true`, no dispatch).
+      const msg = makeLarkMessage({
+        content: JSON.stringify({
+          content: [
+            [
+              { tag: 'text', text: '@_user_1 看看这个截图' },
+              { tag: 'img', image_key: 'img_v2_abc' },
+            ],
+          ],
+          title: '',
+        }),
+        mentions: [{ id: { open_id: 'ou_bot_me' }, key: '@_user_1', name: 'Bot' }],
+        message_type: 'post',
+      });
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should route topic-group message to 4-segment threadId', async () => {
+      const msg = makeLarkMessage({ chat_type: 'group', thread_id: 'omt_topic9' });
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage.mock.calls[0]?.[1]).toBe('lark:group:oc_test_chat:omt_topic9');
+    });
+
+    it('should route plain group message to 3-segment threadId (no thread_id)', async () => {
+      const msg = makeLarkMessage({ chat_type: 'group' });
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage.mock.calls[0]?.[1]).toBe('lark:group:oc_test_chat');
     });
 
     it('should skip empty text messages with no media', async () => {
@@ -559,6 +639,40 @@ describe('LarkAdapter', () => {
       expect(message.attachments).toEqual([]);
     });
 
+    it('should parse post message: element text + inline image attachment', () => {
+      const raw = makeLarkMessage({
+        content: JSON.stringify({
+          content: [
+            [
+              { tag: 'text', text: '@_user_1 ' },
+              { tag: 'text', text: '看看这个 ' },
+              { tag: 'img', image_key: 'img_v2_post' },
+            ],
+          ],
+          title: '',
+        }),
+        message_type: 'post',
+      });
+      const message = adapter.parseMessage(raw);
+
+      expect(message.text).toBe('看看这个');
+      expect(message.attachments).toHaveLength(1);
+      expect(message.attachments[0].type).toBe('image');
+    });
+
+    it('should parse legacy-shape post content (flat element array)', () => {
+      const raw = makeLarkMessage({
+        content: JSON.stringify({
+          content: [{ tag: 'text', text: '旧版富文本' }],
+          title: '标题',
+        }),
+        message_type: 'post',
+      });
+      const message = adapter.parseMessage(raw);
+
+      expect(message.text).toBe('标题旧版富文本');
+    });
+
     it('should return empty attachments when key is missing', () => {
       const raw = makeLarkMessage({
         content: JSON.stringify({}),
@@ -829,6 +943,34 @@ describe('downloadMediaFromRawMessage', () => {
     ]);
   });
 
+  it('downloads every inline image of a post message', async () => {
+    const imgBytes = Buffer.from([0x89, 0x50]);
+    downloadSpy.mockResolvedValue(imgBytes);
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({
+          content: [
+            [
+              { tag: 'text', text: '两张图' },
+              { tag: 'img', image_key: 'img_p1' },
+              { tag: 'img', image_key: 'img_p2' },
+            ],
+          ],
+          title: '',
+        }),
+        message_type: 'post',
+      }),
+    );
+
+    expect(downloadSpy).toHaveBeenCalledTimes(2);
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 'img_p1', 'image');
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 'img_p2', 'image');
+    expect(result).toHaveLength(2);
+    expect(result.every((att) => att.type === 'image')).toBe(true);
+  });
+
   it('downloads audio via file_key as audio/ogg', async () => {
     const audioBytes = Buffer.from([0x4f, 0x67, 0x67, 0x53]);
     downloadSpy.mockResolvedValueOnce(audioBytes);
@@ -922,5 +1064,47 @@ describe('downloadMediaFromRawMessage', () => {
     );
 
     expect(warn).toHaveBeenCalled();
+  });
+});
+
+// ---- replyMessageWithMsgType ----
+// Media replies must hit the reply endpoint (`/im/v1/messages/{id}/reply`)
+// with the caller's msg_type, mirroring sendMessageWithMsgType — the direct-
+// send twin would land the attachment outside the trigger's topic thread.
+
+describe('LarkApiClient.replyMessageWithMsgType', () => {
+  it('POSTs to the reply endpoint with the given msg_type and returns the reply message id', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/auth/v3/tenant_access_token')) {
+        return new Response(JSON.stringify({ code: 0, expire: 3600, tenant_access_token: 'tok' }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ code: 0, data: { message_id: 'om_reply_1' } }), {
+        status: 200,
+      });
+    });
+
+    const api = new LarkApiClient('app', 'secret', 'feishu');
+    const result = await api.replyMessageWithMsgType(
+      'om_trigger',
+      'image',
+      JSON.stringify({ image_key: 'img_1' }),
+    );
+
+    const replyCall = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/im/v1/messages/om_trigger/reply'),
+    );
+    expect(replyCall).toBeDefined();
+    const init = replyCall![1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      content: JSON.stringify({ image_key: 'img_1' }),
+      msg_type: 'image',
+    });
+    expect(result.messageId).toBe('om_reply_1');
+
+    fetchSpy.mockRestore();
   });
 });

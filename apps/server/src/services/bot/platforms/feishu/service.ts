@@ -30,6 +30,8 @@ import type {
   ReplyToThreadState,
   SearchMessagesParams,
   SearchMessagesState,
+  SendDirectMessageParams,
+  SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
   UnpinMessageParams,
@@ -79,6 +81,21 @@ export class FeishuMessageService implements MessageRuntimeService {
   ) {
     this.platformName = platformName;
   }
+
+  sendDirectMessage = async (params: SendDirectMessageParams): Promise<SendDirectMessageState> => {
+    // Feishu sends a DM by addressing the user directly via receive_id;
+    // no separate createDM step is needed. The API implicitly creates/reuses
+    // a p2p chat and returns chat_id in the raw response.
+    // TODO: attachments — sendFeishuAttachments requires a chat_id which we
+    // only get after the first text message ships. Ship text now, attachments
+    // in a follow-up if needed.
+    const { messageId, raw } = await this.api.sendDirectMessage(params.userId, params.content);
+    return {
+      channelId: raw?.chat_id ?? params.userId,
+      messageId,
+      platform: this.platformName,
+    };
+  };
 
   // ==================== Core Message Operations ====================
 
