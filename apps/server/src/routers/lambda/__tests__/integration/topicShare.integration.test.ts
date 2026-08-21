@@ -2,6 +2,8 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   agents,
+  chatGroups,
+  chatGroupsAgents,
   topics,
   workspaceAuditLogs,
   workspaceMembers,
@@ -242,6 +244,94 @@ describe('Topic Share Router Integration Tests (workspace permission matrix)', (
 
       return { agentId: agent.id, topicId: topic.id };
     };
+
+    /**
+     * A group whose supervisor holds the policy, plus a topic that carries only
+     * `groupId` — the shape `createTopic({ groupId })` produces when no agent or
+     * session is supplied.
+     */
+    const seedGroupTopic = async (params: {
+      supervisorUserId: string;
+      topicSharePolicy?: 'member' | 'restricted';
+      topicUserId: string;
+    }) => {
+      const [supervisor] = await serverDB
+        .insert(agents)
+        .values({
+          agencyConfig: params.topicSharePolicy
+            ? { topicSharePolicy: params.topicSharePolicy }
+            : null,
+          title: 'Supervisor',
+          userId: params.supervisorUserId,
+          virtual: true,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({
+          title: 'Policy Group',
+          userId: params.supervisorUserId,
+          visibility: 'public',
+          workspaceId,
+        })
+        .returning();
+
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: supervisor.id,
+        chatGroupId: group.id,
+        order: -1,
+        role: 'supervisor',
+        userId: params.supervisorUserId,
+        workspaceId,
+      });
+
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({
+          groupId: group.id,
+          title: 'Group Policy Topic',
+          userId: params.topicUserId,
+          workspaceId,
+        })
+        .returning();
+
+      return { groupId: group.id, supervisorAgentId: supervisor.id, topicId: topic.id };
+    };
+
+    it("blocks publishing a group topic through the supervisor's policy", async () => {
+      // `createTopic({ groupId })` stores neither an agent nor a session, so
+      // reading `agentId` first would leave these rows with no policy at all —
+      // and the group Permission page writes the policy onto this supervisor.
+      const seeded = await seedGroupTopic({
+        supervisorUserId: creatorId,
+        topicSharePolicy: 'restricted',
+        topicUserId: memberId,
+      });
+
+      const memberCaller = topicRouter.createCaller(createWorkspaceContext(memberId, workspaceId));
+
+      await expect(
+        memberCaller.enableSharing({ topicId: seeded.topicId, visibility: 'link' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      // The placeholder still works, same as the agent case.
+      await expect(
+        memberCaller.enableSharing({ topicId: seeded.topicId, visibility: 'private' }),
+      ).resolves.toMatchObject({ visibility: 'private' });
+    });
+
+    it('leaves group topics publishable under the default supervisor policy', async () => {
+      const seeded = await seedGroupTopic({ supervisorUserId: creatorId, topicUserId: memberId });
+
+      const memberCaller = topicRouter.createCaller(createWorkspaceContext(memberId, workspaceId));
+
+      await expect(
+        memberCaller.enableSharing({ topicId: seeded.topicId, visibility: 'link' }),
+      ).resolves.toMatchObject({ visibility: 'link' });
+    });
 
     it('blocks a member from publishing a link under a restricted agent', async () => {
       const seeded = await seedAgentTopic({

@@ -163,17 +163,23 @@ export class AgentService extends BaseService {
           // written elsewhere — so replacing the object would silently delete
           // every one of them, including the topic-share policy that keeps a
           // restricted agent's conversations from being published.
-          updateData.agencyConfig = mergeJsonPatch(
-            existingAgent.agencyConfig,
-            request.agencyConfig,
-          );
+          // An explicit `null` still clears the column, exactly as before: that
+          // is a caller deliberately asking for it, unlike a partial edit that
+          // simply has no way to name the other keys.
+          updateData.agencyConfig =
+            request.agencyConfig === null
+              ? null
+              : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
         }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
         if (request.chatConfig !== undefined) {
           // Same reason as `agencyConfig` above: the schema exposes 13 of
           // `LobeAgentChatConfig`'s fields, so replacing the object would drop
           // the two dozen a caller has no way to send back.
-          updateData.chatConfig = mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
+          updateData.chatConfig =
+            request.chatConfig === null
+              ? null
+              : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
         }
         if (request.description !== undefined) updateData.description = request.description ?? null;
         if (request.model !== undefined) updateData.model = request.model ?? null;

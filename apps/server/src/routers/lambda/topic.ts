@@ -85,6 +85,7 @@ const topicBulkDeleteScopeSchema = z.enum(['own', 'workspace']).default('own');
 
 interface TopicShareCtx {
   agentModel: AgentModel;
+  chatGroupModel: ChatGroupModel;
   serverDB: LobeChatDatabase;
   topicModel: TopicModel;
   userId: string;
@@ -98,15 +99,22 @@ const isWorkspaceTopicOwner = (ctx: TopicShareCtx) =>
   });
 
 /**
- * The agent an agent-held topic answers to. Agent-native topics carry
- * `agentId` directly; legacy session-only rows predate that column, so resolve
- * through the session rather than letting them slip past the policy.
+ * The agent a topic answers to, for policy purposes.
+ *
+ * Group topics resolve through their supervisor first: a group conversation
+ * *is* a conversation with its supervisor, that is the row the group's
+ * Permission page writes, and `createTopic` accepts a `groupId` with no agent
+ * or session at all — so reading `agentId` first would leave those rows with
+ * no policy to apply. Agent-native topics then carry `agentId` directly, and
+ * legacy session-only rows predate that column, so resolve through the session
+ * rather than letting them slip past the policy.
  */
 const resolveTopicShareAgent = async (
   ctx: TopicShareCtx,
-  topic: { agentId?: string | null; sessionId?: string | null },
+  topic: { agentId?: string | null; groupId?: string | null; sessionId?: string | null },
 ) => {
   const agentId =
+    (topic.groupId ? await ctx.chatGroupModel.getSupervisorAgentId(topic.groupId) : null) ??
     topic.agentId ??
     (topic.sessionId
       ? await resolveAgentIdFromSession(topic.sessionId, ctx.serverDB, ctx.userId, ctx.workspaceId!)

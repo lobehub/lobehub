@@ -9,8 +9,12 @@
  * therefore delete every field the caller never mentioned, which for
  * `agencyConfig` means silently reopening a restricted agent's topic sharing.
  *
- * `undefined` removes a key (the only way a caller can drop one); `null` is
- * kept, because the schemas use it as an explicit "cleared" value.
+ * `undefined` removes a key (the only way a caller can drop one); a `null`
+ * *value* is kept, because the schemas use it as an explicit "cleared" field.
+ *
+ * A `null` *patch* is a no-op here. Whether a whole-column `null` clears the
+ * column is the caller's decision, not this helper's — `agencyConfig` and
+ * `chatConfig` clear on it, `params` never did.
  */
 export const mergeJsonPatch = (
   existing: unknown,

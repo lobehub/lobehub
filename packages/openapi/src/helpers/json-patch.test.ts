@@ -38,6 +38,9 @@ describe('mergeJsonPatch', () => {
     });
   });
 
+  // Clearing a whole column is the caller's decision, not this helper's:
+  // `agent.service` maps an explicit `agencyConfig: null` to `null` before
+  // ever reaching here, while `params` has always treated it as a no-op.
   it('leaves the stored object untouched when there is nothing to apply', () => {
     const existing = { topicSharePolicy: 'restricted' };
 
