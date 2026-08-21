@@ -3,13 +3,9 @@
 import { copyToClipboard, Flexbox, Text } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import type { MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
-import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
@@ -36,16 +32,6 @@ interface ArtifactShareChromeProps {
 
 export const ArtifactShareChrome = ({ title }: ArtifactShareChromeProps) => {
   const { t } = useTranslation('chat');
-  const isLogin = useUserStore(authSelectors.isLogin);
-
-  const handleSignIn = (event: MouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    const callbackUrl = `${window.location.pathname}${window.location.search}`;
-    const target = `/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`;
-    void trackLoginOrSignupClicked({ spm: 'share.artifact.signin.click' }).finally(() => {
-      window.location.href = target;
-    });
-  };
 
   const handleShare = async () => {
     await copyToClipboard(window.location.href);
@@ -61,11 +47,7 @@ export const ArtifactShareChrome = ({ title }: ArtifactShareChromeProps) => {
       justify={'space-between'}
     >
       <Flexbox horizontal align={'center'} flex={1} style={{ minWidth: 0 }}>
-        <a
-          className={styles.logo}
-          href={isLogin ? '/' : '/signin'}
-          onClick={isLogin ? undefined : handleSignIn}
-        >
+        <a className={styles.logo} href={'/'}>
           <ProductLogo size={28} />
         </a>
       </Flexbox>
@@ -85,17 +67,9 @@ export const ArtifactShareChrome = ({ title }: ArtifactShareChromeProps) => {
         <Button shape={'round'} size={'small'} onClick={handleShare}>
           {t('sharePage.artifact.share')}
         </Button>
-        {!isLogin && (
-          <Button
-            href={'/signin'}
-            shape={'round'}
-            size={'small'}
-            type={'primary'}
-            onClick={handleSignIn}
-          >
-            {t('sharePage.error.unauthorized.action')}
-          </Button>
-        )}
+        <Button href={'/'} shape={'round'} size={'small'}>
+          {t('sharePage.menu.goToLobeHub')}
+        </Button>
       </Flexbox>
     </Flexbox>
   );
