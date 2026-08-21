@@ -270,6 +270,8 @@ export default {
   'permission.collaborators.addModal.empty': 'No members available to add',
   'permission.collaborators.addModal.noMatch': 'No matching members',
   'permission.collaborators.addModal.search': 'Search members',
+  'permission.collaborators.addModal.selectionLimit':
+    'You can add up to {{count}} members at a time',
   'permission.collaborators.addModal.selectedCount_one': '{{count}} member selected',
   'permission.collaborators.addModal.selectedCount_other': '{{count}} members selected',
   'permission.collaborators.addModal.title': 'Add collaborators',

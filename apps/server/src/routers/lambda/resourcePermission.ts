@@ -1,3 +1,4 @@
+import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -105,7 +106,7 @@ export const resourcePermissionRouter = router({
     .input(
       resourceInput.extend({
         accessLevel: accessLevelSchema,
-        userIds: z.array(z.string()).min(1).max(100),
+        userIds: z.array(z.string()).min(1).max(MAX_RESOURCE_COLLABORATORS_PER_ADD),
       }),
     )
     .mutation(async ({ ctx, input }) => {

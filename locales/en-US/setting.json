@@ -660,6 +660,7 @@
   "permission.collaborators.addModal.search": "Search members",
   "permission.collaborators.addModal.selectedCount_one": "{{count}} member selected",
   "permission.collaborators.addModal.selectedCount_other": "{{count}} members selected",
+  "permission.collaborators.addModal.selectionLimit": "You can add up to {{count}} members at a time",
   "permission.collaborators.addModal.title": "Add collaborators",
   "permission.collaborators.empty": "No collaborators yet",
   "permission.collaborators.libraryDesc": "Collaborators can open this knowledge base and view the files inside even when the access level is \"No access\"",

@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
 import {
   Avatar,
   Empty,
@@ -10,7 +11,7 @@ import {
   SkeletonTitle,
   Text,
 } from '@lobehub/ui';
-import { Button, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckIcon, SearchXIcon, UsersIcon } from 'lucide-react';
@@ -206,9 +207,22 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
     }, [candidates, query]);
 
     const toggle = (userId: string) => {
-      setSelected((prev) =>
-        prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-      );
+      if (selected.includes(userId)) {
+        setSelected((prev) => prev.filter((id) => id !== userId));
+        return;
+      }
+      // The procedure refuses a longer batch outright, so stop the selection at
+      // the cap and say why — otherwise the whole hand-assembled selection is
+      // rejected at confirm time, after the work of making it.
+      if (selected.length >= MAX_RESOURCE_COLLABORATORS_PER_ADD) {
+        toast.warning(
+          t('permission.collaborators.addModal.selectionLimit', {
+            count: MAX_RESOURCE_COLLABORATORS_PER_ADD,
+          }),
+        );
+        return;
+      }
+      setSelected((prev) => [...prev, userId]);
     };
 
     const handleConfirm = async () => {

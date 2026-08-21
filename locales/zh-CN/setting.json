@@ -660,6 +660,7 @@
   "permission.collaborators.addModal.search": "搜索成员",
   "permission.collaborators.addModal.selectedCount_one": "已选 {{count}} 位成员",
   "permission.collaborators.addModal.selectedCount_other": "已选 {{count}} 位成员",
+  "permission.collaborators.addModal.selectionLimit": "一次最多添加 {{count}} 位成员",
   "permission.collaborators.addModal.title": "添加协作者",
   "permission.collaborators.empty": "尚未添加协作者",
   "permission.collaborators.libraryDesc": "协作者在访问级别为「不可访问」时，仍可打开此知识库并查看内部文件",
