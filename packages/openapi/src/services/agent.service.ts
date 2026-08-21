@@ -7,6 +7,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
+import { mergeJsonPatch } from '../helpers/json-patch';
 import { processPaginationConditions } from '../helpers/pagination';
 import {
   projectPublicAgent,
@@ -156,10 +157,24 @@ export class AgentService extends BaseService {
         const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
         if (request.agencyConfig !== undefined) {
-          updateData.agencyConfig = request.agencyConfig ?? null;
+          // Merged, not replaced. The request schema exposes only the graph
+          // slice of `agencyConfig`, while the column also carries the member
+          // permission policies, device bindings and execution settings
+          // written elsewhere — so replacing the object would silently delete
+          // every one of them, including the topic-share policy that keeps a
+          // restricted agent's conversations from being published.
+          updateData.agencyConfig = mergeJsonPatch(
+            existingAgent.agencyConfig,
+            request.agencyConfig,
+          );
         }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
-        if (request.chatConfig !== undefined) updateData.chatConfig = request.chatConfig ?? null;
+        if (request.chatConfig !== undefined) {
+          // Same reason as `agencyConfig` above: the schema exposes 13 of
+          // `LobeAgentChatConfig`'s fields, so replacing the object would drop
+          // the two dozen a caller has no way to send back.
+          updateData.chatConfig = mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
+        }
         if (request.description !== undefined) updateData.description = request.description ?? null;
         if (request.model !== undefined) updateData.model = request.model ?? null;
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
@@ -168,19 +183,7 @@ export class AgentService extends BaseService {
 
         // Merge params instead of fully overwriting
         if (request.params !== undefined) {
-          const existingParams = (existingAgent.params as Record<string, unknown>) ?? {};
-          const incomingParams = request.params ?? {};
-          const mergedParams = { ...existingParams };
-
-          for (const [key, value] of Object.entries(incomingParams)) {
-            if (value === undefined) {
-              delete mergedParams[key];
-            } else {
-              mergedParams[key] = value;
-            }
-          }
-
-          updateData.params = mergedParams;
+          updateData.params = mergeJsonPatch(existingAgent.params, request.params);
         }
 
         // Update database
