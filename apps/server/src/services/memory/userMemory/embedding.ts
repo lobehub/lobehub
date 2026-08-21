@@ -1,6 +1,7 @@
 import { DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS } from '@lobechat/const';
 import type { ModelRuntime } from '@lobechat/model-runtime';
 import { RequestTrigger } from '@lobechat/types';
+import { padVector } from '@lobechat/utils';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
@@ -102,9 +103,10 @@ export const embedUserMemoryTexts = async (
   const outputs = params.input.map<number[] | undefined>(() => undefined);
   if (requests.length === 0) return outputs;
 
+  const targetDim = params.dimensions ?? DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS;
   const embeddings = await params.runtime.embeddings(
     {
-      dimensions: params.dimensions ?? DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+      dimensions: targetDim,
       input: requests.map((item) => item.text),
       model: params.model,
     },
@@ -115,7 +117,8 @@ export const embedUserMemoryTexts = async (
     const request = requests[requestIndex];
     if (!request || !embeddingVector) continue;
 
-    outputs[request.index] = embeddingVector;
+    // Pad or truncate vector to target dimension
+    outputs[request.index] = padVector(embeddingVector, targetDim);
   }
 
   return outputs;

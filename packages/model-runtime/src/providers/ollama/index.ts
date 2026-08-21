@@ -130,11 +130,20 @@ export class LobeOllamaAI implements LobeRuntimeAI {
     }
   }
 
+  /**
+   * Generate embeddings using Ollama.
+   *
+   * Ollama API does NOT support the `dimensions` parameter.
+   * The `dimensions` from payload is intentionally NOT passed to the API.
+   * Vector padding to target dimension is handled centrally by the embedding service.
+   *
+   * @see packages/utils/src/vectorPadding.ts
+   * @see apps/server/src/services/memory/userMemory/embedding.ts
+   */
   async embeddings(payload: EmbeddingsPayload): Promise<Embeddings[]> {
     const input = Array.isArray(payload.input) ? payload.input : [payload.input];
     const promises = input.map((inputText: string) =>
       this.invokeEmbeddingModel({
-        dimensions: payload.dimensions,
         input: inputText,
         model: payload.model,
       }),
