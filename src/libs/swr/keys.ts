@@ -1038,6 +1038,7 @@ export const inboxKeys = {
 
 // ---- share (shared topic / page) ----------------------------------------
 export const shareKeys = {
+  artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,

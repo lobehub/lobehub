@@ -16,6 +16,7 @@ export interface WorkspaceHtmlArtifactPublishInput {
 }
 
 export interface WorkspaceHtmlArtifactExisting {
+  id?: string;
   identifier: string;
   publicUrl?: string;
   revision?: number;
@@ -23,6 +24,7 @@ export interface WorkspaceHtmlArtifactExisting {
 }
 
 export interface WorkspaceHtmlArtifactPublishResult {
+  id?: string;
   publicUrl?: string;
   revision?: number;
 }
