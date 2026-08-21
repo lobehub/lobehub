@@ -54,3 +54,39 @@ export const isWorktreeCheckout = ({
   sourcePath?: string;
 }): boolean =>
   !!git?.isWorktree || (!!sourcePath && !!effectivePath && effectivePath !== sourcePath);
+
+/**
+ * The effective checkout is back to the source repo: drop the worktree
+ * override. `branch`, its `upstream` ref and the linked `github` PR described
+ * the worktree's branch, not the source repo's, so they are dropped rather than
+ * left pointing at a branch the topic is no longer on — the source branch is
+ * unknown until the next `git switch` / `checkout` refreshes it.
+ *
+ * The single funnel for un-setting a worktree, shared by the `ExitWorktree`
+ * recorder (the session walked out of it) and the run-start prune (the
+ * directory was deleted underneath it), so the two cannot drift into recording
+ * different shapes for the same state.
+ */
+export const applyWorktreeExitToConfig = (
+  currentConfig: WorkingDirConfig | undefined,
+  source: string,
+): WorkingDirConfig => {
+  const git: NonNullable<WorkingDirConfig['git']> = {
+    ...currentConfig?.git,
+    isWorktree: false,
+  };
+
+  delete git.activeWorktree;
+  if (currentConfig?.git?.isWorktree) {
+    delete git.branch;
+    delete git.github;
+    delete git.upstream;
+  }
+
+  return {
+    ...currentConfig,
+    git,
+    path: source,
+    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+  };
+};

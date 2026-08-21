@@ -105,7 +105,11 @@ describe('runCommand', () => {
       expect(result.stdout).toContain('/tmp');
     });
 
-    it('should report the real spawn error when cwd does not exist', async () => {
+    // The raw spawn failure for a missing cwd is `spawn /bin/sh ENOENT`, which
+    // reads as a broken shell. The injected cwd (agent working directory, or a
+    // recorded worktree that has since been deleted) is the real culprit, so it
+    // has to be named — the agent can rebind, but it cannot fix `/bin/sh`.
+    it('should report the missing directory when cwd does not exist', async () => {
       const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
         { command: 'echo unreachable', cwd: missingCwd },
@@ -114,8 +118,7 @@ describe('runCommand', () => {
 
       expect(result.success).toBe(false);
       expect(result.exit_code).toBeUndefined();
-      expect(result.error).toContain(`working directory: ${missingCwd}`);
-      expect(result.error).toContain('ENOENT');
+      expect(result.error).toBe(`Working directory does not exist: ${missingCwd}`);
     });
 
     it('should merge env into child process environment', async () => {

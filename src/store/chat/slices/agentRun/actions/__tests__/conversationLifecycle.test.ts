@@ -8,6 +8,7 @@ import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
+import { deviceService } from '@/services/device';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
@@ -18,6 +19,7 @@ import type {
 } from '@/store/chat/slices/voiceMessage/action';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { clearWorktreeProbeCache } from '@/store/chat/utils/pruneMissingWorktree';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useDeviceStore } from '@/store/device';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -1822,6 +1824,107 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({ metadata: expectedMetadata }),
         );
         // Rides along to the server, which owns the real topic row.
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            optimisticTopic: expect.objectContaining({ metadata: expectedMetadata }),
+          }),
+        );
+
+        await act(async () => {
+          resolveGateway();
+          await sendPromise;
+        });
+      });
+
+      // A worktree recorded on the agent outlives the directory: `git worktree
+      // remove` (or a cleanup pass) leaves the override behind and every NEW
+      // topic used to inherit that dead path as its cwd — the picker still
+      // reads "lobehub" (it shows the SOURCE repo), while every tool call
+      // spawns in a directory that no longer exists.
+      it('should not bind a new topic to a recorded worktree that no longer exists', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        const sourcePath = '/repo/lobehub';
+        const missingWorktree = '/repo/lobehub-wt-deleted';
+        clearWorktreeProbeCache();
+        vi.spyOn(deviceService, 'statPath').mockImplementation(
+          async (_deviceId: string, path: string) =>
+            ({ exists: path !== missingWorktree, isDirectory: path !== missingWorktree }) as any,
+        );
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              workingDirByDevice: {
+                [deviceId]: {
+                  git: { activeWorktree: missingWorktree },
+                  path: sourcePath,
+                  repoType: 'github',
+                },
+              },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        let resolveGateway!: () => void;
+        const gatewayPromise = new Promise<any>((resolve) => {
+          resolveGateway = () =>
+            resolve({
+              assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+              operationId: 'gateway-op-dead-worktree',
+              topicId: TEST_IDS.NEW_TOPIC_ID,
+              userMessageId: TEST_IDS.USER_MESSAGE_ID,
+            });
+        });
+        const executeGatewayAgentSpy = vi.fn().mockReturnValue(gatewayPromise);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [],
+                pageSize: 20,
+                total: 0,
+              },
+            },
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: null },
+            message: 'Where do I run?',
+          });
+        });
+
+        await waitFor(() => expect(executeGatewayAgentSpy).toHaveBeenCalled());
+
+        // The run falls back to the source repo — the same directory the
+        // ControlBar has been displaying all along.
+        const expectedMetadata = {
+          workingDirectory: sourcePath,
+          workingDirectoryConfig: {
+            git: { isWorktree: false },
+            path: sourcePath,
+            repoType: 'github',
+          },
+        };
+        expect(useChatStore.getState().topicDataMap[topicKey]?.items[0]).toEqual(
+          expect.objectContaining({ metadata: expectedMetadata }),
+        );
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             optimisticTopic: expect.objectContaining({ metadata: expectedMetadata }),

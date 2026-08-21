@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
@@ -42,6 +43,15 @@ export async function runCommand(
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
+  }
+
+  // A cwd that no longer exists surfaces from `spawn` as `spawn /bin/sh ENOENT`,
+  // which reads as "the shell is missing" and sends the agent hunting for a
+  // broken PATH. The cwd is injected (agent working directory / recorded
+  // worktree), never typed by the model, so the honest report is that the
+  // directory is gone — the caller can then rebind instead of retrying.
+  if (cwd && !existsSync(cwd)) {
+    return { error: `Working directory does not exist: ${cwd}`, success: false };
   }
 
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
