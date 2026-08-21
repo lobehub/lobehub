@@ -38,6 +38,8 @@ export interface AskUserQuestionLabels {
   recommendedTag: string;
   skip: string;
   submit: string;
+  supplementEnter: string;
+  supplementPlaceholder: string;
   timeExpired: string;
   timeRemaining: (time: string) => string;
 }
@@ -52,9 +54,9 @@ export interface AskUserQuestionViewProps extends AskUserFormApi {
 
 /**
  * The presentational shell for AskUserQuestion:
- * - a top tab strip (Q1, Q2, … + a trailing "Or type directly" escape tab) when
+ * - a top tab strip (Q1, Q2, … + additional-notes and replace-all tabs) when
  *   there is more than one question,
- * - the active `QuestionPanel` (or the whole-form escape TextArea), and
+ * - the active `QuestionPanel` (or the notes / replace-all TextArea), and
  * - a Skip/Submit footer with an optional countdown.
  *
  * All form state and handlers arrive via props (from `useAskUserForm`); the
@@ -74,6 +76,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     handleEscapeTextChange,
     handleSkip,
     handleSubmit,
+    handleSupplementTextChange,
     handleToggle,
     isMulti,
     isSubmitDisabled,
@@ -83,8 +86,11 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     remainingMs,
     setActiveTab,
     setEscapeMode,
+    setSupplementMode,
     showCountdown,
     submitting,
+    supplementActive,
+    supplementText,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -161,7 +167,8 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       if (event.repeat && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
 
       const q = activeQuestion;
-      const rowNavEnabled = !!q && !escapeActive && !submitting && !expired && q.options.length > 0;
+      const rowNavEnabled =
+        !!q && !escapeActive && !supplementActive && !submitting && !expired && q.options.length > 0;
 
       // Digit keys pick the matching numbered row directly; the row after the
       // last option is the "write your own" line, which focuses its textarea.
@@ -280,7 +287,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     <Flexbox gap={12} ref={rootRef}>
       {isMulti && (
         <Tabs
-          activeKey={escapeActive ? 'escape' : activeTab}
+          activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
           variant="square"
           items={[
             ...questions.map((q, idx) => {
@@ -295,9 +302,17 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
                 ),
               };
             }),
-            // The whole-form freeform sits as a visible peer to the questions —
-            // it replaces *all* of them, so it reads as a sibling choice, not a
-            // hidden mode toggle.
+            {
+              key: 'supplement',
+              label: (
+                <Flexbox horizontal align="center" gap={6}>
+                  <Icon icon={PenLine} size={12} />
+                  <Text>{labels.supplementEnter}</Text>
+                </Flexbox>
+              ),
+            },
+            // Replace-all stays at the far right because it discards the
+            // structured selections, unlike the adjacent additional-notes tab.
             {
               key: 'escape',
               label: (
@@ -311,22 +326,29 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
           onChange={(key: string) => {
             if (key === 'escape') {
               setEscapeMode(true);
+            } else if (key === 'supplement') {
+              setSupplementMode(true);
             } else {
               setEscapeMode(false);
+              setSupplementMode(false);
               setActiveTab(key);
             }
           }}
         />
       )}
 
-      {escapeActive ? (
+      {escapeActive || supplementActive ? (
         <TextArea
           autoSize={{ maxRows: 8, minRows: 3 }}
           disabled={expired || submitting}
-          placeholder={labels.escapePlaceholder}
-          value={escapeText}
+          value={supplementActive ? supplementText : escapeText}
           variant="filled"
-          onChange={(e) => handleEscapeTextChange(e.target.value)}
+          placeholder={supplementActive ? labels.supplementPlaceholder : labels.escapePlaceholder}
+          onChange={(e) =>
+            supplementActive
+              ? handleSupplementTextChange(e.target.value)
+              : handleEscapeTextChange(e.target.value)
+          }
           onKeyDown={(e) => {
             // Enter submits (Shift+Enter keeps inserting a newline); fall back
             // to the default newline while submit is unavailable. The IME guard

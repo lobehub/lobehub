@@ -153,3 +153,66 @@ describe('useAskUserForm select-to-submit', () => {
     });
   });
 });
+
+describe('useAskUserForm additional notes', () => {
+  it('keeps structured answers and appends additional notes', () => {
+    const { hook, onInteractionAction } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto'));
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('Keep existing behavior.'));
+    act(() => hook.result.current.handleSubmit());
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: {
+        'How broad?': 'Narrow',
+        'Which mode?': 'Auto',
+        '__supplement__': 'Keep existing behavior.',
+      },
+      type: 'submit',
+    });
+  });
+
+  it('requires both complete answers and non-empty notes in additional-notes mode', () => {
+    const { hook } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.setSupplementMode(true));
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+
+    act(() => hook.result.current.handleSupplementTextChange('More context'));
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto'));
+    expect(hook.result.current.isSubmitDisabled).toBe(false);
+  });
+
+  it('keeps replace-all and additional-notes modes mutually exclusive', () => {
+    const { hook } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.setSupplementMode(true));
+    expect(hook.result.current.supplementActive).toBe(true);
+    expect(hook.result.current.escapeActive).toBe(false);
+
+    act(() => hook.result.current.setEscapeMode(true));
+    expect(hook.result.current.supplementActive).toBe(false);
+    expect(hook.result.current.escapeActive).toBe(true);
+  });
+
+  it('restores additional-notes drafts without losing selected answers', () => {
+    const { hook } = setup(twoQuestionArgs, {
+      picks: { 'How broad?': 'Full', 'Which mode?': 'Manual' },
+      supplementActive: true,
+      supplementText: 'Preserve this note',
+    });
+
+    expect(hook.result.current.picks).toEqual({
+      'How broad?': 'Full',
+      'Which mode?': 'Manual',
+    });
+    expect(hook.result.current.supplementActive).toBe(true);
+    expect(hook.result.current.supplementText).toBe('Preserve this note');
+    expect(hook.result.current.isSubmitDisabled).toBe(false);
+  });
+});

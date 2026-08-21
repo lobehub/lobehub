@@ -1,7 +1,13 @@
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { buildSubmitPayload, FREEFORM_PAYLOAD_KEY, isQuestionAnswered, readDraft } from './draft';
+import {
+  buildSubmitPayload,
+  FREEFORM_PAYLOAD_KEY,
+  isQuestionAnswered,
+  readDraft,
+  SUPPLEMENT_PAYLOAD_KEY,
+} from './draft';
 import { normalizeAskUserQuestions } from './normalize';
 import type { AskUserDraft, AskUserQuestionArgs, AskUserQuestionItem } from './types';
 
@@ -32,6 +38,7 @@ export interface AskUserFormApi {
   handleEscapeTextChange: (value: string) => void;
   handleSkip: () => void;
   handleSubmit: () => void;
+  handleSupplementTextChange: (value: string) => void;
   handleToggle: (
     q: AskUserQuestionItem,
     label: string,
@@ -52,7 +59,10 @@ export interface AskUserFormApi {
   remainingMs: number;
   setActiveTab: (key: string) => void;
   setEscapeMode: (next: boolean) => void;
+  setSupplementMode: (next: boolean) => void;
   submitting: boolean;
+  supplementActive: boolean;
+  supplementText: string;
 }
 
 /**
@@ -80,6 +90,10 @@ export const useAskUserForm = ({
   const [custom, setCustom] = useState<Record<string, string>>(() => initial.custom);
   const [escapeText, setEscapeText] = useState<string>(() => initial.escapeText);
   const [escapeActive, setEscapeActive] = useState<boolean>(() => initial.escapeActive);
+  const [supplementText, setSupplementText] = useState<string>(() => initial.supplementText);
+  const [supplementActive, setSupplementActive] = useState<boolean>(
+    () => initial.supplementActive && !initial.escapeActive,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     // Resume on the first unanswered question rather than always at Q1.
@@ -145,7 +159,14 @@ export const useAskUserForm = ({
 
       setPicks(nextPicks);
       if (nextCustom !== custom) setCustom(nextCustom);
-      writeDraft({ custom: nextCustom, escapeActive, escapeText, picks: nextPicks });
+      writeDraft({
+        custom: nextCustom,
+        escapeActive,
+        escapeText,
+        picks: nextPicks,
+        supplementActive,
+        supplementText,
+      });
 
       if (!q.multiSelect) {
         // Codex-style select-to-submit: the pick that completes the form sends
@@ -172,7 +193,17 @@ export const useAskUserForm = ({
         }
       }
     },
-    [picks, custom, escapeActive, escapeText, questions, submitWith, writeDraft],
+    [
+      picks,
+      custom,
+      escapeActive,
+      escapeText,
+      questions,
+      submitWith,
+      supplementActive,
+      supplementText,
+      writeDraft,
+    ],
   );
 
   const handleCustomChange = useCallback(
@@ -190,9 +221,16 @@ export const useAskUserForm = ({
 
       setCustom(nextCustom);
       if (nextPicks !== picks) setPicks(nextPicks);
-      writeDraft({ custom: nextCustom, escapeActive, escapeText, picks: nextPicks });
+      writeDraft({
+        custom: nextCustom,
+        escapeActive,
+        escapeText,
+        picks: nextPicks,
+        supplementActive,
+        supplementText,
+      });
     },
-    [picks, custom, escapeActive, escapeText, writeDraft],
+    [picks, custom, escapeActive, escapeText, supplementActive, supplementText, writeDraft],
   );
 
   const handleEscapeTextChange = useCallback(
@@ -200,17 +238,63 @@ export const useAskUserForm = ({
       setEscapeText(value);
       // Persist freeform text alongside the (hidden) picks so a refresh resumes
       // here; the picks survive a toggle back to the form.
-      writeDraft({ custom, escapeActive: true, escapeText: value, picks });
+      writeDraft({
+        custom,
+        escapeActive: true,
+        escapeText: value,
+        picks,
+        supplementActive: false,
+        supplementText,
+      });
     },
-    [custom, picks, writeDraft],
+    [custom, picks, supplementText, writeDraft],
+  );
+
+  const handleSupplementTextChange = useCallback(
+    (value: string) => {
+      setSupplementText(value);
+      writeDraft({
+        custom,
+        escapeActive: false,
+        escapeText,
+        picks,
+        supplementActive: true,
+        supplementText: value,
+      });
+    },
+    [custom, escapeText, picks, writeDraft],
   );
 
   const setEscapeMode = useCallback(
     (next: boolean) => {
       setEscapeActive(next);
-      writeDraft({ custom, escapeActive: next, escapeText, picks });
+      if (next) setSupplementActive(false);
+      writeDraft({
+        custom,
+        escapeActive: next,
+        escapeText,
+        picks,
+        supplementActive: next ? false : supplementActive,
+        supplementText,
+      });
     },
-    [custom, escapeText, picks, writeDraft],
+    [custom, escapeText, picks, supplementActive, supplementText, writeDraft],
+  );
+
+  const setSupplementMode = useCallback(
+    (next: boolean) => {
+      setSupplementActive(next);
+      if (next) setEscapeActive(false);
+      writeDraft({
+        custom,
+        escapeActive: next ? false : escapeActive,
+        escapeText,
+        picks,
+        supplementActive: next,
+        supplementText,
+      });
+    },
+    [custom, escapeActive, escapeText, picks, supplementText, writeDraft],
   );
 
   // Whole-form freeform only makes sense with more than one question — with a
@@ -218,6 +302,7 @@ export const useAskUserForm = ({
   // answer, so escape is redundant there and never offered.
   const escapeAvailable = questions.length > 1;
   const inEscape = escapeActive && escapeAvailable;
+  const inSupplement = supplementActive && escapeAvailable;
 
   const handleSubmit = useCallback(() => {
     if (escapeActive && escapeAvailable) {
@@ -225,9 +310,21 @@ export const useAskUserForm = ({
       // under `__freeform__`. Bridge formatter forwards it verbatim.
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
     } else {
-      void submitWith(buildSubmitPayload(questions, picks, custom));
+      const payload = buildSubmitPayload(questions, picks, custom);
+      if (inSupplement) payload[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
+      void submitWith(payload);
     }
-  }, [custom, escapeActive, escapeAvailable, escapeText, picks, questions, submitWith]);
+  }, [
+    custom,
+    escapeActive,
+    escapeAvailable,
+    escapeText,
+    inSupplement,
+    picks,
+    questions,
+    submitWith,
+    supplementText,
+  ]);
 
   const handleSkip = useCallback(async () => {
     if (!onInteractionAction || submitting) return;
@@ -267,6 +364,9 @@ export const useAskUserForm = ({
         fallback[q.question] = q.multiSelect ? [first] : first;
       }
     }
+    if (supplementActive && escapeAvailable && supplementText.trim()) {
+      fallback[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
+    }
     void submitWith(fallback);
   }, [
     expired,
@@ -277,6 +377,8 @@ export const useAskUserForm = ({
     escapeText,
     picks,
     custom,
+    supplementActive,
+    supplementText,
     submitWith,
   ]);
 
@@ -285,7 +387,9 @@ export const useAskUserForm = ({
     questions.length === 0 ||
     (inEscape
       ? !escapeText.trim() || submitting || expired
-      : !allAnswered || expired || submitting);
+      : inSupplement
+        ? !allAnswered || !supplementText.trim() || submitting || expired
+        : !allAnswered || expired || submitting);
 
   return {
     activeQuestion,
@@ -298,6 +402,7 @@ export const useAskUserForm = ({
     handleEscapeTextChange,
     handleSkip,
     handleSubmit,
+    handleSupplementTextChange,
     handleToggle,
     isMulti: escapeAvailable,
     isSubmitDisabled,
@@ -306,6 +411,9 @@ export const useAskUserForm = ({
     remainingMs: deadline - now,
     setActiveTab,
     setEscapeMode,
+    setSupplementMode,
     submitting,
+    supplementActive: inSupplement,
+    supplementText,
   };
 };

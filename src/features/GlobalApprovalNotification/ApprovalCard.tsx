@@ -151,11 +151,8 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
             title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
-            <div className={styles.headerTitle}>
-              {topicTitle || agentDisplayName(meta, t('globalApproval.title'))}
-            </div>
             <div className={styles.headerSubtitle}>
-              {agentDisplayName(meta) ? `${agentDisplayName(meta)} · ` : ''}
+              {agentDisplayName(meta) && <span>{agentDisplayName(meta)}</span>}
               {t('globalApproval.subtitle')}
             </div>
           </div>
@@ -169,14 +166,16 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
           )}
         </div>
 
-        {userRequest && (
-          <div className={styles.userRequest}>
-            <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
+        <div className={styles.requestContext}>
+          <div className={styles.headerTitle}>
+            {topicTitle || agentDisplayName(meta, t('globalApproval.title'))}
+          </div>
+          {userRequest && (
             <div className={styles.userRequestBody}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {interventions.length > 1 && (
           <InterventionTabBar
