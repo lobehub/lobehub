@@ -24,11 +24,26 @@ export interface ImageFileState {
    * attachment with their own message, and clear each other's drafts.
    */
   chatUploadFileListByContext: Record<string, UploadFileItem[]>;
+  /**
+   * Which composer each IN-FLIGHT upload is writing into, keyed by a per-call
+   * session id.
+   *
+   * An upload spends its first moments reading and compressing the file, before
+   * any pending item exists — and a send during that window mints the topic and
+   * moves the bucket. A dispatch bound to the key captured at call time would
+   * then land in the abandoned bucket: the attachment disappears, or (when the
+   * move lands between two progress callbacks) a moved item never leaves
+   * `pending` and jams the send button. Redirecting by SESSION rather than by
+   * key is what makes the retarget safe — `main_<agent>_new` is reused by the
+   * next new topic, so a key-to-key redirect would misfile that one instead.
+   */
+  chatUploadSessionContext: Record<string, string>;
   uploadingIds: string[];
 }
 
 export const initialImageFileState: ImageFileState = {
   chatContextSelectionsByContext: {},
   chatUploadFileListByContext: {},
+  chatUploadSessionContext: {},
   uploadingIds: [],
 };

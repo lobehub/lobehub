@@ -1,7 +1,9 @@
 import { type ChatContextContent } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { toast } from '@lobehub/ui/base-ui';
 import { Buffer } from 'buffer.js';
+import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
@@ -112,11 +114,21 @@ export class FileActionImpl {
   dispatchChatUploadFileList = ({
     contextKey,
     payload,
+    uploadSessionId,
   }: {
     contextKey?: string;
     payload: UploadFileListDispatch;
+    /**
+     * Set by an in-flight `uploadChatFiles`. The bucket it writes into is read
+     * back at DISPATCH time, so a topic mint that moves the bucket mid-upload
+     * takes the remaining add / progress / success writes with it.
+     */
+    uploadSessionId?: string;
   }): void => {
-    const key = chatUploadContextKey(contextKey);
+    const sessionKey = uploadSessionId
+      ? this.#get().chatUploadSessionContext[uploadSessionId]
+      : undefined;
+    const key = sessionKey ?? chatUploadContextKey(contextKey);
     const currentMap = this.#get().chatUploadFileListByContext;
     const current = currentMap[key] ?? [];
     const nextValue = uploadFileListReducer(current, payload);
@@ -139,9 +151,25 @@ export class FileActionImpl {
   moveChatUploadFileList = (fromContextKey: string, toContextKey: string): void => {
     if (fromContextKey === toContextKey) return;
 
+    // Retarget uploads still in flight FIRST, and unconditionally: the racy case
+    // is precisely the one with nothing to move yet, where the file is still
+    // being read/compressed and its `addFiles` is about to land.
+    const sessions = this.#get().chatUploadSessionContext;
+    const movedSessions = Object.fromEntries(
+      Object.entries(sessions).map(([id, key]) => [
+        id,
+        key === fromContextKey ? toContextKey : key,
+      ]),
+    );
+
     const currentMap = this.#get().chatUploadFileListByContext;
     const source = currentMap[fromContextKey];
-    if (!source || source.length === 0) return;
+    if (!source || source.length === 0) {
+      if (!isEqual(sessions, movedSessions)) {
+        this.#set({ chatUploadSessionContext: movedSessions }, false, n('moveChatUploadFileList'));
+      }
+      return;
+    }
 
     const sourceIds = new Set(source.map((item) => item.id));
     const target = currentMap[toContextKey] ?? [];
@@ -149,7 +177,10 @@ export class FileActionImpl {
     const { [fromContextKey]: _removed, ...nextMap } = currentMap;
 
     this.#set(
-      { chatUploadFileListByContext: { ...nextMap, [toContextKey]: nextTarget } },
+      {
+        chatUploadFileListByContext: { ...nextMap, [toContextKey]: nextTarget },
+        chatUploadSessionContext: movedSessions,
+      },
       false,
       n('moveChatUploadFileList'),
     );
@@ -296,8 +327,44 @@ export class FileActionImpl {
     contextKey?: string;
     files: File[];
   }): Promise<void> => {
+    // Registered before the first `await` so a move during compression can find
+    // it; unregistered in the `finally` below once nothing else will dispatch.
+    const uploadSessionId = nanoid();
+    this.#set(
+      {
+        chatUploadSessionContext: {
+          ...this.#get().chatUploadSessionContext,
+          [uploadSessionId]: chatUploadContextKey(contextKey),
+        },
+      },
+      false,
+      n('registerChatUpload'),
+    );
     const dispatch = (payload: UploadFileListDispatch) =>
-      this.#get().dispatchChatUploadFileList({ contextKey, payload });
+      this.#get().dispatchChatUploadFileList({ contextKey, payload, uploadSessionId });
+
+    try {
+      await this.#runChatUpload({ agentId, dispatch, rawFiles });
+    } finally {
+      this.#unregisterChatUpload(uploadSessionId);
+    }
+  };
+
+  /** Deregister a finished upload — nothing dispatches under it any more. */
+  #unregisterChatUpload = (uploadSessionId: string): void => {
+    const { [uploadSessionId]: _done, ...rest } = this.#get().chatUploadSessionContext;
+    this.#set({ chatUploadSessionContext: rest }, false, n('unregisterChatUpload'));
+  };
+
+  #runChatUpload = async ({
+    agentId,
+    dispatch,
+    rawFiles,
+  }: {
+    agentId: string;
+    dispatch: (payload: UploadFileListDispatch) => void;
+    rawFiles: File[];
+  }): Promise<void> => {
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 

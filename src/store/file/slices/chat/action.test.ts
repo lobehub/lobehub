@@ -221,6 +221,49 @@ describe('useFileStore:chat', () => {
     expect(uploads(result.current, 'main_agt_tpc_1')).toEqual([{ id: 'abc' }]);
   });
 
+  // The upload spends its first moments reading/compressing the file, so no
+  // pending item exists yet and the send gate is open. A send in that window
+  // mints the topic and moves the bucket — the add that lands afterwards must
+  // follow it, or the attachment is written to a bucket nothing renders.
+  it('retargets an in-flight upload when the bucket moves mid-upload', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const uploadWithProgress = vi.fn().mockResolvedValue({ id: 'file-1', url: 'http://x/1' });
+
+    act(() => {
+      useStore.setState({ uploadWithProgress: uploadWithProgress as any });
+    });
+
+    const PRE_MINT = 'main_agent-1_new';
+    const MINTED = 'main_agent-1_tpc_1';
+
+    let uploading!: Promise<void>;
+    act(() => {
+      uploading = result.current.uploadChatFiles({
+        agentId: AGENT_ID,
+        contextKey: PRE_MINT,
+        files: [new File(['x'], 'shot.txt', { type: 'text/plain' })],
+      });
+      // The move lands BEFORE the upload has added anything — the bucket it is
+      // about to write into is still empty.
+      expect(uploads(useStore.getState(), PRE_MINT)).toEqual([]);
+      result.current.moveChatUploadFileList(PRE_MINT, MINTED);
+    });
+
+    await act(async () => {
+      await uploading;
+    });
+
+    expect(uploads(useStore.getState(), MINTED)).toEqual([
+      expect.objectContaining({ id: 'shot.txt' }),
+    ]);
+    expect(uploads(useStore.getState(), PRE_MINT)).toEqual([]);
+    // The session is deregistered once the upload settles, so the next new topic
+    // reusing `main_agent-1_new` is not redirected into the old conversation.
+    expect(useStore.getState().chatUploadSessionContext).toEqual({});
+  });
+
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
     // chat mode: agent mode disabled and not a heterogeneous agent
     mockAgentMode({ enableAgentMode: false, heterogeneous: false });
