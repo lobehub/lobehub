@@ -122,7 +122,7 @@ export class AgentShareModel {
       });
     }
 
-    return share;
+    return { ...share, shareConfig: normalizeAgentShareConfig(share.shareConfig) };
   };
 
   /** Get a share by agent ID for its owner. */

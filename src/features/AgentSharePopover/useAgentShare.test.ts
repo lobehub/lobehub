@@ -1,7 +1,11 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { agentShareService } from '@/services/agentShare';
+
 import { useAgentShare } from './useAgentShare';
+
+type AgentShareStatus = NonNullable<Awaited<ReturnType<typeof agentShareService.getShareStatus>>>;
 
 const mocks = vi.hoisted(() => ({
   enableShare: vi.fn(),
@@ -14,8 +18,10 @@ vi.mock('@/services/agentShare', () => ({
   agentShareService: mocks,
 }));
 
-const shareRow = (agentId: string) => ({
+const shareRow = (agentId: string): AgentShareStatus => ({
+  accessedAt: new Date(0),
   agentId,
+  createdAt: new Date(0),
   id: `share-${agentId}`,
   shareConfig: {
     allowReadMemory: false,
@@ -24,6 +30,8 @@ const shareRow = (agentId: string) => ({
     maxTopicsPerVisitor: 5,
     maxTurnsPerTopic: 20,
   },
+  updatedAt: new Date(0),
+  userViewCount: 0,
   visibility: 'private',
 });
 
