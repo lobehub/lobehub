@@ -414,6 +414,56 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
   });
 
+  it('should carry the delivery resume payload into the re-queued lock-conflict message', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    // A human-intervention resume that lost the lock race. Re-queueing only the
+    // retry counter would run a plain step and drop the approval entirely.
+    await service.executeStep({
+      approvedToolCall: { id: 'call-1' },
+      humanInput: 'approved',
+      operationId: 'op-resume',
+      rejectAndContinue: false,
+      stepIndex: 5,
+      toolMessageId: 'msg-tool-1',
+    });
+
+    expect(scheduleMessage.mock.calls[0][0].payload).toMatchObject({
+      approvedToolCall: { id: 'call-1' },
+      humanInput: 'approved',
+      lockRetryAttempt: 1,
+      rejectAndContinue: false,
+      toolMessageId: 'msg-tool-1',
+    });
+  });
+
+  it('should carry an async-tool resume flag into the re-queued lock-conflict message', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    await service.executeStep({
+      operationId: 'op-async-resume',
+      resumeAsyncTool: true,
+      stepIndex: 5,
+    });
+
+    expect(scheduleMessage.mock.calls[0][0].payload).toMatchObject({
+      lockRetryAttempt: 1,
+      resumeAsyncTool: true,
+    });
+  });
+
   it('should back off exponentially across successive lock-conflict re-deliveries', async () => {
     const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
     const service = new AgentRuntimeService({} as any, 'user-1', {

@@ -857,6 +857,14 @@ export class AgentRuntimeService {
       // longer than the budget therefore exhausts it and the delivery is
       // dead-lettered — the step it carried is then never executed. Re-queue a
       // fresh delivery on our own bounded backoff instead, and ACK this one.
+      //
+      // The re-delivery has to carry this delivery's own resume/intervention
+      // payload: a human-intervention resume (`processHumanIntervention`) or an
+      // async-tool resume (`tryResumeParentFromAsyncTool`) can lose the lock
+      // race too, and re-queueing only the retry counter would run a plain step
+      // once the lock clears — silently dropping the approval / human input, or
+      // leaving a parked operation parked forever. Undefined fields drop out of
+      // the JSON body, so unrelated deliveries still send just the counter.
       const nextLockRetryAttempt = lockRetryAttempt + 1;
       if (this.queueService && nextLockRetryAttempt <= STEP_LOCK_RETRY_MAX_ATTEMPTS) {
         const delay = stepLockRetryDelayMs(nextLockRetryAttempt);
@@ -875,7 +883,16 @@ export class AgentRuntimeService {
             delay,
             endpoint: `${this.baseURL}/run`,
             operationId,
-            payload: { lockRetryAttempt: nextLockRetryAttempt },
+            payload: {
+              approvedToolCall,
+              finishAfterAsyncTool,
+              humanInput,
+              lockRetryAttempt: nextLockRetryAttempt,
+              rejectAndContinue,
+              rejectionReason,
+              resumeAsyncTool,
+              toolMessageId,
+            },
             priority: 'high',
             retryDelay:
               typeof currentState?.metadata?.queueRetryDelay === 'string'
