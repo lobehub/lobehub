@@ -2,6 +2,7 @@ import { promises as dns } from 'node:dns';
 import { isIP } from 'node:net';
 
 import debug from 'debug';
+import { Agent } from 'undici';
 
 import { appEnv } from '@/envs/app';
 import { fileEnv } from '@/envs/file';
@@ -55,14 +56,71 @@ const isPrivateV4 = (ip: string): boolean =>
     ['240.0.0.0', 4],
   ].some(([prefix, bits]) => inV4Range(ip, prefix as string, bits as number));
 
+/**
+ * Expand an IPv6 address into its 8 hextets.
+ *
+ * Parsing rather than pattern-matching is the point: `new URL()` canonicalizes
+ * `[::ffff:10.0.0.1]` to `::ffff:a00:1`, so a regex looking for a dotted quad
+ * silently misses the mapped form the browser/Node actually hands us — and the
+ * embedded address is what decides whether it is private.
+ */
+const toHextets = (raw: string): number[] | undefined => {
+  let address = raw.toLowerCase().split('%')[0];
+
+  // A trailing dotted quad (::ffff:10.0.0.1) is two hextets.
+  const dotted = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(address);
+  if (dotted) {
+    const octets = dotted[1].split('.').map(Number);
+    if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255))
+      return undefined;
+    address =
+      address.slice(0, dotted.index) +
+      [
+        ((octets[0] << 8) | octets[1]).toString(16),
+        ((octets[2] << 8) | octets[3]).toString(16),
+      ].join(':');
+  }
+
+  const halves = address.split('::');
+  if (halves.length > 2) return undefined;
+
+  const parse = (part: string) =>
+    part ? part.split(':').map((hextet) => Number.parseInt(hextet, 16)) : [];
+  const left = parse(halves[0]);
+  const right = halves.length === 2 ? parse(halves[1]) : [];
+  if ([...left, ...right].some((value) => !Number.isInteger(value) || value < 0 || value > 0xff_ff))
+    return undefined;
+
+  if (halves.length === 1) return left.length === 8 ? left : undefined;
+
+  const gap = 8 - left.length - right.length;
+  if (gap < 1) return undefined;
+  return [...left, ...Array.from({ length: gap }, () => 0), ...right];
+};
+
 const isPrivateV6 = (ip: string): boolean => {
-  const address = ip.toLowerCase().split('%')[0];
-  if (address === '::1' || address === '::') return true;
-  // IPv4-mapped (::ffff:10.0.0.1) must be judged by the embedded v4 address.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(address);
-  if (mapped) return isPrivateV4(mapped[1]);
+  const hextets = toHextets(ip);
+  // Anything we cannot parse is refused rather than assumed public.
+  if (!hextets) return true;
+
+  // `::` (unspecified) and `::1` (loopback).
+  if (hextets.slice(0, 7).every((hextet) => hextet === 0) && hextets[7] <= 1) return true;
+
+  // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible (::a.b.c.d) are decided by
+  // the embedded v4 address, in whichever textual form they arrived.
+  if (
+    hextets.slice(0, 5).every((hextet) => hextet === 0) &&
+    (hextets[5] === 0xff_ff || hextets[5] === 0)
+  ) {
+    const embedded = [hextets[6] >> 8, hextets[6] & 0xff, hextets[7] >> 8, hextets[7] & 0xff].join(
+      '.',
+    );
+    return isPrivateV4(embedded);
+  }
+
   // fc00::/7 unique-local, fe80::/10 link-local.
-  return /^f[cd]/.test(address) || /^fe[89ab]/.test(address);
+  if ((hextets[0] & 0xfe_00) === 0xfc_00) return true;
+  return (hextets[0] & 0xff_c0) === 0xfe_80;
 };
 
 const isPrivateAddress = (ip: string): boolean =>
@@ -76,7 +134,16 @@ const isPrivateAddress = (ip: string): boolean =>
  * `169.254.169.254` is just as dangerous as the literal address, and cloud
  * metadata is the classic target.
  */
-const resolveSafeUrl = async (raw: string, trusted: Set<string>): Promise<URL | undefined> => {
+interface SafeTarget {
+  /** The vetted address, so the request can be pinned to the answer we checked. */
+  pinned?: { address: string; family: number };
+  url: URL;
+}
+
+const resolveSafeUrl = async (
+  raw: string,
+  trusted: Set<string>,
+): Promise<SafeTarget | undefined> => {
   let url: URL;
   try {
     url = new URL(raw);
@@ -97,31 +164,48 @@ const resolveSafeUrl = async (raw: string, trusted: Set<string>): Promise<URL | 
     return undefined;
   }
 
-  if (trusted.has(url.origin)) return url;
+  if (trusted.has(url.origin)) return { url };
 
   const host = url.hostname.replaceAll(/^\[|\]$/g, '');
-  let addresses: string[];
+  let answers: Array<{ address: string; family: number }>;
   if (isIP(host)) {
-    addresses = [host];
+    answers = [{ address: host, family: isIP(host) }];
   } else {
     try {
-      addresses = (await dns.lookup(host, { all: true })).map((entry) => entry.address);
+      answers = await dns.lookup(host, { all: true });
     } catch (error) {
       log('resolveSafeUrl: DNS lookup failed for %s: %O', host, error);
       return undefined;
     }
   }
 
-  if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
+  if (answers.length === 0 || answers.some((entry) => isPrivateAddress(entry.address))) {
     log('resolveSafeUrl: refusing %s — resolves to a private address', host);
     return undefined;
   }
 
-  return url;
+  return { pinned: answers[0], url };
 };
+
+/**
+ * A configured HTTP proxy resolves DNS at the proxy, not here — pinning an
+ * address we resolved locally would both bypass the proxy (and whatever egress
+ * policy it enforces, see the global `EnvHttpProxyAgent`) and mean nothing,
+ * since the proxy would do its own lookup anyway.
+ */
+const proxyConfigured = (): boolean =>
+  ['ALL_PROXY', 'HTTPS_PROXY', 'HTTP_PROXY'].some(
+    (name) => process.env[name] || process.env[name.toLowerCase()],
+  );
 
 /** Redirect hops to follow before giving up. */
 const MAX_REDIRECTS = 5;
+
+export interface PublicFetchResult {
+  /** Releases the pinned connection pool. Call once the body has been read. */
+  dispose: () => Promise<void>;
+  response: Response;
+}
 
 /**
  * `fetch` for a URL that may have come from a caller.
@@ -133,38 +217,74 @@ const MAX_REDIRECTS = 5;
  * SSRF primitive — and the response is handed to the chat platform, so it is an
  * exfiltration path too.
  *
- * Redirects are followed MANUALLY so every hop is re-validated: our own file
- * proxy answers `/f/:id` with a 302, and validating only the first URL would
- * let a public host bounce us straight to the metadata endpoint.
+ * Two properties make the check hold:
+ *
+ * - The connection is PINNED to the address we vetted. Validating a hostname
+ *   and then letting undici resolve it again is a DNS-rebinding hole: the
+ *   attacker's name answers publicly for our lookup and privately for the
+ *   connection. (Skipped behind a proxy — see `proxyConfigured`.)
+ * - Redirects are followed MANUALLY so every hop is re-validated: our own file
+ *   proxy answers `/f/:id` with a 302, so they cannot simply be refused, and
+ *   validating only the first URL would let a public host bounce us straight to
+ *   the metadata endpoint.
  */
 export const fetchPublicUrl = async (
   rawUrl: string,
   timeoutMs: number,
-): Promise<Response | undefined> => {
+): Promise<PublicFetchResult | undefined> => {
   const trusted = trustedOrigins();
+  const pools: Agent[] = [];
+  const dispose = async () => {
+    await Promise.all(pools.map((pool) => pool.close().catch(() => pool.destroy())));
+  };
+
   let target = rawUrl;
 
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const url = await resolveSafeUrl(target, trusted);
-    if (!url) return undefined;
+  try {
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const safe = await resolveSafeUrl(target, trusted);
+      if (!safe) {
+        await dispose();
+        return undefined;
+      }
 
-    const response = await fetch(url, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+      let dispatcher: Agent | undefined;
+      if (safe.pinned && !proxyConfigured()) {
+        const { address, family } = safe.pinned;
+        dispatcher = new Agent({
+          connect: {
+            // Hand undici the address we vetted instead of letting it resolve
+            // the name a second time. Host/SNI still come from the URL.
+            lookup: (_hostname, _options, callback) => callback(null, address, family),
+          },
+        });
+        pools.push(dispatcher);
+      }
 
-    if (response.status < 300 || response.status >= 400) return response;
+      const response = await fetch(safe.url, {
+        dispatcher,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+      } as RequestInit);
 
-    const location = response.headers.get('location');
-    // Release the redirect body before following the hop.
-    await response.body?.cancel().catch(() => undefined);
-    if (!location) {
-      log('fetchPublicUrl: %d with no location header', response.status);
-      return undefined;
+      if (response.status < 300 || response.status >= 400) return { dispose, response };
+
+      const location = response.headers.get('location');
+      // Release the redirect body before following the hop.
+      await response.body?.cancel().catch(() => undefined);
+      if (!location) {
+        log('fetchPublicUrl: %d with no location header', response.status);
+        await dispose();
+        return undefined;
+      }
+      target = new URL(location, safe.url).toString();
     }
-    target = new URL(location, url).toString();
-  }
 
-  log('fetchPublicUrl: too many redirects for %s', rawUrl);
-  return undefined;
+    log('fetchPublicUrl: too many redirects for %s', rawUrl);
+    await dispose();
+    return undefined;
+  } catch (error) {
+    await dispose();
+    throw error;
+  }
 };

@@ -28,7 +28,11 @@ export const MIN_BOT_HISTORY_LIMIT = 1;
  * Values are deliberately conservative:
  * - telegram: 5MB photo / 20MB file — Bot API caps for URL-sourced media.
  * - discord: 10MB — default upload cap for bots (DMs never get guild boosts).
- * - slack: 1GB — `files.upload` v2 cap; effectively unlimited here.
+ * - slack: 50MB — `files.upload` v2 itself allows 1GB, but every sender
+ *   materializes the file in memory to upload it, so the real ceiling is
+ *   MAX_IN_MEMORY_ATTACHMENT_BYTES. Budgeting at 1GB made the 50MB–1GB band
+ *   pass the budget pass as an upload and then fail during materialization,
+ *   dropping the attachment with neither a file nor a download link.
  * - wechat: 2MB image — empirical: iLink silently drops larger images
  *   (every API call returns 200 yet the message never renders); 20MB file
  *   as a best-effort cap, the iLink protocol documents no explicit number.
@@ -57,7 +61,7 @@ export const MESSENGER_ATTACHMENT_BUDGETS: Record<
   MessengerAttachmentBudget
 > = {
   discord: { fileMaxBytes: 10 * MB, imageMaxBytes: 10 * MB, textMaxChars: 2000 },
-  slack: { fileMaxBytes: 1024 * MB, imageMaxBytes: 1024 * MB, textMaxChars: 3000 },
+  slack: { fileMaxBytes: 50 * MB, imageMaxBytes: 50 * MB, textMaxChars: 3000 },
   telegram: { fileMaxBytes: 20 * MB, imageMaxBytes: 5 * MB, textMaxChars: 4096 },
   wechat: { fileMaxBytes: 20 * MB, imageMaxBytes: 2 * MB, textMaxChars: 2000 },
 };

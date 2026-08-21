@@ -11,8 +11,10 @@ import {
 // for real, which has nothing to do with what they assert. Its own behaviour is
 // covered in publicUrlFetch.test.ts.
 vi.mock('../publicUrlFetch', () => ({
-  fetchPublicUrl: (url: string, timeoutMs: number) =>
-    fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
 }));
 
 describe('materializeAttachmentsForDiscord', () => {

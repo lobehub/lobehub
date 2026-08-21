@@ -5,8 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // for real, which has nothing to do with what they assert. Its own behaviour is
 // covered in publicUrlFetch.test.ts.
 vi.mock('./publicUrlFetch', () => ({
-  fetchPublicUrl: (url: string, timeoutMs: number) =>
-    fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
 }));
 
 const sharpMocks = vi.hoisted(() => ({
@@ -212,6 +214,30 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.fallbackLines[0]).toContain('movie.mp4');
     expect(result.fallbackLines[0]).toContain('100.0MB');
     expect(result.fallbackLines[0]).toContain('https://example.com/f/movie.mp4');
+  });
+
+  it('degrades a Slack file above the in-memory ceiling instead of dropping it', async () => {
+    // Regression: Slack's budget used to be the API's 1GB cap, so a 60MB file
+    // passed the budget pass as an upload and was then refused during
+    // materialization — the attachment vanished with neither file nor link.
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.zip',
+          name: 'big.zip',
+          size: 60 * MB,
+          type: 'file' as const,
+        },
+      ],
+      PLATFORM_ATTACHMENT_BUDGETS.slack,
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.attachments).toEqual([]);
+    expect(result.fallbackLines[0]).toContain('https://example.com/f/big.zip');
   });
 
   it('keeps an over-budget attachment without a fetchUrl as a last resort', async () => {

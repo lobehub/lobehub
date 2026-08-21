@@ -26,8 +26,11 @@ describe('fetchPublicUrl', () => {
     const fetchMock = vi.fn().mockResolvedValue(ok());
     vi.stubGlobal('fetch', fetchMock);
 
-    expect(await fetchPublicUrl('https://cdn.example.com/a.png', 1000)).toBeTruthy();
+    const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+    expect(result?.response.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalled();
+    await result!.dispose();
   });
 
   it.each([
@@ -37,6 +40,13 @@ describe('fetchPublicUrl', () => {
     ['RFC1918 (192.168)', 'http://192.168.0.1/'],
     ['IPv6 loopback', 'http://[::1]/'],
     ['IPv6 unique-local', 'http://[fd00::1]/'],
+    // `new URL()` canonicalizes these to ::ffff:a00:1 / ::ffff:a9fe:a9fe, so a
+    // regex looking for a dotted quad never sees them.
+    ['IPv4-mapped RFC1918', 'http://[::ffff:10.0.0.1]/'],
+    ['IPv4-mapped metadata', 'http://[::ffff:169.254.169.254]/'],
+    ['IPv4-mapped loopback', 'http://[::ffff:127.0.0.1]/'],
+    ['already-canonical IPv4-mapped', 'http://[::ffff:a00:1]/'],
+    ['IPv4-compatible loopback', 'http://[::127.0.0.1]/'],
   ])('refuses a literal %s address', async (_label, url) => {
     const fetchMock = vi.fn().mockResolvedValue(ok());
     vi.stubGlobal('fetch', fetchMock);
@@ -91,6 +101,42 @@ describe('fetchPublicUrl', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
 
     expect(await fetchPublicUrl('http://minio.internal:9000/bucket/k', 1000)).toBeTruthy();
+  });
+
+  it('pins the request to the vetted address so a rebinding answer cannot be used', async () => {
+    // Validating a hostname and then letting undici resolve it again is the
+    // rebinding hole: the name answers publicly for our lookup and privately
+    // for the connection.
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
+    await result!.dispose();
+  });
+
+  it('does not pin behind a proxy, which resolves DNS itself', async () => {
+    // Pinning a locally resolved address would bypass the proxy and whatever
+    // egress policy it enforces.
+    vi.stubEnv('HTTPS_PROXY', 'http://proxy.internal:3128');
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeUndefined();
+    await result!.dispose();
+    vi.unstubAllEnvs();
+  });
+
+  it('hands back a dispose hook so the pinned pool is released', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
+
+    const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+    expect(result?.dispose).toBeTypeOf('function');
+    await expect(result!.dispose()).resolves.toBeUndefined();
   });
 
   it('re-validates every redirect hop', async () => {

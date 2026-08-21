@@ -114,36 +114,44 @@ export const fetchCappedBuffer = async (
   try {
     // Caller-supplied URLs reach here (see `botMessage`'s `fetchUrl` input), so
     // the fetch must refuse anything pointing inside the network.
-    const response = await fetchPublicUrl(url, timeoutMs);
-    if (!response) return undefined;
-    if (!response.ok) {
-      log('fetchCappedBuffer: HTTP %d for %s', response.status, url);
-      return undefined;
-    }
+    const fetched = await fetchPublicUrl(url, timeoutMs);
+    if (!fetched) return undefined;
 
-    // Reject on the advertised size before a single byte is buffered. The
-    // header is absent often enough (and wrong often enough) that the
-    // streaming cap below still has to hold on its own.
-    const declared = Number(response.headers.get('content-length'));
-    if (Number.isFinite(declared) && declared > limit) {
-      log(
-        'fetchCappedBuffer: content-length %d exceeds the %d byte cap for %s',
-        declared,
+    const { response } = fetched;
+    try {
+      if (!response.ok) {
+        log('fetchCappedBuffer: HTTP %d for %s', response.status, url);
+        return undefined;
+      }
+
+      // Reject on the advertised size before a single byte is buffered. The
+      // header is absent often enough (and wrong often enough) that the
+      // streaming cap below still has to hold on its own.
+      const declared = Number(response.headers.get('content-length'));
+      if (Number.isFinite(declared) && declared > limit) {
+        log(
+          'fetchCappedBuffer: content-length %d exceeds the %d byte cap for %s',
+          declared,
+          limit,
+          url,
+        );
+        return undefined;
+      }
+
+      // A trustworthy length lets the read allocate exactly once; a missing or
+      // bogus one just falls back to growing, still capped at `limit`.
+      const buffer = await readCappedBody(
+        response,
         limit,
-        url,
+        Number.isFinite(declared) ? declared : undefined,
       );
-      return undefined;
+      if (!buffer) log('fetchCappedBuffer: %s exceeded the %d byte cap', url, limit);
+      return buffer;
+    } finally {
+      // Only safe once the body has been read: disposing earlier would abort
+      // the stream we are still consuming.
+      await fetched.dispose();
     }
-
-    // A trustworthy length lets the read allocate exactly once; a missing or
-    // bogus one just falls back to growing, still capped at `limit`.
-    const buffer = await readCappedBody(
-      response,
-      limit,
-      Number.isFinite(declared) ? declared : undefined,
-    );
-    if (!buffer) log('fetchCappedBuffer: %s exceeded the %d byte cap', url, limit);
-    return buffer;
   } catch (error) {
     log('fetchCappedBuffer: fetch failed for %s: %O', url, error);
     return undefined;
