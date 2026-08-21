@@ -87,21 +87,89 @@ describe('fetchPublicUrl', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('trusts our own app origin even though it is ours to serve', async () => {
+  it('trusts our own app origin only when the URL is server-generated', async () => {
     const fetchMock = vi.fn().mockResolvedValue(ok());
     vi.stubGlobal('fetch', fetchMock);
 
-    expect(await fetchPublicUrl('https://app.example.com/f/file_1', 1000)).toBeTruthy();
+    const result = await fetchPublicUrl('https://app.example.com/f/file_1', 1000, {
+      allowConfiguredOrigins: true,
+    });
+
+    expect(result).toBeTruthy();
     // Trusted origins skip resolution entirely.
     expect(mocks.lookup).not.toHaveBeenCalled();
+    await result!.dispose();
   });
 
-  it('trusts a private storage endpoint we configured ourselves', async () => {
+  it('trusts a private storage endpoint we configured ourselves, when opted in', async () => {
     // Self-hosted deployments legitimately run object storage on the LAN, and
     // dev hands back a localhost storage URL.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
 
-    expect(await fetchPublicUrl('http://minio.internal:9000/bucket/k', 1000)).toBeTruthy();
+    const result = await fetchPublicUrl('http://minio.internal:9000/bucket/k', 1000, {
+      allowConfiguredOrigins: true,
+    });
+
+    expect(result).toBeTruthy();
+    await result!.dispose();
+  });
+
+  it('does NOT trust a configured private origin for a caller-supplied URL', async () => {
+    // Regression: a configured origin is not proof of ownership. Without
+    // provenance, any caller could name our internal storage host and walk
+    // straight past the private-address guard.
+    mocks.lookup.mockResolvedValue([{ address: '10.0.0.5', family: 4 }]);
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl('http://minio.internal:9000/bucket/k', 1000)).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('still resolves our own app origin normally without the opt-in', async () => {
+    // A public APP_URL keeps working for caller URLs — it just goes through the
+    // same DNS check as anything else rather than skipping it.
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicUrl('https://app.example.com/f/file_1', 1000);
+
+    expect(result).toBeTruthy();
+    expect(mocks.lookup).toHaveBeenCalled();
+    await result!.dispose();
+  });
+
+  it('trusts the virtual-hosted bucket subdomain of our own storage endpoint', async () => {
+    // Regression: S3 (and every S3-compatible service) defaults to
+    // virtual-hosted addressing, so our own presigned URL lives on
+    // `<bucket>.<endpoint>` and never equals the endpoint origin. Falling
+    // through to the private-address check made every attachment silently
+    // degrade to a download link.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
+
+    const result = await fetchPublicUrl('http://my-bucket.minio.internal:9000/k', 1000, {
+      allowConfiguredOrigins: true,
+    });
+
+    expect(result).toBeTruthy();
+    expect(mocks.lookup).not.toHaveBeenCalled();
+    await result!.dispose();
+  });
+
+  it.each([
+    ['a look-alike sibling host', 'http://evil-minio.internal:9000/k'],
+    ['a different port on the same host', 'http://bucket.minio.internal:9001/k'],
+    ['a different scheme', 'https://bucket.minio.internal:9000/k'],
+  ])('does not extend that trust to %s', async (_label, url) => {
+    // The suffix match is anchored on a `.` boundary and still pins scheme and
+    // port, so it trusts strictly more of OUR endpoint and nothing else. Asserted
+    // WITH the opt-in, which is the stronger claim.
+    mocks.lookup.mockResolvedValue([{ address: '10.0.0.5', family: 4 }]);
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchPublicUrl(url, 1000, { allowConfiguredOrigins: true })).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('pins the request to the vetted address so a rebinding answer cannot be used', async () => {

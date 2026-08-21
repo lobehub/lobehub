@@ -210,9 +210,10 @@ const resolveSize = async (attachment: BotMessageAttachment): Promise<number | u
   if (attachment.data) return Buffer.byteLength(attachment.data, 'base64');
   if (!attachment.fetchUrl) return undefined;
 
-  const probed = await fetchPublicUrl(attachment.fetchUrl, SIZE_PROBE_TIMEOUT_MS, 'HEAD').catch(
-    () => undefined,
-  );
+  const probed = await fetchPublicUrl(attachment.fetchUrl, SIZE_PROBE_TIMEOUT_MS, {
+    allowConfiguredOrigins: attachment.trustedUrl === true,
+    method: 'HEAD',
+  }).catch(() => undefined);
   if (!probed) return undefined;
 
   try {

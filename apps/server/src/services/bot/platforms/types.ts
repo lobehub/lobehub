@@ -132,6 +132,17 @@ export interface BotMessageAttachment {
    * downloading URL-sourced attachments first.
    */
   size?: number;
+  /**
+   * Set ONLY when the server itself produced `fetchUrl` from a record the
+   * caller was checked to own (see `sendMessengerPush`). It relaxes the
+   * outbound SSRF guard to accept our own configured origins even when they
+   * resolve privately, which self-hosted storage and local dev need.
+   *
+   * Never set it from request input: a caller-supplied URL that merely lands
+   * on a configured origin is not owned, and trusting it would turn the
+   * relaxation into the bypass it exists to avoid.
+   */
+  trustedUrl?: boolean;
   type: 'image' | 'file' | 'video' | 'audio';
 }
 

@@ -897,6 +897,10 @@ export const messengerRouter = router({
 
             return {
               fetchUrl: await fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+              // Built here from a row this caller was checked to own, so the
+              // outbound guard may accept our own configured origins for it —
+              // which self-hosted storage and dev (localhost storage URL) need.
+              trustedUrl: true,
               mimeType: file.fileType,
               name: file.name,
               // Byte size from the owned row — the send path uses it to apply

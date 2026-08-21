@@ -9,13 +9,19 @@ const MB = 1024 * 1024;
 /**
  * Hard ceiling on how many bytes of ONE attachment may be held in memory.
  *
- * This is a worker-memory guard, not a platform policy cap — per-platform
- * limits are applied upstream by `prepareAttachmentsForBudget`, which degrades
- * anything over budget to a download link before the bytes are ever fetched.
- * What is left for this module to defend against is the attachment whose size
- * was unknown or under-reported up front: the bot reply path can hand us
- * attachments with no `size` at all, and a serverless worker dies long before
- * a platform would have rejected the upload.
+ * This is a worker-memory guard, not a platform policy cap.
+ *
+ * On the PUSH path, per-platform limits are applied upstream by
+ * `prepareAttachmentsForBudget`, which degrades anything over budget to a
+ * download link before the bytes are ever fetched — so this cap should never
+ * be the thing that stops a push.
+ *
+ * The agent-facing `botMessage` procedures do NOT go through that pass: the
+ * router hands raw attachments straight to the platform services. There, an
+ * oversized body is refused here and the sender skips the attachment, which
+ * means it is dropped without a fallback link. That gap is tracked separately
+ * (see LOBE-13364) — routing those sends through the budget pass is a change
+ * to the agent tool contract, not something to bolt on inside this loader.
  */
 export const MAX_IN_MEMORY_ATTACHMENT_BYTES = 50 * MB;
 
@@ -23,6 +29,11 @@ export const MAX_IN_MEMORY_ATTACHMENT_BYTES = 50 * MB;
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 15_000;
 
 export interface LoadAttachmentOptions {
+  /**
+   * Accept our own configured origins without the private-address check. Set
+   * only for URLs the server produced from an owned record.
+   */
+  allowConfiguredOrigins?: boolean;
   /**
    * Hard byte cap. The transfer is aborted the moment it is crossed, so the
    * cap holds without trusting the caller's declared size.
@@ -35,6 +46,8 @@ export interface LoadAttachmentOptions {
 interface LoadableAttachment {
   data?: string;
   fetchUrl?: string;
+  /** Server-generated from an owned record — see `BotMessageAttachment`. */
+  trustedUrl?: boolean;
 }
 
 /** Starting capacity when the response declares no usable `content-length`. */
@@ -107,6 +120,7 @@ const readCappedBody = async (
 export const fetchCappedBuffer = async (
   url: string,
   {
+    allowConfiguredOrigins = false,
     limit = MAX_IN_MEMORY_ATTACHMENT_BYTES,
     timeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS,
   }: LoadAttachmentOptions = {},
@@ -114,7 +128,7 @@ export const fetchCappedBuffer = async (
   try {
     // Caller-supplied URLs reach here (see `botMessage`'s `fetchUrl` input), so
     // the fetch must refuse anything pointing inside the network.
-    const fetched = await fetchPublicUrl(url, timeoutMs);
+    const fetched = await fetchPublicUrl(url, timeoutMs, { allowConfiguredOrigins });
     if (!fetched) return undefined;
 
     const { response } = fetched;
@@ -181,7 +195,14 @@ export const loadAttachmentBuffer = async (
     return undefined;
   }
 
-  if (attachment.fetchUrl) return fetchCappedBuffer(attachment.fetchUrl, { ...options, limit });
+  if (attachment.fetchUrl)
+    return fetchCappedBuffer(attachment.fetchUrl, {
+      ...options,
+      // Provenance rides on the attachment, never on the call site: only a URL
+      // the server built from an owned record may relax the guard.
+      allowConfiguredOrigins: attachment.trustedUrl === true,
+      limit,
+    });
 
   return undefined;
 };

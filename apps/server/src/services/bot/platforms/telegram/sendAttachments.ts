@@ -68,8 +68,9 @@ const uploadSource = async (
  * - `sendDocument` by URL only works for .pdf/.zip per the Bot API, and the
  *   stable file-proxy URL (`/f/:id`) carries no extension and answers with a
  *   302 — Telegram rejects it for every document type, including PDFs.
- * - Videos ride `sendDocument` too (see `dispatch`), so they need bytes for
- *   the same reason.
+ * - `sendVideo` by URL is just as fragile on that URL shape, and uploading the
+ *   bytes is also what lets Telegram probe duration/dimensions so the message
+ *   arrives with a real player rather than a bare blob.
  *
  * Returns `undefined` when no source is usable so the caller can skip the
  * item without aborting the whole batch.
@@ -96,13 +97,7 @@ const dispatch = async (
       return;
     }
     case 'video': {
-      // Deliberately `sendDocument`, not `sendVideo`: Telegram re-encodes a
-      // soundless MP4 sent as "video" into an animation (rendered with a GIF
-      // badge, original audio-less file lost). Product/screen-recording videos
-      // routinely have no audio track, and we cannot detect that server-side
-      // without ffprobe. A document upload preserves the original bytes and
-      // Telegram still inline-plays MP4 documents.
-      await api.sendDocument({ caption, chatId, source });
+      await api.sendVideo({ caption, chatId, source });
       return;
     }
     case 'audio': {

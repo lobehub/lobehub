@@ -551,6 +551,8 @@ export class TelegramApi {
     params: {
       caption?: string;
       chatId: string | number;
+      /** Method-specific scalars (e.g. `supports_streaming` on sendVideo). */
+      extraFields?: Record<string, boolean | number | string | undefined>;
       source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
     },
   ): Promise<{ message_id: number }> {
@@ -566,6 +568,7 @@ export class TelegramApi {
 
       if ('url' in params.source) {
         return this.call(method, {
+          ...params.extraFields,
           caption: captionForSend,
           chat_id: params.chatId,
           parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
@@ -576,6 +579,7 @@ export class TelegramApi {
       return this.callMultipart(
         method,
         {
+          ...params.extraFields,
           caption: captionForSend,
           chat_id: params.chatId,
           parse_mode: captionForSend && useHtml ? 'HTML' : undefined,
@@ -622,13 +626,29 @@ export class TelegramApi {
     return this.sendMedia('sendDocument', 'document', params);
   }
 
+  /**
+   * `supports_streaming` is always on: it is what makes clients render a
+   * seekable player instead of a download-then-play blob, and every MP4 we
+   * forward is already a progressive file.
+   *
+   * NOTE it does NOT stop Telegram from rendering a SOUNDLESS MP4 as an
+   * animation (the "GIF" badge). That classification happens server-side from
+   * the absence of an audio stream, and no Bot API parameter overrides it —
+   * `sendDocument` re-detects the content type just the same, and only
+   * `disable_content_type_detection` escapes it, at the cost of losing inline
+   * playback entirely. Adding a silent audio track is the only real fix and
+   * needs ffmpeg, which this path deliberately does not carry.
+   */
   async sendVideo(params: {
     caption?: string;
     chatId: string | number;
     source: { url: string } | { buffer: Buffer; filename: string; mimeType?: string };
   }): Promise<{ message_id: number }> {
     log('sendVideo: chatId=%s', params.chatId);
-    return this.sendMedia('sendVideo', 'video', params);
+    return this.sendMedia('sendVideo', 'video', {
+      ...params,
+      extraFields: { supports_streaming: true },
+    });
   }
 
   async sendAudio(params: {

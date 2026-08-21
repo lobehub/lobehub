@@ -16,18 +16,49 @@ const log = debug('bot-platform:public-url-fetch');
  * hands back a `localhost` storage URL. These are OUR origins, not
  * caller-supplied ones, so trusting them adds no attacker-reachable surface.
  */
-const trustedOrigins = (): Set<string> => {
-  const origins = new Set<string>();
+interface TrustedOrigin {
+  hostname: string;
+  port: string;
+  protocol: string;
+}
+
+const trustedOrigins = (): TrustedOrigin[] => {
+  const origins: TrustedOrigin[] = [];
   for (const candidate of [appEnv.APP_URL, fileEnv.S3_PUBLIC_DOMAIN, fileEnv.S3_ENDPOINT]) {
     if (!candidate) continue;
     try {
-      origins.add(new URL(candidate).origin);
+      const { hostname, port, protocol } = new URL(candidate);
+      origins.push({ hostname, port, protocol });
     } catch {
       // A misconfigured env value simply contributes no trusted origin.
     }
   }
   return origins;
 };
+
+/**
+ * Whether a URL points at storage/app infrastructure we configured ourselves.
+ *
+ * The bucket subdomain is why this is not a plain origin comparison: S3 and
+ * every S3-compatible service default to VIRTUAL-HOSTED-style addressing, so
+ * the presigned URL our own file service hands out lives on
+ * `<bucket>.<S3_ENDPOINT host>` and never equals the configured endpoint
+ * origin. Without this, our own storage falls through to the private-address
+ * check — which is exactly the case the trusted list exists to cover, and it
+ * bit us for real: every WeChat/Telegram attachment silently degraded to a
+ * download link because its bytes could not be fetched.
+ *
+ * Matching is anchored on a `.` boundary and still requires the same scheme and
+ * port, so this trusts strictly more of OUR endpoint and nothing else — a
+ * caller cannot reach `evil-<endpoint>` or a different port with it.
+ */
+const isTrustedOrigin = (url: URL, trusted: TrustedOrigin[]): boolean =>
+  trusted.some(
+    (origin) =>
+      origin.protocol === url.protocol &&
+      origin.port === url.port &&
+      (origin.hostname === url.hostname || url.hostname.endsWith(`.${origin.hostname}`)),
+  );
 
 const inV4Range = (ip: string, prefix: string, bits: number): boolean => {
   const toInt = (value: string) =>
@@ -142,7 +173,7 @@ interface SafeTarget {
 
 const resolveSafeUrl = async (
   raw: string,
-  trusted: Set<string>,
+  trusted: TrustedOrigin[],
 ): Promise<SafeTarget | undefined> => {
   let url: URL;
   try {
@@ -164,7 +195,7 @@ const resolveSafeUrl = async (
     return undefined;
   }
 
-  if (trusted.has(url.origin)) return { url };
+  if (isTrustedOrigin(url, trusted)) return { url };
 
   const host = url.hostname.replaceAll(/^\[|\]$/g, '');
   let answers: Array<{ address: string; family: number }>;
@@ -235,6 +266,17 @@ const requestIsProxied = (url: URL): boolean => {
 /** Redirect hops to follow before giving up. */
 const MAX_REDIRECTS = 5;
 
+export interface PublicFetchOptions {
+  /**
+   * Accept our own configured origins (APP_URL / S3) without the private-address
+   * check. Only for URLs the SERVER produced from an owned record — a
+   * caller-supplied URL that happens to sit on a configured origin is not
+   * owned, and would otherwise walk straight through the guard.
+   */
+  allowConfiguredOrigins?: boolean;
+  method?: 'GET' | 'HEAD';
+}
+
 export interface PublicFetchResult {
   /** Releases the pinned connection pool. Call once the body has been read. */
   dispose: () => Promise<void>;
@@ -265,9 +307,11 @@ export interface PublicFetchResult {
 export const fetchPublicUrl = async (
   rawUrl: string,
   timeoutMs: number,
-  method: 'GET' | 'HEAD' = 'GET',
+  { allowConfiguredOrigins = false, method = 'GET' }: PublicFetchOptions = {},
 ): Promise<PublicFetchResult | undefined> => {
-  const trusted = trustedOrigins();
+  // Not opting in simply contributes no trusted origins, so a caller-supplied
+  // URL on a configured private origin still faces the private-address check.
+  const trusted = allowConfiguredOrigins ? trustedOrigins() : [];
   const pools: Agent[] = [];
   const dispose = async () => {
     await Promise.all(pools.map((pool) => pool.close().catch(() => pool.destroy())));

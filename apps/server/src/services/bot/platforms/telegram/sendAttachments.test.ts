@@ -133,7 +133,13 @@ describe('sendTelegramAttachments', () => {
     });
   });
 
-  it('sends videos as documents so soundless MP4s are not converted to GIF animations', async () => {
+  it('uploads a video as multipart bytes through sendVideo', async () => {
+    // `sendVideo`, not `sendDocument`: routing video through the document
+    // endpoint does NOT avoid the "GIF" rendering (the Bot API re-detects the
+    // content type unless `disable_content_type_detection` is set, which would
+    // cost inline playback), and it would drop `supports_streaming`. The
+    // multipart upload is the part that matters — a URL source is unreliable
+    // for the extension-less file-proxy URL.
     const api = makeApi();
 
     const n = await sendTelegramAttachments(api as any, 'chat-1', [
@@ -146,8 +152,8 @@ describe('sendTelegramAttachments', () => {
     ]);
 
     expect(n).toBe(1);
-    expect(api.sendVideo).not.toHaveBeenCalled();
-    expect(api.sendDocument).toHaveBeenCalledWith({
+    expect(api.sendDocument).not.toHaveBeenCalled();
+    expect(api.sendVideo).toHaveBeenCalledWith({
       caption: undefined,
       chatId: 'chat-1',
       source: expect.objectContaining({ filename: 'ad.mp4', mimeType: 'video/mp4' }),
