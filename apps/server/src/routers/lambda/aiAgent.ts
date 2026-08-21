@@ -33,9 +33,10 @@ import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJ
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
-  hasAvailableServerModel,
+  getServerDefaultHeterogeneousModels,
   initModelRuntimeFromServerConfig,
-  resolveServerModel,
+  resolveServerDefaultHeterogeneousModel,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from '@/server/modules/ModelRuntime';
 import {
   assertCanUseMessageTargets,
@@ -781,21 +782,35 @@ const assertServerDefaultControlAuth = (oidcAuth: Record<string, unknown> | null
 
 export const resolveServerDefaultHeterogeneousCapability = async () => {
   const base = {
-    agents: ['claude-code', 'codex'] as const,
     model: 'lobehub-default' as const,
   };
   if (process.env.ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT === '0') {
-    return { ...base, enabled: false as const, reason: 'disabled' as const };
+    return { ...base, agents: [], enabled: false as const, reason: 'disabled' as const };
   }
 
   try {
-    if (!(await hasAvailableServerModel())) {
-      return { ...base, enabled: false as const, reason: 'invalidConfiguration' as const };
+    const models = await getServerDefaultHeterogeneousModels();
+    const agents = SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES.filter(
+      (agentType) => models[agentType].length > 0,
+    );
+    if (agents.length === 0) {
+      return {
+        ...base,
+        agents,
+        enabled: false as const,
+        models,
+        reason: 'invalidConfiguration' as const,
+      };
     }
-    return { ...base, enabled: true as const };
+    return { ...base, agents, enabled: true as const, models };
   } catch (error) {
     log('Server-default heterogeneous capability is unavailable: %O', error);
-    return { ...base, enabled: false as const, reason: 'invalidConfiguration' as const };
+    return {
+      ...base,
+      agents: [],
+      enabled: false as const,
+      reason: 'invalidConfiguration' as const,
+    };
   }
 };
 
@@ -874,6 +889,7 @@ export const aiAgentRouter = router({
   beginServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
     .input(
       z.object({
+        agentType: z.enum(SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES),
         agentId: z.string().optional(),
         model: z.string().min(1),
         operationId: z.string().min(1),
@@ -907,11 +923,15 @@ export const aiAgentRouter = router({
               : 'No server model is available',
         });
       }
-      const selection = await resolveServerModel(input.providerId, input.model).catch((error) => {
+      const selection = await resolveServerDefaultHeterogeneousModel(
+        input.agentType,
+        input.providerId,
+        input.model,
+      ).catch((error) => {
         throw new TRPCError({
           cause: error,
           code: 'BAD_REQUEST',
-          message: 'The selected server model is not available',
+          message: 'The selected server model is not available for this heterogeneous agent',
         });
       });
       await initModelRuntimeFromServerConfig({
@@ -930,7 +950,7 @@ export const aiAgentRouter = router({
       const model = new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId);
       await model.recordStart({
         agentId: input.agentId,
-        metadata: { serverDefaultHeterogeneous: true },
+        metadata: { agentType: input.agentType, serverDefaultHeterogeneous: true },
         model: selection.model,
         operationId: input.operationId,
         provider: selection.provider,
@@ -946,7 +966,8 @@ export const aiAgentRouter = router({
         operation.topicId !== input.topicId ||
         operation.agentId !== (input.agentId ?? null) ||
         operation.model !== selection.model ||
-        operation.provider !== selection.provider
+        operation.provider !== selection.provider ||
+        operation.metadata?.agentType !== input.agentType
       ) {
         throw new TRPCError({ code: 'CONFLICT', message: 'Operation id is already in use' });
       }

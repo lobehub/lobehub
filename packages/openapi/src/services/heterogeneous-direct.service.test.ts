@@ -1,24 +1,32 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  initModelRuntimeFromServerConfig,
+  resolveServerDefaultHeterogeneousModel,
+} from '@/server/modules/ModelRuntime';
 
 import {
   encodeAnthropicStream,
   encodeResponsesStream,
+  invokeServerDefaultModel,
   normalizeAnthropicRequest,
   normalizeResponsesRequest,
 } from './heterogeneous-direct.service';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromServerConfig: vi.fn(),
-  resolveServerModel: vi.fn(),
+  resolveServerDefaultHeterogeneousModel: vi.fn(),
 }));
 
-const protocolStream = (events: Array<{ data: unknown; type: string }>) => {
+const protocolStream = (events: Array<{ data: unknown; id?: string; type: string }>) => {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     start(controller) {
       for (const event of events) {
         controller.enqueue(
-          encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`),
+          encoder.encode(
+            `${event.id ? `id: ${event.id}\n` : ''}event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`,
+          ),
         );
       }
       controller.close();
@@ -28,7 +36,101 @@ const protocolStream = (events: Array<{ data: unknown; type: string }>) => {
 
 const readText = async (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
 
+const parseSseEvents = (output: string) =>
+  output
+    .split('\n\n')
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split('\n');
+      const data = lines.find((line) => line.startsWith('data: '))?.slice(6);
+      const type = lines.find((line) => line.startsWith('event: '))?.slice(7);
+      return { data: data === '[DONE]' ? data : JSON.parse(data || 'null'), type };
+    });
+
 describe('heterogeneous direct invocation protocol', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('invokes Claude Code only through its resolved Anthropic runtime model', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'claude-server',
+      provider: 'anthropic',
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    const result = await invokeServerDefaultModel({
+      agentType: 'claude-code',
+      model: 'claude-server',
+      payload: { messages: [], model: 'lobehub-default', stream: true },
+      provider: 'anthropic',
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(result.model).toBe('claude-server');
+    expect(resolveServerDefaultHeterogeneousModel).toHaveBeenCalledWith(
+      'claude-code',
+      'anthropic',
+      'claude-server',
+    );
+    expect(chat).toHaveBeenCalledWith(
+      {
+        messages: [],
+        model: 'claude-server',
+        stream: true,
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('uses deployment names as model IDs for runtimes without a dedicated field', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      deploymentName: 'prod-gpt',
+      model: 'gpt-5.4',
+      provider: 'openai',
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    const result = await invokeServerDefaultModel({
+      agentType: 'codex',
+      model: 'gpt-5.4',
+      payload: { messages: [], model: 'lobehub-default', stream: true },
+      provider: 'openai',
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    const runtimePayload = chat.mock.calls[0][0];
+    expect(result.model).toBe('prod-gpt');
+    expect(runtimePayload).toMatchObject({ messages: [], model: 'prod-gpt', stream: true });
+    expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
+  it('fails closed before runtime initialization for an unsupported direct protocol route', async () => {
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockRejectedValue(
+      new Error('unsupported agent/runtime pair'),
+    );
+
+    await expect(
+      invokeServerDefaultModel({
+        agentType: 'codex',
+        model: 'claude-server',
+        payload: { messages: [], model: 'lobehub-default', stream: true },
+        provider: 'anthropic',
+        signal: new AbortController().signal,
+        userId: 'user-1',
+      }),
+    ).rejects.toThrow('unsupported agent/runtime pair');
+    expect(initModelRuntimeFromServerConfig).not.toHaveBeenCalled();
+  });
+
   it('normalizes Anthropic images, tool calls, and tool results', () => {
     const payload = normalizeAnthropicRequest(
       {
@@ -80,6 +182,36 @@ describe('heterogeneous direct invocation protocol', () => {
       ],
       role: 'tool',
       tool_call_id: 'call-1',
+    });
+  });
+
+  it('preserves Anthropic thinking history across tool rounds', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              { signature: 'signed-thinking', thinking: 'private thought', type: 'thinking' },
+              { data: 'encrypted-redacted-thought', type: 'redacted_thinking' },
+              { text: 'I will inspect it.', type: 'text' },
+              { id: 'call-1', input: { path: '/tmp' }, name: 'read', type: 'tool_use' },
+            ],
+            role: 'assistant',
+          },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages[0]).toMatchObject({
+      content: [
+        { signature: 'signed-thinking', thinking: 'private thought', type: 'thinking' },
+        { data: 'encrypted-redacted-thought', type: 'redacted_thinking' },
+        { text: 'I will inspect it.', type: 'text' },
+      ],
+      provider: 'anthropic',
+      role: 'assistant',
+      tool_calls: [{ id: 'call-1' }],
     });
   });
 
@@ -164,41 +296,85 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(output).toContain('"stop_reason":"tool_use"');
   });
 
-  it('preserves Anthropic terminal cumulative usage', async () => {
+  it('finalizes Anthropic stop, usage, and message_stop exactly once', async () => {
     const output = await readText(
       encodeAnthropicStream(
         protocolStream([
+          { data: 'hello', type: 'text' },
+          { data: 'end_turn', type: 'stop' },
           { data: { totalInputTokens: 7, totalOutputTokens: 4 }, type: 'usage' },
-          { data: 'stop', type: 'stop' },
+          { data: 'message_stop', type: 'stop' },
         ]),
       ),
     );
 
-    const messageDeltas = [...output.matchAll(/event: message_delta\ndata: ([^\n]+)/g)].map(
-      (match) => JSON.parse(match[1]),
-    );
-    expect(messageDeltas.at(-1).usage).toEqual({ output_tokens: 4 });
+    const events = parseSseEvents(output);
+    expect(events.slice(-3).map(({ type }) => type)).toEqual([
+      'content_block_stop',
+      'message_delta',
+      'message_stop',
+    ]);
+    expect(events.filter(({ type }) => type === 'content_block_stop')).toHaveLength(1);
+    expect(events.filter(({ type }) => type === 'message_delta')).toHaveLength(1);
+    expect(events.filter(({ type }) => type === 'message_stop')).toHaveLength(1);
+    expect(events.at(-2)?.data).toMatchObject({
+      delta: { stop_reason: 'end_turn' },
+      usage: { output_tokens: 4 },
+    });
   });
 
-  it('encodes Responses text, usage, and terminal events', async () => {
-    const output = await readText(
-      encodeResponsesStream(
-        protocolStream([
-          { data: 'hello', type: 'text' },
-          { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
-          { data: 'stop', type: 'stop' },
-        ]),
-      ),
+  it.each([
+    {
+      events: [
+        { data: 'hello', type: 'text' },
+        { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+      ],
+      name: 'usage without stop',
+    },
+    {
+      events: [
+        { data: 'hello', type: 'text' },
+        { data: 'stop', type: 'stop' },
+        { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+      ],
+      name: 'stop before usage',
+    },
+    {
+      events: [
+        { data: 'hello', type: 'text' },
+        { data: 'end_turn', type: 'stop' },
+        { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+        { data: 'message_stop', type: 'stop' },
+      ],
+      name: 'duplicate stop sentinels',
+    },
+  ])('finalizes Responses $name exactly once', async ({ events: protocolEvents }) => {
+    const output = await readText(encodeResponsesStream(protocolStream(protocolEvents)));
+    const events = parseSseEvents(output);
+    const nativeEvents = events.filter(({ type }) => type);
+    const terminalEvents = nativeEvents.filter(({ type }) =>
+      ['response.completed', 'response.failed', 'response.incomplete'].includes(type!),
     );
 
     expect(output).toContain('event: response.output_text.delta');
     expect(output).toContain('event: response.content_part.done');
     expect(output).toContain('event: response.output_item.done');
-    expect(output).toContain('"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}');
     expect(output).not.toContain('totalInputTokens');
-    expect(output).toContain('event: response.completed');
     expect(output).toContain('"output":[{"content":[{"annotations":[],"text":"hello"');
-    expect(output).toContain('data: [DONE]');
+    expect(terminalEvents).toHaveLength(1);
+    expect(terminalEvents[0]).toMatchObject({
+      data: {
+        response: { usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 } },
+        type: 'response.completed',
+      },
+      type: 'response.completed',
+    });
+    expect(nativeEvents.map(({ data }) => data.sequence_number)).toEqual(
+      nativeEvents.map((_, index) => index),
+    );
+    expect(events.slice(events.indexOf(terminalEvents[0]) + 1)).toEqual([
+      { data: '[DONE]', type: undefined },
+    ]);
   });
 
   it('encodes Responses incomplete and failed terminal lifecycle events', async () => {
@@ -223,6 +399,8 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(failed).toContain('event: response.failed');
     expect(failed).toContain('"error":{"code":"server_error","message":"provider unavailable"}');
     expect(failed).toContain('data: [DONE]');
+    const failedEvents = parseSseEvents(failed).filter(({ type }) => type);
+    expect(failedEvents.map(({ data }) => data.sequence_number)).toEqual([0, 1]);
   });
 
   it('assigns distinct Responses output indexes to reasoning, text, and tools', async () => {
@@ -268,5 +446,44 @@ describe('heterogeneous direct invocation protocol', () => {
     ].map((match) => JSON.parse(match[1]).item);
 
     expect(doneItems).toContainEqual(reasoningItem);
+  });
+
+  it('completes streamed reasoning with its encrypted response item only once', async () => {
+    const reasoningItem = {
+      encrypted_content: 'encrypted-current',
+      id: 'reasoning-current',
+      status: 'completed',
+      summary: [{ text: 'thinking', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const events = parseSseEvents(
+      await readText(
+        encodeResponsesStream(
+          protocolStream([
+            { data: 'thinking', id: 'reasoning-current', type: 'reasoning' },
+            {
+              data: reasoningItem,
+              id: 'reasoning-current',
+              type: 'reasoning_response_item',
+            },
+            { data: 'stop', type: 'stop' },
+          ]),
+        ),
+      ),
+    );
+    const reasoningAdded = events.filter(
+      ({ data, type }) => type === 'response.output_item.added' && data.item.type === 'reasoning',
+    );
+    const reasoningDone = events.filter(
+      ({ data, type }) => type === 'response.output_item.done' && data.item.type === 'reasoning',
+    );
+    const completed = events.find(({ type }) => type === 'response.completed');
+
+    expect(reasoningAdded).toHaveLength(1);
+    expect(reasoningDone).toHaveLength(1);
+    expect(reasoningAdded[0].data.output_index).toBe(reasoningDone[0].data.output_index);
+    expect(reasoningAdded[0].data.item.id).toBe('reasoning-current');
+    expect(reasoningDone[0].data.item).toEqual(reasoningItem);
+    expect(completed?.data.response.output).toEqual([reasoningItem]);
   });
 });

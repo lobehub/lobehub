@@ -3,16 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveServerDefaultHeterogeneousCapability } from '../aiAgent';
 
-const hasAvailableModel = vi.hoisted(() => vi.fn());
+const getSupportedModels = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
-  hasAvailableServerModel: hasAvailableModel,
+  getServerDefaultHeterogeneousModels: getSupportedModels,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES: ['claude-code', 'codex'],
 }));
 
 describe('resolveServerDefaultHeterogeneousCapability', () => {
   beforeEach(() => {
     vi.stubEnv('ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT', '1');
-    hasAvailableModel.mockResolvedValue(true);
+    getSupportedModels.mockResolvedValue({
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+      'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
+    });
   });
 
   afterEach(() => {
@@ -25,9 +29,25 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
       agents: ['claude-code', 'codex'],
       enabled: true,
       model: 'lobehub-default',
+      models: {
+        'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+        'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
+      },
     });
 
-    expect(hasAvailableModel).toHaveBeenCalledOnce();
+    expect(getSupportedModels).toHaveBeenCalledOnce();
+  });
+
+  it('advertises only agents that have a compatible runtime model', async () => {
+    getSupportedModels.mockResolvedValue({
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+      'codex': [],
+    });
+
+    await expect(resolveServerDefaultHeterogeneousCapability()).resolves.toMatchObject({
+      agents: ['claude-code'],
+      enabled: true,
+    });
   });
 
   it('does not read the model catalog when the deployment feature is disabled', async () => {
@@ -37,11 +57,11 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
       enabled: false,
       reason: 'disabled',
     });
-    expect(hasAvailableModel).not.toHaveBeenCalled();
+    expect(getSupportedModels).not.toHaveBeenCalled();
   });
 
   it('reports an invalid configuration when the server catalog has no models', async () => {
-    hasAvailableModel.mockResolvedValue(false);
+    getSupportedModels.mockResolvedValue({ 'claude-code': [], 'codex': [] });
 
     await expect(resolveServerDefaultHeterogeneousCapability()).resolves.toMatchObject({
       enabled: false,
@@ -50,7 +70,7 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
   });
 
   it('reports an invalid configuration when the server catalog cannot be loaded', async () => {
-    hasAvailableModel.mockRejectedValue(new Error('invalid model catalog'));
+    getSupportedModels.mockRejectedValue(new Error('invalid model catalog'));
 
     await expect(resolveServerDefaultHeterogeneousCapability()).resolves.toMatchObject({
       enabled: false,

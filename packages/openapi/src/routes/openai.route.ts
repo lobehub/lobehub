@@ -31,6 +31,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
   }
   const workspaceId = context.get('workspaceId');
   const { response } = await invokeServerDefaultModel({
+    agentType: 'codex',
     model: claims.model,
     payload: normalizeResponsesRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
     provider: claims.provider_id,
