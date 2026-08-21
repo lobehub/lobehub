@@ -166,6 +166,9 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
           // The list fills the content column, so a side-anchored card has nowhere to go and
           // collides with the page header. Below-left keeps it next to the row it describes.
           placement={'bottomLeft'}
+          // Rows near the fold would otherwise push the card past the viewport, putting its
+          // evidence and the click hint out of reach; padding lets it flip above the row instead.
+          positionerProps={{ collisionPadding: 12 }}
           trigger={'hover'}
           content={
             <LessonPreview

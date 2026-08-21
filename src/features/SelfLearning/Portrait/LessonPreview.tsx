@@ -10,8 +10,17 @@ import { useExpertiseLesson } from '../hooks';
 
 const styles = createStaticStyles(({ css }) => ({
   root: css`
+    /*
+     * A row near the fold leaves less room below it than the card wants. base-ui publishes the
+     * space it actually has as --available-height; without this the card runs past the viewport
+     * and its evidence and click hint become unreachable.
+     */
+    overflow-y: auto;
     width: 380px;
     max-width: min(380px, calc(100vw - 32px));
+
+    /* less the popup's own chrome, which sits outside this element */
+    max-height: calc(var(--available-height, 100dvh) - 16px);
   `,
   section: css`
     display: grid;
