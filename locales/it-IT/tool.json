@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Lista delle attività aggiornata",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Conteggio Caratteri",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Conteggio Righe",
+  "localFiles.editFile.ambiguous": "Questo testo appare {{times}} volte nel file. La modifica sarà rifiutata — è necessario un contesto sufficiente per identificare un'occorrenza, oppure \"sostituisci tutto\".",
   "localFiles.editFile.newString": "Sostituisci con",
   "localFiles.editFile.oldString": "Trova",
   "localFiles.editFile.replaceAll": "Sostituisci tutte le occorrenze",

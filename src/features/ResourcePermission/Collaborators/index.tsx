@@ -28,11 +28,15 @@ interface CollaboratorTargetProps {
   resourceType: PermissionResourceType;
 }
 
-const createAddCollaboratorsModal = ({ resourceId, resourceType }: CollaboratorTargetProps) =>
+const createAddCollaboratorsModal = ({
+  grantLevel,
+  resourceId,
+  resourceType,
+}: CollaboratorTargetProps & { grantLevel: ResourceAccessLevel }) =>
   createModal({
     content: (
       <AddCollaboratorsContent
-        grantLevel={COLLABORATOR_GRANT_LEVELS[resourceType] ?? 'edit'}
+        grantLevel={grantLevel}
         resourceId={resourceId}
         resourceType={resourceType}
       />
@@ -51,10 +55,17 @@ const createAddCollaboratorsModal = ({ resourceId, resourceType }: CollaboratorT
 export const AddCollaboratorButton = memo<CollaboratorTargetProps>(
   ({ resourceId, resourceType }) => {
     const { t } = useTranslation('setting');
+    const grantLevel = COLLABORATOR_GRANT_LEVELS[resourceType];
 
     const handleOpen = useCallback(() => {
-      createAddCollaboratorsModal({ resourceId, resourceType });
-    }, [resourceId, resourceType]);
+      if (!grantLevel) return;
+      createAddCollaboratorsModal({ grantLevel, resourceId, resourceType });
+    }, [grantLevel, resourceId, resourceType]);
+
+    // A resource type with no configured grant level has no collaborator flow:
+    // the server rejects any level the modal could submit, so the entry point
+    // must not exist rather than open a dialog that cannot succeed.
+    if (!grantLevel) return null;
 
     return (
       <Button icon={<Icon icon={PlusIcon} />} size={'small'} onClick={handleOpen}>

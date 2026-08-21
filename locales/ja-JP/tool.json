@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "やることリストを更新しました",
   "lobe-knowledge-base.readKnowledge.meta.chars": "文字数",
   "lobe-knowledge-base.readKnowledge.meta.lines": "行数",
+  "localFiles.editFile.ambiguous": "このテキストはファイル内で{{times}}回出現しています。編集は拒否されます — 特定の箇所を識別するための十分な周囲のコンテキストが必要です。または「すべて置換」を選択してください。",
   "localFiles.editFile.newString": "置換後の文字列",
   "localFiles.editFile.oldString": "検索文字列",
   "localFiles.editFile.replaceAll": "すべて置換",

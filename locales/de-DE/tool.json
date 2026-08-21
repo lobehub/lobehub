@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "To-Do-Liste aktualisiert",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Anzahl Zeichen",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Anzahl Zeilen",
+  "localFiles.editFile.ambiguous": "Dieser Text erscheint {{times}} Mal in der Datei. Die Bearbeitung wird abgelehnt — es ist ausreichend umgebender Kontext erforderlich, um ein Vorkommen zu identifizieren, oder \"Alle ersetzen\".",
   "localFiles.editFile.newString": "Ersetzen durch",
   "localFiles.editFile.oldString": "Suchen nach",
   "localFiles.editFile.replaceAll": "Alle Vorkommen ersetzen",

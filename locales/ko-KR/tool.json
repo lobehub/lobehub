@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "할 일 목록이 업데이트되었습니다",
   "lobe-knowledge-base.readKnowledge.meta.chars": "문자 수",
   "lobe-knowledge-base.readKnowledge.meta.lines": "줄 수",
+  "localFiles.editFile.ambiguous": "이 텍스트는 파일에서 {{times}}번 나타납니다. 편집이 거부됩니다 — 특정 항목을 식별할 수 있는 충분한 주변 컨텍스트가 필요하거나 \"모두 교체\"해야 합니다.",
   "localFiles.editFile.newString": "다음으로 바꾸기",
   "localFiles.editFile.oldString": "찾을 내용",
   "localFiles.editFile.replaceAll": "모든 항목 바꾸기",

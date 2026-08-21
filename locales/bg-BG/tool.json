@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Списъкът със задачи е актуализиран",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Брой знаци",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Брой редове",
+  "localFiles.editFile.ambiguous": "Този текст се появява {{times}} пъти в файла. Редакцията ще бъде отказана — необходимо е достатъчно контекст около текста, за да се идентифицира едно конкретно появяване, или \"замени всички\".",
   "localFiles.editFile.newString": "Замени с",
   "localFiles.editFile.oldString": "Намери",
   "localFiles.editFile.replaceAll": "Замени всички срещания",
