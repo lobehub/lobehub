@@ -157,6 +157,14 @@ export const aiChatRouter = router({
     // it as UUID, so a malformed value never reaches here.
     const tracingId = input.tracing?.tracingId ?? randomUUID();
 
+    // The runtime has no dedicated system channel — a system prompt only
+    // reaches the model as a `role: 'system'` message. Fold `systemRole` in
+    // here so callers that pass it get the prompt applied (and hashed into
+    // `llm_generation_tracing.prompt_hash`) instead of silently dropped.
+    const messages = input.systemRole
+      ? [{ content: input.systemRole, role: 'system' }, ...input.messages]
+      : input.messages;
+
     // Always stamp a trigger on metadata so cross-cutting hooks (timing,
     // routing) and the tracing registry have a fallback when the caller
     // forgets to set one. `tracing` carries the structured tracing config
@@ -165,7 +173,7 @@ export const aiChatRouter = router({
     try {
       data = await ctx.aiGenerationService.generateObject(
         {
-          messages: input.messages,
+          messages,
           model: input.model,
           provider: input.provider,
           schema: input.schema,

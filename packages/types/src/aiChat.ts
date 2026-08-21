@@ -251,6 +251,12 @@ export const StructureOutputSchema = z.object({
   model: z.string(),
   provider: z.string(),
   schema: StructureSchema.optional(),
+  /**
+   * Optional system prompt. The runtime only understands system *messages*, so
+   * the handler folds this into `messages` — keep it in the schema, otherwise
+   * zod strips the key at the tRPC boundary and the prompt silently vanishes.
+   */
+  systemRole: z.string().optional(),
   tools: z
     .array(z.object({ function: LobeUniformToolSchema, type: z.literal('function') }))
     .optional(),
@@ -290,6 +296,7 @@ export interface StructureOutputParams {
   model: string;
   provider: string;
   schema?: IStructureSchema;
+  /** Optional system prompt; folded into `messages` as a system message server-side. */
   systemRole?: string;
   tools?: {
     function: LobeUniformTool;

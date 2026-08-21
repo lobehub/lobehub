@@ -1144,6 +1144,47 @@ describe('aiChatRouter', () => {
       expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
     });
 
+    it('folds systemRole into messages as a leading system message', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+
+      const mockGenerateObject = vi.fn().mockResolvedValue({ ok: true });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      await caller.outputJSON({
+        messages: [{ content: 'a helpful travel planner', role: 'user' }],
+        model: 'gpt-4o',
+        provider: 'openai',
+        systemRole: 'You are an assistant configuration designer.',
+      });
+
+      expect(mockGenerateObject.mock.calls[0][0].messages).toEqual([
+        { content: 'You are an assistant configuration designer.', role: 'system' },
+        { content: 'a helpful travel planner', role: 'user' },
+      ]);
+    });
+
+    it('leaves messages untouched when no systemRole is passed', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+
+      const mockGenerateObject = vi.fn().mockResolvedValue({ ok: true });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      const messages = [{ content: 'test', role: 'user' }];
+      await caller.outputJSON({ messages, model: 'gpt-4o', provider: 'openai' });
+
+      expect(mockGenerateObject.mock.calls[0][0].messages).toEqual(messages);
+    });
+
     it('maps provider auth runtime errors to UNAUTHORIZED instead of leaking as internal errors', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
       const runtimeError = {

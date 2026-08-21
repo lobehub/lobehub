@@ -7,6 +7,7 @@
  * are dashboard / partition keys.
  */
 export const TRACING_SCENARIOS = {
+  AgentBuilderConfig: 'agent_builder_config',
   AgentSignal: 'agent_signal',
   AgentWelcome: 'agent_welcome',
   BuilderSuggestion: 'builder_suggestion',
