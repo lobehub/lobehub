@@ -365,7 +365,7 @@ describe('tool executors', () => {
 
     const toolCall = createToolCall();
     // The approval pause wrote this row before parking.
-    toolRows.set(toolCall.id, { id: 'pending-tool-row', parentId: 'pending-tool-row' });
+    toolRows.set(toolCall.id, { id: 'pending-tool-row', parentId: 'assistant-msg-1' });
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: {
         // On an approval resume this IS the pending tool row, not an assistant.
@@ -389,6 +389,7 @@ describe('tool executors', () => {
     expect(updateToolIntervention).toHaveBeenCalledWith('pending-tool-row', {
       status: 'aborted',
     });
+    expect(findToolMessageIdByToolCallId).not.toHaveBeenCalled();
   });
 
   it('settles a client-only call instead of parking it when already aborted', async () => {
@@ -421,6 +422,42 @@ describe('tool executors', () => {
     expect(result.newState.messages).toContainEqual(
       expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
     );
+  });
+
+  it('settles a client-only call when aborted while publishing the pause chunk', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+    let finishPublishing: (() => void) | undefined;
+    publishChunk.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPublishing = resolve;
+        }),
+    );
+
+    const toolCall = createToolCall('client-call', 'client-tool');
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const pending = callTool(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+    await vi.waitFor(() => expect(finishPublishing).toBeTypeOf('function'));
+    controller.abort();
+    finishPublishing!();
+    const result = await pending;
+
+    expect(result.newState.status).toBe('running');
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+    expect(createToolMessage).toHaveBeenCalledTimes(1);
   });
 
   it('treats an unrelated AbortError as a tool failure, not a user stop', async () => {
@@ -838,6 +875,41 @@ describe('tool executors', () => {
     const settledIds = createToolMessage.mock.calls.map((call: any) => call[0].tool_call_id);
     expect(settledIds).toEqual([a.id, b.id]);
     expect(result.newState.messages).toHaveLength(2);
+  });
+
+  it('settles a client-only batch when aborted while publishing the pause chunk', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+    let finishPublishing: (() => void) | undefined;
+    publishChunk.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPublishing = resolve;
+        }),
+    );
+
+    const a = createToolCall('client-a', 'client-tool');
+    const b = createToolCall('client-b', 'client-tool');
+    const instruction: Extract<AgentInstruction, { type: 'call_tools_batch' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling: [a, b] },
+      type: 'call_tools_batch',
+    };
+
+    const pending = callToolsBatch(abortingHost)(
+      instruction,
+      createState({ toolSourceMap: { 'client-tool': 'client' as any } }),
+    );
+    await vi.waitFor(() => expect(finishPublishing).toBeTypeOf('function'));
+    controller.abort();
+    finishPublishing!();
+    const result = await pending;
+
+    expect(result.newState.status).toBe('running');
+    expect(result.newState.messages).toHaveLength(2);
+    expect(createToolMessage).toHaveBeenCalledTimes(2);
   });
 
   it('settles approved client rows in a mixed batch rather than duplicating them', async () => {

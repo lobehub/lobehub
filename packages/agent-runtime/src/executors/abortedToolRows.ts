@@ -68,11 +68,13 @@ export const publishPersistError = async (host: AgentRuntimeHost, error: unknown
  * an abort landed, which settle inline rather than deferring to another step).
  */
 export const settleAbortedToolRows = async ({
+  existingToolMessageIds,
   host,
   parentMessageId,
   state,
   toolsCalling,
 }: {
+  existingToolMessageIds?: Record<string, string>;
   host: AgentRuntimeHost;
   parentMessageId: string;
   state: AgentState;
@@ -99,15 +101,13 @@ export const settleAbortedToolRows = async ({
   const messages: Array<{ content: string; role: 'tool'; tool_call_id: string }> = [];
 
   for (const toolPayload of toolsCalling) {
-    // Asked, not told. Callers cannot reliably know whether a row exists — it
-    // may have been written by an approval pause, by a transport pre-creating
-    // it, or by this very list arriving twice — and every mechanism that tried
-    // to carry that knowledge to the call site only covered the one source it
-    // was added for. One indexed read makes the invariant hold for all of them.
-    const existingMessageId = await transports.messages.findToolMessageIdByToolCallId(
-      toolPayload.id,
-      parentMessageId,
-    );
+    // Prefer an ID carried by the approval resume: its `parentMessageId` is the
+    // tool row itself, so using it as lookup scope would miss the row's real
+    // assistant parent. Other paths cannot reliably know whether a row exists,
+    // so the scoped indexed read keeps the invariant for them.
+    const existingMessageId =
+      existingToolMessageIds?.[toolPayload.id] ??
+      (await transports.messages.findToolMessageIdByToolCallId(toolPayload.id, parentMessageId));
     try {
       if (existingMessageId) {
         // Settle THAT row: inserting a second one would duplicate the tool in

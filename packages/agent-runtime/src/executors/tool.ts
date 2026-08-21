@@ -261,18 +261,23 @@ const raceToolAbort = async <T>(run: () => Promise<T>, signal?: AbortSignal): Pr
  */
 const settleAbortedCall = async ({
   events,
+  existingToolMessageId,
   host,
   parentMessageId,
   state,
   tool,
 }: {
   events: AgentEvent[];
+  existingToolMessageId?: string;
   host: AgentRuntimeHost;
   parentMessageId: string;
   state: AgentState;
   tool: ChatToolPayload;
 }) => {
   const settled = await settleAbortedToolRows({
+    existingToolMessageIds: existingToolMessageId
+      ? { [tool.id]: existingToolMessageId }
+      : undefined,
     host,
     parentMessageId,
     state,
@@ -512,6 +517,9 @@ export const callTool =
       if (host.operation.abortSignal?.aborted) {
         return settleAbortedCall({
           events,
+          existingToolMessageId: payload.skipCreateToolMessage
+            ? payload.parentMessageId
+            : undefined,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -519,13 +527,31 @@ export const callTool =
         });
       }
 
-      return pauseForTools({
+      const paused = await pauseForTools({
         host,
         instruction,
         reason: 'client_tool_execution',
         state,
         toolsCalling: [tool],
       });
+
+      // Stop can arrive while the chunk is being published. Do not return a
+      // parked state after that asynchronous gap: no client result will ever
+      // resume an operation that has already been interrupted.
+      if (host.operation.abortSignal?.aborted) {
+        return settleAbortedCall({
+          events,
+          existingToolMessageId: payload.skipCreateToolMessage
+            ? payload.parentMessageId
+            : undefined,
+          host,
+          parentMessageId: payload.parentMessageId,
+          state,
+          tool,
+        });
+      }
+
+      return paused;
     }
 
     try {
@@ -540,6 +566,9 @@ export const callTool =
         // used to strand the tool_call_id with no row at all.
         return settleAbortedCall({
           events,
+          existingToolMessageId: payload.skipCreateToolMessage
+            ? payload.parentMessageId
+            : undefined,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -714,6 +743,9 @@ export const callTool =
       if (isOperationAbort(error, host.operation.abortSignal)) {
         return settleAbortedCall({
           events,
+          existingToolMessageId: payload.skipCreateToolMessage
+            ? payload.parentMessageId
+            : undefined,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -757,6 +789,7 @@ export const callToolsBatch =
       // to collect these, so parking them strands every tool_call_id in the batch.
       if (host.operation.abortSignal?.aborted) {
         const { messages } = await settleAbortedToolRows({
+          existingToolMessageIds,
           host,
           parentMessageId,
           state,
@@ -769,12 +802,29 @@ export const callToolsBatch =
         return { events, newState: abortedState };
       }
 
-      return pauseForTools({
+      const paused = await pauseForTools({
         host,
         reason: 'client_tool_execution',
         state,
         toolsCalling: clientTools,
       });
+
+      if (host.operation.abortSignal?.aborted) {
+        const { messages } = await settleAbortedToolRows({
+          existingToolMessageIds,
+          host,
+          parentMessageId,
+          state,
+          toolsCalling: clientTools,
+        });
+        const abortedState = structuredClone(state);
+        abortedState.messages.push(...messages);
+        abortedState.lastModified = nowIso();
+
+        return { events, newState: abortedState };
+      }
+
+      return paused;
     }
 
     const toolResults: ToolResultEntry[] = [];
@@ -927,6 +977,7 @@ export const callToolsBatch =
     // below, so the rows are part of the state this step returns.
     if (toSettle.length > 0) {
       await settleAbortedToolRows({
+        existingToolMessageIds,
         host,
         parentMessageId,
         state,
