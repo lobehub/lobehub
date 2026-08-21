@@ -166,6 +166,33 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.fallbackLines[0]).toContain('https://example.com/f/chunked.mp4');
   });
 
+  it('probes unmeasured attachments concurrently, not one after another', async () => {
+    // Regression: serial probing meant N slow URLs cost N x the timeout before
+    // the first platform send even began.
+    let inFlight = 0;
+    let peak = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        inFlight -= 1;
+        return { headers: new Headers({ 'content-length': String(1024) }), ok: true, status: 200 };
+      }),
+    );
+
+    const attachments = Array.from({ length: 5 }, (_, i) => ({
+      fetchUrl: `https://example.com/f/file-${i}.mp4`,
+      name: `file-${i}.mp4`,
+      type: 'video' as const,
+    }));
+
+    await prepareAttachmentsForBudget(attachments, budget);
+
+    expect(peak).toBeGreaterThan(1);
+  });
+
   it('keeps an unmeasurable attachment that has no link to fall back to', async () => {
     const attachment = { data: 'AAAA', name: 'inline.bin', type: 'file' as const };
 

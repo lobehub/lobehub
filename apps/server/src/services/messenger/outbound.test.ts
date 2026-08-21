@@ -3,6 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { InstallationCredentials } from './installations/types';
 
+// Attachments in these fixtures carry no `size`, so the budget pass probes the
+// URL for one. These tests are about delivery mechanics, not budgeting — answer
+// the probe with a small, in-budget length. The probe's own behaviour is
+// covered in attachmentBudget.test.ts.
+vi.mock('@/server/services/bot/platforms/publicUrlFetch', () => ({
+  fetchPublicUrl: async () => ({
+    dispose: async () => undefined,
+    response: { headers: new Headers({ 'content-length': '1024' }), ok: true, status: 200 },
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   batchDiscordFiles: vi.fn(),
   createDMChannel: vi.fn(),

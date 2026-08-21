@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { getWechatTextSendCount } from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
@@ -259,7 +261,11 @@ export const drainPendingPushes = async (
   send: (payload: WechatPendingPush) => Promise<'sent' | 'stop' | { requeue: WechatPendingPush }>,
 ): Promise<DrainPendingResult> => {
   const lockKey = flushLockKey(applicationId, userId);
-  const locked = await redis.set(lockKey, '1', 'EX', FLUSH_LOCK_TTL_SECONDS, 'NX');
+  // A token, not a constant: one delivery can outlive the TTL (probing,
+  // downloading and uploading an attachment is not bounded by 30s), and the
+  // expired holder must not then delete the lock a NEW owner is holding.
+  const token = randomUUID();
+  const locked = await redis.set(lockKey, token, 'EX', FLUSH_LOCK_TTL_SECONDS, 'NX');
   if (locked !== 'OK') return { drained: false, remaining: 0, sent: 0 };
 
   let sent = 0;
@@ -278,6 +284,9 @@ export const drainPendingPushes = async (
       }
 
       const result = await send(payload);
+      // Renew after each delivery so a slow attachment leg cannot let the lease
+      // lapse mid-drain and admit a second drainer.
+      await redis.expire(lockKey, FLUSH_LOCK_TTL_SECONDS);
       if (result === 'stop') {
         await redis.lpush(pendingKey, raw);
         break;
@@ -295,6 +304,8 @@ export const drainPendingPushes = async (
     // still releases the lock on the way out of this return.
     return { drained: true, remaining: await redis.llen(pendingKey), sent };
   } finally {
-    await redis.del(lockKey);
+    // Only release a lease we still own: if it expired and someone else took
+    // it, an unconditional DEL would drop THEIR lock and admit a third drainer.
+    if ((await redis.get(lockKey)) === token) await redis.del(lockKey);
   }
 };

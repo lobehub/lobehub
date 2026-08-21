@@ -188,7 +188,32 @@ const resolveSafeUrl = async (
 };
 
 /**
- * Whether this process actually routes requests through a proxy.
+ * Whether `NO_PROXY` tells the proxy agent to send this host directly.
+ *
+ * `EnvHttpProxyAgent` applies this per destination, so a proxy being installed
+ * does not mean THIS request is proxied — and a bypassed request is dispatched
+ * directly, where the pin is exactly what we still need.
+ */
+const bypassesProxy = (hostname: string): boolean => {
+  const configured = process.env.NO_PROXY || process.env.no_proxy;
+  if (!configured) return false;
+
+  const host = hostname.toLowerCase();
+  return configured
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .some((entry) => {
+      if (entry === '*') return true;
+      // Entries may carry a port and may or may not lead with a dot; both forms
+      // mean "this host and anything under it".
+      const bare = entry.replace(/:\d+$/, '').replace(/^\./, '');
+      return host === bare || host.endsWith(`.${bare}`);
+    });
+};
+
+/**
+ * Whether THIS request actually goes through a proxy.
  *
  * Decided from the dispatcher in force, NOT from proxy environment variables:
  * `setGlobalDispatcher(EnvHttpProxyAgent)` only happens under
@@ -197,13 +222,14 @@ const resolveSafeUrl = async (
  * skipping the pin on that basis would hand the hostname back to undici to
  * resolve a second time, reopening the rebinding hole.
  *
- * When a proxy IS in force, the proxy resolves DNS itself; pinning a locally
- * resolved address would bypass it along with the egress policy it enforces,
- * and would mean nothing anyway.
+ * When a proxy IS in force for this destination, the proxy resolves DNS itself;
+ * pinning a locally resolved address would bypass it along with the egress
+ * policy it enforces, and would mean nothing anyway.
  */
-const requestsAreProxied = (): boolean => {
+const requestIsProxied = (url: URL): boolean => {
   const dispatcher = getGlobalDispatcher();
-  return dispatcher instanceof ProxyAgent || dispatcher instanceof EnvHttpProxyAgent;
+  const proxying = dispatcher instanceof ProxyAgent || dispatcher instanceof EnvHttpProxyAgent;
+  return proxying && !bypassesProxy(url.hostname);
 };
 
 /** Redirect hops to follow before giving up. */
@@ -258,7 +284,7 @@ export const fetchPublicUrl = async (
       }
 
       let dispatcher: Agent | undefined;
-      if (safe.pinned && !requestsAreProxied()) {
+      if (safe.pinned && !requestIsProxied(safe.url)) {
         const { address, family } = safe.pinned;
         dispatcher = new Agent({
           connect: {

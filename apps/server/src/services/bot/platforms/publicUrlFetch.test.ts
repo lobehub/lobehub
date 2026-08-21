@@ -162,6 +162,69 @@ describe('fetchPublicUrl', () => {
     await expect(result!.dispose()).resolves.toBeUndefined();
   });
 
+  it('still pins a destination NO_PROXY tells the proxy to bypass', async () => {
+    // Regression: the check was class-level, so an installed proxy marked every
+    // request proxied — but a NO_PROXY destination is dispatched DIRECTLY, and
+    // that is precisely where the pin is still needed.
+    const previous = getGlobalDispatcher();
+    const proxy = new EnvHttpProxyAgent({ httpsProxy: 'http://proxy.internal:3128' });
+    setGlobalDispatcher(proxy);
+    vi.stubEnv('NO_PROXY', 'cdn.example.com');
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+      expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
+      await result!.dispose();
+    } finally {
+      vi.unstubAllEnvs();
+      setGlobalDispatcher(previous);
+      await proxy.close();
+    }
+  });
+
+  it('still pins when NO_PROXY is a wildcard', async () => {
+    const previous = getGlobalDispatcher();
+    const proxy = new EnvHttpProxyAgent({ httpsProxy: 'http://proxy.internal:3128' });
+    setGlobalDispatcher(proxy);
+    vi.stubEnv('NO_PROXY', '*');
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+      expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
+      await result!.dispose();
+    } finally {
+      vi.unstubAllEnvs();
+      setGlobalDispatcher(previous);
+      await proxy.close();
+    }
+  });
+
+  it('does not pin a host the proxy actually handles', async () => {
+    const previous = getGlobalDispatcher();
+    const proxy = new EnvHttpProxyAgent({ httpsProxy: 'http://proxy.internal:3128' });
+    setGlobalDispatcher(proxy);
+    vi.stubEnv('NO_PROXY', 'other.example.com');
+    const fetchMock = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const result = await fetchPublicUrl('https://cdn.example.com/a.png', 1000);
+
+      expect(fetchMock.mock.calls[0][1].dispatcher).toBeUndefined();
+      await result!.dispose();
+    } finally {
+      vi.unstubAllEnvs();
+      setGlobalDispatcher(previous);
+      await proxy.close();
+    }
+  });
+
   it('re-validates every redirect hop', async () => {
     // Regression: our file proxy answers /f/:id with a 302, so redirects must be
     // followed — which means a public host could bounce us to the metadata IP.

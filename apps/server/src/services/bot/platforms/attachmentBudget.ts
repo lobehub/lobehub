@@ -192,7 +192,7 @@ const knownSize = (attachment: BotMessageAttachment): number | undefined => {
  *    attachment is kept as a last resort (old behavior) rather than dropped.
  */
 /** How long to wait for a size probe before giving up on it. */
-const SIZE_PROBE_TIMEOUT_MS = 8000;
+const SIZE_PROBE_TIMEOUT_MS = 5000;
 
 /**
  * The attachment's byte size, established without downloading it.
@@ -240,9 +240,13 @@ export const prepareAttachmentsForBudget = async (
   const degraded: BotMessageAttachment[] = [];
   const fallbackLines: string[] = [];
 
-  for (const attachment of attachments) {
+  // Probe every unmeasured attachment at once rather than once per loop turn:
+  // serially, N slow URLs cost N x the probe timeout before the first send.
+  const sizes = await Promise.all(attachments.map((attachment) => resolveSize(attachment)));
+
+  for (const [index, attachment] of attachments.entries()) {
     const limit = attachment.type === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
-    const size = await resolveSize(attachment);
+    const size = sizes[index];
 
     if (size !== undefined && size <= limit) {
       kept.push(attachment);

@@ -253,6 +253,34 @@ describe('pending push queue', () => {
     expect(result).toEqual({ drained: false, remaining: 0, sent: 0 });
   });
 
+  it('does not delete a lock a new owner took after the lease expired', async () => {
+    // Regression: one delivery can outlive the 30s TTL (probe + download +
+    // upload is not bounded by it). An unconditional DEL on the way out would
+    // drop the lock the NEXT drainer is holding and admit a third one.
+    const redis = new FakeRedis();
+    await enqueuePendingPush(redis, APP, USER, payload('first'));
+    const lockKey = `wechat:pending-flush:${APP}:${USER}`;
+
+    await drainPendingPushes(redis, APP, USER, async () => {
+      // Simulate the lease expiring mid-delivery and someone else claiming it.
+      await redis.set(lockKey, 'someone-elses-token', 'EX', 30);
+      return 'sent';
+    });
+
+    expect(await redis.get(lockKey)).toBe('someone-elses-token');
+  });
+
+  it('renews its own lease across deliveries and releases it at the end', async () => {
+    const redis = new FakeRedis();
+    await enqueuePendingPush(redis, APP, USER, payload('first'));
+    const lockKey = `wechat:pending-flush:${APP}:${USER}`;
+
+    await drainPendingPushes(redis, APP, USER, async () => 'sent');
+
+    // Its own lease is cleaned up, so the next drain is not blocked for 30s.
+    expect(await redis.get(lockKey)).toBeNull();
+  });
+
   it('reports what is still queued when the drain stops early', async () => {
     const redis = new FakeRedis();
     await enqueuePendingPush(redis, APP, USER, payload('first'));
