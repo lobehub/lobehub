@@ -14,6 +14,12 @@ export interface AgentPermissionState {
   accessLoading: boolean;
   /** Only the creator or a workspace owner may change member selection policies. */
   canEditConfig: boolean;
+  /**
+   * Whether the viewer may write the three policy rows. Narrower than
+   * {@link AgentPermissionState.canEditConfig} — see
+   * `AgentSelectionPoliciesState.canEditPolicies`.
+   */
+  canEditPolicies: boolean;
   /** Members can be assigned a target only if one is actually resolvable. */
   canFixExecutionTarget: boolean;
   /** Only the creator or a workspace owner may re-level members. */

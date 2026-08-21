@@ -15,6 +15,12 @@ export interface GroupPermissionState {
   accessLoading: boolean;
   /** Role-level gate for the model / execution-environment policies. */
   canEditConfig: boolean;
+  /**
+   * Whether the viewer may write the three policy rows. Narrower than
+   * {@link GroupPermissionState.canEditConfig} — see
+   * `AgentSelectionPoliciesState.canEditPolicies`.
+   */
+  canEditPolicies: boolean;
   /** Fixing needs an execution environment resolvable on the supervisor. */
   canFixExecutionTarget: boolean;
   /** Only the creator or a workspace owner may re-level members. */

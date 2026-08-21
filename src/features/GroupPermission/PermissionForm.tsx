@@ -41,6 +41,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     accessLevel,
     accessLoading,
     canEditConfig,
+    canEditPolicies,
     canFixExecutionTarget,
     canManageAccess,
     executionTargetPolicy,
@@ -57,6 +58,11 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
   } = useGroupPermission(groupId);
 
   const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
+
+  // Same authority as the Agent page: these write the supervisor agent's
+  // policy keys, which the server accepts only from its creator or the
+  // workspace owner and silently drops from anyone else's save.
+  const policiesDisabled = !canEditConfig || !canEditPolicies;
   const labelKeys = getSelectionPolicyLabelKeys(isPrivate);
   const sections = resolveGroupPermissionSections({
     accessError,
@@ -182,13 +188,15 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
                   ),
                   children: (
                     <PolicySelect
-                      disabled={!canEditConfig}
+                      disabled={policiesDisabled}
                       options={topicSharePolicyOptions}
                       value={topicSharePolicy}
                       onChange={setTopicSharePolicy}
                     />
                   ),
-                  desc: t('permission.page.groupTopicSharePolicyDesc'),
+                  desc: canEditPolicies
+                    ? t('permission.page.groupTopicSharePolicyDesc')
+                    : t('permission.noManagePermission'),
                   label: t('settingAgent.topicSharePolicy.title'),
                 },
               ]
@@ -212,13 +220,15 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
             ),
             children: (
               <PolicySelect
-                disabled={!canEditConfig}
+                disabled={policiesDisabled}
                 options={modelPolicyOptions}
                 value={modelPolicy}
                 onChange={setModelPolicy}
               />
             ),
-            desc: t('permission.page.groupModelPolicyDesc'),
+            desc: canEditPolicies
+              ? t('permission.page.groupModelPolicyDesc')
+              : t('permission.noManagePermission'),
             label: t('settingAgent.modelPolicy.title'),
           },
           {
@@ -229,13 +239,15 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
             ),
             children: (
               <PolicySelect
-                disabled={!canEditConfig}
+                disabled={policiesDisabled}
                 options={executionPolicyOptions}
                 value={executionTargetPolicy}
                 onChange={setExecutionTargetPolicy}
               />
             ),
-            desc: t('permission.page.groupDevicePolicyDesc'),
+            desc: canEditPolicies
+              ? t('permission.page.groupDevicePolicyDesc')
+              : t('permission.noManagePermission'),
             label: t('settingAgent.devicePolicy.title'),
           },
         ],
