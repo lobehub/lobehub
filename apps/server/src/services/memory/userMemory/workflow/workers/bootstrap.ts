@@ -50,32 +50,32 @@ export const startMemoryWorkers = () => {
   const prefix = BULLMQ_PREFIX;
 
   workers = [
-    new Worker('memory:hourly', hourlyProcessor, {
+    new Worker('memory-hourly', hourlyProcessor, {
       connection,
       concurrency: 1,
       prefix,
     }),
-    new Worker('memory:process-users', processUsersProcessor, {
+    new Worker('memory-process-users', processUsersProcessor, {
       connection,
       concurrency: 1,
       prefix,
     }),
-    new Worker('memory:user-topics', processUserTopicsProcessor, {
+    new Worker('memory-user-topics', processUserTopicsProcessor, {
       connection,
       concurrency: 25,
       prefix,
     }),
-    new Worker('memory:process-topics', processTopicsProcessor, {
+    new Worker('memory-process-topics', processTopicsProcessor, {
       connection,
       concurrency: 20,
       prefix,
     }),
-    new Worker('memory:process-topic', processTopicProcessor, {
+    new Worker('memory-process-topic', processTopicProcessor, {
       connection,
       concurrency: 25,
       prefix,
     }),
-    new Worker('memory:persona-update', personaUpdateProcessor, {
+    new Worker('memory-persona-update', personaUpdateProcessor, {
       connection,
       concurrency: 4,
       prefix,

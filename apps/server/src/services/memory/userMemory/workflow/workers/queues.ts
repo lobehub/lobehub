@@ -54,12 +54,12 @@ const createQueues = () => {
   const prefix = BULLMQ_PREFIX;
 
   return {
-    hourly: new Queue('memory:hourly', { connection, prefix }),
-    personaUpdate: new Queue('memory:persona-update', { connection, prefix }),
-    processTopic: new Queue('memory:process-topic', { connection, prefix }),
-    processTopics: new Queue('memory:process-topics', { connection, prefix }),
-    processUsers: new Queue('memory:process-users', { connection, prefix }),
-    userTopics: new Queue('memory:user-topics', { connection, prefix }),
+    hourly: new Queue('memory-hourly', { connection, prefix }),
+    personaUpdate: new Queue('memory-persona-update', { connection, prefix }),
+    processTopic: new Queue('memory-process-topic', { connection, prefix }),
+    processTopics: new Queue('memory-process-topics', { connection, prefix }),
+    processUsers: new Queue('memory-process-users', { connection, prefix }),
+    userTopics: new Queue('memory-user-topics', { connection, prefix }),
   } as const;
 };
 
