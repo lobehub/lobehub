@@ -28,8 +28,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildPayloadFromKeyVaults,
-  hasAvailableServerModel,
+  getServerDefaultHeterogeneousModels,
   initModelRuntimeWithUserPayload,
+  resolveServerDefaultHeterogeneousModel,
   resolveServerModel,
 } from './index';
 
@@ -127,36 +128,72 @@ describe('resolveServerModel', () => {
   });
 });
 
-describe('hasAvailableServerModel', () => {
-  it('requires an enabled provider with an enabled chat model', async () => {
+describe('getServerDefaultHeterogeneousModels', () => {
+  it('returns only provider-native V1 model paths', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         anthropic: {
-          enabled: false,
-          serverModelLists: [{ enabled: true, id: 'claude-server', type: 'chat' }],
+          enabled: true,
+          serverModelLists: [
+            { enabled: true, id: 'claude-server', type: 'chat' },
+            { enabled: false, id: 'claude-disabled', type: 'chat' },
+          ],
+        },
+        google: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'gemini-server', type: 'chat' }],
         },
         openai: {
           enabled: true,
           serverModelLists: [
-            { enabled: true, id: 'image-server', type: 'image' },
-            { enabled: false, id: 'gpt-disabled', type: 'chat' },
+            { enabled: true, id: 'gpt-5.4', type: 'chat' },
+            { enabled: true, id: 'gpt-4o', type: 'chat' },
           ],
         },
       },
     });
 
-    await expect(hasAvailableServerModel()).resolves.toBe(false);
+    await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+      'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
+    });
+  });
+});
 
+describe('resolveServerDefaultHeterogeneousModel', () => {
+  it('accepts only the selected agent runtime path', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
+        anthropic: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'claude-server', type: 'chat' }],
+        },
         openai: {
           enabled: true,
-          serverModelLists: [{ enabled: true, id: 'gpt-server', type: 'chat' }],
+          serverModelLists: [
+            { enabled: true, id: 'gpt-5.4', type: 'chat' },
+            { enabled: true, id: 'gpt-4o', type: 'chat' },
+          ],
         },
       },
     });
 
-    await expect(hasAvailableServerModel()).resolves.toBe(true);
+    await expect(
+      resolveServerDefaultHeterogeneousModel('claude-code', 'anthropic', 'claude-server'),
+    ).resolves.toMatchObject({ model: 'claude-server', provider: 'anthropic' });
+    await expect(
+      resolveServerDefaultHeterogeneousModel('codex', 'openai', 'gpt-5.4'),
+    ).resolves.toMatchObject({ model: 'gpt-5.4', provider: 'openai' });
+
+    await expect(
+      resolveServerDefaultHeterogeneousModel('codex', 'anthropic', 'claude-server'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
+    await expect(
+      resolveServerDefaultHeterogeneousModel('claude-code', 'openai', 'gpt-5.4'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
+    await expect(
+      resolveServerDefaultHeterogeneousModel('codex', 'openai', 'gpt-4o'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
   });
 });
 

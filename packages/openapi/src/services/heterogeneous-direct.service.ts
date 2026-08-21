@@ -8,9 +8,10 @@ import type {
 import { RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
+import type { ServerDefaultHeterogeneousAgentType } from '@/server/modules/ModelRuntime';
 import {
   initModelRuntimeFromServerConfig,
-  resolveServerModel,
+  resolveServerDefaultHeterogeneousModel,
 } from '@/server/modules/ModelRuntime';
 
 import type { BaseStreamEvent } from '../types/responses.type';
@@ -811,6 +812,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
 };
 
 export const invokeServerDefaultModel = async (params: {
+  agentType: ServerDefaultHeterogeneousAgentType;
   model: string;
   payload: ChatStreamPayload;
   provider: string;
@@ -818,12 +820,13 @@ export const invokeServerDefaultModel = async (params: {
   userId: string;
   workspaceId?: string;
 }) => {
-  const resolvedModel = await resolveServerModel(params.provider, params.model);
+  const resolvedModel = await resolveServerDefaultHeterogeneousModel(
+    params.agentType,
+    params.provider,
+    params.model,
+  );
   const { deploymentName, provider } = resolvedModel;
-  // Mirrors the field-vs-model split in src/services/chat/index.ts. The server's Azure
-  // runtime consumes deploymentName in both API modes, so its logical model ID stays intact.
-  const shouldUseDeploymentField = provider === 'azure' || provider === 'spark';
-  const model = deploymentName && !shouldUseDeploymentField ? deploymentName : resolvedModel.model;
+  const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
     provider,
@@ -832,9 +835,6 @@ export const invokeServerDefaultModel = async (params: {
   const response = await runtime.chat(
     {
       ...params.payload,
-      ...(shouldUseDeploymentField &&
-        deploymentName &&
-        deploymentName !== model && { deploymentName }),
       model,
       stream: true,
     },

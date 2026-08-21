@@ -12,8 +12,8 @@ import { cleanupTestUser, createTestTopic, createTestUser } from './integration/
 
 let testDB: LobeChatDatabase;
 
-const { hasAvailableModel, initRuntime, resolveModel, signOperationToken } = vi.hoisted(() => ({
-  hasAvailableModel: vi.fn(),
+const { getSupportedModels, initRuntime, resolveModel, signOperationToken } = vi.hoisted(() => ({
+  getSupportedModels: vi.fn(),
   initRuntime: vi.fn(),
   resolveModel: vi.fn(),
   signOperationToken: vi.fn(),
@@ -24,9 +24,10 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
-  hasAvailableServerModel: hasAvailableModel,
+  getServerDefaultHeterogeneousModels: getSupportedModels,
   initModelRuntimeFromServerConfig: initRuntime,
-  resolveServerModel: resolveModel,
+  resolveServerDefaultHeterogeneousModel: resolveModel,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES: ['claude-code', 'codex'],
 }));
 
 vi.mock('@/libs/trpc/utils/internalJwt', async (importOriginal) => ({
@@ -45,7 +46,8 @@ describe('server-default heterogeneous operation control', () => {
       userId,
     } as any);
   const operationInput = (operationId: string) => ({
-    model: 'deployment-model',
+    agentType: 'codex' as const,
+    model: 'gpt-5.4',
     operationId,
     providerId: 'openai',
     topicId,
@@ -56,8 +58,11 @@ describe('server-default heterogeneous operation control', () => {
     userId = await createTestUser(testDB);
     topicId = await createTestTopic(testDB, userId);
     vi.stubEnv('ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT', '1');
-    hasAvailableModel.mockResolvedValue(true);
-    resolveModel.mockResolvedValue({ model: 'deployment-model', provider: 'openai' });
+    getSupportedModels.mockResolvedValue({
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+      'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
+    });
+    resolveModel.mockResolvedValue({ model: 'gpt-5.4', provider: 'openai' });
     initRuntime.mockResolvedValue({});
     signOperationToken.mockResolvedValue('operation-token');
   });
@@ -78,8 +83,8 @@ describe('server-default heterogeneous operation control', () => {
       .from(agentOperations)
       .where(eq(agentOperations.id, 'desktop-operation-1'));
     expect(operation).toMatchObject({
-      metadata: { serverDefaultHeterogeneous: true },
-      model: 'deployment-model',
+      metadata: { agentType: 'codex', serverDefaultHeterogeneous: true },
+      model: 'gpt-5.4',
       provider: 'openai',
       status: 'running',
       topicId,
@@ -88,12 +93,13 @@ describe('server-default heterogeneous operation control', () => {
     });
     expect(signOperationToken).toHaveBeenCalledWith({
       capabilities: ['model:invoke'],
-      model: 'deployment-model',
+      model: 'gpt-5.4',
       operationId: 'desktop-operation-1',
       providerId: 'openai',
       userId,
       workspaceId: undefined,
     });
+    expect(resolveModel).toHaveBeenCalledWith('codex', 'openai', 'gpt-5.4');
     expect(initRuntime).toHaveBeenCalledWith({
       actorUserId: userId,
       provider: 'openai',
@@ -142,6 +148,24 @@ describe('server-default heterogeneous operation control', () => {
     expect(signOperationToken).not.toHaveBeenCalled();
   });
 
+  it('does not persist or mint for an agent/runtime pair outside the V1 support matrix', async () => {
+    resolveModel.mockRejectedValueOnce(new Error('unsupported agent/runtime pair'));
+
+    await expect(
+      caller().beginServerDefaultHeterogeneousOperation({
+        ...operationInput('desktop-operation-unsupported'),
+        agentType: 'claude-code',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    const operations = await testDB
+      .select()
+      .from(agentOperations)
+      .where(eq(agentOperations.id, 'desktop-operation-unsupported'));
+    expect(operations).toHaveLength(0);
+    expect(signOperationToken).not.toHaveBeenCalled();
+  });
+
   it('settles idempotently and does not remint a token for a reused operation id', async () => {
     const operationId = 'desktop-operation-4';
     await caller().beginServerDefaultHeterogeneousOperation(operationInput(operationId));
@@ -168,7 +192,7 @@ describe('server-default heterogeneous operation control', () => {
     const operationId = 'unrelated-operation';
     await testDB.insert(agentOperations).values({
       id: operationId,
-      model: 'deployment-model',
+      model: 'gpt-5.4',
       provider: 'openai',
       status: 'running',
       topicId,

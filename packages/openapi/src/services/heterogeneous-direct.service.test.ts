@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   initModelRuntimeFromServerConfig,
-  resolveServerModel,
+  resolveServerDefaultHeterogeneousModel,
 } from '@/server/modules/ModelRuntime';
 
 import {
@@ -15,7 +15,7 @@ import {
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromServerConfig: vi.fn(),
-  resolveServerModel: vi.fn(),
+  resolveServerDefaultHeterogeneousModel: vi.fn(),
 }));
 
 const protocolStream = (events: Array<{ data: unknown; id?: string; type: string }>) => {
@@ -52,31 +52,35 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.clearAllMocks();
   });
 
-  it('passes Azure deployment names without replacing the logical model', async () => {
+  it('invokes Claude Code only through its resolved Anthropic runtime model', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
-    vi.mocked(resolveServerModel).mockResolvedValue({
-      deploymentName: 'prod-gpt',
-      model: 'gpt-4o',
-      provider: 'azure',
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'claude-server',
+      provider: 'anthropic',
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
       chat,
     } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
 
     const result = await invokeServerDefaultModel({
-      model: 'gpt-4o',
+      agentType: 'claude-code',
+      model: 'claude-server',
       payload: { messages: [], model: 'lobehub-default', stream: true },
-      provider: 'azure',
+      provider: 'anthropic',
       signal: new AbortController().signal,
       userId: 'user-1',
     });
 
-    expect(result.model).toBe('gpt-4o');
+    expect(result.model).toBe('claude-server');
+    expect(resolveServerDefaultHeterogeneousModel).toHaveBeenCalledWith(
+      'claude-code',
+      'anthropic',
+      'claude-server',
+    );
     expect(chat).toHaveBeenCalledWith(
       {
-        deploymentName: 'prod-gpt',
         messages: [],
-        model: 'gpt-4o',
+        model: 'claude-server',
         stream: true,
       },
       expect.any(Object),
@@ -85,9 +89,9 @@ describe('heterogeneous direct invocation protocol', () => {
 
   it('uses deployment names as model IDs for runtimes without a dedicated field', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
-    vi.mocked(resolveServerModel).mockResolvedValue({
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
       deploymentName: 'prod-gpt',
-      model: 'gpt-4o',
+      model: 'gpt-5.4',
       provider: 'openai',
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
@@ -95,7 +99,8 @@ describe('heterogeneous direct invocation protocol', () => {
     } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
 
     const result = await invokeServerDefaultModel({
-      model: 'gpt-4o',
+      agentType: 'codex',
+      model: 'gpt-5.4',
       payload: { messages: [], model: 'lobehub-default', stream: true },
       provider: 'openai',
       signal: new AbortController().signal,
@@ -106,6 +111,24 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(result.model).toBe('prod-gpt');
     expect(runtimePayload).toMatchObject({ messages: [], model: 'prod-gpt', stream: true });
     expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
+  it('fails closed before runtime initialization for an unsupported direct protocol route', async () => {
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockRejectedValue(
+      new Error('unsupported agent/runtime pair'),
+    );
+
+    await expect(
+      invokeServerDefaultModel({
+        agentType: 'codex',
+        model: 'claude-server',
+        payload: { messages: [], model: 'lobehub-default', stream: true },
+        provider: 'anthropic',
+        signal: new AbortController().signal,
+        userId: 'user-1',
+      }),
+    ).rejects.toThrow('unsupported agent/runtime pair');
+    expect(initModelRuntimeFromServerConfig).not.toHaveBeenCalled();
   });
 
   it('normalizes Anthropic images, tool calls, and tool results', () => {
