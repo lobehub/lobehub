@@ -201,8 +201,11 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
     };
 
     const handleConfirm = async () => {
-      await addCollaborators(selected, grantLevel);
-      close();
+      // Only dismiss once the grant actually landed — the hook reports failure
+      // through a toast, and closing anyway would discard the selection while
+      // adding nobody.
+      const added = await addCollaborators(selected, grantLevel);
+      if (added) close();
     };
 
     const isInitialLoading = membersLoading && members.length === 0;

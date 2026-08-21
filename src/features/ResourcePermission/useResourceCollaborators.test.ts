@@ -59,6 +59,20 @@ describe('useResourceCollaborators', () => {
     expect(swrState.mutate).toHaveBeenCalled();
   });
 
+  it('reports a failed add so the caller can keep the picker open', async () => {
+    serviceMocks.addCollaborators.mockRejectedValue(new Error('membership changed'));
+    const { result } = renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1'));
+
+    let added: boolean | undefined;
+    await act(async () => {
+      added = await result.current.addCollaborators(['member-1'], 'edit');
+    });
+
+    // The rejection is surfaced as a toast rather than rethrown, so the return
+    // value is the only thing telling the caller nobody was added.
+    expect(added).toBe(false);
+  });
+
   it('adding an empty selection is a no-op', async () => {
     const { result } = renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1'));
 

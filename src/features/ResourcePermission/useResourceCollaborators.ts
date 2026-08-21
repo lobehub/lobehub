@@ -28,15 +28,24 @@ export const useResourceCollaborators = (
     () => resourcePermissionService.listCollaborators(resourceType, resourceId!),
   );
 
+  /**
+   * Run a mutation and refresh the list, reporting whether it succeeded. The
+   * failure is surfaced as a toast here, but the boolean still matters: a
+   * caller that dismisses a surface on completion must branch on it, or a
+   * rejected mutation reads exactly like a successful one and takes the
+   * user's unsaved input down with it.
+   */
   const run = useCallback(
-    async (action: () => Promise<void>) => {
+    async (action: () => Promise<void>): Promise<boolean> => {
       setMutating(true);
       try {
         await action();
         await mutate();
+        return true;
       } catch (e) {
         console.error('[ResourceCollaborators]', e);
         toast.error((e as Error)?.message || t('permission.updateError'));
+        return false;
       } finally {
         setMutating(false);
       }
@@ -45,8 +54,8 @@ export const useResourceCollaborators = (
   );
 
   const addCollaborators = useCallback(
-    (userIds: string[], accessLevel: ResourceAccessLevel) => {
-      if (!resourceId || userIds.length === 0) return Promise.resolve();
+    (userIds: string[], accessLevel: ResourceAccessLevel): Promise<boolean> => {
+      if (!resourceId || userIds.length === 0) return Promise.resolve(false);
       return run(() =>
         resourcePermissionService.addCollaborators(resourceType, resourceId, userIds, accessLevel),
       );
