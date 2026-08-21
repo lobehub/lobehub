@@ -1,0 +1,272 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  encodeAnthropicStream,
+  encodeResponsesStream,
+  normalizeAnthropicRequest,
+  normalizeResponsesRequest,
+} from './heterogeneous-direct.service';
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromServerConfig: vi.fn(),
+  resolveServerModel: vi.fn(),
+}));
+
+const protocolStream = (events: Array<{ data: unknown; type: string }>) => {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(
+          encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`),
+        );
+      }
+      controller.close();
+    },
+  });
+};
+
+const readText = async (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
+
+describe('heterogeneous direct invocation protocol', () => {
+  it('normalizes Anthropic images, tool calls, and tool results', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              { text: 'look', type: 'text' },
+              { source: { data: 'abc', media_type: 'image/png', type: 'base64' }, type: 'image' },
+            ],
+            role: 'user',
+          },
+          {
+            content: [{ id: 'call-1', input: { path: '/tmp' }, name: 'read', type: 'tool_use' }],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [
+                  { text: 'done', type: 'text' },
+                  {
+                    source: { data: 'result-image', media_type: 'image/jpeg', type: 'base64' },
+                    type: 'image',
+                  },
+                ],
+                tool_use_id: 'call-1',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        model: 'lobehub-default',
+        system: [{ text: 'system', type: 'text' }],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages[0]).toEqual({ content: 'system', role: 'system' });
+    expect(payload.messages[1].content).toEqual([
+      { text: 'look', type: 'text' },
+      { image_url: { url: 'data:image/png;base64,abc' }, type: 'image_url' },
+    ]);
+    expect(payload.messages[2].tool_calls?.[0]).toMatchObject({ id: 'call-1' });
+    expect(payload.messages[3]).toEqual({
+      content: [
+        { text: 'done', type: 'text' },
+        { image_url: { url: 'data:image/jpeg;base64,result-image' }, type: 'image_url' },
+      ],
+      role: 'tool',
+      tool_call_id: 'call-1',
+    });
+  });
+
+  it('normalizes two-round Responses reasoning and function call continuity', () => {
+    const firstReasoning = {
+      encrypted_content: 'encrypted-first',
+      id: 'reasoning-1',
+      status: 'completed',
+      summary: [{ text: 'first thought', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const secondReasoning = {
+      encrypted_content: 'encrypted-second',
+      id: 'reasoning-2',
+      status: 'completed',
+      summary: [],
+      type: 'reasoning',
+    };
+    const payload = normalizeResponsesRequest(
+      {
+        input: [
+          firstReasoning,
+          { arguments: '{"q":"x"}', call_id: 'call-1', name: 'search', type: 'function_call' },
+          { call_id: 'call-1', output: 'result', type: 'function_call_output' },
+          secondReasoning,
+          {
+            content: [{ text: 'answer', type: 'output_text' }],
+            role: 'assistant',
+            type: 'message',
+          },
+        ],
+        instructions: 'system',
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages.map(({ role }) => role)).toEqual([
+      'system',
+      'assistant',
+      'tool',
+      'assistant',
+    ]);
+    expect(payload.messages[1].reasoning?.responseItems).toEqual([firstReasoning]);
+    expect(payload.messages[2].tool_call_id).toBe('call-1');
+    expect(payload.messages[3].reasoning?.responseItems).toEqual([secondReasoning]);
+  });
+
+  it('parses the final protocol event without a trailing newline', async () => {
+    const encoder = new TextEncoder();
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: text\ndata: "tail"'));
+        controller.close();
+      },
+    });
+
+    await expect(readText(encodeAnthropicStream(source))).resolves.toContain(
+      '"text":"tail","type":"text_delta"',
+    );
+  });
+
+  it('encodes Anthropic reasoning and parallel tool argument deltas', async () => {
+    const output = await readText(
+      encodeAnthropicStream(
+        protocolStream([
+          { data: 'thinking', type: 'reasoning' },
+          {
+            data: [
+              { function: { arguments: '{', name: 'one' }, id: 'call-1', index: 0 },
+              { function: { arguments: '{', name: 'two' }, id: 'call-2', index: 1 },
+            ],
+            type: 'tool_calls',
+          },
+          { data: 'tool_calls', type: 'stop' },
+        ]),
+      ),
+    );
+
+    expect(output).toContain('"type":"thinking_delta"');
+    expect(output).toContain('"id":"call-1"');
+    expect(output).toContain('"id":"call-2"');
+    expect(output).toContain('"stop_reason":"tool_use"');
+  });
+
+  it('preserves Anthropic terminal cumulative usage', async () => {
+    const output = await readText(
+      encodeAnthropicStream(
+        protocolStream([
+          { data: { totalInputTokens: 7, totalOutputTokens: 4 }, type: 'usage' },
+          { data: 'stop', type: 'stop' },
+        ]),
+      ),
+    );
+
+    const messageDeltas = [...output.matchAll(/event: message_delta\ndata: ([^\n]+)/g)].map(
+      (match) => JSON.parse(match[1]),
+    );
+    expect(messageDeltas.at(-1).usage).toEqual({ output_tokens: 4 });
+  });
+
+  it('encodes Responses text, usage, and terminal events', async () => {
+    const output = await readText(
+      encodeResponsesStream(
+        protocolStream([
+          { data: 'hello', type: 'text' },
+          { data: { totalInputTokens: 2, totalOutputTokens: 1 }, type: 'usage' },
+          { data: 'stop', type: 'stop' },
+        ]),
+      ),
+    );
+
+    expect(output).toContain('event: response.output_text.delta');
+    expect(output).toContain('event: response.content_part.done');
+    expect(output).toContain('event: response.output_item.done');
+    expect(output).toContain('"usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}');
+    expect(output).not.toContain('totalInputTokens');
+    expect(output).toContain('event: response.completed');
+    expect(output).toContain('"output":[{"content":[{"annotations":[],"text":"hello"');
+    expect(output).toContain('data: [DONE]');
+  });
+
+  it('encodes Responses incomplete and failed terminal lifecycle events', async () => {
+    const incomplete = await readText(
+      encodeResponsesStream(
+        protocolStream([
+          { data: 'partial', type: 'text' },
+          { data: 'max_tokens', type: 'stop' },
+        ]),
+      ),
+    );
+    expect(incomplete).toContain('event: response.incomplete');
+    expect(incomplete).toContain('"status":"incomplete"');
+    expect(incomplete).toContain('"incomplete_details":{"reason":"max_output_tokens"}');
+    expect(incomplete).not.toContain('event: response.completed');
+
+    const failed = await readText(
+      encodeResponsesStream(
+        protocolStream([{ data: { message: 'provider unavailable' }, type: 'error' }]),
+      ),
+    );
+    expect(failed).toContain('event: response.failed');
+    expect(failed).toContain('"error":{"code":"server_error","message":"provider unavailable"}');
+    expect(failed).toContain('data: [DONE]');
+  });
+
+  it('assigns distinct Responses output indexes to reasoning, text, and tools', async () => {
+    const output = await readText(
+      encodeResponsesStream(
+        protocolStream([
+          { data: 'think', type: 'reasoning' },
+          { data: 'answer', type: 'text' },
+          {
+            data: [{ function: { arguments: '{}', name: 'search' }, id: 'call-1', index: 0 }],
+            type: 'tool_calls',
+          },
+          { data: 'tool_calls', type: 'stop' },
+        ]),
+      ),
+    );
+    const indexes = [
+      ...output.matchAll(/event: response\.output_item\.added\ndata: ([^\n]+)/g),
+    ].map((match) => JSON.parse(match[1]).output_index);
+
+    expect(indexes).toEqual([0, 1, 2]);
+    expect(output).toContain('event: response.reasoning_summary_text.done');
+  });
+
+  it('completes replayed encrypted reasoning response items', async () => {
+    const reasoningItem = {
+      encrypted_content: 'encrypted-history',
+      id: 'reasoning-history',
+      status: 'completed',
+      summary: [],
+      type: 'reasoning',
+    };
+    const output = await readText(
+      encodeResponsesStream(
+        protocolStream([
+          { data: reasoningItem, type: 'reasoning_response_item' },
+          { data: 'stop', type: 'stop' },
+        ]),
+      ),
+    );
+    const doneItems = [
+      ...output.matchAll(/event: response\.output_item\.done\ndata: ([^\n]+)/g),
+    ].map((match) => JSON.parse(match[1]).item);
+
+    expect(doneItems).toContainEqual(reasoningItem);
+  });
+});

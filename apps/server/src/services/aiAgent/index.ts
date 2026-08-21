@@ -129,7 +129,7 @@ import {
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
-import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
   createAgentStateManager,
   createStreamEventManager,
@@ -2323,41 +2323,28 @@ export class AiAgentService {
       // generated here (authoritative) and flows through to heteroIngest /
       // heteroFinish unchanged. Without this row the run is invisible to the
       // operation lifecycle: verify (ensureForOperation), repair (parent chain),
-      // judge (op.model/provider) and tracing all key off it. Terminal state +
-      // the trace snapshot are written back in heteroFinish. Non-fatal: a
-      // tracing/op-row insert hiccup must never fail the user's run.
-      try {
-        // Route through CompletionLifecycle — NOT the raw operation model — so the
-        // hetero run is a first-class lifecycle peer of the in-process runtime.
-        // recordStart additionally instantiates the task's verify plan when this
-        // is a top-level task op (taskId && !parentOperationId); the hetero finish
-        // side (heteroFinish → CompletionLifecycle.dispatchHooks) then runs the
-        // delivery-checker gate against that plan. Calling the bare operation model
-        // here is exactly what silently degraded verify to off for every hetero
-        // task run (the plan was never created at start).
-        await new CompletionLifecycle(this.db, this.userId, this.workspaceId).recordStart({
-          agentId: persistAgentId,
-          chatGroupId: appContext?.groupId ?? null,
-          maxSteps,
-          // Seed the heterogeneous provider (claude-code / codex / …), NOT the
-          // agent's configured chat provider — the run executes on the CLI, so
-          // `provider` (e.g. `lobehub`) and `model` (e.g. `deepseek-v4-pro`) are
-          // irrelevant. `model` is intentionally left unset: the real executed
-          // model arrives mid-stream and is backfilled by heteroFinish. Mirrors the
-          // assistant-message seeding above (provider: heteroType, model: undefined).
-          operationId,
-          // Top-level dispatch carries no parent; pass it through so the verify
-          // plan gate (taskId && !parentOperationId) reads the real lineage and a
-          // repair/verifier sub-run never re-instantiates its own plan here.
-          parentOperationId,
-          provider: heteroType,
-          taskId: operationTaskId ?? null,
-          threadId: appContext?.threadId ?? null,
-          topicId,
-          trigger,
-        });
-      } catch (err) {
-        log('execAgent: hetero recordStart failed (non-fatal): %O', err);
+      // judge (op.model/provider) and tracing all key off it. The durable row is
+      // also an authentication prerequisite: every callback
+      // re-authorizes its operation token against this exact principal. Do not
+      // mint a token or dispatch/spawn when persistence fails.
+      const operationPersisted = await new CompletionLifecycle(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).recordStart({
+        agentId: persistAgentId,
+        chatGroupId: appContext?.groupId ?? null,
+        maxSteps,
+        operationId,
+        parentOperationId,
+        provider: heteroType,
+        taskId: operationTaskId ?? null,
+        threadId: appContext?.threadId ?? null,
+        topicId,
+        trigger,
+      });
+      if (!operationPersisted) {
+        throw new Error('Failed to persist heterogeneous agent operation');
       }
 
       // Read resume session id for next-turn continuity.
@@ -2369,7 +2356,12 @@ export class AiAgentService {
       // heteroIngest / heteroFinish without full user credentials.
       let operationJwt: string;
       try {
-        operationJwt = await signOperationJwt(this.userId);
+        operationJwt = await signHeteroOperationJWT({
+          capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+          operationId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
       } catch (err) {
         log('execAgent: failed to sign operation JWT for hetero run: %O', err);
         throw new Error('Failed to sign operation JWT for hetero agent', { cause: err });

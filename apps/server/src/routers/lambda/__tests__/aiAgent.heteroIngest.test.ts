@@ -75,7 +75,7 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
     return aiAgentRouter.createCaller({
       jwtPayload: { userId: authUserId },
       oidcAuth: {
-        ...(params.authKind === 'user' ? {} : { purpose: 'hetero-operation' }),
+        ...(params.authKind === 'operation' ? { purpose: 'hetero-operation' } : {}),
         sub: authUserId,
       },
       userId: authUserId,

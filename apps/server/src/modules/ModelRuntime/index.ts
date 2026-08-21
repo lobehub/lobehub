@@ -1,4 +1,5 @@
 import { type GoogleGenAIOptions } from '@google/genai';
+import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import {
   AgentRuntimeError,
   mergeModelRuntimeHooks,
@@ -19,7 +20,7 @@ import {
   type SuperGrokKeyVault,
   type VertexAIKeyVault,
 } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
+import { merge, safeParseJSON } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
@@ -28,6 +29,7 @@ import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
+import { getServerDefaultAgentConfig, getServerGlobalConfig } from '@/server/globalConfig';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
 
@@ -515,4 +517,71 @@ export const initModelRuntimeFromDB = async (
 
   // 6. Initialize ModelRuntime with the payload and hooks
   return initModelRuntimeWithUserPayload(provider, payload, { userId }, hooks);
+};
+
+export const resolveServerDefaultModel = () => {
+  const config = merge(DEFAULT_AGENT_CONFIG, getServerDefaultAgentConfig());
+  if (!config.model || !config.provider) {
+    throw new Error('The deployment default model is not configured');
+  }
+  if (!Object.values(ModelProvider).includes(config.provider as ModelProvider)) {
+    throw new Error(
+      'Deployment-level custom providers are not supported for server-default agents',
+    );
+  }
+  return { model: config.model, provider: config.provider };
+};
+
+/** Whether the deployment exposes at least one enabled chat model. */
+export const hasAvailableServerModel = async () => {
+  const { aiProvider } = await getServerGlobalConfig();
+  return Object.values(aiProvider).some(
+    (providerConfig) =>
+      providerConfig?.enabled &&
+      providerConfig.serverModelLists?.some((model) => model.enabled && model.type === 'chat'),
+  );
+};
+
+/** Resolve a user selection against the deployment-owned, enabled chat model catalog. */
+export const resolveServerModel = async (provider: string, model: string) => {
+  if (!Object.values(ModelProvider).includes(provider as ModelProvider)) {
+    throw new Error('Deployment-level custom providers are not supported for server agents');
+  }
+  const providerConfig = (await getServerGlobalConfig()).aiProvider[provider as ModelProvider];
+  const modelConfig = providerConfig?.serverModelLists?.find(
+    (item) => item.id === model && item.enabled && item.type === 'chat',
+  );
+  if (!providerConfig?.enabled || !modelConfig) {
+    throw new Error('The selected server model is not available');
+  }
+  return { model: modelConfig.id, provider };
+};
+
+/** Initialize a deployment-owned runtime without reading user provider rows or keys. */
+export const initModelRuntimeFromServerConfig = async (params: {
+  actorUserId: string;
+  provider: string;
+  workspaceId?: string;
+}): Promise<ModelRuntime> => {
+  if (!Object.values(ModelProvider).includes(params.provider as ModelProvider)) {
+    throw new Error(
+      'Deployment-level custom providers are not supported for server-default agents',
+    );
+  }
+  const businessHooks = getBusinessModelRuntimeHooks(
+    params.actorUserId,
+    params.provider,
+    params.workspaceId,
+  );
+  const tracingHooks = createLLMGenerationTracingHook(
+    params.actorUserId,
+    params.provider,
+    params.workspaceId,
+  );
+  return initModelRuntimeWithUserPayload(
+    params.provider,
+    { userId: params.actorUserId },
+    { userId: params.actorUserId },
+    mergeModelRuntimeHooks(businessHooks, tracingHooks),
+  );
 };

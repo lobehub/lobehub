@@ -26,7 +26,19 @@ import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildPayloadFromKeyVaults, initModelRuntimeWithUserPayload } from './index';
+import {
+  buildPayloadFromKeyVaults,
+  hasAvailableServerModel,
+  initModelRuntimeWithUserPayload,
+  resolveServerModel,
+} from './index';
+
+const getServerGlobalConfig = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/globalConfig', () => ({
+  getServerDefaultAgentConfig: () => ({}),
+  getServerGlobalConfig,
+}));
 
 interface InspectableBedrockRuntime {
   client: {
@@ -66,6 +78,63 @@ vi.mock('@/envs/llm', () => ({
     STEPFUN_API_KEY: 'test-stepfun-key',
   })),
 }));
+
+describe('resolveServerModel', () => {
+  it('accepts only an enabled deployment-owned chat model', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        openai: {
+          enabled: true,
+          serverModelLists: [
+            { enabled: true, id: 'gpt-server', type: 'chat' },
+            { enabled: false, id: 'gpt-disabled', type: 'chat' },
+          ],
+        },
+      },
+    });
+
+    await expect(resolveServerModel('openai', 'gpt-server')).resolves.toEqual({
+      model: 'gpt-server',
+      provider: 'openai',
+    });
+    await expect(resolveServerModel('openai', 'gpt-disabled')).rejects.toThrow(
+      'selected server model is not available',
+    );
+  });
+});
+
+describe('hasAvailableServerModel', () => {
+  it('requires an enabled provider with an enabled chat model', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        anthropic: {
+          enabled: false,
+          serverModelLists: [{ enabled: true, id: 'claude-server', type: 'chat' }],
+        },
+        openai: {
+          enabled: true,
+          serverModelLists: [
+            { enabled: true, id: 'image-server', type: 'image' },
+            { enabled: false, id: 'gpt-disabled', type: 'chat' },
+          ],
+        },
+      },
+    });
+
+    await expect(hasAvailableServerModel()).resolves.toBe(false);
+
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        openai: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'gpt-server', type: 'chat' }],
+        },
+      },
+    });
+
+    await expect(hasAvailableServerModel()).resolves.toBe(true);
+  });
+});
 
 /**
  * Test cases for function initModelRuntimeWithUserPayload

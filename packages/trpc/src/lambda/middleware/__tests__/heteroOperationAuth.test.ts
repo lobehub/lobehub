@@ -17,12 +17,49 @@ const createCaller = createCallerFactory(testRouter);
 describe('heteroOperationAuth middleware', () => {
   it('accepts a hetero-operation token as kind "operation"', async () => {
     const caller = createCaller({
-      oidcAuth: { purpose: 'hetero-operation', sub: 'user-abc' },
+      oidcAuth: {
+        aud: 'urn:lobehub:hetero-operation',
+        capabilities: ['hetero:ingest'],
+        exp: 2,
+        iat: 1,
+        iss: 'urn:lobehub:internal',
+        jti: 'jti-1',
+        operation_id: 'op-1',
+        purpose: 'hetero-operation',
+        sub: 'user-abc',
+      },
     } as any);
 
     const result = await caller.ping();
 
     expect(result).toEqual({ kind: 'operation', userId: 'user-abc' });
+  });
+
+  it('accepts a pre-deploy operation token through the legacy ownership path', async () => {
+    const caller = createCaller({
+      oidcAuth: {
+        purpose: 'hetero-operation',
+        sub: 'user-abc',
+        workspace_id: 'workspace-123',
+      },
+    } as any);
+
+    await expect(caller.ping()).resolves.toEqual({
+      kind: 'legacy-operation',
+      userId: 'user-abc',
+    });
+  });
+
+  it('does not downgrade a partially populated strict token to legacy auth', async () => {
+    const caller = createCaller({
+      oidcAuth: {
+        operation_id: 'op-1',
+        purpose: 'hetero-operation',
+        sub: 'user-abc',
+      },
+    } as any);
+
+    await expect(caller.ping()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
   it('accepts a normal user OIDC token (no purpose) as kind "user"', async () => {
