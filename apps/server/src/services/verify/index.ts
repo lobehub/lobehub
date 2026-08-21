@@ -1,4 +1,10 @@
 export {
+  type AcceptanceMergeSummary,
+  collectCheckIds,
+  mergeAcceptanceRounds,
+  planCheckIdRemap,
+} from './acceptanceMerge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,

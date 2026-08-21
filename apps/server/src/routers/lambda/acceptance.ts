@@ -490,6 +490,33 @@ export const acceptanceRouter = router({
   list: acceptanceProcedure.query(async ({ ctx }) => ctx.acceptanceService.listWithSubjects()),
 
   /**
+   * Fold one acceptance into another: the source's verification rounds (and
+   * with them its checks, verdicts and evidence) re-chain onto the target, and
+   * the source entry is deleted.
+   *
+   * Both sides are creator-scoped like every other verify write — a merge
+   * rewrites BOTH aggregates, so a workspace member must not be able to fold
+   * another member's acceptance into (or out of) their own.
+   */
+  merge: acceptanceWriteProcedure
+    .input(z.object({ sourceId: z.string(), targetId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const source = await resolveAcceptance(ctx, input.sourceId);
+      assertWorkspaceRowManageable(ctx, source.userId, 'acceptance');
+      const target = await resolveAcceptance(ctx, input.targetId);
+      assertWorkspaceRowManageable(ctx, target.userId, 'acceptance');
+
+      try {
+        return await ctx.acceptanceService.merge(source.id, target.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error instanceof Error ? error.message : 'Failed to merge acceptance',
+        });
+      }
+    }),
+
+  /**
    * Acceptance status for a known set of subjects, in one read.
    *
    * `list` is recency-capped and spans every subject type, so a list surface

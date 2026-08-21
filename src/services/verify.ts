@@ -273,6 +273,14 @@ export class VerifyService {
   updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });
 
+  /**
+   * Fold one acceptance into another — the source's checks (and the rounds /
+   * evidence behind them) move onto the target, and the source entry is
+   * removed. Returns what the merge actually moved.
+   */
+  mergeAcceptance = (sourceId: string, targetId: string) =>
+    lambdaClient.acceptance.merge.mutate({ sourceId, targetId });
+
   /** Delete the acceptance aggregate (its round reports detach, not delete). */
   deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
 
