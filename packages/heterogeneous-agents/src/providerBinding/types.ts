@@ -1,4 +1,8 @@
-import type { AiProviderRuntimeConfig, HeterogeneousApiConfig } from '@lobechat/types';
+import type {
+  AiProviderRuntimeConfig,
+  HeterogeneousApiConfig,
+  HeterogeneousServerConfig,
+} from '@lobechat/types';
 
 import type { LocalHeterogeneousAgentType } from '../config';
 
@@ -21,11 +25,19 @@ export interface HeterogeneousProviderBindingRuntime {
   runtimeConfig?: AiProviderRuntimeConfig;
 }
 
-export interface HeterogeneousProviderBindingReference {
-  apiConfig: HeterogeneousApiConfig;
-  /** Binding key stored with the native session that the renderer wants to resume. */
-  resumeBindingKey?: string;
-}
+export type HeterogeneousProviderBindingReference =
+  | {
+      apiConfig: HeterogeneousApiConfig;
+      kind: 'provider';
+      /** Binding key stored with the native session that the renderer wants to resume. */
+      resumeBindingKey?: string;
+    }
+  | {
+      kind: 'server-default';
+      /** Binding key stored with the native session that the renderer wants to resume. */
+      resumeBindingKey?: string;
+      serverConfig: HeterogeneousServerConfig;
+    };
 
 export interface HeterogeneousProviderBindingResolution {
   agentType: LocalHeterogeneousAgentType;

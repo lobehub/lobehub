@@ -1681,7 +1681,10 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.startSession({
           agentType: 'codex',
           command: 'codex',
-          providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+          providerBinding: {
+            apiConfig: { model: 'gpt-test', providerId: 'openai' },
+            kind: 'provider',
+          },
         }),
       ).rejects.toThrow('Model "openai/gpt-test" is disabled or unavailable.');
     });
@@ -1696,7 +1699,10 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
       });
       const runsDir = path.join(appStoragePath, 'heteroAgent', 'runs');
       expect(await readdir(runsDir)).toEqual([sessionId]);
@@ -1710,7 +1716,10 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('forces provider-bound Codex through exec without persisting or logging its secret', async () => {
       const { cliArgs, options, sessionId } = await runSendPrompt('provider-bound prompt', {
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
         useCodexAppServer: true,
       });
 
@@ -1748,7 +1757,10 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
       });
 
       await expect(
@@ -1767,12 +1779,18 @@ describe('HeterogeneousAgentCtr', () => {
       const first = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
       });
       const legacy = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
         resumeSessionId: 'thread-without-binding-key',
       });
       const rejected = await ctr.startSession({
@@ -1780,6 +1798,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         providerBinding: {
           apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
           resumeBindingKey: 'provider-binding:v1:different',
         },
         resumeSessionId: 'thread-rejected',
@@ -1789,6 +1808,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         providerBinding: {
           apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
           resumeBindingKey: first.providerBindingKey,
         },
         resumeSessionId: 'thread-accepted',

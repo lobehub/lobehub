@@ -5,7 +5,11 @@ import {
   isHeterogeneousProviderBindingSupported,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
-import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
+import type {
+  HeterogeneousApiConfig,
+  HeterogeneousAuthMode,
+  HeterogeneousServerConfig,
+} from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Tabs } from '@lobehub/ui/base-ui';
@@ -88,11 +92,17 @@ const ProfileEditor = memo(() => {
     });
   };
 
-  const updateHeterogeneousAuthMode = async (authMode: HeterogeneousAuthMode) => {
+  const updateHeterogeneousAuthMode = async (
+    authMode: HeterogeneousAuthMode,
+    selection?: {
+      apiConfig?: HeterogeneousApiConfig;
+      serverConfig?: HeterogeneousServerConfig;
+    },
+  ) => {
     if (!canEdit || !heterogeneousProvider) return;
     await updateAgentConfigById(agentId, {
       agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, authMode },
+        heterogeneousProvider: { ...heterogeneousProvider, ...selection, authMode },
       },
     });
   };
@@ -102,6 +112,17 @@ const ProfileEditor = memo(() => {
     await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
+      },
+    });
+  };
+
+  const updateHeterogeneousServerConfig = async (
+    serverConfig: HeterogeneousServerConfig | undefined,
+  ) => {
+    if (!canEdit || !heterogeneousProvider) return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, serverConfig },
       },
     });
   };
@@ -127,6 +148,33 @@ const ProfileEditor = memo(() => {
       isHetero: true,
       workspaceScoped,
     }) === 'local';
+  const useFetchServerDefaultCapability = useAgentStore(
+    (s) => s.useFetchServerDefaultHeterogeneousCapability,
+  );
+  const serverModeAgentType =
+    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+      ? heterogeneousProvider.type
+      : undefined;
+  const serverCapabilityEnabled = apiModeAvailable && !!serverModeAgentType;
+  const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
+  const serverModeAvailable =
+    serverCapabilityEnabled &&
+    serverModeAgentType !== undefined &&
+    serverCapability.data?.enabled === true &&
+    serverCapability.data.agents.includes(serverModeAgentType);
+  const serverModeUnavailableReason = !apiModeAvailable
+    ? t('heterogeneousStatus.apiMode.localOnly')
+    : serverCapability.error
+      ? t('heterogeneousStatus.serverMode.loadFailed')
+      : serverCapability.data?.enabled === false
+        ? t(
+            serverCapability.data.reason === 'disabled'
+              ? 'heterogeneousStatus.serverMode.disabled'
+              : 'heterogeneousStatus.serverMode.invalidConfiguration',
+          )
+        : serverCapabilityEnabled && !serverCapability.isLoading && !serverModeAvailable
+          ? t('heterogeneousStatus.serverMode.unsupported')
+          : undefined;
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
@@ -152,9 +200,16 @@ const ProfileEditor = memo(() => {
               apiModeAvailable={apiModeAvailable}
               apiModeLabEnabled={apiModeLabEnabled}
               provider={heterogeneousProvider}
+              serverModeAvailable={serverModeAvailable}
+              serverModeLoading={serverCapabilityEnabled && serverCapability.isLoading}
+              serverModeUnavailableReason={serverModeUnavailableReason}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
+              onServerConfigChange={updateHeterogeneousServerConfig}
+              onServerModeRetry={() => {
+                void serverCapability.mutate();
+              }}
             />
           ),
         },

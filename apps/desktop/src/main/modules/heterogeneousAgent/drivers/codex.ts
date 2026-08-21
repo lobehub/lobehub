@@ -11,6 +11,7 @@ const hasAnyFlag = (args: string[], flags: readonly string[]) =>
 
 const HOST_PROVIDER_ID = 'lobehub';
 const HOST_API_KEY_ENV = 'LOBEHUB_CODEX_API_KEY';
+const SERVER_TOKEN_ENV = 'LOBEHUB_HETERO_TOKEN';
 
 const isConflictingConfigOverride = (value: string): boolean => {
   const key = value.split('=', 1)[0]?.trim();
@@ -49,6 +50,7 @@ const sanitizeCodexProviderBindingEnv = (source: Record<string, string> | undefi
   delete env.CODEX_HOME;
   delete env.OPENAI_API_KEY;
   delete env[HOST_API_KEY_ENV];
+  delete env[SERVER_TOKEN_ENV];
   return env;
 };
 
@@ -117,6 +119,26 @@ export const codexDriver: HeterogeneousAgentDriver = {
         CODEX_HOME: profileDir,
         [HOST_API_KEY_ENV]: apiKey,
       },
+      profileFiles: [{ content: config, path: 'config.toml' }],
+    };
+  },
+  prepareServerDefaultBinding({ args, endpoint, env, profileDir }) {
+    const config = [
+      `model = ${tomlString('lobehub-default')}`,
+      `model_provider = ${tomlString(HOST_PROVIDER_ID)}`,
+      '',
+      `[model_providers.${HOST_PROVIDER_ID}]`,
+      `name = ${tomlString('LobeHub Server Default')}`,
+      `base_url = ${tomlString(`${endpoint}/api/v1/openai/v1`)}`,
+      `env_key = ${tomlString(SERVER_TOKEN_ENV)}`,
+      'wire_api = "responses"',
+      'requires_openai_auth = false',
+      'supports_websockets = false',
+      '',
+    ].join('\n');
+    return {
+      args: [...sanitizeCodexProviderBindingArgs(args), '--model', 'lobehub-default'],
+      env: { ...sanitizeCodexProviderBindingEnv(env), CODEX_HOME: profileDir },
       profileFiles: [{ content: config, path: 'config.toml' }],
     };
   },

@@ -490,7 +490,11 @@ export const executeHeterogeneousAgent = async (
     model?: string;
     usage: unknown;
   }) => {
-    if (adapterType !== 'claude-code' || heterogeneousProvider.authMode === 'api') return;
+    if (
+      adapterType !== 'claude-code' ||
+      (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription'
+    )
+      return;
     const u = intent.usage as ModelUsage;
     agentQuotaService
       .recordUsage({
@@ -1816,8 +1820,10 @@ export const executeHeterogeneousAgent = async (
 
   await rehydrateClientSubagentRuns();
 
-  const providerBindingActive = heterogeneousProvider.authMode === 'api';
-  if (providerBindingActive) {
+  const apiBindingActive = heterogeneousProvider.authMode === 'api';
+  const serverBindingActive = heterogeneousProvider.authMode === 'server';
+  const providerBindingActive = apiBindingActive || serverBindingActive;
+  if (apiBindingActive) {
     if (!labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())) {
       await persistTerminalError(
         toHeterogeneousAgentMessageError(
@@ -1868,12 +1874,31 @@ export const executeHeterogeneousAgent = async (
     };
 
     const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
-    const providerBinding = providerBindingActive
+    const providerBinding = apiBindingActive
       ? {
+          kind: 'provider' as const,
           apiConfig: heterogeneousProvider.apiConfig!,
           resumeBindingKey,
         }
-      : undefined;
+      : serverBindingActive
+        ? heterogeneousProvider.serverConfig
+          ? {
+              kind: 'server-default' as const,
+              resumeBindingKey,
+              serverConfig: heterogeneousProvider.serverConfig,
+            }
+          : undefined
+        : undefined;
+
+    if (serverBindingActive && !providerBinding) {
+      await persistTerminalError(
+        toHeterogeneousAgentMessageError(
+          new Error(t('heteroAgent.serverMode.configMissing', { ns: 'chat' })),
+          adapterType,
+        ),
+      );
+      return;
+    }
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({

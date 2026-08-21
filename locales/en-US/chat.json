@@ -745,6 +745,7 @@
   "heteroAgent.resumeReset.cursorAcpIncompatible": "The previous Cursor session could not be restored through ACP, so a new conversation has started with fresh context.",
   "heteroAgent.resumeReset.cwdChanged": "Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.",
   "heteroAgent.resumeReset.resumeFailed": "The saved Codex thread could not be resumed safely, so a new conversation has started for this topic.",
+  "heteroAgent.serverMode.configMissing": "LobeHub Server requires a model. Open the agent profile to select one.",
   "heteroAgent.switchCwd.cancel": "Cancel",
   "heteroAgent.switchCwd.content": "Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.",
   "heteroAgent.switchCwd.ok": "Switch and start new session",

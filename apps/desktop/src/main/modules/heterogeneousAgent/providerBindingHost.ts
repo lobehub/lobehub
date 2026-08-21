@@ -71,7 +71,7 @@ export const prepareHostedProviderBinding = async (params: {
   args: string[];
   driver: HeterogeneousAgentDriver;
   env?: Record<string, string>;
-  reference: HeterogeneousProviderBindingReference;
+  reference: Extract<HeterogeneousProviderBindingReference, { kind: 'provider' }>;
   resolution: HeterogeneousProviderBindingResolution;
   sessionId: string;
 }): Promise<HostedProviderBinding> => {
@@ -121,6 +121,54 @@ export const prepareHostedProviderBinding = async (params: {
     return {
       args: plan.args,
       bindingKey,
+      cleanup: () => rm(runDir, { force: true, recursive: true }),
+      cleanupSync: () => rmSync(runDir, { force: true, recursive: true }),
+      env: plan.env,
+      profileDir,
+      runDir,
+    };
+  } catch (error) {
+    await rm(runDir, { force: true, recursive: true });
+    throw error;
+  }
+};
+
+export const prepareHostedServerDefaultBinding = async (params: {
+  agentType: string;
+  appStoragePath: string;
+  args: string[];
+  driver: HeterogeneousAgentDriver;
+  endpoint: string;
+  env?: Record<string, string>;
+  sessionId: string;
+}): Promise<HostedProviderBinding> => {
+  if (!params.driver.prepareServerDefaultBinding) {
+    throw new Error(`${params.agentType} does not implement server-default binding.`);
+  }
+  const digest = hash(['server-default:v1', params.agentType, params.endpoint].join('\0'));
+  const profileDir = path.join(
+    params.appStoragePath,
+    HETERO_AGENT_BINDINGS_DIR,
+    params.agentType,
+    digest,
+  );
+  const runDir = path.join(params.appStoragePath, HETERO_AGENT_RUNS_DIR, params.sessionId);
+  await mkdir(profileDir, { mode: DIRECTORY_MODE, recursive: true });
+  await mkdir(runDir, { mode: DIRECTORY_MODE, recursive: true });
+  await chmod(profileDir, DIRECTORY_MODE);
+  await chmod(runDir, DIRECTORY_MODE);
+  try {
+    const plan = await params.driver.prepareServerDefaultBinding({
+      args: params.args,
+      endpoint: params.endpoint,
+      env: params.env,
+      profileDir,
+    });
+    await writeManagedFiles(profileDir, runDir, plan.profileFiles);
+    await writeManagedFiles(runDir, runDir, plan.runFiles);
+    return {
+      args: plan.args,
+      bindingKey: `server-default:v1:${digest}`,
       cleanup: () => rm(runDir, { force: true, recursive: true }),
       cleanupSync: () => rmSync(runDir, { force: true, recursive: true }),
       env: plan.env,

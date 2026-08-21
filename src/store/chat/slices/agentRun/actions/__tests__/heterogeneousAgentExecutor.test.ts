@@ -730,6 +730,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           }),
           providerBinding: {
             apiConfig: { model: 'api-primary', providerId: 'anthropic-direct' },
+            kind: 'provider',
             resumeBindingKey: undefined,
           },
         }),

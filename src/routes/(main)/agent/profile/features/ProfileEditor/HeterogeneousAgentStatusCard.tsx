@@ -11,9 +11,10 @@ import type {
   HeterogeneousApiConfig,
   HeterogeneousAuthMode,
   HeterogeneousProviderConfig,
+  HeterogeneousServerConfig,
 } from '@lobechat/types';
 import { ActionIcon, CopyButton, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Button, Segmented, Select, type SelectProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,6 +26,7 @@ import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { binaryService } from '@/services/electron/binary';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 const COMMAND_LINE_HEIGHT = 28;
 
@@ -220,9 +222,22 @@ interface HeterogeneousAgentStatusCardProps {
   apiModeAvailable?: boolean;
   apiModeLabEnabled?: boolean;
   onApiConfigChange?: (apiConfig: HeterogeneousApiConfig | undefined) => Promise<void> | void;
-  onAuthModeChange?: (authMode: HeterogeneousAuthMode) => Promise<void> | void;
+  onAuthModeChange?: (
+    authMode: HeterogeneousAuthMode,
+    selection?: {
+      apiConfig?: HeterogeneousApiConfig;
+      serverConfig?: HeterogeneousServerConfig;
+    },
+  ) => Promise<void> | void;
   onCommandChange?: (command: string) => Promise<void> | void;
+  onServerConfigChange?: (
+    serverConfig: HeterogeneousServerConfig | undefined,
+  ) => Promise<void> | void;
+  onServerModeRetry?: () => void;
   provider: HeterogeneousProviderConfig;
+  serverModeAvailable?: boolean;
+  serverModeLoading?: boolean;
+  serverModeUnavailableReason?: string;
 }
 
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
@@ -230,9 +245,14 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     apiModeAvailable = false,
     apiModeLabEnabled = false,
     provider,
+    serverModeAvailable = false,
+    serverModeLoading = false,
+    serverModeUnavailableReason,
     onApiConfigChange,
     onAuthModeChange,
     onCommandChange,
+    onServerConfigChange,
+    onServerModeRetry,
   }) => {
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
@@ -249,6 +269,35 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const [savingCommand, setSavingCommand] = useState(false);
     const commandInputRef = useRef<HTMLInputElement | null>(null);
     const authMode = provider.authMode ?? 'subscription';
+    const serverProviders = useServerConfigStore((state) => state.serverConfig.aiProvider);
+    const serverModelOptions = useMemo<SelectProps['options']>(
+      () =>
+        Object.entries(serverProviders)
+          .filter(([, config]) => config.enabled)
+          .map(([providerId, config]) => ({
+            label: providerId,
+            options: (config.serverModelLists ?? [])
+              .filter((model) => model.enabled && model.type === 'chat')
+              .map((model) => ({
+                label: model.displayName || model.id,
+                value: `${providerId}/${model.id}`,
+              })),
+          }))
+          .filter((group) => group.options.length > 0),
+      [serverProviders],
+    );
+    const firstServerModel = useMemo<HeterogeneousServerConfig | undefined>(() => {
+      const firstGroup = serverModelOptions?.[0];
+      const firstOption =
+        firstGroup && 'options' in firstGroup ? firstGroup.options?.[0] : undefined;
+      if (!firstOption || typeof firstOption.value !== 'string') return;
+      const separator = firstOption.value.indexOf('/');
+      if (separator < 1) return;
+      return {
+        model: firstOption.value.slice(separator + 1),
+        providerId: firstOption.value.slice(0, separator),
+      };
+    }, [serverModelOptions]);
     const providerBindingSupported = isHeterogeneousProviderBindingSupported(provider.type);
     const { modelsByProvider, providers: compatibleProviders } =
       useProviderBindingCompatibleProviders(provider.type);
@@ -278,15 +327,18 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       async (nextAuthMode: HeterogeneousAuthMode) => {
         if (!canEdit || nextAuthMode === authMode) return;
         if (nextAuthMode === 'api' && (!apiModeLabEnabled || !apiModeAvailable)) return;
-
-        await onAuthModeChange?.(nextAuthMode);
-        if (nextAuthMode !== 'api' || provider.apiConfig) return;
+        if (nextAuthMode === 'server' && (!serverModeAvailable || !firstServerModel)) return;
 
         const firstProvider = compatibleProviders[0];
-        const firstModel = firstProvider && modelsByProvider[firstProvider.id]?.[0];
-        if (firstProvider && firstModel) {
-          await onApiConfigChange?.({ model: firstModel.id, providerId: firstProvider.id });
-        }
+        const firstApiModel = firstProvider && modelsByProvider[firstProvider.id]?.[0];
+        await onAuthModeChange?.(nextAuthMode, {
+          ...(nextAuthMode === 'api' && !provider.apiConfig && firstProvider && firstApiModel
+            ? { apiConfig: { model: firstApiModel.id, providerId: firstProvider.id } }
+            : {}),
+          ...(nextAuthMode === 'server' && !provider.serverConfig && firstServerModel
+            ? { serverConfig: firstServerModel }
+            : {}),
+        });
       },
       [
         apiModeAvailable,
@@ -295,10 +347,25 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         canEdit,
         compatibleProviders,
         modelsByProvider,
-        onApiConfigChange,
         onAuthModeChange,
         provider.apiConfig,
+        provider.serverConfig,
+        firstServerModel,
+        serverModeAvailable,
       ],
+    );
+
+    const handleServerModelChange = useCallback(
+      async (value: string) => {
+        if (!canEdit) return;
+        const separator = value.indexOf('/');
+        if (separator < 1) return;
+        await onServerConfigChange?.({
+          model: value.slice(separator + 1),
+          providerId: value.slice(0, separator),
+        });
+      },
+      [canEdit, onServerConfigChange],
     );
 
     const handlePrimaryModelChange = useCallback(
@@ -350,7 +417,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     }, [detect]);
 
     useEffect(() => {
-      if (provider.type !== 'claude-code' || authMode === 'api' || !status?.available) {
+      if (provider.type !== 'claude-code' || authMode !== 'subscription' || !status?.available) {
         setAuth(null);
         return;
       }
@@ -553,11 +620,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
     const renderAuthMode = () => {
       if (!providerBindingSupported || detecting || !status?.available) return null;
-      // Keep leftover API-mode agents visible so they can switch back; hide the
-      // experiment entirely for subscription agents until Labs is enabled.
-      if (!apiModeLabEnabled && authMode !== 'api') return null;
-
       const apiOptionEnabled = apiModeLabEnabled && apiModeAvailable;
+      const serverOptionEnabled = serverModeAvailable && Boolean(firstServerModel);
 
       return (
         <div className={styles.detailRow}>
@@ -576,6 +640,11 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                   disabled: !apiOptionEnabled,
                   label: t('heterogeneousStatus.auth.api'),
                   value: 'api',
+                },
+                {
+                  disabled: !serverOptionEnabled,
+                  label: t('heterogeneousStatus.auth.server'),
+                  value: 'server',
                 },
               ]}
               onChange={(value) => {
@@ -600,7 +669,51 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 {t('heterogeneousStatus.apiMode.localOnly')}
               </Text>
             ) : null}
+            {serverModeLoading ? (
+              <Text className={styles.unavailableText}>
+                {t('heterogeneousStatus.serverMode.checking')}
+              </Text>
+            ) : !serverModeAvailable && serverModeUnavailableReason ? (
+              <>
+                <Text className={styles.unavailableText}>{serverModeUnavailableReason}</Text>
+                {onServerModeRetry && (
+                  <Button size="small" type="text" onClick={onServerModeRetry}>
+                    {t('heterogeneousStatus.serverMode.retry')}
+                  </Button>
+                )}
+              </>
+            ) : null}
           </Flexbox>
+        </div>
+      );
+    };
+
+    const renderServerConfig = () => {
+      if (authMode !== 'server' || detecting || !status?.available) return null;
+      if (!firstServerModel) {
+        return (
+          <div className={styles.detailRow}>
+            <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
+            <Text className={styles.unavailableText}>
+              {t('heterogeneousStatus.serverMode.noModels')}
+            </Text>
+          </div>
+        );
+      }
+
+      const selected = provider.serverConfig ?? firstServerModel;
+      return (
+        <div className={styles.detailRow}>
+          <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
+          <Select
+            disabled={!canEdit}
+            options={serverModelOptions}
+            popupMatchSelectWidth={false}
+            value={`${selected.providerId}/${selected.model}`}
+            onChange={(value) => {
+              if (typeof value === 'string') void handleServerModelChange(value);
+            }}
+          />
         </div>
       );
     };
@@ -760,6 +873,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
           {renderCommandEditor()}
           {renderAuthMode()}
           {renderSubscriptionAccount()}
+          {renderServerConfig()}
           {renderApiConfig()}
         </div>
         {showCliInstallGuide && (

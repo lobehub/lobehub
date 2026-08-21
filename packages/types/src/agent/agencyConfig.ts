@@ -76,7 +76,7 @@ export type HeterogeneousAgentModelCatalog =
   HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
 
 /** Authentication source used by a heterogeneous agent CLI. */
-export type HeterogeneousAuthMode = 'api' | 'subscription';
+export type HeterogeneousAuthMode = 'api' | 'server' | 'subscription';
 
 /**
  * Reference-only API binding for a heterogeneous agent.
@@ -89,6 +89,14 @@ export interface HeterogeneousApiConfig {
   providerId: string;
   /** Optional model used for fast/background work. Defaults to the primary model. */
   smallFastModel?: string | null;
+}
+
+/** Deployment-owned model selected for server-proxied heterogeneous execution. */
+export interface HeterogeneousServerConfig {
+  /** Model id from the deployment's enabled model catalog. */
+  model: string;
+  /** Deployment-owned provider; its credentials never leave the server. */
+  providerId: string;
 }
 
 /**
@@ -145,6 +153,8 @@ export interface HeterogeneousProviderConfig {
    * - hermes: reserved for future use
    */
   platformAgentId?: string;
+  /** Deployment-owned model used when `authMode` is `server`. */
+  serverConfig?: HeterogeneousServerConfig;
   /**
    * Speed mode (Codex only), surfaced through the chat-input model selector
    * and translated into the `service_tier` CLI config at spawn time. Omitted

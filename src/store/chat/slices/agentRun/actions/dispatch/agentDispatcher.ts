@@ -106,7 +106,10 @@ export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
-  if (ctx.heterogeneousProvider?.authMode === 'api') {
+  if (
+    ctx.heterogeneousProvider?.authMode === 'api' ||
+    ctx.heterogeneousProvider?.authMode === 'server'
+  ) {
     const target = resolveExecutionTarget(
       {
         boundDeviceId: ctx.boundDeviceId,

@@ -417,7 +417,18 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
   'heterogeneousStatus.auth.api': 'API',
   'heterogeneousStatus.auth.label': 'Auth Method',
+  'heterogeneousStatus.auth.server': 'LobeHub Server',
+  'heterogeneousStatus.serverMode.noModels':
+    'No deployment-provided chat models are currently available.',
   'heterogeneousStatus.auth.subscription': 'Subscription',
+  'heterogeneousStatus.serverMode.checking': 'Checking server availability...',
+  'heterogeneousStatus.serverMode.disabled':
+    'The deployment administrator has disabled server-default execution.',
+  'heterogeneousStatus.serverMode.invalidConfiguration':
+    'The deployment default model or its credentials are not configured.',
+  'heterogeneousStatus.serverMode.loadFailed': 'Could not check server availability.',
+  'heterogeneousStatus.serverMode.retry': 'Retry',
+  'heterogeneousStatus.serverMode.unsupported': 'This CLI cannot use the deployment default model.',
   'heterogeneousStatus.command.edit': 'Edit command',
   'heterogeneousStatus.command.label': 'Launch Command',
   'heterogeneousStatus.command.placeholder': 'Command name or absolute path',
