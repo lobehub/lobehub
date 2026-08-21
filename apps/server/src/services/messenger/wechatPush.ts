@@ -360,6 +360,32 @@ export const sendProactiveWechatMessage = async (params: {
     redis,
   });
 
+  // The drain does not always empty the queue: it stops once the backlog would
+  // eat into the credits reserved for the live reply, and it requeues any leg
+  // that failed mid-delivery. Either way older messages are still owed, so
+  // sending this one now would let a fresh (often smaller) push jump ahead of
+  // them — exactly the FIFO break the drain above exists to prevent. Queue it
+  // behind them instead.
+  const backlog = await redis.llen(
+    wechatPendingPushKey(target.applicationId, target.platformUserId),
+  );
+  if (backlog > 0) {
+    await enqueuePendingPush(redis, target.applicationId, target.platformUserId, payload);
+    log(
+      'sendProactiveWechatMessage: %d queued message(s) still owed for %s — queued behind them',
+      backlog,
+      target.platformUserId,
+    );
+    // Distinguish "the drain ran out of credits" from "a replay failed", so the
+    // toast matches what the user sees in the window state.
+    const afterDrain = await peekWindow(redis, target.applicationId, target.platformUserId);
+    if (!afterDrain) return { reason: 'window_closed', status: 'queued' };
+    return {
+      reason: afterDrain.remaining <= RESERVED_REPLY_CREDITS ? 'quota_exhausted' : 'send_failed',
+      status: 'queued',
+    };
+  }
+
   const prepared = await prepareWechatDelivery(payload);
   const credit = await consumeSendCredits(
     redis,

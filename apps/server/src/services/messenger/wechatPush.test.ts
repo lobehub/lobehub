@@ -276,6 +276,29 @@ describe('sendProactiveWechatMessage', () => {
     expect(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER)) ?? []).toHaveLength(0);
   });
 
+  it('queues a fresh push behind a backlog the drain could not finish', async () => {
+    // Regression (P2): the drain stops once the backlog would eat into the
+    // credits reserved for the live reply. The fresh push used to sail past the
+    // still-queued older message, breaking the FIFO the drain exists to keep.
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
+    await consumeSendCredits(redis, APP, WECHAT_USER, WECHAT_WINDOW_MAX_SENDS - 2);
+    await enqueuePendingPush(redis, APP, WECHAT_USER, { content: 'queued first', enqueuedAt: 1 });
+
+    const result = await sendProactiveWechatMessage({
+      content: 'fresh push',
+      serverDB,
+      userId: LOBE_USER,
+    });
+
+    expect(result).toEqual({ reason: 'quota_exhausted', status: 'queued' });
+    // The fresh message never jumped the queue.
+    expect(mockSendMessage).not.toHaveBeenCalledWith(WECHAT_USER, 'fresh push', 'token-1');
+    const queued = redis.lists
+      .get(wechatPendingPushKey(APP, WECHAT_USER))!
+      .map((raw) => JSON.parse(raw).content);
+    expect(queued).toEqual(['queued first', 'fresh push']);
+  });
+
   it('delivers the displayed final send before queueing the next message', async () => {
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
     await consumeSendCredits(redis, APP, WECHAT_USER, WECHAT_WINDOW_MAX_SENDS - 1);

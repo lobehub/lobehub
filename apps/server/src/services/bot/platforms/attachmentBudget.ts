@@ -2,6 +2,7 @@ import type { MessengerAttachmentBudget } from '@lobechat/const';
 import { MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
 import debug from 'debug';
 
+import { loadAttachmentBuffer } from './loadAttachmentBuffer';
 import type { BotMessageAttachment } from './types';
 
 const log = debug('bot-platform:attachment-budget');
@@ -92,33 +93,15 @@ const toJpegFilename = (name: string | undefined): string | undefined => {
   return `${trimmed.replace(/\.[^./\\]*$/, '')}.jpg`;
 };
 
-/** Refuse to buffer arbitrarily large remote files into memory for compression. */
+/**
+ * Refuse to buffer arbitrarily large remote files into memory for compression.
+ * Enforced as the response streams in, so an image with an absent or lying
+ * `content-length` cannot be fully allocated before it is rejected.
+ */
 const MAX_COMPRESSION_SOURCE_BYTES = 100 * MB;
 
-const loadSourceBuffer = async (attachment: BotMessageAttachment): Promise<Buffer | undefined> => {
-  if (attachment.data) {
-    try {
-      return Buffer.from(attachment.data, 'base64');
-    } catch (error) {
-      log('loadSourceBuffer: failed to decode base64: %O', error);
-    }
-  }
-  if (attachment.fetchUrl) {
-    try {
-      const response = await fetch(attachment.fetchUrl, { signal: AbortSignal.timeout(15_000) });
-      if (response.ok) {
-        const buffer = Buffer.from(await response.arrayBuffer());
-        if (buffer.length <= MAX_COMPRESSION_SOURCE_BYTES) return buffer;
-        log('loadSourceBuffer: %d bytes exceeds compression source cap', buffer.length);
-      } else {
-        log('loadSourceBuffer: HTTP %d for %s', response.status, attachment.fetchUrl);
-      }
-    } catch (error) {
-      log('loadSourceBuffer: fetch failed for %s: %O', attachment.fetchUrl, error);
-    }
-  }
-  return undefined;
-};
+const loadSourceBuffer = async (attachment: BotMessageAttachment): Promise<Buffer | undefined> =>
+  loadAttachmentBuffer(attachment, { limit: MAX_COMPRESSION_SOURCE_BYTES });
 
 /**
  * Ladder of (max dimension, JPEG quality) attempts, largest/best first. The

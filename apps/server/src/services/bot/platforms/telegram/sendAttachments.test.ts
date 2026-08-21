@@ -144,6 +144,100 @@ describe('sendTelegramAttachments', () => {
     });
   });
 
+  it('refuses an oversize download on content-length before reading the body', async () => {
+    const api = makeApi();
+    const bodyRead = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      body: {
+        getReader: () => {
+          bodyRead();
+          throw new Error('body must not be read');
+        },
+      },
+      headers: new Headers({ 'content-length': String(80 * 1024 * 1024) }),
+      ok: true,
+      status: 200,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const n = await sendTelegramAttachments(api as any, 'chat-1', [
+        { fetchUrl: 'https://app.example.com/f/huge', name: 'huge.bin', type: 'file' },
+      ]);
+
+      expect(n).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(bodyRead).not.toHaveBeenCalled();
+    expect(api.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it('aborts a size-less download once it streams past the cap', async () => {
+    // Regression (P1): the cap used to be checked AFTER `arrayBuffer()`, so a
+    // response with no `content-length` was fully allocated before rejection.
+    const api = makeApi();
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    // 8 x 8MB = 64MB, past the 50MB cap — the reader must be cancelled partway.
+    let served = 0;
+    const fetchMock = vi.fn().mockResolvedValue({
+      body: {
+        getReader: () => ({
+          cancel,
+          read: async () => {
+            served += 1;
+            if (served > 8) return { done: true, value: undefined };
+            return { done: false, value: new Uint8Array(8 * 1024 * 1024) };
+          },
+        }),
+      },
+      headers: new Headers(),
+      ok: true,
+      status: 200,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const n = await sendTelegramAttachments(api as any, 'chat-1', [
+        { fetchUrl: 'https://app.example.com/f/sizeless', name: 'big.bin', type: 'file' },
+      ]);
+
+      expect(n).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(cancel).toHaveBeenCalled();
+    // Stopped at the first chunk that crossed 50MB, not after draining all 64MB.
+    expect(served).toBe(7);
+    expect(api.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it('skips inline base64 that exceeds the upload cap without downloading it', async () => {
+    const api = makeApi();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const n = await sendTelegramAttachments(api as any, 'chat-1', [
+        {
+          data: Buffer.alloc(51 * 1024 * 1024).toString('base64'),
+          fetchUrl: 'https://app.example.com/f/huge',
+          name: 'huge.bin',
+          type: 'file',
+        },
+      ]);
+
+      expect(n).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // The inline copy IS the attachment — re-fetching it would be just as big.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('skips a document whose download fails without aborting the batch', async () => {
     const api = makeApi();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));

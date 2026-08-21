@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { loadAttachmentBuffer, MAX_IN_MEMORY_ATTACHMENT_BYTES } from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 import type { TelegramApi } from './api';
 
@@ -19,7 +20,7 @@ type TelegramMediaSource =
  * has already degraded anything over the platform budget to a download link,
  * so this only guards attachments whose size was unknown up front.
  */
-const MAX_UPLOAD_SOURCE_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_SOURCE_BYTES = MAX_IN_MEMORY_ATTACHMENT_BYTES;
 
 /** Download timeout for materializing an attachment (up to ~50MB). */
 const DOWNLOAD_TIMEOUT_MS = 30_000;
@@ -37,46 +38,22 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
   return `attachment-${index + 1}`;
 };
 
-const decodeDataSource = (
-  att: BotMessageAttachment,
-  index: number,
-): TelegramMediaSource | undefined => {
-  if (!att.data) return undefined;
-  try {
-    return {
-      buffer: Buffer.from(att.data, 'base64'),
-      filename: fallbackFilename(att, index),
-      mimeType: att.mimeType,
-    };
-  } catch (error) {
-    log('decodeDataSource: failed to decode base64 for "%s": %O', att.name, error);
-    return undefined;
-  }
-};
-
-const downloadSource = async (
+/**
+ * Materialize the attachment's bytes for a multipart upload. The cap is
+ * enforced while the body streams in, so an attachment whose size was unknown
+ * or under-reported cannot exhaust the worker before being rejected.
+ */
+const uploadSource = async (
   att: BotMessageAttachment,
   index: number,
 ): Promise<TelegramMediaSource | undefined> => {
-  if (!att.fetchUrl) return undefined;
-  try {
-    const response = await fetch(att.fetchUrl, {
-      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      log('downloadSource: HTTP %d for %s', response.status, att.fetchUrl);
-      return undefined;
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length > MAX_UPLOAD_SOURCE_BYTES) {
-      log('downloadSource: %d bytes exceeds the 50MB Bot API upload cap', buffer.length);
-      return undefined;
-    }
-    return { buffer, filename: fallbackFilename(att, index), mimeType: att.mimeType };
-  } catch (error) {
-    log('downloadSource: fetch failed for %s: %O', att.fetchUrl, error);
-    return undefined;
-  }
+  const buffer = await loadAttachmentBuffer(att, {
+    limit: MAX_UPLOAD_SOURCE_BYTES,
+    timeoutMs: DOWNLOAD_TIMEOUT_MS,
+  });
+  if (!buffer) return undefined;
+
+  return { buffer, filename: fallbackFilename(att, index), mimeType: att.mimeType };
 };
 
 /**
@@ -101,13 +78,9 @@ const resolveTelegramSource = async (
   att: BotMessageAttachment,
   index: number,
 ): Promise<TelegramMediaSource | undefined> => {
-  if (att.type === 'file' || att.type === 'video') {
-    return decodeDataSource(att, index) ?? (await downloadSource(att, index));
-  }
-  if (att.fetchUrl) {
-    return { url: att.fetchUrl };
-  }
-  return decodeDataSource(att, index);
+  if (att.type === 'file' || att.type === 'video') return uploadSource(att, index);
+  if (att.fetchUrl) return { url: att.fetchUrl };
+  return uploadSource(att, index);
 };
 
 const dispatch = async (
