@@ -743,14 +743,26 @@ export const invokeServerDefaultModel = async (params: {
   userId: string;
   workspaceId?: string;
 }) => {
-  const { model, provider } = await resolveServerModel(params.provider, params.model);
+  const resolvedModel = await resolveServerModel(params.provider, params.model);
+  const { deploymentName, provider } = resolvedModel;
+  // Mirrors the field-vs-model split in src/services/chat/index.ts. The server's Azure
+  // runtime consumes deploymentName in both API modes, so its logical model ID stays intact.
+  const shouldUseDeploymentField = provider === 'azure' || provider === 'spark';
+  const model = deploymentName && !shouldUseDeploymentField ? deploymentName : resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
     provider,
     workspaceId: params.workspaceId,
   });
   const response = await runtime.chat(
-    { ...params.payload, model, stream: true },
+    {
+      ...params.payload,
+      ...(shouldUseDeploymentField &&
+        deploymentName &&
+        deploymentName !== model && { deploymentName }),
+      model,
+      stream: true,
+    },
     { metadata: { trigger: RequestTrigger.Api }, signal: params.signal, user: params.userId },
   );
   if (!response.body) throw new Error('Model runtime returned an empty stream');

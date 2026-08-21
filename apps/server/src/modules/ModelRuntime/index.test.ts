@@ -101,6 +101,30 @@ describe('resolveServerModel', () => {
       'selected server model is not available',
     );
   });
+
+  it('preserves a deployment-owned model mapping', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        azure: {
+          enabled: true,
+          serverModelLists: [
+            {
+              config: { deploymentName: 'prod-gpt' },
+              enabled: true,
+              id: 'gpt-4o',
+              type: 'chat',
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(resolveServerModel('azure', 'gpt-4o')).resolves.toEqual({
+      deploymentName: 'prod-gpt',
+      model: 'gpt-4o',
+      provider: 'azure',
+    });
+  });
 });
 
 describe('hasAvailableServerModel', () => {

@@ -554,7 +554,13 @@ export const resolveServerModel = async (provider: string, model: string) => {
   if (!providerConfig?.enabled || !modelConfig) {
     throw new Error('The selected server model is not available');
   }
-  return { model: modelConfig.id, provider };
+  return {
+    ...(modelConfig.config?.deploymentName && {
+      deploymentName: modelConfig.config.deploymentName,
+    }),
+    model: modelConfig.id,
+    provider,
+  };
 };
 
 /** Initialize a deployment-owned runtime without reading user provider rows or keys. */

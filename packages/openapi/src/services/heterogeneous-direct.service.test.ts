@@ -1,8 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  initModelRuntimeFromServerConfig,
+  resolveServerModel,
+} from '@/server/modules/ModelRuntime';
 
 import {
   encodeAnthropicStream,
   encodeResponsesStream,
+  invokeServerDefaultModel,
   normalizeAnthropicRequest,
   normalizeResponsesRequest,
 } from './heterogeneous-direct.service';
@@ -40,6 +46,66 @@ const parseSseEvents = (output: string) =>
     });
 
 describe('heterogeneous direct invocation protocol', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('passes Azure deployment names without replacing the logical model', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerModel).mockResolvedValue({
+      deploymentName: 'prod-gpt',
+      model: 'gpt-4o',
+      provider: 'azure',
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    const result = await invokeServerDefaultModel({
+      model: 'gpt-4o',
+      payload: { messages: [], model: 'lobehub-default', stream: true },
+      provider: 'azure',
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(result.model).toBe('gpt-4o');
+    expect(chat).toHaveBeenCalledWith(
+      {
+        deploymentName: 'prod-gpt',
+        messages: [],
+        model: 'gpt-4o',
+        stream: true,
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('uses deployment names as model IDs for runtimes without a dedicated field', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerModel).mockResolvedValue({
+      deploymentName: 'prod-gpt',
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    const result = await invokeServerDefaultModel({
+      model: 'gpt-4o',
+      payload: { messages: [], model: 'lobehub-default', stream: true },
+      provider: 'openai',
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    const runtimePayload = chat.mock.calls[0][0];
+    expect(result.model).toBe('prod-gpt');
+    expect(runtimePayload).toMatchObject({ messages: [], model: 'prod-gpt', stream: true });
+    expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
   it('normalizes Anthropic images, tool calls, and tool results', () => {
     const payload = normalizeAnthropicRequest(
       {
