@@ -31,8 +31,8 @@ const configQueueByAgent = new Map<string, ConfigQueueState>();
 export const useAgentShare = (agentId: string | undefined, enabled: boolean) => {
   const [createError, setCreateError] = useState<unknown>();
   const [isCreating, setIsCreating] = useState(false);
-  const activeAgentRef = useRef<string>();
-  const creatingAgentRef = useRef<string>();
+  const activeAgentRef = useRef<string | undefined>(undefined);
+  const creatingAgentRef = useRef<string | undefined>(undefined);
   activeAgentRef.current = enabled ? agentId : undefined;
   const {
     data: shareInfo,
