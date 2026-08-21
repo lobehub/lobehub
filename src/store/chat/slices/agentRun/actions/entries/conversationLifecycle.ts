@@ -1089,21 +1089,31 @@ export class ConversationLifecycleActionImpl {
       deviceId: runCwdDeviceId,
     });
     // The topic keeps the dead worktree on its row until something rewrites it,
-    // and the SERVER re-resolves from that row on every later turn (task
-    // callbacks, cron runs, a resumed operation) — so the correction has to be
-    // persisted, not just applied to this run.
+    // and the SERVER re-resolves the cwd from that row — for an existing topic
+    // the corrected config does NOT ride along with the request (only a NEW
+    // topic's metadata does), so the row is the only channel this run has.
+    // Hence AWAIT, not fire-and-forget: dispatching first would race the write
+    // and let this very turn resolve the dead path again.
     if (
       existingTopic &&
       topicWorkingDirectoryConfig !== existingTopic.metadata?.workingDirectoryConfig
     ) {
-      void this.#get()
-        .updateTopicMetadata(existingTopic.id, {
-          workingDirectory: getWorkingDirEffectivePath(topicWorkingDirectoryConfig),
-          workingDirectoryConfig: topicWorkingDirectoryConfig,
-        })
-        .catch(() => {
-          // Metadata bookkeeping must never fail a run that is otherwise fine.
-        });
+      const repairedMetadata = {
+        workingDirectory: getWorkingDirEffectivePath(topicWorkingDirectoryConfig),
+        workingDirectoryConfig: topicWorkingDirectoryConfig,
+      };
+      try {
+        // `updateTopicMetadata` returns early for a topic the paginated store
+        // doesn't hold — exactly the deep-linked case `resolveExistingTopicForRun`
+        // fetched from the server — so persist directly for those instead of
+        // silently writing nothing.
+        await (topicSelectors.getTopicById(existingTopic.id)(this.#get())
+          ? this.#get().updateTopicMetadata(existingTopic.id, repairedMetadata)
+          : topicService.updateTopicMetadata(existingTopic.id, repairedMetadata));
+      } catch {
+        // Metadata bookkeeping must never fail a run that is otherwise fine —
+        // the shell still reports the missing directory by name.
+      }
     }
     // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
     // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the

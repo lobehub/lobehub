@@ -10,6 +10,7 @@ import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { deviceService } from '@/services/device';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import * as agentGroupStore from '@/store/agentGroup';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -1934,6 +1935,174 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           resolveGateway();
           await sendPromise;
+        });
+      });
+
+      // The corrected config does NOT ride along with an existing topic's request
+      // — only a NEW topic's metadata does — so the server re-resolves the cwd
+      // from the topic row. Dispatching before the repair lands lets this very
+      // turn resolve the dead path again.
+      it('should persist the repaired topic cwd before dispatching the run', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        const sourcePath = '/repo/lobehub';
+        const missingWorktree = '/repo/lobehub-wt-deleted';
+        clearWorktreeProbeCache();
+        vi.spyOn(deviceService, 'statPath').mockImplementation(
+          async (_deviceId: string, path: string) =>
+            ({ exists: path !== missingWorktree, isDirectory: path !== missingWorktree }) as any,
+        );
+        // The write is gated so the assertion is about COMPLETION, not call
+        // order: a fire-and-forget repair also "calls" the service first, and
+        // then dispatches while it is still in flight.
+        let commitRepair!: () => void;
+        const repairWrite = new Promise<void>((resolve) => {
+          commitRepair = () => resolve();
+        });
+        const updateTopicMetadataSpy = vi
+          .spyOn(topicService, 'updateTopicMetadata')
+          .mockReturnValue(repairWrite as any);
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: { boundDeviceId: deviceId, executionTarget: 'local' },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const topicKey = topicMapKey({ agentId });
+        const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          operationId: 'gateway-op-repair',
+          topicId: TEST_IDS.TOPIC_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                isExpandingPageSize: false,
+                isLoadingMore: false,
+                items: [
+                  {
+                    id: TEST_IDS.TOPIC_ID,
+                    metadata: {
+                      workingDirectory: missingWorktree,
+                      workingDirectoryConfig: {
+                        git: { activeWorktree: missingWorktree },
+                        path: sourcePath,
+                        repoType: 'github',
+                      },
+                    },
+                    title: 'existing',
+                  },
+                ] as any,
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+
+        let sendPromise!: ReturnType<typeof result.current.sendMessage>;
+        act(() => {
+          sendPromise = result.current.sendMessage({
+            context: { agentId, threadId: null, topicId: TEST_IDS.TOPIC_ID },
+            message: 'Where do I run?',
+          });
+        });
+
+        await waitFor(() => expect(updateTopicMetadataSpy).toHaveBeenCalled());
+        expect(updateTopicMetadataSpy).toHaveBeenCalledWith(TEST_IDS.TOPIC_ID, {
+          workingDirectory: sourcePath,
+          workingDirectoryConfig: {
+            git: { isWorktree: false },
+            path: sourcePath,
+            repoType: 'github',
+          },
+        });
+        // Still in flight — the run must not have been dispatched yet.
+        expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+
+        await act(async () => {
+          commitRepair();
+          await sendPromise;
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+      });
+
+      // The topic list store is paginated, so a deep-linked older topic is
+      // resolved from the server and never enters it — and `updateTopicMetadata`
+      // returns early for a topic it doesn't hold, writing nothing at all.
+      it('should persist the repair for a topic the paginated store never loaded', async () => {
+        mockConstEnv.isDesktop = true;
+        const deviceId = 'device-1';
+        const sourcePath = '/repo/lobehub';
+        const missingWorktree = '/repo/lobehub-wt-deleted';
+        clearWorktreeProbeCache();
+        vi.spyOn(deviceService, 'statPath').mockImplementation(
+          async (_deviceId: string, path: string) =>
+            ({ exists: path !== missingWorktree, isDirectory: path !== missingWorktree }) as any,
+        );
+        const updateTopicMetadataSpy = vi
+          .spyOn(topicService, 'updateTopicMetadata')
+          .mockResolvedValue(undefined as any);
+        vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+          id: TEST_IDS.TOPIC_ID,
+          metadata: {
+            workingDirectory: missingWorktree,
+            workingDirectoryConfig: {
+              git: { activeWorktree: missingWorktree },
+              path: sourcePath,
+              repoType: 'github',
+            },
+          },
+        } as any);
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: deviceId,
+              executionTarget: 'local',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: TEST_IDS.TOPIC_ID },
+            message: 'Where do I run?',
+          });
+        });
+
+        expect(updateTopicMetadataSpy).toHaveBeenCalledWith(TEST_IDS.TOPIC_ID, {
+          workingDirectory: sourcePath,
+          workingDirectoryConfig: {
+            git: { isWorktree: false },
+            path: sourcePath,
+            repoType: 'github',
+          },
         });
       });
 

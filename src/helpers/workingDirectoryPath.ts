@@ -71,13 +71,21 @@ export const applyWorktreeExitToConfig = (
   currentConfig: WorkingDirConfig | undefined,
   source: string,
 ): WorkingDirConfig => {
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    isWorktree: false,
-  };
+  const currentGit = currentConfig?.git;
+  const git: NonNullable<WorkingDirConfig['git']> = { ...currentGit, isWorktree: false };
+
+  // `isWorktree` is only stamped by the newer snapshot writer, so a topic
+  // recorded before it carries `{ activeWorktree, branch, github }` and nothing
+  // else. Keying the cleanup off that flag alone left those configs pointing at
+  // the source repo while still advertising the abandoned worktree's branch and
+  // PR — the same pre-flag shape `staleSnapshot` already reads by comparing
+  // paths. Leaving the override is what makes it a worktree, flag or not.
+  const wasWorktree =
+    !!currentGit?.isWorktree ||
+    (!!currentGit?.activeWorktree && currentGit.activeWorktree !== source);
 
   delete git.activeWorktree;
-  if (currentConfig?.git?.isWorktree) {
+  if (wasWorktree) {
     delete git.branch;
     delete git.github;
     delete git.upstream;
