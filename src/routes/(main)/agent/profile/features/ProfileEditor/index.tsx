@@ -151,17 +151,19 @@ const ProfileEditor = memo(() => {
   const useFetchServerDefaultCapability = useAgentStore(
     (s) => s.useFetchServerDefaultHeterogeneousCapability,
   );
+  // V1 wires only these two native protocol paths. Future client drivers may widen this gate,
+  // while model/runtime compatibility must continue to come from the server capability below.
   const serverModeAgentType =
     heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
       ? heterogeneousProvider.type
       : undefined;
   const serverCapabilityEnabled = apiModeAvailable && !!serverModeAgentType;
   const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
-  const serverModeAvailable =
-    serverCapabilityEnabled &&
-    serverModeAgentType !== undefined &&
-    serverCapability.data?.enabled === true &&
-    serverCapability.data.agents.includes(serverModeAgentType);
+  const serverModels =
+    serverCapability.data?.enabled === true && serverModeAgentType
+      ? serverCapability.data.models[serverModeAgentType]
+      : [];
+  const serverModeAvailable = serverCapabilityEnabled && serverModels.length > 0;
   const serverModeUnavailableReason = !apiModeAvailable
     ? t('heterogeneousStatus.apiMode.localOnly')
     : serverCapability.error
@@ -203,6 +205,7 @@ const ProfileEditor = memo(() => {
               serverModeAvailable={serverModeAvailable}
               serverModeLoading={serverCapabilityEnabled && serverCapability.isLoading}
               serverModeUnavailableReason={serverModeUnavailableReason}
+              serverModels={serverModels}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}

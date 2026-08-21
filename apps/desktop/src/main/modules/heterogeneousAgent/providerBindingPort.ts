@@ -43,6 +43,7 @@ const getAuthenticatedServer = async (auth: RemoteServerAuth) => {
 export const beginServerDefaultOperation = async (
   auth: RemoteServerAuth,
   input: {
+    agentType: 'claude-code' | 'codex';
     agentId?: string;
     model: string;
     operationId: string;

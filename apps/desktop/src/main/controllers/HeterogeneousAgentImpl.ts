@@ -1280,8 +1280,12 @@ export default class HeterogeneousAgentCtr {
     if (!session?.serverDefaultBinding) return this.sendPromptImpl(params);
     if (!params.topicId) throw new Error('Server-default execution requires a topic');
     if (!session.serverDefaultModel) throw new Error('Server-default execution requires a model');
+    if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
+      throw new Error(`Server-default execution does not support ${session.agentType}`);
+    }
 
     const operation = await beginServerDefaultOperation(this.remoteServerAuth, {
+      agentType: session.agentType,
       agentId: params.agentId,
       model: session.serverDefaultModel.model,
       operationId: params.operationId,

@@ -14,7 +14,7 @@ import type {
   HeterogeneousServerConfig,
 } from '@lobechat/types';
 import { ActionIcon, CopyButton, Flexbox, Icon, Input, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Button, Segmented, Select, type SelectProps } from '@lobehub/ui/base-ui';
+import { Button, Segmented, Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,7 +26,6 @@ import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { binaryService } from '@/services/electron/binary';
-import { useServerConfigStore } from '@/store/serverConfig';
 
 const COMMAND_LINE_HEIGHT = 28;
 
@@ -237,6 +236,7 @@ interface HeterogeneousAgentStatusCardProps {
   provider: HeterogeneousProviderConfig;
   serverModeAvailable?: boolean;
   serverModeLoading?: boolean;
+  serverModels?: HeterogeneousServerConfig[];
   serverModeUnavailableReason?: string;
 }
 
@@ -245,6 +245,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     apiModeAvailable = false,
     apiModeLabEnabled = false,
     provider,
+    serverModels = [],
     serverModeAvailable = false,
     serverModeLoading = false,
     serverModeUnavailableReason,
@@ -269,35 +270,20 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const [savingCommand, setSavingCommand] = useState(false);
     const commandInputRef = useRef<HTMLInputElement | null>(null);
     const authMode = provider.authMode ?? 'subscription';
-    const serverProviders = useServerConfigStore((state) => state.serverConfig.aiProvider);
-    const serverModelOptions = useMemo<SelectProps['options']>(
+    const serverModelOptions = useMemo(
       () =>
-        Object.entries(serverProviders)
-          .filter(([, config]) => config.enabled)
-          .map(([providerId, config]) => ({
-            label: providerId,
-            options: (config.serverModelLists ?? [])
-              .filter((model) => model.enabled && model.type === 'chat')
-              .map((model) => ({
-                label: model.displayName || model.id,
-                value: `${providerId}/${model.id}`,
-              })),
-          }))
-          .filter((group) => group.options.length > 0),
-      [serverProviders],
+        serverModels.map(({ model, providerId }) => ({
+          label: model,
+          value: `${providerId}/${model}`,
+        })),
+      [serverModels],
     );
-    const firstServerModel = useMemo<HeterogeneousServerConfig | undefined>(() => {
-      const firstGroup = serverModelOptions?.[0];
-      const firstOption =
-        firstGroup && 'options' in firstGroup ? firstGroup.options?.[0] : undefined;
-      if (!firstOption || typeof firstOption.value !== 'string') return;
-      const separator = firstOption.value.indexOf('/');
-      if (separator < 1) return;
-      return {
-        model: firstOption.value.slice(separator + 1),
-        providerId: firstOption.value.slice(0, separator),
-      };
-    }, [serverModelOptions]);
+    const firstServerModel = serverModels[0];
+    const selectedServerModel =
+      serverModels.find(
+        ({ model, providerId }) =>
+          model === provider.serverConfig?.model && providerId === provider.serverConfig.providerId,
+      ) ?? firstServerModel;
     const providerBindingSupported = isHeterogeneousProviderBindingSupported(provider.type);
     const { modelsByProvider, providers: compatibleProviders } =
       useProviderBindingCompatibleProviders(provider.type);
@@ -305,6 +291,18 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       () => compatibleProviders.map(({ id }) => id),
       [compatibleProviders],
     );
+
+    useEffect(() => {
+      if (
+        authMode !== 'server' ||
+        !selectedServerModel ||
+        (selectedServerModel.model === provider.serverConfig?.model &&
+          selectedServerModel.providerId === provider.serverConfig.providerId)
+      )
+        return;
+
+      void onServerConfigChange?.(selectedServerModel);
+    }, [authMode, onServerConfigChange, provider.serverConfig, selectedServerModel]);
 
     const displayName = providerConfig?.title || provider.type;
     const AgentIcon = providerConfig?.icon;
@@ -331,13 +329,18 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
         const firstProvider = compatibleProviders[0];
         const firstApiModel = firstProvider && modelsByProvider[firstProvider.id]?.[0];
+        const nextServerConfig =
+          nextAuthMode === 'server' &&
+          selectedServerModel &&
+          (selectedServerModel.model !== provider.serverConfig?.model ||
+            selectedServerModel.providerId !== provider.serverConfig.providerId)
+            ? selectedServerModel
+            : undefined;
         await onAuthModeChange?.(nextAuthMode, {
           ...(nextAuthMode === 'api' && !provider.apiConfig && firstProvider && firstApiModel
             ? { apiConfig: { model: firstApiModel.id, providerId: firstProvider.id } }
             : {}),
-          ...(nextAuthMode === 'server' && !provider.serverConfig && firstServerModel
-            ? { serverConfig: firstServerModel }
-            : {}),
+          ...(nextServerConfig ? { serverConfig: nextServerConfig } : {}),
         });
       },
       [
@@ -351,6 +354,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         provider.apiConfig,
         provider.serverConfig,
         firstServerModel,
+        selectedServerModel,
         serverModeAvailable,
       ],
     );
@@ -701,7 +705,6 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         );
       }
 
-      const selected = provider.serverConfig ?? firstServerModel;
       return (
         <div className={styles.detailRow}>
           <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
@@ -709,7 +712,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             disabled={!canEdit}
             options={serverModelOptions}
             popupMatchSelectWidth={false}
-            value={`${selected.providerId}/${selected.model}`}
+            value={`${selectedServerModel.providerId}/${selectedServerModel.model}`}
             onChange={(value) => {
               if (typeof value === 'string') void handleServerModelChange(value);
             }}

@@ -1,4 +1,4 @@
-import type { HeterogeneousProviderConfig } from '@lobechat/types';
+import type { HeterogeneousProviderConfig, HeterogeneousServerConfig } from '@lobechat/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
@@ -133,16 +133,28 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     value,
   }: {
     onChange?: (value: string) => void;
-    options?: Array<{ options?: Array<{ label: ReactNode; value: string }> }>;
+    options?: Array<{
+      label?: ReactNode;
+      options?: Array<{ label: ReactNode; value: string }>;
+      value?: string;
+    }>;
     value?: string;
   }) => (
     <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {options?.flatMap((group) =>
-        (group.options ?? []).map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        )),
+      {options?.flatMap((option) =>
+        option.options
+          ? option.options.map((child) => (
+              <option key={child.value} value={child.value}>
+                {child.label}
+              </option>
+            ))
+          : option.value
+            ? [
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>,
+              ]
+            : [],
       )}
     </select>
   ),
@@ -226,23 +238,14 @@ vi.mock('@/services/electron/binary', () => ({
   },
 }));
 
-vi.mock('@/store/serverConfig', () => ({
-  useServerConfigStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      serverConfig: {
-        aiProvider: {
-          lobehub: {
-            enabled: true,
-            serverModelLists: [
-              { displayName: 'Claude Server', enabled: true, id: 'claude-server', type: 'chat' },
-              { displayName: 'GPT Server', enabled: true, id: 'gpt-server', type: 'chat' },
-              { displayName: 'Disabled', enabled: false, id: 'disabled', type: 'chat' },
-            ],
-          },
-        },
-      },
-    }),
-}));
+const claudeServerModels = [
+  { model: 'claude-server', providerId: 'anthropic' },
+  { model: 'claude-fast', providerId: 'anthropic' },
+] satisfies HeterogeneousServerConfig[];
+
+const codexServerModels = [
+  { model: 'gpt-server', providerId: 'openai' },
+] satisfies HeterogeneousServerConfig[];
 
 describe('HeterogeneousAgentStatusCard', () => {
   it('shows the embedded Codex install guide when the CLI is unavailable', async () => {
@@ -511,6 +514,7 @@ describe('HeterogeneousAgentStatusCard', () => {
           apiModeAvailable
           serverModeAvailable
           provider={provider}
+          serverModels={claudeServerModels}
           onAuthModeChange={onAuthModeChange}
         />
       </MemoryRouter>,
@@ -524,7 +528,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByRole('button', { name: 'LobeHub Server' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'LobeHub Server' }));
     expect(onAuthModeChange).toHaveBeenCalledWith('server', {
-      serverConfig: { model: 'claude-server', providerId: 'lobehub' },
+      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
     });
 
     rerender(
@@ -551,6 +555,7 @@ describe('HeterogeneousAgentStatusCard', () => {
         <HeterogeneousAgentStatusCard
           serverModeAvailable
           provider={provider}
+          serverModels={claudeServerModels}
           onAuthModeChange={onAuthModeChange}
         />
       </MemoryRouter>,
@@ -562,7 +567,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     fireEvent.click(serverOption);
     expect(onAuthModeChange).toHaveBeenCalledWith('server', {
-      serverConfig: { model: 'claude-server', providerId: 'lobehub' },
+      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
     });
   });
 
@@ -595,7 +600,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     const provider = {
       authMode: 'server',
       command: 'claude',
-      serverConfig: { model: 'claude-server', providerId: 'lobehub' },
+      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
       type: 'claude-code',
     } satisfies HeterogeneousProviderConfig;
 
@@ -604,17 +609,49 @@ describe('HeterogeneousAgentStatusCard', () => {
         <HeterogeneousAgentStatusCard
           serverModeAvailable
           provider={provider}
+          serverModels={claudeServerModels}
           onServerConfigChange={onServerConfigChange}
         />
       </MemoryRouter>,
     );
 
-    const select = await screen.findByDisplayValue('Claude Server');
-    expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
-    fireEvent.change(select, { target: { value: 'lobehub/gpt-server' } });
+    const select = await screen.findByDisplayValue('claude-server');
+    expect(screen.queryByText('gpt-server')).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'anthropic/claude-fast' } });
     expect(onServerConfigChange).toHaveBeenCalledWith({
-      model: 'gpt-server',
-      providerId: 'lobehub',
+      model: 'claude-fast',
+      providerId: 'anthropic',
+    });
+  });
+
+  it('falls back when the saved server model is not in the agent capability', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    const onServerConfigChange = vi.fn();
+    const provider = {
+      authMode: 'server',
+      command: 'codex',
+      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
+      type: 'codex',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard
+          serverModeAvailable
+          provider={provider}
+          serverModels={codexServerModels}
+          onServerConfigChange={onServerConfigChange}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByDisplayValue('gpt-server')).toBeInTheDocument();
+    expect(screen.queryByText('claude-server')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(onServerConfigChange).toHaveBeenCalledWith({
+        model: 'gpt-server',
+        providerId: 'openai',
+      });
     });
   });
 
