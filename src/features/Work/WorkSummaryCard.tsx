@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+    border-radius: 8px;
 
     background: ${cssVar.colorBgElevated};
   `,
