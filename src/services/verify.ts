@@ -373,6 +373,14 @@ export class VerifyService {
   }): Promise<VerifyCriterionDraft[]> =>
     lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
 
+  /** Draft the standing acceptance criteria used by the create-goal review step. */
+  generateGoalCriteria = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<VerifyCriterionDraft[]> =>
+    lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
   /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
   createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>
     lambdaClient.verify.createCriteria.mutate({ drafts }) as Promise<string[]>;
