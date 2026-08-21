@@ -73,6 +73,7 @@
   "messenger.push.loadFailed": "Não foi possível carregar o status da mensagem proativa.",
   "messenger.push.placeholder": "Escreva uma mensagem para enviar ao {{platform}}…",
   "messenger.push.queued": "{{count}} mensagem(ns) na fila será(ão) entregue(s) após você enviar uma mensagem ao bot no {{platform}}.",
+  "messenger.push.queuedBusyToast": "Outra mensagem ainda está sendo entregue — a sua está na fila atrás dela. Envie uma mensagem ao bot no {{platform}} para recebê-la.",
   "messenger.push.queuedQuotaToast": "Sem envios restantes nesta janela — sua mensagem está na fila. Envie uma mensagem para o bot no {{platform}} para redefinir a janela e recebê-la.",
   "messenger.push.queuedRetryToast": "Parte da sua mensagem não pôde ser entregue — o restante está na fila e será reenviado após você enviar uma mensagem para o bot no {{platform}}.",
   "messenger.push.queuedToast": "A janela de envio está fechada — sua mensagem está na fila. Envie uma mensagem ao bot no {{platform}} para recebê-la.",

@@ -229,6 +229,24 @@ export const enqueuePendingPush = async (
   return Math.min(length, PENDING_QUEUE_MAX);
 };
 
+export interface DrainPendingResult {
+  /**
+   * `false` when another drain already held the lock. Its current item is
+   * LPOP'd — out of the list but not yet delivered — so the queue can look
+   * empty from outside while an older message is still in flight. Callers that
+   * order their own work against the backlog must treat this as "unknown", not
+   * as "empty".
+   */
+  drained: boolean;
+  /**
+   * Items still queued when the lock was released. Measured INSIDE the lock,
+   * so it never observes the transient gap described above. Only meaningful
+   * when `drained` is true.
+   */
+  remaining: number;
+  sent: number;
+}
+
 /**
  * Replay queued pushes in FIFO order under a short NX lock (concurrent inbound
  * messages must not double-send). The handler returns `sent` to continue or
@@ -239,10 +257,10 @@ export const drainPendingPushes = async (
   applicationId: string,
   userId: string,
   send: (payload: WechatPendingPush) => Promise<'sent' | 'stop' | { requeue: WechatPendingPush }>,
-): Promise<number> => {
+): Promise<DrainPendingResult> => {
   const lockKey = flushLockKey(applicationId, userId);
   const locked = await redis.set(lockKey, '1', 'EX', FLUSH_LOCK_TTL_SECONDS, 'NX');
-  if (locked !== 'OK') return 0;
+  if (locked !== 'OK') return { drained: false, remaining: 0, sent: 0 };
 
   let sent = 0;
   try {
@@ -272,8 +290,11 @@ export const drainPendingPushes = async (
       }
       sent++;
     }
+    // Read under the lock: outside it, an item popped for delivery is missing
+    // from the list and the queue would read as empty mid-flight. The `finally`
+    // still releases the lock on the way out of this return.
+    return { drained: true, remaining: await redis.llen(pendingKey), sent };
   } finally {
     await redis.del(lockKey);
   }
-  return sent;
 };

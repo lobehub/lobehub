@@ -202,7 +202,7 @@ describe('pending push queue', () => {
     await enqueuePendingPush(redis, APP, USER, payload('second'));
 
     const drained: string[] = [];
-    const sent = await drainPendingPushes(redis, APP, USER, async (p) => {
+    const { sent } = await drainPendingPushes(redis, APP, USER, async (p) => {
       drained.push(p.content!);
       return 'sent';
     });
@@ -218,7 +218,7 @@ describe('pending push queue', () => {
     await enqueuePendingPush(redis, APP, USER, payload('second'));
 
     let calls = 0;
-    const sent = await drainPendingPushes(redis, APP, USER, async () => {
+    const { sent } = await drainPendingPushes(redis, APP, USER, async () => {
       calls++;
       return calls === 1 ? 'sent' : 'stop';
     });
@@ -234,10 +234,33 @@ describe('pending push queue', () => {
     await enqueuePendingPush(redis, APP, USER, payload('first'));
     await redis.set(`wechat:pending-flush:${APP}:${USER}`, '1', 'EX', 30);
 
-    const sent = await drainPendingPushes(redis, APP, USER, async () => 'sent');
+    const { sent } = await drainPendingPushes(redis, APP, USER, async () => 'sent');
 
     expect(sent).toBe(0);
     expect(redis.lists.get(wechatPendingPushKey(APP, USER))).toHaveLength(1);
+  });
+
+  it('reports the lock it could not take, so callers do not read an empty queue as drained', async () => {
+    // Regression: the in-flight drain has already LPOP'd its current item, so
+    // the list reads empty from outside while an older message is still being
+    // delivered. `drained: false` is what stops a caller trusting that.
+    const redis = new FakeRedis();
+    await enqueuePendingPush(redis, APP, USER, payload('first'));
+    await redis.set(`wechat:pending-flush:${APP}:${USER}`, '1', 'EX', 30);
+
+    const result = await drainPendingPushes(redis, APP, USER, async () => 'sent');
+
+    expect(result).toEqual({ drained: false, remaining: 0, sent: 0 });
+  });
+
+  it('reports what is still queued when the drain stops early', async () => {
+    const redis = new FakeRedis();
+    await enqueuePendingPush(redis, APP, USER, payload('first'));
+    await enqueuePendingPush(redis, APP, USER, payload('second'));
+
+    const result = await drainPendingPushes(redis, APP, USER, async () => 'stop');
+
+    expect(result).toEqual({ drained: true, remaining: 2, sent: 0 });
   });
 
   it('drops malformed payloads instead of blocking the queue', async () => {
@@ -246,7 +269,7 @@ describe('pending push queue', () => {
     await enqueuePendingPush(redis, APP, USER, payload('valid'));
 
     const drained: string[] = [];
-    const sent = await drainPendingPushes(redis, APP, USER, async (p) => {
+    const { sent } = await drainPendingPushes(redis, APP, USER, async (p) => {
       drained.push(p.content!);
       return 'sent';
     });

@@ -41,6 +41,7 @@ const getMessengerTranslationKey = (error: unknown): MessengerTranslationKey | u
 };
 
 const QUEUED_TOAST_KEYS = {
+  delivery_in_progress: 'messenger.push.queuedBusyToast',
   quota_exhausted: 'messenger.push.queuedQuotaToast',
   send_failed: 'messenger.push.queuedRetryToast',
   window_closed: 'messenger.push.queuedToast',

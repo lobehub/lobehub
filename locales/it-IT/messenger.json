@@ -73,6 +73,7 @@
   "messenger.push.loadFailed": "Impossibile caricare lo stato del messaggio proattivo.",
   "messenger.push.placeholder": "Scrivi un messaggio da inviare a {{platform}}…",
   "messenger.push.queued": "{{count}} messaggio/i in coda verrà/verranno consegnato/i dopo che avrai inviato un messaggio al bot su {{platform}}.",
+  "messenger.push.queuedBusyToast": "Un altro messaggio è ancora in consegna — il tuo è in coda dietro di esso. Invia un messaggio al bot su {{platform}} per riceverlo.",
   "messenger.push.queuedQuotaToast": "Nessun invio rimasto in questa finestra temporale — il tuo messaggio è in coda. Invia un messaggio al bot su {{platform}} per reimpostare la finestra e riceverlo.",
   "messenger.push.queuedRetryToast": "Parte del tuo messaggio non è stata consegnata — il resto è in coda e verrà ritentato dopo che avrai inviato un messaggio al bot su {{platform}}.",
   "messenger.push.queuedToast": "La finestra di invio è chiusa — il tuo messaggio è in coda. Invia un messaggio al bot su {{platform}} per riceverlo.",

@@ -73,6 +73,7 @@
   "messenger.push.loadFailed": "無法載入主動訊息狀態。",
   "messenger.push.placeholder": "撰寫訊息以發送到 {{platform}}…",
   "messenger.push.queued": "{{count}} 則排隊中的訊息將在您於 {{platform}} 與機器人互動後送達。",
+  "messenger.push.queuedBusyToast": "另一則訊息仍在傳送中——您的訊息已排隊等待。請在 {{platform}} 上向機器人發送訊息以接收它。",
   "messenger.push.queuedQuotaToast": "此時段內已無可用發送次數——您的訊息已排入佇列。請在 {{platform}} 上向機器人發送訊息以重置時段並接收訊息。",
   "messenger.push.queuedRetryToast": "您的部分訊息無法送達——其餘部分已排入佇列，並將在您於 {{platform}} 上向機器人發送訊息後重新嘗試送出。",
   "messenger.push.queuedToast": "發送窗口已關閉 — 您的訊息已排隊。請在 {{platform}} 與機器人互動以接收訊息。",

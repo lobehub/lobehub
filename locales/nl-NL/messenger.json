@@ -73,6 +73,7 @@
   "messenger.push.loadFailed": "Kon de status van het proactieve bericht niet laden.",
   "messenger.push.placeholder": "Schrijf een bericht om te verzenden naar {{platform}}…",
   "messenger.push.queued": "{{count}} bericht(en) in de wachtrij worden afgeleverd nadat je de bot een bericht stuurt in {{platform}}.",
+  "messenger.push.queuedBusyToast": "Er wordt nog een ander bericht afgeleverd — jouw bericht staat in de wachtrij. Stuur een bericht naar de bot in {{platform}} om het te ontvangen.",
   "messenger.push.queuedQuotaToast": "Geen verzendmogelijkheden meer in dit venster — je bericht is in de wachtrij geplaatst. Stuur een bericht naar de bot in {{platform}} om het venster te resetten en het bericht te ontvangen.",
   "messenger.push.queuedRetryToast": "Een deel van je bericht kon niet worden afgeleverd — de rest is in de wachtrij geplaatst en wordt opnieuw geprobeerd nadat je de bot in {{platform}} een bericht stuurt.",
   "messenger.push.queuedToast": "Het verzendvenster is gesloten — je bericht staat in de wachtrij. Stuur een bericht naar de bot in {{platform}} om het te ontvangen.",

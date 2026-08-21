@@ -35,6 +35,9 @@ interface LoadableAttachment {
   fetchUrl?: string;
 }
 
+/** Starting capacity when the response declares no usable `content-length`. */
+const INITIAL_CAPACITY_BYTES = 64 * 1024;
+
 /**
  * Read a response body into a Buffer, stopping the moment `limit` is crossed.
  *
@@ -42,12 +45,25 @@ interface LoadableAttachment {
  * length afterwards is too late — the allocation that would kill the worker has
  * already happened. Reading through the stream lets us abort the transfer
  * instead of merely rejecting the result.
+ *
+ * Bytes are copied into ONE growing buffer rather than collected as chunks and
+ * `Buffer.concat`-ed at the end: concat holds the chunk list and the combined
+ * result alive simultaneously, so a download near the cap would peak at roughly
+ * twice it — undermining the very ceiling this module exists to enforce. With a
+ * usable `content-length` the buffer is sized exactly once and never grows.
  */
-const readCappedBody = async (response: Response, limit: number): Promise<Buffer | undefined> => {
+const readCappedBody = async (
+  response: Response,
+  limit: number,
+  declaredLength?: number,
+): Promise<Buffer | undefined> => {
   if (!response.body) return undefined;
 
   const reader = response.body.getReader();
-  const chunks: Buffer[] = [];
+  const initial =
+    declaredLength && declaredLength > 0 ? Math.min(declaredLength, limit) : INITIAL_CAPACITY_BYTES;
+
+  let buffer = Buffer.allocUnsafe(Math.min(initial, limit));
   let total = 0;
 
   try {
@@ -55,20 +71,30 @@ const readCappedBody = async (response: Response, limit: number): Promise<Buffer
       const { done, value } = await reader.read();
       if (done) break;
 
-      total += value.byteLength;
-      if (total > limit) {
+      if (total + value.byteLength > limit) {
         // Cancel so the remaining bytes are never pulled over the wire.
         await reader.cancel();
         return undefined;
       }
-      chunks.push(Buffer.from(value));
+
+      if (total + value.byteLength > buffer.length) {
+        const grown = Buffer.allocUnsafe(
+          Math.min(limit, Math.max(buffer.length * 2, total + value.byteLength)),
+        );
+        buffer.copy(grown, 0, 0, total);
+        buffer = grown;
+      }
+
+      buffer.set(value, total);
+      total += value.byteLength;
     }
   } catch (error) {
     log('readCappedBody: stream failed after %d bytes: %O', total, error);
     return undefined;
   }
 
-  return Buffer.concat(chunks);
+  // A view, not a copy — the backing allocation is already capped at `limit`.
+  return buffer.subarray(0, total);
 };
 
 /**
@@ -104,7 +130,13 @@ export const fetchCappedBuffer = async (
       return undefined;
     }
 
-    const buffer = await readCappedBody(response, limit);
+    // A trustworthy length lets the read allocate exactly once; a missing or
+    // bogus one just falls back to growing, still capped at `limit`.
+    const buffer = await readCappedBody(
+      response,
+      limit,
+      Number.isFinite(declared) ? declared : undefined,
+    );
     if (!buffer) log('fetchCappedBuffer: %s exceeded the %d byte cap', url, limit);
     return buffer;
   } catch (error) {

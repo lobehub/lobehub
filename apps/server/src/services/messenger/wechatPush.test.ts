@@ -299,6 +299,25 @@ describe('sendProactiveWechatMessage', () => {
     expect(queued).toEqual(['queued first', 'fresh push']);
   });
 
+  it('queues behind an in-flight drain instead of reading the queue as empty', async () => {
+    // Regression (P2, round 2): a concurrent drain holds the lock with its
+    // current item already LPOP'd, so the list looks empty from here. Sending
+    // now would overtake a message that is still being delivered.
+    await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
+    // Someone else's drain is in flight; the queue is transiently empty.
+    await redis.set(`wechat:pending-flush:${APP}:${WECHAT_USER}`, '1', 'EX', 30);
+
+    const result = await sendProactiveWechatMessage({
+      content: 'fresh push',
+      serverDB,
+      userId: LOBE_USER,
+    });
+
+    expect(result).toEqual({ reason: 'delivery_in_progress', status: 'queued' });
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(redis.lists.get(wechatPendingPushKey(APP, WECHAT_USER))).toHaveLength(1);
+  });
+
   it('delivers the displayed final send before queueing the next message', async () => {
     await recordInboundToken(redis, APP, WECHAT_USER, 'token-1');
     await consumeSendCredits(redis, APP, WECHAT_USER, WECHAT_WINDOW_MAX_SENDS - 1);

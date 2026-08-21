@@ -134,6 +134,8 @@ export default {
   'messenger.push.placeholder': 'Write a message to send to {{platform}}…',
   'messenger.push.queued':
     '{{count}} queued message(s) will be delivered after you message the bot in {{platform}}.',
+  'messenger.push.queuedBusyToast':
+    'Another message is still being delivered — yours is queued behind it. Message the bot in {{platform}} to receive it.',
   'messenger.push.queuedQuotaToast':
     'No sends left in this window — your message is queued. Message the bot in {{platform}} to reset the window and receive it.',
   'messenger.push.queuedRetryToast':

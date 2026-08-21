@@ -11,18 +11,17 @@ import {
   prepareAttachmentsForBudget,
   splitFallbackMessages,
 } from '@/server/services/bot/platforms/attachmentBudget';
-import type {
-  WechatPendingPush,
-  WechatWindowRedis,
-} from '@/server/services/bot/platforms/wechat/contextWindow';
 import {
   consumeSendCredits,
   drainPendingPushes,
+  type DrainPendingResult,
   enqueuePendingPush,
   peekWindow,
   WECHAT_WINDOW_MAX_SENDS,
+  type WechatPendingPush,
   wechatPendingPushKey,
   wechatWindowKey,
+  type WechatWindowRedis,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
 import type { WechatOutboundAttachment } from '@/server/services/bot/platforms/wechat/sendAttachments';
 import { sendWechatAttachments } from '@/server/services/bot/platforms/wechat/sendAttachments';
@@ -58,7 +57,9 @@ export type WechatPushQueueReason =
   /** Window open but not enough sends left for this delivery. */
   | 'quota_exhausted'
   /** Delivery was attempted and partially failed; the rest is queued for retry. */
-  | 'send_failed';
+  | 'send_failed'
+  /** An earlier message is still being delivered; this one waits behind it. */
+  | 'delivery_in_progress';
 
 export interface WechatPushResult {
   /** Set when `status` is `queued` — why delivery had to wait. */
@@ -353,29 +354,32 @@ export const sendProactiveWechatMessage = async (params: {
   // window sitting next to "N messages queued" (the queue only replays on the
   // next INBOUND message), and a fresh push would overtake the backlog,
   // breaking FIFO delivery.
-  await drainQueuedPushes({
+  const drain = await drainQueuedPushes({
     api: target.api,
     applicationId: target.applicationId,
     platformUserId: target.platformUserId,
     redis,
   });
 
+  // Only send now if THIS call drained the queue and left it empty.
+  //
   // The drain does not always empty the queue: it stops once the backlog would
   // eat into the credits reserved for the live reply, and it requeues any leg
-  // that failed mid-delivery. Either way older messages are still owed, so
-  // sending this one now would let a fresh (often smaller) push jump ahead of
-  // them — exactly the FIFO break the drain above exists to prevent. Queue it
-  // behind them instead.
-  const backlog = await redis.llen(
-    wechatPendingPushKey(target.applicationId, target.platformUserId),
-  );
-  if (backlog > 0) {
+  // that failed mid-delivery. And when it could not take the lock at all, a
+  // concurrent drain is mid-flight with its current item already LPOP'd — the
+  // list would read as empty from here while an older message is still being
+  // delivered. Sending in either case lets a fresh (often smaller) push jump
+  // ahead of older ones, exactly the FIFO break this block exists to prevent.
+  if (!drain.drained || drain.remaining > 0) {
     await enqueuePendingPush(redis, target.applicationId, target.platformUserId, payload);
     log(
-      'sendProactiveWechatMessage: %d queued message(s) still owed for %s — queued behind them',
-      backlog,
+      'sendProactiveWechatMessage: queued behind backlog for %s (drained=%s, remaining=%d)',
       target.platformUserId,
+      drain.drained,
+      drain.remaining,
     );
+    if (!drain.drained) return { reason: 'delivery_in_progress', status: 'queued' };
+
     // Distinguish "the drain ran out of credits" from "a replay failed", so the
     // toast matches what the user sees in the window state.
     const afterDrain = await peekWindow(redis, target.applicationId, target.platformUserId);
@@ -436,7 +440,7 @@ const drainQueuedPushes = async (params: {
   applicationId: string;
   platformUserId: string;
   redis: WechatWindowRedis;
-}): Promise<number> => {
+}): Promise<DrainPendingResult> => {
   const { api, redis, applicationId, platformUserId } = params;
 
   return drainPendingPushes(redis, applicationId, platformUserId, async (payload) => {
@@ -484,4 +488,4 @@ export const flushPendingWechatPushes = async (params: {
     applicationId: params.applicationId,
     platformUserId: params.platformUserId,
     redis: params.redis,
-  });
+  }).then((result) => result.sent);
