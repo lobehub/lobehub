@@ -70,11 +70,37 @@ export const resolveSelectorShape = (
   return { capability, kind: 'menu' };
 };
 
+interface ModelDependentSelectionParams {
+  capability: HeteroSelectorCapability;
+  effort?: HeterogeneousReasoningEffort;
+  isFastSpeed: boolean;
+  value: string;
+}
+
 /**
  * A dimension the newly picked model cannot serve would otherwise stay persisted
  * and be silently dropped by the CLI, leaving the menu claiming a setting the
  * run never used.
  */
+export const resolveModelDependentSelection = ({
+  capability,
+  effort,
+  isFastSpeed,
+  value,
+}: ModelDependentSelectionParams): HeteroSelection => {
+  const resetSpeed = isFastSpeed && !!capability.speed && !capability.speed.supported(value);
+  const resetEffort =
+    !!effort &&
+    effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+    !!capability.effort &&
+    !capability.effort.levels(value).includes(effort);
+
+  return {
+    ...(resetEffort ? { effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
+    ...(resetSpeed ? { speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
+  };
+};
+
 export const resolveModelSwitchSelection = ({
   capability,
   effort,
@@ -86,30 +112,34 @@ export const resolveModelSwitchSelection = ({
   isFastSpeed: boolean;
   value: string;
 }): HeteroSelection => {
-  const resetSpeed = isFastSpeed && !!capability.speed && !capability.speed.supported(value);
-  const resetEffort =
-    !!effort &&
-    effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-    !!capability.effort &&
-    !capability.effort.levels(value).includes(effort);
+  const dependentSelection = resolveModelDependentSelection({
+    capability,
+    effort,
+    isFastSpeed,
+    value,
+  });
 
   return {
-    ...(resetEffort ? { effort: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
+    ...dependentSelection,
     model: value,
-    ...(resetSpeed ? { speed: HETEROGENEOUS_AGENT_DEFAULT_SELECTION } : {}),
   };
 };
 
 export const buildSelectorView = ({
   capability,
   provider,
+  selectedModel,
   t,
 }: {
   capability: HeteroSelectorCapability;
   provider: HeterogeneousProviderConfig;
+  selectedModel?: string;
   t: Translate;
 }): SelectorView => {
-  const model = capability.model?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+  const model =
+    selectedModel?.trim() ||
+    capability.model?.resolve(provider) ||
+    HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   const effort = capability.effort?.resolve(provider);
   const mode = capability.mode?.resolve(provider);
   const speedSupported = capability.speed?.supported(model) ?? false;
@@ -126,6 +156,8 @@ export const buildSelectorView = ({
   const isCatalogModel = capability.model?.source === 'catalog';
   const isModeOnly =
     !!capability.mode && !capability.model && !capability.effort && !capability.speed;
+  const isEffortOnly =
+    !!capability.effort && !capability.model && !capability.mode && !capability.speed;
 
   const dimensions: SelectorDimension[] = [];
 
@@ -218,14 +250,18 @@ export const buildSelectorView = ({
       ? mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? t('heteroAgent.modelSelector.defaultConfig')
         : (modeLabel ?? defaultLabel)
-      : getTriggerText({
-          defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
-          defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
-          defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
-          effort,
-          effortLabel,
-          model,
-          modelLabel,
-        }),
+      : isEffortOnly
+        ? effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+          ? t('heteroAgent.modelSelector.defaultReasoning')
+          : (effortLabel ?? defaultLabel)
+        : getTriggerText({
+            defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
+            defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
+            defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),
+            effort,
+            effortLabel,
+            model,
+            modelLabel,
+          }),
   };
 };

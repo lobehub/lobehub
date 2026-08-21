@@ -143,6 +143,11 @@ const HeteroControlBar = memo(() => {
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
 
   const heteroProvider = agencyConfig?.heterogeneousProvider;
+  // API mode runs against the bound custom Provider/API key. The local CLI's
+  // subscription windows belong to a different credential source and must not
+  // be displayed or sampled for that run. An omitted authMode is the legacy
+  // subscription default.
+  const subscriptionQuotaApplies = heteroProvider?.authMode !== 'api';
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     isHetero: !!heteroProvider,
@@ -154,7 +159,9 @@ const HeteroControlBar = memo(() => {
   // and the cloud sandbox has no sampler, so both stay quota-less.
   const quotaDeviceId = executionTarget === 'device' ? agencyConfig?.boundDeviceId : undefined;
   const shouldShowClaudeQuota =
-    heteroProvider?.type === 'claude-code' && (isLocalHeteroExecution || !!quotaDeviceId);
+    subscriptionQuotaApplies &&
+    heteroProvider?.type === 'claude-code' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
 
   if (isAccessLoading) return null;
 
@@ -208,7 +215,8 @@ const HeteroControlBar = memo(() => {
   // Codex quota still needs the local CLI (spawned over IPC), so it stays
   // desktop-local; the SDK runtime badge likewise reports this desktop's own
   // in-process runtime, not a remote device's.
-  const shouldShowCodexQuota = heteroProvider?.type === 'codex' && isLocalHeteroExecution;
+  const shouldShowCodexQuota =
+    subscriptionQuotaApplies && heteroProvider?.type === 'codex' && isLocalHeteroExecution;
   const shouldShowSdkRuntime =
     heteroProvider?.type === 'claude-code' &&
     isLocalHeteroExecution &&
