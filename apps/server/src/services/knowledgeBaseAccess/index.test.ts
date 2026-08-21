@@ -104,6 +104,27 @@ describe('getRestrictedKnowledgeBaseIds', () => {
     await expect(getRestrictedKnowledgeBaseIds(ctx)).resolves.toEqual([]);
   });
 
+  it('drops KBs the caller holds an edit collaborator grant on', async () => {
+    const ctx = {
+      // 1st select: restriction rows; 2nd select: the caller's edit grants
+      serverDB: dbWithResults([{ id: 'kb-1' }, { id: 'kb-2' }], [{ resourceId: 'kb-1' }]),
+      userId: 'collaborator',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(getRestrictedKnowledgeBaseIds(ctx)).resolves.toEqual(['kb-2']);
+  });
+
+  it('keeps the restriction when the caller has no collaborator grant', async () => {
+    const ctx = {
+      serverDB: dbWithResults([{ id: 'kb-1' }], []),
+      userId: 'member',
+      workspaceId: 'ws-1',
+    };
+
+    await expect(getRestrictedKnowledgeBaseIds(ctx)).resolves.toEqual(['kb-1']);
+  });
+
   it('skips the RBAC lookup when no restriction rows exist', async () => {
     const ctx = { serverDB: dbWithResults([]), userId: 'member', workspaceId: 'ws-1' };
 
@@ -191,8 +212,9 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a file id belongs to a restricted KB', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd select: restricted file membership hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [{ fileId: 'file-1' }]),
+      // 1st select: restriction rows; 2nd: the caller's collaborator grants
+      // (none); 3rd: restricted file membership hit
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ fileId: 'file-1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -204,9 +226,10 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a parsed-file docs_* id links to a restricted KB via fileId', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd select: document hit through the
-      // fileId → knowledge_base_files membership (knowledgeBaseId null)
-      serverDB: dbWithResults([{ id: 'kb-1' }], [{ id: 'docs_parsed' }]),
+      // 1st select: restriction rows; 2nd: collaborator grants (none); 3rd:
+      // document hit through the fileId → knowledge_base_files membership
+      // (knowledgeBaseId null)
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ id: 'docs_parsed' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -218,8 +241,9 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('throws FORBIDDEN when a docs_* id belongs to a restricted KB', async () => {
     const ctx = {
-      // 1st select: restriction rows; 2nd select: restricted document hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [{ id: 'docs_1' }]),
+      // 1st select: restriction rows; 2nd: collaborator grants (none); 3rd:
+      // restricted document hit
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [{ id: 'docs_1' }]),
       userId: 'member',
       workspaceId: 'ws-1',
     };
@@ -231,8 +255,9 @@ describe('assertContentsNotInRestrictedKnowledgeBase', () => {
 
   it('passes when neither files nor documents match a restricted KB', async () => {
     const ctx = {
-      // restriction rows, then empty file hit, then empty document hit
-      serverDB: dbWithResults([{ id: 'kb-1' }], [], []),
+      // restriction rows, collaborator grants (none), empty file hit, empty
+      // document hit
+      serverDB: dbWithResults([{ id: 'kb-1' }], [], [], []),
       userId: 'member',
       workspaceId: 'ws-1',
     };

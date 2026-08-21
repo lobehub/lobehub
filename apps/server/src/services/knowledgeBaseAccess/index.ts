@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import {
   documents,
   knowledgeBaseFiles,
@@ -121,7 +122,16 @@ export const getRestrictedKnowledgeBaseIds = async (
   });
   if (hasAllScope) return [];
 
-  return rows.map((row) => row.id);
+  // A collaborator grant at `edit` lifts the caller back to browsable on that
+  // knowledge base — drop it from the restricted set so every listing/search
+  // filter downstream lets it through, mirroring `canPerformResourceAction`.
+  const grantedIds = await new ResourcePermissionModel(
+    ctx.serverDB,
+    ctx.workspaceId,
+  ).getCollaboratorResourceIds('knowledgeBase', ctx.userId, 'edit');
+  const grantedSet = new Set(grantedIds);
+
+  return rows.map((row) => row.id).filter((id) => !grantedSet.has(id));
 };
 
 /**
