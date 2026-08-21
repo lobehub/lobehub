@@ -7,6 +7,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
+import { retainAgentPermissionPolicies } from '../helpers/agent-policy-keys';
 import { mergeJsonPatch } from '../helpers/json-patch';
 import { processPaginationConditions } from '../helpers/pagination';
 import {
@@ -165,10 +166,15 @@ export class AgentService extends BaseService {
           // restricted agent's conversations from being published.
           // An explicit `null` still clears the column, exactly as before: that
           // is a caller deliberately asking for it, unlike a partial edit that
-          // simply has no way to name the other keys.
+          // simply has no way to name the other keys. The member permission
+          // policies survive that clear regardless — this endpoint authorizes
+          // on `AGENT_UPDATE`, which workspace Admins hold for everyone's
+          // agents, while writing those keys is reserved to the agent's creator
+          // and the workspace primary owner. Clearing what the schema cannot
+          // even express would be a way around that gate.
           updateData.agencyConfig =
             request.agencyConfig === null
-              ? null
+              ? retainAgentPermissionPolicies(existingAgent.agencyConfig)
               : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
         }
         if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;

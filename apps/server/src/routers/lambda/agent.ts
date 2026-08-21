@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import type { KnowledgeItem } from '@lobechat/types';
-import { CreateAgentSchema, KnowledgeType } from '@lobechat/types';
+import { AGENT_PERMISSION_POLICY_KEYS, CreateAgentSchema, KnowledgeType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -62,12 +62,6 @@ import {
   getUseLevelKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
 import { getResourceConfigAccess, redactAgentConfig } from './_helpers/resourceConfigGuard';
-
-const AGENT_PERMISSION_POLICY_KEYS = [
-  'executionTargetSelectionPolicy',
-  'modelSelectionPolicy',
-  'topicSharePolicy',
-] as const;
 
 const getAgentPermissionPolicyPatch = (value: Record<string, unknown>) => {
   const agencyConfig = value.agencyConfig;

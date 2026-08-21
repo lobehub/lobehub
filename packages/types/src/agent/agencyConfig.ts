@@ -828,6 +828,22 @@ export interface LobeAgentAgencyConfig {
 }
 
 /**
+ * The `agencyConfig` keys that govern every workspace member rather than the
+ * agent's own behaviour, and which only the agent's creator or the workspace
+ * primary owner may write.
+ *
+ * Any surface that writes `agencyConfig` has to account for these: the TRPC
+ * writer strips them from an unauthorized patch, and the public API — whose
+ * schema cannot express them at all — must never drop them, not even when
+ * clearing the column.
+ */
+export const AGENT_PERMISSION_POLICY_KEYS = [
+  'executionTargetSelectionPolicy',
+  'modelSelectionPolicy',
+  'topicSharePolicy',
+] as const satisfies readonly (keyof LobeAgentAgencyConfig)[];
+
+/**
  * Explicit defaults written when a workspace agent is created.
  *
  * Members may choose their own model and execution environment, and may share
