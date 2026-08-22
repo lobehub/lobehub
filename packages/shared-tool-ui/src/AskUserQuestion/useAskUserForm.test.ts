@@ -301,6 +301,7 @@ describe('useAskUserForm additional notes', () => {
         args: twoQuestionArgs,
         countdownMs: 1000,
         onInteractionAction,
+        persistedDraft: undefined,
         writeDraft: vi.fn(),
       }),
     );
