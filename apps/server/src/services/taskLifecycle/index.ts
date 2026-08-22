@@ -239,11 +239,12 @@ export class TaskLifecycleService {
       //      'scheduled' to wait for the next tick. They never auto-pause
       //      on success — only `reason === 'error'` below puts them in
       //      'paused' for human attention.
-      //    - Non-automation tasks fall back to the legacy "pause for user
-      //      review" behavior: a 'result' brief from the agent is a
-      //      *proposal* of completion, and the user must explicitly approve
-      //      via the brief action to transition to 'completed'. Auto-complete
-      //      only happens via the Judge path above.
+      //    - Subtasks complete immediately. Their parent owns the broader
+      //      delivery decision, so pausing every successful child for a second
+      //      user review stalls an otherwise autonomous task graph. Completing
+      //      the child also unlocks its downstream siblings.
+      //    - Root non-automation tasks keep the legacy "pause for user review"
+      //      behavior: their result is the user-facing delivery boundary.
       // "Let go" for verify-bound runs: when a confirmed verify plan exists for
       // this op, delivery acceptance is decided asynchronously by Verify
       // (driveTaskFromVerify completes / pauses the task on settle), so we must
@@ -275,6 +276,8 @@ export class TaskLifecycleService {
           // failed — the live `error` alone would silently self-heal.
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
+        } else if (!verifyBound && currentTask.parentTaskId) {
+          await this.completeSubtask(currentTask);
         } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
@@ -497,6 +500,31 @@ export class TaskLifecycleService {
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Settle a successful child task and advance its sibling dependency graph.
+   *
+   * This mirrors the completion side effects of TaskService.updateStatus
+   * without importing TaskService here (TaskRunner already depends on this
+   * lifecycle service). The dynamic import keeps that module cycle out of
+   * initialization while preserving the runner's single cascade implementation.
+   */
+  private async completeSubtask(task: TaskItem): Promise<void> {
+    await this.taskModel.updateStatus(task.id, 'completed', {
+      completedAt: new Date(),
+      error: null,
+    });
+
+    const parentTask = await this.taskModel.findById(task.parentTaskId!);
+    if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
+      await this.taskModel.updateStatus(parentTask.id, 'paused');
+    }
+
+    const { TaskRunnerService } = await import('@/server/services/taskRunner');
+    await new TaskRunnerService(this.db, this.userId, this.workspaceId).cascadeOnCompletion(
+      task.id,
+    );
   }
 
   /**

@@ -9,6 +9,14 @@ const fakeScheduler = {
   scheduleNextTopic: vi.fn().mockResolvedValue('msg-new'),
 };
 
+const { cascadeOnCompletion } = vi.hoisted(() => ({
+  cascadeOnCompletion: vi.fn().mockResolvedValue({ failed: [], paused: [], started: [] }),
+}));
+
+vi.mock('@/server/services/taskRunner', () => ({
+  TaskRunnerService: vi.fn(() => ({ cascadeOnCompletion })),
+}));
+
 vi.mock('@/server/services/taskScheduler', () => ({
   createTaskSchedulerModule: () => fakeScheduler,
 }));
@@ -78,6 +86,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     fakeScheduler.scheduleNextTopic.mockClear().mockResolvedValue('msg-new');
     notifyCompleted.mockReset().mockResolvedValue(undefined);
     notifyFailed.mockReset().mockResolvedValue(undefined);
+    cascadeOnCompletion.mockReset().mockResolvedValue({ failed: [], paused: [], started: [] });
 
     service = new TaskLifecycleService({} as any, 'user-1');
 
@@ -256,6 +265,56 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
       expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'scheduled', expect.anything());
+    });
+
+    it('successful subtask → completes and unlocks downstream tasks instead of pausing', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
+      findById
+        .mockResolvedValueOnce(task)
+        .mockResolvedValueOnce(parentTask)
+        .mockResolvedValue(task);
+      (service as any).taskModel.shouldPauseAfterComplete = vi.fn().mockReturnValue(false);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+      expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
+    });
+
+    it('successful subtask still honors an explicit parent after-completion checkpoint', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
+      findById
+        .mockResolvedValueOnce(task)
+        .mockResolvedValueOnce(parentTask)
+        .mockResolvedValue(task);
+      (service as any).taskModel.shouldPauseAfterComplete = vi.fn().mockReturnValue(true);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).toHaveBeenCalledWith('parent-task', 'paused');
+      expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
     });
 
     it('non-automation task with shouldPauseOnTopicComplete=false → no status update', async () => {
