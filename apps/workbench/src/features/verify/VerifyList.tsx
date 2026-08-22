@@ -13,7 +13,7 @@ import useSWR from 'swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
-import WorkbenchBrandLink from '../../shell/WorkbenchBrandLink';
+import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 import VerifyRow from './VerifyRow';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -119,12 +119,11 @@ const WorkbenchVerifyList = memo(() => {
   return (
     <Flexbox className={styles.page}>
       <Flexbox className={styles.header} gap={12}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <WorkbenchBrandLink />
-          <Text strong style={{ flex: 1, fontSize: 17 }}>
+        <WorkbenchHeader>
+          <Text strong style={{ fontSize: 17 }}>
             {t('workspace.title')}
           </Text>
-        </Flexbox>
+        </WorkbenchHeader>
         <label className={styles.search}>
           <Icon color={cssVar.colorTextQuaternary} icon={Search} size={15} />
           <input

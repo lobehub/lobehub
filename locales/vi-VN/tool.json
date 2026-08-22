@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Danh sách công việc đã được cập nhật",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Số ký tự",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Số dòng",
+  "localFiles.editFile.ambiguous": "Văn bản này xuất hiện {{times}} lần trong tệp. Việc chỉnh sửa sẽ bị từ chối — cần có đủ ngữ cảnh xung quanh để xác định một lần xuất hiện, hoặc \"thay thế tất cả\".",
   "localFiles.editFile.newString": "Thay thế bằng",
   "localFiles.editFile.oldString": "Tìm",
   "localFiles.editFile.replaceAll": "Thay thế tất cả",

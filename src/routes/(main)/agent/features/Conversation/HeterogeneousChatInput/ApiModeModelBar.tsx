@@ -3,7 +3,7 @@
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { memo, useMemo } from 'react';
 
-import { useClaudeCodeCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders';
+import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -15,12 +15,12 @@ interface ApiModeModelBarProps {
 const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((state) => state.updateAgentConfigById);
-  const { providers } = useClaudeCodeCompatibleProviders();
-  const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+  const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
+  const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
 
   if (
-    heterogeneousProvider?.type !== 'claude-code' ||
+    !heterogeneousProvider ||
     heterogeneousProvider.authMode !== 'api' ||
     providerIds.length === 0
   )

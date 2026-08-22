@@ -138,6 +138,10 @@ export default {
     'The send window is closed — your message is queued. Message the bot in {{platform}} to receive it.',
   'messenger.push.resource.description':
     'The file will be sent as an attachment to your linked {{platform}} account.',
+  'messenger.push.resource.oversizeFileHint':
+    'This file exceeds the {{limit}} limit of {{platform}} and will be sent as a download link.',
+  'messenger.push.resource.oversizeImageHint':
+    'This image exceeds the {{limit}} limit of {{platform}}. It will be compressed before sending, or sent as a download link if it still does not fit.',
   'messenger.push.resource.placeholder': 'Add a message (optional)…',
   'messenger.push.retry': 'Try again',
   'messenger.push.sectionTitle': 'Message Push',

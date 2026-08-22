@@ -1190,6 +1190,25 @@ describe('AgentModel', () => {
   });
 
   describe('updateConfig', () => {
+    it('replaces the profile wholesale so a removed trait can be cleared', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({
+          profile: { artworkStyle: 'anime', fullBodyArtwork: 'https://cdn/full-body.png' },
+          userId,
+        })
+        .returning()
+        .then((res) => res[0]);
+
+      await agentModel.updateConfig(agent.id, { profile: { artworkStyle: 'anime' } });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect(result?.profile).toEqual({ artworkStyle: 'anime' });
+    });
+
     it('should update agent config and set updatedAt', async () => {
       const agent = await serverDB
         .insert(agents)
@@ -1466,6 +1485,7 @@ describe('AgentModel', () => {
       expect(workspaceAgent.agencyConfig).toEqual({
         executionTargetSelectionPolicy: 'member',
         modelSelectionPolicy: 'member',
+        topicSharePolicy: 'member',
       });
       expect(personalAgent.agencyConfig).toBeNull();
     });
@@ -1680,6 +1700,7 @@ describe('AgentModel', () => {
         executionTarget: 'none',
         executionTargetSelectionPolicy: 'fixed',
         modelSelectionPolicy: 'member',
+        topicSharePolicy: 'member',
       });
     });
 
@@ -1911,6 +1932,7 @@ describe('AgentModel', () => {
         expect(result?.agencyConfig).toEqual({
           executionTargetSelectionPolicy: 'member',
           modelSelectionPolicy: 'member',
+          topicSharePolicy: 'member',
         });
       });
 

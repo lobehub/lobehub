@@ -142,13 +142,16 @@ export class CompletionLifecycle {
 
   /**
    * Persist the initial `agent_operations` row when an operation is created.
-   * Fire-and-forget: a DB outage here must never block the runtime startup
-   * path — `dispatchHooks` will still finalize the row if one was written.
+   * Returns whether the row write succeeded so security-sensitive callers can
+   * require durable state before dispatch. Other runtime paths may preserve
+   * the historical non-blocking behavior by ignoring the result.
    */
-  async recordStart(params: RecordOperationStartParams): Promise<void> {
+  async recordStart(params: RecordOperationStartParams): Promise<boolean> {
+    let persisted = true;
     try {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
+      persisted = false;
       log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }
 
@@ -170,6 +173,8 @@ export class CompletionLifecycle {
         ),
       );
     }
+
+    return persisted;
   }
 
   /**

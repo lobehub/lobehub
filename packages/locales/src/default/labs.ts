@@ -4,6 +4,9 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
+  'features.agentProviderBinding.desc':
+    'Let supported local agents use a configured API provider and model instead of their subscription. Initially available for Claude Code and Codex on Desktop local execution.',
+  'features.agentProviderBinding.title': 'Agent Provider Binding',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -13,9 +16,6 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
-  'features.claudeCodeApiMode.desc':
-    'Let Claude Code use a configured API provider and model on this desktop instead of a Claude subscription. Desktop local execution only.',
-  'features.claudeCodeApiMode.title': 'Claude Code API Provider',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',

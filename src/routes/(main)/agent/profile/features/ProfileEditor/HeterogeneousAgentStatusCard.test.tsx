@@ -171,8 +171,8 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
   ),
 }));
 
-vi.mock('@/features/HeterogeneousAgent/hooks/useClaudeCodeCompatibleProviders', () => ({
-  useClaudeCodeCompatibleProviders: () => ({
+vi.mock('@/features/HeterogeneousAgent/hooks/useProviderBinding', () => ({
+  useProviderBindingCompatibleProviders: () => ({
     modelsByProvider: {
       anthropic: [{ id: 'claude-primary', providerId: 'anthropic' }],
     },

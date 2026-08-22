@@ -752,6 +752,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       ['tool_end', { isSuccess: true, toolCallId: 'tc-1' }],
       ['stream_end', {}],
       ['agent_runtime_init', { state: 'idle' }],
+      ['step_complete', { phase: 'operation_heartbeat' }],
       ['tool_execute', { apiName: 'Read', toolCallId: 'tc-1' }],
       ['stream_retry', { attempt: 1 }],
     ])('drops %s without DB writes', async (type, data) => {

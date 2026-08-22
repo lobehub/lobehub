@@ -22,9 +22,13 @@ vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => (
   selectRuntimeType: () => 'hetero',
 }));
 
-vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
-  resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
-}));
+vi.mock(
+  '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
+  }),
+);
 
 vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
   mergeAgentRuntimeInitialContexts: () => undefined,

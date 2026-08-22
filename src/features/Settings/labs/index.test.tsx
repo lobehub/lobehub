@@ -172,8 +172,8 @@ describe('Labs settings page', () => {
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
     renderPage();
 
-    const claudeCodeApiMode = screen.getByText('features.claudeCodeApiMode.title');
-    expect(within(claudeCodeApiMode).getByText('stage.alpha.label')).toBeDefined();
+    const agentProviderBinding = screen.getByText('features.agentProviderBinding.title');
+    expect(within(agentProviderBinding).getByText('stage.alpha.label')).toBeDefined();
 
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();

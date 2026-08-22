@@ -2,9 +2,7 @@
 
 import type { RouteObject } from 'react-router';
 
-import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
-import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
-import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
+import { acceptanceRouteMeta } from '@/features/Verify/routeMeta';
 import { dynamicElement, ErrorBoundary } from '@/utils/router';
 
 import { createMainAreaRouteFactory, createSharedDesktopRoutes } from './desktopRouter.shared';
@@ -19,42 +17,44 @@ export const mainAreaMetaRoutes: RouteObject[] = [
   { children: createMainAreaChildren(), path: '/' },
 ];
 
+// `/share/*` is served by the standalone Share app (apps/share), not this router.
 const webOnlyRoutes: RouteObject[] = [
-  // Share topic route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/share/t/[id]')),
-          'Desktop > Share > Topic',
-        ),
-        handle: { meta: shareTopicRouteMeta },
-        path: ':id',
-      },
-    ],
-    element: dynamicElement(
-      () => import('@/routes/share/t/[id]/_layout'),
-      'Desktop > Share > Topic > Layout',
-    ),
-    path: '/share/t',
-  },
-
-  // Share page route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Desktop > Share > Page'),
-        handle: { meta: sharePageRouteMeta },
-        path: ':id',
-      },
-    ],
-    path: '/share/page',
-  },
-
   {
     element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  {
+    children: [
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/acceptance/empty'),
+          'Desktop > Acceptance Empty',
+        ),
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/acceptance/[acceptanceId]'),
+          'Desktop > AcceptanceReport',
+        ),
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/acceptance/[acceptanceId]'),
+          'Desktop > AcceptanceCheck',
+        ),
+        handle: { meta: acceptanceRouteMeta },
+        path: ':acceptanceId/check/:checkId',
+      },
+    ],
+    element: dynamicElement(() => import('@/routes/(main)/acceptance'), 'Desktop > Acceptance'),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance',
   },
 ];
 

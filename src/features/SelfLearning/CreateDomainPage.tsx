@@ -39,6 +39,7 @@ const emptyAdjustments: Record<AdjustmentTarget, string> = {
   domainFilter: '',
   layers: '',
   outOfScope: '',
+  rationale: '',
 };
 
 const styles = createStaticStyles(({ css }) => ({
@@ -200,6 +201,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   rationale: css`
     margin: 0;
+    padding-inline: 0;
+
     font-size: 16px;
     line-height: 1.75;
     color: ${cssVar.colorText};
@@ -348,6 +351,7 @@ const CreateDomainPage = memo(() => {
         domainFilter: draft.domainFilter.trim(),
         layers: draft.layers.filter((l) => l.title.trim()),
         outOfScope: draft.outOfScope?.trim() || null,
+        rationale: draft.rationale?.trim() || null,
         title: draft.title.trim(),
       });
       if (storageKey) localStorage.removeItem(storageKey);
@@ -597,10 +601,24 @@ const CreateDomainPage = memo(() => {
                 </Flexbox>
                 <Divider style={{ margin: 0 }} />
                 <Flexbox className={styles.reviewSection} gap={12}>
-                  <Text fontSize={14} type={'secondary'}>
-                    {t('create.reviewHelp')}
-                  </Text>
-                  {draft.rationale && <div className={styles.rationale}>{draft.rationale}</div>}
+                  <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
+                    <Text fontSize={14} type={'secondary'}>
+                      {t('create.reviewHelp')}
+                    </Text>
+                    <Flexbox flex={'none'}>{renderAdjustmentButton('rationale')}</Flexbox>
+                  </Flexbox>
+                  <TextArea
+                    autoSize={{ maxRows: 8, minRows: 2 }}
+                    className={styles.rationale}
+                    // An in-flight adjustment answers from the draft as it was when the
+                    // request left, so edits made meanwhile would be silently overwritten
+                    // when the response merges back.
+                    disabled={refiningTarget === 'rationale'}
+                    placeholder={t('create.field.rationalePlaceholder')}
+                    value={draft.rationale ?? ''}
+                    variant={'borderless'}
+                    onChange={(e) => patch({ rationale: e.target.value })}
+                  />
                 </Flexbox>
 
                 <Flexbox className={styles.reviewSection} gap={10}>

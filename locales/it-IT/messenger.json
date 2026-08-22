@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} messaggio/i in coda verrà/verranno consegnato/i dopo che avrai inviato un messaggio al bot su {{platform}}.",
   "messenger.push.queuedToast": "La finestra di invio è chiusa — il tuo messaggio è in coda. Invia un messaggio al bot su {{platform}} per riceverlo.",
   "messenger.push.resource.description": "Il file verrà inviato come allegato al tuo account {{platform}} collegato.",
+  "messenger.push.resource.oversizeFileHint": "Questo file supera il limite di {{limit}} di {{platform}} e verrà inviato come link per il download.",
+  "messenger.push.resource.oversizeImageHint": "Questa immagine supera il limite di {{limit}} di {{platform}}. Verrà compressa prima dell'invio o inviata come link per il download se non rientra ancora nei limiti.",
   "messenger.push.resource.placeholder": "Aggiungi un messaggio (facoltativo)…",
   "messenger.push.retry": "Riprova",
   "messenger.push.sectionTitle": "Invio messaggi",

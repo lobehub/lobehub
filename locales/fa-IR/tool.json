@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "لیست انجام به‌روزرسانی شد",
   "lobe-knowledge-base.readKnowledge.meta.chars": "تعداد کاراکترها",
   "lobe-knowledge-base.readKnowledge.meta.lines": "تعداد خطوط",
+  "localFiles.editFile.ambiguous": "این متن {{times}} بار در فایل ظاهر می‌شود. ویرایش رد خواهد شد — نیاز به زمینه کافی برای شناسایی یک مورد خاص یا «جایگزینی همه» دارد.",
   "localFiles.editFile.newString": "جایگزین با",
   "localFiles.editFile.oldString": "یافتن",
   "localFiles.editFile.replaceAll": "جایگزینی تمام موارد",

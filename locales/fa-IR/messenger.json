@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} پیام در صف قرار دارد و پس از ارسال پیام شما به ربات در {{platform}} تحویل داده خواهد شد.",
   "messenger.push.queuedToast": "پنجره ارسال بسته است — پیام شما در صف قرار گرفت. به ربات در {{platform}} پیام دهید تا آن را دریافت کنید.",
   "messenger.push.resource.description": "فایل به‌عنوان پیوست به حساب مرتبط شما در {{platform}} ارسال خواهد شد.",
+  "messenger.push.resource.oversizeFileHint": "این فایل از حد {{limit}} در {{platform}} فراتر رفته و به صورت یک لینک دانلود ارسال خواهد شد.",
+  "messenger.push.resource.oversizeImageHint": "این تصویر از حد {{limit}} در {{platform}} فراتر رفته است. قبل از ارسال فشرده خواهد شد، یا اگر هنوز مناسب نباشد، به صورت لینک دانلود ارسال می‌شود.",
   "messenger.push.resource.placeholder": "یک پیام اضافه کنید (اختیاری)…",
   "messenger.push.retry": "دوباره تلاش کنید",
   "messenger.push.sectionTitle": "ارسال پیام",

@@ -58,7 +58,7 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
         <NavItem
           icon={PlusIcon}
           title={t('sidebar.emptyAction')}
-          onClick={openCreateProjectModal}
+          onClick={() => openCreateProjectModal()}
         />
       ) : (
         projects.map((project) => <ProjectItem key={project.id} project={project} />)

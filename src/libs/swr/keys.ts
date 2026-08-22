@@ -956,7 +956,11 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  acceptances: def('verify:acceptances', () => ['verify:acceptances']),
+  /** `limit` is part of the key: the merge picker asks for a wider window than the panel. */
+  acceptances: def('verify:acceptances', (limit?: number) => [
+    'verify:acceptances',
+    String(limit ?? ''),
+  ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',

@@ -152,6 +152,13 @@ export interface ChatTopicMetadata {
    */
   heteroCurrentMsgId?: { msgId: string; operationId: string };
   /**
+   * Secret-free identity of the provider/auth binding that created
+   * `heteroSessionId`. Resume is allowed only when this identity still matches.
+   */
+  heteroSessionBindingKey?: string;
+  /** Binding identities paired with `heteroSessionIdByWorkingDirectory`. */
+  heteroSessionBindingKeyByWorkingDirectory?: Record<string, string>;
+  /**
    * Persistent session id for a heterogeneous agent.
    * Saved after each turn so the next message in the same topic can resume
    * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).
@@ -449,6 +456,8 @@ export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null =
 /** Metadata patch accepted by the topic update API. */
 export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
+  heteroSessionBindingKey: z.string().optional(),
+  heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),

@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "تم تحديث قائمة المهام",
   "lobe-knowledge-base.readKnowledge.meta.chars": "عدد الأحرف",
   "lobe-knowledge-base.readKnowledge.meta.lines": "عدد الأسطر",
+  "localFiles.editFile.ambiguous": "يظهر هذا النص {{times}} مرة في الملف. سيتم رفض التعديل — يحتاج إلى سياق كافٍ لتحديد حدوث واحد، أو \"استبدال الكل\".",
   "localFiles.editFile.newString": "استبدال بـ",
   "localFiles.editFile.oldString": "بحث عن",
   "localFiles.editFile.replaceAll": "استبدال جميع التكرارات",

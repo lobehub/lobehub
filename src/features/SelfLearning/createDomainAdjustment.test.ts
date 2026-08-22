@@ -30,6 +30,7 @@ describe('mergeAdjustedBlock', () => {
   it.each([
     ['domainFilter', 'New filter'],
     ['outOfScope', 'New exclusion'],
+    ['rationale', 'New rationale'],
     ['canonEntries', adjusted.canonEntries],
     ['layers', adjusted.layers],
   ] as const)('only replaces the requested %s block', (target, expected) => {

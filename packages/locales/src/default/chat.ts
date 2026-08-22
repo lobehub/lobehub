@@ -506,6 +506,8 @@ export default {
   'heteroAgent.cliModel.timeout': 'Model discovery timed out.',
   'heteroAgent.cliModel.unsupportedClient':
     'Update the target device client to discover CLI models.',
+  'heteroAgent.resumeReset.bindingChanged':
+    'Authentication binding changed. The previous local agent session could not be resumed safely, so a new conversation has started.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'heteroAgent.resumeReset.cursorAcpIncompatible':
@@ -521,17 +523,28 @@ export default {
   'heteroAgent.cloudNotConfigured.desc':
     'Configure your Claude Code token in agent profile to start sending messages.',
   'heteroAgent.cloudNotConfigured.title': 'Cloud credentials required',
+  'heteroAgent.apiMode.agentUnsupported': '{{name}} does not support LobeHub Provider binding.',
   'heteroAgent.apiMode.configMissing':
-    'Claude Code API mode requires a provider and model binding. Open the agent profile to configure it.',
+    'Provider binding requires a provider and model. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.credentialUnsupported':
+    'The provider "{{providerId}}" uses an authentication method this agent does not support.',
+  'heteroAgent.apiMode.credentialsMissing':
+    'The provider "{{providerId}}" has no API key configured.',
+  'heteroAgent.apiMode.endpointMissing':
+    'The provider "{{providerId}}" requires a base URL for this agent.',
+  'heteroAgent.apiMode.endpointUnsupported':
+    'The provider "{{providerId}}" has an unsupported base URL.',
   'heteroAgent.apiMode.labDisabled.action': 'Enable in Labs',
   'heteroAgent.apiMode.labDisabled.desc':
     'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
-  'heteroAgent.apiMode.labDisabled.title': 'Claude Code API mode is a Labs experiment',
+  'heteroAgent.apiMode.labDisabled.title': 'Provider binding is a Labs experiment',
   'heteroAgent.apiMode.localOnly.desc':
     'Switch the execution environment to Local device, or use Subscription authentication.',
   'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',
   'heteroAgent.apiMode.modelUnavailable':
     'The model "{{providerId}}/{{model}}" is disabled or no longer available.',
+  'heteroAgent.apiMode.protocolMismatch':
+    'The provider "{{providerId}}" does not expose a protocol supported by {{agentType}}.',
   'heteroAgent.apiMode.providerUnavailable':
     'The provider "{{providerId}}" is disabled or no longer available.',
   'heteroAgent.cloudRepo.sectionTitle': 'Repositories',
@@ -1218,6 +1231,7 @@ export default {
   'sendPlaceholderHeterogeneous': 'Describe a task or ask a question to {{name}}',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
+  'sender.unknownMember': 'Member',
   'sessionGroup.config': 'Category Management',
   'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
@@ -1281,6 +1295,7 @@ export default {
   'shareModal.pdfGenerationError': 'PDF generation failed',
   'shareModal.pdfReady': 'PDF is ready',
   'shareModal.popover.export': 'Export',
+  'shareModal.popover.loadError': 'Failed to load sharing settings, please try again later',
   'shareModal.popover.privacyWarning.confirm': 'Share & copy link',
   'shareModal.popover.privacyWarning.content':
     "Anyone with the link can open this whole conversation, so take a moment to make sure there's nothing here you'd rather keep private. A shared topic may include:",
@@ -1318,6 +1333,8 @@ export default {
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
+  'sharePage.meta.pageDescription': 'A page shared from {{appName}}.',
+  'sharePage.meta.topicDescription': 'A conversation shared from {{appName}}.',
   'sharePage.pill.edit': 'Edit',
   'sharePage.pill.openInApp': 'Open in {{appName}}',
   'sharePage.pill.sharedVia': 'Shared via {{appName}}',

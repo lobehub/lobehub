@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
+
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 
 import { AiAgentService } from '../index';
 
@@ -72,7 +74,7 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/libs/trpc/utils/internalJwt', () => ({
-  signOperationJwt: vi.fn().mockResolvedValue('op-jwt'),
+  signHeteroOperationJWT: vi.fn().mockResolvedValue('op-jwt'),
   signUserJWT: vi.fn().mockResolvedValue('user-jwt'),
 }));
 
@@ -212,11 +214,13 @@ vi.mock('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext', () => 
 
 describe('AiAgentService.execAgent - hetero early-exit file attachments', () => {
   let service: AiAgentService;
+  let recordStartSpy: MockInstance<CompletionLifecycle['recordStart']>;
   const mockDb = {} as any;
   const userId = 'test-user-id';
 
   beforeEach(() => {
     vi.clearAllMocks();
+    recordStartSpy = vi.spyOn(CompletionLifecycle.prototype, 'recordStart').mockResolvedValue(true);
     topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
     topicMock.findById.mockResolvedValue(undefined);
@@ -249,11 +253,23 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   });
 
   afterEach(() => {
+    recordStartSpy.mockRestore();
     vi.clearAllMocks();
   });
 
   const findUserMessageCreate = () =>
     mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+
+  it('does not dispatch a heterogeneous run when its durable operation row fails', async () => {
+    recordStartSpy.mockResolvedValueOnce(false);
+
+    await expect(
+      service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' }),
+    ).rejects.toThrow('Failed to persist heterogeneous agent operation');
+
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
 
   it('should attach fileIds to the user message (SPA gateway device/sandbox mode)', async () => {
     // regression: the hetero early exit used to create the user message
@@ -415,31 +431,37 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
-  it('should reject Claude Code API mode before sandbox or device dispatch', async () => {
-    heteroAgentConfig.agencyConfig = {
-      executionTarget: 'sandbox',
-      heterogeneousProvider: {
-        apiConfig: { model: 'claude-test', providerId: 'anthropic' },
-        authMode: 'api',
-        type: 'claude-code',
-      },
-    } as any;
+  it.each(['claude-code', 'codex'] as const)(
+    'should reject %s provider binding before sandbox or device dispatch',
+    async (type) => {
+      heteroAgentConfig.agencyConfig = {
+        executionTarget: 'sandbox',
+        heterogeneousProvider: {
+          apiConfig: {
+            model: type === 'codex' ? 'gpt-test' : 'claude-test',
+            providerId: type === 'codex' ? 'openai' : 'anthropic',
+          },
+          authMode: 'api',
+          type,
+        },
+      } as any;
 
-    const result = await service.execAgent({
-      agentId: 'agent-1',
-      prompt: 'This must not receive provider credentials remotely',
-    });
+      const result = await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'This must not receive provider credentials remotely',
+      });
 
-    expect(result).toEqual(
-      expect.objectContaining({
-        error: expect.stringContaining('Desktop local execution'),
-        status: 'error',
-        success: false,
-      }),
-    );
-    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
-    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
-  });
+      expect(result).toEqual(
+        expect.objectContaining({
+          error: expect.stringContaining('Desktop local execution'),
+          status: 'error',
+          success: false,
+        }),
+      );
+      expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    },
+  );
 
   it('should pass resolved Codex model and reasoning effort args to sandbox dispatch', async () => {
     heteroAgentConfig.model = 'codex';

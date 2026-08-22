@@ -44,6 +44,8 @@ interface UseFileItemDropdownParams {
   id: string;
   libraryId?: string;
   onRenameStart?: () => void;
+  /** Byte size when available — powers the push modal's oversize pre-warning. */
+  size?: number;
   sourceType?: string;
   url: string;
   userId?: string | null;
@@ -65,6 +67,7 @@ export const useFileItemDropdown = ({
   url,
   filename,
   fileType,
+  size,
   sourceType,
   onRenameStart,
   userId,
@@ -123,7 +126,7 @@ export const useFileItemDropdown = ({
   // "Send to chat platform" entry.
   const sendToMessengerItem = useSendToMessengerMenuItem({
     enabled: !isFolder && !isPage && !!url,
-    file: { fileType, id, name: filename },
+    file: { fileType, id, name: filename, size },
   });
 
   const menuItems = useCallback(() => {

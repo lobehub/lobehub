@@ -238,7 +238,7 @@ export const drainPendingPushes = async (
   redis: WechatWindowRedis,
   applicationId: string,
   userId: string,
-  send: (payload: WechatPendingPush) => Promise<'sent' | 'stop'>,
+  send: (payload: WechatPendingPush) => Promise<'sent' | 'stop' | { requeue: WechatPendingPush }>,
 ): Promise<number> => {
   const lockKey = flushLockKey(applicationId, userId);
   const locked = await redis.set(lockKey, '1', 'EX', FLUSH_LOCK_TTL_SECONDS, 'NX');
@@ -262,6 +262,12 @@ export const drainPendingPushes = async (
       const result = await send(payload);
       if (result === 'stop') {
         await redis.lpush(pendingKey, raw);
+        break;
+      }
+      if (typeof result === 'object') {
+        // Partial delivery: put back only what still needs sending, so the
+        // next replay does not repeat a leg the user already received.
+        await redis.lpush(pendingKey, JSON.stringify(result.requeue));
         break;
       }
       sent++;

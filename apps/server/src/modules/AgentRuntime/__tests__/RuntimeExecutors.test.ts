@@ -5743,9 +5743,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi
-            .fn()
-            .mockResolvedValue({ content: '{"mocked":true}', isMocked: true }),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue({
+            isMocked: true,
+            result: { content: '{"mocked":true}', success: true },
+          }),
         };
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
@@ -5770,6 +5771,32 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             content: '{"mocked":true}',
             role: 'tool',
           }),
+        );
+      });
+
+      it('should preserve failed mock results without executing the real tool', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue({
+            isMocked: true,
+            result: { content: 'fixture error', error: 'fixture error', success: false },
+          }),
+        };
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+        expect(mockMessageModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({ content: 'fixture error', role: 'tool' }),
+        );
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({ mocked: true, success: false }),
+          undefined,
         );
       });
 

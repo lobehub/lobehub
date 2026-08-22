@@ -84,6 +84,26 @@ describe('AcceptanceModel', () => {
     expect((await model.findById(grouped.id))?.projectId).toBeNull();
   });
 
+  it('files an acceptance under a project and takes it back out', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const project = await projectModel.create({ identifier: 'MOVE', name: 'Move target' });
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('topic', topicId);
+
+    await model.update(acceptance.id, { projectId: project.id });
+    expect((await model.findById(acceptance.id))?.projectId).toBe(project.id);
+
+    // Ungrouping is the same write with a null — the aggregate itself stays put.
+    await model.update(acceptance.id, { projectId: null });
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+
+    // Another user's model cannot re-file it: ownership scopes the update.
+    await new AcceptanceModel(serverDB, otherUserId).update(acceptance.id, {
+      projectId: project.id,
+    });
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+  });
+
   it('keeps the first standalone display title and backfills one when initially absent', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const subjectId = 'standalone-external-delivery';

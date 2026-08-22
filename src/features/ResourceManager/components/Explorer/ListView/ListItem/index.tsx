@@ -242,6 +242,7 @@ const FileListItem = ({
     id,
     libraryId: resourceManagerState.libraryId,
     onRenameStart: isFolder ? handleRenameStart : undefined,
+    size,
     sourceType,
     url,
     userId,

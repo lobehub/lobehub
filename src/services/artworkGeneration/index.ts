@@ -1,9 +1,11 @@
+export { cutOutFlatBackground, type CutOutResult, type RgbaImage } from './cutOutFlatBackground';
 export {
   type AttachedArtworkReferences,
   generateArtworkImage,
   type GenerateArtworkImageOptions,
 } from './generateArtworkImage';
 export { selectAgentArtworkModel } from './selectModel';
+export { cutOutFullBodyArtwork } from './transparentFullBody';
 export {
   generateWorkspaceAvatarImage,
   type GenerateWorkspaceAvatarImageOptions,

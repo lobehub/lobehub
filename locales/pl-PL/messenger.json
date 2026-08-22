@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} wiadomość(i) w kolejce zostanie dostarczona po wysłaniu wiadomości do bota na {{platform}}.",
   "messenger.push.queuedToast": "Okno wysyłania jest zamknięte — Twoja wiadomość jest w kolejce. Wyślij wiadomość do bota na {{platform}}, aby ją otrzymać.",
   "messenger.push.resource.description": "Plik zostanie wysłany jako załącznik do Twojego powiązanego konta {{platform}}.",
+  "messenger.push.resource.oversizeFileHint": "Ten plik przekracza limit {{limit}} dla {{platform}} i zostanie wysłany jako link do pobrania.",
+  "messenger.push.resource.oversizeImageHint": "Ten obraz przekracza limit {{limit}} dla {{platform}}. Zostanie skompresowany przed wysłaniem lub przesłany jako link do pobrania, jeśli nadal nie będzie pasował.",
   "messenger.push.resource.placeholder": "Dodaj wiadomość (opcjonalnie)…",
   "messenger.push.retry": "Spróbuj ponownie",
   "messenger.push.sectionTitle": "Wysyłanie wiadomości",

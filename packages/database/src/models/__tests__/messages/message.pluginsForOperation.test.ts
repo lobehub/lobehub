@@ -86,16 +86,15 @@ const captureEmittedSql = async (
   return captured;
 };
 
-/** Total rows the executor had to *examine* on the two base tables (output +
- *  filtered-out, times loops) — the signal a full-table scan leaks. */
-const rowsExaminedOnBaseTables = (node: any): number => {
+/** Rows the executor had to *examine* on `relation` (output + filtered-out,
+ *  times loops) — the signal a full-table scan of it leaks. */
+const rowsExaminedOn = (node: any, relation: string): number => {
   let total = 0;
-  const rel = node?.['Relation Name'];
-  if (rel === 'messages' || rel === 'message_plugins') {
+  if (node?.['Relation Name'] === relation) {
     const loops = node['Actual Loops'] ?? 1;
     total += ((node['Actual Rows'] ?? 0) + (node['Rows Removed by Filter'] ?? 0)) * loops;
   }
-  for (const child of node?.Plans ?? []) total += rowsExaminedOnBaseTables(child);
+  for (const child of node?.Plans ?? []) total += rowsExaminedOn(child, relation);
   return total;
 };
 
@@ -229,21 +228,26 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
   });
 
   // Query-plan regression — the accurate guard. It reproduces the actual
-  // degradation (a full scan of the user's whole plugin/message history) on a
-  // seeded skew and asserts the topic-scoped retrieval stays index-served.
+  // degradation (a full scan of the user's whole plugin history) on a seeded skew
+  // and asserts NO branch ever walks more than a handful of the user's plugin
+  // rows. This catches every historical form of the bug: the original
+  // `OR`-ed WHERE, and the later single-JOIN heterogeneous branch — both had the
+  // planner scan/nested-loop all of `message_plugins` (100s+ per call). The fix
+  // keeps `message_plugins` access PK-bounded in both branches (topic window joins
+  // by PK; heterogeneous match resolves message ids first, then fetches by PK).
   //
   // Gated to the server DB (real Postgres): PGlite's planner picks a *different*,
-  // already-fast plan for the OR predicate, so the regression is invisible there
-  // — a plan assertion on PGlite would be a false green. CI runs this suite
-  // against real Postgres via `vitest.config.server.mts` (TEST_SERVER_DB=1).
+  // already-fast plan, so the regression is invisible there — a plan assertion on
+  // PGlite would be a false green. CI runs this suite against real Postgres via
+  // `vitest.config.server.mts` (TEST_SERVER_DB=1).
   //
-  // Why the plan and not the SQL shape: the row results are identical for OR vs.
-  // split, and a "no OR() in the SQL" assertion breaks on innocent rewrites
-  // (UNION/CTE) that are equally fast. Rows-examined is what actually matters.
+  // Why the plan and not the SQL shape: the row results are identical across all
+  // three forms, and a "no OR()/no JOIN" text assertion breaks on innocent
+  // rewrites. Plugin-rows-examined is what actually matters.
   describe.skipIf(!isServerDB)('query-plan regression (real Postgres only)', () => {
     const NOISE = 2000;
 
-    it('keeps the topic-scoped tool-call retrieval index-served instead of scanning the whole user history', async () => {
+    it('never scans the whole plugin history in any branch', async () => {
       // Skew: NOISE plugin rows in a *different* topic (topic2) the query must
       // never touch, plus a few in-window rows and one heterogeneous row far
       // outside the window in the target topic (topic1).
@@ -295,32 +299,33 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
         expect(rows.map((r) => r.id).sort()).toEqual(['hetero', 'in-window', 'in-window-2']);
       });
 
-      // Guard every plugin retrieval that constrains by `topic_id`. The
-      // heterogeneous-only branch carries no `topic_id`, so it is naturally
-      // exempt — it is knowingly an unindexed scan until the partial jsonb index
-      // lands (separate PR). Crucially, the OR regression *does* carry `topic_id`
-      // (alongside the metadata match), so it is caught here by its plan, not by
-      // any assumption about how the SQL is written.
-      const topicScopedPluginScans = statements.filter(
-        (s) =>
-          /"message_plugins"/i.test(s.sql) &&
-          /"messages"/i.test(s.sql) &&
-          /topic_id/i.test(s.sql),
+      // Any statement that JOINs message_plugins to messages must stay bounded —
+      // it must not walk ~all of the user's history on EITHER table. That is the
+      // exact regression: the original OR-ed WHERE and the later single-JOIN
+      // heterogeneous branch both resolved the jsonb match *inside* the plugin
+      // JOIN, so the planner scanned every plugin (or every message) the user owns
+      // — whichever side it chose to drive from. The fix resolves that match in a
+      // messages-ONLY lookup, which is excluded here (it never references
+      // message_plugins) and is the partial index's job in a follow-up; the only
+      // JOINs that remain are keyed by primary key.
+      const joinStatements = statements.filter(
+        (s) => /"message_plugins"/i.test(s.sql) && /"messages"/i.test(s.sql),
       );
       expect(
-        topicScopedPluginScans.length,
-        'no topic-scoped plugin retrieval was emitted — did the method stop querying by topic?',
+        joinStatements.length,
+        'no message_plugins⋈messages statement was emitted — did the method stop returning plugin rows?',
       ).toBeGreaterThan(0);
 
-      for (const statement of topicScopedPluginScans) {
+      for (const statement of joinStatements) {
         const explained = await pool.query({
           text: `EXPLAIN (ANALYZE, FORMAT JSON) ${statement.sql}`,
           values: statement.params,
         });
-        const examined = rowsExaminedOnBaseTables(explained.rows[0]['QUERY PLAN'][0].Plan);
+        const plan = explained.rows[0]['QUERY PLAN'][0].Plan;
+        const examined = rowsExaminedOn(plan, 'messages') + rowsExaminedOn(plan, 'message_plugins');
         expect(
           examined,
-          `the topic-scoped plugin retrieval examined ${examined} rows — it scanned ~all of the user's ${NOISE}-row history instead of using the topic_id index. An unindexable predicate (e.g. an OR with the jsonb metadata match) was folded back into this query.`,
+          `a message_plugins⋈messages statement examined ${examined} rows — it walked ~all of the user's ${NOISE}-row history instead of a bounded/PK access. A jsonb metadata match was resolved inside the plugin JOIN.`,
         ).toBeLessThan(NOISE / 2);
       }
     });

@@ -32,6 +32,7 @@ import type { Command } from 'commander';
 import { getTrpcClient } from '../api/client';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { log } from '../utils/logger';
+import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
@@ -459,6 +460,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
+  const operationHeartbeat =
+    serverIngester && operationId
+      ? createOperationHeartbeat({
+          operationId,
+          push: (event) => serverIngester.push(event),
+        })
+      : undefined;
+
   // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
   // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
@@ -740,6 +749,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
           terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        operationHeartbeat?.observe(event);
         serverIngester?.push(event);
       }
     } catch (err) {
@@ -882,6 +892,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const { code, signal, sessionId } = result;
 
   if (serverIngester && sink) {
+    operationHeartbeat?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {

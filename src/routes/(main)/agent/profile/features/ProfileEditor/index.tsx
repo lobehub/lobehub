@@ -1,7 +1,10 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  isHeterogeneousProviderBindingSupported,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
@@ -114,9 +117,16 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableClaudeCodeApiMode);
+  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableAgentProviderBinding);
+  // Workspace agents are excluded even when the author could spawn them
+  // locally: the binding UI would list workspace-scoped providers, but Desktop
+  // main resolves the reference in the personal scope only (see
+  // `selectRuntimeType`'s personal-scope guard).
   const apiModeAvailable =
     isDesktop &&
+    !isWorkspaceAgent &&
+    !!heterogeneousProvider &&
+    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
     resolveExecutionTarget(effectiveAgencyConfig, {
       clientExecutionAvailable: true,
       isHetero: true,
@@ -146,6 +156,7 @@ const ProfileEditor = memo(() => {
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
               apiModeLabEnabled={apiModeLabEnabled}
+              apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}

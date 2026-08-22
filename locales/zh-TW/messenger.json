@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} 則排隊中的訊息將在您於 {{platform}} 與機器人互動後送達。",
   "messenger.push.queuedToast": "發送窗口已關閉 — 您的訊息已排隊。請在 {{platform}} 與機器人互動以接收訊息。",
   "messenger.push.resource.description": "檔案將作為附件發送到您連結的 {{platform}} 帳戶。",
+  "messenger.push.resource.oversizeFileHint": "此檔案超過 {{platform}} 的 {{limit}} 限制，將以下載連結的形式發送。",
+  "messenger.push.resource.oversizeImageHint": "此圖片超過 {{platform}} 的 {{limit}} 限制。圖片將在發送前壓縮，若仍無法符合限制，將以下載連結的形式發送。",
   "messenger.push.resource.placeholder": "新增訊息（選填）…",
   "messenger.push.retry": "再試一次",
   "messenger.push.sectionTitle": "訊息推送",

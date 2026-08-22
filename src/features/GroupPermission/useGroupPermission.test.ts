@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   policiesAgentId: undefined as string | undefined,
   setAccessLevel: vi.fn(),
   setModelPolicy: vi.fn(),
+  setTopicSharePolicy: vi.fn(),
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -30,6 +31,8 @@ vi.mock('@/features/ResourcePermission/useAgentSelectionPolicies', () => ({
       modelPolicy: 'member',
       setExecutionTargetPolicy: vi.fn(),
       setModelPolicy: mocks.setModelPolicy,
+      setTopicSharePolicy: mocks.setTopicSharePolicy,
+      topicSharePolicy: 'member',
     };
   },
 }));
@@ -147,6 +150,18 @@ describe('useGroupPermission', () => {
 
       result.current.setModelPolicy('fixed');
       expect(mocks.setModelPolicy).toHaveBeenCalledWith('fixed');
+    });
+
+    it('routes the topic-share policy to the supervisor too', () => {
+      // A group conversation is a conversation with its supervisor, so the
+      // policy the group page writes is the one its topics are gated on.
+      const { result } = setup();
+
+      expect(result.current.topicSharePolicy).toBe('member');
+
+      result.current.setTopicSharePolicy('restricted');
+      expect(mocks.setTopicSharePolicy).toHaveBeenCalledWith('restricted');
+      expect(mocks.policiesAgentId).toBe('agt-supervisor');
     });
 
     it('reports a group whose supervisor has not resolved yet', () => {

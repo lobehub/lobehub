@@ -8,9 +8,8 @@ import {
 } from '@/business/client/BusinessMobileRoutes';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
+import { acceptanceRouteMeta } from '@/features/Verify/routeMeta';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
-import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -587,41 +586,31 @@ export const mobileRoutes: RouteObject[] = [
   },
   ...BusinessMobileRoutesWithoutMainLayout,
 
-  // Share topic route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/share/t/[id]')),
-          'Mobile > Share > Topic',
-        ),
-        handle: { meta: shareTopicRouteMeta },
-        path: ':id',
-      },
-    ],
-    element: dynamicElement(
-      () => import('@/routes/share/t/[id]/_layout'),
-      'Mobile > Share > Topic > Layout',
-    ),
-    path: '/share/t',
-  },
-
-  // Share page route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Mobile > Share > Page'),
-        handle: { meta: sharePageRouteMeta },
-        path: ':id',
-      },
-    ],
-    path: '/share/page',
-  },
+  // `/share/*` is served by the standalone Share app (apps/share), not this router.
 
   // Messenger verify route (outside main layout)
   {
     element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > VerifyIm'),
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
+  },
+
+  {
+    element: dynamicElement(
+      () => import('@/routes/acceptance/[acceptanceId]'),
+      'Mobile > AcceptanceReport',
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance/:acceptanceId',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/acceptance/[acceptanceId]'),
+      'Mobile > AcceptanceCheck',
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: acceptanceRouteMeta },
+    path: '/acceptance/:acceptanceId/check/:checkId',
   },
 ];

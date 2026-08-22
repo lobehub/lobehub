@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} съобщение(я) в опашката ще бъдат доставени, след като изпратите съобщение до бота в {{platform}}.",
   "messenger.push.queuedToast": "Прозорецът за изпращане е затворен — вашето съобщение е в опашката. Изпратете съобщение до бота в {{platform}}, за да го получите.",
   "messenger.push.resource.description": "Файлът ще бъде изпратен като прикачен файл към свързания ви {{platform}} акаунт.",
+  "messenger.push.resource.oversizeFileHint": "Този файл надвишава лимита от {{limit}} на {{platform}} и ще бъде изпратен като линк за изтегляне.",
+  "messenger.push.resource.oversizeImageHint": "Това изображение надвишава лимита от {{limit}} на {{platform}}. То ще бъде компресирано преди изпращане или изпратено като линк за изтегляне, ако все още не се побира.",
   "messenger.push.resource.placeholder": "Добавете съобщение (по избор)…",
   "messenger.push.retry": "Опитайте отново",
   "messenger.push.sectionTitle": "Изпращане на съобщения",

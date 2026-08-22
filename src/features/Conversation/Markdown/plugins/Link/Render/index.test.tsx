@@ -172,7 +172,7 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
-  it('hard-navigates acceptance pages into the Workbench runtime', () => {
+  it('opens acceptance links in the conversation portal', () => {
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
 
     const { getByRole } = renderLink({
@@ -183,9 +183,9 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.click(getByRole('link', { name: 'Acceptance' }));
 
-    expect(assign).toHaveBeenCalledWith('/acceptance/acceptance-1');
+    expect(mockOpenAcceptance).toHaveBeenCalledWith('acceptance-1');
+    expect(assign).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(mockOpenAcceptance).not.toHaveBeenCalled();
   });
 
   it('opens official document links in the conversation portal', () => {

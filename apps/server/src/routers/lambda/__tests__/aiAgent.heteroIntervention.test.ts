@@ -69,12 +69,29 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
 
   // Browser leg: user JWT.
   const userCaller = () => aiAgentRouter.createCaller({ jwtPayload: { userId }, userId } as any);
-  // Exec leg: hetero-operation JWT (server-minted, ownership-exempt).
-  const heteroCaller = () =>
+  // Exec leg: operation-bound JWT claims produced by the server signer.
+  const heteroCaller = (operationId: string) =>
     aiAgentRouter.createCaller({
       jwtPayload: { userId },
-      oidcAuth: { purpose: 'hetero-operation', sub: userId },
+      oidcAuth: {
+        aud: 'urn:lobehub:hetero-operation',
+        capabilities: ['hetero:intervention:read'],
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000),
+        iss: 'urn:lobehub:internal',
+        jti: `jti-${operationId}`,
+        operation_id: operationId,
+        purpose: 'hetero-operation',
+        sub: userId,
+      },
       userId,
+    } as any);
+  // Exec leg from a token minted before operation-bound claims were deployed.
+  const legacyHeteroCaller = (sub: string) =>
+    aiAgentRouter.createCaller({
+      jwtPayload: { userId: sub },
+      oidcAuth: { purpose: 'hetero-operation', sub },
+      userId: sub,
     } as any);
   // Exec leg via an owner OIDC token (a desktop reusing its own session): a
   // normal token whose `purpose` is NOT `hetero-operation` → heteroAuthKind
@@ -92,15 +109,17 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
   };
 
   it('submit → wait round-trips a structured answer, filtered to the response', async () => {
+    const operationId = 'op-roundtrip';
+    await insertOperation(operationId, userId);
     await userCaller().submitHeteroIntervention({
-      operationId: 'op-1',
+      operationId,
       result: { 'Which env?': 'prod' },
       toolCallId: 't1',
     });
 
-    const res = await heteroCaller().waitInterventionResponse({
+    const res = await heteroCaller(operationId).waitInterventionResponse({
       lastEventId: '0',
-      operationId: 'op-1',
+      operationId,
     });
 
     expect(res.events).toHaveLength(1);
@@ -113,16 +132,18 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
   });
 
   it('cancel clears the result and defaults the reason', async () => {
+    const operationId = 'op-cancel';
+    await insertOperation(operationId, userId);
     await userCaller().submitHeteroIntervention({
       cancelled: true,
-      operationId: 'op-1',
+      operationId,
       result: { should: 'be dropped' },
       toolCallId: 't2',
     });
 
-    const res = await heteroCaller().waitInterventionResponse({
+    const res = await heteroCaller(operationId).waitInterventionResponse({
       lastEventId: '0',
-      operationId: 'op-1',
+      operationId,
     });
 
     expect(res.events[0].data).toMatchObject({
@@ -134,24 +155,57 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
   });
 
   it('waitInterventionResponse ignores non-intervention events on the stream', async () => {
+    const operationId = 'op-ignore-non-intervention';
+    await insertOperation(operationId, userId);
     // A plain stream event lands on the op's stream but is not an answer.
     store.events.push({
       data: {},
       id: String(++store.seq),
-      operationId: 'op-1',
+      operationId,
       stepIndex: 0,
       type: 'stream_chunk',
     });
 
-    const res = await heteroCaller().waitInterventionResponse({
+    const res = await heteroCaller(operationId).waitInterventionResponse({
       lastEventId: '0',
-      operationId: 'op-1',
+      operationId,
     });
 
     expect(res.events).toHaveLength(0);
   });
 
   describe('waitInterventionResponse ownership guard', () => {
+    it('lets a pre-deploy operation token read an operation owned by its subject', async () => {
+      await insertOperation('op-legacy-owned', userId);
+      await userCaller().submitHeteroIntervention({
+        operationId: 'op-legacy-owned',
+        result: { answer: 'yes' },
+        toolCallId: 't-legacy-own',
+      });
+
+      const res = await legacyHeteroCaller(userId).waitInterventionResponse({
+        lastEventId: '0',
+        operationId: 'op-legacy-owned',
+      });
+
+      expect(res.events).toHaveLength(1);
+      expect(res.events[0].data).toMatchObject({ toolCallId: 't-legacy-own' });
+    });
+
+    it("rejects a pre-deploy operation token reading another user's operation", async () => {
+      const otherUserId = await createTestUser(serverDB);
+      await insertOperation('op-legacy-others', otherUserId);
+
+      await expect(
+        legacyHeteroCaller(userId).waitInterventionResponse({
+          lastEventId: '0',
+          operationId: 'op-legacy-others',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      await cleanupTestUser(serverDB, otherUserId);
+    });
+
     it('lets an owner token read its own operation', async () => {
       await insertOperation('op-owned', userId);
       await userCaller().submitHeteroIntervention({
@@ -199,15 +253,13 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
-    it('exempts the server-minted operation token from the ownership lookup', async () => {
-      // No agent_operations row exists for this id; the operation-token path
-      // must still succeed (it's trusted as server-minted).
-      const res = await heteroCaller().waitInterventionResponse({
-        lastEventId: '0',
-        operationId: 'op-no-row',
-      });
-
-      expect(res.events).toHaveLength(0);
+    it('rejects a server-minted token when its durable operation row is missing', async () => {
+      await expect(
+        heteroCaller('op-no-row').waitInterventionResponse({
+          lastEventId: '0',
+          operationId: 'op-no-row',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
 });

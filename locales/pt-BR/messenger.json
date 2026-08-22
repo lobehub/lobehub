@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} mensagem(ns) na fila será(ão) entregue(s) após você enviar uma mensagem ao bot no {{platform}}.",
   "messenger.push.queuedToast": "A janela de envio está fechada — sua mensagem está na fila. Envie uma mensagem ao bot no {{platform}} para recebê-la.",
   "messenger.push.resource.description": "O arquivo será enviado como um anexo para sua conta vinculada no {{platform}}.",
+  "messenger.push.resource.oversizeFileHint": "Este arquivo excede o limite de {{limit}} do {{platform}} e será enviado como um link para download.",
+  "messenger.push.resource.oversizeImageHint": "Esta imagem excede o limite de {{limit}} do {{platform}}. Ela será comprimida antes de ser enviada ou enviada como um link de download caso ainda não se encaixe.",
   "messenger.push.resource.placeholder": "Adicione uma mensagem (opcional)…",
   "messenger.push.retry": "Tentar novamente",
   "messenger.push.sectionTitle": "Envio de Mensagens",

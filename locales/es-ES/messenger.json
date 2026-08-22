@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} mensaje(s) en cola se entregarán después de que envíes un mensaje al bot en {{platform}}.",
   "messenger.push.queuedToast": "La ventana de envío está cerrada — tu mensaje está en cola. Envía un mensaje al bot en {{platform}} para recibirlo.",
   "messenger.push.resource.description": "El archivo se enviará como un adjunto a tu cuenta vinculada de {{platform}}.",
+  "messenger.push.resource.oversizeFileHint": "Este archivo supera el límite de {{limit}} de {{platform}} y se enviará como un enlace de descarga.",
+  "messenger.push.resource.oversizeImageHint": "Esta imagen supera el límite de {{limit}} de {{platform}}. Se comprimirá antes de enviarla, o se enviará como un enlace de descarga si aún no cabe.",
   "messenger.push.resource.placeholder": "Añade un mensaje (opcional)…",
   "messenger.push.retry": "Intentar de nuevo",
   "messenger.push.sectionTitle": "Envío de mensajes",

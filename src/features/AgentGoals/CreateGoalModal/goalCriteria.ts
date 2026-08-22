@@ -6,8 +6,6 @@ import { verifyService } from '@/services/verify';
 interface GenerateGoalCriteriaParams {
   context?: string;
   goal: string;
-  model: string;
-  provider: string;
 }
 
 export const withGoalCriterionDefaults = (draft: VerifyCriterionDraft): GoalCriterionDraft => ({
@@ -27,14 +25,11 @@ export const createFallbackGoalCriterion = (goal: string): GoalCriterionDraft =>
 export const generateGoalCriteria = async ({
   context,
   goal,
-  model,
-  provider,
 }: GenerateGoalCriteriaParams): Promise<GoalCriterionDraft[]> => {
-  const generated = await verifyService.generateCriteria({
+  const generated = await verifyService.generateGoalCriteria({
     context,
     goal,
     maxCriteria: 8,
-    modelConfig: { model, provider },
   });
 
   if (generated.length === 0) throw new Error('No acceptance criteria were generated.');

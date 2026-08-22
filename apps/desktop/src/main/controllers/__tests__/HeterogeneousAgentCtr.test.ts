@@ -83,6 +83,12 @@ const { loggerInfoMock } = vi.hoisted(() => ({
   loggerInfoMock: vi.fn(),
 }));
 
+const getProviderBindingRuntimeMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/modules/heterogeneousAgent/providerBindingPort', () => ({
+  getProviderBindingRuntime: getProviderBindingRuntimeMock,
+}));
+
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => mockGetAllWindows() },
   app: {
@@ -564,6 +570,15 @@ describe('HeterogeneousAgentCtr', () => {
       });
     });
     loggerInfoMock.mockReset();
+    getProviderBindingRuntimeMock.mockReset();
+    getProviderBindingRuntimeMock.mockResolvedValue({
+      enabled: true,
+      runtimeConfig: {
+        config: { enableResponseApi: true },
+        keyVaults: { apiKey: 'provider-secret' },
+        settings: { sdkType: 'openai', supportResponsesApi: true },
+      },
+    });
     traeAcpSessionCloseMock.mockReset();
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
@@ -1645,6 +1660,150 @@ describe('HeterogeneousAgentCtr', () => {
 
       expect(detect).toHaveBeenCalledWith('codex', true);
       expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('rejects a binding whose model the server reports as disabled, even when the renderer sent it', async () => {
+      getProviderBindingRuntimeMock.mockResolvedValue({
+        enabled: true,
+        enabledModels: [{ id: 'another-model', providerId: 'openai', type: 'chat' }],
+        runtimeConfig: {
+          config: { enableResponseApi: true },
+          keyVaults: { apiKey: 'provider-secret' },
+          settings: { sdkType: 'openai', supportResponsesApi: true },
+        },
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      await expect(
+        ctr.startSession({
+          agentType: 'codex',
+          command: 'codex',
+          providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        }),
+      ).rejects.toThrow('Model "openai/gpt-test" is disabled or unavailable.');
+    });
+
+    it('cleans provider-binding run state when CLI preflight fails', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: { detect },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+      });
+      const runsDir = path.join(appStoragePath, 'heteroAgent', 'runs');
+      expect(await readdir(runsDir)).toEqual([sessionId]);
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('Codex CLI was not found');
+
+      expect(await readdir(runsDir)).toEqual([]);
+    });
+
+    it('forces provider-bound Codex through exec without persisting or logging its secret', async () => {
+      const { cliArgs, options, sessionId } = await runSendPrompt('provider-bound prompt', {
+        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        useCodexAppServer: true,
+      });
+
+      expect(cliArgs[0]).toBe('exec');
+      expect(codexAppServerConstructMock).not.toHaveBeenCalled();
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          CODEX_HOME: expect.stringContaining('/heteroAgent/bindings/codex/'),
+          LOBEHUB_CODEX_API_KEY: 'provider-secret',
+        }),
+      );
+      expect(JSON.stringify(cliArgs)).not.toContain('provider-secret');
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('provider-secret');
+
+      const codexBindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'codex');
+      const [bindingDir] = await readdir(codexBindingsDir);
+      const config = await readFile(path.join(codexBindingsDir, bindingDir, 'config.toml'), 'utf8');
+      expect(config).toContain('wire_api = "responses"');
+      expect(config).not.toContain('provider-secret');
+      await expect(
+        readdir(path.join(appStoragePath, 'heteroAgent', 'runs', sessionId)),
+      ).rejects.toThrow();
+    });
+
+    it('cleans provider-binding run state when spawn throws synchronously', async () => {
+      nextFakeProc = {
+        __start: () => {
+          throw new Error('spawn failed');
+        },
+      };
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('spawn failed');
+      await expect(
+        readdir(path.join(appStoragePath, 'heteroAgent', 'runs', sessionId)),
+      ).rejects.toThrow();
+    });
+
+    it('resumes a provider-bound session only when the resolved binding key matches', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const first = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+      });
+      const legacy = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        resumeSessionId: 'thread-without-binding-key',
+      });
+      const rejected = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          resumeBindingKey: 'provider-binding:v1:different',
+        },
+        resumeSessionId: 'thread-rejected',
+      });
+      const accepted = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          resumeBindingKey: first.providerBindingKey,
+        },
+        resumeSessionId: 'thread-accepted',
+      });
+
+      await expect(ctr.getSessionInfo({ sessionId: legacy.sessionId })).resolves.toEqual({
+        agentSessionId: undefined,
+      });
+      await expect(ctr.getSessionInfo({ sessionId: rejected.sessionId })).resolves.toEqual({
+        agentSessionId: undefined,
+      });
+      await expect(ctr.getSessionInfo({ sessionId: accepted.sessionId })).resolves.toEqual({
+        agentSessionId: 'thread-accepted',
+      });
+      expect(accepted.providerBindingKey).toBe(first.providerBindingKey);
     });
 
     it('validates the default desktop directory when the session cwd is omitted', async () => {

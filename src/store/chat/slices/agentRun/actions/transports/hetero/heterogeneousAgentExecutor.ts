@@ -6,10 +6,10 @@ import type {
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
-  buildClaudeCodeDirectEnv,
   buildHeterogeneousAgentAuthRequiredError,
   createMainAgentRunState,
   isHeterogeneousAgentAuthRequired,
+  isHeterogeneousProviderBindingSupported,
   isLocalHeterogeneousType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
@@ -17,8 +17,6 @@ import {
   reduceMainAgent,
   rehydrateSubagentRunsState,
   resolveHeterogeneousAgentCommand,
-  sanitizeClaudeCodeDirectArgs,
-  sanitizeClaudeCodeDirectEnv,
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
@@ -49,9 +47,10 @@ import { createNanoId } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
-import { validateClaudeCodeApiBinding } from '@/helpers/claudeCodeApiBinding';
 import {
+  removeHeteroSessionBindingKeyForWorkingDirectory,
   removeHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionBindingKeyForWorkingDirectory,
   setHeteroSessionIdForWorkingDirectory,
 } from '@/helpers/heteroSessionByWorkingDirectory';
 import { agentQuotaService } from '@/services/agentQuota';
@@ -63,7 +62,6 @@ import {
 } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
-import { getAiInfraStoreState } from '@/store/aiInfra';
 import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
@@ -80,6 +78,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
+import { getNativeHeteroSessionBindingKey } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
@@ -223,6 +222,7 @@ export interface HeterogeneousAgentExecutorParams {
   operationId: string;
   pageSelections?: PageSelection[];
   /** CC session ID from previous execution in this topic (for --resume) */
+  resumeBindingKey?: string;
   resumeSessionId?: string;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
@@ -463,6 +463,7 @@ export const executeHeterogeneousAgent = async (
     message,
     operationId,
     pageSelections,
+    resumeBindingKey,
     resumeSessionId,
     workingDirectory,
     workingDirectoryConfig,
@@ -802,6 +803,11 @@ export const executeHeterogeneousAgent = async (
 
     const topicMetadata = getTopicMetadataById(get(), context.topicId);
     await updateTopicMetadata(context.topicId, {
+      heteroSessionBindingKey: undefined,
+      heteroSessionBindingKeyByWorkingDirectory: removeHeteroSessionBindingKeyForWorkingDirectory(
+        topicMetadata,
+        workingDirectory,
+      ),
       heteroSessionId: undefined,
       heteroSessionIdByWorkingDirectory: removeHeteroSessionIdForWorkingDirectory(
         topicMetadata,
@@ -812,6 +818,7 @@ export const executeHeterogeneousAgent = async (
     });
   };
   let persistedResumeSessionId: string | undefined;
+  let activeSessionBindingKey = getNativeHeteroSessionBindingKey(adapterType);
   let pendingResumeSessionId: string | undefined;
   let resumeSessionPersistQueue: Promise<void> = Promise.resolve();
   const persistResumeSessionId = (sessionId: string, source: string): Promise<void> => {
@@ -827,6 +834,12 @@ export const executeHeterogeneousAgent = async (
       .then(async () => {
         const topicMetadata = getTopicMetadataById(get(), topicId);
         await updateTopicMetadata(topicId, {
+          heteroSessionBindingKey: activeSessionBindingKey,
+          heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
+            topicMetadata,
+            workingDirectory,
+            activeSessionBindingKey,
+          ),
           heteroSessionId: sessionId,
           heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
             topicMetadata,
@@ -1803,12 +1816,9 @@ export const executeHeterogeneousAgent = async (
 
   await rehydrateClientSubagentRuns();
 
-  let directEnv: Record<string, string> | undefined;
-  let directModel: string | undefined;
-  let spawnProvider = heterogeneousProvider;
-
-  if (adapterType === 'claude-code' && heterogeneousProvider.authMode === 'api') {
-    if (!labPreferSelectors.enableClaudeCodeApiMode(useUserStore.getState())) {
+  const providerBindingActive = heterogeneousProvider.authMode === 'api';
+  if (providerBindingActive) {
+    if (!labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())) {
       await persistTerminalError(
         toHeterogeneousAgentMessageError(
           new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
@@ -1819,60 +1829,24 @@ export const executeHeterogeneousAgent = async (
     }
 
     const { apiConfig } = heterogeneousProvider;
-    const aiInfraState = getAiInfraStoreState();
-    const providerConfig = apiConfig
-      ? aiInfraState.aiProviderRuntimeConfig[apiConfig.providerId]
-      : undefined;
-    const bindingError = validateClaudeCodeApiBinding({
-      apiConfig,
-      enabledModels: aiInfraState.enabledAiModels ?? [],
-      providerEnabled:
-        !!apiConfig &&
-        !!providerConfig &&
-        !!aiInfraState.enabledAiProviders?.some((provider) => provider.id === apiConfig.providerId),
-      providerSdkType: providerConfig?.settings.sdkType,
-    });
-    if (bindingError) {
-      const message =
-        bindingError.code === 'configMissing'
-          ? t('heteroAgent.apiMode.configMissing', { ns: 'chat' })
-          : t(`heteroAgent.apiMode.${bindingError.code}`, {
-              ...bindingError,
-              ns: 'chat',
-            });
+    if (
+      !isHeterogeneousProviderBindingSupported(adapterType) ||
+      !apiConfig?.providerId ||
+      !apiConfig.model?.trim()
+    ) {
+      const message = !isHeterogeneousProviderBindingSupported(adapterType)
+        ? t('heteroAgent.apiMode.agentUnsupported', { name: adapterType, ns: 'chat' })
+        : t('heteroAgent.apiMode.configMissing', { ns: 'chat' });
       await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
       return;
     }
-
-    if (!apiConfig || !providerConfig) return;
-
-    const result = buildClaudeCodeDirectEnv({
-      keyVaults: providerConfig.keyVaults,
-      model: apiConfig.model,
-      sdkType: providerConfig.settings.sdkType,
-      smallFastModel: apiConfig.smallFastModel ?? undefined,
-    });
-    if (result.error) {
-      await persistTerminalError(
-        toHeterogeneousAgentMessageError(new Error(result.error), adapterType),
-      );
-      return;
-    }
-
-    directEnv = result.env;
-    directModel = apiConfig.model.trim();
-    spawnProvider = {
-      ...heterogeneousProvider,
-      args: sanitizeClaudeCodeDirectArgs(heterogeneousProvider.args),
-      model: undefined,
-    };
   }
 
   try {
     // Account routing: realize the pinned/balanced account choice as spawn env
     // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
     // before; a quota-service failure must never block the run.
-    const quotaAccountPlan = directEnv
+    const quotaAccountPlan = providerBindingActive
       ? { env: {}, externalAccountId: undefined }
       : await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
 
@@ -1890,20 +1864,21 @@ export const executeHeterogeneousAgent = async (
       ...quotaAccountPlan.env,
       // The agent's own env is the most specific choice and keeps winning —
       // over both provenance and account routing.
-      ...(directEnv
-        ? sanitizeClaudeCodeDirectEnv(heterogeneousProvider.env)
-        : heterogeneousProvider.env),
-      ...directEnv,
+      ...heterogeneousProvider.env,
     };
 
-    const spawnArgs = buildHeteroSpawnArgs(spawnProvider);
-    const resolvedSpawnArgs =
-      directEnv && directModel ? [...(spawnArgs ?? []), '--model', directModel] : spawnArgs;
+    const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
+    const providerBinding = providerBindingActive
+      ? {
+          apiConfig: heterogeneousProvider.apiConfig!,
+          resumeBindingKey,
+        }
+      : undefined;
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
-      args: resolvedSpawnArgs,
+      args: spawnArgs,
       command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,
@@ -1913,15 +1888,21 @@ export const executeHeterogeneousAgent = async (
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
           ? heterogeneousProvider.model
           : undefined,
+      providerBinding,
       resumeSessionId,
       useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
       useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
+    activeSessionBindingKey =
+      result.providerBindingKey ?? getNativeHeteroSessionBindingKey(adapterType);
+    if (providerBindingActive && resumeSessionId && resumeBindingKey !== activeSessionBindingKey) {
+      await clearStaleResumeMetadata();
+    }
 
     // Attribute the run to the login the FINAL env actually resolves to (an
     // agent-env CLAUDE_CONFIG_DIR beats routing, and unbound agents use the
     // default login). Falls back to the routed choice when the file read fails.
-    if (adapterType === 'claude-code' && !directEnv) {
+    if (adapterType === 'claude-code' && !providerBindingActive) {
       heterogeneousAgentService
         .getClaudeCodeIdentity({ env: sessionEnv })
         .then((identity) => {

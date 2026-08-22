@@ -26,6 +26,7 @@ import type {
   RunScope,
 } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -1115,12 +1116,23 @@ export const createGatewayEventHandler = (
           // pushes the canonical snapshot directly on this event. Fall back
           // to a DB refetch only if the snapshot is absent (older server
           // builds, or push-event delivery edge cases).
+          const isSuperseded = operationSelectors.hasNewerConversationOperation(
+            operationId,
+            context,
+          )(get());
           if (Array.isArray(data?.uiMessages)) {
             terminalMessages = data.uiMessages;
-            get().replaceMessages(data.uiMessages, {
-              action: 'gateway/agent_runtime_end',
-              context,
-            });
+            // `visible_output_end` lets a follow-up start before this terminal
+            // event arrives. Once that happens, this run's snapshot is no longer
+            // the conversation SoT: replacing the list would erase the newer
+            // turn's optimistic rows until refresh. Keep terminalMessages for
+            // this run's notification, but do not mutate its successor's store.
+            if (!isSuperseded) {
+              get().replaceMessages(data.uiMessages, {
+                action: 'gateway/agent_runtime_end',
+                context,
+              });
+            }
           } else if (
             (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
             hasStreamedContent
@@ -1143,7 +1155,7 @@ export const createGatewayEventHandler = (
             // arrives BEFORE any stream activity, the optimistic `tmp_*`
             // messages are the only in-memory state and they need the
             // refetch to be reconciled with the server-side rows.
-          } else {
+          } else if (!isSuperseded) {
             await fetchAndReplaceMessages(get, context).catch(console.error);
           }
 

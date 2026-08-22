@@ -35,7 +35,7 @@ const AcceptanceProjectActions = memo<AcceptanceProjectActionsProps>(({ projectI
           icon: <Icon icon={Plus} />,
           key: action,
           label: t('acceptance.workspace.groups.createProject'),
-          onClick: openCreateProjectModal,
+          onClick: () => openCreateProjectModal(),
         };
   });
 

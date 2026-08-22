@@ -162,7 +162,14 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
-   * let Claude Code use a configured API provider on Desktop instead of a subscription
+   * let supported local agents (Claude Code / Codex) use a configured API
+   * provider on Desktop instead of their subscription
+   */
+  enableAgentProviderBinding: z.boolean().optional(),
+  /**
+   * @deprecated superseded by `enableAgentProviderBinding` when the feature
+   * generalized beyond Claude Code. Kept so users who enabled it under the old
+   * key keep the feature on; the selector falls back to it.
    */
   enableClaudeCodeApiMode: z.boolean().optional(),
   /**

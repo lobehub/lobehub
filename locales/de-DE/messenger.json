@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} Nachricht(en) in der Warteschlange werden zugestellt, nachdem Sie den Bot in {{platform}} kontaktiert haben.",
   "messenger.push.queuedToast": "Das Sendezeitfenster ist geschlossen — Ihre Nachricht ist in der Warteschlange. Kontaktieren Sie den Bot in {{platform}}, um sie zu erhalten.",
   "messenger.push.resource.description": "Die Datei wird als Anhang an Ihr verknüpftes {{platform}}-Konto gesendet.",
+  "messenger.push.resource.oversizeFileHint": "Diese Datei überschreitet das {{limit}}-Limit von {{platform}} und wird als Download-Link gesendet.",
+  "messenger.push.resource.oversizeImageHint": "Dieses Bild überschreitet das {{limit}}-Limit von {{platform}}. Es wird vor dem Senden komprimiert oder als Download-Link gesendet, falls es immer noch nicht passt.",
   "messenger.push.resource.placeholder": "Fügen Sie eine Nachricht hinzu (optional)…",
   "messenger.push.retry": "Erneut versuchen",
   "messenger.push.sectionTitle": "Nachrichten-Push",

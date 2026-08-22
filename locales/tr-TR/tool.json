@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Yapılacaklar listesi güncellendi",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Karakter Sayısı",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Satır Sayısı",
+  "localFiles.editFile.ambiguous": "Bu metin dosyada {{times}} kez görünüyor. Düzenleme reddedilecek — bir örneği tanımlamak için yeterli bağlam veya \"tümünü değiştir\" seçeneği gerekiyor.",
   "localFiles.editFile.newString": "Şununla değiştir",
   "localFiles.editFile.oldString": "Bul",
   "localFiles.editFile.replaceAll": "Tümünü değiştir",

@@ -12,6 +12,7 @@ import {
   CircleDashed,
   CircleHelp,
   CircleX,
+  GitMerge,
   LoaderCircle,
   MoreHorizontal,
   Pencil,
@@ -31,6 +32,8 @@ import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 import { getAcceptanceStatusActions } from '../statusActions';
+import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
+import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 
 const styles = createStaticStyles(({ css }) => ({
   editRow: css`
@@ -187,6 +190,61 @@ const AcceptanceRow = memo<{
     }
   };
 
+  const assignProject = async (projectId: string | null) => {
+    setMutating(true);
+    try {
+      await verifyService.setAcceptanceProject(item.id, projectId);
+      await refresh();
+      toast.success(
+        projectId
+          ? t(
+              item.project?.id
+                ? 'acceptance.workspace.project.moveSuccess'
+                : 'acceptance.workspace.project.addSuccess',
+            )
+          : t('acceptance.workspace.project.removeSuccess'),
+      );
+    } catch (error) {
+      console.error('[acceptance:project]', error);
+      toast.error(t('acceptance.workspace.project.error'));
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const projectItem = useAcceptanceProjectMenuItem({
+    currentProjectId: item.project?.id,
+    onSelect: (projectId) => void assignProject(projectId),
+  });
+
+  /**
+   * Fold this entry into another acceptance — its checks (with rounds and
+   * evidence) move over and this row disappears. Navigating the active row to
+   * the target keeps the reviewer on the surface their checks just moved to,
+   * instead of on a 404.
+   */
+  const mergeIntoAcceptance = () => {
+    openMergeAcceptanceModal({
+      source: item,
+      onConfirm: async (targetId) => {
+        setMutating(true);
+        try {
+          const summary = await verifyService.mergeAcceptance(item.id, targetId);
+          if (active) navigate(`/acceptance/${targetId}`, { replace: true });
+          await Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(targetId))]);
+          toast.success(t('acceptance.workspace.merge.success', { count: summary.movedChecks }));
+          return true;
+        } catch (error) {
+          console.error('[acceptance:merge]', error);
+          toast.error(t('acceptance.workspace.merge.error'));
+          return false;
+        } finally {
+          setMutating(false);
+        }
+      },
+    });
+  };
+
   const removeAcceptance = () => {
     confirmModal({
       cancelText: t('actions.cancel'),
@@ -242,6 +300,13 @@ const AcceptanceRow = memo<{
       key: 'rename',
       label: t('acceptance.workspace.actions.rename'),
       onClick: startRename,
+    },
+    projectItem,
+    {
+      icon: <Icon icon={GitMerge} />,
+      key: 'merge',
+      label: t('acceptance.workspace.actions.merge'),
+      onClick: mergeIntoAcceptance,
     },
     ...(statusItems.length > 0
       ? [

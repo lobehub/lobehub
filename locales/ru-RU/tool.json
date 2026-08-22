@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Список задач обновлен",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Количество символов",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Количество строк",
+  "localFiles.editFile.ambiguous": "Этот текст появляется {{times}} раз(а) в файле. Изменение будет отклонено — необходимо достаточно контекста, чтобы идентифицировать одно вхождение, или выбрать «заменить все».",
   "localFiles.editFile.newString": "Заменить на",
   "localFiles.editFile.oldString": "Найти",
   "localFiles.editFile.replaceAll": "Заменить все вхождения",

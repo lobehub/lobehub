@@ -4,7 +4,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useProjectStore } from '@/store/project';
+import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
   getCreateProjectInput,
@@ -12,6 +12,15 @@ import {
   isProjectIdentifierValid,
   isProjectSlugValid,
 } from './createProjectForm';
+
+interface CreateProjectOptions {
+  /**
+   * Handle the created project instead of opening it. Callers that create a
+   * project as a step of another action (filing a delivery under a new one)
+   * must not have the user navigated away from what they were doing.
+   */
+  onCreated?: (project: ProjectListItem) => void;
+}
 
 interface CreateProjectFormState {
   identifier: string;
@@ -28,7 +37,7 @@ const CreateProjectTitle = memo(() => {
   return t('create.title');
 });
 
-const CreateProjectContent = memo(() => {
+const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { t } = useTranslation(['project', 'common']);
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
@@ -67,7 +76,8 @@ const CreateProjectContent = memo(() => {
     try {
       const project = await createProject(createInput);
       close();
-      navigate(`/project/${project.slug ?? project.id}`);
+      if (onCreated) onCreated(project);
+      else navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
       console.error('Failed to create project', error);
       toast.error(t('operationFailed', { ns: 'common' }));
@@ -144,9 +154,9 @@ const CreateProjectContent = memo(() => {
   );
 });
 
-export const openCreateProjectModal = () =>
+export const openCreateProjectModal = (options: CreateProjectOptions = {}) =>
   createModal({
-    content: <CreateProjectContent />,
+    content: <CreateProjectContent {...options} />,
     footer: null,
     styles: { content: { padding: 0 } },
     title: <CreateProjectTitle />,

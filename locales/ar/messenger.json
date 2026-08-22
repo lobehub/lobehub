@@ -75,6 +75,8 @@
   "messenger.push.queued": "{{count}} رسالة (رسائل) في الانتظار سيتم تسليمها بعد أن ترسل رسالة إلى الروبوت في {{platform}}.",
   "messenger.push.queuedToast": "نافذة الإرسال مغلقة — تم وضع رسالتك في الانتظار. أرسل رسالة إلى الروبوت في {{platform}} لاستلامها.",
   "messenger.push.resource.description": "سيتم إرسال الملف كمرفق إلى حسابك المرتبط على {{platform}}.",
+  "messenger.push.resource.oversizeFileHint": "يتجاوز هذا الملف الحد الأقصى {{limit}} الخاص بـ {{platform}} وسيتم إرساله كرابط تنزيل.",
+  "messenger.push.resource.oversizeImageHint": "تتجاوز هذه الصورة الحد المسموح به {{limit}} على {{platform}}. سيتم ضغطها قبل الإرسال، أو سيتم إرسالها كرابط تحميل إذا لم تكن مناسبة.",
   "messenger.push.resource.placeholder": "أضف رسالة (اختياري)…",
   "messenger.push.retry": "حاول مرة أخرى",
   "messenger.push.sectionTitle": "دفع الرسائل",

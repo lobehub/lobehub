@@ -491,6 +491,8 @@ export class CursorAcpSession extends AcpAgentSession<
     }
 
     const answers = [];
+    const supplement = answer.result.__supplement__;
+    const supplementText = typeof supplement === 'string' ? supplement.trim() : '';
     for (const question of request.questions) {
       const selectedOptionIds = this.getAnswerSelections(answer, question.prompt).flatMap(
         (selection) => {
@@ -500,7 +502,12 @@ export class CursorAcpSession extends AcpAgentSession<
           return [option?.id ?? selection];
         },
       );
-      answers.push({ questionId: question.id, selectedOptionIds });
+      answers.push({
+        questionId: question.id,
+        selectedOptionIds: supplementText
+          ? [...selectedOptionIds, supplementText]
+          : selectedOptionIds,
+      });
     }
 
     return { outcome: { answers, outcome: 'answered' } };

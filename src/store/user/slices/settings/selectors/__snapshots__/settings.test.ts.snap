@@ -68,6 +68,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.6-luna",
     "provider": "openai",
   },
+  "goal": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
   "historyCompress": {
     "model": "deepseek-v4-flash",
     "provider": "deepseek",

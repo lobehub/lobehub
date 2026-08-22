@@ -113,7 +113,7 @@ export const chainExpertiseDomainDraft = ({
       ],
 });
 
-export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v1';
+export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v2';
 
 export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
   name: 'expertise_topic_ingestion',
@@ -130,14 +130,21 @@ export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
               items: {
                 additionalProperties: false,
                 properties: {
-                  existingCode: { type: ['string', 'null'] },
+                  existingLessonCode: { type: ['string', 'null'] },
                   example: { type: 'string' },
                   layer: { type: ['string', 'null'] },
                   outcome: { enum: ['pass', 'violation'], type: 'string' },
                   reasoning: { type: 'string' },
                   title: { type: 'string' },
                 },
-                required: ['existingCode', 'example', 'layer', 'outcome', 'reasoning', 'title'],
+                required: [
+                  'example',
+                  'existingLessonCode',
+                  'layer',
+                  'outcome',
+                  'reasoning',
+                  'title',
+                ],
                 type: 'object',
               },
               maxItems: 8,
@@ -159,7 +166,14 @@ const EXPERTISE_TOPIC_INGESTION_SYSTEM_PROMPT = `You maintain evidence-backed ex
 
 First apply each domainFilter and outOfScope literally. If a conversation does not match, return matches=false and no observations.
 
-For a match, map concrete evidence to an existing lesson when its judgment is the same; otherwise propose one reusable lesson. Do not turn implementation trivia or a one-off fact into a lesson. Use only declared layer keys. Keep evidence short and grounded in the supplied conversation.`;
+For a match, turn concrete evidence into observations. Attaching to an existing lesson is the default; a new lesson is the exception:
+
+- Attach whenever a listed lesson already carries the same judgment, even when this conversation words it differently or applies it to another stack. Put that lesson's code in existingLessonCode, copied character for character from its \`code\` field (for example "P-07").
+- existingLessonCode holds a lesson code and nothing else. Never put source code, a file path, a symbol name, a lesson title, or any identifier taken from the conversation there — those all read as "no existing lesson" and silently fork a duplicate.
+- Only when no listed lesson carries the judgment, set existingLessonCode to null and propose one reusable lesson. Before doing so, state to yourself what it adds that every listed lesson misses; if you cannot, attach instead. Rewording a listed lesson is not a new lesson.
+- Do not turn implementation trivia or a one-off fact into a lesson.
+
+Use only declared layer keys. Keep evidence short and grounded in the supplied conversation, and write human-facing text in the language of the conversation.`;
 
 export const chainExpertiseTopicIngestion = (input: {
   context: string;
