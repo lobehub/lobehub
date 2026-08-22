@@ -26,6 +26,7 @@ import { ModelProvider } from 'model-bank';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
+import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
@@ -552,17 +553,22 @@ const supportsServerDefaultHeterogeneousAgent = (
     ? parseClaudeModelId(model) !== undefined
     : isResponsesAPIModel(model);
 
+const getEnabledServerChatModels = async (provider: ModelProvider) => {
+  const providerConfig = (await getServerGlobalConfig()).aiProvider[provider];
+  if (!providerConfig?.enabled) return [];
+
+  const models =
+    providerConfig.serverModelLists ??
+    (await loadModels()).filter((model) => model.providerId === provider);
+
+  return models.filter((model) => model.enabled && model.type === 'chat');
+};
+
 /** Return compatible models from the single deployment-owned relay provider. */
 export const getServerDefaultHeterogeneousModels = async () => {
   const models: ServerDefaultHeterogeneousModels = { 'claude-code': [], 'codex': [] };
-  const { aiProvider } = await getServerGlobalConfig();
-  const providerConfig = aiProvider[ModelProvider.LobeHub];
 
-  if (!providerConfig?.enabled) return models;
-
-  for (const model of providerConfig.serverModelLists ?? []) {
-    if (!model.enabled || model.type !== 'chat') continue;
-
+  for (const model of await getEnabledServerChatModels(ModelProvider.LobeHub)) {
     for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
       if (supportsServerDefaultHeterogeneousAgent(agentType, model.id)) {
         models[agentType].push({ model: model.id });
@@ -578,11 +584,10 @@ export const resolveServerModel = async (provider: string, model: string) => {
   if (!Object.values(ModelProvider).includes(provider as ModelProvider)) {
     throw new Error('Deployment-level custom providers are not supported for server agents');
   }
-  const providerConfig = (await getServerGlobalConfig()).aiProvider[provider as ModelProvider];
-  const modelConfig = providerConfig?.serverModelLists?.find(
-    (item) => item.id === model && item.enabled && item.type === 'chat',
+  const modelConfig = (await getEnabledServerChatModels(provider as ModelProvider)).find(
+    (item) => item.id === model,
   );
-  if (!providerConfig?.enabled || !modelConfig) {
+  if (!modelConfig) {
     throw new Error('The selected server model is not available');
   }
   return {
