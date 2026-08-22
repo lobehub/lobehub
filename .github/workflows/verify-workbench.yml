@@ -6,6 +6,7 @@ on:
 permissions:
   actions: read
   contents: read
+  pull-requests: write
 
 concurrency:
   group: verify-workbench-${{ github.event.pull_request.number }}
@@ -110,3 +111,32 @@ jobs:
             echo "Preview: https://pr${PR}-lobehub-workbench.lobeobjects-tg.workers.dev" >> "$GITHUB_STEP_SUMMARY"
           fi
         working-directory: apps/workbench
+
+      - name: Comment the preview URL
+        if: steps.detect.outputs.should_build == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Matched on a marker rather than `gh pr comment --edit-last`, which edits the
+          # last comment by this actor — and other workflows in this repo comment as the
+          # same bot, so it would rewrite one of theirs.
+          marker='<!-- workbench-preview -->'
+          body="${marker}
+          ### Workbench preview
+
+          <https://pr${PR}-lobehub-workbench.lobeobjects-tg.workers.dev>
+
+          A version, not a deployment: it takes no production traffic. Assets are served
+          from that same origin, so the page also renders through the gateway — point
+          \`workbench\`'s override at that host on staging in 鳥居番, then open
+          <https://gateway-staging.lobehub.com/acceptance>."
+          id=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq "map(select(.body | startswith(\"${marker}\"))) | .[0].id // empty")
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${id}" -f body="$body" > /dev/null
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR}/comments" -f body="$body" > /dev/null
+          fi
