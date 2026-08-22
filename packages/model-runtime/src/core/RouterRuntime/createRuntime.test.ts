@@ -584,6 +584,93 @@ describe('createRouterRuntime', () => {
       );
     });
 
+    it.each<
+      [
+        string,
+        (
+          runtime: InstanceType<ReturnType<typeof createRouterRuntime>>,
+          options: any,
+        ) => Promise<unknown>,
+      ]
+    >([
+      [
+        'chat',
+        (runtime, options) =>
+          runtime.chat({ messages: [], model: 'request-model', temperature: 0.7 }, options),
+      ],
+      [
+        'createImage',
+        (runtime, options) =>
+          runtime.createImage(
+            { model: 'request-model', params: { prompt: 'a cat' } } as any,
+            options,
+          ),
+      ],
+      [
+        'createVideo',
+        (runtime, options) =>
+          runtime.createVideo(
+            { model: 'request-model', params: { prompt: 'a cat' } } as any,
+            options,
+          ),
+      ],
+      [
+        'generateObject',
+        (runtime, options) =>
+          runtime.generateObject(
+            {
+              messages: [],
+              model: 'request-model',
+              schema: { name: 'result', schema: { properties: {}, type: 'object' } },
+            },
+            options,
+          ),
+      ],
+      [
+        'embeddings',
+        (runtime, options) =>
+          runtime.embeddings({ input: 'hello', model: 'request-model' }, options),
+      ],
+      [
+        'textToSpeech',
+        (runtime, options) =>
+          runtime.textToSpeech({ input: 'hello', model: 'request-model', voice: 'alloy' }, options),
+      ],
+    ])(
+      'should forward request pricing context to dynamic routers for %s',
+      async (_method, call) => {
+        class MockRuntime implements LobeRuntimeAI {
+          chat = vi.fn().mockResolvedValue('chat-response');
+          createImage = vi.fn().mockResolvedValue({ imageUrl: 'image-url' });
+          createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-id' });
+          embeddings = vi.fn().mockResolvedValue([]);
+          generateObject = vi.fn().mockResolvedValue({});
+          textToSpeech = vi.fn().mockResolvedValue('speech-response');
+        }
+
+        const dynamicRoutersFunction = vi.fn(() => [
+          {
+            apiType: 'openai' as const,
+            models: ['request-model'],
+            options: {},
+            runtime: MockRuntime as any,
+          },
+        ]);
+        const Runtime = createRouterRuntime({
+          id: 'test-runtime',
+          routers: dynamicRoutersFunction,
+        });
+        const pricingContext = { plan: 'premium', scope: 'personal' } as const;
+
+        await call(new Runtime(), { pricingContext });
+
+        expect(dynamicRoutersFunction).toHaveBeenCalledWith(expect.any(Object), {
+          model: 'request-model',
+          pricingContext,
+        });
+      },
+    );
+
     it('should throw NoAvailableProvider error when dynamic routers function returns empty array', async () => {
       const emptyRoutersFunction = () => [];
 

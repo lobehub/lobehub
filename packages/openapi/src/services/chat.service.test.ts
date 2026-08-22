@@ -113,13 +113,13 @@ describe('ChatService payload construction', () => {
     expect(chatMock.mock.calls[0][0]).toMatchObject({ temperature: 0.7 });
   });
 
-  it('passes user and workspace context to the runtime constructor', async () => {
+  it('passes workspace context to the runtime constructor', async () => {
     await buildService('workspace-1').chat({ messages } as any);
 
     expect(initModelRuntimeWithUserPayloadMock).toHaveBeenCalledWith(
       'p',
       { apiKey: 'k', userId: 'user-1' },
-      { userId: 'user-1', workspaceId: 'workspace-1' },
+      { workspaceId: 'workspace-1' },
       undefined,
     );
   });
