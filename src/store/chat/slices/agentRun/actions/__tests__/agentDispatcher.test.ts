@@ -12,7 +12,7 @@ const apiHeteroProvider = {
 const serverHeteroProvider = {
   authMode: 'server' as const,
   command: 'claude',
-  serverConfig: { model: 'claude-sonnet', providerId: 'anthropic' },
+  serverConfig: { model: 'claude-sonnet', providerId: 'lobehub' },
   type: 'claude-code' as const,
 };
 const codexApiHeteroProvider = {

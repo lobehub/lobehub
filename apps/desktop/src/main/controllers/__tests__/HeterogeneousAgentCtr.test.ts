@@ -1677,7 +1677,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         providerBinding: {
           kind: 'server-default',
-          serverConfig: { model: 'gpt-5.4', providerId: 'openai' },
+          serverConfig: { model: 'gpt-5.4', providerId: 'lobehub' },
         },
       });
 
@@ -1694,7 +1694,7 @@ describe('HeterogeneousAgentCtr', () => {
         agentType: 'codex',
         model: 'gpt-5.4',
         operationId: 'op-server-default',
-        providerId: 'openai',
+        providerId: 'lobehub',
         topicId: 'topic-1',
       });
       expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {

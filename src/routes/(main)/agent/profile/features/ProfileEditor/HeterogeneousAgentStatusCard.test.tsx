@@ -239,12 +239,12 @@ vi.mock('@/services/electron/binary', () => ({
 }));
 
 const claudeServerModels = [
-  { model: 'claude-server', providerId: 'anthropic' },
-  { model: 'claude-fast', providerId: 'anthropic' },
+  { model: 'claude-sonnet-4-6', providerId: 'lobehub' },
+  { model: 'claude-haiku-4-5', providerId: 'lobehub' },
 ] satisfies HeterogeneousServerConfig[];
 
 const codexServerModels = [
-  { model: 'gpt-server', providerId: 'openai' },
+  { model: 'gpt-5.4', providerId: 'lobehub' },
 ] satisfies HeterogeneousServerConfig[];
 
 describe('HeterogeneousAgentStatusCard', () => {
@@ -528,7 +528,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByRole('button', { name: 'LobeHub Server' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'LobeHub Server' }));
     expect(onAuthModeChange).toHaveBeenCalledWith('server', {
-      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
+      serverConfig: { model: 'claude-sonnet-4-6', providerId: 'lobehub' },
     });
 
     rerender(
@@ -567,7 +567,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     fireEvent.click(serverOption);
     expect(onAuthModeChange).toHaveBeenCalledWith('server', {
-      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
+      serverConfig: { model: 'claude-sonnet-4-6', providerId: 'lobehub' },
     });
   });
 
@@ -600,7 +600,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     const provider = {
       authMode: 'server',
       command: 'claude',
-      serverConfig: { model: 'claude-server', providerId: 'anthropic' },
+      serverConfig: { model: 'claude-sonnet-4-6', providerId: 'lobehub' },
       type: 'claude-code',
     } satisfies HeterogeneousProviderConfig;
 
@@ -615,12 +615,12 @@ describe('HeterogeneousAgentStatusCard', () => {
       </MemoryRouter>,
     );
 
-    const select = await screen.findByDisplayValue('claude-server');
-    expect(screen.queryByText('gpt-server')).not.toBeInTheDocument();
-    fireEvent.change(select, { target: { value: 'anthropic/claude-fast' } });
+    const select = await screen.findByDisplayValue('claude-sonnet-4-6');
+    expect(screen.queryByText('gpt-5.4')).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'lobehub/claude-haiku-4-5' } });
     expect(onServerConfigChange).toHaveBeenCalledWith({
-      model: 'claude-fast',
-      providerId: 'anthropic',
+      model: 'claude-haiku-4-5',
+      providerId: 'lobehub',
     });
   });
 
@@ -645,12 +645,12 @@ describe('HeterogeneousAgentStatusCard', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByDisplayValue('gpt-server')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('gpt-5.4')).toBeInTheDocument();
     expect(screen.queryByText('claude-server')).not.toBeInTheDocument();
     await waitFor(() => {
       expect(onServerConfigChange).toHaveBeenCalledWith({
-        model: 'gpt-server',
-        providerId: 'openai',
+        model: 'gpt-5.4',
+        providerId: 'lobehub',
       });
     });
   });
