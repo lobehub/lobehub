@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../utils/logger';
 import {
   editLocalFile,
   globLocalFiles,
@@ -15,23 +16,19 @@ import {
   writeLocalFile,
 } from './file';
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 describe('file tools (integration wrapper)', () => {
   const tmpDir = path.join(os.tmpdir(), 'cli-file-test-' + process.pid);
 
   beforeEach(async () => {
+    vi.spyOn(log, 'debug').mockImplementation(() => {});
+    vi.spyOn(log, 'error').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+    vi.spyOn(log, 'warn').mockImplementation(() => {});
     await mkdir(tmpDir, { recursive: true });
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 

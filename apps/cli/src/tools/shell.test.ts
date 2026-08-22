@@ -1,18 +1,18 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../utils/logger';
 import { cleanupAllProcesses, getCommandOutput, killCommand, runCommand } from './shell';
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 describe('shell tools (integration wrapper)', () => {
+  beforeEach(() => {
+    vi.spyOn(log, 'debug').mockImplementation(() => {});
+    vi.spyOn(log, 'error').mockImplementation(() => {});
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+    vi.spyOn(log, 'warn').mockImplementation(() => {});
+  });
+
   afterEach(() => {
+    vi.restoreAllMocks();
     cleanupAllProcesses();
   });
 
