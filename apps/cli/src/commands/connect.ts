@@ -445,7 +445,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   // Request handlers (system info / tool calls / device RPCs / agent runs) —
   // shared with the workspace-share connections opened via `enrollWorkspace`.
-  bindGatewayClientHandlers(client, handlerContext);
+  bindGatewayClientHandlers(client, handlerContext, workspaceId);
 
   client.on('connected', () => {
     updateStatus('connected');
@@ -504,7 +504,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       workspaceId: wsId,
     });
 
-    bindGatewayClientHandlers(wsClient, handlerContext);
+    bindGatewayClientHandlers(wsClient, handlerContext, wsId);
 
     const entry: WorkspaceShareConnection = { cancelRefresh: null, client: wsClient };
 
@@ -814,7 +814,11 @@ interface GatewayHandlerContext {
  * the `enrollWorkspace` RPC — so a workspace principal exposes exactly the same
  * tool / RPC / agent-run surface as the personal one.
  */
-function bindGatewayClientHandlers(client: GatewayClient, ctx: GatewayHandlerContext) {
+function bindGatewayClientHandlers(
+  client: GatewayClient,
+  ctx: GatewayHandlerContext,
+  connectionWorkspaceId?: string,
+) {
   const { deps, error, getServerUrl, info, isDaemonChild } = ctx;
 
   // Handle system info requests
@@ -903,6 +907,7 @@ function bindGatewayClientHandlers(client: GatewayClient, ctx: GatewayHandlerCon
           serverUrl: getServerUrl(),
           systemContext: request.systemContext,
           topicId: request.topicId,
+          workspaceId: request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId,
         },
         { error, info },
       );

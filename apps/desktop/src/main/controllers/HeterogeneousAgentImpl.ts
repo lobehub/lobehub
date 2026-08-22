@@ -16,14 +16,17 @@ import type {
   HeterogeneousCliAgentType,
 } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
+import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
 import {
   buildHeterogeneousAgentAuthRequiredError,
   buildHeterogeneousAgentCliNotFoundError,
+  formatHeterogeneousProviderBindingError,
   getHeterogeneousAgentConfigOrThrow,
   isHeterogeneousAgentAuthRequired,
   resolveHeterogeneousAgentCommand,
+  resolveHeterogeneousProviderBinding,
 } from '@lobechat/heterogeneous-agents';
-import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
   McpToolResult,
@@ -49,6 +52,8 @@ import {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  buildCursorAcpArgs,
+  buildCursorAcpPrompt,
   buildGrokAcpArgs,
   buildGrokAcpPrompt,
   buildTraeAcpArgs,
@@ -57,16 +62,23 @@ import {
   CodexAppServerClient,
   CodexThreadSession,
   createFileStoreImageUploader,
+  CursorAcpSession,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
+  isCursorAcpSessionNotFoundError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
+import {
+  describeUnusableWorkingDirectory,
+  isSpawnableDirectory,
+  resolveHeteroSpawnCwd,
+} from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -88,6 +100,12 @@ import {
   createLambdaFileStorePort,
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
+import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
+import {
+  gcHostedProviderBindingProfiles,
+  prepareHostedProviderBinding,
+} from '@/modules/heterogeneousAgent/providerBindingHost';
+import { getProviderBindingRuntime } from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -192,6 +210,8 @@ interface StartSessionParams {
   env?: Record<string, string>;
   /** Protocol-native model selected after session setup (TRAE ACP only). */
   initialModel?: string;
+  /** Credential-free LobeHub Provider reference. Desktop main resolves its secrets. */
+  providerBinding?: HeterogeneousProviderBindingReference;
   /** Session ID to resume (for multi-turn) */
   resumeSessionId?: string;
   /** Run claude-code prompts through the Claude Agent SDK instead of CLI spawn (lab preference) */
@@ -201,6 +221,7 @@ interface StartSessionParams {
 }
 
 export interface StartSessionResult {
+  providerBindingKey?: string;
   sessionId: string;
 }
 
@@ -310,9 +331,11 @@ interface AgentSession {
   cancelledByUs?: boolean;
   codexAppServerFallback?: boolean;
   command: string;
+  cursorAcpSession?: CursorAcpSession;
   cwd?: string;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
+  hostedProviderBinding?: HostedProviderBinding;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -368,7 +391,7 @@ interface InterventionSlot {
   /** Resolves once bridge.events() iterator ends (after `cancelAll`). */
   pumpDone?: Promise<void>;
   /** Path to the per-op temp `mcp.json` we wrote for `--mcp-config`. */
-  tmpConfigPath: string;
+  tmpConfigPath?: string;
 }
 
 export default class HeterogeneousAgentCtr {
@@ -460,7 +483,7 @@ export default class HeterogeneousAgentCtr {
       agentType: session.agentType,
       code: HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound,
       command: this.resolveSessionCommand(session),
-      message: `Working directory does not exist: ${workingDirectory}`,
+      message: describeUnusableWorkingDirectory(workingDirectory),
       workingDirectory,
     };
   }
@@ -569,6 +592,34 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
+  private getCursorResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'cursor' ||
+      !session.resumeSessionId ||
+      !isCursorAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'cursor',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        message: error.rpcError.message,
+      },
+      message:
+        'The saved Cursor session cannot be loaded through ACP, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -584,7 +635,7 @@ export default class HeterogeneousAgentCtr {
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
       const workingDirectory = this.resolveSessionWorkingDirectory(session);
-      if (!existsSync(workingDirectory)) {
+      if (!isSpawnableDirectory(workingDirectory)) {
         return this.buildWorkingDirectoryMissingError(session, workingDirectory);
       }
 
@@ -593,7 +644,9 @@ export default class HeterogeneousAgentCtr {
     }
 
     const resumeError =
-      this.getCodexResumeError(error, session) ?? this.getGrokResumeError(error, session);
+      this.getCodexResumeError(error, session) ??
+      this.getGrokResumeError(error, session) ??
+      this.getCursorResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
@@ -649,7 +702,7 @@ export default class HeterogeneousAgentCtr {
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
     const workingDirectory = this.resolveSessionWorkingDirectory(session);
-    if (!existsSync(workingDirectory)) {
+    if (!isSpawnableDirectory(workingDirectory)) {
       return this.buildWorkingDirectoryMissingError(session, workingDirectory);
     }
 
@@ -919,6 +972,35 @@ export default class HeterogeneousAgentCtr {
 
   // ─── AskUserQuestion MCP server () ───
 
+  /** Register and broadcast a native ACP intervention without starting an MCP server. */
+  private setupAcpInterventionForOp(
+    operationId: string,
+    sessionId: string,
+  ): {
+    bridge: AskUserBridge;
+    cleanup: () => Promise<void>;
+  } {
+    const bridge = new AskUserBridge(operationId);
+    const pumpDone = (async () => {
+      for await (const event of bridge.events()) {
+        this.broadcast('heteroAgentEvent', { event, sessionId });
+      }
+    })().catch((error) => {
+      logger.warn('ACP AskUserQuestion bridge pump error:', error);
+    });
+    const slot: InterventionSlot = { bridge, pumpDone };
+    this.opIdToIntervention.set(operationId, slot);
+
+    return {
+      bridge,
+      cleanup: async () => {
+        bridge.cancelAll('session_ended');
+        await pumpDone;
+        this.opIdToIntervention.delete(operationId);
+      },
+    };
+  }
+
   /**
    * Lazy single-instance MCP server for CC's AskUserQuestion replacement.
    * First claude-code prompt triggers `start()`; subsequent prompts reuse
@@ -1081,25 +1163,78 @@ export default class HeterogeneousAgentCtr {
   async startSession(params: StartSessionParams): Promise<StartSessionResult> {
     const sessionId = randomUUID();
     const agentType = params.agentType || 'claude-code';
-    getHeterogeneousAgentDriver(agentType);
+    const driver = getHeterogeneousAgentDriver(agentType);
+    let hostedProviderBinding: HostedProviderBinding | undefined;
+
+    if (params.providerBinding) {
+      const bindingRuntime = await getProviderBindingRuntime(
+        this.remoteServerAuth,
+        params.providerBinding,
+      );
+      const bindingResult = resolveHeterogeneousProviderBinding({
+        agentType,
+        apiConfig: params.providerBinding.apiConfig,
+        checkCredentials: true,
+        // Server-resolved list — makes main authoritative on model
+        // availability even when the renderer's store state is stale.
+        enabledModels: bindingRuntime.enabledModels,
+        providerEnabled: bindingRuntime.enabled,
+        runtimeConfig: bindingRuntime.runtimeConfig,
+      });
+      if (bindingResult.error) {
+        throw new Error(formatHeterogeneousProviderBindingError(bindingResult.error));
+      }
+
+      hostedProviderBinding = await prepareHostedProviderBinding({
+        agentType,
+        appStoragePath: this.app.appStoragePath,
+        args: params.args || [],
+        driver,
+        env: params.env,
+        reference: params.providerBinding,
+        resolution: bindingResult.resolution,
+        sessionId,
+      });
+
+      // Opportunistic sweep of long-unused binding profiles (provider deleted,
+      // endpoint changed, identity version bumped). The profile in use was just
+      // touched by prepare, so it is never a candidate. Never blocks the run.
+      gcHostedProviderBindingProfiles(this.app.appStoragePath)
+        .then((removedProfiles) => {
+          if (removedProfiles.length > 0)
+            logger.info('Removed stale provider-binding profiles:', removedProfiles);
+        })
+        .catch((error) => logger.warn('Provider-binding profile GC failed:', error));
+    }
+
+    const resumeSessionId =
+      !hostedProviderBinding ||
+      params.providerBinding?.resumeBindingKey === hostedProviderBinding.bindingKey
+        ? params.resumeSessionId
+        : undefined;
 
     this.sessions.set(sessionId, {
       // If resuming, pre-set the agent session ID so sendPrompt adds --resume
-      agentSessionId: params.resumeSessionId,
+      agentSessionId: resumeSessionId,
       agentType,
-      args: params.args || [],
+      args: hostedProviderBinding?.args ?? params.args ?? [],
       command: params.command,
       cwd: params.cwd,
-      env: params.env,
+      env: hostedProviderBinding?.env ?? params.env,
+      hostedProviderBinding,
       model: params.initialModel,
       sessionId,
-      resumeSessionId: params.resumeSessionId,
+      resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,
       useCodexAppServer: params.useCodexAppServer,
     });
 
-    logger.info('Session created:', { agentType, sessionId });
-    return { sessionId };
+    logger.info('Session created:', {
+      agentType,
+      providerBinding: !!hostedProviderBinding,
+      sessionId,
+    });
+    return { providerBindingKey: hostedProviderBinding?.bindingKey, sessionId };
   }
 
   /**
@@ -1114,12 +1249,19 @@ export default class HeterogeneousAgentCtr {
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
     session.cancelledByUs = false;
 
-    const preflightError = await this.getSpawnPreflightError(session);
+    let preflightError;
+    try {
+      preflightError = await this.getSpawnPreflightError(session);
+    } catch (error) {
+      await session.hostedProviderBinding?.cleanup();
+      throw error;
+    }
     if (preflightError) {
       this.broadcast('heteroAgentSessionError', {
         error: preflightError,
         sessionId: session.sessionId,
       });
+      await session.hostedProviderBinding?.cleanup();
       throw new Error(preflightError.message);
     }
 
@@ -1138,6 +1280,7 @@ export default class HeterogeneousAgentCtr {
     ) {
       try {
         const ensured = await ensureClaudeCodeResumeTranscript({
+          configDir: session.hostedProviderBinding?.profileDir,
           cwd: session.cwd,
           messages: params.resumeReplayMessages,
           sessionId: session.agentSessionId,
@@ -1157,11 +1300,18 @@ export default class HeterogeneousAgentCtr {
       session.agentType === 'claude-code' &&
       (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
     ) {
-      return this.sendPromptWithClaudeSdk(params, session);
+      try {
+        return await this.sendPromptWithClaudeSdk(params, session);
+      } finally {
+        // The SDK helper owns cleanup once `run()` starts; this outer guard
+        // also covers input/trace/session construction failures before that try/finally.
+        await session.hostedProviderBinding?.cleanup();
+      }
     }
 
     if (
       session.agentType === 'codex' &&
+      !session.hostedProviderBinding &&
       !session.codexAppServerFallback &&
       (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
     ) {
@@ -1185,6 +1335,10 @@ export default class HeterogeneousAgentCtr {
 
     if (session.agentType === 'grok-build') {
       return this.sendPromptWithGrokAcp(params, session);
+    }
+
+    if (session.agentType === 'cursor') {
+      return this.sendPromptWithCursorAcp(params, session);
     }
 
     if (session.agentType === 'trae') {
@@ -1285,6 +1439,7 @@ export default class HeterogeneousAgentCtr {
           logger.warn('AskUserQuestion cleanup error during pre-spawn failure:', cleanupErr);
         });
       }
+      await session.hostedProviderBinding?.cleanup();
       throw err;
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
@@ -1315,23 +1470,34 @@ export default class HeterogeneousAgentCtr {
       stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
     };
 
-    return new Promise<void>((resolve, reject) => {
-      const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
-      this.handleSpawnedAgentProcess({
-        cwd,
-        intervention,
-        params,
-        proc,
-        reject,
-        resolve,
-        session,
-        initialCumulativeUsage,
-        spawnEnv,
-        traceSession,
-        useStdin,
-        spawnPlan,
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
+        this.handleSpawnedAgentProcess({
+          cwd,
+          intervention,
+          params,
+          proc,
+          reject,
+          resolve,
+          session,
+          initialCumulativeUsage,
+          spawnEnv,
+          traceSession,
+          useStdin,
+          spawnPlan,
+        });
       });
-    });
+    } catch (error) {
+      // A synchronous spawn failure has no process event to own teardown.
+      // Process-emitted failures may already have cleaned these resources;
+      // both cleanup operations are intentionally idempotent.
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after process failure:', cleanupError);
+      });
+      await session.hostedProviderBinding?.cleanup();
+      throw error;
+    }
   }
 
   private async sendPromptWithClaudeSdk(
@@ -1424,6 +1590,8 @@ export default class HeterogeneousAgentCtr {
       throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
         cause: error,
       });
+    } finally {
+      await session.hostedProviderBinding?.cleanup();
     }
   }
 
@@ -1716,6 +1884,98 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private async sendPromptWithCursorAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = buildCursorAcpPrompt(promptInput);
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildCursorAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(params.operationId, session.sessionId);
+    const cursorAcpSession = new CursorAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.cursorAcpSession = cursorAcpSession;
+
+    try {
+      await cursorAcpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport: 'cursor-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport: 'cursor-acp',
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = isCursorAcpSessionNotFoundError(error)
+        ? error
+        : stderr
+          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+              cause: error,
+            })
+          : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await intervention.cleanup();
+      if (session.cursorAcpSession === cursorAcpSession) session.cursorAcpSession = undefined;
+    }
+  }
+
   private async sendPromptWithTraeAcp(
     params: SendPromptParams,
     session: AgentSession,
@@ -1907,6 +2167,7 @@ export default class HeterogeneousAgentCtr {
         error: sessionError,
         sessionId: session.sessionId,
       });
+      void session.hostedProviderBinding?.cleanup();
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
@@ -2037,6 +2298,7 @@ export default class HeterogeneousAgentCtr {
               logger.warn('AskUserQuestion cleanup error:', err);
             });
           }
+          await session.hostedProviderBinding?.cleanup();
 
           void this.writeCliTraceJson(traceSession, 'exit.json', {
             code,
@@ -2241,6 +2503,10 @@ export default class HeterogeneousAgentCtr {
       session.grokAcpSession.interrupt();
       return;
     }
+    if (session.cursorAcpSession) {
+      session.cursorAcpSession.interrupt();
+      return;
+    }
     if (session.appServerSession) {
       const appServerSession = session.appServerSession;
       try {
@@ -2261,7 +2527,10 @@ export default class HeterogeneousAgentCtr {
       return;
     }
 
-    if (!session.process || session.process.killed) return;
+    if (!session.process || session.process.killed) {
+      await session.hostedProviderBinding?.cleanup();
+      return;
+    }
     const proc = session.process;
     this.killProcessTree(proc, 'SIGINT');
 
@@ -2283,6 +2552,11 @@ export default class HeterogeneousAgentCtr {
     if (session.grokAcpSession) {
       session.cancelledByUs = true;
       session.grokAcpSession.close();
+    }
+
+    if (session.cursorAcpSession) {
+      session.cancelledByUs = true;
+      session.cursorAcpSession.close();
     }
 
     if (session.appServerSession) {
@@ -2316,6 +2590,7 @@ export default class HeterogeneousAgentCtr {
       }, 3000);
     }
 
+    await session.hostedProviderBinding?.cleanup();
     this.sessions.delete(params.sessionId);
   }
 
@@ -2355,6 +2630,7 @@ export default class HeterogeneousAgentCtr {
    */
   private unlinkPendingInterventionConfigsSync = (): void => {
     for (const [, intervention] of this.opIdToIntervention) {
+      if (!intervention.tmpConfigPath) continue;
       try {
         unlinkSync(intervention.tmpConfigPath);
       } catch {
@@ -2372,9 +2648,14 @@ export default class HeterogeneousAgentCtr {
     electronApp.on('before-quit', () => {
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
+        session.hostedProviderBinding?.cleanupSync();
         if (session.grokAcpSession) {
           session.cancelledByUs = true;
           session.grokAcpSession.close();
+        }
+        if (session.cursorAcpSession) {
+          session.cancelledByUs = true;
+          session.cursorAcpSession.close();
         }
         if (session.appServerSession) {
           session.cancelledByUs = true;
@@ -2447,6 +2728,8 @@ export default class HeterogeneousAgentCtr {
     serverUrl: string;
     systemContext?: string;
     topicId: string;
+    /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
+    workspaceId?: string;
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
@@ -2462,16 +2745,25 @@ export default class HeterogeneousAgentCtr {
       serverUrl,
       systemContext,
       topicId,
+      workspaceId,
     } = params;
     const workDir = cwd ?? process.cwd();
+    // Let the embedded CLI classify a stale project path and finish the
+    // operation through heteroFinish instead of failing this wrapper spawn as
+    // the misleading `spawn LobeHub.exe ENOENT`.
+    const workDirUsable = isSpawnableDirectory(workDir);
+    const spawnCwd = resolveHeteroSpawnCwd(workDir);
 
     // When CLI tracing is enabled (dev builds, or the Help-menu toggle in
     // packaged builds), have `lh hetero exec` persist the agent process's RAW
     // stream-json (pre-adapter) on this device. The remote-device path
     // otherwise leaves no local record — the CLI consumes stdout internally and
     // only POSTs adapted events to the server — so without this there's nothing
-    // to inspect when a remote run misbehaves.
-    const rawDumpDir = this.shouldTraceCliOutput ? this.resolveTraceRootDir(workDir) : undefined;
+    // to inspect when a remote run misbehaves. Do not pass a cwd-relative dump
+    // path for a missing workDir: RawStreamDump would recreate the deleted
+    // directory before spawnAgent can report it.
+    const rawDumpDir =
+      this.shouldTraceCliOutput && workDirUsable ? this.resolveTraceRootDir(workDir) : undefined;
 
     const args = [
       'hetero',
@@ -2514,6 +2806,10 @@ export default class HeterogeneousAgentCtr {
       LOBEHUB_JWT: jwt,
       ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
+      // Same reason `runHeteroTask` injects this for notify: without it the
+      // CLI's heteroIngest/heteroFinish fall back to personal scope and the
+      // workspace topic 404s (empty assistant, topic stuck `running`).
+      ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
     };
 
     logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);
@@ -2522,7 +2818,7 @@ export default class HeterogeneousAgentCtr {
     // an older global install earlier on PATH, letting model discovery report a
     // capability that the actual execution runtime does not support.
     const child = spawn(process.execPath, [cliScript, ...args], {
-      cwd: workDir,
+      cwd: spawnCwd,
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
     });

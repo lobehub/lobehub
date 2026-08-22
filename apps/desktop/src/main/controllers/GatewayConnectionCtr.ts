@@ -75,6 +75,7 @@ interface PlatformTaskEntry {
   agentId?: string;
   agentType: string;
   operationId: string;
+  parentOperationId?: string;
   pid: number;
   topicId: string;
   /**
@@ -289,6 +290,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         serverUrl,
         systemContext: request.systemContext,
         topicId: request.topicId,
+        workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -436,6 +438,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentType: string;
             cwd?: string;
             operationId: string;
+            parentOperationId?: string;
             platformAgentId?: string;
             prompt: string;
             taskId: string;
@@ -677,6 +680,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     agentType: string;
     cwd?: string;
     operationId: string;
+    parentOperationId?: string;
     platformAgentId?: string;
     prompt: string;
     taskId: string;
@@ -688,6 +692,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       agentType,
       cwd,
       operationId,
+      parentOperationId,
       platformAgentId,
       prompt,
       taskId,
@@ -708,9 +713,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       ...(accessToken && { LOBEHUB_JWT: accessToken }),
+      LOBEHUB_OPERATION_ID: operationId,
       ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
       ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
     };
+    const sessionKey = parentOperationId ? operationId : topicId;
 
     if (agentType === 'openclaw') {
       const commandStatus = await resolveRemotePlatformCommand('openclaw');
@@ -730,7 +737,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // openclaw serialises session writes; a concurrent process holding the session
       // lock will cause the new one to exit with code 1.
       for (const [existingTaskId, entry] of this.platformTasks) {
-        if (entry.topicId === topicId && entry.agentType === 'openclaw') {
+        if (
+          entry.agentType === 'openclaw' &&
+          (existingTaskId === taskId ||
+            (!parentOperationId && !entry.parentOperationId && entry.topicId === topicId))
+        ) {
           this.killPlatformProcessTree(entry.pid, 'SIGTERM');
           this.platformTasks.delete(existingTaskId);
         }
@@ -741,7 +752,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         '--agent',
         openclawAgent,
         '--session-id',
-        topicId,
+        sessionKey,
         '--message',
         enrichedPrompt,
         '--local',
@@ -770,6 +781,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         agentId,
         agentType,
         operationId,
+        parentOperationId,
         pid,
         topicId,
         workspaceId,
@@ -786,17 +798,22 @@ export default class GatewayConnectionCtr extends ControllerModule {
           const text = signal
             ? `Task cancelled (signal: ${signal})`
             : `Task failed (exit code: ${code})`;
+          const terminalError = signal ? undefined : { message: text, type: 'HeteroProcessError' };
           void this.sendNotify({
             agentId,
             content: text,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
           }).finally(() =>
             this.sendNotify({
               agentId,
+              cancelled: !!signal,
               content: '',
               done: true,
+              error: terminalError,
+              operationId,
               role: 'assistant',
               topicId,
               workspaceId,
@@ -807,6 +824,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentId,
             content: '',
             done: true,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -825,14 +843,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
       if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
       // Kill any existing hermes process for this topicId before spawning a new one.
       for (const [existingTaskId, entry] of this.platformTasks) {
-        if (entry.topicId === topicId && entry.agentType === 'hermes') {
+        if (
+          entry.agentType === 'hermes' &&
+          (existingTaskId === taskId ||
+            (!parentOperationId && !entry.parentOperationId && entry.topicId === topicId))
+        ) {
           this.killPlatformProcessTree(entry.pid, 'SIGTERM');
           this.platformTasks.delete(existingTaskId);
         }
       }
 
       // Resume the previous session for this topic if one exists.
-      const existingSessionId = this.hermesSessionMap.get(topicId);
+      const existingSessionId = this.hermesSessionMap.get(sessionKey);
       const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
       if (existingSessionId) {
         hermesArgs.push('--resume', existingSessionId);
@@ -866,6 +888,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         agentId,
         agentType,
         operationId,
+        parentOperationId,
         pid,
         topicId,
         workspaceId,
@@ -890,17 +913,22 @@ export default class GatewayConnectionCtr extends ControllerModule {
           const text = signal
             ? `Task cancelled (signal: ${signal})`
             : `Task failed (exit code: ${code})`;
+          const terminalError = signal ? undefined : { message: text, type: 'HeteroProcessError' };
           void this.sendNotify({
             agentId,
             content: text,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
           }).finally(() =>
             this.sendNotify({
               agentId,
+              cancelled: !!signal,
               content: '',
               done: true,
+              error: terminalError,
+              operationId,
               role: 'assistant',
               topicId,
               workspaceId,
@@ -914,12 +942,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
         const sessionId = parseHermesSessionId(stderr);
         const response = stdout.trim();
 
-        if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
+        if (sessionId) this.hermesSessionMap.set(sessionKey, sessionId);
 
         if (response) {
           void this.sendNotify({
             agentId,
             content: response,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -928,6 +957,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
               agentId,
               content: '',
               done: true,
+              operationId,
               role: 'assistant',
               topicId,
               workspaceId,
@@ -938,6 +968,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
             agentId,
             content: '',
             done: true,
+            operationId,
             role: 'assistant',
             topicId,
             workspaceId,
@@ -1034,8 +1065,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
    */
   private async sendNotify(params: {
     agentId?: string;
+    cancelled?: boolean;
     content: string;
     done?: boolean;
+    error?: { message: string; type?: string };
+    operationId?: string;
     role: string;
     topicId: string;
     /**

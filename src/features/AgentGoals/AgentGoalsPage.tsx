@@ -144,7 +144,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
         {isLoading && !isInitialized ? (
-          <GoalSkeleton showHeader={false} />
+          <GoalSkeleton chrome={'body'} />
         ) : error ? (
           <Block padding={32} variant={'outlined'}>
             <Flexbox align={'center'} gap={12}>

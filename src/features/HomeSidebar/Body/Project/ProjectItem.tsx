@@ -3,7 +3,7 @@
 import type { MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { MoreHorizontalIcon, PencilIcon, SquareKanbanIcon, TrashIcon } from 'lucide-react';
+import { FolderClosedIcon, MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -70,7 +70,7 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
       <NavItem
         contextMenuItems={canManage ? menuItems : undefined}
         disabled={deleting}
-        icon={project.avatar || SquareKanbanIcon}
+        icon={project.avatar || FolderClosedIcon}
         title={project.name}
         actions={
           canManage ? (

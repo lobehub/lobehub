@@ -80,6 +80,7 @@ describe('AcceptanceService decision gating', () => {
     expect(mocks.taskResolve).not.toHaveBeenCalled();
     expect(mocks.ensureForSubject).toHaveBeenCalledWith('standalone', 'external-delivery-1', {
       metadata: { title: 'External delivery' },
+      projectId: null,
       requirement: 'The external delivery works',
     });
   });

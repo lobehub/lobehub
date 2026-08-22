@@ -1,5 +1,9 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -67,11 +71,10 @@ export interface RuntimeSelectionContext {
   /** Result of `chatStore.isGatewayModeEnabled()`. */
   isGatewayMode: boolean;
   /**
-   * The agent is workspace-scoped (`agent.workspaceId` set). Workspace agents
-   * never execute in-process on the current member's own desktop — a
-   * default/stored `local` target coerces to sandbox/device, so the run
-   * routes through the gateway (see `resolveExecutionTarget`'s
-   * `workspaceScoped`).
+   * The agent is workspace-scoped (`agent.workspaceId` set), regardless of
+   * authorship or per-member overrides. Unlike `workspaceScoped`, this stays
+   * true for the agent's author and for members with an explicit local
+   * override — the cases that CAN spawn a workspace agent in-process.
    */
   isWorkspaceAgent?: boolean;
   /**
@@ -83,6 +86,14 @@ export interface RuntimeSelectionContext {
    * stay on Gateway, even if its own agent config would say otherwise.
    */
   parentRuntime?: AgentRuntimeType;
+  /**
+   * The shared-row safety coercion still applies: a member without an explicit
+   * `executionTarget` override never executes the shared config on their own
+   * client (see `resolveWorkspaceScoped` / `resolveExecutionTarget`). False
+   * for the author or an explicitly overriding member even when
+   * `isWorkspaceAgent` is true.
+   */
+  workspaceScoped?: boolean;
 }
 
 interface SelectRuntimeTypeOptions {
@@ -103,6 +114,34 @@ export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
+  if (ctx.heterogeneousProvider?.authMode === 'api') {
+    // Personal-scope invariant: Desktop main resolves the binding's providerId
+    // with NO workspace header (see `providerBindingPort`), while a workspace
+    // agent's binding was configured against workspace-scoped providers. The
+    // author (or an explicitly overriding member) CAN spawn a workspace agent
+    // in-process — `workspaceScoped` alone does not block them — so a colliding
+    // personal provider id (e.g. builtin `anthropic`) would silently supply
+    // different credentials. Reject before any IPC.
+    if (ctx.isWorkspaceAgent) {
+      throw new Error(HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR);
+    }
+    const target = resolveExecutionTarget(
+      {
+        boundDeviceId: ctx.boundDeviceId,
+        executionTarget: ctx.executionTarget,
+        heterogeneousProvider: ctx.heterogeneousProvider,
+      },
+      {
+        isHetero: true,
+        clientExecutionAvailable: isDesktop,
+        workspaceScoped: ctx.workspaceScoped,
+      },
+    );
+    if (target !== 'local' || (ctx.parentRuntime && ctx.parentRuntime !== 'hetero')) {
+      throw new Error(HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR);
+    }
+  }
+
   if (ctx.parentRuntime) return ctx.parentRuntime;
   // Notify-based platform agents (openclaw / hermes) use the gateway transport for both
   // targets: `local` presets this desktop's personal device ID on the request, while
@@ -128,7 +167,7 @@ export const selectRuntimeType = (
       {
         isHetero: true,
         clientExecutionAvailable: isDesktop,
-        workspaceScoped: ctx.isWorkspaceAgent,
+        workspaceScoped: ctx.workspaceScoped,
       },
     );
     return target === 'local' ? 'hetero' : 'gateway';

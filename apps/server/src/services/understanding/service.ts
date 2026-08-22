@@ -6,6 +6,7 @@ import {
   getConnectorErrorMessage,
   isConnectorErrorRetryable,
 } from '@lobechat/connector-data';
+import { TRACING_SCENARIOS } from '@lobechat/const';
 import {
   getUnderstandingSourceFingerprint,
   OnboardingUnderstandingRepository,
@@ -23,7 +24,9 @@ import {
   chainUnderstandingDetailedPersona,
   chainUnderstandingPersona,
   UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+  UNDERSTANDING_ANALYSIS_PROMPT_VERSION,
   UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+  UNDERSTANDING_DETAILED_PERSONA_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type {
   CollectionDiagnostics,
@@ -1057,31 +1060,27 @@ export class UnderstandingService {
               () =>
                 this.dependencies.generator.generateObject(
                   {
-                    messages: [
-                      {
-                        content: chainUnderstandingDetailedPersona({
-                          analysis: proposal.analysis,
-                          responseLanguage,
-                        }),
-                        role: 'system',
-                      },
-                      {
-                        content: [
-                          'Write the complete persona from the original collected provider contexts.',
-                          buildEphemeralDocument(
-                            contexts as StoredUnderstandingProviderContext[],
-                            baseline,
-                          ),
-                        ].join('\n\n'),
-                        role: 'user',
-                      },
-                    ],
+                    ...chainUnderstandingDetailedPersona({
+                      analysis: proposal.analysis,
+                      context: buildEphemeralDocument(
+                        contexts as StoredUnderstandingProviderContext[],
+                        baseline,
+                      ),
+                      responseLanguage,
+                    }),
                     model: writerAgent.model,
                     provider: writerAgent.provider,
                     schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
                     thinking: { type: 'disabled' },
                   },
-                  { metadata: { trigger: RequestTrigger.Onboarding } },
+                  {
+                    metadata: { trigger: RequestTrigger.Onboarding },
+                    tracing: {
+                      promptVersion: UNDERSTANDING_DETAILED_PERSONA_PROMPT_VERSION,
+                      scenario: TRACING_SCENARIOS.UnderstandingDetailedPersona,
+                      schemaName: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA.name,
+                    },
+                  },
                 ),
             ),
           );
@@ -1238,30 +1237,26 @@ export class UnderstandingService {
             () =>
               this.dependencies.generator.generateObject(
                 {
-                  messages: [
-                    {
-                      content: chainUnderstandingPersona({
-                        diagnostics,
-                        feedback,
-                        providers,
-                        responseLanguage,
-                      }),
-                      role: 'system',
-                    },
-                    {
-                      content: [
-                        'Write onboarding persona from collected provider contexts.',
-                        buildEphemeralDocument(contexts, baseline),
-                      ].join('\n\n'),
-                      role: 'user',
-                    },
-                  ],
+                  ...chainUnderstandingPersona({
+                    context: buildEphemeralDocument(contexts, baseline),
+                    diagnostics,
+                    feedback,
+                    providers,
+                    responseLanguage,
+                  }),
                   model: writerAgent.model,
                   provider: writerAgent.provider,
                   schema: UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
                   thinking: { type: 'disabled' },
                 },
-                { metadata: { trigger: RequestTrigger.Onboarding } },
+                {
+                  metadata: { trigger: RequestTrigger.Onboarding },
+                  tracing: {
+                    promptVersion: UNDERSTANDING_ANALYSIS_PROMPT_VERSION,
+                    scenario: TRACING_SCENARIOS.UnderstandingAnalysis,
+                    schemaName: UNDERSTANDING_ANALYSIS_JSON_SCHEMA.name,
+                  },
+                },
               ),
           ),
         );

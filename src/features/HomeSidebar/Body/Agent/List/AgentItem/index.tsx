@@ -153,6 +153,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
       <Avatar
         avatar={typeof avatar === 'string' ? avatar : undefined}
         avatarBackground={backgroundColor || undefined}
+        title={displayTitle}
       />
     );
 
@@ -177,7 +178,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     }
 
     return avatarNode;
-  }, [isUpdating, isLoading, avatar, backgroundColor, unreadCount]);
+  }, [isUpdating, isLoading, avatar, backgroundColor, displayTitle, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,

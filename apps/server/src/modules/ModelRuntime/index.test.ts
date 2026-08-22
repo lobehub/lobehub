@@ -26,7 +26,20 @@ import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildPayloadFromKeyVaults, initModelRuntimeWithUserPayload } from './index';
+import {
+  buildPayloadFromKeyVaults,
+  getServerDefaultHeterogeneousModels,
+  initModelRuntimeFromServerConfig,
+  initModelRuntimeWithUserPayload,
+  resolveServerDefaultHeterogeneousModel,
+  resolveServerModel,
+} from './index';
+
+const getServerGlobalConfig = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/globalConfig', () => ({
+  getServerGlobalConfig,
+}));
 
 interface InspectableBedrockRuntime {
   client: {
@@ -66,6 +79,151 @@ vi.mock('@/envs/llm', () => ({
     STEPFUN_API_KEY: 'test-stepfun-key',
   })),
 }));
+
+describe('resolveServerModel', () => {
+  it('accepts only an enabled deployment-owned chat model', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        openai: {
+          enabled: true,
+          serverModelLists: [
+            { enabled: true, id: 'gpt-server', type: 'chat' },
+            { enabled: false, id: 'gpt-disabled', type: 'chat' },
+          ],
+        },
+      },
+    });
+
+    await expect(resolveServerModel('openai', 'gpt-server')).resolves.toEqual({
+      model: 'gpt-server',
+      provider: 'openai',
+    });
+    await expect(resolveServerModel('openai', 'gpt-disabled')).rejects.toThrow(
+      'selected server model is not available',
+    );
+  });
+
+  it('preserves a deployment-owned model mapping', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        azure: {
+          enabled: true,
+          serverModelLists: [
+            {
+              config: { deploymentName: 'prod-gpt' },
+              enabled: true,
+              id: 'gpt-4o',
+              type: 'chat',
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(resolveServerModel('azure', 'gpt-4o')).resolves.toEqual({
+      deploymentName: 'prod-gpt',
+      model: 'gpt-4o',
+      provider: 'azure',
+    });
+  });
+});
+
+describe('getServerDefaultHeterogeneousModels', () => {
+  it('returns only compatible V1 models from the LobeHub relay provider', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        anthropic: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'claude-opus-4-8', type: 'chat' }],
+        },
+        google: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'gemini-server', type: 'chat' }],
+        },
+        lobehub: {
+          enabled: true,
+          serverModelLists: [
+            { enabled: true, id: 'claude-sonnet-4-6', type: 'chat' },
+            { enabled: false, id: 'claude-haiku-4-5', type: 'chat' },
+            { enabled: true, id: 'gpt-5.4', type: 'chat' },
+            { enabled: true, id: 'gpt-4o', type: 'chat' },
+            { enabled: true, id: 'gemini-3.1-pro-preview', type: 'chat' },
+            { enabled: true, id: 'claude-image', type: 'image' },
+          ],
+        },
+        openai: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'gpt-5.4', type: 'chat' }],
+        },
+      },
+    });
+
+    await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
+      'claude-code': [{ model: 'claude-sonnet-4-6' }],
+      'codex': [{ model: 'gpt-5.4' }],
+    });
+  });
+});
+
+describe('resolveServerDefaultHeterogeneousModel', () => {
+  it('accepts only protocol-compatible models from the LobeHub relay provider', async () => {
+    getServerGlobalConfig.mockResolvedValue({
+      aiProvider: {
+        anthropic: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'claude-sonnet-4-6', type: 'chat' }],
+        },
+        lobehub: {
+          enabled: true,
+          serverModelLists: [
+            { enabled: true, id: 'claude-sonnet-4-6', type: 'chat' },
+            { enabled: true, id: 'gpt-5.4', type: 'chat' },
+            { enabled: true, id: 'gpt-4o', type: 'chat' },
+          ],
+        },
+        openai: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'gpt-5.4', type: 'chat' }],
+        },
+      },
+    });
+
+    await expect(
+      resolveServerDefaultHeterogeneousModel('claude-code', 'claude-sonnet-4-6'),
+    ).resolves.toMatchObject({ model: 'claude-sonnet-4-6', provider: 'lobehub' });
+    await expect(resolveServerDefaultHeterogeneousModel('codex', 'gpt-5.4')).resolves.toMatchObject(
+      { model: 'gpt-5.4', provider: 'lobehub' },
+    );
+
+    await expect(
+      resolveServerDefaultHeterogeneousModel('codex', 'claude-sonnet-4-6'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
+    await expect(resolveServerDefaultHeterogeneousModel('claude-code', 'gpt-5.4')).rejects.toThrow(
+      'not compatible with this heterogeneous agent',
+    );
+    await expect(resolveServerDefaultHeterogeneousModel('codex', 'gpt-4o')).rejects.toThrow(
+      'not compatible with this heterogeneous agent',
+    );
+  });
+});
+
+describe('initModelRuntimeFromServerConfig', () => {
+  it('initializes the LobeHub router directly without protocol-provider credentials', async () => {
+    const runtime = {} as ModelRuntime;
+    const initialize = vi.spyOn(ModelRuntime, 'initializeWithProvider').mockReturnValue(runtime);
+
+    await expect(
+      initModelRuntimeFromServerConfig({ actorUserId: 'user-1', workspaceId: 'workspace-1' }),
+    ).resolves.toBe(runtime);
+
+    expect(initialize).toHaveBeenCalledWith(
+      ModelProvider.LobeHub,
+      { userId: 'user-1' },
+      expect.anything(),
+    );
+    initialize.mockRestore();
+  });
+});
 
 /**
  * Test cases for function initModelRuntimeWithUserPayload

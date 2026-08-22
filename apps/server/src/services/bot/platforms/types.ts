@@ -126,6 +126,12 @@ export interface BotMessageAttachment {
   fetchUrl?: string;
   mimeType?: string;
   name?: string;
+  /**
+   * Size of the underlying bytes, when the caller knows it (e.g. from the
+   * files table). Lets the send path apply platform size budgets without
+   * downloading URL-sourced attachments first.
+   */
+  size?: number;
   type: 'image' | 'file' | 'video' | 'audio';
 }
 

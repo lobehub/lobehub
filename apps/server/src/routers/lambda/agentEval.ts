@@ -44,6 +44,30 @@ const rubricTypeSchema = z.enum([
 
 const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passthrough();
 
+const evalCaseEnvironmentSchema = z
+  .object({
+    toolForwarding: z
+      .record(
+        z.string().trim().min(1),
+        z
+          .object({
+            endpoint: z.string().url(),
+            timeoutMs: z.number().int().positive().optional(),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict();
+
+const evalTestCaseContentSchema = z.object({
+  category: z.string().optional(),
+  choices: z.array(z.string()).optional(),
+  environment: evalCaseEnvironmentSchema.optional(),
+  expected: z.string().optional(),
+  input: z.string(),
+});
+
 const log = debug('lobe-lambda-router:agent-eval');
 
 const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -524,12 +548,7 @@ export const agentEvalRouter = router({
     .input(
       z.object({
         datasetId: z.string(),
-        content: z.object({
-          input: z.string(),
-          expected: z.string().optional(),
-          choices: z.array(z.string()).optional(),
-          category: z.string().optional(),
-        }),
+        content: evalTestCaseContentSchema,
         evalMode: rubricTypeSchema.optional(),
         evalConfig: evalConfigSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
@@ -567,12 +586,7 @@ export const agentEvalRouter = router({
         datasetId: z.string(),
         cases: z.array(
           z.object({
-            content: z.object({
-              input: z.string(),
-              expected: z.string().optional(),
-              choices: z.array(z.string()).optional(),
-              category: z.string().optional(),
-            }),
+            content: evalTestCaseContentSchema,
             metadata: z.record(z.string(), z.unknown()).optional(),
             sortOrder: z.number().optional(),
           }),
@@ -608,9 +622,11 @@ export const agentEvalRouter = router({
         id: z.string(),
         content: z
           .object({
-            input: z.string(),
+            input: z.string().optional(),
             expected: z.string().optional(),
+            choices: z.array(z.string()).optional(),
             category: z.string().optional(),
+            environment: evalCaseEnvironmentSchema.optional(),
           })
           .optional(),
         evalMode: rubricTypeSchema.nullish(),
@@ -621,7 +637,7 @@ export const agentEvalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
-      const result = await ctx.testCaseModel.update(id, data);
+      const result = await ctx.testCaseModel.update(id, data as any);
       if (!result) {
         throw new TRPCError({
           code: 'NOT_FOUND',

@@ -77,6 +77,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   listContainer: css`
     overflow: hidden;
 
+    /* The rows are Base UI Checkbox labels, which are inline-flex. In a plain
+       block container they lay out as INLINE boxes — two or three short todos
+       share a line and the list wraps like prose. A column flex container
+       blockifies them, so one todo is one row again. */
+    display: flex;
+    flex-direction: column;
+
     margin-block-start: 8px;
     padding-block: 4px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};

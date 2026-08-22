@@ -16,6 +16,7 @@ export {
   FREEFORM_PAYLOAD_KEY,
   isQuestionAnswered,
   readDraft,
+  SUPPLEMENT_PAYLOAD_KEY,
 } from './draft';
 export { normalizeAskUserQuestions } from './normalize';
 export { default as QuestionPanel } from './QuestionPanel';

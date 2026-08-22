@@ -24,12 +24,14 @@ const LibraryPermission = memo(() => {
 
   return (
     <ResourceAccessPage
+      showCollaborators
       redirectPath={'/resource'}
       resourceHomePath={`/resource/library/${id}`}
       resourceId={id}
       resourceName={data?.name}
       resourceType={'knowledgeBase'}
       copy={{
+        collaboratorsDesc: t('permission.collaborators.libraryDesc'),
         generalAccessDesc: t('permission.page.libraryGeneralAccessDesc'),
         privateHint: t('permission.page.libraryAccessLevelPrivateHint'),
         privateNotice: t('permission.page.libraryPrivateNotice'),

@@ -192,13 +192,25 @@ export default {
     'No published artifacts yet. Publish an Artifact from the chat to see it here.',
   'resource.artifacts.error': 'Failed to load artifacts.',
   'resource.artifacts.fromTopic': 'from {{topic}}',
+  'resource.artifacts.moreActions': 'More actions',
+  'resource.artifacts.noRelease': 'No release yet',
   'resource.artifacts.open': 'Open',
+  'resource.artifacts.openHistory': 'Version history',
   'resource.artifacts.overLimit':
     'Existing projects remain online. New projects are blocked until you unpublish one or upgrade.',
   'resource.artifacts.refresh': 'Refresh',
+  'resource.artifacts.retryLoad': 'Retry',
   'resource.artifacts.quotaUsage': '{{used}} / {{limit}} public projects',
   'resource.artifacts.size': '{{size}} bytes',
+  'resource.artifacts.status.failed': 'Failed',
+  'resource.artifacts.status.online': 'Online',
+  'resource.artifacts.status.publishing': 'Publishing',
+  'resource.artifacts.status.updateFailed': 'Update failed',
+  'resource.artifacts.statusDetail.failed': 'Build failed',
+  'resource.artifacts.statusDetail.publishing': 'Publishing…',
+  'resource.artifacts.statusDetail.updateFailed': 'Latest update failed',
   'resource.artifacts.title': 'Artifacts',
+  'resource.artifacts.type': 'Artifact',
   'resource.artifacts.unpublish': 'Unpublish',
   'resource.artifacts.unpublishConfirm':
     'Unpublish this artifact? The public URL will stop working.',
@@ -494,8 +506,12 @@ export default {
   'heteroAgent.cliModel.timeout': 'Model discovery timed out.',
   'heteroAgent.cliModel.unsupportedClient':
     'Update the target device client to discover CLI models.',
+  'heteroAgent.resumeReset.bindingChanged':
+    'Authentication binding changed. The previous local agent session could not be resumed safely, so a new conversation has started.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
+  'heteroAgent.resumeReset.cursorAcpIncompatible':
+    'The previous Cursor session could not be restored through ACP, so a new conversation has started with fresh context.',
   'heteroAgent.resumeReset.resumeFailed':
     'The saved Codex thread could not be resumed safely, so a new conversation has started for this topic.',
   'heteroAgent.switchCwd.cancel': 'Cancel',
@@ -507,6 +523,30 @@ export default {
   'heteroAgent.cloudNotConfigured.desc':
     'Configure your Claude Code token in agent profile to start sending messages.',
   'heteroAgent.cloudNotConfigured.title': 'Cloud credentials required',
+  'heteroAgent.apiMode.agentUnsupported': '{{name}} does not support LobeHub Provider binding.',
+  'heteroAgent.apiMode.configMissing':
+    'Provider binding requires a provider and model. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.credentialUnsupported':
+    'The provider "{{providerId}}" uses an authentication method this agent does not support.',
+  'heteroAgent.apiMode.credentialsMissing':
+    'The provider "{{providerId}}" has no API key configured.',
+  'heteroAgent.apiMode.endpointMissing':
+    'The provider "{{providerId}}" requires a base URL for this agent.',
+  'heteroAgent.apiMode.endpointUnsupported':
+    'The provider "{{providerId}}" has an unsupported base URL.',
+  'heteroAgent.apiMode.labDisabled.action': 'Enable in Labs',
+  'heteroAgent.apiMode.labDisabled.desc':
+    'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
+  'heteroAgent.apiMode.labDisabled.title': 'Provider binding is a Labs experiment',
+  'heteroAgent.apiMode.localOnly.desc':
+    'Switch the execution environment to Local device, or use Subscription authentication.',
+  'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',
+  'heteroAgent.apiMode.modelUnavailable':
+    'The model "{{providerId}}/{{model}}" is disabled or no longer available.',
+  'heteroAgent.apiMode.protocolMismatch':
+    'The provider "{{providerId}}" does not expose a protocol supported by {{agentType}}.',
+  'heteroAgent.apiMode.providerUnavailable':
+    'The provider "{{providerId}}" is disabled or no longer available.',
   'heteroAgent.cloudRepo.sectionTitle': 'Repositories',
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
@@ -1191,6 +1231,7 @@ export default {
   'sendPlaceholderHeterogeneous': 'Describe a task or ask a question to {{name}}',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
+  'sender.unknownMember': 'Member',
   'sessionGroup.config': 'Category Management',
   'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
@@ -1254,6 +1295,7 @@ export default {
   'shareModal.pdfGenerationError': 'PDF generation failed',
   'shareModal.pdfReady': 'PDF is ready',
   'shareModal.popover.export': 'Export',
+  'shareModal.popover.loadError': 'Failed to load sharing settings, please try again later',
   'shareModal.popover.privacyWarning.confirm': 'Share & copy link',
   'shareModal.popover.privacyWarning.content':
     "Anyone with the link can open this whole conversation, so take a moment to make sure there's nothing here you'd rather keep private. A shared topic may include:",
@@ -1291,6 +1333,8 @@ export default {
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
+  'sharePage.meta.pageDescription': 'A page shared from {{appName}}.',
+  'sharePage.meta.topicDescription': 'A conversation shared from {{appName}}.',
   'sharePage.pill.edit': 'Edit',
   'sharePage.pill.openInApp': 'Open in {{appName}}',
   'sharePage.pill.sharedVia': 'Shared via {{appName}}',
@@ -1542,6 +1586,10 @@ export default {
   'taskDetail.topicDrawer.untitled': 'Untitled',
   'taskDetail.topicMenu.copyId': 'Copy Topic ID',
   'taskDetail.topicMenu.copyOperationId': 'Copy Operation ID',
+  'taskDetail.topicMenu.delete': 'Delete Run',
+  'taskDetail.topicMenu.deleteConfirm.content':
+    'This run and its messages will be permanently deleted. This action cannot be undone.',
+  'taskDetail.topicMenu.deleteConfirm.title': 'Delete Run?',
   'taskDetail.topicMenu.openAgentTopic': 'Go to Agent conversation',
   'taskDetail.topicMenu.open': 'Open Run',
   'taskDetail.topicMenu.stop': 'Stop Run',
@@ -1744,9 +1792,11 @@ export default {
   'taskList.emptyHero.greeting': 'What should we tackle today?',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
   'taskList.form.grouping': 'Grouping',
+  'taskList.form.nestedSubTasks': 'Nested sub-tasks',
   'taskList.form.orderCompletedByRecency': 'Sort completed tasks by recency',
   'taskList.form.ordering': 'Ordering',
   'taskList.form.showCompleted': 'Show completed & canceled',
+  'taskList.form.showSubTasks': 'Show sub-tasks',
   'taskList.form.subGrouping': 'Sub-grouping',
   'taskList.hiddenCompleted.count_one': '{{count}} task',
   'taskList.hiddenCompleted.count_other': '{{count}} tasks',
@@ -1828,9 +1878,11 @@ export default {
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'terminalPanel.close': 'Close terminal panel',
   'terminalPanel.closeOtherTabs': 'Close other terminals',
+  'terminalPanel.closePane': 'Close pane',
   'terminalPanel.closeTab': 'Close terminal',
   'terminalPanel.createFailed': 'Failed to start the terminal session',
   'terminalPanel.newTab': 'New terminal',
+  'terminalPanel.split': 'Split terminal',
   'terminalPanel.title': 'Terminal',
   'thread.threadMessageCount': '{{messageCount}} messages',
   'thread.title': 'Subtopic',
@@ -2279,6 +2331,39 @@ export default {
   'workingPanel.localFile.preview.reload': 'Reload preview',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.preview.source': 'Source',
+  'workingPanel.localFile.publish.action': 'Publish',
+  'workingPanel.localFile.publish.confirmTitle': 'Before you publish this page',
+  'workingPanel.localFile.publish.details': 'What will be published',
+  'workingPanel.localFile.publish.dynamic': 'Files loaded later by scripts will not be included.',
+  'workingPanel.localFile.publish.failed': "Couldn't publish this page",
+  'workingPanel.localFile.publish.files_one':
+    'This page includes {{count}} local file. It will be published together with the HTML.',
+  'workingPanel.localFile.publish.files_other':
+    'This page includes {{count}} local files. They will be published together with the HTML.',
+  'workingPanel.localFile.publish.inline_one':
+    '1 small file (under {{limit}}) is inlined into the HTML.',
+  'workingPanel.localFile.publish.inline_other':
+    '{{count}} small files (under {{limit}}) are inlined into the HTML.',
+  'workingPanel.localFile.publish.live': 'Live',
+  'workingPanel.localFile.publish.upload_one': '1 larger file will be uploaded with the page.',
+  'workingPanel.localFile.publish.upload_other':
+    '{{count}} larger files will be uploaded with the page.',
+  'workingPanel.localFile.publish.missing': 'Missing files will not be included: {{list}}',
+  'workingPanel.localFile.publish.noLocalFiles': 'This page has no local files besides the HTML.',
+  'workingPanel.localFile.publish.noTopic': 'Open a topic to publish this page',
+  'workingPanel.localFile.publish.note': 'You can unpublish it at any time.',
+  'workingPanel.localFile.publish.oversized': 'These files are too large to publish: {{list}}',
+  'workingPanel.localFile.publish.remotes':
+    'These remote URLs stay as they are. After publish they still load from the original hosts.',
+  'workingPanel.localFile.publish.scanning': 'Preparing this page…',
+  'workingPanel.localFile.publish.privacy':
+    'Anyone with the link can open this page. Before publishing, make sure it does not contain anything you would rather keep private, such as credentials, API keys, personal information, uploaded files, or images.',
+  'workingPanel.localFile.publish.success': 'Published',
+  'workingPanel.localFile.publish.tooLarge': 'This page is too large to publish ({{size}} bytes).',
+  'workingPanel.localFile.publish.tooMany': 'This page references too many local files to publish.',
+  'workingPanel.localFile.publish.unresolvedLocals':
+    'This page still points at local files that were not packed, so those assets would break after publish.',
+  'workingPanel.localFile.publish.version': 'Publish this version',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
   'workingPanel.skills.actions.comingSoon': 'Coming soon',
   'workingPanel.skills.actions.delete': 'Delete',

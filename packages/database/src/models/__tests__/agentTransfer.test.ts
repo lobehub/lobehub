@@ -1,11 +1,12 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
   agentBotProviders,
   agentCronJobs,
+  agentDocuments,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -13,7 +14,12 @@ import {
   briefs,
   chatGroups,
   chatGroupsAgents,
+  documentHistories,
   documents,
+  expertiseBindings,
+  expertiseHits,
+  expertiseInsights,
+  expertiseRuns,
   files,
   knowledgeBases,
   messages,
@@ -27,12 +33,16 @@ import {
   threads,
   topicCommentMentions,
   topicComments,
+  topicDocuments,
   topics,
+  userConnectors,
+  userConnectorTools,
   users,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
   TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS,
@@ -143,6 +153,88 @@ describe('AgentModel.transferAgent', () => {
       .from(agentsToSessions)
       .where(eq(agentsToSessions.agentId, agent.id));
     expect(link.workspaceId).toBe(wsId1);
+  });
+
+  it('should transfer agent-owned expertise and its learned content', async () => {
+    const agentModel = new AgentModel(serverDB, userId, wsId1);
+    const agent = await agentModel.create({ title: 'Learning Agent' });
+    const expertiseModel = new ExpertiseModel(serverDB, userId, wsId1);
+    const domainId = await expertiseModel.createDomain({
+      agentId: agent.id,
+      brief: 'Improve incident response',
+      domainFilter: 'I practice when I investigate production incidents.',
+      title: 'Incident response',
+    });
+    const lesson = await expertiseModel.teachLesson({
+      domainId,
+      text: 'I verify the blast radius before changing production systems.',
+    });
+    const [run] = await serverDB
+      .insert(expertiseRuns)
+      .values({
+        actorId: agent.id,
+        actorType: 'agent',
+        domainId,
+        runIndex: 1,
+        subjectId: 'incident-1',
+        subjectType: 'topic',
+        userId,
+        workspaceId: wsId1,
+      })
+      .returning({ id: expertiseRuns.id });
+    const [hit] = await serverDB
+      .insert(expertiseHits)
+      .values({
+        domainId,
+        lessonId: lesson!.id,
+        outcome: 'pass',
+        runId: run.id,
+      })
+      .returning({ id: expertiseHits.id });
+    const [insight] = await serverDB
+      .insert(expertiseInsights)
+      .values({
+        body: 'The same diagnostic gap appears repeatedly.',
+        domainId,
+        headline: 'Recurring diagnostic gap',
+        kind: 'repeated-mistake',
+        userId,
+        workspaceId: wsId1,
+      })
+      .returning({ id: expertiseInsights.id });
+
+    await agentModel.transferAgent(agent.id, wsId2, targetUserId);
+    await serverDB.delete(workspaces).where(eq(workspaces.id, wsId1));
+
+    const transferredExpertise = new ExpertiseModel(serverDB, targetUserId, wsId2);
+    const [domain, lessons, binding, transferredInsight, transferredRun, transferredHit] =
+      await Promise.all([
+        transferredExpertise.findDomain(domainId),
+        transferredExpertise.listLessons(domainId),
+        serverDB
+          .select({ workspaceId: expertiseBindings.workspaceId })
+          .from(expertiseBindings)
+          .where(eq(expertiseBindings.domainId, domainId)),
+        serverDB
+          .select({ workspaceId: expertiseInsights.workspaceId })
+          .from(expertiseInsights)
+          .where(eq(expertiseInsights.id, insight.id)),
+        serverDB
+          .select({ userId: expertiseRuns.userId, workspaceId: expertiseRuns.workspaceId })
+          .from(expertiseRuns)
+          .where(eq(expertiseRuns.id, run.id)),
+        serverDB
+          .select({ id: expertiseHits.id })
+          .from(expertiseHits)
+          .where(eq(expertiseHits.id, hit.id)),
+      ]);
+
+    expect(domain?.workspaceId).toBe(wsId2);
+    expect(lessons).toHaveLength(1);
+    expect(binding[0].workspaceId).toBe(wsId2);
+    expect(transferredInsight[0].workspaceId).toBe(wsId2);
+    expect(transferredRun[0]).toEqual({ userId: targetUserId, workspaceId: wsId2 });
+    expect(transferredHit[0].id).toBe(hit.id);
   });
 
   it('should clear stale session group references on transfer', async () => {
@@ -581,15 +673,24 @@ describe('AgentModel.transferAgent', () => {
       userId,
       workspaceId: wsId1,
     });
+    // Dedicated agent provenance + binding, so the document itself rides along
+    // and its pin survives the move (a pin whose document stays behind is
+    // detached instead — see the scope-riders suite).
     await serverDB.insert(documents).values({
       content: '',
       fileType: 'text/plain',
       id: 'task-doc',
-      source: 'test',
-      sourceType: 'file',
+      source: `agent-document://${agent.id}/task-doc.md`,
+      sourceType: 'agent',
       title: 'Task doc',
       totalCharCount: 0,
       totalLineCount: 0,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'task-doc',
       userId,
       workspaceId: wsId1,
     });
@@ -709,11 +810,16 @@ describe('AgentModel.transferAgent', () => {
       content: '',
       fileType: 'text/plain',
       id: 'task-vis-doc',
-      source: 'test',
-      sourceType: 'file',
+      source: `agent-document://${agent.id}/vis.md`,
+      sourceType: 'agent',
       title: 'Doc',
       totalCharCount: 0,
       totalLineCount: 0,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'task-vis-doc',
       userId,
     });
     await serverDB.insert(taskDocuments).values({
@@ -959,6 +1065,685 @@ describe('AgentModel.transferAgent', () => {
     await expect(model.transferAgent('nonexistent', wsId1, userId)).rejects.toThrow(
       'Agent not found',
     );
+  });
+});
+
+describe('AgentModel.transferAgent scope riders (connectors & documents)', () => {
+  it('should move agent-scoped connectors with credentials when the owner stays the same', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Plugin Agent' });
+
+    const [connector] = await serverDB
+      .insert(userConnectors)
+      .values({
+        agentId: agent.id,
+        credentials: 'encrypted-secret',
+        identifier: 'my-custom-mcp',
+        isEnabled: true,
+        name: 'My Custom MCP',
+        sourceType: 'custom',
+        status: 'connected',
+        userId,
+      })
+      .returning();
+    await serverDB.insert(userConnectorTools).values({
+      crudType: 'read',
+      permission: 'auto',
+      toolName: 'do_thing',
+      userConnectorId: connector.id,
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [moved] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, connector.id));
+    expect(moved.workspaceId).toBe(wsId1);
+    expect(moved.userId).toBe(userId);
+    // Same owner: credentials ride along, the plugin keeps working.
+    expect(moved.credentials).toBe('encrypted-secret');
+    expect(moved.status).toBe('connected');
+
+    const [tool] = await serverDB
+      .select()
+      .from(userConnectorTools)
+      .where(eq(userConnectorTools.userConnectorId, connector.id));
+    expect(tool.workspaceId).toBe(wsId1);
+    expect(tool.userId).toBe(userId);
+  });
+
+  it('should strip credentials from foreign-owned agent connectors on scope transfer', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'Shared Agent' });
+
+    // Another member connected this agent-scoped connector with THEIR account.
+    const [connector] = await serverDB
+      .insert(userConnectors)
+      .values({
+        agentId: agent.id,
+        credentials: 'their-secret',
+        identifier: 'their-mcp',
+        isEnabled: true,
+        name: 'Their MCP',
+        sourceType: 'custom',
+        status: 'connected',
+        userId: targetUserId,
+        workspaceId: wsId1,
+      })
+      .returning();
+
+    await model.transferAgent(agent.id, null, userId);
+
+    const [moved] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, connector.id));
+    expect(moved.workspaceId).toBeNull();
+    expect(moved.userId).toBe(userId);
+    // Ownership changed: the previous owner's credentials never travel.
+    expect(moved.credentials).toBeNull();
+    expect(moved.status).toBe('disconnected');
+    expect(moved.isEnabled).toBe(false);
+  });
+
+  it('should unmount base connectors linked by the moved agent', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Mount Agent' });
+
+    const [base] = await serverDB
+      .insert(userConnectors)
+      .values({
+        identifier: 'personal-linear',
+        isEnabled: true,
+        metadata: { mountedByAgentId: agent.id },
+        name: 'Linear',
+        sourceType: 'builtin',
+        status: 'connected',
+        userId,
+      })
+      .returning();
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [after] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, base.id));
+    // The base row stays in the source scope, just unmounted.
+    expect(after.workspaceId).toBeNull();
+    expect(after.metadata?.mountedByAgentId).toBeUndefined();
+  });
+
+  it('should move dedicated agent documents with binding and history', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Doc Agent' });
+
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'dedicated-doc',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'dedicated-doc',
+      userId,
+    });
+    await serverDB.insert(documentHistories).values({
+      documentId: 'dedicated-doc',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: new Date(),
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId, 'private');
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'dedicated-doc'));
+    expect(doc.workspaceId).toBe(wsId1);
+    expect(doc.userId).toBe(userId);
+    expect(doc.visibility).toBe('private');
+
+    const [binding] = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(binding.workspaceId).toBe(wsId1);
+    expect(binding.userId).toBe(userId);
+
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'dedicated-doc'));
+    expect(history.workspaceId).toBe(wsId1);
+  });
+
+  it('should detach associated documents and leave them in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Assoc Agent' });
+
+    await serverDB.insert(documents).values({
+      content: 'notes',
+      fileType: 'text/plain',
+      id: 'assoc-doc',
+      source: 'https://example.com/notes',
+      sourceType: 'web',
+      title: 'Personal notes',
+      totalCharCount: 5,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'assoc-doc',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'assoc-doc'));
+    // The pre-existing personal document is NOT the agent's property.
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.userId).toBe(userId);
+
+    const bindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(bindings).toHaveLength(0);
+  });
+
+  it('should keep a dedicated document bound to an outside agent in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Moving Agent' });
+    const stayingAgent = await model.create({ title: 'Staying Agent' });
+
+    await serverDB.insert(documents).values({
+      content: 'shared skill',
+      fileType: 'text/markdown',
+      id: 'shared-dedicated-doc',
+      source: `agent-document://${agent.id}/shared.md`,
+      sourceType: 'agent',
+      title: 'shared.md',
+      totalCharCount: 12,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values([
+      { agentId: agent.id, documentId: 'shared-dedicated-doc', userId },
+      { agentId: stayingAgent.id, documentId: 'shared-dedicated-doc', userId },
+    ]);
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'shared-dedicated-doc'));
+    // An external consumer pins the document to the source scope.
+    expect(doc.workspaceId).toBeNull();
+
+    const movedBindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(movedBindings).toHaveLength(0);
+
+    const stayingBindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, stayingAgent.id));
+    expect(stayingBindings).toHaveLength(1);
+    expect(stayingBindings[0].workspaceId).toBeNull();
+  });
+
+  it('should move a dedicated document referenced only by topics that move too', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Topic Doc Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ agentId: agent.id, id: 'moving-topic', title: 'T', userId });
+    await serverDB.insert(documents).values({
+      content: 'report',
+      fileType: 'text/markdown',
+      id: 'topic-ref-doc',
+      source: `agent-document://${agent.id}/report.md`,
+      sourceType: 'agent',
+      title: 'report.md',
+      totalCharCount: 6,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'topic-ref-doc',
+      userId,
+    });
+    await serverDB.insert(topicDocuments).values({
+      documentId: 'topic-ref-doc',
+      topicId: 'moving-topic',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    // The referencing topic moves with the agent, so the document moves too —
+    // and the topic-document link follows its topic's scope.
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'topic-ref-doc'));
+    expect(doc.workspaceId).toBe(wsId1);
+
+    const [link] = await serverDB
+      .select()
+      .from(topicDocuments)
+      .where(eq(topicDocuments.topicId, 'moving-topic'));
+    expect(link.workspaceId).toBe(wsId1);
+    expect(link.userId).toBe(userId);
+  });
+
+  it('should detach a moved topic link whose document stays in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Assoc Topic Agent' });
+
+    await serverDB
+      .insert(topics)
+      .values({ agentId: agent.id, id: 'assoc-link-topic', title: 'T', userId });
+    // Not agent provenance: an ordinary personal document the user attached to
+    // the conversation, so it stays behind when the agent moves.
+    await serverDB.insert(documents).values({
+      content: 'notes',
+      fileType: 'text/plain',
+      id: 'stays-doc',
+      source: 'https://example.com/notes',
+      sourceType: 'web',
+      title: 'Personal notes',
+      totalCharCount: 5,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(topicDocuments).values({
+      documentId: 'stays-doc',
+      topicId: 'assoc-link-topic',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'stays-doc'));
+    expect(doc.workspaceId).toBeNull();
+
+    // A link carried into the target would resolve in neither scope: the read
+    // path joins the junction AND the document against the same predicate.
+    const links = await serverDB
+      .select()
+      .from(topicDocuments)
+      .where(eq(topicDocuments.topicId, 'assoc-link-topic'));
+    expect(links).toHaveLength(0);
+  });
+
+  it('should detach a moved task pin whose document stays in the source scope', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Assoc Task Agent' });
+
+    await serverDB.insert(tasks).values({
+      createdByAgentId: agent.id,
+      createdByUserId: userId,
+      id: 'assoc-link-task',
+      identifier: 'T-assoc',
+      instruction: 'Do the thing',
+      seq: 1,
+    });
+    await serverDB.insert(documents).values({
+      content: 'notes',
+      fileType: 'text/plain',
+      id: 'task-stays-doc',
+      source: 'https://example.com/notes',
+      sourceType: 'web',
+      title: 'Personal notes',
+      totalCharCount: 5,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(taskDocuments).values({
+      documentId: 'task-stays-doc',
+      taskId: 'assoc-link-task',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'task-stays-doc'));
+    expect(doc.workspaceId).toBeNull();
+
+    const pins = await serverDB
+      .select()
+      .from(taskDocuments)
+      .where(eq(taskDocuments.taskId, 'assoc-link-task'));
+    expect(pins).toHaveLength(0);
+  });
+
+  it('should leave a document whose provenance names an agent outside the move', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const outsider = await model.create({ title: 'Outsider Agent' });
+    const agent = await model.create({ title: 'Borrower Agent' });
+
+    // Created for `outsider`, later associated to the moving agent. Provenance
+    // alone would read as "dedicated" and hand it over with the move.
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'foreign-provenance-doc',
+      source: `agent-document://${outsider.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'foreign-provenance-doc',
+      userId,
+    });
+    // The originating agent is gone, so no external binding holds it back.
+    await serverDB.delete(agents).where(eq(agents.id, outsider.id));
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'foreign-provenance-doc'));
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.userId).toBe(userId);
+
+    // Associated policy: the binding is detached, the document stays put.
+    const bindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(bindings).toHaveLength(0);
+  });
+
+  it("should leave another member's skill bundle that was only associated", async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Skill Borrower' });
+
+    // Skill-management provenance carries no agent id; only the create/convert
+    // flows stamp the binding, and `associate` does not.
+    await serverDB.insert(documents).values({
+      content: '',
+      fileType: 'skills/bundle',
+      id: 'borrowed-skill-doc',
+      source: 'agent-signal:skill-management',
+      sourceType: 'agent-signal',
+      title: 'Borrowed skill',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: targetUserId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'borrowed-skill-doc',
+      templateId: null,
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, 'borrowed-skill-doc'));
+    expect(doc.workspaceId).toBeNull();
+    expect(doc.userId).toBe(targetUserId);
+
+    const bindings = await serverDB
+      .select()
+      .from(agentDocuments)
+      .where(eq(agentDocuments.agentId, agent.id));
+    expect(bindings).toHaveLength(0);
+  });
+
+  it("should move an agent's own skill bundle together with its index", async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Skill Owner' });
+
+    await serverDB.insert(documents).values([
+      {
+        content: '',
+        fileType: 'skills/bundle',
+        id: 'own-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'Own skill',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+      {
+        content: '# skill',
+        fileType: 'skills/index',
+        id: 'own-skill-index',
+        parentId: 'own-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'SKILL.md',
+        totalCharCount: 7,
+        totalLineCount: 1,
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentDocuments).values([
+      { agentId: agent.id, documentId: 'own-skill-bundle', templateId: 'agent-skill', userId },
+      { agentId: agent.id, documentId: 'own-skill-index', templateId: 'agent-skill', userId },
+    ]);
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const docs = await serverDB
+      .select()
+      .from(documents)
+      .where(inArray(documents.id, ['own-skill-bundle', 'own-skill-index']));
+    expect(docs).toHaveLength(2);
+    for (const doc of docs) expect(doc.workspaceId).toBe(wsId1);
+  });
+
+  it('should hold a whole skill tree back when one node is pinned outside the move', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Pinned Skill Owner' });
+
+    // A task that is NOT moving with this transfer pins the index alone.
+    await serverDB.insert(tasks).values({
+      createdByUserId: userId,
+      id: 'outside-task',
+      identifier: 'T-outside',
+      instruction: 'Unrelated',
+      seq: 1,
+    });
+    await serverDB.insert(documents).values([
+      {
+        content: '',
+        fileType: 'skills/bundle',
+        id: 'pinned-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'Pinned skill',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+      },
+      {
+        content: '# skill',
+        fileType: 'skills/index',
+        id: 'pinned-skill-index',
+        parentId: 'pinned-skill-bundle',
+        source: 'agent-signal:skill-management',
+        sourceType: 'agent-signal',
+        title: 'SKILL.md',
+        totalCharCount: 7,
+        totalLineCount: 1,
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentDocuments).values([
+      { agentId: agent.id, documentId: 'pinned-skill-bundle', templateId: 'agent-skill', userId },
+      { agentId: agent.id, documentId: 'pinned-skill-index', templateId: 'agent-skill', userId },
+    ]);
+    await serverDB
+      .insert(taskDocuments)
+      .values({ documentId: 'pinned-skill-index', taskId: 'outside-task', userId });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    // `parent_id` is never rewritten, so moving the bundle without its pinned
+    // index would leave a tree straddling two scopes.
+    const docs = await serverDB
+      .select()
+      .from(documents)
+      .where(inArray(documents.id, ['pinned-skill-bundle', 'pinned-skill-index']));
+    expect(docs).toHaveLength(2);
+    for (const doc of docs) expect(doc.workspaceId).toBeNull();
+  });
+
+  it("should drop the slug when it collides with another member's private document", async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Slug Agent' });
+
+    // Invisible to the mover through the read predicate, but the
+    // `documents_slug_workspace_id_unique` index still covers it.
+    await serverDB.insert(documents).values({
+      content: 'private',
+      fileType: 'text/markdown',
+      id: 'target-private-doc',
+      slug: 'shared-slug',
+      source: 'https://example.com/private',
+      sourceType: 'web',
+      title: 'Private',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId: targetUserId,
+      visibility: 'private',
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'slug-doc',
+      slug: 'shared-slug',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'slug-doc',
+      userId,
+    });
+
+    await model.transferAgent(agent.id, wsId1, userId);
+
+    const [doc] = await serverDB.select().from(documents).where(eq(documents.id, 'slug-doc'));
+    expect(doc.workspaceId).toBe(wsId1);
+    expect(doc.slug).toBeNull();
+  });
+
+  it('should rehome revision history to the new owner when moving to personal scope', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'History Agent' });
+
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'history-doc',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'history-doc',
+      userId,
+      workspaceId: wsId1,
+    });
+    // Authored by the member who is NOT the transfer target.
+    await serverDB.insert(documentHistories).values({
+      documentId: 'history-doc',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: new Date(),
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, null, targetUserId);
+
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'history-doc'));
+    // Personal reads are `user_id = owner AND workspace_id IS NULL`; keeping
+    // the author here would hide the history from its new owner and let it
+    // cascade away with the author's account.
+    expect(history.workspaceId).toBeNull();
+    expect(history.userId).toBe(targetUserId);
+  });
+
+  it('should keep revision authorship when the document lands in a workspace', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const agent = await model.create({ title: 'History WS Agent' });
+
+    await serverDB.insert(documents).values({
+      content: '# skill',
+      fileType: 'text/markdown',
+      id: 'history-ws-doc',
+      source: `agent-document://${agent.id}/skill.md`,
+      sourceType: 'agent',
+      title: 'skill.md',
+      totalCharCount: 7,
+      totalLineCount: 1,
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(agentDocuments).values({
+      agentId: agent.id,
+      documentId: 'history-ws-doc',
+      userId,
+      workspaceId: wsId1,
+    });
+    await serverDB.insert(documentHistories).values({
+      documentId: 'history-ws-doc',
+      editorData: {},
+      saveSource: 'manual',
+      savedAt: new Date(),
+      userId,
+      workspaceId: wsId1,
+    });
+
+    await model.transferAgent(agent.id, wsId2, targetUserId);
+
+    const [history] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, 'history-ws-doc'));
+    // A workspace target filters on `workspace_id` alone, so the revision keeps
+    // pointing at whoever actually wrote it.
+    expect(history.workspaceId).toBe(wsId2);
+    expect(history.userId).toBe(userId);
   });
 });
 

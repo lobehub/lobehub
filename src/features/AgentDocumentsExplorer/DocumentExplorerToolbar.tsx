@@ -7,8 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
-    padding-block: 4px;
-    padding-inline: 12px 4px;
+    /* padding-inline start matches a tree row's content edge:
+       --trees-padding-inline (4) - --trees-item-margin-x (4), clamped at 0,
+       plus the row's own margin (4) and padding (8). */
+    padding-block: 8px 4px;
+    padding-inline: 12px 8px;
     color: ${cssVar.colorTextSecondary};
   `,
   title: css`

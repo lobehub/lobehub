@@ -121,6 +121,20 @@ describe('OpenAPI auth middleware', () => {
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(mockServerDB, 'oidc-user');
   });
 
+  it('does not accept an operation token on ordinary OpenAPI routes', async () => {
+    mockValidateOIDCJWT.mockResolvedValueOnce({
+      tokenData: { purpose: 'hetero-operation', sub: 'oidc-user' },
+      userId: 'oidc-user',
+    });
+
+    const response = await createApp().request('/protected', {
+      headers: { Authorization: 'Bearer operation-token' },
+    });
+
+    expect(response.status).toBe(401);
+    expect(mockAssertOIDCUserActive).not.toHaveBeenCalled();
+  });
+
   it('should reject an inactive OIDC bearer token without authenticating the request', async () => {
     const app = createApp();
     const inactiveError = Object.assign(new Error('OIDC user is no longer active'), {

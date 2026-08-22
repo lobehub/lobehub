@@ -729,9 +729,13 @@ export class MessageModel {
             targetId: messages.targetId,
 
             sender: {
+              // `id` MUST be the first selected field: drizzle decides whether a
+              // left-joined nested selection is null from its first column, so
+              // leading with a nullable column (avatar) collapsed every
+              // avatar-less sender to `sender: null`.
+              id: users.id,
               avatar: users.avatar,
               fullName: users.fullName,
-              id: users.id,
               username: users.username,
             },
 
@@ -1362,6 +1366,15 @@ export class MessageModel {
         agentId: messages.agentId,
         targetId: messages.targetId,
 
+        sender: {
+          // `id` MUST be the first selected field — see queryWithWhere's sender
+          // selection for why (drizzle left-join nested-object nullification).
+          id: users.id,
+          avatar: users.avatar,
+          fullName: users.fullName,
+          username: users.username,
+        },
+
         tools: messages.tools,
         tool_call_id: messagePlugins.toolCallId,
 
@@ -1391,6 +1404,7 @@ export class MessageModel {
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+      .leftJoin(users, eq(users.id, messages.userId))
       .orderBy(asc(messages.createdAt));
 
     if (result.length === 0) return [];
@@ -1536,10 +1550,23 @@ export class MessageModel {
 
     // 6. Transform messages to UIChatMessage format
     return result.map(
-      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+      ({
+        model,
+        provider,
+        translate,
+        ttsId,
+        ttsFile,
+        ttsContentMd5,
+        ttsVoice,
+        sender,
+        ...item
+      }) => {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
         return {
           ...item,
+          // Same presence contract as queryWithWhere: collapse a null-id sender
+          // (deleted account) to `null` so clients can rely on `sender?.id`.
+          sender: sender?.id ? sender : null,
           chunksList: chunksList
             .filter((relation) => relation.messageId === item.id)
             .map((c) => ({
@@ -2817,17 +2844,117 @@ export class MessageModel {
       lte(messages.createdAt, completedAt),
     );
 
-    const heterogeneousMatch = sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`;
+    // The two branches are resolved SEPARATELY — never OR-ed into one WHERE (an
+    // `... AND (withinWindow OR heteroMatch)` is unindexable and seq-scans every
+    // plugin row the user owns). They are also SHAPED differently on purpose:
+    //
+    // - Time window: one index-friendly range scan joined to its plugin rows.
+    // - Heterogeneous match: resolved id-FIRST, not as a plugin JOIN. The
+    //   `metadata->>'heterogeneousToolStateOperationId'` predicate carries a 0.5%
+    //   default selectivity estimate, so joining it to `message_plugins` makes the
+    //   planner scan / nested-loop the user's ENTIRE plugin history (100k+ rows,
+    //   100s+ per call for heavy users — it returns ~0 rows but pays the full scan
+    //   every time, since most ops never stamp the key). Looking up the few
+    //   matching message ids in a JOIN-free query first, then fetching those rows
+    //   by primary key, leaves the planner no join to mis-order: the lookup is
+    //   single-table (index-served once the metadata expression is indexed; a
+    //   bounded scan otherwise) and the fetch is a pure PK access. Kept
+    //   topic-agnostic to preserve the prior behaviour exactly — a late CLI row
+    //   can land outside the op's window (and, rarely, its topic).
+    const projection = {
+      apiName: messagePlugins.apiName,
+      arguments: messagePlugins.arguments,
+      clientId: messagePlugins.clientId,
+      // The tool message's text body. Heterogeneous CLI adapters (claude-code
+      // Bash) persist the command's stdout here rather than in a structured
+      // `state` field, and the completion-time github Work scan reads the gh
+      // CLI's printed entity URL from it.
+      content: messages.content,
+      createdAt: messages.createdAt,
+      error: messagePlugins.error,
+      id: messagePlugins.id,
+      identifier: messagePlugins.identifier,
+      intervention: messagePlugins.intervention,
+      state: messagePlugins.state,
+      toolCallId: messagePlugins.toolCallId,
+      type: messagePlugins.type,
+      userId: messagePlugins.userId,
+    };
+
+    const scan = (condition: SQL | undefined) =>
+      this.db
+        .select(projection)
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messagePlugins.id, messages.id))
+        .where(and(this.ownership(), this.pluginsOwnership(), condition));
+
+    const fetchHeterogeneous = async () => {
+      const idRows = await this.db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            this.ownership(),
+            sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`,
+          ),
+        );
+      const ids = idRows.map((row) => row.id);
+      if (ids.length === 0) return [];
+      return scan(inArray(messagePlugins.id, ids));
+    };
+
+    const [windowRows, heterogeneousRows] = await Promise.all([
+      scan(withinWindow),
+      fetchHeterogeneous(),
+    ]);
+
+    const byId = new Map<string, (typeof windowRows)[number]>();
+    for (const row of windowRows) byId.set(row.id, row);
+    for (const row of heterogeneousRows) if (!byId.has(row.id)) byId.set(row.id, row);
+
+    const rows = [...byId.values()].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return rows.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
+   * Load specific tool-call rows by their message ids, ownership-scoped and
+   * pinned to one topic. Serves the LOCAL hetero run work scan
+   * (`work.registerShellWorksForRun`): a desktop-local CLI run has no
+   * `agent_operations` row, so the client reports the exact tool message ids it
+   * persisted instead of the server reconstructing an operation window. The
+   * topic pin means a caller can never scan rows outside the conversation it
+   * claims to complete.
+   */
+  listMessagePluginsByIds = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
+    if (params.ids.length === 0) return [];
 
     const rows = await this.db
       .select({
         apiName: messagePlugins.apiName,
         arguments: messagePlugins.arguments,
         clientId: messagePlugins.clientId,
-        // The tool message's text body. Heterogeneous CLI adapters (claude-code
-        // Bash) persist the command's stdout here rather than in a structured
-        // `state` field, and the completion-time github Work scan reads the gh
-        // CLI's printed entity URL from it.
+        // The tool message's text body — claude-code Bash persists the
+        // command's stdout here (see listMessagePluginsForOperation).
         content: messages.content,
         createdAt: messages.createdAt,
         error: messagePlugins.error,
@@ -2841,10 +2968,20 @@ export class MessageModel {
       })
       .from(messagePlugins)
       .innerJoin(messages, eq(messagePlugins.id, messages.id))
-      .where(and(this.ownership(), this.pluginsOwnership(), or(withinWindow, heterogeneousMatch)))
-      .orderBy(asc(messages.createdAt), asc(messages.id));
+      .where(
+        and(
+          inArray(messagePlugins.id, params.ids),
+          eq(messages.topicId, params.topicId),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      );
 
-    return rows.map((row) => ({
+    const sorted = [...rows].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return sorted.map((row) => ({
       apiName: row.apiName ?? undefined,
       arguments: row.arguments ?? undefined,
       clientId: row.clientId ?? undefined,

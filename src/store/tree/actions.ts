@@ -20,6 +20,7 @@ export const toTreeItem = (item: {
   id: string;
   metadata?: Record<string, any> | null;
   name: string;
+  size?: number | null;
   slug?: string | null;
   sourceType?: string;
   url?: string;
@@ -31,6 +32,7 @@ export const toTreeItem = (item: {
   isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
   name: item.name,
+  size: item.size ?? undefined,
   slug: item.slug,
   sourceType: item.sourceType,
   url: item.url ?? '',

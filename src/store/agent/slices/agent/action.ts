@@ -44,7 +44,16 @@ import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -605,6 +614,10 @@ export class AgentSliceActionImpl {
         draft[id] = config;
       } else {
         draft[id] = merge(draft[id], config);
+        // The character sheet is authored as one document — `AgentModel`
+        // replaces it rather than merging — so mirror that here, or a trait the
+        // user just cleared reappears until the next full fetch.
+        if (Object.hasOwn(config, 'profile')) draft[id].profile = config.profile;
         // merge() can't drop keys; honor `undefined` as a per-device delete so
         // clearing a working directory takes effect optimistically.
         pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);

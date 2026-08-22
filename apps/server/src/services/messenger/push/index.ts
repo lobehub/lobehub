@@ -2,7 +2,7 @@ import type { MessengerPlatform } from '@/config/messenger';
 import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import type { LobeChatDatabase } from '@/database/type';
-import type { WechatOutboundAttachment } from '@/server/services/bot/platforms/wechat/sendAttachments';
+import type { BotMessageAttachment } from '@/server/services/bot/platforms/types';
 import { getInstallationStore } from '@/server/services/messenger/installations';
 import { sendOutboundDirectMessage } from '@/server/services/messenger/outbound';
 import {
@@ -65,6 +65,7 @@ const resolveAccountLink = async (params: {
 };
 
 const sendAlwaysAvailableMessage = async (params: {
+  attachments?: BotMessageAttachment[];
   content?: string;
   platform: Exclude<MessengerPushPlatform, 'wechat'>;
   serverDB: LobeChatDatabase;
@@ -72,7 +73,7 @@ const sendAlwaysAvailableMessage = async (params: {
   userId: string;
 }): Promise<MessengerPushResult> => {
   const content = params.content?.trim();
-  if (!content) return { status: 'unavailable' };
+  if (!content && !params.attachments?.length) return { status: 'unavailable' };
 
   const link = await resolveAccountLink(params);
   if (!link) return { status: 'unlinked' };
@@ -86,6 +87,7 @@ const sendAlwaysAvailableMessage = async (params: {
 
   try {
     await sendOutboundDirectMessage({
+      attachments: params.attachments,
       content,
       credentials,
       platformUserId: link.platformUserId,
@@ -98,7 +100,7 @@ const sendAlwaysAvailableMessage = async (params: {
 };
 
 export const sendMessengerPush = async (params: {
-  attachments?: WechatOutboundAttachment[];
+  attachments?: BotMessageAttachment[];
   content?: string;
   platform: MessengerPushPlatform;
   serverDB: LobeChatDatabase;

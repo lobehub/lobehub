@@ -142,7 +142,7 @@ export class ServerToolTransport implements ToolTransport {
         execution = {
           attempts: 0,
           mocked: true,
-          result: { content: hookResult.content, executionTime: 0, success: true },
+          result: hookResult.result,
         };
       } else if (
         chatToolPayload.executor === 'client' &&

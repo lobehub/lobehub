@@ -28,15 +28,10 @@ import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
-import GoalSkeleton from '@/components/Skeleton/Goal';
-import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
-import GroupLayoutSkeleton from '@/components/Skeleton/GroupLayout';
 import MemorySkeleton from '@/components/Skeleton/Memory';
-import ProfileSkeleton from '@/components/Skeleton/Profile';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
-import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
-import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
+import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
@@ -167,7 +162,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goals'),
               'Desktop > Chat > Goals',
-              { fallback: <GoalSkeleton /> },
             ),
             handle: { meta: goalsRouteMeta },
             path: 'goals',
@@ -176,16 +170,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/agent/goal/[goalId]'),
               'Desktop > Chat > Goal Detail',
-              { fallback: <GoalDetailSkeleton /> },
             ),
-            handle: { meta: goalsRouteMeta },
+            handle: { meta: goalDetailRouteMeta },
             path: 'goal/:goalId',
           },
           {
             element: dynamicElement(
               () => import('@/routes/(main)/agent/profile'),
               'Desktop > Chat > Profile',
-              { fallback: <ProfileSkeleton /> },
             ),
             handle: { meta: agentProfileRouteMeta },
             path: 'profile',
@@ -350,7 +342,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
             element: dynamicElement(
               () => import('@/routes/(main)/group/profile'),
               'Desktop > Agent Group > Profile',
-              { fallback: <ProfileSkeleton variant={'group'} /> },
             ),
             handle: { meta: groupProfileRouteMeta },
             path: 'profile',
@@ -372,7 +363,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicLayout(
           () => import('@/routes/(main)/group/_layout'),
           'Desktop > Group > Layout',
-          { fallback: <GroupLayoutSkeleton />, preloadId: 'group' },
+          { preloadId: 'group' },
         ),
         errorElement: <ErrorBoundary />,
         path: ':gid',
@@ -692,10 +683,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(
           () => import('@/routes/(main)/memory/(home)'),
           'Desktop > Memory > Home',
-          { fallback: <MemorySkeleton />, preloadId: 'memory' },
+          { preloadId: 'memory' },
         ),
         handle: {
-          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
+          meta: routeMeta({
+            icon: BrainCircuit,
+            Skeleton: MemorySkeleton,
+            titleKey: 'navigation.memory',
+          }),
         },
         index: true,
       },
@@ -1028,11 +1023,11 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
 
   // Apps page (personal-only — never mirrored under /:workspaceSlug)
   {
-    element: dynamicElement(() => import('@/routes/(main)/apps'), 'Desktop > Apps', {
-      fallback: <AppsSkeleton />,
-    }),
+    element: dynamicElement(() => import('@/routes/(main)/apps'), 'Desktop > Apps'),
     errorElement: <ErrorBoundary />,
-    handle: { meta: routeMeta({ icon: Download, titleKey: 'navigation.apps' }) },
+    handle: {
+      meta: routeMeta({ icon: Download, Skeleton: AppsSkeleton, titleKey: 'navigation.apps' }),
+    },
     path: 'apps',
   },
 
@@ -1074,9 +1069,8 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Memory',
-          { fallback: <SettingsPageSkeleton /> },
         ),
-        handle: { settingsTab: SettingsTabs.Memory },
+        handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
         path: 'memory',
       },
       {
@@ -1088,7 +1082,6 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Tab',
-          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { meta: settingsRouteMeta },
         path: ':tab',
@@ -1099,7 +1092,6 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Tab > Sub',
-          { fallback: <SettingsPageSkeleton /> },
         ),
         handle: { meta: settingsRouteMeta },
         path: ':tab/:sub',
@@ -1108,9 +1100,9 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
     element: dynamicElement(
       () => import('@/routes/(main)/settings/_layout'),
       'Desktop > Settings > Layout',
-      { fallback: <SettingsPageSkeleton /> },
     ),
     errorElement: <ErrorBoundary />,
+    handle: { meta: settingsRouteMeta },
     path: 'settings',
   },
 

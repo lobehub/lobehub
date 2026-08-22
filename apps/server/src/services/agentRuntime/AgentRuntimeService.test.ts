@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 
-import { AgentRuntimeService } from './AgentRuntimeService';
+import { AgentRuntimeService, createEvalToolForwardingHook } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
@@ -28,6 +28,9 @@ vi.mock('@lobechat/model-runtime', () => ({
   getErrorCodeSpec: () => undefined,
   refineErrorCode: () => undefined,
 }));
+
+const { ssrfSafeFetch: mockSsrfSafeFetch } = vi.hoisted(() => ({ ssrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -244,6 +247,137 @@ describe('AgentRuntimeService', () => {
   afterEach(() => {
     delete process.env.AGENT_RUNTIME_BASE_URL;
     hookDispatcher.unregister('test-operation-1');
+  });
+
+  describe('eval tool forwarding hook', () => {
+    const event = {
+      apiName: 'search_tweets',
+      args: { query: 'test' },
+      callIndex: 2,
+      identifier: 'twitter',
+      mock: vi.fn(),
+      operationId: 'op-forwarding',
+      stepIndex: 3,
+    };
+
+    beforeEach(() => {
+      event.mock.mockReset();
+      mockSsrfSafeFetch.mockReset();
+    });
+
+    it('forwards the beforeToolCall payload and preserves the returned tool result', async () => {
+      const timeoutSpy = vi.spyOn(global, 'setTimeout');
+      const result = { content: 'fixture result', state: { source: 'mock' }, success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
+        'https://mock.test/tool-calls',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toEqual({
+        data: { apiName: 'search_tweets', args: { query: 'test' }, identifier: 'twitter' },
+        metadata: { callIndex: 2, operationId: 'op-forwarding', stepIndex: 3 },
+        type: 'toolCall',
+      });
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 15_000);
+      expect(event.mock).toHaveBeenCalledWith(result);
+      timeoutSpy.mockRestore();
+    });
+
+    it('includes the dataset case id in forwarding metadata', async () => {
+      const result = { content: 'fixture result', success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook(
+        { twitter: { endpoint: 'https://mock.test/tool-calls' } },
+        'case-42',
+      );
+
+      await hook.handler(event as any);
+
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
+        metadata: { caseId: 'case-42' },
+      });
+    });
+
+    it('mocks a failed result without executing the real tool', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'fixture unavailable', success: false })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: 'fixture unavailable',
+        error: 'fixture unavailable',
+        success: false,
+      });
+    });
+
+    it('mocks a placeholder when a successful response has no tool result', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(new Response(JSON.stringify({ success: true })));
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
+    });
+
+    it('mocks a placeholder when a successful response has an invalid tool result', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: { content: 1, success: true }, success: true })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
+    });
+
+    it('mocks a failed result when the forwarding response is not JSON', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(new Response('not-json'));
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: expect.stringContaining('SyntaxError'),
+        error: expect.any(SyntaxError),
+        success: false,
+      });
+    });
+
+    it('mocks transport failures', async () => {
+      mockSsrfSafeFetch.mockRejectedValue('SSRF blocked');
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: 'SSRF blocked',
+        error: 'SSRF blocked',
+        success: false,
+      });
+    });
   });
 
   describe('constructor', () => {
