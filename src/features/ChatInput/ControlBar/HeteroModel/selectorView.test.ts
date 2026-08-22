@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelCapability } from './selectorView';
 import {
   buildSelectorView,
+  resolveModelDependentSelection,
   resolveModelSwitchSelection,
   resolveSelectorShape,
 } from './selectorView';
@@ -186,6 +187,36 @@ describe('current value surfaced on each dimension', () => {
       'Opus 4.8 heteroAgent.modelSelector.defaultReasoning',
     );
   });
+
+  it('renders an effort-only API selector without repeating the adjacent model label', () => {
+    const capability = selectorCapabilityOf('codex');
+    if (!capability.effort) throw new Error('no effort capability for codex');
+
+    const view = buildSelectorView({
+      capability: { effort: capability.effort },
+      provider: { effort: 'ultra', type: 'codex' },
+      selectedModel: 'gpt-5.6-sol',
+      t,
+    });
+
+    expect(view.dimensions.map((dimension) => dimension.key)).toEqual(['reasoning']);
+    expect(view.dimensions[0].options.map((option) => option.value)).toContain('ultra');
+    expect(view.triggerText).toBe('heteroAgent.modelSelector.reasoning.ultra');
+  });
+
+  it('labels the untouched effort-only API selector as the default effort', () => {
+    const capability = selectorCapabilityOf('claude-code');
+    if (!capability.effort) throw new Error('no effort capability for claude-code');
+
+    const view = buildSelectorView({
+      capability: { effort: capability.effort },
+      provider: { type: 'claude-code' },
+      selectedModel: 'claude-sonnet-4-6',
+      t,
+    });
+
+    expect(view.triggerText).toBe('heteroAgent.modelSelector.defaultReasoning');
+  });
 });
 
 describe('resolveModelSwitchSelection', () => {
@@ -229,6 +260,17 @@ describe('resolveModelSwitchSelection', () => {
         value: 'haiku',
       }),
     ).toEqual({ model: 'haiku' });
+  });
+
+  it('resets only the incompatible effort when an API-bound model changes', () => {
+    expect(
+      resolveModelDependentSelection({
+        capability: selectorCapabilityOf('codex'),
+        effort: 'ultra',
+        isFastSpeed: false,
+        value: 'gpt-5.4',
+      }),
+    ).toEqual({ effort: 'default' });
   });
 });
 

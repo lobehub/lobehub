@@ -15,10 +15,17 @@ import SelectorMenu from './SelectorMenu';
 import { resolveSelectorShape } from './selectorView';
 import { useHeteroProviderPatch } from './useHeteroProviderPatch';
 
-const HeteroModel = memo(() => {
-  const agentId = useAgentId();
+interface HeteroModelProps {
+  agentId?: string;
+  effortOnly?: boolean;
+  selectedModel?: string;
+}
+
+const HeteroModel = memo<HeteroModelProps>(({ agentId, effortOnly, selectedModel }) => {
+  const contextAgentId = useAgentId();
+  const resolvedAgentId = agentId ?? contextAgentId;
   const provider = useAgentStore(
-    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
+    (s) => agentByIdSelectors.getAgencyConfigById(resolvedAgentId)(s)?.heterogeneousProvider,
     isEqual,
   );
   const { allowed: canCreateContent, reason } = usePermission('create_content');
@@ -26,16 +33,24 @@ const HeteroModel = memo(() => {
   // the selector when this caller cannot configure that shared resource.
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
-  const patch = useHeteroProviderPatch({ agentId, enabled, provider });
+  const patch = useHeteroProviderPatch({ agentId: resolvedAgentId, enabled, provider });
 
   const shape = resolveSelectorShape(provider, enabled);
 
   if (shape.kind === 'none' || !provider) return null;
 
-  if (shape.kind === 'catalog')
+  const capability = effortOnly
+    ? shape.capability.effort
+      ? { effort: shape.capability.effort }
+      : undefined
+    : shape.capability;
+
+  if (!capability) return null;
+
+  if (!effortOnly && shape.kind === 'catalog')
     return (
       <ModelCatalogSelector
-        agentId={agentId}
+        agentId={resolvedAgentId}
         disabled={false}
         model={shape.capability.model.resolve(provider)}
         permissionReason={reason}
@@ -46,11 +61,12 @@ const HeteroModel = memo(() => {
 
   return (
     <SelectorMenu
-      agentId={agentId}
-      capability={shape.capability}
+      agentId={resolvedAgentId}
+      capability={capability}
       patch={patch}
       permissionReason={reason}
       provider={provider}
+      selectedModel={selectedModel}
     />
   );
 });

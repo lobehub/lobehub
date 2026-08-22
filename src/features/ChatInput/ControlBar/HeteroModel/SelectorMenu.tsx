@@ -29,15 +29,16 @@ interface SelectorMenuProps {
   patch: (selection: HeteroSelection) => Promise<void>;
   permissionReason?: string;
   provider: HeterogeneousProviderConfig;
+  selectedModel?: string;
 }
 
 const SelectorMenu = memo<SelectorMenuProps>(
-  ({ agentId, capability, patch, permissionReason, provider }) => {
+  ({ agentId, capability, patch, permissionReason, provider, selectedModel }) => {
     const { t } = useTranslation('chat');
 
     const view = useMemo(
-      () => buildSelectorView({ capability, provider, t }),
-      [capability, provider, t],
+      () => buildSelectorView({ capability, provider, selectedModel, t }),
+      [capability, provider, selectedModel, t],
     );
 
     const select = useCallback(
