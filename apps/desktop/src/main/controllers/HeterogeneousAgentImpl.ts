@@ -1229,6 +1229,7 @@ export default class HeterogeneousAgentCtr {
         driver,
         endpoint: await getServerDefaultEndpoint(this.remoteServerAuth),
         env: params.env,
+        model: params.providerBinding.apiConfig.model,
         sessionId,
       });
     }

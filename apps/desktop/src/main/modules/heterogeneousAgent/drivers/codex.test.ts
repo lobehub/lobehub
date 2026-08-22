@@ -32,10 +32,13 @@ describe('codexDriver provider binding', () => {
       args: [],
       endpoint: 'https://app.example.com',
       env: { LOBEHUB_HETERO_TOKEN: 'stale' },
+      model: 'gpt-5.4',
       profileDir: '/tmp/profile',
     });
     const config = plan.profileFiles?.[0]?.content ?? '';
 
+    expect(plan.args).toEqual(['--model', 'lobehub/gpt-5.4']);
+    expect(config).toContain('model = "lobehub/gpt-5.4"');
     expect(config).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
     expect(config).toContain('env_key = "LOBEHUB_HETERO_TOKEN"');
     expect(config).not.toContain('stale');

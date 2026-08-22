@@ -3,6 +3,7 @@ import {
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
@@ -122,9 +123,10 @@ export const codexDriver: HeterogeneousAgentDriver = {
       profileFiles: [{ content: config, path: 'config.toml' }],
     };
   },
-  prepareServerDefaultBinding({ args, endpoint, env, profileDir }) {
+  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+    const requestModel = formatServerDefaultHeterogeneousModel(model);
     const config = [
-      `model = ${tomlString('lobehub-default')}`,
+      `model = ${tomlString(requestModel)}`,
       `model_provider = ${tomlString(HOST_PROVIDER_ID)}`,
       '',
       `[model_providers.${HOST_PROVIDER_ID}]`,
@@ -137,7 +139,7 @@ export const codexDriver: HeterogeneousAgentDriver = {
       '',
     ].join('\n');
     return {
-      args: [...sanitizeCodexProviderBindingArgs(args), '--model', 'lobehub-default'],
+      args: [...sanitizeCodexProviderBindingArgs(args), '--model', requestModel],
       env: { ...sanitizeCodexProviderBindingEnv(env), CODEX_HOME: profileDir },
       profileFiles: [{ content: config, path: 'config.toml' }],
     };

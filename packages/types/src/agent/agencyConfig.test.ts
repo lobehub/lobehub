@@ -5,6 +5,8 @@ import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   canPublishAgentTopicLink,
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
@@ -23,6 +25,15 @@ import {
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
 } from './heteroSelectorCapabilities';
+
+describe('server-default heterogeneous model request', () => {
+  it('only accepts the namespaced operation model used for CLI metadata', () => {
+    expect(formatServerDefaultHeterogeneousModel('gpt-5.4')).toBe('lobehub/gpt-5.4');
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.4', 'gpt-5.4')).toBe(true);
+    expect(isServerDefaultHeterogeneousModel('lobehub-default', 'gpt-5.4')).toBe(false);
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.5', 'gpt-5.4')).toBe(false);
+  });
+});
 
 describe('normalizeHeterogeneousProviderConfig', () => {
   it('recovers a legacy adapterType before considering the command', () => {

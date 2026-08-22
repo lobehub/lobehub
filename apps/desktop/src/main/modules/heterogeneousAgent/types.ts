@@ -56,6 +56,7 @@ export interface PrepareServerDefaultBindingContext {
   args: string[];
   endpoint: string;
   env?: Record<string, string>;
+  model: string;
   profileDir: string;
 }
 

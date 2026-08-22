@@ -140,12 +140,15 @@ export const prepareHostedServerDefaultBinding = async (params: {
   driver: HeterogeneousAgentDriver;
   endpoint: string;
   env?: Record<string, string>;
+  model: string;
   sessionId: string;
 }): Promise<HostedProviderBinding> => {
   if (!params.driver.prepareServerDefaultBinding) {
     throw new Error(`${params.agentType} does not implement server-default binding.`);
   }
-  const digest = hash(['server-default:v1', params.agentType, params.endpoint].join('\0'));
+  const digest = hash(
+    ['server-default:v2', params.agentType, params.endpoint, params.model].join('\0'),
+  );
   const profileDir = path.join(
     params.appStoragePath,
     HETERO_AGENT_BINDINGS_DIR,
@@ -162,13 +165,14 @@ export const prepareHostedServerDefaultBinding = async (params: {
       args: params.args,
       endpoint: params.endpoint,
       env: params.env,
+      model: params.model,
       profileDir,
     });
     await writeManagedFiles(profileDir, runDir, plan.profileFiles);
     await writeManagedFiles(runDir, runDir, plan.runFiles);
     return {
       args: plan.args,
-      bindingKey: `server-default:v1:${digest}`,
+      bindingKey: `server-default:v2:${digest}`,
       cleanup: () => rm(runDir, { force: true, recursive: true }),
       cleanupSync: () => rmSync(runDir, { force: true, recursive: true }),
       env: plan.env,

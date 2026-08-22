@@ -25,6 +25,7 @@ describe('claudeCodeDriver', () => {
       args: [],
       endpoint: 'https://app.example.com',
       env: { ANTHROPIC_AUTH_TOKEN: 'stale' },
+      model: 'claude-sonnet-4-6',
       profileDir: '/tmp/profile',
     });
 

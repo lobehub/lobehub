@@ -93,6 +93,13 @@ export interface HeterogeneousProviderApiConfig {
   source?: 'provider';
 }
 
+export const formatServerDefaultHeterogeneousModel = (model: string): string => `lobehub/${model}`;
+
+export const isServerDefaultHeterogeneousModel = (
+  requestModel: unknown,
+  operationModel: string,
+): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
+
 /** Deployment-owned API binding whose provider and credentials stay on the server. */
 export interface HeterogeneousServerDefaultApiConfig {
   /** Model id from the deployment's enabled model catalog. */

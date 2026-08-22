@@ -1696,6 +1696,7 @@ describe('HeterogeneousAgentCtr', () => {
         operationId: 'op-server-default',
         topicId: 'topic-1',
       });
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/gpt-5.4']));
       expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
         cancelled: false,
         operationId: 'op-server-default',
