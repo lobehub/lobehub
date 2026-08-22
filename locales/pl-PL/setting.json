@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Model",
   "systemAgent.generationTopic.modelDesc": "Model przeznaczony do automatycznego nadawania nazw tematom sztuki AI",
   "systemAgent.generationTopic.title": "Agent nazewnictwa tematów sztuki AI",
+  "systemAgent.goal.modelDesc": "Model używany do przekształcenia trwałego celu w jego stałe kryteria akceptacji.",
+  "systemAgent.goal.title": "Tworzenie celu",
   "systemAgent.helpInfo": "Podczas tworzenia nowego agenta domyślne ustawienia agenta będą używane jako wartości wstępne.",
   "systemAgent.historyCompress.label": "Model",
   "systemAgent.historyCompress.modelDesc": "Określ model używany do kompresji historii rozmów",

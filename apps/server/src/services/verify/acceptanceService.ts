@@ -37,6 +37,7 @@ import type {
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
+import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
 import { computeFalseFlags } from './feedbackService';
 import { maybeContinueGoalLoop, syncGoalToolState } from './goalLoop';
 
@@ -540,6 +541,54 @@ export class AcceptanceService {
     await this.recomputeStatus(acceptanceId);
     log('run %s attached to acceptance %s as round %d', runId, acceptanceId, run.roundIndex);
     return run;
+  };
+
+  /**
+   * Fold one acceptance into another — the source's checks (with their rounds,
+   * verdicts and evidence) become part of the target's inventory, and the
+   * source entry goes away.
+   *
+   * The two aggregates are the same delivery arriving twice: a second CLI
+   * ingest that minted a new standalone acceptance, or a topic and the task it
+   * was promoted into. Merging is what makes them one review surface again.
+   */
+  merge = async (sourceId: string, targetId: string): Promise<AcceptanceMergeSummary> => {
+    if (sourceId === targetId) throw new Error('An acceptance cannot be merged into itself');
+
+    const source = await this.acceptanceModel.findById(sourceId);
+    if (!source) throw new Error(`Acceptance "${sourceId}" not found`);
+    const target = await this.acceptanceModel.findById(targetId);
+    if (!target) throw new Error(`Acceptance "${targetId}" not found`);
+
+    // Same rule as attaching a single round: a settled aggregate must be
+    // re-opened deliberately before more checks land in it, or an `accepted`
+    // sign-off would silently start covering checks nobody signed off on.
+    if (target.status === 'accepted' || target.status === 'closed') {
+      throw new Error(
+        `This acceptance has already been ${target.status} — reopen it before merging into it`,
+      );
+    }
+
+    const summary = await mergeAcceptanceRounds({
+      db: this.db,
+      source,
+      target,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
+    // Past this point the merge is COMMITTED and the source no longer exists —
+    // so a failure here must not be reported as a failed merge. The caller
+    // would surface a retry that can only ever fail ("Acceptance not found"),
+    // for a rollup that is derived and re-derived by every later round,
+    // decision and sweep. Log it and return the merge that did happen.
+    try {
+      await this.recomputeStatus(targetId);
+    } catch (error) {
+      log('acceptance %s merged, but status recompute failed (non-fatal): %O', targetId, error);
+    }
+
+    return summary;
   };
 
   /**

@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "مدل",
   "systemAgent.generationTopic.modelDesc": "مدلی که برای نام‌گذاری خودکار موضوعات هنر هوش مصنوعی استفاده می‌شود",
   "systemAgent.generationTopic.title": "عامل نام‌گذاری موضوع هنر هوش مصنوعی",
+  "systemAgent.goal.modelDesc": "مدلی که برای تبدیل یک هدف پایدار به معیارهای پذیرش دائمی آن استفاده می‌شود.",
+  "systemAgent.goal.title": "ایجاد هدف",
   "systemAgent.helpInfo": "هنگام ایجاد یک عامل جدید، تنظیمات پیش‌فرض عامل به‌عنوان مقادیر اولیه استفاده می‌شوند.",
   "systemAgent.historyCompress.label": "مدل",
   "systemAgent.historyCompress.modelDesc": "مدلی که برای فشرده‌سازی تاریخچه گفتگو استفاده می‌شود",

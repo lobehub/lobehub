@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Модел",
   "systemAgent.generationTopic.modelDesc": "Модел, използван за автоматично именуване на теми за AI изкуство",
   "systemAgent.generationTopic.title": "Агент за именуване на теми за AI изкуство",
+  "systemAgent.goal.modelDesc": "Модел, използван за превръщане на постоянна цел в нейни постоянни критерии за приемане.",
+  "systemAgent.goal.title": "Създаване на цел",
   "systemAgent.helpInfo": "При създаване на нов агент, настройките по подразбиране ще се използват като предварителни стойности.",
   "systemAgent.historyCompress.label": "Модел",
   "systemAgent.historyCompress.modelDesc": "Посочете модел за компресиране на историята на разговорите",

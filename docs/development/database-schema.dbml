@@ -1557,6 +1557,109 @@ table goals {
   }
 }
 
+table goal_edges {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  goal_id text [not null]
+  source_node_id uuid [not null]
+  target_node_id uuid [not null]
+  kind text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (source_node_id, target_node_id, kind) [name: 'goal_edges_source_target_kind_unique', unique]
+    goal_id [name: 'goal_edges_goal_id_idx']
+    target_node_id [name: 'goal_edges_target_node_id_idx']
+
+  }
+}
+
+table goal_events {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  goal_id text [not null]
+  event_type text [not null]
+  entity_type text [not null]
+  entity_id text [not null]
+  actor_type text [not null]
+  actor_id text
+  task_id text
+  operation_id text
+  reason text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (goal_id, created_at) [name: 'goal_events_goal_id_created_at_idx']
+    (entity_type, entity_id) [name: 'goal_events_entity_idx']
+    task_id [name: 'goal_events_task_id_idx']
+    operation_id [name: 'goal_events_operation_id_idx']
+  }
+}
+
+table goal_node_decisions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  node_id uuid [not null]
+  authority text [not null]
+  status text [not null, default: 'pending']
+  question text [not null]
+  options jsonb
+  recommended_option_id text
+  requested_user_id text
+  requested_project_role text
+  resolved_option_id text
+  resolution text
+  resolved_by_user_id text
+  resolved_by_agent_id text
+  resolved_at "timestamp with time zone"
+  canceled_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    node_id [name: 'goal_node_decisions_node_id_unique', unique]
+    status [name: 'goal_node_decisions_status_idx']
+    (requested_user_id, status) [name: 'goal_node_decisions_requested_user_id_status_idx']
+  }
+}
+
+table goal_node_work_versions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  node_id uuid [not null]
+  work_version_id uuid [not null]
+  relation text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (node_id, work_version_id, relation) [name: 'goal_node_work_versions_node_version_relation_unique', unique]
+    work_version_id [name: 'goal_node_work_versions_work_version_id_idx']
+  }
+}
+
+table goal_nodes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  goal_id text [not null]
+  kind text [not null]
+  status text [not null, default: 'proposed']
+  title text [not null]
+  description text
+  task_id text
+  priority integer [not null, default: 0]
+  confidence "numeric(4, 3)"
+  created_by_user_id text
+  created_by_agent_id text
+  resolved_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (goal_id, status) [name: 'goal_nodes_goal_id_status_idx']
+    (goal_id, kind) [name: 'goal_nodes_goal_id_kind_idx']
+    (goal_id, id) [name: 'goal_nodes_goal_id_id_unique', unique]
+    task_id [name: 'goal_nodes_task_id_unique', unique]
+
+  }
+}
+
 table llm_generation_tracing {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   scenario text [not null]

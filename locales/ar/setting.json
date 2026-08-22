@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "النموذج",
   "systemAgent.generationTopic.modelDesc": "النموذج المخصص لتسمية مواضيع فن الذكاء الاصطناعي تلقائيًا",
   "systemAgent.generationTopic.title": "وكيل تسمية مواضيع فن الذكاء الاصطناعي",
+  "systemAgent.goal.modelDesc": "النموذج المستخدم لتحويل الهدف المستمر إلى معايير القبول الدائمة الخاصة به.",
+  "systemAgent.goal.title": "إنشاء الهدف",
   "systemAgent.helpInfo": "عند إنشاء وكيل جديد، سيتم استخدام إعدادات الوكيل الافتراضية كقيم مسبقة.",
   "systemAgent.historyCompress.label": "النموذج",
   "systemAgent.historyCompress.modelDesc": "تحديد النموذج المستخدم لضغط سجل المحادثة",

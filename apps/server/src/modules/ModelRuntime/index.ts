@@ -534,9 +534,11 @@ export type ServerDefaultHeterogeneousModels = Record<
 >;
 
 /**
- * Both CLIs use the single LobeHub relay provider. V1 restricts its models by
- * the protocol required by each CLI: Claude Code -> Anthropic Messages,
- * Codex -> OpenAI Responses.
+ * Both CLIs use the single LobeHub relay provider. `lobehub` is a deployment-
+ * owned router slot, not a hosted-only upstream: official and private
+ * distributions provide their own model catalog and RouterRuntime behind it.
+ * V1 restricts its models by the protocol required by each CLI: Claude Code ->
+ * Anthropic Messages, Codex -> OpenAI Responses.
  *
  * Do not widen this predicate to generic chat/function-calling models. Adding
  * another model/protocol path requires lossless continuation-state translation
@@ -605,7 +607,14 @@ export const resolveServerDefaultHeterogeneousModel = async (
   return selection;
 };
 
-/** Initialize a deployment-owned runtime without reading user provider rows or keys. */
+/**
+ * Initialize the deployment's single relay directly.
+ *
+ * Do not resolve `DEFAULT_AGENT_CONFIG` here or translate this into OpenAI /
+ * Anthropic environment credentials. Those names describe the two CLI ingress
+ * protocols only; the deployment-owned LobeHub RouterRuntime owns the one
+ * upstream endpoint, credentials, model routing, fallback, and billing policy.
+ */
 export const initModelRuntimeFromServerConfig = async (params: {
   actorUserId: string;
   workspaceId?: string;
@@ -620,9 +629,8 @@ export const initModelRuntimeFromServerConfig = async (params: {
     ModelProvider.LobeHub,
     params.workspaceId,
   );
-  return initModelRuntimeWithUserPayload(
+  return ModelRuntime.initializeWithProvider(
     ModelProvider.LobeHub,
-    { userId: params.actorUserId },
     { userId: params.actorUserId },
     mergeModelRuntimeHooks(businessHooks, tracingHooks),
   );

@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Modèle",
   "systemAgent.generationTopic.modelDesc": "Modèle utilisé pour nommer automatiquement les sujets d’art IA",
   "systemAgent.generationTopic.title": "Agent de nommage de sujet d’art IA",
+  "systemAgent.goal.modelDesc": "Modèle utilisé pour transformer un objectif persistant en ses critères d'acceptation permanents.",
+  "systemAgent.goal.title": "Création d'objectif",
   "systemAgent.helpInfo": "Lors de la création d’un nouvel agent, les paramètres par défaut seront utilisés comme valeurs prédéfinies.",
   "systemAgent.historyCompress.label": "Modèle",
   "systemAgent.historyCompress.modelDesc": "Modèle utilisé pour compresser l’historique des conversations",

@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "モデル",
   "systemAgent.generationTopic.modelDesc": "AI絵画の自動トピック命名に使用されるモデルを指定します",
   "systemAgent.generationTopic.title": "AIイラスト用トピック命名アシスタント",
+  "systemAgent.goal.modelDesc": "持続的な目標をその恒久的な受け入れ基準に変換するために使用されるモデル。",
+  "systemAgent.goal.title": "目標の作成",
   "systemAgent.helpInfo": "新しいアシスタントを作成するとき、デフォルトのアシスタント設定がプリセット値として使用されます。",
   "systemAgent.historyCompress.label": "モデル",
   "systemAgent.historyCompress.modelDesc": "会話履歴を圧縮するために指定されたモデル",

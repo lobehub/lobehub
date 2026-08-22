@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Модель",
   "systemAgent.generationTopic.modelDesc": "Модель, используемая для автоматического наименования тем ИИ-арта",
   "systemAgent.generationTopic.title": "Агент наименования тем ИИ-арта",
+  "systemAgent.goal.modelDesc": "Модель, используемая для преобразования постоянной цели в её текущие критерии принятия.",
+  "systemAgent.goal.title": "Создание цели",
   "systemAgent.helpInfo": "При создании нового агента будут использоваться настройки агента по умолчанию.",
   "systemAgent.historyCompress.label": "Модель",
   "systemAgent.historyCompress.modelDesc": "Укажите модель для сжатия истории диалога",

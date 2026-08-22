@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Mô Hình",
   "systemAgent.generationTopic.modelDesc": "Mô hình được chỉ định để tự động đặt tên chủ đề nghệ thuật AI",
   "systemAgent.generationTopic.title": "Tác Nhân Đặt Tên Chủ Đề Nghệ Thuật AI",
+  "systemAgent.goal.modelDesc": "Mô hình được sử dụng để chuyển mục tiêu lâu dài thành tiêu chí chấp nhận hiện hành của nó.",
+  "systemAgent.goal.title": "Tạo Mục Tiêu",
   "systemAgent.helpInfo": "Khi tạo tác nhân mới, cài đặt mặc định của tác nhân sẽ được sử dụng làm giá trị thiết lập sẵn.",
   "systemAgent.historyCompress.label": "Mô Hình",
   "systemAgent.historyCompress.modelDesc": "Chỉ định mô hình dùng để nén lịch sử trò chuyện",

@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Model",
   "systemAgent.generationTopic.modelDesc": "Model dat wordt gebruikt voor automatische naamgeving van AI-kunstonderwerpen",
   "systemAgent.generationTopic.title": "AI Kunstonderwerp Naamgevingsagent",
+  "systemAgent.goal.modelDesc": "Model gebruikt om een persistent doel om te zetten in de bijbehorende acceptatiecriteria.",
+  "systemAgent.goal.title": "Doelcreatie",
   "systemAgent.helpInfo": "Bij het aanmaken van een nieuwe agent worden de standaardinstellingen als uitgangspunt gebruikt.",
   "systemAgent.historyCompress.label": "Model",
   "systemAgent.historyCompress.modelDesc": "Specificeer het model dat wordt gebruikt om gespreksgeschiedenis te comprimeren",

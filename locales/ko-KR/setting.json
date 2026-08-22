@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "모델",
   "systemAgent.generationTopic.modelDesc": "AI 그림 자동 주제 명명에 사용되는 모델 지정",
   "systemAgent.generationTopic.title": "AI 그림 주제 명명 도우미",
+  "systemAgent.goal.modelDesc": "지속적인 목표를 해당 지속적인 수용 기준으로 전환하는 데 사용되는 모델입니다.",
+  "systemAgent.goal.title": "목표 생성",
   "systemAgent.helpInfo": "새 도우미를 생성할 때 기본 도우미 설정이 기본값으로 사용됩니다.",
   "systemAgent.historyCompress.label": "모델",
   "systemAgent.historyCompress.modelDesc": "대화 기록 압축에 사용되는 모델을 지정합니다",

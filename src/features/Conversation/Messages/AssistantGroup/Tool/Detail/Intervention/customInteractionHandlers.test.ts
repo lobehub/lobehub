@@ -91,6 +91,7 @@ describe('customInteractionHandlers', () => {
     const payload = {
       'How broad should this pass be?': 'Focused',
       'Which surfaces?': ['Chat', 'Settings'],
+      '__supplement__': 'Keep the existing behavior.',
     };
 
     const result = await prepareCustomInteractionSubmit(identifier, payload, { apiName });

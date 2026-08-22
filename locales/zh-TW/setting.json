@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "模型",
   "systemAgent.generationTopic.modelDesc": "指定用於 AI 繪畫自動命名話題的模型",
   "systemAgent.generationTopic.title": "AI 繪圖主題命名助手",
+  "systemAgent.goal.modelDesc": "用於將持續目標轉化為其固定接受標準的模型。",
+  "systemAgent.goal.title": "目標創建",
   "systemAgent.helpInfo": "當創建新助手時，將以預設助手設定作為預設值。",
   "systemAgent.historyCompress.label": "模型",
   "systemAgent.historyCompress.modelDesc": "指定用於壓縮會話歷史的模型",

@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Modell",
   "systemAgent.generationTopic.modelDesc": "Modell zur automatischen Benennung von KI-Kunstthemen",
   "systemAgent.generationTopic.title": "Agent zur Benennung von KI-Kunstthemen",
+  "systemAgent.goal.modelDesc": "Modell, das verwendet wird, um ein dauerhaftes Ziel in seine ständigen Akzeptanzkriterien umzuwandeln.",
+  "systemAgent.goal.title": "Zielerstellung",
   "systemAgent.helpInfo": "Beim Erstellen eines neuen Agenten werden die Standardagenteneinstellungen als Voreinstellungen verwendet.",
   "systemAgent.historyCompress.label": "Modell",
   "systemAgent.historyCompress.modelDesc": "Modell zur Komprimierung des Gesprächsverlaufs",

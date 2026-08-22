@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Modelo",
   "systemAgent.generationTopic.modelDesc": "Modelo designado para nombrar automáticamente temas de arte IA",
   "systemAgent.generationTopic.title": "Agente de Nombres para Temas de Arte IA",
+  "systemAgent.goal.modelDesc": "Modelo utilizado para convertir un objetivo persistente en sus criterios de aceptación permanentes.",
+  "systemAgent.goal.title": "Creación de Objetivos",
   "systemAgent.helpInfo": "Al crear un nuevo agente, se usarán los valores predeterminados como configuración inicial.",
   "systemAgent.historyCompress.label": "Modelo",
   "systemAgent.historyCompress.modelDesc": "Especifica el modelo usado para comprimir el historial de conversación",

@@ -1326,6 +1326,8 @@
   "systemAgent.generationTopic.label": "Model",
   "systemAgent.generationTopic.modelDesc": "Model used to name AI image topics",
   "systemAgent.generationTopic.title": "AI Image Topic Naming",
+  "systemAgent.goal.modelDesc": "Model used to turn a persistent goal into its standing acceptance criteria.",
+  "systemAgent.goal.title": "Goal Creation",
   "systemAgent.helpInfo": "When creating a new agent, the default agent settings will be used as preset values.",
   "systemAgent.historyCompress.label": "Model",
   "systemAgent.historyCompress.modelDesc": "Model used to compress conversation history",

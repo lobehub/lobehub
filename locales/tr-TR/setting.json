@@ -1310,6 +1310,8 @@
   "systemAgent.generationTopic.label": "Model",
   "systemAgent.generationTopic.modelDesc": "Yapay zeka sanat konularının otomatik adlandırılması için belirlenen model",
   "systemAgent.generationTopic.title": "Yapay Zeka Sanat Konusu Adlandırma Temsilcisi",
+  "systemAgent.goal.modelDesc": "Kalıcı bir hedefi sürekli kabul kriterlerine dönüştürmek için kullanılan model.",
+  "systemAgent.goal.title": "Hedef Oluşturma",
   "systemAgent.helpInfo": "Yeni bir temsilci oluştururken, varsayılan temsilci ayarları ön ayar olarak kullanılacaktır.",
   "systemAgent.historyCompress.label": "Model",
   "systemAgent.historyCompress.modelDesc": "Konuşma geçmişini sıkıştırmak için kullanılacak modeli belirtin",

@@ -281,6 +281,7 @@ export default {
   'acceptance.workspace.actions.markAccepted': 'Mark as accepted',
   'acceptance.workspace.actions.markClosed': 'Mark as closed',
   'acceptance.workspace.actions.markRejected': 'Mark as rejected',
+  'acceptance.workspace.actions.merge': 'Merge into…',
   'acceptance.workspace.actions.more': 'More actions',
   'acceptance.workspace.actions.rename': 'Rename',
   'acceptance.workspace.actions.reopen': 'Reopen for review',
@@ -321,6 +322,21 @@ export default {
   'acceptance.workspace.project.moveSuccess': 'Moved to the project',
   'acceptance.workspace.project.remove': 'Remove from project',
   'acceptance.workspace.project.removeSuccess': 'Removed from the project',
+  'acceptance.workspace.merge.title': 'Merge acceptance',
+  'acceptance.workspace.merge.windowHint':
+    'Only the {{count}} most recent acceptances are listed here.',
+
+  'acceptance.workspace.merge.description':
+    'Move the {{count}} checks of “{{title}}” into another acceptance. Pick where they should land.',
+  'acceptance.workspace.merge.noSearchResults': 'No acceptance matches “{{query}}”.',
+  'acceptance.workspace.merge.searchPlaceholder': 'Search acceptances',
+  'acceptance.workspace.merge.noCandidates': 'No other acceptance to merge into.',
+  'acceptance.workspace.merge.settledHint': 'settled — reopen it first',
+  'acceptance.workspace.merge.hint':
+    'The checks keep their verdicts, evidence and rounds. This acceptance is removed once they land.',
+  'acceptance.workspace.merge.confirm': 'Merge',
+  'acceptance.workspace.merge.success': '{{count}} checks merged',
+  'acceptance.workspace.merge.error': 'Failed to merge acceptance',
   'acceptance.workspace.renameEmpty': 'The title cannot be empty',
   'acceptance.workspace.renameError': 'Failed to rename',
   'acceptance.workspace.renameSuccess': 'Renamed',
