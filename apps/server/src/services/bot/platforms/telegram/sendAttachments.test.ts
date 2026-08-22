@@ -281,14 +281,136 @@ describe('sendTelegramAttachments', () => {
     api.sendPhoto
       .mockRejectedValueOnce(new Error('Telegram 429'))
       .mockResolvedValueOnce({ message_id: 2 });
+    // The rejected photo now tries a document fallback, which materializes the
+    // bytes first — stub the download so the test stays off the network.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
-    const n = await sendTelegramAttachments(api as any, 'chat-1', [
-      { fetchUrl: 'https://cdn.example.com/a.png', type: 'image' },
-      { fetchUrl: 'https://cdn.example.com/b.png', type: 'image' },
+    try {
+      const n = await sendTelegramAttachments(api as any, 'chat-1', [
+        { fetchUrl: 'https://cdn.example.com/a.png', type: 'image' },
+        { fetchUrl: 'https://cdn.example.com/b.png', type: 'image' },
+      ]);
+
+      expect(n).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it('uploads audio as multipart bytes rather than handing Telegram the URL', async () => {
+    // Regression: `sendAudio` by URL needs the declared MIME type to match, so
+    // our extension-less 302 proxy URL came back as
+    // `Bad Request: failed to get HTTP URL content` and the audio was dropped.
+    const api = makeApi();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(Buffer.from('mp3-bytes'), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const n = await sendTelegramAttachments(api as any, 'chat-1', [
+        {
+          fetchUrl: 'https://app.example.com/f/file_1',
+          mimeType: 'audio/mpeg',
+          name: 'take.mp3',
+          type: 'audio',
+        },
+      ]);
+
+      expect(n).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(api.sendAudio).toHaveBeenCalledWith({
+      caption: undefined,
+      chatId: 'chat-1',
+      source: expect.objectContaining({ buffer: expect.any(Buffer), filename: 'take.mp3' }),
+    });
+  });
+
+  it.each([
+    ['a wav', 'audio/wav', 'clip.wav'],
+    ['an octet-stream blob', 'application/octet-stream', 'clip.flac'],
+  ])(
+    'routes %s through sendDocument, which sendAudio would have rejected',
+    async (_label, mimeType, name) => {
+      // The Bot API only accepts .mp3/.m4a on sendAudio; anything else 400s
+      // instead of degrading, so pick the endpoint that takes arbitrary bytes.
+      const api = makeApi();
+
+      const n = await sendTelegramAttachments(api as any, 'chat-1', [
+        { data: Buffer.from('bytes').toString('base64'), mimeType, name, type: 'audio' },
+      ]);
+
+      expect(n).toBe(1);
+      expect(api.sendAudio).not.toHaveBeenCalled();
+      expect(api.sendDocument).toHaveBeenCalledWith({
+        caption: undefined,
+        chatId: 'chat-1',
+        source: expect.objectContaining({ filename: name }),
+      });
+    },
+  );
+
+  it('keeps sendAudio for an m4a named file whose MIME type is generic', async () => {
+    const api = makeApi();
+
+    await sendTelegramAttachments(api as any, 'chat-1', [
+      {
+        data: Buffer.from('bytes').toString('base64'),
+        mimeType: 'application/octet-stream',
+        name: 'voice.m4a',
+        type: 'audio',
+      },
     ]);
 
+    expect(api.sendAudio).toHaveBeenCalledTimes(1);
+    expect(api.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it('falls back to sendDocument when a typed endpoint rejects the file', async () => {
+    // A rejection used to drop the attachment outright: the caller saw zero
+    // deliveries and answered "push unavailable" with no file at all.
+    const api = makeApi();
+    api.sendVideo.mockRejectedValueOnce(new Error('Telegram 400: unsupported video'));
+
+    const n = await sendTelegramAttachments(
+      api as any,
+      'chat-1',
+      [
+        {
+          data: Buffer.from('mp4').toString('base64'),
+          mimeType: 'video/mp4',
+          name: 'clip.mp4',
+          type: 'video',
+        },
+      ],
+      'here you go',
+    );
+
     expect(n).toBe(1);
-    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+    expect(api.sendDocument).toHaveBeenCalledWith({
+      // The caption still rides the first DELIVERED message.
+      caption: 'here you go',
+      chatId: 'chat-1',
+      source: expect.objectContaining({ filename: 'clip.mp4' }),
+    });
+  });
+
+  it('does not retry sendDocument against itself', async () => {
+    const api = makeApi();
+    api.sendDocument.mockRejectedValueOnce(new Error('Telegram 413'));
+
+    const n = await sendTelegramAttachments(api as any, 'chat-1', [
+      { data: Buffer.from('x').toString('base64'), name: 'a.bin', type: 'file' },
+    ]);
+
+    expect(n).toBe(0);
+    expect(api.sendDocument).toHaveBeenCalledTimes(1);
   });
 
   it('skips attachments with no resolvable source', async () => {

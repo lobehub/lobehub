@@ -59,18 +59,19 @@ const uploadSource = async (
 /**
  * Resolve a `BotMessageAttachment` into a Telegram-ready source.
  *
- * Images and audio prefer `fetchUrl` — Telegram fetches the bytes
- * server-side, saving a round-trip + base64 inflation, and those endpoints
- * accept arbitrary URLs.
- *
- * Documents and videos are ALWAYS materialized into a Buffer for multipart
- * upload instead:
- * - `sendDocument` by URL only works for .pdf/.zip per the Bot API, and the
- *   stable file-proxy URL (`/f/:id`) carries no extension and answers with a
- *   302 — Telegram rejects it for every document type, including PDFs.
- * - `sendVideo` by URL is just as fragile on that URL shape, and uploading the
- *   bytes is also what lets Telegram probe duration/dimensions so the message
- *   arrives with a real player rather than a bare blob.
+ * Only IMAGES prefer `fetchUrl` — `sendPhoto` is the one endpoint that ingests
+ * an arbitrary URL reliably, and letting Telegram pull the bytes saves a
+ * round-trip + base64 inflation. Everything else is materialized into a Buffer
+ * for multipart upload, because Bot API URL ingestion is documented per method
+ * and our URL shape satisfies none of it:
+ * - `sendDocument` by URL only works for .pdf/.zip, and the stable file-proxy
+ *   URL (`/f/:id`) carries no extension and answers with a 302 — Telegram
+ *   rejects it for every document type, including PDFs.
+ * - `sendAudio` by URL needs the declared MIME type to match (audio/mpeg);
+ *   anything else comes back as `failed to get HTTP URL content`.
+ * - `sendVideo` is just as fragile on that URL shape, and uploading the bytes
+ *   is also what lets Telegram probe duration/dimensions so the message arrives
+ *   with a real player rather than a bare blob.
  *
  * Returns `undefined` when no source is usable so the caller can skip the
  * item without aborting the whole batch.
@@ -79,34 +80,69 @@ const resolveTelegramSource = async (
   att: BotMessageAttachment,
   index: number,
 ): Promise<TelegramMediaSource | undefined> => {
-  if (att.type === 'file' || att.type === 'video') return uploadSource(att, index);
-  if (att.fetchUrl) return { url: att.fetchUrl };
+  if (att.type === 'image' && att.fetchUrl) return { url: att.fetchUrl };
   return uploadSource(att, index);
+};
+
+/**
+ * `sendAudio` renders a playable audio message, but the Bot API accepts only
+ * .MP3 / .M4A there — a .wav / .flac / .ogg is rejected outright rather than
+ * degraded. Those still reach the user as a document, which Telegram happily
+ * plays inline for common audio types.
+ */
+const TELEGRAM_AUDIO_MIME_TYPES = new Set(['audio/mp4', 'audio/mpeg', 'audio/x-m4a']);
+const TELEGRAM_AUDIO_EXTENSIONS = new Set(['m4a', 'mp3']);
+
+const isTelegramPlayableAudio = (att: BotMessageAttachment): boolean => {
+  const mime = att.mimeType?.toLowerCase().split(';')[0].trim();
+  if (mime && TELEGRAM_AUDIO_MIME_TYPES.has(mime)) return true;
+
+  // A correct extension still wins when the MIME type is a generic
+  // `application/octet-stream`, which object storage hands back often enough.
+  const name = att.name?.toLowerCase() ?? '';
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && TELEGRAM_AUDIO_EXTENSIONS.has(name.slice(dot + 1));
+};
+
+type TelegramMediaMethod = 'sendAudio' | 'sendDocument' | 'sendPhoto' | 'sendVideo';
+
+const methodFor = (att: BotMessageAttachment): TelegramMediaMethod => {
+  switch (att.type) {
+    case 'image': {
+      return 'sendPhoto';
+    }
+    case 'video': {
+      return 'sendVideo';
+    }
+    case 'audio': {
+      return isTelegramPlayableAudio(att) ? 'sendAudio' : 'sendDocument';
+    }
+    default: {
+      return 'sendDocument';
+    }
+  }
 };
 
 const dispatch = async (
   api: TelegramApi,
-  chatId: string | number,
-  att: BotMessageAttachment,
-  source: TelegramMediaSource,
-  caption: string | undefined,
+  method: TelegramMediaMethod,
+  params: { caption?: string; chatId: string | number; source: TelegramMediaSource },
 ): Promise<void> => {
-  switch (att.type) {
-    case 'image': {
-      await api.sendPhoto({ caption, chatId, source });
+  switch (method) {
+    case 'sendPhoto': {
+      await api.sendPhoto(params);
       return;
     }
-    case 'video': {
-      await api.sendVideo({ caption, chatId, source });
+    case 'sendVideo': {
+      await api.sendVideo(params);
       return;
     }
-    case 'audio': {
-      await api.sendAudio({ caption, chatId, source });
+    case 'sendAudio': {
+      await api.sendAudio(params);
       return;
     }
-    case 'file':
     default: {
-      await api.sendDocument({ caption, chatId, source });
+      await api.sendDocument(params);
     }
   }
 };
@@ -134,16 +170,36 @@ export const sendTelegramAttachments = async (
       log('sendTelegramAttachments: skipping attachment without resolvable source');
       continue;
     }
+
+    const attemptCaption = delivered === 0 ? caption : undefined;
+    const method = methodFor(att);
     try {
-      await dispatch(api, chatId, att, source, delivered === 0 ? caption : undefined);
+      await dispatch(api, method, { caption: attemptCaption, chatId, source });
       delivered += 1;
+      continue;
     } catch (error) {
       log(
-        'sendTelegramAttachments: failed to send %s "%s": %O',
+        'sendTelegramAttachments: %s failed for %s "%s": %O',
+        method,
         att.type,
         att.name ?? '(unnamed)',
         error,
       );
+    }
+
+    // Every typed endpoint enforces format rules of its own, and each time one
+    // of them rejected us the attachment was DROPPED — the caller saw zero
+    // deliveries and the user got "push unavailable" with no file at all
+    // (.md/.csv/.pdf, then .wav, all the same shape). `sendDocument` takes
+    // arbitrary bytes, so spend one more call there before giving up.
+    if (method === 'sendDocument') continue;
+    const bytes = 'buffer' in source ? source : await uploadSource(att, index);
+    if (!bytes) continue;
+    try {
+      await api.sendDocument({ caption: attemptCaption, chatId, source: bytes });
+      delivered += 1;
+    } catch (error) {
+      log('sendTelegramAttachments: document fallback failed for "%s": %O', att.name, error);
     }
   }
   return delivered;
