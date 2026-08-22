@@ -1,58 +1,24 @@
 'use client';
 
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
-import { Icon, Tag, Text } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import type { LucideIcon } from 'lucide-react';
-import { Check, Copy, MessageCircle, Monitor, Smartphone, Terminal } from 'lucide-react';
+import { ArrowUpRight, Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
+import { PlatformAvatar, SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/constants';
+
+import { CLI_INSTALL_COMMAND } from './const';
+import { CliScene, DesktopScene, MobileScene } from './scenes';
 import { styles } from './style';
-
-const CLI_INSTALL_COMMAND = 'npm install -g @lobehub/cli';
-
-const WAYS = [
-  {
-    ctaKey: 'apps.desktop.cta',
-    descKey: 'apps.desktop.desc',
-    icon: Monitor,
-    id: 'desktop',
-    titleKey: 'apps.desktop.title',
-  },
-  {
-    ctaKey: 'apps.mobile.cta',
-    descKey: 'apps.mobile.desc',
-    icon: Smartphone,
-    id: 'mobile',
-    titleKey: 'apps.mobile.title',
-  },
-  {
-    ctaKey: 'apps.messenger.cta',
-    descKey: 'apps.messenger.desc',
-    icon: MessageCircle,
-    id: 'messenger',
-    titleKey: 'apps.messenger.title',
-  },
-  {
-    ctaKey: 'apps.cli.copy',
-    descKey: 'apps.cli.desc',
-    icon: Terminal,
-    id: 'cli',
-    titleKey: 'apps.cli.title',
-  },
-] as const satisfies ReadonlyArray<{
-  ctaKey: string;
-  descKey: string;
-  icon: LucideIcon;
-  id: string;
-  titleKey: string;
-}>;
 
 const openExternal = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
+
+const DESKTOP_FEATURES = ['files', 'tools', 'focus'] as const;
 
 const AppsPage = () => {
   const { t } = useTranslation('setting');
@@ -70,69 +36,104 @@ const AppsPage = () => {
     }
   };
 
-  const onAct = (id: (typeof WAYS)[number]['id']) => {
-    if (id === 'desktop') {
-      openExternal(DOWNLOAD_URL.default);
-      return;
-    }
-    if (id === 'mobile') {
-      openExternal(DOWNLOAD_URL.mobile);
-      return;
-    }
-    if (id === 'messenger') {
-      navigate('/settings/messenger');
-      return;
-    }
-    void copyInstallCommand();
-  };
-
   return (
     <div className={styles.page}>
       <main className={styles.content}>
+        <h1 className={styles.headline}>{t('apps.title')}</h1>
+
         <div className={styles.grid}>
-          <header className={styles.header}>
-            <div className={styles.headerTop}>
-              <span className={styles.index}>00</span>
-              <span className={styles.kicker}>{t('apps.kicker')}</span>
-            </div>
-            <h1 className={styles.pageTitle}>{t('apps.title')}</h1>
-          </header>
-
-          {WAYS.map((way, index) => {
-            const inUse = way.id === 'desktop' && isDesktop;
-
-            return (
-              <article className={styles.cell} key={way.id}>
-                <div className={styles.cellMeta}>
-                  <span className={styles.index}>{String(index + 1).padStart(2, '0')}</span>
-                  <span className={styles.iconBox}>
-                    <Icon icon={way.icon} size={18} />
-                  </span>
-                </div>
-                <div className={styles.cellBody}>
-                  <h2 className={styles.cellTitle}>{t(way.titleKey)}</h2>
-                  <Text type="secondary">{t(inUse ? 'apps.desktop.inUseDesc' : way.descKey)}</Text>
-                </div>
-                <div className={styles.actionSlot}>
-                  {way.id === 'cli' && (
-                    <code className={styles.command}>{CLI_INSTALL_COMMAND}</code>
-                  )}
-                  {inUse ? (
+          <article className={`${styles.card} ${styles.spanFull}`}>
+            <div className={styles.heroInner}>
+              <div className={styles.cardBody}>
+                <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+                  <h2 className={styles.cardTitle}>{t('apps.desktop.title')}</h2>
+                  {isDesktop && (
                     <Tag icon={<Check size={12} />} size="small">
                       {t('apps.desktop.inUse')}
                     </Tag>
-                  ) : (
-                    <Button
-                      icon={way.id === 'cli' ? (copied ? Check : Copy) : undefined}
-                      onClick={() => onAct(way.id)}
-                    >
-                      {way.id === 'cli' && copied ? t('apps.cli.copied') : t(way.ctaKey)}
-                    </Button>
                   )}
                 </div>
-              </article>
-            );
-          })}
+                <Text style={{ marginTop: 8 }} type="secondary">
+                  {t(isDesktop ? 'apps.desktop.inUseDesc' : 'apps.desktop.desc')}
+                </Text>
+                <ul className={styles.bullets}>
+                  {DESKTOP_FEATURES.map((feature) => (
+                    <li key={feature}>
+                      <strong>{t(`apps.desktop.features.${feature}.label`)}</strong>
+                      {' — '}
+                      {t(`apps.desktop.features.${feature}.desc`)}
+                    </li>
+                  ))}
+                </ul>
+                {!isDesktop && (
+                  <div className={styles.ctaRow}>
+                    <Button type="primary" onClick={() => openExternal(DOWNLOAD_URL.default)}>
+                      {t('apps.desktop.cta')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <DesktopScene />
+            </div>
+          </article>
+
+          <article className={styles.card}>
+            <div className={styles.cardBody}>
+              <h2 className={styles.cardTitle}>{t('apps.mobile.title')}</h2>
+              <Text style={{ marginTop: 8 }} type="secondary">
+                {t('apps.mobile.desc')}
+              </Text>
+              <div className={styles.ctaRow}>
+                <Button onClick={() => openExternal(DOWNLOAD_URL.mobile)}>
+                  {t('apps.mobile.cta')}
+                </Button>
+              </div>
+            </div>
+            <MobileScene />
+          </article>
+
+          <article className={styles.card}>
+            <div className={styles.cardBody} style={{ paddingBottom: 20 }}>
+              <h2 className={styles.cardTitle}>{t('apps.messenger.title')}</h2>
+              <Text style={{ marginTop: 8 }} type="secondary">
+                {t('apps.messenger.desc')}
+              </Text>
+            </div>
+            {SUPPORTED_MESSENGER_PLATFORMS.map((platform) => (
+              <div className={styles.channelRow} key={platform.id}>
+                <PlatformAvatar platform={platform.id} size={32} />
+                <Text style={{ flex: 1 }} weight={500}>
+                  {platform.name}
+                </Text>
+                <Button
+                  icon={ArrowUpRight}
+                  iconPosition="end"
+                  size="small"
+                  onClick={() => navigate('/settings/messenger')}
+                >
+                  {t('apps.messenger.setup')}
+                </Button>
+              </div>
+            ))}
+          </article>
+
+          <article className={`${styles.card} ${styles.spanFull}`}>
+            <div className={styles.cliInner}>
+              <div className={styles.cardBody}>
+                <h2 className={styles.cardTitle}>{t('apps.cli.title')}</h2>
+                <Text style={{ marginTop: 8 }} type="secondary">
+                  {t('apps.cli.desc')}
+                </Text>
+                <div className={styles.command}>
+                  {CLI_INSTALL_COMMAND}
+                  <Button icon={copied ? Check : Copy} size="small" onClick={copyInstallCommand}>
+                    {copied ? t('apps.cli.copied') : t('apps.cli.copy')}
+                  </Button>
+                </div>
+              </div>
+              <CliScene />
+            </div>
+          </article>
         </div>
       </main>
     </div>

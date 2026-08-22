@@ -220,6 +220,12 @@ const styles = createStaticStyles(({ css }) => ({
 interface HeterogeneousAgentStatusCardProps {
   apiModeAvailable?: boolean;
   apiModeLabEnabled?: boolean;
+  /**
+   * Provider binding is blocked because the agent is workspace-scoped: the
+   * binding UI would offer workspace providers while Desktop main resolves
+   * the reference in the personal scope only.
+   */
+  apiModeWorkspaceBlocked?: boolean;
   onApiConfigChange?: (apiConfig: HeterogeneousApiConfig | undefined) => Promise<void> | void;
   onAuthModeChange?: (
     authMode: HeterogeneousAuthMode,
@@ -244,6 +250,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
   ({
     apiModeAvailable = false,
     apiModeLabEnabled = false,
+    apiModeWorkspaceBlocked = false,
     provider,
     serverModels = [],
     serverModeAvailable = false,
@@ -670,7 +677,11 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               </>
             ) : !apiModeAvailable ? (
               <Text className={styles.unavailableText}>
-                {t('heterogeneousStatus.apiMode.localOnly')}
+                {t(
+                  apiModeWorkspaceBlocked
+                    ? 'heterogeneousStatus.apiMode.workspaceUnsupported'
+                    : 'heterogeneousStatus.apiMode.localOnly',
+                )}
               </Text>
             ) : null}
             {serverModeLoading ? (

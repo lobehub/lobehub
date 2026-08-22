@@ -139,7 +139,7 @@ const ProfileEditor = memo(() => {
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
   const apiModeLabEnabled = useUserStore(labPreferSelectors.enableAgentProviderBinding);
-  const apiModeAvailable =
+  const localDesktopAvailable =
     isDesktop &&
     !!heterogeneousProvider &&
     isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
@@ -148,6 +148,12 @@ const ProfileEditor = memo(() => {
       isHetero: true,
       workspaceScoped,
     }) === 'local';
+  // Workspace agents are excluded even when the author could spawn them
+  // locally: the binding UI would list workspace-scoped providers, but Desktop
+  // main resolves the reference in the personal scope only (see
+  // `selectRuntimeType`'s personal-scope guard). Server mode is not a user
+  // provider binding, so it stays available whenever local desktop execution is.
+  const apiModeAvailable = localDesktopAvailable && !isWorkspaceAgent;
   const useFetchServerDefaultCapability = useAgentStore(
     (s) => s.useFetchServerDefaultHeterogeneousCapability,
   );
@@ -157,14 +163,14 @@ const ProfileEditor = memo(() => {
     heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
       ? heterogeneousProvider.type
       : undefined;
-  const serverCapabilityEnabled = apiModeAvailable && !!serverModeAgentType;
+  const serverCapabilityEnabled = localDesktopAvailable && !!serverModeAgentType;
   const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
   const serverModels =
     serverCapability.data?.enabled === true && serverModeAgentType
       ? serverCapability.data.models[serverModeAgentType]
       : [];
   const serverModeAvailable = serverCapabilityEnabled && serverModels.length > 0;
-  const serverModeUnavailableReason = !apiModeAvailable
+  const serverModeUnavailableReason = !localDesktopAvailable
     ? t('heterogeneousStatus.apiMode.localOnly')
     : serverCapability.error
       ? t('heterogeneousStatus.serverMode.loadFailed')
@@ -201,6 +207,7 @@ const ProfileEditor = memo(() => {
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
               apiModeLabEnabled={apiModeLabEnabled}
+              apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
               serverModeAvailable={serverModeAvailable}
               serverModeLoading={serverCapabilityEnabled && serverCapability.isLoading}
