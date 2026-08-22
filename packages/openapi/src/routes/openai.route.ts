@@ -1,3 +1,4 @@
+import { isServerDefaultHeterogeneousModel } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -18,16 +19,16 @@ const app = new Hono();
 app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
   const request = await c.req.json().catch(() => null);
   if (!isRecord(request)) throw new HTTPException(400, { message: 'Invalid JSON request' });
-  if (request.model !== SERVER_DEFAULT_MODEL_ALIAS) {
-    throw new HTTPException(400, { message: `model must be ${SERVER_DEFAULT_MODEL_ALIAS}` });
-  }
-  if (request.stream !== true) {
-    throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
-  }
   const context = c as Context;
   const claims = context.get('heteroOperationClaims') as HeteroOperationJwtClaims;
   if (!claims.provider_id || !claims.model) {
     throw new HTTPException(403, { message: 'Operation token has no server model selection' });
+  }
+  if (!isServerDefaultHeterogeneousModel(request.model, claims.model)) {
+    throw new HTTPException(400, { message: 'model must match the server operation selection' });
+  }
+  if (request.stream !== true) {
+    throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
   }
   const workspaceId = context.get('workspaceId');
   const { response } = await invokeServerDefaultModel({

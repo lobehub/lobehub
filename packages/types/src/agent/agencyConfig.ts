@@ -91,6 +91,13 @@ export interface HeterogeneousApiConfig {
   smallFastModel?: string | null;
 }
 
+export const formatServerDefaultHeterogeneousModel = (model: string): string => `lobehub/${model}`;
+
+export const isServerDefaultHeterogeneousModel = (
+  requestModel: unknown,
+  operationModel: string,
+): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
+
 /**
  * Heterogeneous agent provider configuration.
  * When set, the assistant delegates execution to an external agent runtime
