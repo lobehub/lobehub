@@ -146,26 +146,31 @@ const ProfileEditor = memo(() => {
     heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
       ? heterogeneousProvider.type
       : undefined;
-  const serverCapabilityEnabled = localDesktopAvailable && !!serverDefaultAgentType;
+  // Labs-gated with the rest of API mode: with the flag off we never fetch the
+  // capability, so the deployment-default option cannot surface anywhere.
+  const serverCapabilityEnabled =
+    apiModeLabEnabled && localDesktopAvailable && !!serverDefaultAgentType;
   const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
   const serverDefaultModels =
     serverCapability.data?.enabled === true && serverDefaultAgentType
       ? serverCapability.data.models[serverDefaultAgentType]
       : [];
   const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
-  const serverDefaultUnavailableReason = !localDesktopAvailable
-    ? t('heterogeneousStatus.apiMode.localOnly')
-    : serverCapability.error
-      ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
-      : serverCapability.data?.enabled === false
-        ? t(
-            serverCapability.data.reason === 'disabled'
-              ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
-              : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
-          )
-        : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
-          ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
-          : undefined;
+  const serverDefaultUnavailableReason = !apiModeLabEnabled
+    ? undefined
+    : !localDesktopAvailable
+      ? t('heterogeneousStatus.apiMode.localOnly')
+      : serverCapability.error
+        ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
+        : serverCapability.data?.enabled === false
+          ? t(
+              serverCapability.data.reason === 'disabled'
+                ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
+                : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
+            )
+          : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
+            ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
+            : undefined;
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab

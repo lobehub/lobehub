@@ -415,7 +415,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard provider={provider} />
+        <HeterogeneousAgentStatusCard apiModeLabEnabled provider={provider} />
       </MemoryRouter>,
     );
 
@@ -511,7 +511,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(await screen.findByDisplayValue('claude')).toBeInTheDocument();
   });
 
-  it('keeps the deployment default available inside API while other providers are Labs-gated', async () => {
+  it('offers the deployment default when switching to API mode with Labs enabled', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
     getClaudeAuthStatus.mockResolvedValue(null);
     const onAuthModeChange = vi.fn();
@@ -524,6 +524,7 @@ describe('HeterogeneousAgentStatusCard', () => {
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
           apiModeAvailable
+          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={claudeServerModels}
@@ -554,6 +555,7 @@ describe('HeterogeneousAgentStatusCard', () => {
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
           apiModeAvailable
+          apiModeLabEnabled
           serverDefaultAvailable
           provider={apiProvider}
           serverDefaultModels={claudeServerModels}
@@ -563,7 +565,56 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     expect(await screen.findByText('Auth Method')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'LobeHub' })).toBeEnabled();
-    expect(screen.getByRole('option', { name: 'Anthropic' })).toBeDisabled();
+  });
+
+  it('gates the deployment default behind Labs like the rest of API mode', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
+    getClaudeAuthStatus.mockResolvedValue(null);
+    const provider = {
+      command: 'claude',
+      type: 'claude-code',
+    } satisfies HeterogeneousProviderConfig;
+
+    // Labs off: even with stale server-default props from the parent, the API
+    // experiment stays hidden for subscription agents.
+    const { rerender } = render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard
+          apiModeAvailable
+          serverDefaultAvailable
+          provider={provider}
+          serverDefaultModels={claudeServerModels}
+        />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('claude')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Auth Method')).not.toBeInTheDocument();
+
+    // A leftover server-default agent stays visible so it can switch back,
+    // but only sees the Labs pointer — no provider or model pickers.
+    const leftoverProvider = {
+      ...provider,
+      apiConfig: { model: 'claude-sonnet-4-6', source: 'server-default' as const },
+      authMode: 'api' as const,
+    } satisfies HeterogeneousProviderConfig;
+
+    rerender(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard
+          apiModeAvailable
+          serverDefaultAvailable
+          provider={leftoverProvider}
+          serverDefaultModels={claudeServerModels}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Auth Method')).toBeInTheDocument();
+    expect(screen.getByText('Enable in Labs')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'LobeHub' })).not.toBeInTheDocument();
   });
 
   it('lists the deployment default alongside configured providers in API mode', async () => {
@@ -614,6 +665,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     render(
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
+          apiModeLabEnabled
           provider={provider}
           serverDefaultUnavailableReason="Deployment default model is unavailable"
           onServerDefaultRetry={onServerDefaultRetry}
@@ -639,6 +691,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     render(
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
+          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={claudeServerModels}
@@ -669,6 +722,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     render(
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
+          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={codexServerModels}
@@ -705,7 +759,8 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(await screen.findByText('Auth Method')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'API' })).toBeEnabled();
     expect(screen.getByText('Enable in Labs')).toBeInTheDocument();
-    expect(screen.getAllByText('Model Select').length).toBeGreaterThan(0);
+    // The pickers stay hidden while Labs is off; only the pointer remains.
+    expect(screen.queryByText('Model Select')).not.toBeInTheDocument();
   });
 
   it('persists null when clearing the small-fast model', async () => {

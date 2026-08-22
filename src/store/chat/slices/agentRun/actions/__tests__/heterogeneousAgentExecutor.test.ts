@@ -746,9 +746,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
     });
 
-    it('uses the deployment provider inside API mode without the Labs experiment', async () => {
-      setClaudeCodeApiModeLab(false);
-
+    it('uses the deployment provider inside API mode when the Labs experiment is enabled', async () => {
       await runWithEvents([ccResult()], {
         params: { heterogeneousProvider: serverDefaultApiProvider },
       });
@@ -764,6 +762,26 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('blocks the deployment provider before spawn when the Labs experiment is disabled', async () => {
+      setClaudeCodeApiModeLab(false);
+      const store = createMockStore();
+
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        {
+          ...defaultParams,
+          heterogeneousProvider: serverDefaultApiProvider,
+        },
+      );
+
+      expect(mockStartSession).not.toHaveBeenCalled();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({ message: expect.stringMatching(/labDisabled|Labs experiment/) }),
+        expect.anything(),
+      );
     });
 
     it('fails before spawn when the Labs experiment is disabled', async () => {
@@ -788,7 +806,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     it('fails before spawn when the binding reference is incomplete', async () => {
-      setClaudeCodeApiModeLab(false);
       const store = createMockStore();
 
       await executeHeterogeneousAgent(

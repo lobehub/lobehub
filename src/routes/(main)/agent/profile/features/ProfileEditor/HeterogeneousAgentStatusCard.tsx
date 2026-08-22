@@ -46,6 +46,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 const COMMAND_LINE_HEIGHT = 28;
 const SERVER_DEFAULT_PROVIDER_VALUE = 'server-default';
 const USER_PROVIDER_VALUE_PREFIX = 'provider:';
+const NO_SERVER_DEFAULT_MODELS: ServerDefaultModel[] = [];
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -268,9 +269,9 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     apiModeLabEnabled = false,
     apiModeWorkspaceBlocked = false,
     provider,
-    serverDefaultAvailable = false,
+    serverDefaultAvailable: serverDefaultAvailableProp = false,
     serverDefaultLoading = false,
-    serverDefaultModels = [],
+    serverDefaultModels: serverDefaultModelsProp = [],
     serverDefaultUnavailableReason,
     onApiConfigChange,
     onAuthModeChange,
@@ -292,6 +293,13 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const [savingCommand, setSavingCommand] = useState(false);
     const commandInputRef = useRef<HTMLInputElement | null>(null);
     const authMode = provider.authMode ?? 'subscription';
+    // Labs gates every API-mode path, server-default included. Normalize here
+    // so a parent passing stale server-default props cannot resurface the
+    // experiment while the flag is off.
+    const serverDefaultAvailable = apiModeLabEnabled && serverDefaultAvailableProp;
+    const serverDefaultModels = apiModeLabEnabled
+      ? serverDefaultModelsProp
+      : NO_SERVER_DEFAULT_MODELS;
     const serverDefaultSelected = provider.apiConfig?.source === 'server-default';
     const providerApiConfig =
       provider.apiConfig?.source !== 'server-default' ? provider.apiConfig : undefined;
@@ -677,6 +685,9 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
     const renderAuthMode = () => {
       if (!providerBindingSupported || detecting || !status?.available) return null;
+      // Keep leftover API-mode agents visible so they can switch back; hide the
+      // experiment entirely for subscription agents until Labs is enabled.
+      if (!apiModeLabEnabled && authMode !== 'api') return null;
       const localProviderApiAvailable = apiModeLabEnabled && apiModeAvailable;
       const runnableApiAvailable = serverDefaultAvailable || localProviderApiAvailable;
       const showLocalProviderUnavailable =
@@ -706,21 +717,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 void handleAuthModeChange(value as HeterogeneousAuthMode);
               }}
             />
-            {!runnableApiAvailable && serverDefaultLoading ? (
-              <Text className={styles.unavailableText}>
-                {t('heterogeneousStatus.apiMode.serverDefault.checking')}
-              </Text>
-            ) : !runnableApiAvailable && serverDefaultUnavailableReason ? (
-              <>
-                <Text className={styles.unavailableText}>{serverDefaultUnavailableReason}</Text>
-                {onServerDefaultRetry && (
-                  <Button size="small" type="text" onClick={onServerDefaultRetry}>
-                    {t('heterogeneousStatus.apiMode.serverDefault.retry')}
-                  </Button>
-                )}
-              </>
-            ) : null}
-            {showLocalProviderUnavailable && !apiModeLabEnabled ? (
+            {!apiModeLabEnabled ? (
               <>
                 <Text className={styles.unavailableText}>
                   {t('heterogeneousStatus.apiMode.labDisabled')}
@@ -732,6 +729,19 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 >
                   {t('heterogeneousStatus.apiMode.enableInLabs')}
                 </Text>
+              </>
+            ) : !runnableApiAvailable && serverDefaultLoading ? (
+              <Text className={styles.unavailableText}>
+                {t('heterogeneousStatus.apiMode.serverDefault.checking')}
+              </Text>
+            ) : !runnableApiAvailable && serverDefaultUnavailableReason ? (
+              <>
+                <Text className={styles.unavailableText}>{serverDefaultUnavailableReason}</Text>
+                {onServerDefaultRetry && (
+                  <Button size="small" type="text" onClick={onServerDefaultRetry}>
+                    {t('heterogeneousStatus.apiMode.serverDefault.retry')}
+                  </Button>
+                )}
               </>
             ) : showLocalProviderUnavailable && !apiModeAvailable ? (
               <Text className={styles.unavailableText}>
@@ -782,7 +792,13 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     };
 
     const renderApiConfig = () => {
-      if (!providerBindingSupported || authMode !== 'api' || detecting || !status?.available)
+      if (
+        !providerBindingSupported ||
+        authMode !== 'api' ||
+        !apiModeLabEnabled ||
+        detecting ||
+        !status?.available
+      )
         return null;
 
       const selectedProviderValue = serverDefaultSelected

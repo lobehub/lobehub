@@ -1833,6 +1833,21 @@ export const executeHeterogeneousAgent = async (
       : undefined;
   const serverDefaultBindingActive = !!serverDefaultApiConfig;
   const userProviderBindingActive = !!providerApiConfig;
+  // The Labs flag gates every API-mode path, including the server-default
+  // binding: with the flag off, an api-auth agent must behave exactly as it
+  // did before the feature existed — blocked with a pointer to Labs.
+  if (
+    providerBindingActive &&
+    !labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())
+  ) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
   if (providerBindingActive && !serverDefaultBindingActive && !userProviderBindingActive) {
     await persistTerminalError(
       toHeterogeneousAgentMessageError(
@@ -1843,28 +1858,17 @@ export const executeHeterogeneousAgent = async (
     return;
   }
 
-  if (userProviderBindingActive) {
-    if (!labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())) {
-      await persistTerminalError(
-        toHeterogeneousAgentMessageError(
-          new Error(t('heteroAgent.apiMode.labDisabled.title', { ns: 'chat' })),
-          adapterType,
-        ),
-      );
-      return;
-    }
-
-    if (
-      !isHeterogeneousProviderBindingSupported(adapterType) ||
+  if (
+    userProviderBindingActive &&
+    (!isHeterogeneousProviderBindingSupported(adapterType) ||
       !providerApiConfig.providerId ||
-      !providerApiConfig.model.trim()
-    ) {
-      const message = !isHeterogeneousProviderBindingSupported(adapterType)
-        ? t('heteroAgent.apiMode.agentUnsupported', { name: adapterType, ns: 'chat' })
-        : t('heteroAgent.apiMode.configMissing', { ns: 'chat' });
-      await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
-      return;
-    }
+      !providerApiConfig.model.trim())
+  ) {
+    const message = !isHeterogeneousProviderBindingSupported(adapterType)
+      ? t('heteroAgent.apiMode.agentUnsupported', { name: adapterType, ns: 'chat' })
+      : t('heteroAgent.apiMode.configMissing', { ns: 'chat' });
+    await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
+    return;
   }
 
   if (

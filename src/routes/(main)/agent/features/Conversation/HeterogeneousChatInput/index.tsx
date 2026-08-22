@@ -115,10 +115,11 @@ const HeterogeneousChatInput = memo(() => {
       ? heterogeneousProvider.apiConfig
       : undefined;
   const apiConfigMissing = isApiAuth && !heterogeneousProvider.apiConfig;
+  // The Labs flag gates every API-mode path, server-default included: with the
+  // flag off, an api-auth agent behaves exactly as before the feature existed.
   const isApiModeActive =
-    !!serverDefaultApiConfig ||
-    apiConfigMissing ||
-    (!!providerApiConfig && enableAgentProviderBinding);
+    enableAgentProviderBinding &&
+    (!!serverDefaultApiConfig || apiConfigMissing || !!providerApiConfig);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
@@ -141,10 +142,11 @@ const HeterogeneousChatInput = memo(() => {
       providerType,
     });
   const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
-  const apiModeLabDisabled = !!providerApiConfig && !enableAgentProviderBinding;
+  const apiModeLabDisabled = isApiAuth && !enableAgentProviderBinding;
   const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
   const validateProviderBinding =
-    (apiConfigMissing || (!!providerApiConfig && enableAgentProviderBinding)) &&
+    enableAgentProviderBinding &&
+    (apiConfigMissing || !!providerApiConfig) &&
     executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
     resolveProviderBindingGuard({
