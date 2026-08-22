@@ -60,3 +60,44 @@ export interface CreateTaskGoalInput {
   requirement?: string | null;
   title?: string;
 }
+
+// ============================================
+// Goal Graph — durable long-horizon reasoning structure
+// ============================================
+
+/** Coarse-grained semantic role of a node in a Goal Graph. */
+export type GoalNodeKind = 'problem' | 'work' | 'finding' | 'decision';
+
+/** Semantic lifecycle of a node; independent from the execution status of its Task. */
+export type GoalNodeStatus =
+  'proposed' | 'active' | 'waiting' | 'resolved' | 'rejected' | 'retired';
+
+/** How two Goal Graph nodes are related. */
+export type GoalEdgeKind =
+  | 'decomposes'
+  | 'depends_on'
+  | 'investigates'
+  | 'produces'
+  | 'supports'
+  | 'contradicts'
+  | 'leads_to';
+
+/** The role an immutable Work version plays for a Goal Graph node. */
+export type GoalNodeWorkVersionRelation = 'input' | 'produced' | 'supports' | 'contradicts';
+
+export type GoalDecisionAuthority = 'agent' | 'user' | 'project_role';
+
+export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
+
+export interface GoalDecisionOption {
+  description?: string;
+  id: string;
+  label: string;
+}
+
+export type GoalEventActorType = 'agent' | 'user' | 'system';
+
+export type GoalEventEntityType = 'goal' | 'node' | 'edge' | 'decision' | 'task';
+
+export type GoalEventType =
+  'created' | 'updated' | 'activated' | 'resolved' | 'rejected' | 'retired' | 'linked' | 'unlinked';
