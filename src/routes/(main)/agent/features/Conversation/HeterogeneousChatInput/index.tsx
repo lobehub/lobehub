@@ -104,14 +104,28 @@ const HeterogeneousChatInput = memo(() => {
   const providerType = heterogeneousProvider?.type;
   const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   const isApiAuth = heterogeneousProvider?.authMode === 'api';
-  const isApiModeActive = isApiAuth && enableAgentProviderBinding;
+  const serverDefaultApiConfig =
+    isApiAuth && heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const providerApiConfig =
+    isApiAuth &&
+    heterogeneousProvider.apiConfig &&
+    heterogeneousProvider.apiConfig.source !== 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const apiConfigMissing = isApiAuth && !heterogeneousProvider.apiConfig;
+  const isApiModeActive =
+    !!serverDefaultApiConfig ||
+    apiConfigMissing ||
+    (!!providerApiConfig && enableAgentProviderBinding);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
     workspaceScoped,
   });
   const { error: apiBindingValidationError, isReady: isApiBindingStateReady } =
-    useProviderBindingValidation(providerType, heterogeneousProvider?.apiConfig);
+    useProviderBindingValidation(providerType, providerApiConfig);
   const deviceSelectionRequired =
     !!providerType &&
     !isHeterogeneousSandboxExecutionAvailable(providerType) &&
@@ -127,12 +141,14 @@ const HeterogeneousChatInput = memo(() => {
       providerType,
     });
   const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
-  const apiModeLabDisabled = isApiAuth && !enableAgentProviderBinding;
+  const apiModeLabDisabled = !!providerApiConfig && !enableAgentProviderBinding;
   const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
-  const isLocalApiMode = isApiModeActive && executionTarget === 'local';
+  const validateProviderBinding =
+    (apiConfigMissing || (!!providerApiConfig && enableAgentProviderBinding)) &&
+    executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
     resolveProviderBindingGuard({
-      active: isLocalApiMode,
+      active: validateProviderBinding,
       error: apiBindingValidationError,
       isReady: isApiBindingStateReady,
     });

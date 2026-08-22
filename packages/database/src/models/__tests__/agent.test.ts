@@ -1353,7 +1353,7 @@ describe('AgentModel', () => {
             type: 'claude-code',
           },
         },
-      } as any);
+      });
 
       await agentModel.updateConfig(agent.id, {
         agencyConfig: {

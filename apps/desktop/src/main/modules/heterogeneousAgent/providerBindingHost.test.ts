@@ -25,7 +25,10 @@ const makeParams = async (driver: HeterogeneousAgentDriver) => {
     appStoragePath,
     args: [],
     driver,
-    reference: { apiConfig: { model: 'gpt-test', providerId: 'provider-test' } },
+    reference: {
+      apiConfig: { model: 'gpt-test', providerId: 'provider-test' },
+      kind: 'provider' as const,
+    },
     resolution: {
       agentType: 'codex' as const,
       apiConfig: { model: 'gpt-test', providerId: 'provider-test' },

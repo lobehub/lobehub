@@ -79,16 +79,18 @@ export type HeterogeneousAgentModelCatalog =
 export type HeterogeneousAuthMode = 'api' | 'subscription';
 
 /**
- * Reference-only API binding for a heterogeneous agent.
+ * Reference-only user-provider API binding for a heterogeneous agent.
  * Provider credentials are resolved at launch and are never persisted here.
  */
-export interface HeterogeneousApiConfig {
+export interface HeterogeneousProviderApiConfig {
   /** Primary model used by the CLI. */
   model: string;
-  /** LobeHub provider whose runtime credentials are resolved locally. */
+  /** User provider whose runtime credentials are resolved locally. */
   providerId: string;
   /** Optional model used for fast/background work. Defaults to the primary model. */
   smallFastModel?: string | null;
+  /** Omitted by existing records; any omitted source is a user-provider binding. */
+  source?: 'provider';
 }
 
 export const formatServerDefaultHeterogeneousModel = (model: string): string => `lobehub/${model}`;
@@ -97,6 +99,16 @@ export const isServerDefaultHeterogeneousModel = (
   requestModel: unknown,
   operationModel: string,
 ): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
+
+/** Deployment-owned API binding whose provider and credentials stay on the server. */
+export interface HeterogeneousServerDefaultApiConfig {
+  /** Model id from the deployment's enabled model catalog. */
+  model: string;
+  source: 'server-default';
+}
+
+export type HeterogeneousApiConfig =
+  HeterogeneousProviderApiConfig | HeterogeneousServerDefaultApiConfig;
 
 /**
  * Heterogeneous agent provider configuration.
@@ -115,7 +127,7 @@ export const isServerDefaultHeterogeneousModel = (
  *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
-  /** Credential-free LobeHub Provider binding used when `authMode` is `api`. */
+  /** Credential-free API binding used when `authMode` is `api`. */
   apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];

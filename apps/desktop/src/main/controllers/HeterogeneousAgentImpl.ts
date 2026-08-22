@@ -81,6 +81,7 @@ import {
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeterogeneousServerDefaultApiConfig,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -104,8 +105,14 @@ import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/provide
 import {
   gcHostedProviderBindingProfiles,
   prepareHostedProviderBinding,
+  prepareHostedServerDefaultBinding,
 } from '@/modules/heterogeneousAgent/providerBindingHost';
-import { getProviderBindingRuntime } from '@/modules/heterogeneousAgent/providerBindingPort';
+import {
+  beginServerDefaultOperation,
+  getProviderBindingRuntime,
+  getServerDefaultEndpoint,
+  settleServerDefaultOperation,
+} from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
   HeterogeneousAgentBuildPlan,
   HeterogeneousAgentImageAttachment,
@@ -358,6 +365,9 @@ interface AgentSession {
   resolvedCommandSearchPath?: string;
   resumeSessionId?: string;
   sdkSession?: ClaudeAgentSdkSession;
+  serverDefaultApiConfig?: HeterogeneousServerDefaultApiConfig;
+  serverDefaultBinding?: boolean;
+  serverOperationToken?: string;
   sessionId: string;
   traeAcpSession?: TraeAcpSession;
   useClaudeCodeSdk?: boolean;
@@ -756,7 +766,7 @@ export default class HeterogeneousAgentCtr {
     // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
     if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
-    return {
+    const env: NodeJS.ProcessEnv = {
       ...inheritedEnv,
       ...proxyEnv,
       ...(session.agentType === 'codebuddy'
@@ -764,6 +774,12 @@ export default class HeterogeneousAgentCtr {
         : {}),
       ...session.env,
     };
+    if (session.serverOperationToken) {
+      if (session.agentType === 'claude-code')
+        env.ANTHROPIC_AUTH_TOKEN = session.serverOperationToken;
+      if (session.agentType === 'codex') env.LOBEHUB_HETERO_TOKEN = session.serverOperationToken;
+    }
+    return env;
   }
 
   private get shouldTraceCliOutput(): boolean {
@@ -1166,7 +1182,7 @@ export default class HeterogeneousAgentCtr {
     const driver = getHeterogeneousAgentDriver(agentType);
     let hostedProviderBinding: HostedProviderBinding | undefined;
 
-    if (params.providerBinding) {
+    if (params.providerBinding && params.providerBinding.kind !== 'server-default') {
       const bindingRuntime = await getProviderBindingRuntime(
         this.remoteServerAuth,
         params.providerBinding,
@@ -1205,6 +1221,17 @@ export default class HeterogeneousAgentCtr {
             logger.info('Removed stale provider-binding profiles:', removedProfiles);
         })
         .catch((error) => logger.warn('Provider-binding profile GC failed:', error));
+    } else if (params.providerBinding?.kind === 'server-default') {
+      hostedProviderBinding = await prepareHostedServerDefaultBinding({
+        agentType,
+        appStoragePath: this.app.appStoragePath,
+        args: params.args || [],
+        driver,
+        endpoint: await getServerDefaultEndpoint(this.remoteServerAuth),
+        env: params.env,
+        model: params.providerBinding.apiConfig.model,
+        sessionId,
+      });
     }
 
     const resumeSessionId =
@@ -1222,6 +1249,11 @@ export default class HeterogeneousAgentCtr {
       cwd: params.cwd,
       env: hostedProviderBinding?.env ?? params.env,
       hostedProviderBinding,
+      serverDefaultApiConfig:
+        params.providerBinding?.kind === 'server-default'
+          ? params.providerBinding.apiConfig
+          : undefined,
+      serverDefaultBinding: params.providerBinding?.kind === 'server-default',
       model: params.initialModel,
       sessionId,
       resumeSessionId,
@@ -1245,6 +1277,38 @@ export default class HeterogeneousAgentCtr {
    * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
   async sendPrompt(params: SendPromptParams): Promise<void> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session?.serverDefaultBinding) return this.sendPromptImpl(params);
+    if (!params.topicId) throw new Error('Server-default execution requires a topic');
+    if (!session.serverDefaultApiConfig)
+      throw new Error('Server-default execution requires a model');
+    if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
+      throw new Error(`Server-default execution does not support ${session.agentType}`);
+    }
+
+    const operation = await beginServerDefaultOperation(this.remoteServerAuth, {
+      agentType: session.agentType,
+      agentId: params.agentId,
+      model: session.serverDefaultApiConfig.model,
+      operationId: params.operationId,
+      topicId: params.topicId,
+    });
+    session.serverOperationToken = operation.token;
+    let result: 'done' | 'error' = 'error';
+    try {
+      await this.sendPromptImpl(params);
+      result = 'done';
+    } finally {
+      session.serverOperationToken = undefined;
+      await settleServerDefaultOperation(this.remoteServerAuth, {
+        cancelled: session.cancelledByUs,
+        operationId: params.operationId,
+        result,
+      }).catch((error) => logger.warn('Failed to settle server-default operation:', error));
+    }
+  }
+
+  private async sendPromptImpl(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
     session.cancelledByUs = false;

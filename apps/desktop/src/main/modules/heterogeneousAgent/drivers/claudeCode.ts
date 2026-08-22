@@ -63,4 +63,17 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
       },
     };
   },
+  prepareServerDefaultBinding({ args, endpoint, env, profileDir }) {
+    return {
+      args: [...sanitizeClaudeCodeDirectArgs(args), '--model', 'lobehub-default'],
+      env: {
+        ...sanitizeClaudeCodeDirectEnv(env),
+        ANTHROPIC_BASE_URL: `${endpoint}/api/v1/anthropic`,
+        ANTHROPIC_MODEL: 'lobehub-default',
+        ANTHROPIC_SMALL_FAST_MODEL: 'lobehub-default',
+        CLAUDE_CODE_SUBAGENT_MODEL: 'lobehub-default',
+        CLAUDE_CONFIG_DIR: profileDir,
+      },
+    };
+  },
 };

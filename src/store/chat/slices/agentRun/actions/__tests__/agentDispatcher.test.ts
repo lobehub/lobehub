@@ -9,6 +9,12 @@ const apiHeteroProvider = {
   command: 'claude',
   type: 'claude-code' as const,
 };
+const serverDefaultApiHeteroProvider = {
+  apiConfig: { model: 'claude-sonnet', source: 'server-default' as const },
+  authMode: 'api' as const,
+  command: 'claude',
+  type: 'claude-code' as const,
+};
 const codexApiHeteroProvider = {
   apiConfig: { model: 'gpt-test', providerId: 'openai' },
   authMode: 'api' as const,
@@ -118,6 +124,41 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: apiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: false },
+        ),
+      ).toThrow(/Desktop local execution/);
+    });
+
+    it('allows the deployment-default API source only for Desktop local execution', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'sandbox',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toThrow(/Desktop local execution/);
+
+      expect(() =>
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
             isGatewayMode: false,
           },
           { isDesktop: false },
@@ -339,6 +380,21 @@ describe('selectRuntimeType', () => {
           { isDesktop: true },
         ),
       ).toThrow(/not supported for workspace agents/);
+    });
+
+    it('keeps deployment-default API workspace agents spawnable by their author', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
+            isGatewayMode: false,
+            isWorkspaceAgent: true,
+            workspaceScoped: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
     });
 
     it('keeps subscription-auth workspace agents spawnable by their author', () => {

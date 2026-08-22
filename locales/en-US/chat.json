@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Provider binding requires a provider and model. Open the agent profile to configure it.",
   "heteroAgent.apiMode.credentialUnsupported": "The provider \"{{providerId}}\" uses an authentication method this agent does not support.",
   "heteroAgent.apiMode.credentialsMissing": "The provider \"{{providerId}}\" has no API key configured.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub requires a compatible model. Open the agent profile to select one.",
   "heteroAgent.apiMode.endpointMissing": "The provider \"{{providerId}}\" requires a base URL for this agent.",
   "heteroAgent.apiMode.endpointUnsupported": "The provider \"{{providerId}}\" has an unsupported base URL.",
   "heteroAgent.apiMode.labDisabled.action": "Enable in Labs",

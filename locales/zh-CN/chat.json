@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "服务商绑定需要选择服务商和模型，请前往 Agent 资料完成配置。",
   "heteroAgent.apiMode.credentialUnsupported": "服务商「{{providerId}}」使用的认证方式不受此 Agent 支持。",
   "heteroAgent.apiMode.credentialsMissing": "服务商「{{providerId}}」尚未配置 API Key。",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub 需要选择兼容模型，请前往 Agent 资料完成配置。",
   "heteroAgent.apiMode.endpointMissing": "此 Agent 要求服务商「{{providerId}}」配置 Base URL。",
   "heteroAgent.apiMode.endpointUnsupported": "服务商「{{providerId}}」的 Base URL 不受支持。",
   "heteroAgent.apiMode.labDisabled.action": "前往实验室开启",

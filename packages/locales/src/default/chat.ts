@@ -526,6 +526,8 @@ export default {
   'heteroAgent.apiMode.agentUnsupported': '{{name}} does not support LobeHub Provider binding.',
   'heteroAgent.apiMode.configMissing':
     'Provider binding requires a provider and model. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.defaultProviderConfigMissing':
+    'LobeHub requires a compatible model. Open the agent profile to select one.',
   'heteroAgent.apiMode.credentialUnsupported':
     'The provider "{{providerId}}" uses an authentication method this agent does not support.',
   'heteroAgent.apiMode.credentialsMissing':

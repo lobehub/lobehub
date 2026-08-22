@@ -7,7 +7,10 @@ const bindingContext = (): PrepareProviderBindingContext => ({
   args: ['--model', 'stale-model', '-c', 'model_provider="other"', '--json'],
   env: { CODEX_HOME: '/user/codex', KEEP_ME: 'yes', OPENAI_API_KEY: 'stale-key' },
   profileDir: '/managed/codex',
-  reference: { apiConfig: { model: 'gpt-test', providerId: 'responses-provider' } },
+  reference: {
+    apiConfig: { model: 'gpt-test', providerId: 'responses-provider' },
+    kind: 'provider',
+  },
   resolution: {
     agentType: 'codex',
     apiConfig: { model: 'gpt-test', providerId: 'responses-provider' },
@@ -24,6 +27,24 @@ const bindingContext = (): PrepareProviderBindingContext => ({
 });
 
 describe('codexDriver provider binding', () => {
+  it('writes a server-default Responses profile without the operation token', async () => {
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: { LOBEHUB_HETERO_TOKEN: 'stale' },
+      model: 'gpt-5.4',
+      profileDir: '/tmp/profile',
+    });
+    const config = plan.profileFiles?.[0]?.content ?? '';
+
+    expect(plan.args).toEqual(['--model', 'lobehub/gpt-5.4']);
+    expect(config).toContain('model = "lobehub/gpt-5.4"');
+    expect(config).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
+    expect(config).toContain('env_key = "LOBEHUB_HETERO_TOKEN"');
+    expect(config).not.toContain('stale');
+    expect(plan.env.LOBEHUB_HETERO_TOKEN).toBeUndefined();
+  });
+
   it('writes a secret-free Responses provider config and injects the key through env', async () => {
     const plan = await codexDriver.prepareProviderBinding!(bindingContext());
     const config = plan.profileFiles?.[0]?.content ?? '';

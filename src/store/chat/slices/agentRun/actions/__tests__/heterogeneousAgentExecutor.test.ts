@@ -694,6 +694,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       model: 'stale-config-model',
       type: 'claude-code' as const,
     };
+    const serverDefaultApiProvider = {
+      ...apiProvider,
+      apiConfig: { model: 'claude-server', source: 'server-default' as const },
+    };
 
     const configureDirectProvider = () => {
       useAiInfraStore.setState({
@@ -730,6 +734,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           }),
           providerBinding: {
             apiConfig: { model: 'api-primary', providerId: 'anthropic-direct' },
+            kind: 'provider',
             resumeBindingKey: undefined,
           },
         }),
@@ -737,6 +742,26 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       const serializedParams = JSON.stringify(mockStartSession.mock.calls[0][0]);
       expect(serializedParams).not.toContain('direct-key');
       expect(serializedParams).not.toContain('https://direct.example.com');
+      expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
+      expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('uses the deployment provider inside API mode without the Labs experiment', async () => {
+      setClaudeCodeApiModeLab(false);
+
+      await runWithEvents([ccResult()], {
+        params: { heterogeneousProvider: serverDefaultApiProvider },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerBinding: {
+            apiConfig: { model: 'claude-server', source: 'server-default' },
+            kind: 'server-default',
+            resumeBindingKey: undefined,
+          },
+        }),
+      );
       expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
     });
@@ -763,6 +788,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     it('fails before spawn when the binding reference is incomplete', async () => {
+      setClaudeCodeApiModeLab(false);
       const store = createMockStore();
 
       await executeHeterogeneousAgent(

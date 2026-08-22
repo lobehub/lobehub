@@ -83,10 +83,23 @@ const { loggerInfoMock } = vi.hoisted(() => ({
   loggerInfoMock: vi.fn(),
 }));
 
-const getProviderBindingRuntimeMock = vi.hoisted(() => vi.fn());
+const {
+  beginServerDefaultOperationMock,
+  getProviderBindingRuntimeMock,
+  getServerDefaultEndpointMock,
+  settleServerDefaultOperationMock,
+} = vi.hoisted(() => ({
+  beginServerDefaultOperationMock: vi.fn(),
+  getProviderBindingRuntimeMock: vi.fn(),
+  getServerDefaultEndpointMock: vi.fn(),
+  settleServerDefaultOperationMock: vi.fn(),
+}));
 
 vi.mock('@/modules/heterogeneousAgent/providerBindingPort', () => ({
+  beginServerDefaultOperation: beginServerDefaultOperationMock,
   getProviderBindingRuntime: getProviderBindingRuntimeMock,
+  getServerDefaultEndpoint: getServerDefaultEndpointMock,
+  settleServerDefaultOperation: settleServerDefaultOperationMock,
 }));
 
 vi.mock('electron', () => ({
@@ -570,6 +583,12 @@ describe('HeterogeneousAgentCtr', () => {
       });
     });
     loggerInfoMock.mockReset();
+    beginServerDefaultOperationMock.mockReset();
+    beginServerDefaultOperationMock.mockResolvedValue({
+      endpoint: 'https://app.example.com',
+      model: 'lobehub-default',
+      token: 'operation-token',
+    });
     getProviderBindingRuntimeMock.mockReset();
     getProviderBindingRuntimeMock.mockResolvedValue({
       enabled: true,
@@ -579,6 +598,10 @@ describe('HeterogeneousAgentCtr', () => {
         settings: { sdkType: 'openai', supportResponsesApi: true },
       },
     });
+    getServerDefaultEndpointMock.mockReset();
+    getServerDefaultEndpointMock.mockResolvedValue('https://app.example.com');
+    settleServerDefaultOperationMock.mockReset();
+    settleServerDefaultOperationMock.mockResolvedValue(undefined);
     traeAcpSessionCloseMock.mockReset();
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
@@ -1642,6 +1665,45 @@ describe('HeterogeneousAgentCtr', () => {
       return { cliArgs, command, ctr, options, sessionId, writes };
     };
 
+    it('identifies Codex when beginning a server-default operation', async () => {
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'gpt-5.4', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        agentId: 'agent-1',
+        operationId: 'op-server-default',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: 'agent-1',
+        agentType: 'codex',
+        model: 'gpt-5.4',
+        operationId: 'op-server-default',
+        topicId: 'topic-1',
+      });
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/gpt-5.4']));
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-server-default',
+        result: 'done',
+      });
+    });
+
     it('fails fast when Codex CLI is unavailable instead of attempting spawn', async () => {
       const detect = vi.fn().mockResolvedValue({ available: false });
       const ctr = new HeterogeneousAgentCtr({
@@ -1681,7 +1743,10 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.startSession({
           agentType: 'codex',
           command: 'codex',
-          providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+          providerBinding: {
+            apiConfig: { model: 'gpt-test', providerId: 'openai' },
+            kind: 'provider',
+          },
         }),
       ).rejects.toThrow('Model "openai/gpt-test" is disabled or unavailable.');
     });
@@ -1696,7 +1761,10 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
       });
       const runsDir = path.join(appStoragePath, 'heteroAgent', 'runs');
       expect(await readdir(runsDir)).toEqual([sessionId]);
@@ -1710,7 +1778,10 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('forces provider-bound Codex through exec without persisting or logging its secret', async () => {
       const { cliArgs, options, sessionId } = await runSendPrompt('provider-bound prompt', {
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
         useCodexAppServer: true,
       });
 
@@ -1748,7 +1819,10 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
       });
 
       await expect(
@@ -1767,12 +1841,18 @@ describe('HeterogeneousAgentCtr', () => {
       const first = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
       });
       const legacy = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: { apiConfig: { model: 'gpt-test', providerId: 'openai' } },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
         resumeSessionId: 'thread-without-binding-key',
       });
       const rejected = await ctr.startSession({
@@ -1780,6 +1860,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         providerBinding: {
           apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
           resumeBindingKey: 'provider-binding:v1:different',
         },
         resumeSessionId: 'thread-rejected',
@@ -1789,6 +1870,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         providerBinding: {
           apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
           resumeBindingKey: first.providerBindingKey,
         },
         resumeSessionId: 'thread-accepted',

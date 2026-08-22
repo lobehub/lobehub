@@ -14,12 +14,7 @@ export const sanitizeAgentApiConfig = (
   let apiConfig: HeterogeneousApiConfig | undefined;
   if (isRecord(rawApiConfig) && typeof rawApiConfig.model === 'string') {
     if (rawApiConfig.source === 'server-default') {
-      // This server compatibility path intentionally lands before clients widen the shared
-      // config union to include the deployment-owned binding shape.
-      apiConfig = {
-        model: rawApiConfig.model,
-        source: 'server-default',
-      } as unknown as HeterogeneousApiConfig;
+      apiConfig = { model: rawApiConfig.model, source: 'server-default' };
     } else if (typeof rawApiConfig.providerId === 'string') {
       apiConfig = {
         model: rawApiConfig.model,
