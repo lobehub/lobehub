@@ -319,6 +319,36 @@ describe('tool executors', () => {
     expect(result.newState.status).toBe('running');
   });
 
+  it('observes a late transport rejection after a synchronous abort', async () => {
+    const controller = new AbortController();
+    const abortingHost = {
+      ...host,
+      operation: { ...host.operation, abortSignal: controller.signal },
+    } as typeof host;
+    let rejectTransport: ((error: Error) => void) | undefined;
+    runTool.mockImplementationOnce(() => {
+      controller.abort();
+      return new Promise((_, reject) => {
+        rejectTransport = reject;
+      });
+    });
+
+    const toolCall = createToolCall();
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: toolCall },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(abortingHost)(instruction, createState());
+    rejectTransport!(new Error('transport failed after abort'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', tool_call_id: toolCall.id }),
+    );
+    expect(host.transports.tools!.handleError).not.toHaveBeenCalled();
+  });
+
   it('never starts a tool when the signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();

@@ -237,6 +237,10 @@ const raceToolAbort = async <T>(run: () => Promise<T>, signal?: AbortSignal): Pr
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(new ToolAbortedError());
     signal.addEventListener('abort', onAbort, { once: true });
+    // Observe the transport before the synchronous-abort recheck below. The
+    // outer race may already be settled, but a started transport can still
+    // reject later and must not surface as an unhandled rejection.
+    started.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
     // The signal can fire between `run()` starting and the listener attaching —
     // a transport that aborts from inside its own synchronous setup does exactly
     // that. Without this re-check the listener is registered too late, nothing
@@ -245,7 +249,6 @@ const raceToolAbort = async <T>(run: () => Promise<T>, signal?: AbortSignal): Pr
       reject(new ToolAbortedError());
       return;
     }
-    started.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
   });
 };
 
