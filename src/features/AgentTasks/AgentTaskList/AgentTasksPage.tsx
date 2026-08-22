@@ -1,6 +1,8 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
@@ -77,15 +79,25 @@ interface AgentTasksPageProps {
   projectId?: string;
 }
 
+type TaskCollection = 'scheduled' | 'tasks';
+
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
+  const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
+  const [collection, setCollection] = useState<TaskCollection>('tasks');
+  const canSwitchCollection = !agentId && !projectId;
+  const isScheduledCollection = canSwitchCollection && collection === 'scheduled';
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, mutate } = useFetchTaskList(
-    projectId ? { projectId, visibility: 'all' } : agentId ? { agentId } : { allAgents: true },
+    projectId
+      ? { projectId, visibility: 'all' }
+      : agentId
+        ? { agentId }
+        : { allAgents: true, automated: false },
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope (agent ↔ all) or visibility switch the store
@@ -98,8 +110,16 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // failed first load, so we surface loading only while there's no error (below).
   const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
+  const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
+  const scheduledSWR = useFetchScheduledTaskList({ enabled: isScheduledCollection });
+  const scheduledTasks = useTaskStore(taskListSelectors.scheduledTaskList);
+  const isScheduledTaskListInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  const scheduledViewOptions = useMemo(
+    () => ({ ...viewOptions, hideCompleted: false }),
+    [viewOptions],
+  );
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
   const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
@@ -146,16 +166,36 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
   }, [setViewOptions]);
 
-  const headerVisibility = getTaskPageHeaderVisibility({ agentId, isEmptyHero, isMobile });
+  const headerVisibility = getTaskPageHeaderVisibility({
+    agentId,
+    isEmptyHero: isScheduledCollection ? false : isEmptyHero,
+    isMobile,
+  });
+
+  const collectionTabs = canSwitchCollection ? (
+    <TabsRoot
+      size={'small'}
+      value={collection}
+      onValueChange={(value) => setCollection(value as TaskCollection)}
+    >
+      <TabsList>
+        <TabsIndicator />
+        <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
+        <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
+      </TabsList>
+    </TabsRoot>
+  ) : (
+    <Breadcrumb />
+  );
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={headerVisibility.showBreadcrumb ? <Breadcrumb /> : undefined}
+        left={headerVisibility.showBreadcrumb || canSwitchCollection ? collectionTabs : undefined}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {!agentId && !projectId && <TaskListVisibilityFilter />}
-            {(inlineCollapsed || viewMode === 'kanban') && (
+            {!isScheduledCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
+            {!isScheduledCollection && (inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}
                 icon={Plus}
@@ -164,7 +204,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
                 onClick={handleCreateTask}
               />
             )}
-            {headerVisibility.showViewOptions && (
+            {!isScheduledCollection && headerVisibility.showViewOptions && (
               <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
             )}
             {headerVisibility.showTaskAgentPanelToggle && (
@@ -183,7 +223,26 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
           },
         }}
       />
-      {isEmptyHero ? (
+      {isScheduledCollection ? (
+        <WideScreenContainer
+          fullWidth
+          gap={16}
+          paddingBlock={16}
+          paddingInline={16}
+          wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+        >
+          <TaskList
+            data={isScheduledTaskListInit || undefined}
+            emptyDescription={t('taskList.scheduled.empty')}
+            error={scheduledSWR.error}
+            isLoading={scheduledSWR.isLoading || (!isScheduledTaskListInit && !scheduledSWR.error)}
+            items={scheduledTasks}
+            options={scheduledViewOptions}
+            routeScope={routeScope}
+            onRetry={() => scheduledSWR.mutate()}
+          />
+        </WideScreenContainer>
+      ) : isEmptyHero ? (
         <EmptyState agentId={agentId} projectId={projectId} />
       ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>

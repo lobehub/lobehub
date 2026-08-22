@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
@@ -39,10 +40,13 @@ interface TaskListProps {
    * on a scope/visibility switch and never disagrees with the empty signal.
    */
   data?: unknown;
+  emptyDescription?: string;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
   error?: unknown;
   /** First-load / retry in flight (SWR `isLoading`). */
   isLoading?: boolean;
+  /** Optional list source for alternate task collections such as scheduled tasks. */
+  items?: TaskListItem[];
   onRetry?: () => void;
   onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
@@ -142,9 +146,11 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
 );
 
 const TaskList = memo<TaskListProps>((props) => {
-  const { data, error, isLoading, onRetry, onShowHiddenCompleted, options, routeScope } = props;
+  const { data, error, isLoading, items, onRetry, onShowHiddenCompleted, options, routeScope } =
+    props;
   const { t } = useTranslation('chat');
-  const tasks = useTaskStore(taskListSelectors.taskList);
+  const storeTasks = useTaskStore(taskListSelectors.taskList);
+  const tasks = items ?? storeTasks;
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -251,7 +257,10 @@ const TaskList = memo<TaskListProps>((props) => {
 
   const emptyState = (
     <Center height={'80vh'} width={'100%'}>
-      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+      <Empty
+        description={props.emptyDescription ?? t('taskList.empty')}
+        icon={ClipboardCheckIcon}
+      />
     </Center>
   );
 

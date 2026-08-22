@@ -1812,6 +1812,8 @@ export default {
   'taskList.orderBy.status': 'Status',
   'taskList.orderBy.title': 'Title',
   'taskList.orderBy.updatedAt': 'Updated at',
+  'taskList.scheduled.empty': 'No scheduled tasks yet',
+  'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.title': 'Tasks',
   'taskList.unassigned': 'Unassigned',
   'taskList.unassignedHint': 'Lobe AI will run this task when no assignee is set',

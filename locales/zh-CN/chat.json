@@ -1535,6 +1535,8 @@
   "taskList.orderBy.status": "状态",
   "taskList.orderBy.title": "标题",
   "taskList.orderBy.updatedAt": "更新时间",
+  "taskList.scheduled.empty": "暂无定时任务",
+  "taskList.scheduled.title": "定时任务",
   "taskList.title": "任务",
   "taskList.unassigned": "未分配",
   "taskList.unassignedHint": "未分配时将由 Lobe AI 执行该任务",
