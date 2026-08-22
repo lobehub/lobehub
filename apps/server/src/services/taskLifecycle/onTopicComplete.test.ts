@@ -271,6 +271,28 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'scheduled', expect.anything());
     });
 
+    it('finalizes a current-operation completion request after the topic completes', async () => {
+      const task = baseTask({
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-1' } },
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
+    });
+
     it('successful subtask → completes and unlocks downstream tasks instead of pausing', async () => {
       const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
       const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
@@ -378,6 +400,27 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       });
 
       expect(updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('goal-owned root task completes instead of remaining running', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: null });
+      findById.mockResolvedValue(task);
+      (service as any).taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(false);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'goal',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
     });
   });
 

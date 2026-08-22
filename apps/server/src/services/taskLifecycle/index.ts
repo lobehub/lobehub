@@ -239,6 +239,9 @@ export class TaskLifecycleService {
       //      'scheduled' to wait for the next tick. They never auto-pause
       //      on success — only `reason === 'error'` below puts them in
       //      'paused' for human attention.
+      //    - Goal-owned root tasks complete immediately. The Goal coordinator
+      //      owns the broader delivery decision and cannot consume a task that
+      //      merely stays running after its topic has already finished.
       //    - Subtasks complete immediately. Their parent owns the broader
       //      delivery decision, so pausing every successful child for a second
       //      user review stalls an otherwise autonomous task graph. Completing
@@ -262,6 +265,13 @@ export class TaskLifecycleService {
       }
 
       if (currentTask) {
+        const completionRequestedByCurrentOperation =
+          (
+            currentTask.context as {
+              completion?: { requestedByOperationId?: string };
+            } | null
+          )?.completion?.requestedByOperationId === params.operationId;
+
         if (
           currentTask.automationMode === 'schedule' &&
           (await this.scheduleCapReached(currentTask))
@@ -276,6 +286,20 @@ export class TaskLifecycleService {
           // failed — the live `error` alone would silently self-heal.
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
+        } else if (!verifyBound && completionRequestedByCurrentOperation) {
+          if (currentTask.parentTaskId) {
+            await this.completeSubtask(currentTask);
+          } else {
+            await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
+              completedAt: new Date(),
+              error: null,
+            });
+          }
+        } else if (!verifyBound && params.runTrigger === 'goal' && !currentTask.parentTaskId) {
+          await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
+            completedAt: new Date(),
+            error: null,
+          });
         } else if (!verifyBound && currentTask.parentTaskId) {
           const checkpoint = this.taskModel.getCheckpointConfig(currentTask);
           if (checkpoint.topic?.after) {

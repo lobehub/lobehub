@@ -210,6 +210,11 @@ export interface TaskOriginContext {
 }
 
 export interface TaskContext {
+  completion?: {
+    /** The running operation that asked to complete its own task. The lifecycle
+     * finalizes the task only after that operation has finished cleanly. */
+    requestedByOperationId?: string;
+  };
   lifecycle?: TaskLifecycleAudit;
   origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
