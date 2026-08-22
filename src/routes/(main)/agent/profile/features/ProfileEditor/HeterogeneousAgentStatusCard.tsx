@@ -866,7 +866,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
               <ModelSelect
                 initialWidth
-                disabled={!canEdit || !apiModeLabEnabled || !apiModeAvailable}
+                disabled={!canEdit || !apiModeAvailable}
                 placeholder={t('heterogeneousStatus.apiMode.modelPlaceholder')}
                 popupWidth={360}
                 providerIds={[providerApiConfig.providerId]}
@@ -890,15 +890,13 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                       : 'heterogeneousStatus.apiMode.noProviders',
                   )}
                 </Text>
-                {apiModeLabEnabled && (
-                  <Text
-                    className={styles.metaText}
-                    style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                    onClick={() => navigate('/settings/provider')}
-                  >
-                    {t('heterogeneousStatus.apiMode.configureProvider')}
-                  </Text>
-                )}
+                <Text
+                  className={styles.metaText}
+                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => navigate('/settings/provider')}
+                >
+                  {t('heterogeneousStatus.apiMode.configureProvider')}
+                </Text>
               </Flexbox>
             </div>
           )}
