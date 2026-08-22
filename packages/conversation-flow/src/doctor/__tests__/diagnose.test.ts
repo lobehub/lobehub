@@ -431,6 +431,29 @@ describe('diagnoseTopic', () => {
       ]);
     });
 
+    it('uses the last real message behind a compression group as the repair parent', () => {
+      const compressedGroup = {
+        content: 'Earlier conversation summary',
+        createdAt: 10,
+        id: 'mg1',
+        lastMessageId: 'a1',
+        role: 'compressedGroup',
+        updatedAt: 10,
+      } as unknown as Message;
+      const messages = [
+        compressedGroup,
+        ...build([
+          { content: 'question after reconnect', id: 'u2', role: 'user', t: 100 },
+          { content: 'answer after reconnect', id: 'a2', parent: 'u2', role: 'assistant', t: 110 },
+        ]),
+      ];
+
+      const diagnosis = diagnoseTopic(messages);
+
+      expect(diagnosis.patch).toEqual([{ messageId: 'u2', parentId: 'a1', type: 'reparent' }]);
+      expect(diagnoseTopic(applyPatch(messages, diagnosis.patch)).issues).toHaveLength(0);
+    });
+
     it('chains several stranded sections back in time order', () => {
       const three = build([
         { content: 'q1', id: 'u1', role: 'user', t: 0 },
