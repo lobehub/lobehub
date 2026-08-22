@@ -1270,6 +1270,45 @@ describe('AgentModel', () => {
       });
     });
 
+    it('should preserve omitted API binding fields during same-provider partial updates', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-primary',
+              providerId: 'anthropic',
+              smallFastModel: 'claude-fast',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: { smallFastModel: 'claude-fast-updated' },
+          },
+        },
+      });
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: { model: 'claude-primary-updated' },
+          },
+        },
+      });
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary-updated',
+        providerId: 'anthropic',
+        smallFastModel: 'claude-fast-updated',
+      });
+    });
+
     it('should not persist a client-selected provider for the deployment API binding', async () => {
       const agent = await agentModel.create({
         agencyConfig: {

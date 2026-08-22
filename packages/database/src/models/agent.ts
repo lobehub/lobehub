@@ -5,6 +5,7 @@ import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import {
   and,
@@ -1405,17 +1406,17 @@ export class AgentModel {
 
     const mergedValue = merge(agent, restData);
 
-    // API bindings are discriminated snapshots, not partial nested config. Deep-merging a
-    // provider patch into a server-default binding would retain the old `source` discriminator.
-    const heterogeneousProviderPatch = data.agencyConfig?.heterogeneousProvider;
-    if (heterogeneousProviderPatch && Object.hasOwn(heterogeneousProviderPatch, 'apiConfig')) {
-      mergedValue.agencyConfig = {
-        ...mergedValue.agencyConfig,
-        heterogeneousProvider: {
-          ...mergedValue.agencyConfig?.heterogeneousProvider,
-          apiConfig: heterogeneousProviderPatch.apiConfig,
-        },
-      } as AgentItem['agencyConfig'];
+    // API bindings follow updateConfig's partial deep-merge contract. A user-provider patch must
+    // only clear the deployment discriminator retained from a previous server-default binding.
+    const apiConfigPatch = toRecord(data.agencyConfig?.heterogeneousProvider?.apiConfig);
+    const mergedApiConfig = toRecord(mergedValue.agencyConfig?.heterogeneousProvider?.apiConfig);
+    if (
+      apiConfigPatch &&
+      apiConfigPatch.source !== 'server-default' &&
+      typeof apiConfigPatch.providerId === 'string' &&
+      mergedApiConfig
+    ) {
+      delete mergedApiConfig.source;
     }
 
     mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
