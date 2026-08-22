@@ -12,7 +12,7 @@ import type {
   CodexRateLimitResetOutcome,
   CodexRateLimitSnapshot,
 } from '@lobechat/electron-client-ipc';
-import { resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
+import { buildCodexAppServerArgs, resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
 
 const RPC_TIMEOUT_MS = 10_000;
 const CODEX_PRIMARY_WINDOW_MINUTES = 5 * 60;
@@ -438,7 +438,10 @@ const requestViaRpc = async <T>(
     let rpcId = 0;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
-    const rpcArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server'];
+    // Headless app-server only. TUI flags such as `-a untrusted` are parsed
+    // before the subcommand, and current Codex CLI rejects `untrusted`
+    // (`--ask-for-approval` accepts only `on-request` and `never`).
+    const rpcArgs = buildCodexAppServerArgs();
 
     const cleanup = (kill: boolean) => {
       if (finished) return false;
