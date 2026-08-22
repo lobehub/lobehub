@@ -1277,6 +1277,7 @@ export default class HeterogeneousAgentCtr {
    */
   async sendPrompt(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
+    if (session) session.cancelledByUs = false;
     const serverDefaultApiConfig = session?.serverDefaultApiConfig;
     if (!session || !serverDefaultApiConfig) return this.sendPromptImpl(params);
     if (!params.topicId) throw new Error('Server-default execution requires a topic');
@@ -1291,11 +1292,16 @@ export default class HeterogeneousAgentCtr {
       operationId: params.operationId,
       topicId: params.topicId,
     });
-    session.serverOperationToken = operation.token;
     let result: 'done' | 'error' = 'error';
     try {
+      if (session.cancelledByUs) {
+        await this.completeCancelledSessionBeforeLaunch(session);
+        return;
+      }
+
+      session.serverOperationToken = operation.token;
       await this.sendPromptImpl(params);
-      result = 'done';
+      if (!session.cancelledByUs) result = 'done';
     } finally {
       session.serverOperationToken = undefined;
       await settleServerDefaultOperation(this.remoteServerAuth, {
@@ -1309,7 +1315,6 @@ export default class HeterogeneousAgentCtr {
   private async sendPromptImpl(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
-    session.cancelledByUs = false;
 
     let preflightError;
     try {
@@ -1317,6 +1322,10 @@ export default class HeterogeneousAgentCtr {
     } catch (error) {
       await session.hostedProviderBinding?.cleanup();
       throw error;
+    }
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
     }
     if (preflightError) {
       this.broadcast('heteroAgentSessionError', {
@@ -1504,6 +1513,15 @@ export default class HeterogeneousAgentCtr {
       await session.hostedProviderBinding?.cleanup();
       throw err;
     }
+
+    if (session.cancelledByUs) {
+      await intervention?.cleanup().catch((cleanupError) => {
+        logger.warn('AskUserQuestion cleanup error after pre-launch cancellation:', cleanupError);
+      });
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const useStdin = spawnPlan.stdinPayload !== undefined;
 
     logger.info(
@@ -1562,6 +1580,11 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private async completeCancelledSessionBeforeLaunch(session: AgentSession): Promise<void> {
+    await session.hostedProviderBinding?.cleanup();
+    this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+  }
+
   private async sendPromptWithClaudeSdk(
     params: SendPromptParams,
     session: AgentSession,
@@ -1583,6 +1606,11 @@ export default class HeterogeneousAgentCtr {
     });
 
     void this.writeCliTraceFile(traceSession, 'stdin.txt', stdinPayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
 
     const sdkSession = new ClaudeAgentSdkSession({
       args: session.args,
