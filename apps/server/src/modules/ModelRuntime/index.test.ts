@@ -129,83 +129,71 @@ describe('resolveServerModel', () => {
 });
 
 describe('getServerDefaultHeterogeneousModels', () => {
-  it('returns only compatible V1 models from the LobeHub provider', async () => {
+  it('returns only provider-native V1 model paths', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         anthropic: {
           enabled: true,
-          serverModelLists: [{ enabled: true, id: 'claude-opus-4-8', type: 'chat' }],
-        },
-        lobehub: {
-          enabled: true,
           serverModelLists: [
-            { enabled: true, id: 'claude-sonnet-4-6', type: 'chat' },
-            { enabled: false, id: 'claude-haiku-4-5', type: 'chat' },
-            { enabled: true, id: 'gpt-5.4', type: 'chat' },
-            { enabled: true, id: 'gpt-4o', type: 'chat' },
-            { enabled: true, id: 'gemini-3.1-pro-preview', type: 'chat' },
-            { enabled: true, id: 'claude-image', type: 'image' },
+            { enabled: true, id: 'claude-server', type: 'chat' },
+            { enabled: false, id: 'claude-disabled', type: 'chat' },
           ],
+        },
+        google: {
+          enabled: true,
+          serverModelLists: [{ enabled: true, id: 'gemini-server', type: 'chat' }],
         },
         openai: {
           enabled: true,
-          serverModelLists: [{ enabled: true, id: 'gpt-5.4', type: 'chat' }],
+          serverModelLists: [
+            { enabled: true, id: 'gpt-5.4', type: 'chat' },
+            { enabled: true, id: 'gpt-4o', type: 'chat' },
+          ],
         },
       },
     });
 
     await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
-      'claude-code': [{ model: 'claude-sonnet-4-6', providerId: 'lobehub' }],
-      'codex': [{ model: 'gpt-5.4', providerId: 'lobehub' }],
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+      'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
     });
   });
 });
 
 describe('resolveServerDefaultHeterogeneousModel', () => {
-  it('accepts only compatible models routed through the LobeHub provider', async () => {
+  it('accepts only the selected agent runtime path', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         anthropic: {
           enabled: true,
-          serverModelLists: [{ enabled: true, id: 'claude-sonnet-4-6', type: 'chat' }],
-        },
-        lobehub: {
-          enabled: true,
-          serverModelLists: [
-            { enabled: true, id: 'claude-sonnet-4-6', type: 'chat' },
-            { enabled: true, id: 'gpt-5.4', type: 'chat' },
-            { enabled: true, id: 'gpt-4o', type: 'chat' },
-          ],
+          serverModelLists: [{ enabled: true, id: 'claude-server', type: 'chat' }],
         },
         openai: {
           enabled: true,
-          serverModelLists: [{ enabled: true, id: 'gpt-5.4', type: 'chat' }],
+          serverModelLists: [
+            { enabled: true, id: 'gpt-5.4', type: 'chat' },
+            { enabled: true, id: 'gpt-4o', type: 'chat' },
+          ],
         },
       },
     });
 
     await expect(
-      resolveServerDefaultHeterogeneousModel('claude-code', 'lobehub', 'claude-sonnet-4-6'),
-    ).resolves.toMatchObject({ model: 'claude-sonnet-4-6', provider: 'lobehub' });
-    await expect(
-      resolveServerDefaultHeterogeneousModel('codex', 'lobehub', 'gpt-5.4'),
-    ).resolves.toMatchObject({ model: 'gpt-5.4', provider: 'lobehub' });
-
-    await expect(
-      resolveServerDefaultHeterogeneousModel('codex', 'lobehub', 'claude-sonnet-4-6'),
-    ).rejects.toThrow('not compatible with this heterogeneous agent');
-    await expect(
-      resolveServerDefaultHeterogeneousModel('claude-code', 'lobehub', 'gpt-5.4'),
-    ).rejects.toThrow('not compatible with this heterogeneous agent');
-    await expect(
-      resolveServerDefaultHeterogeneousModel('codex', 'lobehub', 'gpt-4o'),
-    ).rejects.toThrow('not compatible with this heterogeneous agent');
+      resolveServerDefaultHeterogeneousModel('claude-code', 'anthropic', 'claude-server'),
+    ).resolves.toMatchObject({ model: 'claude-server', provider: 'anthropic' });
     await expect(
       resolveServerDefaultHeterogeneousModel('codex', 'openai', 'gpt-5.4'),
-    ).rejects.toThrow('use the LobeHub provider');
+    ).resolves.toMatchObject({ model: 'gpt-5.4', provider: 'openai' });
+
     await expect(
-      resolveServerDefaultHeterogeneousModel('claude-code', 'anthropic', 'claude-sonnet-4-6'),
-    ).rejects.toThrow('use the LobeHub provider');
+      resolveServerDefaultHeterogeneousModel('codex', 'anthropic', 'claude-server'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
+    await expect(
+      resolveServerDefaultHeterogeneousModel('claude-code', 'openai', 'gpt-5.4'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
+    await expect(
+      resolveServerDefaultHeterogeneousModel('codex', 'openai', 'gpt-4o'),
+    ).rejects.toThrow('not compatible with this heterogeneous agent');
   });
 });
 

@@ -14,8 +14,8 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
   beforeEach(() => {
     vi.stubEnv('ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT', '1');
     getSupportedModels.mockResolvedValue({
-      'claude-code': [{ model: 'claude-sonnet-4-6', providerId: 'lobehub' }],
-      'codex': [{ model: 'gpt-5.4', providerId: 'lobehub' }],
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+      'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
     });
   });
 
@@ -30,8 +30,8 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
       enabled: true,
       model: 'lobehub-default',
       models: {
-        'claude-code': [{ model: 'claude-sonnet-4-6', providerId: 'lobehub' }],
-        'codex': [{ model: 'gpt-5.4', providerId: 'lobehub' }],
+        'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
+        'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
       },
     });
 
@@ -40,7 +40,7 @@ describe('resolveServerDefaultHeterogeneousCapability', () => {
 
   it('advertises only agents that have a compatible runtime model', async () => {
     getSupportedModels.mockResolvedValue({
-      'claude-code': [{ model: 'claude-sonnet-4-6', providerId: 'lobehub' }],
+      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
       'codex': [],
     });
 
