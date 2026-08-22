@@ -1404,6 +1404,20 @@ export class AgentModel {
     }
 
     const mergedValue = merge(agent, restData);
+
+    // API bindings are discriminated snapshots, not partial nested config. Deep-merging a
+    // provider patch into a server-default binding would retain the old `source` discriminator.
+    const heterogeneousProviderPatch = data.agencyConfig?.heterogeneousProvider;
+    if (heterogeneousProviderPatch && Object.hasOwn(heterogeneousProviderPatch, 'apiConfig')) {
+      mergedValue.agencyConfig = {
+        ...mergedValue.agencyConfig,
+        heterogeneousProvider: {
+          ...mergedValue.agencyConfig?.heterogeneousProvider,
+          apiConfig: heterogeneousProviderPatch.apiConfig,
+        },
+      } as AgentItem['agencyConfig'];
+    }
+
     mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
 
     // The inbox is LobeHub's built-in default cloud agent; it must never be

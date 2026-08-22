@@ -1302,6 +1302,39 @@ describe('AgentModel', () => {
       });
     });
 
+    it('should replace a deployment API binding when switching to a user provider', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-server',
+              source: 'server-default',
+            },
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      } as any);
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              model: 'claude-primary',
+              providerId: 'anthropic',
+            },
+          },
+        },
+      });
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-primary',
+        providerId: 'anthropic',
+      });
+    });
+
     it('should update updatedAt even when only updating meta fields like avatar', async () => {
       const agent = await serverDB
         .insert(agents)
