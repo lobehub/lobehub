@@ -893,7 +893,6 @@ export const aiAgentRouter = router({
         agentId: z.string().optional(),
         model: z.string().min(1),
         operationId: z.string().min(1),
-        providerId: z.string().min(1),
         topicId: z.string().min(1),
       }),
     )
@@ -925,7 +924,6 @@ export const aiAgentRouter = router({
       }
       const selection = await resolveServerDefaultHeterogeneousModel(
         input.agentType,
-        input.providerId,
         input.model,
       ).catch((error) => {
         throw new TRPCError({
@@ -936,7 +934,6 @@ export const aiAgentRouter = router({
       });
       await initModelRuntimeFromServerConfig({
         actorUserId: ctx.userId,
-        provider: selection.provider,
         workspaceId,
       }).catch((error) => {
         log('Selected server model runtime is unavailable: %O', error);

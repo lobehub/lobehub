@@ -52,11 +52,11 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.clearAllMocks();
   });
 
-  it('invokes Claude Code only through its resolved Anthropic runtime model', async () => {
+  it('invokes Claude Code through an Anthropic-compatible LobeHub relay model', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
-      model: 'claude-server',
-      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider: 'lobehub',
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
       chat,
@@ -64,23 +64,21 @@ describe('heterogeneous direct invocation protocol', () => {
 
     const result = await invokeServerDefaultModel({
       agentType: 'claude-code',
-      model: 'claude-server',
+      model: 'claude-sonnet-4-6',
       payload: { messages: [], model: 'lobehub-default', stream: true },
-      provider: 'anthropic',
       signal: new AbortController().signal,
       userId: 'user-1',
     });
 
-    expect(result.model).toBe('claude-server');
+    expect(result.model).toBe('claude-sonnet-4-6');
     expect(resolveServerDefaultHeterogeneousModel).toHaveBeenCalledWith(
       'claude-code',
-      'anthropic',
-      'claude-server',
+      'claude-sonnet-4-6',
     );
     expect(chat).toHaveBeenCalledWith(
       {
         messages: [],
-        model: 'claude-server',
+        model: 'claude-sonnet-4-6',
         stream: true,
       },
       expect.any(Object),
@@ -92,7 +90,7 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
       deploymentName: 'prod-gpt',
       model: 'gpt-5.4',
-      provider: 'openai',
+      provider: 'lobehub',
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
       chat,
@@ -102,7 +100,6 @@ describe('heterogeneous direct invocation protocol', () => {
       agentType: 'codex',
       model: 'gpt-5.4',
       payload: { messages: [], model: 'lobehub-default', stream: true },
-      provider: 'openai',
       signal: new AbortController().signal,
       userId: 'user-1',
     });
@@ -121,9 +118,8 @@ describe('heterogeneous direct invocation protocol', () => {
     await expect(
       invokeServerDefaultModel({
         agentType: 'codex',
-        model: 'claude-server',
+        model: 'claude-sonnet-4-6',
         payload: { messages: [], model: 'lobehub-default', stream: true },
-        provider: 'anthropic',
         signal: new AbortController().signal,
         userId: 'user-1',
       }),

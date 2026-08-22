@@ -49,7 +49,6 @@ describe('server-default heterogeneous operation control', () => {
     agentType: 'codex' as const,
     model: 'gpt-5.4',
     operationId,
-    providerId: 'openai',
     topicId,
   });
 
@@ -59,10 +58,10 @@ describe('server-default heterogeneous operation control', () => {
     topicId = await createTestTopic(testDB, userId);
     vi.stubEnv('ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT', '1');
     getSupportedModels.mockResolvedValue({
-      'claude-code': [{ model: 'claude-server', providerId: 'anthropic' }],
-      'codex': [{ model: 'gpt-5.4', providerId: 'openai' }],
+      'claude-code': [{ model: 'claude-sonnet-4-6' }],
+      'codex': [{ model: 'gpt-5.4' }],
     });
-    resolveModel.mockResolvedValue({ model: 'gpt-5.4', provider: 'openai' });
+    resolveModel.mockResolvedValue({ model: 'gpt-5.4', provider: 'lobehub' });
     initRuntime.mockResolvedValue({});
     signOperationToken.mockResolvedValue('operation-token');
   });
@@ -85,7 +84,7 @@ describe('server-default heterogeneous operation control', () => {
     expect(operation).toMatchObject({
       metadata: { agentType: 'codex', serverDefaultHeterogeneous: true },
       model: 'gpt-5.4',
-      provider: 'openai',
+      provider: 'lobehub',
       status: 'running',
       topicId,
       userId,
@@ -95,14 +94,13 @@ describe('server-default heterogeneous operation control', () => {
       capabilities: ['model:invoke'],
       model: 'gpt-5.4',
       operationId: 'desktop-operation-1',
-      providerId: 'openai',
+      providerId: 'lobehub',
       userId,
       workspaceId: undefined,
     });
-    expect(resolveModel).toHaveBeenCalledWith('codex', 'openai', 'gpt-5.4');
+    expect(resolveModel).toHaveBeenCalledWith('codex', 'gpt-5.4');
     expect(initRuntime).toHaveBeenCalledWith({
       actorUserId: userId,
-      provider: 'openai',
       workspaceId: undefined,
     });
   });

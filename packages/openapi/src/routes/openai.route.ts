@@ -34,7 +34,6 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
     agentType: 'codex',
     model: claims.model,
     payload: normalizeResponsesRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
-    provider: claims.provider_id,
     signal: c.req.raw.signal,
     userId: String(context.get('userId')),
     workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
