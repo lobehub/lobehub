@@ -519,7 +519,7 @@ export const initModelRuntimeFromDB = async (
   const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
 
   // 6. Initialize ModelRuntime with the payload and hooks
-  return initModelRuntimeWithUserPayload(provider, payload, { userId }, hooks);
+  return initModelRuntimeWithUserPayload(provider, payload, { userId, workspaceId }, hooks);
 };
 
 export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES = ['claude-code', 'codex'] as const;
@@ -656,7 +656,7 @@ export const initModelRuntimeFromServerConfig = async (params: {
   );
   return ModelRuntime.initializeWithProvider(
     ModelProvider.LobeHub,
-    { userId: params.actorUserId },
+    { userId: params.actorUserId, workspaceId: params.workspaceId },
     mergeModelRuntimeHooks(businessHooks, tracingHooks),
   );
 };
