@@ -1,5 +1,5 @@
 import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
@@ -176,10 +176,16 @@ export const NewModelShortcuts = () => {
                 aria-pressed={item.type === 'chat' ? isCurrent : undefined}
                 className={cx(styles.button, isCurrent && styles.active)}
                 disabled={!!switchingKey && !isSwitching}
-                icon={<ModelIcon model={getShortcutIconModelId(item)} size={18} />}
                 key={key}
                 loading={isSwitching}
                 type={'text'}
+                icon={
+                  item.iconUrl ? (
+                    <Avatar alt={''} avatar={item.iconUrl} size={18} />
+                  ) : (
+                    <ModelIcon model={getShortcutIconModelId(item)} size={18} />
+                  )
+                }
                 onClick={() => handleClick(item)}
               >
                 {item.title}

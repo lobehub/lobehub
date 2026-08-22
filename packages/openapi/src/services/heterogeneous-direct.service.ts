@@ -815,21 +815,18 @@ export const invokeServerDefaultModel = async (params: {
   agentType: ServerDefaultHeterogeneousAgentType;
   model: string;
   payload: ChatStreamPayload;
-  provider: string;
   signal: AbortSignal;
   userId: string;
   workspaceId?: string;
 }) => {
   const resolvedModel = await resolveServerDefaultHeterogeneousModel(
     params.agentType,
-    params.provider,
     params.model,
   );
-  const { deploymentName, provider } = resolvedModel;
+  const { deploymentName } = resolvedModel;
   const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
-    provider,
     workspaceId: params.workspaceId,
   });
   const response = await runtime.chat(

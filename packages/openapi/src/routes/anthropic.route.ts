@@ -34,7 +34,6 @@ app.post('/v1/messages', requireHeteroModelInvocation, async (c) => {
     agentType: 'claude-code',
     model: claims.model,
     payload: normalizeAnthropicRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
-    provider: claims.provider_id,
     signal: c.req.raw.signal,
     userId: String(context.get('userId')),
     workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
