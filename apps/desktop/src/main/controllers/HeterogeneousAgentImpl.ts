@@ -1728,6 +1728,11 @@ export default class HeterogeneousAgentCtr {
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', inputPayload);
 
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return true;
+    }
+
     const clientOptions = {
       args: appServerArgs.slice(0, -1),
       clientVersion: electronApp.getVersion(),
@@ -1904,6 +1909,12 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: traceInput,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', traceInput);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const acpSession = new GrokAcpSession({
       args: session.args,
       clientVersion: electronApp.getVersion(),
@@ -1996,6 +2007,12 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: tracePayload,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const stderrChunks: string[] = [];
     const intervention = this.setupAcpInterventionForOp(params.operationId, session.sessionId);
     const cursorAcpSession = new CursorAcpSession({
@@ -2088,6 +2105,12 @@ export default class HeterogeneousAgentCtr {
       stdinPayload: tracePayload,
     });
     void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
     const stderrChunks: string[] = [];
 
     const traeAcpSession = new TraeAcpSession({
