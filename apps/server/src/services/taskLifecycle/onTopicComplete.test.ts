@@ -75,6 +75,7 @@ const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
 describe('TaskLifecycleService.onTopicComplete', () => {
   let service: TaskLifecycleService;
   let updateStatus: ReturnType<typeof vi.fn>;
+  let updateStatusIfCurrent: ReturnType<typeof vi.fn>;
   let updateContext: ReturnType<typeof vi.fn>;
   let findById: ReturnType<typeof vi.fn>;
   let updateHeartbeat: ReturnType<typeof vi.fn>;
@@ -91,6 +92,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     service = new TaskLifecycleService({} as any, 'user-1');
 
     updateStatus = vi.fn().mockResolvedValue(null);
+    updateStatusIfCurrent = vi.fn();
     updateContext = vi.fn().mockResolvedValue(null);
     findById = vi.fn();
     updateHeartbeat = vi.fn().mockResolvedValue(undefined);
@@ -101,10 +103,12 @@ describe('TaskLifecycleService.onTopicComplete', () => {
 
     const taskModel = (service as any).taskModel;
     taskModel.updateStatus = updateStatus;
+    taskModel.updateStatusIfCurrent = updateStatusIfCurrent;
     taskModel.updateContext = updateContext;
     taskModel.findById = findById;
     taskModel.updateHeartbeat = updateHeartbeat;
     taskModel.getReviewConfig = getReviewConfig;
+    taskModel.getCheckpointConfig = vi.fn().mockReturnValue({});
     // Default checkpoint behavior: pause after topic complete
     taskModel.shouldPauseOnTopicComplete = vi.fn().mockReturnValue(true);
     // Avoid generateHandoff side effects by skipping when lastAssistantContent is undefined
@@ -270,6 +274,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     it('successful subtask → completes and unlocks downstream tasks instead of pausing', async () => {
       const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
       const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
+      updateStatusIfCurrent.mockResolvedValue(task);
       findById
         .mockResolvedValueOnce(task)
         .mockResolvedValueOnce(parentTask)
@@ -284,7 +289,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         topicId: 'topic-1',
       });
 
-      expect(updateStatus).toHaveBeenCalledWith('task-1', 'completed', {
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
         completedAt: expect.any(Date),
         error: null,
       });
@@ -295,6 +300,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     it('successful subtask still honors an explicit parent after-completion checkpoint', async () => {
       const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
       const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });
+      updateStatusIfCurrent.mockResolvedValue(task);
       findById
         .mockResolvedValueOnce(task)
         .mockResolvedValueOnce(parentTask)
@@ -309,12 +315,53 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         topicId: 'topic-1',
       });
 
-      expect(updateStatus).toHaveBeenCalledWith('task-1', 'completed', {
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
         completedAt: expect.any(Date),
         error: null,
       });
       expect(updateStatus).toHaveBeenCalledWith('parent-task', 'paused');
       expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
+    });
+
+    it('successful subtask with an explicit topic-after checkpoint → pauses for review', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      findById.mockResolvedValue(task);
+      (service as any).taskModel.getCheckpointConfig = vi
+        .fn()
+        .mockReturnValue({ topic: { after: true } });
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'paused', {
+        error: null,
+      });
+      expect(cascadeOnCompletion).not.toHaveBeenCalled();
+    });
+
+    it('late successful callback does not overwrite a child that is no longer running', async () => {
+      const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
+      findById.mockResolvedValue(task);
+      updateStatusIfCurrent.mockResolvedValue(null);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+        completedAt: expect.any(Date),
+        error: null,
+      });
+      expect(cascadeOnCompletion).not.toHaveBeenCalled();
     });
 
     it('non-automation task with shouldPauseOnTopicComplete=false → no status update', async () => {

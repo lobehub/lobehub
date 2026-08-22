@@ -736,6 +736,21 @@ describe('TaskModel', () => {
       expect(updated!.status).toBe('running');
       expect(updated!.startedAt).toBeDefined();
     });
+
+    it('should update status only when the current status matches', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+      await model.updateStatus(task.id, 'running');
+
+      const completed = await model.updateStatusIfCurrent(task.id, 'running', 'completed', {
+        completedAt: new Date(),
+      });
+      const staleUpdate = await model.updateStatusIfCurrent(task.id, 'running', 'failed');
+
+      expect(completed?.status).toBe('completed');
+      expect(staleUpdate).toBeNull();
+      expect((await model.findById(task.id))?.status).toBe('completed');
+    });
   });
 
   describe('heartbeat', () => {

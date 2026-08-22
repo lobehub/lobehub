@@ -277,7 +277,14 @@ export class TaskLifecycleService {
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
         } else if (!verifyBound && currentTask.parentTaskId) {
-          await this.completeSubtask(currentTask);
+          const checkpoint = this.taskModel.getCheckpointConfig(currentTask);
+          if (checkpoint.topic?.after) {
+            await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'paused', {
+              error: null,
+            });
+          } else {
+            await this.completeSubtask(currentTask);
+          }
         } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
@@ -511,12 +518,21 @@ export class TaskLifecycleService {
    * initialization while preserving the runner's single cascade implementation.
    */
   private async completeSubtask(task: TaskItem): Promise<void> {
-    await this.taskModel.updateStatus(task.id, 'completed', {
-      completedAt: new Date(),
-      error: null,
-    });
+    const completedTask = await this.taskModel.updateStatusIfCurrent(
+      task.id,
+      'running',
+      'completed',
+      {
+        completedAt: new Date(),
+        error: null,
+      },
+    );
+    if (!completedTask) {
+      log('subtask=%s no longer running — skipping completion cascade', task.identifier);
+      return;
+    }
 
-    const parentTask = await this.taskModel.findById(task.parentTaskId!);
+    const parentTask = await this.taskModel.findById(completedTask.parentTaskId!);
     if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
       await this.taskModel.updateStatus(parentTask.id, 'paused');
     }
