@@ -23,12 +23,15 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
       ? heterogeneousProvider.type
       : undefined;
-  const serverDefaultSelected = heterogeneousProvider?.apiConfig?.source === 'server-default';
+  const apiConfig = heterogeneousProvider?.apiConfig;
+  const serverDefaultApiConfig = apiConfig?.source === 'server-default' ? apiConfig : undefined;
+  const providerApiConfig =
+    apiConfig && apiConfig.source !== 'server-default' ? apiConfig : undefined;
   const useFetchServerDefaultCapability = useAgentStore(
     (state) => state.useFetchServerDefaultHeterogeneousCapability,
   );
   const serverCapability = useFetchServerDefaultCapability(
-    serverDefaultSelected && !!serverDefaultAgentType,
+    !!serverDefaultApiConfig && !!serverDefaultAgentType,
   );
   const serverDefaultModels =
     serverCapability.data?.enabled === true && serverDefaultAgentType
@@ -38,7 +41,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   if (
     !heterogeneousProvider ||
     heterogeneousProvider.authMode !== 'api' ||
-    (!serverDefaultSelected && providerIds.length === 0)
+    (!serverDefaultApiConfig && providerIds.length === 0)
   )
     return null;
 
@@ -51,13 +54,13 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     });
   };
 
-  if (serverDefaultSelected) {
+  if (serverDefaultApiConfig) {
     return (
       <Select
         loading={serverCapability.isLoading}
         options={serverDefaultModels.map(({ model }) => ({ label: model, value: model }))}
         size="small"
-        value={heterogeneousProvider.apiConfig.model}
+        value={serverDefaultApiConfig.model}
         variant="borderless"
         onChange={(model) => {
           if (typeof model === 'string') void persist({ model, source: 'server-default' });
@@ -65,8 +68,6 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
       />
     );
   }
-
-  const providerApiConfig = heterogeneousProvider.apiConfig;
 
   return (
     <ModelSelect
