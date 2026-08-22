@@ -912,6 +912,13 @@ describe('AgentRuntimeService', () => {
     });
 
     it('should resolve pending client tools when interruption races the parked result', async () => {
+      const completedTool = {
+        apiName: 'calculate',
+        arguments: '{}',
+        id: 'completed-server-tool-call',
+        identifier: 'server-tool',
+        type: 'default' as const,
+      };
       const pendingTool = {
         apiName: 'search',
         arguments: '{}',
@@ -923,6 +930,13 @@ describe('AgentRuntimeService', () => {
         events: [{ type: 'interrupted' as const }],
         newState: {
           ...mockState,
+          messages: [
+            {
+              content: 'Completed server result',
+              role: 'tool' as const,
+              tool_call_id: completedTool.id,
+            },
+          ],
           pendingToolsCalling: [pendingTool],
           status: 'waiting_for_async_tool' as const,
           stepCount: 2,
@@ -934,6 +948,7 @@ describe('AgentRuntimeService', () => {
         newState: {
           ...parkedResult.newState,
           messages: [
+            ...parkedResult.newState.messages,
             {
               content: 'Tool execution was aborted by user.',
               role: 'tool' as const,
@@ -951,18 +966,36 @@ describe('AgentRuntimeService', () => {
         .mockResolvedValueOnce(mockState)
         .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
 
-      const result = await service.executeStep(mockParams);
+      const mixedBatchContext = {
+        ...mockParams.context!,
+        payload: {
+          ...(mockParams.context!.payload as Record<string, unknown>),
+          hasToolsCalling: true,
+          toolsCalling: [completedTool, pendingTool],
+        },
+        phase: 'llm_result' as const,
+      };
+      const result = await service.executeStep({ ...mockParams, context: mixedBatchContext });
 
       expect(result.state).toEqual(
         expect.objectContaining({
-          messages: [expect.objectContaining({ tool_call_id: pendingTool.id })],
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: 'Completed server result',
+              tool_call_id: completedTool.id,
+            }),
+            expect.objectContaining({ tool_call_id: pendingTool.id }),
+          ]),
           status: 'interrupted',
         }),
       );
       expect(mockRuntime.step).toHaveBeenCalledTimes(2);
       expect(mockRuntime.step).toHaveBeenLastCalledWith(
         expect.objectContaining({ status: 'interrupted' }),
-        mockParams.context,
+        expect.objectContaining({
+          payload: expect.objectContaining({ toolsCalling: [pendingTool] }),
+          phase: 'llm_result',
+        }),
       );
     });
   });

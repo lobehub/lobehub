@@ -1207,11 +1207,21 @@ export class AgentRuntimeService {
           // interrupted state is saved.
           if (
             stepResult.newState.status === 'waiting_for_async_tool' &&
-            stepResult.newState.pendingToolsCalling?.length
+            stepResult.newState.pendingToolsCalling?.length &&
+            currentContext
           ) {
             const interruptedState = structuredClone(stepResult.newState);
             interruptedState.status = 'interrupted';
-            const abortResult = await runtime.step(interruptedState, currentContext);
+            const abortContext: AgentRuntimeContext = {
+              ...currentContext,
+              payload: {
+                ...(currentContext.payload as Record<string, unknown>),
+                hasToolsCalling: true,
+                toolsCalling: interruptedState.pendingToolsCalling,
+              },
+              phase: 'llm_result',
+            };
+            const abortResult = await runtime.step(interruptedState, abortContext);
             stepResult = {
               ...abortResult,
               events: [...stepResult.events, ...abortResult.events],
