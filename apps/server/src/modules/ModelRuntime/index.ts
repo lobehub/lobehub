@@ -6,6 +6,7 @@ import {
   ModelRuntime,
   type ModelRuntimeHooks,
 } from '@lobechat/model-runtime';
+import { parseClaudeModelId } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import {
@@ -548,38 +549,36 @@ export type ServerDefaultHeterogeneousModels = Record<
 >;
 
 /**
- * V1 deliberately keeps each CLI on its provider-native protocol path:
- * Claude Code -> Anthropic runtime; Codex -> OpenAI Responses runtime.
- * This predicate is the support matrix used by both capability discovery and invocation.
+ * Both CLIs use the LobeHub provider; V1 restricts models by the runtime protocol
+ * selected for that model: Claude Code -> Anthropic, Codex -> OpenAI Responses.
+ * This model predicate is shared by capability discovery and invocation validation.
  *
- * Do not widen this predicate to generic chat/function-calling models. Adding another
- * agent/runtime pair requires lossless continuation-state translation in both directions
- * and a two-turn tool-call E2E covering the new pair before it is exposed in the catalog.
+ * Do not widen this predicate to generic LobeHub chat/function-calling models. Adding
+ * another model/runtime path requires lossless continuation-state translation in both
+ * directions and a two-turn tool-call E2E before it is exposed in the catalog.
  */
 const supportsServerDefaultHeterogeneousAgent = (
   agentType: ServerDefaultHeterogeneousAgentType,
-  provider: string,
   model: string,
 ) =>
   agentType === 'claude-code'
-    ? provider === ModelProvider.Anthropic
-    : provider === ModelProvider.OpenAI && isResponsesAPIModel(model);
+    ? parseClaudeModelId(model) !== undefined
+    : isResponsesAPIModel(model);
 
-/** Return only the deployment models covered by the V1 protocol support matrix. */
+/** Return only LobeHub models covered by the V1 protocol support matrix. */
 export const getServerDefaultHeterogeneousModels = async () => {
   const models: ServerDefaultHeterogeneousModels = { 'claude-code': [], 'codex': [] };
   const { aiProvider } = await getServerGlobalConfig();
+  const providerConfig = aiProvider[ModelProvider.LobeHub];
 
-  for (const [provider, providerConfig] of Object.entries(aiProvider)) {
-    if (!providerConfig?.enabled) continue;
+  if (!providerConfig?.enabled) return models;
 
-    for (const model of providerConfig.serverModelLists ?? []) {
-      if (!model.enabled || model.type !== 'chat') continue;
+  for (const model of providerConfig.serverModelLists ?? []) {
+    if (!model.enabled || model.type !== 'chat') continue;
 
-      for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
-        if (supportsServerDefaultHeterogeneousAgent(agentType, provider, model.id)) {
-          models[agentType].push({ model: model.id, providerId: provider });
-        }
+    for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
+      if (supportsServerDefaultHeterogeneousAgent(agentType, model.id)) {
+        models[agentType].push({ model: model.id, providerId: ModelProvider.LobeHub });
       }
     }
   }
@@ -614,8 +613,11 @@ export const resolveServerDefaultHeterogeneousModel = async (
   provider: string,
   model: string,
 ) => {
+  if (provider !== ModelProvider.LobeHub) {
+    throw new Error('Server-default heterogeneous agents use the LobeHub provider');
+  }
   const selection = await resolveServerModel(provider, model);
-  if (!supportsServerDefaultHeterogeneousAgent(agentType, selection.provider, selection.model)) {
+  if (!supportsServerDefaultHeterogeneousAgent(agentType, selection.model)) {
     throw new Error('The selected server model is not compatible with this heterogeneous agent');
   }
 
