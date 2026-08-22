@@ -29,6 +29,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildPayloadFromKeyVaults,
   getServerDefaultHeterogeneousModels,
+  initModelRuntimeFromServerConfig,
   initModelRuntimeWithUserPayload,
   resolveServerDefaultHeterogeneousModel,
   resolveServerModel,
@@ -203,6 +204,24 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     await expect(resolveServerDefaultHeterogeneousModel('codex', 'gpt-4o')).rejects.toThrow(
       'not compatible with this heterogeneous agent',
     );
+  });
+});
+
+describe('initModelRuntimeFromServerConfig', () => {
+  it('initializes the LobeHub router directly without protocol-provider credentials', async () => {
+    const runtime = {} as ModelRuntime;
+    const initialize = vi.spyOn(ModelRuntime, 'initializeWithProvider').mockReturnValue(runtime);
+
+    await expect(
+      initModelRuntimeFromServerConfig({ actorUserId: 'user-1', workspaceId: 'workspace-1' }),
+    ).resolves.toBe(runtime);
+
+    expect(initialize).toHaveBeenCalledWith(
+      ModelProvider.LobeHub,
+      { userId: 'user-1' },
+      expect.anything(),
+    );
+    initialize.mockRestore();
   });
 });
 
