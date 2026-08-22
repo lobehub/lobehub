@@ -49,6 +49,7 @@ describe('TopicDoctorRepo', () => {
     const result = await repo.repair({ topicId });
 
     expect(result.applied).toBe(0);
+    expect(result.restoredMessageIds).toEqual([]);
     const row = await serverDB.query.messages.findFirst({
       where: (table, { eq }) => eq(table.id, 'u2'),
     });
@@ -79,6 +80,7 @@ describe('TopicDoctorRepo', () => {
     const result = await repo.repair({ topicId });
 
     expect(result.applied).toBe(1);
+    expect(result.restoredMessageIds).toEqual(['u2']);
     const row = await serverDB.query.messages.findFirst({
       where: (table, { eq }) => eq(table.id, 'u2'),
     });
