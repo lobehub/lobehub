@@ -365,8 +365,8 @@ interface AgentSession {
   resolvedCommandSearchPath?: string;
   resumeSessionId?: string;
   sdkSession?: ClaudeAgentSdkSession;
+  /** Present iff the session runs on the server-default (LobeHub) binding. */
   serverDefaultApiConfig?: HeterogeneousServerDefaultApiConfig;
-  serverDefaultBinding?: boolean;
   serverOperationToken?: string;
   sessionId: string;
   traeAcpSession?: TraeAcpSession;
@@ -1253,7 +1253,6 @@ export default class HeterogeneousAgentCtr {
         params.providerBinding?.kind === 'server-default'
           ? params.providerBinding.apiConfig
           : undefined,
-      serverDefaultBinding: params.providerBinding?.kind === 'server-default',
       model: params.initialModel,
       sessionId,
       resumeSessionId,
@@ -1278,10 +1277,9 @@ export default class HeterogeneousAgentCtr {
    */
   async sendPrompt(params: SendPromptParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
-    if (!session?.serverDefaultBinding) return this.sendPromptImpl(params);
+    const serverDefaultApiConfig = session?.serverDefaultApiConfig;
+    if (!session || !serverDefaultApiConfig) return this.sendPromptImpl(params);
     if (!params.topicId) throw new Error('Server-default execution requires a topic');
-    if (!session.serverDefaultApiConfig)
-      throw new Error('Server-default execution requires a model');
     if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
       throw new Error(`Server-default execution does not support ${session.agentType}`);
     }
@@ -1289,7 +1287,7 @@ export default class HeterogeneousAgentCtr {
     const operation = await beginServerDefaultOperation(this.remoteServerAuth, {
       agentType: session.agentType,
       agentId: params.agentId,
-      model: session.serverDefaultApiConfig.model,
+      model: serverDefaultApiConfig.model,
       operationId: params.operationId,
       topicId: params.topicId,
     });
