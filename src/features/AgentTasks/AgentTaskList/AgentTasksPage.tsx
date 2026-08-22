@@ -117,7 +117,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const scheduledViewOptions = useMemo(
-    () => ({ ...viewOptions, hideCompleted: false }),
+    () => ({ ...viewOptions, groupBy: 'automationMode' as const, hideCompleted: false }),
     [viewOptions],
   );
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
