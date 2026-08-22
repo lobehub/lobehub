@@ -151,7 +151,7 @@ describe('generateDraftPlan — holistic fallback', () => {
 });
 
 describe('generateCriteria tracing', () => {
-  it('uses the createGoal criteria scenario instead of the run-time plan scenario', async () => {
+  it('keeps generic task criteria generation on the verify-plan scenario', async () => {
     generateObjectMock.mockResolvedValue({ criteria: [] });
 
     await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({
@@ -162,7 +162,7 @@ describe('generateCriteria tracing', () => {
     expect(generateObjectMock).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
-        tracing: expect.objectContaining({ scenario: 'goal_criteria_gen' }),
+        tracing: expect.objectContaining({ scenario: 'verify_plan_gen' }),
       }),
     );
   });

@@ -1285,6 +1285,8 @@
   "systemAgent.generationTopic.label": "模型",
   "systemAgent.generationTopic.modelDesc": "用于自动命名 AI 图片话题的模型",
   "systemAgent.generationTopic.title": "AI 图片话题命名",
+  "systemAgent.goal.modelDesc": "用于将持久目标转化为其持续接受标准的模型。",
+  "systemAgent.goal.title": "目标创建",
   "systemAgent.helpInfo": "当创建新助理时，将以默认助理设置作为预设值。",
   "systemAgent.historyCompress.label": "模型",
   "systemAgent.historyCompress.modelDesc": "用于压缩会话历史的模型",

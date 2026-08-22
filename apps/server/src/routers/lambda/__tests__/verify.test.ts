@@ -15,6 +15,7 @@ const modelMocks = vi.hoisted(() => ({
   findRunById: vi.fn(),
   findResultById: vi.fn(),
   generateCriteria: vi.fn(),
+  generateGoalCriteria: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
   updateRun: vi.fn(),
@@ -57,6 +58,12 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
     generateCriteria = modelMocks.generateCriteria;
   },
   VerifyReporterService: class VerifyReporterService {},
+}));
+
+vi.mock('@/server/services/goal/criteriaGenerator', () => ({
+  GoalCriteriaGeneratorService: class GoalCriteriaGeneratorService {
+    generate = modelMocks.generateGoalCriteria;
+  },
 }));
 
 vi.mock('@/server/services/file', () => ({
@@ -126,6 +133,18 @@ describe('verifyRouter', () => {
           modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
         }),
       ).rejects.toThrow('Provider timed out');
+    });
+  });
+
+  describe('generateGoalCriteria', () => {
+    it('does not accept a caller-selected model config', async () => {
+      modelMocks.generateGoalCriteria.mockResolvedValueOnce([]);
+
+      await createCaller().generateGoalCriteria({ goal: 'Ship a responsive task board' });
+
+      expect(modelMocks.generateGoalCriteria).toHaveBeenCalledWith({
+        goal: 'Ship a responsive task board',
+      });
     });
   });
 
