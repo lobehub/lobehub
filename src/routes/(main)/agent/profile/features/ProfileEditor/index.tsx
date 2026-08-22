@@ -5,11 +5,7 @@ import {
   isHeterogeneousProviderBindingSupported,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
-import type {
-  HeterogeneousApiConfig,
-  HeterogeneousAuthMode,
-  HeterogeneousServerConfig,
-} from '@lobechat/types';
+import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Tabs } from '@lobehub/ui/base-ui';
@@ -94,15 +90,12 @@ const ProfileEditor = memo(() => {
 
   const updateHeterogeneousAuthMode = async (
     authMode: HeterogeneousAuthMode,
-    selection?: {
-      apiConfig?: HeterogeneousApiConfig;
-      serverConfig?: HeterogeneousServerConfig;
-    },
+    apiConfig?: HeterogeneousApiConfig,
   ) => {
     if (!canEdit || !heterogeneousProvider) return;
     await updateAgentConfigById(agentId, {
       agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, ...selection, authMode },
+        heterogeneousProvider: { ...heterogeneousProvider, apiConfig, authMode },
       },
     });
   };
@@ -112,17 +105,6 @@ const ProfileEditor = memo(() => {
     await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
-      },
-    });
-  };
-
-  const updateHeterogeneousServerConfig = async (
-    serverConfig: HeterogeneousServerConfig | undefined,
-  ) => {
-    if (!canEdit || !heterogeneousProvider) return;
-    await updateAgentConfigById(agentId, {
-      agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, serverConfig },
       },
     });
   };
@@ -151,37 +133,38 @@ const ProfileEditor = memo(() => {
   // Workspace agents are excluded even when the author could spawn them
   // locally: the binding UI would list workspace-scoped providers, but Desktop
   // main resolves the reference in the personal scope only (see
-  // `selectRuntimeType`'s personal-scope guard). Server mode is not a user
-  // provider binding, so it stays available whenever local desktop execution is.
+  // `selectRuntimeType`'s personal-scope guard). The deployment-default API
+  // source is not a user-provider binding, so it stays available whenever
+  // local Desktop execution is available.
   const apiModeAvailable = localDesktopAvailable && !isWorkspaceAgent;
   const useFetchServerDefaultCapability = useAgentStore(
     (s) => s.useFetchServerDefaultHeterogeneousCapability,
   );
   // V1 wires only these two native protocol paths. Future client drivers may widen this gate,
   // while model/runtime compatibility must continue to come from the server capability below.
-  const serverModeAgentType =
+  const serverDefaultAgentType =
     heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
       ? heterogeneousProvider.type
       : undefined;
-  const serverCapabilityEnabled = localDesktopAvailable && !!serverModeAgentType;
+  const serverCapabilityEnabled = localDesktopAvailable && !!serverDefaultAgentType;
   const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
-  const serverModels =
-    serverCapability.data?.enabled === true && serverModeAgentType
-      ? serverCapability.data.models[serverModeAgentType]
+  const serverDefaultModels =
+    serverCapability.data?.enabled === true && serverDefaultAgentType
+      ? serverCapability.data.models[serverDefaultAgentType]
       : [];
-  const serverModeAvailable = serverCapabilityEnabled && serverModels.length > 0;
-  const serverModeUnavailableReason = !localDesktopAvailable
+  const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
+  const serverDefaultUnavailableReason = !localDesktopAvailable
     ? t('heterogeneousStatus.apiMode.localOnly')
     : serverCapability.error
-      ? t('heterogeneousStatus.serverMode.loadFailed')
+      ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
       : serverCapability.data?.enabled === false
         ? t(
             serverCapability.data.reason === 'disabled'
-              ? 'heterogeneousStatus.serverMode.disabled'
-              : 'heterogeneousStatus.serverMode.invalidConfiguration',
+              ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
+              : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
           )
-        : serverCapabilityEnabled && !serverCapability.isLoading && !serverModeAvailable
-          ? t('heterogeneousStatus.serverMode.unsupported')
+        : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
+          ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
           : undefined;
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
@@ -209,15 +192,14 @@ const ProfileEditor = memo(() => {
               apiModeLabEnabled={apiModeLabEnabled}
               apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
-              serverModeAvailable={serverModeAvailable}
-              serverModeLoading={serverCapabilityEnabled && serverCapability.isLoading}
-              serverModeUnavailableReason={serverModeUnavailableReason}
-              serverModels={serverModels}
+              serverDefaultAvailable={serverDefaultAvailable}
+              serverDefaultLoading={serverCapabilityEnabled && serverCapability.isLoading}
+              serverDefaultModels={serverDefaultModels}
+              serverDefaultUnavailableReason={serverDefaultUnavailableReason}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
-              onServerConfigChange={updateHeterogeneousServerConfig}
-              onServerModeRetry={() => {
+              onServerDefaultRetry={() => {
                 void serverCapability.mutate();
               }}
             />

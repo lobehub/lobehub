@@ -403,8 +403,9 @@ export default {
   'heterogeneousStatus.apiMode.configureProvider': 'Go to provider settings',
   'heterogeneousStatus.apiMode.enableInLabs': 'Enable in Labs',
   'heterogeneousStatus.apiMode.labDisabled':
-    'Provider binding is a Labs experiment. Enable it to use a configured API provider instead of the agent subscription.',
+    'Other provider bindings are a Labs experiment. Enable it to use a configured API provider instead of the deployment default.',
   'heterogeneousStatus.apiMode.localOnly': 'Available only for Desktop local execution',
+  'heterogeneousStatus.apiMode.defaultProvider': 'Default provider',
   'heterogeneousStatus.apiMode.model': 'Model',
   'heterogeneousStatus.apiMode.modelPlaceholder': 'Select a model',
   'heterogeneousStatus.apiMode.noProviders':
@@ -415,21 +416,24 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelDesc':
     'Used for session titles, summaries, and other background work. Does not change the main conversation.',
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
+  'heterogeneousStatus.apiMode.provider': 'Provider',
+  'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
   'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
+  'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
+  'heterogeneousStatus.apiMode.serverDefault.disabled':
+    'The deployment administrator has disabled the default API provider for heterogeneous agents.',
+  'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration':
+    'The deployment provider or its compatible models are not configured.',
+  'heterogeneousStatus.apiMode.serverDefault.loadFailed':
+    'Could not check the deployment provider.',
+  'heterogeneousStatus.apiMode.serverDefault.noModels':
+    'No compatible models are available from the deployment provider.',
+  'heterogeneousStatus.apiMode.serverDefault.retry': 'Retry',
+  'heterogeneousStatus.apiMode.serverDefault.unsupported':
+    'The deployment provider does not expose a compatible model for this CLI.',
   'heterogeneousStatus.auth.api': 'API',
   'heterogeneousStatus.auth.label': 'Auth Method',
-  'heterogeneousStatus.auth.server': 'LobeHub Server',
-  'heterogeneousStatus.serverMode.noModels':
-    'No deployment-provided chat models are currently available.',
   'heterogeneousStatus.auth.subscription': 'Subscription',
-  'heterogeneousStatus.serverMode.checking': 'Checking server availability...',
-  'heterogeneousStatus.serverMode.disabled':
-    'The deployment administrator has disabled server-default execution.',
-  'heterogeneousStatus.serverMode.invalidConfiguration':
-    'The deployment default model or its credentials are not configured.',
-  'heterogeneousStatus.serverMode.loadFailed': 'Could not check server availability.',
-  'heterogeneousStatus.serverMode.retry': 'Retry',
-  'heterogeneousStatus.serverMode.unsupported': 'This CLI cannot use the deployment default model.',
   'heterogeneousStatus.command.edit': 'Edit command',
   'heterogeneousStatus.command.label': 'Launch Command',
   'heterogeneousStatus.command.placeholder': 'Command name or absolute path',

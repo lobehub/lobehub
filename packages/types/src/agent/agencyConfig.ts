@@ -76,28 +76,32 @@ export type HeterogeneousAgentModelCatalog =
   HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
 
 /** Authentication source used by a heterogeneous agent CLI. */
-export type HeterogeneousAuthMode = 'api' | 'server' | 'subscription';
+export type HeterogeneousAuthMode = 'api' | 'subscription';
 
 /**
- * Reference-only API binding for a heterogeneous agent.
+ * Reference-only user-provider API binding for a heterogeneous agent.
  * Provider credentials are resolved at launch and are never persisted here.
  */
-export interface HeterogeneousApiConfig {
+export interface HeterogeneousProviderApiConfig {
   /** Primary model used by the CLI. */
   model: string;
-  /** LobeHub provider whose runtime credentials are resolved locally. */
+  /** User provider whose runtime credentials are resolved locally. */
   providerId: string;
   /** Optional model used for fast/background work. Defaults to the primary model. */
   smallFastModel?: string | null;
+  /** Omitted by existing records; any omitted source is a user-provider binding. */
+  source?: 'provider';
 }
 
-/** Deployment-owned model selected for server-proxied heterogeneous execution. */
-export interface HeterogeneousServerConfig {
+/** Deployment-owned API binding whose provider and credentials stay on the server. */
+export interface HeterogeneousServerDefaultApiConfig {
   /** Model id from the deployment's enabled model catalog. */
   model: string;
-  /** Deployment-owned provider; its credentials never leave the server. */
-  providerId: string;
+  source: 'server-default';
 }
+
+export type HeterogeneousApiConfig =
+  HeterogeneousProviderApiConfig | HeterogeneousServerDefaultApiConfig;
 
 /**
  * Heterogeneous agent provider configuration.
@@ -116,7 +120,7 @@ export interface HeterogeneousServerConfig {
  *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
-  /** Credential-free LobeHub Provider binding used when `authMode` is `api`. */
+  /** Credential-free API binding used when `authMode` is `api`. */
   apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];
@@ -153,8 +157,6 @@ export interface HeterogeneousProviderConfig {
    * - hermes: reserved for future use
    */
   platformAgentId?: string;
-  /** Deployment-owned model used when `authMode` is `server`. */
-  serverConfig?: HeterogeneousServerConfig;
   /**
    * Speed mode (Codex only), surfaced through the chat-input model selector
    * and translated into the `service_tier` CLI config at spawn time. Omitted

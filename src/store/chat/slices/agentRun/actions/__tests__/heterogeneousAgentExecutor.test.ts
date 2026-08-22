@@ -694,6 +694,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       model: 'stale-config-model',
       type: 'claude-code' as const,
     };
+    const serverDefaultApiProvider = {
+      ...apiProvider,
+      apiConfig: { model: 'claude-server', source: 'server-default' as const },
+    };
 
     const configureDirectProvider = () => {
       useAiInfraStore.setState({
@@ -742,6 +746,26 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
     });
 
+    it('uses the deployment provider inside API mode without the Labs experiment', async () => {
+      setClaudeCodeApiModeLab(false);
+
+      await runWithEvents([ccResult()], {
+        params: { heterogeneousProvider: serverDefaultApiProvider },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerBinding: {
+            apiConfig: { model: 'claude-server', source: 'server-default' },
+            kind: 'server-default',
+            resumeBindingKey: undefined,
+          },
+        }),
+      );
+      expect(mockSelectAccountForAgent).not.toHaveBeenCalled();
+      expect(mockGetClaudeCodeIdentity).not.toHaveBeenCalled();
+    });
+
     it('fails before spawn when the Labs experiment is disabled', async () => {
       configureDirectProvider();
       setClaudeCodeApiModeLab(false);
@@ -764,6 +788,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     it('fails before spawn when the binding reference is incomplete', async () => {
+      setClaudeCodeApiModeLab(false);
       const store = createMockStore();
 
       await executeHeterogeneousAgent(

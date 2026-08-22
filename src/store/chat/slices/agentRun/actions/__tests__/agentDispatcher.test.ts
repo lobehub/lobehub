@@ -9,10 +9,10 @@ const apiHeteroProvider = {
   command: 'claude',
   type: 'claude-code' as const,
 };
-const serverHeteroProvider = {
-  authMode: 'server' as const,
+const serverDefaultApiHeteroProvider = {
+  apiConfig: { model: 'claude-sonnet', source: 'server-default' as const },
+  authMode: 'api' as const,
   command: 'claude',
-  serverConfig: { model: 'claude-sonnet', providerId: 'lobehub' },
   type: 'claude-code' as const,
 };
 const codexApiHeteroProvider = {
@@ -131,12 +131,12 @@ describe('selectRuntimeType', () => {
       ).toThrow(/Desktop local execution/);
     });
 
-    it('allows Claude Code server mode only for Desktop local execution', () => {
+    it('allows the deployment-default API source only for Desktop local execution', () => {
       expect(
         selectRuntimeType(
           {
             executionTarget: 'local',
-            heterogeneousProvider: serverHeteroProvider,
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
             isGatewayMode: false,
           },
           { isDesktop: true },
@@ -147,7 +147,7 @@ describe('selectRuntimeType', () => {
         selectRuntimeType(
           {
             executionTarget: 'sandbox',
-            heterogeneousProvider: serverHeteroProvider,
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
             isGatewayMode: false,
           },
           { isDesktop: true },
@@ -158,7 +158,7 @@ describe('selectRuntimeType', () => {
         selectRuntimeType(
           {
             executionTarget: 'local',
-            heterogeneousProvider: serverHeteroProvider,
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
             isGatewayMode: false,
           },
           { isDesktop: false },
@@ -382,12 +382,12 @@ describe('selectRuntimeType', () => {
       ).toThrow(/not supported for workspace agents/);
     });
 
-    it('keeps server-mode workspace agents spawnable by their author', () => {
+    it('keeps deployment-default API workspace agents spawnable by their author', () => {
       expect(
         selectRuntimeType(
           {
             executionTarget: 'local',
-            heterogeneousProvider: serverHeteroProvider,
+            heterogeneousProvider: serverDefaultApiHeteroProvider,
             isGatewayMode: false,
             isWorkspaceAgent: true,
             workspaceScoped: false,

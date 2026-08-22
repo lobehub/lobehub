@@ -1270,6 +1270,38 @@ describe('AgentModel', () => {
       });
     });
 
+    it('should not persist a client-selected provider for the deployment API binding', async () => {
+      const agent = await agentModel.create({
+        agencyConfig: {
+          heterogeneousProvider: {
+            authMode: 'api',
+            type: 'claude-code',
+          },
+        },
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: {
+            apiConfig: {
+              apiKey: 'must-not-persist',
+              model: 'claude-server',
+              providerId: 'must-not-persist',
+              smallFastModel: 'must-not-persist',
+              source: 'server-default',
+            },
+          },
+        },
+      } as any);
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+
+      expect(result?.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'claude-server',
+        source: 'server-default',
+      });
+    });
+
     it('should update updatedAt even when only updating meta fields like avatar', async () => {
       const agent = await serverDB
         .insert(agents)

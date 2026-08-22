@@ -2,7 +2,7 @@ import {
   type HeterogeneousProviderBindingError,
   isHeterogeneousProviderBindingSupported,
 } from '@lobechat/heterogeneous-agents';
-import type { HeterogeneousApiConfig } from '@lobechat/types';
+import type { HeterogeneousProviderApiConfig } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
@@ -27,7 +27,7 @@ interface CompatibleProvidersResult {
 
 export const useProviderBindingValidation = (
   agentType: string | undefined,
-  apiConfig?: HeterogeneousApiConfig,
+  apiConfig?: HeterogeneousProviderApiConfig,
 ) => {
   const isReady = useAiInfraStore(aiProviderSelectors.isInitAiProviderRuntimeState);
   const providerList = useAiInfraStore((state) => state.enabledAiProviders ?? [], isEqual);

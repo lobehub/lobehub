@@ -1,6 +1,7 @@
 'use client';
 
 import type { HeterogeneousApiConfig } from '@lobechat/types';
+import { Select } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
@@ -18,11 +19,26 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
+  const serverDefaultAgentType =
+    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+      ? heterogeneousProvider.type
+      : undefined;
+  const serverDefaultSelected = heterogeneousProvider?.apiConfig?.source === 'server-default';
+  const useFetchServerDefaultCapability = useAgentStore(
+    (state) => state.useFetchServerDefaultHeterogeneousCapability,
+  );
+  const serverCapability = useFetchServerDefaultCapability(
+    serverDefaultSelected && !!serverDefaultAgentType,
+  );
+  const serverDefaultModels =
+    serverCapability.data?.enabled === true && serverDefaultAgentType
+      ? serverCapability.data.models[serverDefaultAgentType]
+      : [];
 
   if (
     !heterogeneousProvider ||
     heterogeneousProvider.authMode !== 'api' ||
-    providerIds.length === 0
+    (!serverDefaultSelected && providerIds.length === 0)
   )
     return null;
 
@@ -35,6 +51,23 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     });
   };
 
+  if (serverDefaultSelected) {
+    return (
+      <Select
+        loading={serverCapability.isLoading}
+        options={serverDefaultModels.map(({ model }) => ({ label: model, value: model }))}
+        size="small"
+        value={heterogeneousProvider.apiConfig.model}
+        variant="borderless"
+        onChange={(model) => {
+          if (typeof model === 'string') void persist({ model, source: 'server-default' });
+        }}
+      />
+    );
+  }
+
+  const providerApiConfig = heterogeneousProvider.apiConfig;
+
   return (
     <ModelSelect
       initialWidth
@@ -43,18 +76,16 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
       size="small"
       variant="borderless"
       value={
-        heterogeneousProvider.apiConfig
+        providerApiConfig
           ? {
-              model: heterogeneousProvider.apiConfig.model,
-              provider: heterogeneousProvider.apiConfig.providerId,
+              model: providerApiConfig.model,
+              provider: providerApiConfig.providerId,
             }
           : undefined
       }
       onChange={({ model, provider }) => {
         const smallFastModel =
-          heterogeneousProvider.apiConfig?.providerId === provider
-            ? heterogeneousProvider.apiConfig.smallFastModel
-            : undefined;
+          providerApiConfig?.providerId === provider ? providerApiConfig.smallFastModel : undefined;
         void persist({ model, providerId: provider, smallFastModel });
       }}
     />

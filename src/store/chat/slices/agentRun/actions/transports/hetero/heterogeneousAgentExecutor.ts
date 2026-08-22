@@ -1820,10 +1820,30 @@ export const executeHeterogeneousAgent = async (
 
   await rehydrateClientSubagentRuns();
 
-  const apiBindingActive = heterogeneousProvider.authMode === 'api';
-  const serverBindingActive = heterogeneousProvider.authMode === 'server';
-  const providerBindingActive = apiBindingActive || serverBindingActive;
-  if (apiBindingActive) {
+  const providerBindingActive = heterogeneousProvider.authMode === 'api';
+  const serverDefaultApiConfig =
+    providerBindingActive && heterogeneousProvider.apiConfig?.source === 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const providerApiConfig =
+    providerBindingActive &&
+    heterogeneousProvider.apiConfig &&
+    heterogeneousProvider.apiConfig.source !== 'server-default'
+      ? heterogeneousProvider.apiConfig
+      : undefined;
+  const serverDefaultBindingActive = !!serverDefaultApiConfig;
+  const userProviderBindingActive = !!providerApiConfig;
+  if (providerBindingActive && !serverDefaultBindingActive && !userProviderBindingActive) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.configMissing', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
+  }
+
+  if (userProviderBindingActive) {
     if (!labPreferSelectors.enableAgentProviderBinding(useUserStore.getState())) {
       await persistTerminalError(
         toHeterogeneousAgentMessageError(
@@ -1834,11 +1854,10 @@ export const executeHeterogeneousAgent = async (
       return;
     }
 
-    const { apiConfig } = heterogeneousProvider;
     if (
       !isHeterogeneousProviderBindingSupported(adapterType) ||
-      !apiConfig?.providerId ||
-      !apiConfig.model?.trim()
+      !providerApiConfig.providerId ||
+      !providerApiConfig.model.trim()
     ) {
       const message = !isHeterogeneousProviderBindingSupported(adapterType)
         ? t('heteroAgent.apiMode.agentUnsupported', { name: adapterType, ns: 'chat' })
@@ -1846,6 +1865,20 @@ export const executeHeterogeneousAgent = async (
       await persistTerminalError(toHeterogeneousAgentMessageError(new Error(message), adapterType));
       return;
     }
+  }
+
+  if (
+    serverDefaultBindingActive &&
+    (!serverDefaultApiConfig.model.trim() ||
+      (adapterType !== 'claude-code' && adapterType !== 'codex'))
+  ) {
+    await persistTerminalError(
+      toHeterogeneousAgentMessageError(
+        new Error(t('heteroAgent.apiMode.defaultProviderConfigMissing', { ns: 'chat' })),
+        adapterType,
+      ),
+    );
+    return;
   }
 
   try {
@@ -1874,31 +1907,19 @@ export const executeHeterogeneousAgent = async (
     };
 
     const spawnArgs = buildHeteroSpawnArgs(heterogeneousProvider);
-    const providerBinding = apiBindingActive
+    const providerBinding = serverDefaultBindingActive
       ? {
-          kind: 'provider' as const,
-          apiConfig: heterogeneousProvider.apiConfig!,
+          apiConfig: serverDefaultApiConfig,
+          kind: 'server-default' as const,
           resumeBindingKey,
         }
-      : serverBindingActive
-        ? heterogeneousProvider.serverConfig
-          ? {
-              kind: 'server-default' as const,
-              resumeBindingKey,
-              serverConfig: heterogeneousProvider.serverConfig,
-            }
-          : undefined
+      : userProviderBindingActive
+        ? {
+            apiConfig: providerApiConfig,
+            kind: 'provider' as const,
+            resumeBindingKey,
+          }
         : undefined;
-
-    if (serverBindingActive && !providerBinding) {
-      await persistTerminalError(
-        toHeterogeneousAgentMessageError(
-          new Error(t('heteroAgent.serverMode.configMissing', { ns: 'chat' })),
-          adapterType,
-        ),
-      );
-      return;
-    }
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({

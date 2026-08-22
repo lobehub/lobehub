@@ -1,7 +1,7 @@
 import type {
   AiProviderRuntimeConfig,
-  HeterogeneousApiConfig,
-  HeterogeneousServerConfig,
+  HeterogeneousProviderApiConfig,
+  HeterogeneousServerDefaultApiConfig,
 } from '@lobechat/types';
 
 import type { LocalHeterogeneousAgentType } from '../config';
@@ -27,21 +27,21 @@ export interface HeterogeneousProviderBindingRuntime {
 
 export type HeterogeneousProviderBindingReference =
   | {
-      apiConfig: HeterogeneousApiConfig;
+      apiConfig: HeterogeneousProviderApiConfig;
       kind: 'provider';
       /** Binding key stored with the native session that the renderer wants to resume. */
       resumeBindingKey?: string;
     }
   | {
+      apiConfig: HeterogeneousServerDefaultApiConfig;
       kind: 'server-default';
       /** Binding key stored with the native session that the renderer wants to resume. */
       resumeBindingKey?: string;
-      serverConfig: HeterogeneousServerConfig;
     };
 
 export interface HeterogeneousProviderBindingResolution {
   agentType: LocalHeterogeneousAgentType;
-  apiConfig: HeterogeneousApiConfig;
+  apiConfig: HeterogeneousProviderApiConfig;
   /** Credential-free endpoint used by the target CLI. */
   endpoint?: string;
   protocol: HeterogeneousProviderBindingProtocol;
@@ -68,7 +68,7 @@ export interface EnabledProviderBindingModelRef {
 
 export interface ResolveHeterogeneousProviderBindingInput {
   agentType: string;
-  apiConfig?: HeterogeneousApiConfig;
+  apiConfig?: HeterogeneousProviderApiConfig;
   /** Check decrypted credentials. Keep false in renderer/UI and true in Desktop main. */
   checkCredentials?: boolean;
   enabledModels?: readonly EnabledProviderBindingModelRef[];

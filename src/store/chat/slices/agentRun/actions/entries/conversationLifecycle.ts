@@ -1513,8 +1513,7 @@ export class ConversationLifecycleActionImpl {
           (heteroContext.topicId
             ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
             : undefined) ?? existingTopic;
-        const providerBinding =
-          heterogeneousProvider.authMode === 'api' || heterogeneousProvider.authMode === 'server';
+        const providerBinding = heterogeneousProvider.authMode === 'api';
         const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
           topic?.metadata,
           workingDirectory,

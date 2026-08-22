@@ -161,8 +161,7 @@ const resolveHeteroRunContext = (
   });
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
-  const providerBinding =
-    heterogeneousProvider?.authMode === 'api' || heterogeneousProvider?.authMode === 'server';
+  const providerBinding = heterogeneousProvider?.authMode === 'api';
 
   // Drops the saved sessionId when its bound cwd disagrees with the current
   // one — without this CC emits "No conversation found with session ID".

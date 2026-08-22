@@ -114,10 +114,7 @@ export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
-  if (
-    ctx.heterogeneousProvider?.authMode === 'api' ||
-    ctx.heterogeneousProvider?.authMode === 'server'
-  ) {
+  if (ctx.heterogeneousProvider?.authMode === 'api') {
     // Personal-scope invariant: Desktop main resolves the binding's providerId
     // with NO workspace header (see `providerBindingPort`), while a workspace
     // agent's binding was configured against workspace-scoped providers. The
@@ -125,9 +122,14 @@ export const selectRuntimeType = (
     // in-process — `workspaceScoped` alone does not block them — so a colliding
     // personal provider id (e.g. builtin `anthropic`) would silently supply
     // different credentials. Reject before any IPC.
-    // Server mode uses deployment-owned credentials rather than a user
-    // provider id, so this guard stays on API bindings only.
-    if (ctx.heterogeneousProvider?.authMode === 'api' && ctx.isWorkspaceAgent) {
+    // The deployment-default API source uses deployment-owned credentials
+    // rather than a user provider id, so this guard stays on user-provider
+    // bindings only.
+    if (
+      ctx.heterogeneousProvider.apiConfig &&
+      ctx.heterogeneousProvider.apiConfig?.source !== 'server-default' &&
+      ctx.isWorkspaceAgent
+    ) {
       throw new Error(HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR);
     }
     const target = resolveExecutionTarget(

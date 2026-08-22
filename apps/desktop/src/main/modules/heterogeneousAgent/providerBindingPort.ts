@@ -47,7 +47,6 @@ export const beginServerDefaultOperation = async (
     agentId?: string;
     model: string;
     operationId: string;
-    providerId: string;
     topicId: string;
   },
 ): Promise<ServerDefaultOperationBinding> => {

@@ -81,7 +81,7 @@ import {
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
   HeterogeneousAgentModelCatalog,
-  HeterogeneousServerConfig,
+  HeterogeneousServerDefaultApiConfig,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -365,8 +365,8 @@ interface AgentSession {
   resolvedCommandSearchPath?: string;
   resumeSessionId?: string;
   sdkSession?: ClaudeAgentSdkSession;
+  serverDefaultApiConfig?: HeterogeneousServerDefaultApiConfig;
   serverDefaultBinding?: boolean;
-  serverDefaultModel?: HeterogeneousServerConfig;
   serverOperationToken?: string;
   sessionId: string;
   traeAcpSession?: TraeAcpSession;
@@ -1248,11 +1248,11 @@ export default class HeterogeneousAgentCtr {
       cwd: params.cwd,
       env: hostedProviderBinding?.env ?? params.env,
       hostedProviderBinding,
-      serverDefaultBinding: params.providerBinding?.kind === 'server-default',
-      serverDefaultModel:
+      serverDefaultApiConfig:
         params.providerBinding?.kind === 'server-default'
-          ? params.providerBinding.serverConfig
+          ? params.providerBinding.apiConfig
           : undefined,
+      serverDefaultBinding: params.providerBinding?.kind === 'server-default',
       model: params.initialModel,
       sessionId,
       resumeSessionId,
@@ -1279,7 +1279,8 @@ export default class HeterogeneousAgentCtr {
     const session = this.sessions.get(params.sessionId);
     if (!session?.serverDefaultBinding) return this.sendPromptImpl(params);
     if (!params.topicId) throw new Error('Server-default execution requires a topic');
-    if (!session.serverDefaultModel) throw new Error('Server-default execution requires a model');
+    if (!session.serverDefaultApiConfig)
+      throw new Error('Server-default execution requires a model');
     if (session.agentType !== 'claude-code' && session.agentType !== 'codex') {
       throw new Error(`Server-default execution does not support ${session.agentType}`);
     }
@@ -1287,9 +1288,8 @@ export default class HeterogeneousAgentCtr {
     const operation = await beginServerDefaultOperation(this.remoteServerAuth, {
       agentType: session.agentType,
       agentId: params.agentId,
-      model: session.serverDefaultModel.model,
+      model: session.serverDefaultApiConfig.model,
       operationId: params.operationId,
-      providerId: session.serverDefaultModel.providerId,
       topicId: params.topicId,
     });
     session.serverOperationToken = operation.token;
