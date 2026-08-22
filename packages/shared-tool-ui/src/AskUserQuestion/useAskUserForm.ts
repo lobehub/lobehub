@@ -336,7 +336,11 @@ export const useAskUserForm = ({
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
     } else {
       const payload = buildSubmitPayload(questions, picks, custom);
-      if (inSupplement) payload[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
+      // Additional notes are a saved form value, not a tab-local value. Once
+      // entered, keep them on an explicit submit even after the user returns
+      // to a question to review or change an answer. Replace-all remains the
+      // only mutually exclusive submission mode.
+      if (supplementText.trim()) payload[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
       void submitWith(payload);
     }
   }, [
@@ -389,7 +393,9 @@ export const useAskUserForm = ({
         fallback[q.question] = q.multiSelect ? [first] : first;
       }
     }
-    if (supplementActive && supplementAvailable && supplementText.trim()) {
+    // Match explicit submission: leaving the notes tab only changes which
+    // editor is visible; it does not discard the saved notes.
+    if (supplementText.trim()) {
       fallback[SUPPLEMENT_PAYLOAD_KEY] = supplementText.trim();
     }
     void submitWith(fallback);
@@ -402,8 +408,6 @@ export const useAskUserForm = ({
     escapeText,
     picks,
     custom,
-    supplementActive,
-    supplementAvailable,
     supplementText,
     submitWith,
   ]);

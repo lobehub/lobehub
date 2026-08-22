@@ -270,4 +270,57 @@ describe('useAskUserForm additional notes', () => {
       type: 'submit',
     });
   });
+
+  it('includes saved notes on explicit submit after returning to a question', () => {
+    const { hook, onInteractionAction } = setup(twoQuestionArgs);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[1], 'Auto'));
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('Keep this saved note.'));
+    act(() => hook.result.current.setQuestionMode('0'));
+    act(() => hook.result.current.handleSubmit());
+
+    expect(hook.result.current.supplementActive).toBe(false);
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: {
+        'How broad?': 'Narrow',
+        'Which mode?': 'Auto',
+        '__supplement__': 'Keep this saved note.',
+      },
+      type: 'submit',
+    });
+  });
+
+  it('includes saved notes in the timeout fallback after returning to a question', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-22T00:00:00Z'));
+    const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: twoQuestionArgs,
+        countdownMs: 1000,
+        onInteractionAction,
+        writeDraft: vi.fn(),
+      }),
+    );
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Full'));
+    act(() => hook.result.current.setSupplementMode(true));
+    act(() => hook.result.current.handleSupplementTextChange('Keep this timeout note.'));
+    act(() => hook.result.current.setQuestionMode('1'));
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(onInteractionAction).toHaveBeenCalledExactlyOnceWith({
+      payload: {
+        'How broad?': 'Full',
+        'Which mode?': 'Auto',
+        '__supplement__': 'Keep this timeout note.',
+      },
+      type: 'submit',
+    });
+
+    hook.unmount();
+    vi.useRealTimers();
+  });
 });
