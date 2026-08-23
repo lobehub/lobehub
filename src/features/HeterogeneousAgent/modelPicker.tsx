@@ -32,15 +32,22 @@ export const resolveServerDefaultModelMeta = (
   builtinAiModelList.find((item) => item.id === model && item.providerId === 'lobehub') ??
   builtinAiModelList.find((item) => item.id === model);
 
+/** Closed-trigger text. Prefer Select's public `title`, not extra option fields. */
+export const compactModelTriggerText = (option: { title?: string; value?: unknown }) => {
+  const value = String(option.value ?? '');
+  const modelId = value.includes('/') ? value.slice(value.indexOf('/') + 1) : value;
+  return option.title || modelId;
+};
+
 export const buildServerDefaultModelOptions = (
   models: Array<{ model: string }>,
   builtinAiModelList: LobeDefaultAiModelListItem[],
 ) =>
   models.map(({ model }) => {
     const meta = resolveServerDefaultModelMeta(model, builtinAiModelList);
+    const title = meta?.displayName ?? model;
 
     return {
-      displayName: meta?.displayName ?? model,
       label: (
         <ModelItemRender
           displayName={meta?.displayName}
@@ -49,6 +56,7 @@ export const buildServerDefaultModelOptions = (
           showInfoTag={false}
         />
       ),
+      title,
       value: model,
     };
   });

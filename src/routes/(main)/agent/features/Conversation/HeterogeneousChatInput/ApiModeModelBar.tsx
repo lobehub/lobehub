@@ -9,6 +9,7 @@ import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousA
 import {
   buildServerDefaultModelOptions,
   COMPACT_MODEL_PICKER_STYLE,
+  compactModelTriggerText,
   modelPickerStyles,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
@@ -20,11 +21,9 @@ interface ApiModeModelBarProps {
   agentId: string;
 }
 
-const compactTriggerLabel = (option: { displayName?: string; value?: unknown }) => {
-  const value = String(option.value ?? '');
-  const modelId = value.includes('/') ? value.slice(value.indexOf('/') + 1) : value;
-  return <span className={modelPickerStyles.compactLabel}>{option.displayName || modelId}</span>;
-};
+const compactTriggerLabel = (option: { title?: string; value?: unknown }) => (
+  <span className={modelPickerStyles.compactLabel}>{compactModelTriggerText(option)}</span>
+);
 
 const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));

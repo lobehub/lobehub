@@ -155,6 +155,7 @@ const ModelSelect = memo<ModelSelectProps>(
           ...model,
           label: <ModelItemRender {...model} {...model.abilities} showInfoTag={false} />,
           provider: provider.id,
+          title: model.displayName || model.id,
           value: `${provider.id}/${model.id}`,
         }));
       };
