@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Режим API Claude Code требует привязки провайдера и модели. Откройте профиль агента, чтобы настроить его.",
   "heteroAgent.apiMode.credentialUnsupported": "Провайдер \"{{providerId}}\" использует метод аутентификации, который не поддерживается этим агентом.",
   "heteroAgent.apiMode.credentialsMissing": "У провайдера \"{{providerId}}\" не настроен API-ключ.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "Для работы LobeHub требуется совместимая модель. Откройте профиль агента, чтобы выбрать подходящую.",
   "heteroAgent.apiMode.endpointMissing": "Провайдеру \"{{providerId}}\" требуется базовый URL для этого агента.",
   "heteroAgent.apiMode.endpointUnsupported": "Провайдер \"{{providerId}}\" имеет неподдерживаемый базовый URL.",
   "heteroAgent.apiMode.labDisabled.action": "Включить в Лабораториях",

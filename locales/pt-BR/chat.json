@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "O modo API do Claude Code requer um provedor e vinculação de modelo. Abra o perfil do agente para configurá-lo.",
   "heteroAgent.apiMode.credentialUnsupported": "O provedor \"{{providerId}}\" utiliza um método de autenticação que este agente não suporta.",
   "heteroAgent.apiMode.credentialsMissing": "O provedor \"{{providerId}}\" não possui uma chave de API configurada.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "O LobeHub requer um modelo compatível. Abra o perfil do agente para selecionar um.",
   "heteroAgent.apiMode.endpointMissing": "O provedor \"{{providerId}}\" requer uma URL base para este agente.",
   "heteroAgent.apiMode.endpointUnsupported": "O provedor \"{{providerId}}\" possui uma URL base não suportada.",
   "heteroAgent.apiMode.labDisabled.action": "Ativar em Labs",

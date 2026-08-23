@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Tryb API Claude Code wymaga dostawcy i przypisania modelu. Otwórz profil agenta, aby go skonfigurować.",
   "heteroAgent.apiMode.credentialUnsupported": "Dostawca \"{{providerId}}\" używa metody uwierzytelniania, której ten agent nie obsługuje.",
   "heteroAgent.apiMode.credentialsMissing": "Dostawca \"{{providerId}}\" nie ma skonfigurowanego klucza API.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub wymaga kompatybilnego modelu. Otwórz profil agenta, aby wybrać jeden.",
   "heteroAgent.apiMode.endpointMissing": "Dostawca \"{{providerId}}\" wymaga podstawowego adresu URL dla tego agenta.",
   "heteroAgent.apiMode.endpointUnsupported": "Dostawca \"{{providerId}}\" ma nieobsługiwany podstawowy adres URL.",
   "heteroAgent.apiMode.labDisabled.action": "Włącz w Labs",

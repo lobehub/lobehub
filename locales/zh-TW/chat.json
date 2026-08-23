@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Claude Code API 模式需要提供者和模型綁定。打開代理配置檔案進行設定。",
   "heteroAgent.apiMode.credentialUnsupported": "提供者「{{providerId}}」使用了此代理不支援的身份驗證方法。",
   "heteroAgent.apiMode.credentialsMissing": "提供者「{{providerId}}」未配置 API 金鑰。",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub 需要一個兼容的模型。請打開代理配置檔案以選擇模型。",
   "heteroAgent.apiMode.endpointMissing": "提供者「{{providerId}}」需要此代理的基本 URL。",
   "heteroAgent.apiMode.endpointUnsupported": "提供者「{{providerId}}」的基本 URL 不受支援。",
   "heteroAgent.apiMode.labDisabled.action": "在 Labs 中啟用",

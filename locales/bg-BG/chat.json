@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Режимът Claude Code API изисква доставчик и свързване на модел. Отворете профила на агента, за да го конфигурирате.",
   "heteroAgent.apiMode.credentialUnsupported": "Доставчикът \"{{providerId}}\" използва метод за удостоверяване, който този агент не поддържа.",
   "heteroAgent.apiMode.credentialsMissing": "Доставчикът \"{{providerId}}\" няма конфигуриран API ключ.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub изисква съвместим модел. Отворете профила на агента, за да изберете такъв.",
   "heteroAgent.apiMode.endpointMissing": "Доставчикът \"{{providerId}}\" изисква основен URL адрес за този агент.",
   "heteroAgent.apiMode.endpointUnsupported": "Доставчикът \"{{providerId}}\" има неподдържан основен URL адрес.",
   "heteroAgent.apiMode.labDisabled.action": "Активирайте в Labs",

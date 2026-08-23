@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "يتطلب وضع Claude Code API موفرًا وربطًا بالنموذج. افتح ملف تعريف الوكيل لتكوينه.",
   "heteroAgent.apiMode.credentialUnsupported": "المزود \"{{providerId}}\" يستخدم طريقة مصادقة لا يدعمها هذا الوكيل.",
   "heteroAgent.apiMode.credentialsMissing": "المزود \"{{providerId}}\" ليس لديه مفتاح API مُعد.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "يتطلب LobeHub نموذجًا متوافقًا. افتح ملف تعريف الوكيل لتحديد واحد.",
   "heteroAgent.apiMode.endpointMissing": "المزود \"{{providerId}}\" يتطلب عنوان URL أساسي لهذا الوكيل.",
   "heteroAgent.apiMode.endpointUnsupported": "المزود \"{{providerId}}\" لديه عنوان URL أساسي غير مدعوم.",
   "heteroAgent.apiMode.labDisabled.action": "تمكين في المختبرات",

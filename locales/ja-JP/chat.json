@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Claude Code APIモードにはプロバイダーとモデルのバインディングが必要です。エージェントプロファイルを開いて設定してください。",
   "heteroAgent.apiMode.credentialUnsupported": "プロバイダー \"{{providerId}}\" は、このエージェントがサポートしていない認証方法を使用しています。",
   "heteroAgent.apiMode.credentialsMissing": "プロバイダー \"{{providerId}}\" に API キーが設定されていません。",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHubは互換性のあるモデルを必要とします。エージェントプロファイルを開いて選択してください。",
   "heteroAgent.apiMode.endpointMissing": "プロバイダー \"{{providerId}}\" には、このエージェントに必要なベース URL がありません。",
   "heteroAgent.apiMode.endpointUnsupported": "プロバイダー \"{{providerId}}\" にはサポートされていないベース URL があります。",
   "heteroAgent.apiMode.labDisabled.action": "ラボで有効化",

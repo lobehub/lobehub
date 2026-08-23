@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Der Claude Code API-Modus erfordert eine Anbieter- und Modellbindung. Öffnen Sie das Agentenprofil, um es zu konfigurieren.",
   "heteroAgent.apiMode.credentialUnsupported": "Der Anbieter \"{{providerId}}\" verwendet eine Authentifizierungsmethode, die von diesem Agenten nicht unterstützt wird.",
   "heteroAgent.apiMode.credentialsMissing": "Für den Anbieter \"{{providerId}}\" ist kein API-Schlüssel konfiguriert.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub benötigt ein kompatibles Modell. Öffnen Sie das Agentenprofil, um eines auszuwählen.",
   "heteroAgent.apiMode.endpointMissing": "Der Anbieter \"{{providerId}}\" erfordert eine Basis-URL für diesen Agenten.",
   "heteroAgent.apiMode.endpointUnsupported": "Der Anbieter \"{{providerId}}\" hat eine nicht unterstützte Basis-URL.",
   "heteroAgent.apiMode.labDisabled.action": "In Labs aktivieren",

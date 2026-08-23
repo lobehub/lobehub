@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Claude Code API 모드는 공급자 및 모델 바인딩이 필요합니다. 에이전트 프로필을 열어 구성하세요.",
   "heteroAgent.apiMode.credentialUnsupported": "제공자 \"{{providerId}}\"는 이 에이전트가 지원하지 않는 인증 방식을 사용합니다.",
   "heteroAgent.apiMode.credentialsMissing": "제공자 \"{{providerId}}\"에 API 키가 구성되어 있지 않습니다.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub는 호환 가능한 모델이 필요합니다. 에이전트 프로필을 열어 하나를 선택하세요.",
   "heteroAgent.apiMode.endpointMissing": "제공자 \"{{providerId}}\"는 이 에이전트에 대한 기본 URL이 필요합니다.",
   "heteroAgent.apiMode.endpointUnsupported": "제공자 \"{{providerId}}\"는 지원되지 않는 기본 URL을 가지고 있습니다.",
   "heteroAgent.apiMode.labDisabled.action": "랩에서 활성화",

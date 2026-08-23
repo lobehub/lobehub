@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Claude Code API modu, bir sağlayıcı ve model bağlaması gerektirir. Yapılandırmak için ajan profilini açın.",
   "heteroAgent.apiMode.credentialUnsupported": "\"{{providerId}}\" sağlayıcısı, bu ajanın desteklemediği bir kimlik doğrulama yöntemi kullanıyor.",
   "heteroAgent.apiMode.credentialsMissing": "\"{{providerId}}\" sağlayıcısı için API anahtarı yapılandırılmamış.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub uyumlu bir model gerektirir. Birini seçmek için ajan profilini açın.",
   "heteroAgent.apiMode.endpointMissing": "\"{{providerId}}\" sağlayıcısı, bu ajan için bir temel URL gerektiriyor.",
   "heteroAgent.apiMode.endpointUnsupported": "\"{{providerId}}\" sağlayıcısının desteklenmeyen bir temel URL'si var.",
   "heteroAgent.apiMode.labDisabled.action": "Laboratuvarlarda Etkinleştir",

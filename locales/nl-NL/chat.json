@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Claude Code API-modus vereist een provider en modelbinding. Open het agentprofiel om dit te configureren.",
   "heteroAgent.apiMode.credentialUnsupported": "De provider \"{{providerId}}\" gebruikt een authenticatiemethode die deze agent niet ondersteunt.",
   "heteroAgent.apiMode.credentialsMissing": "De provider \"{{providerId}}\" heeft geen API-sleutel geconfigureerd.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub vereist een compatibel model. Open het agentprofiel om er een te selecteren.",
   "heteroAgent.apiMode.endpointMissing": "De provider \"{{providerId}}\" vereist een basis-URL voor deze agent.",
   "heteroAgent.apiMode.endpointUnsupported": "De provider \"{{providerId}}\" heeft een niet-ondersteunde basis-URL.",
   "heteroAgent.apiMode.labDisabled.action": "Inschakelen in Labs",

@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Chế độ API Claude Code yêu cầu một nhà cung cấp và mô hình được liên kết. Mở hồ sơ tác nhân để cấu hình.",
   "heteroAgent.apiMode.credentialUnsupported": "Nhà cung cấp \"{{providerId}}\" sử dụng phương thức xác thực mà tác nhân này không hỗ trợ.",
   "heteroAgent.apiMode.credentialsMissing": "Nhà cung cấp \"{{providerId}}\" chưa được cấu hình khóa API.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub yêu cầu một mô hình tương thích. Mở hồ sơ tác nhân để chọn một mô hình.",
   "heteroAgent.apiMode.endpointMissing": "Nhà cung cấp \"{{providerId}}\" yêu cầu một URL cơ sở cho tác nhân này.",
   "heteroAgent.apiMode.endpointUnsupported": "Nhà cung cấp \"{{providerId}}\" có URL cơ sở không được hỗ trợ.",
   "heteroAgent.apiMode.labDisabled.action": "Bật trong Labs",

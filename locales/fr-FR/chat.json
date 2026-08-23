@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "Le mode API Claude Code nécessite un fournisseur et un modèle associés. Ouvrez le profil de l'agent pour le configurer.",
   "heteroAgent.apiMode.credentialUnsupported": "Le fournisseur \"{{providerId}}\" utilise une méthode d'authentification que cet agent ne prend pas en charge.",
   "heteroAgent.apiMode.credentialsMissing": "Le fournisseur \"{{providerId}}\" n'a pas de clé API configurée.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub nécessite un modèle compatible. Ouvrez le profil de l'agent pour en sélectionner un.",
   "heteroAgent.apiMode.endpointMissing": "Le fournisseur \"{{providerId}}\" nécessite une URL de base pour cet agent.",
   "heteroAgent.apiMode.endpointUnsupported": "Le fournisseur \"{{providerId}}\" a une URL de base non prise en charge.",
   "heteroAgent.apiMode.labDisabled.action": "Activer dans Labs",

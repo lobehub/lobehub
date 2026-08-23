@@ -532,6 +532,7 @@
   "heteroAgent.apiMode.configMissing": "حالت API کد کلود نیاز به ارائه‌دهنده و اتصال مدل دارد. پروفایل عامل را باز کنید تا آن را پیکربندی کنید.",
   "heteroAgent.apiMode.credentialUnsupported": "ارائه‌دهنده \"{{providerId}}\" از روشی برای احراز هویت استفاده می‌کند که این عامل از آن پشتیبانی نمی‌کند.",
   "heteroAgent.apiMode.credentialsMissing": "ارائه‌دهنده \"{{providerId}}\" کلید API تنظیم نشده‌ای دارد.",
+  "heteroAgent.apiMode.defaultProviderConfigMissing": "LobeHub به یک مدل سازگار نیاز دارد. نمایه عامل را باز کنید تا یکی را انتخاب کنید.",
   "heteroAgent.apiMode.endpointMissing": "ارائه‌دهنده \"{{providerId}}\" به یک URL پایه برای این عامل نیاز دارد.",
   "heteroAgent.apiMode.endpointUnsupported": "ارائه‌دهنده \"{{providerId}}\" دارای یک URL پایه غیرقابل پشتیبانی است.",
   "heteroAgent.apiMode.labDisabled.action": "فعال کردن در آزمایشگاه‌ها",

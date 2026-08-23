@@ -808,6 +808,7 @@
   "lobehub.claude-sonnet-4-6.description": "Claude Sonnet 4.6 هو أفضل مزيج من السرعة والذكاء من Anthropic.",
   "lobehub.claude-sonnet-5.description": "كلود سونيت 5 هو نموذج سونيت الأكثر وكيلًا من أنثروبيك، مصمم للبرمجة المستمرة، واستخدام الأدوات، وسير العمل طويل السياق مع سرعة وكفاءة من مستوى سونيت.",
   "lobehub.dall-e-3.description": "أحدث نموذج DALL·E، صدر في نوفمبر 2023، يدعم توليد صور أكثر واقعية ودقة مع تفاصيل أقوى.",
+  "lobehub.deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp هو نموذج متعدد الوسائط تجريبي يضاهي V4 Flash في قدرات النص ويضيف فهم الصور لعمليات سير العمل الخاصة بالوكيل البصري.",
   "lobehub.deepseek-v4-flash.description": "DeepSeek V4 Flash يوازن بين الاستجابات السريعة والمنطق القوي لتدفقات العمل الحساسة للزمن.",
   "lobehub.deepseek-v4-pro.description": "DeepSeek V4 Pro هو النموذج الأكثر اقتصادية حاليًا الذي لا يزال يقدم أداءً جيدًا في المهام الوكالية اليومية.",
   "lobehub.dola-seedream-5-0-pro-260628.description": "ByteDance Seedream 5.0 Pro من BytePlus هو نموذج عالي الدقة لتوليد الصور مع تحكم دقيق في تموضع العناصر، يدعم تحويل النص إلى صورة وتحرير الصور الفردية بدقة 2K.",
