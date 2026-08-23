@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   setMetadata: vi.fn(),
   setPlan: vi.fn(),
   taskFindById: vi.fn(),
-  taskResolveVerifyConfig: vi.fn(),
+  taskAcceptanceResolve: vi.fn(),
 }));
 
 vi.mock('../goalLoop', () => ({
@@ -38,10 +38,13 @@ vi.mock('../planGenerator', () => ({
   })),
 }));
 
+vi.mock('../taskAcceptance', () => ({
+  resolveTaskAcceptance: mocks.taskAcceptanceResolve,
+}));
+
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(() => ({
     findById: mocks.taskFindById,
-    resolveVerifyConfig: mocks.taskResolveVerifyConfig,
   })),
 }));
 
@@ -71,9 +74,10 @@ describe('Verify acceptance lifecycle', () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
   });
 
-  it('creates and attaches the task acceptance when its verify plan is confirmed', async () => {
-    mocks.taskResolveVerifyConfig.mockResolvedValue({
-      enabled: true,
+  it('attaches the verify run to the task acceptance that owns its policy', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
       requirement: 'The novel is complete and coherent',
     });
     mocks.taskFindById.mockResolvedValue({
@@ -83,7 +87,6 @@ describe('Verify acceptance lifecycle', () => {
     mocks.runFindByOperation
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'run-1', plan });
-    mocks.acceptanceEnsureForSubject.mockResolvedValue({ id: 'acceptance-1' });
 
     await instantiateVerifyPlanOnStart(
       db,
@@ -92,12 +95,6 @@ describe('Verify acceptance lifecycle', () => {
       'workspace-1',
     );
 
-    expect(mocks.acceptanceEnsureForSubject).toHaveBeenCalledWith('task', 'task-1', {
-      requirement: 'The novel is complete and coherent',
-    });
-    expect(mocks.acceptanceUpdate).toHaveBeenCalledWith('acceptance-1', {
-      requirement: 'The novel is complete and coherent',
-    });
     expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
   });
 

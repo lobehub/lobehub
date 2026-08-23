@@ -12,6 +12,7 @@ import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
+import { resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-lifecycle');
 const MAX_TASK_DOCUMENT_CHARS = 80_000;
@@ -105,14 +106,12 @@ export const runVerifyOnCompletion = async (
       return;
     }
 
-    // Task-bound runs may pin which agent verifies (TaskVerifyConfig.verifierAgentId,
-    // with subtask inheritance). Non-task runs leave it undefined → builtin fallback.
+    // Task-bound runs may pin which agent verifies through its Acceptance policy.
+    // Non-task runs leave it undefined → builtin fallback.
     let verifierAgentId: string | undefined;
     if (op.taskId) {
-      const verifyConfig = await new TaskModel(db, userId, workspaceId).resolveVerifyConfig(
-        op.taskId,
-      );
-      verifierAgentId = verifyConfig?.verifierAgentId ?? undefined;
+      const resolvedAcceptance = await resolveTaskAcceptance(db, userId, op.taskId, workspaceId);
+      verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
     }
 
     const modelConfig = await resolveVerifyModelConfig(

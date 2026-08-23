@@ -2,6 +2,7 @@ import { normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceAttachment,
   AcceptanceCheckReviewAction,
+  AcceptanceConfig,
   AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
@@ -475,11 +476,12 @@ export class AcceptanceService {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: { requirement?: string; title?: string },
+    defaults?: { config?: AcceptanceConfig; requirement?: string; title?: string },
   ): Promise<AcceptanceItem> => {
     await this.assertSubjectExists(subjectType, subjectId);
     const projectId = await this.resolveSubjectProjectId(subjectType, subjectId);
     return this.acceptanceModel.ensureForSubject(subjectType, subjectId, {
+      config: defaults?.config,
       projectId,
       requirement: defaults?.requirement,
       ...(subjectType === 'standalone' && defaults?.title

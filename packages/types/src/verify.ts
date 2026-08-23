@@ -90,9 +90,9 @@ export interface AcceptanceVisualRender {
 }
 
 /**
- * Acceptance policy/config snapshot. The source may be a task's `config.verify`,
- * a topic-level override, or a document acceptance rule, so it lives with the
- * generic aggregate rather than only in task types.
+ * Acceptance policy/config snapshot. This is the authoritative policy for the
+ * subject's verification lifecycle; legacy task `config.verify` values are
+ * migrated here on first read.
  */
 /**
  * One user-authored acceptance criterion in a subject's standing checklist

@@ -3,6 +3,9 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AcceptanceModel } from '@/database/models/acceptance';
+import { TaskModel } from '@/database/models/task';
+
 import { taskRouter } from '../../task';
 import {
   cleanupTestUser,
@@ -434,6 +437,28 @@ describe('Task Router Integration', () => {
   });
 
   describe('verify config', () => {
+    it('moves verify config supplied at task creation into Acceptance', async () => {
+      const task = await caller.create({
+        config: {
+          model: 'test-model',
+          verify: { enabled: true, maxIterations: 2, requirement: 'Ship the artifact' },
+        },
+        instruction: 'Test',
+      });
+
+      const storedTask = await new TaskModel(serverDB, userId).findById(task.data.id);
+      const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+        'task',
+        task.data.id,
+      );
+
+      expect(storedTask?.config).toEqual({ model: 'test-model' });
+      expect(acceptance).toMatchObject({
+        config: { enabled: true, maxIterations: 2 },
+        requirement: 'Ship the artifact',
+      });
+    });
+
     it('should set and retrieve verify config (round-trip)', async () => {
       const task = await caller.create({ instruction: 'Test' });
 
@@ -465,6 +490,22 @@ describe('Task Router Integration', () => {
         verifierAgentId: 'agt_codex',
         verifyCriteriaIds: ['c1', 'c2'],
         verifyRubricId: 'rub_1',
+      });
+
+      const storedTask = await new TaskModel(serverDB, userId).findById(task.data.id);
+      const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+        'task',
+        task.data.id,
+      );
+      expect(storedTask?.config).not.toHaveProperty('verify');
+      expect(acceptance).toMatchObject({
+        config: {
+          enabled: true,
+          maxIterations: 3,
+          verifierAgentId: 'agt_codex',
+          verifyCriteriaIds: ['c1', 'c2'],
+          verifyRubricId: 'rub_1',
+        },
       });
     });
 

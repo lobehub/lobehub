@@ -1,6 +1,6 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { GoalStatus } from '@lobechat/const/goal';
-import type { TaskListItem, TaskParticipant } from '@lobechat/types';
+import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -21,6 +21,8 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
+import { AcceptanceService } from '@/server/services/verify/acceptanceService';
+import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -63,6 +65,15 @@ const taskProcedureWrite = taskProcedure.use(withScopedPermission('agent:update'
 // All procedures that take an id accept either raw id (task_xxx) or identifier (TASK-1)
 // Resolution happens in the model layer via model.resolve()
 const idInput = z.object({ id: z.string() });
+
+const taskVerifyConfigPatchSchema = z.object({
+  enabled: z.boolean().nullish(),
+  maxIterations: z.number().min(1).max(10).nullish(),
+  requirement: z.string().nullish(),
+  verifierAgentId: z.string().nullish(),
+  verifyCriteriaIds: z.array(z.string()).nullish(),
+  verifyRubricId: z.string().nullish(),
+});
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 const createSchema = z.object({
@@ -440,7 +451,31 @@ export const taskRouter = router({
 
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
-      const task = await ctx.taskService.createTask(input);
+      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(input.config?.verify);
+      const { verify: _legacyVerify, ...taskConfig } = input.config ?? {};
+      const task = await ctx.taskService.createTask({
+        ...input,
+        config: parsedVerify.success ? taskConfig : input.config,
+      });
+      try {
+        if (parsedVerify.success) {
+          const { requirement, ...rawConfig } = parsedVerify.data;
+          const config = Object.fromEntries(
+            Object.entries(rawConfig).filter(([, value]) => value != null),
+          );
+          await new AcceptanceService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).ensureForSubject('task', task.id, {
+            config,
+            requirement: requirement ?? undefined,
+          });
+        }
+      } catch (error) {
+        await ctx.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -1008,7 +1043,16 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
-      return { data: model.getVerifyConfig(task) || null, success: true };
+      const resolved = await resolveTaskAcceptance(
+        ctx.serverDB,
+        ctx.userId,
+        task.id,
+        ctx.workspaceId ?? undefined,
+      );
+      return {
+        data: resolved ? { ...resolved.config, requirement: resolved.requirement } : null,
+        success: true,
+      };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:getVerifyConfig]', error);
@@ -1025,16 +1069,8 @@ export const taskRouter = router({
       idInput.merge(
         z.object({
           // `.nullish()` lets callers clear a saved field: `null` removes it
-          // (JSON can't send `undefined`), omission leaves it untouched. See
-          // TaskModel.updateVerifyConfig.
-          verify: z.object({
-            enabled: z.boolean().nullish(),
-            maxIterations: z.number().min(1).max(10).nullish(),
-            requirement: z.string().nullish(),
-            verifierAgentId: z.string().nullish(),
-            verifyCriteriaIds: z.array(z.string()).nullish(),
-            verifyRubricId: z.string().nullish(),
-          }),
+          // (JSON can't send `undefined`), omission leaves it untouched.
+          verify: taskVerifyConfigPatchSchema,
         }),
       ),
     )
@@ -1043,10 +1079,30 @@ export const taskRouter = router({
       try {
         const model = ctx.taskModel;
         const resolved = await resolveOrThrow(model, id);
-        const task = await model.updateVerifyConfig(resolved.id, verify);
-        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        const acceptanceService = new AcceptanceService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        const acceptance = await acceptanceService.ensureForSubject('task', resolved.id);
+        const nextConfig = { ...acceptance.config } as Record<string, unknown>;
+        for (const [key, value] of Object.entries(verify)) {
+          if (key === 'requirement') continue;
+          if (value === null) delete nextConfig[key];
+          else if (value !== undefined) nextConfig[key] = value;
+        }
+        const requirement =
+          verify.requirement === undefined ? acceptance.requirement : verify.requirement;
+        await acceptanceService.acceptanceModel.update(acceptance.id, {
+          config: nextConfig,
+          requirement,
+        });
+        const data: TaskVerifyConfig = {
+          ...(nextConfig as TaskVerifyConfig),
+          requirement: requirement ?? undefined,
+        };
         return {
-          data: model.getVerifyConfig(task),
+          data,
           message: 'Verify config updated',
           success: true,
         };
