@@ -236,23 +236,25 @@ describe('MessageGatewayClient', () => {
         expect(isAnyMessageGatewayEnabled()).toBe(false);
       });
 
-      it('is true for a node-only deployment that owns at least one platform', () => {
+      it('is false without a default host, however much the node host is configured', () => {
+        // Node-only is out of scope by capability, not by oversight: the Node
+        // gateway hosts long-polling/native-dep platforms only, so it can
+        // never serve the webhook and websocket platforms that fall back to
+        // the default host. Entering gateway mode here would hand those
+        // platforms a client that cannot connect, with the in-process runtime
+        // already skipped.
         mockGatewayEnv.MESSAGE_GATEWAY_URL = undefined;
-        expect(isAnyMessageGatewayEnabled()).toBe(true);
-      });
-
-      it('is false when the only configured host owns no platform', () => {
-        // URL deployed ahead of the platform list: every platform still
-        // resolves to `default`, which has no URL — activating gateway mode
-        // here would route every connect to an unconfigured client.
-        mockGatewayEnv.MESSAGE_GATEWAY_URL = undefined;
-        mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = undefined;
         expect(isAnyMessageGatewayEnabled()).toBe(false);
       });
 
       it('stays true on an empty platform list while the default host is configured', () => {
         // The step-2 rollout shape: node URL deployed, nothing routed to it yet.
         mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = '';
+        expect(isAnyMessageGatewayEnabled()).toBe(true);
+      });
+
+      it('is true for the cutover shape: default host live, wechat routed to node', () => {
+        mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = 'wechat';
         expect(isAnyMessageGatewayEnabled()).toBe(true);
       });
     });

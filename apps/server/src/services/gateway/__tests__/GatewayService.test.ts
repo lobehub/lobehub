@@ -76,11 +76,10 @@ vi.mock('../MessageGatewayClient', () => {
       resolveMessageGatewayHost(platform) === 'node' ? mockNodeGatewayClient : mockGatewayClient,
     getMessageGatewayClientForHost: (host: string) =>
       host === 'node' ? mockNodeGatewayClient : mockGatewayClient,
-    isAnyMessageGatewayEnabled: () =>
-      (mockNodeGateway.configured
-        ? [mockGatewayClient, mockNodeGatewayClient]
-        : [mockGatewayClient]
-      ).some((client) => client.isEnabled),
+    // Production anchors gateway mode on the DEFAULT host: every platform not
+    // routed to node falls back to it, and the node gateway cannot host those
+    // platform kinds at all.
+    isAnyMessageGatewayEnabled: () => mockGatewayClient.isEnabled,
     isMessageGatewayHostConfigured: (host: string) => {
       const client = host === 'node' ? mockNodeGatewayClient : mockGatewayClient;
       // Production defines isEnabled as (ENABLED === '1' && isConfigured), so
@@ -1341,28 +1340,12 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     });
 
-    it('treats the deployment as gateway-managed when every platform has a configured host', async () => {
-      // Node-only deployment where the node host owns EVERY platform this
-      // process can run. Reading the default host alone would report "no
-      // gateway", send the runtime down the in-process path, and
-      // disconnectAll() the very host holding the connections.
-      mockGatewayClient.isConfigured = false;
-      mockGatewayClient.isEnabled = false;
-      mockNodeGateway.platforms = ['discord', 'telegram', 'wechat', 'slack'];
-
-      expect(service.useMessageGateway).toBe(true);
-
-      await service.ensureRunning();
-
-      expect(mockGatewayManager.start).not.toHaveBeenCalled();
-      expect(mockNodeGatewayClient.disconnectAll).not.toHaveBeenCalled();
-    });
-
-    it('stays on the in-process runtime when a platform has no configured host', async () => {
-      // Node host owns wechat only, and there is no default URL — so discord,
-      // telegram and slack would resolve to a client that throws on every
-      // call, with the in-process runtime already skipped. Better to run
-      // everything the old way than to strand them.
+    it('stays on the in-process runtime when the default host is unconfigured', async () => {
+      // Node-only deployment. Gateway mode is a whole-process switch and the
+      // Node gateway cannot host the webhook/websocket platforms that fall
+      // back to `default`, so entering it here would strand them with no
+      // in-process fallback. Out of scope by capability — see the note on
+      // `isAnyMessageGatewayEnabled`.
       mockGatewayClient.isConfigured = false;
       mockGatewayClient.isEnabled = false;
       mockNodeGateway.platforms = ['wechat'];

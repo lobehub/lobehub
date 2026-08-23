@@ -39,7 +39,6 @@ import {
   getMessageGatewayClient,
   getMessageGatewayClientForHost,
   isAnyMessageGatewayEnabled,
-  isMessageGatewayHostConfigured,
   type MessageGatewayCapabilities,
   type MessageGatewayConnectionStatus,
   type MessageGatewayHost,
@@ -180,29 +179,7 @@ export class GatewayService {
    * the client reachable for cleanup.
    */
   get useMessageGateway(): boolean {
-    if (!isAnyMessageGatewayEnabled()) return false;
-
-    // Gateway mode is a whole-process switch — taking it means the in-process
-    // runtime never starts. So every platform this process can run needs a
-    // configured owning host: a platform absent from
-    // MESSAGE_GATEWAY_NODE_PLATFORMS still resolves to `default`, and if that
-    // host has no URL it would be handed a client that throws on every call,
-    // with no in-process fallback left to catch it. Better to run everything
-    // the old way than to strand half the platforms.
-    const orphaned = [
-      ...platformRegistry.listPlatforms().map((definition) => definition.id),
-      ...messengerPlatformRegistry.listPlatforms().map((definition) => definition.id),
-    ].filter((platform) => !isMessageGatewayHostConfigured(resolveMessageGatewayHost(platform)));
-
-    if (orphaned.length > 0) {
-      log(
-        'Gateway mode off: no configured gateway host for %o — staying on the in-process runtime',
-        [...new Set(orphaned)],
-      );
-      return false;
-    }
-
-    return true;
+    return isAnyMessageGatewayEnabled();
   }
 
   async ensureRunning(): Promise<void> {

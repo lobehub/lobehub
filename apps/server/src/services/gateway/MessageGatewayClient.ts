@@ -320,23 +320,22 @@ export function isMessageGatewayHostConfigured(host: MessageGatewayHost): boolea
 }
 
 /**
- * Whether ANY configured host runs connections — the "is this deployment
- * gateway-managed at all?" question, as opposed to "which host owns this
- * platform?".
+ * Whether this deployment is gateway-managed at all — as opposed to "which
+ * host owns this platform?".
  *
- * Must not be answered by the default host alone: a deployment can configure
- * only the Node gateway, and reading just `MESSAGE_GATEWAY_URL` there would
- * report the gateway as unused, sending the runtime down the in-process
- * connection path while it also tears down the very connections the Node host
- * is holding.
+ * Deliberately anchored on the DEFAULT host. Gateway mode is a whole-process
+ * switch (taking it means the in-process runtime never starts), and every
+ * platform absent from `MESSAGE_GATEWAY_NODE_PLATFORMS` resolves to the
+ * default host — so without one configured, some platform always ends up with
+ * a client that cannot connect and no fallback.
+ *
+ * A deployment with ONLY a Node gateway is therefore not supported here, and
+ * that is a capability statement rather than an omission: the Node gateway
+ * hosts long-polling and native-dep platforms only, so it can never serve the
+ * webhook and websocket platforms the default host carries. Serving those
+ * from a Node-only deployment would need a per-platform runtime decision
+ * instead of one process-wide flag.
  */
 export function isAnyMessageGatewayEnabled(): boolean {
-  if (gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1') return false;
-  if (isMessageGatewayHostConfigured('default')) return true;
-  // The Node host counts only once it actually owns a platform. With an empty
-  // platform list every platform still resolves to `default`, so reporting
-  // "gateway mode" on the strength of a Node URL alone would send every
-  // connect to an unconfigured default client and take those platforms
-  // offline — worse than the in-process path this flag chooses between.
-  return isMessageGatewayHostConfigured('node') && parseNodePlatforms().size > 0;
+  return gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' && isMessageGatewayHostConfigured('default');
 }
