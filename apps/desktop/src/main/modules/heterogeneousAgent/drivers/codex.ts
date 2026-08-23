@@ -146,6 +146,18 @@ const buildServerDefaultModelCatalog = (
           support_verbosity: false,
           supported_in_api: true,
           supported_reasoning_levels: supportedReasoningLevels,
+          // Required by codex-cli's catalog schema — it has no serde default, so
+          // omitting it fails the whole file to parse ("missing field
+          // `supports_parallel_tool_calls`") before the agent ever starts, with
+          // nothing in the message tying it to this builder.
+          //
+          // `true` because the relay genuinely fans out: the responses encoder
+          // walks its whole tool map and emits one `function_call` output item
+          // per call, each with its own `output_index`. Codex may also send
+          // `parallel_tool_calls` back on the request; `normalizeResponsesRequest`
+          // reads only the fields it knows, so that is dropped rather than
+          // forwarded to an upstream that might reject it.
+          supports_parallel_tool_calls: true,
           supports_reasoning_summary_parameter: false,
           truncation_policy: { limit: 10_000, mode: metadata.truncationMode },
           upgrade: null,
