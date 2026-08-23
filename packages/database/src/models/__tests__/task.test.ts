@@ -524,6 +524,19 @@ describe('TaskModel', () => {
       expect(backlogP2.offset).toBe(2);
     });
 
+    it('should not double-count duplicate statuses in a group', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'Backlog task' });
+
+      const [group] = await model.groupList({
+        groups: [{ key: 'backlog', statuses: ['backlog', 'backlog'] }],
+      });
+
+      expect(group.total).toBe(1);
+      expect(group.tasks).toHaveLength(1);
+      expect(group.hasMore).toBe(false);
+    });
+
     it('should filter root tasks only (parentTaskId null)', async () => {
       const model = new TaskModel(serverDB, userId);
       const parent = await model.create({ instruction: 'Parent' });
