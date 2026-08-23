@@ -12,13 +12,36 @@ const isVolcengineReasoningEffortModel = (model: string) => {
   return normalizedModel.includes('deepseek-v4') || normalizedModel.includes('glm-5-2');
 };
 
+/**
+ * `thinking.type` values Ark accepts. The runtime's own union is wider — it also
+ * carries `adaptive`, which is Anthropic's "let the model decide" and which Ark
+ * rejects outright:
+ *
+ *     The parameter `type` specified in the request are not valid:
+ *     invalid value adaptive.
+ *
+ * That reached here from a real caller, not a hypothetical one: `/api/v1/anthropic`
+ * relays an Anthropic client's request body, and Claude Code sends
+ * `thinking: {type: 'adaptive'}` on every request regardless of which model it
+ * has been pointed at. Forwarding whatever arrived turned that into a 400 on
+ * every turn.
+ *
+ * Anything outside this set is dropped rather than translated. Omitting the
+ * field leaves Ark on the model's own default, which is what "let the model
+ * decide" asks for — and unlike a guessed mapping it cannot fail the request.
+ */
+const ARK_THINKING_TYPES = new Set(['enabled', 'disabled']);
+
+const arkThinking = (thinking: any) =>
+  ARK_THINKING_TYPES.has(thinking?.type) ? thinking : undefined;
+
 const resolveVolcengineReasoningParams = (
   model: string,
   thinking: any,
   reasoning_effort: any,
   isResponses = false,
 ) => {
-  let targetThinking = thinking;
+  let targetThinking = arkThinking(thinking);
   let targetReasoningEffort = reasoning_effort;
 
   if (isVolcengineReasoningEffortModel(model)) {
