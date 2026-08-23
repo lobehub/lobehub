@@ -353,7 +353,7 @@ export function combineDocuments(
     const { flat, folders } = partitionFolders(userDocs);
 
     const headerLines: string[] = [
-      `${userDocs.length} user-created doc${userDocs.length === 1 ? '' : 's'}. Use readDocument(id) for full content.`,
+      'User-created docs, when present, are listed below — use readDocument(id) for full content.',
     ];
     if (hasHiddenWebDocs) {
       headerLines.push(

@@ -215,7 +215,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        2 user-created docs. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
 
         TITLE                     ID                                    SIZE  UPDATED
         Daily Brief 提取框架          2af6eb88-8bdb-468f-887f-620baa394efa  35    2026-04-27
@@ -327,7 +327,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        1 user-created doc. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
         Web-crawled docs hidden — call listDocuments(sourceType='web') to see them.
 
         TITLE        ID                                    SIZE  UPDATED
@@ -408,7 +408,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        4 user-created docs. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
         1 folder collapsed (📁) — call listDocuments(parentId=<id>) to list a folder's docs.
 
         TITLE      ID      SIZE  UPDATED
@@ -475,7 +475,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        1 user-created doc. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
 
         TITLE      ID                                    SIZE   UPDATED
         周报与平台对话分析  d14dca54-7b38-44d5-9bdb-f3fed8c5f947  empty  2026-04-16
