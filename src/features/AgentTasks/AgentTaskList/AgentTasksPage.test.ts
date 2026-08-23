@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { getTaskCreateActionBehavior, getTaskPageHeaderVisibility } from './AgentTasksPage';
+import {
+  getTaskCreateActionBehavior,
+  getTaskPageHeaderVisibility,
+  resolveTaskCollection,
+} from './AgentTasksPage';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
 describe('AgentTasksPage', () => {
+  describe('resolveTaskCollection', () => {
+    it('opens the scheduled collection from its addressable URL', () => {
+      expect(resolveTaskCollection(new URLSearchParams('collection=scheduled'))).toBe('scheduled');
+    });
+
+    it('falls back to ordinary tasks for absent or unknown values', () => {
+      expect(resolveTaskCollection(new URLSearchParams())).toBe('tasks');
+      expect(resolveTaskCollection(new URLSearchParams('collection=unknown'))).toBe('tasks');
+    });
+  });
+
   describe('getTaskCreateActionBehavior', () => {
     it('should allow workspace viewers to reopen the collapsed inline entry in list view', () => {
       expect(

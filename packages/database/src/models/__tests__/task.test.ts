@@ -567,6 +567,24 @@ describe('TaskModel', () => {
       expect(result[0].tasks).toHaveLength(1);
     });
 
+    it('should exclude runnable automation from ordinary kanban groups', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const manual = await model.create({ instruction: 'Manual task' });
+      await model.create({
+        automationMode: 'schedule',
+        instruction: 'Scheduled task',
+        schedulePattern: '0 9 * * *',
+      });
+
+      const [group] = await model.groupList({
+        automated: false,
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+      });
+
+      expect(group.tasks.map((task) => task.id)).toEqual([manual.id]);
+      expect(group.total).toBe(1);
+    });
+
     it('should filter tasks by their bound goal entity', async () => {
       const model = new TaskModel(serverDB, userId);
 

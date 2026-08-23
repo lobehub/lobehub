@@ -139,6 +139,7 @@ const listSchema = z.object({
 
 const groupListSchema = z.object({
   assigneeAgentId: z.string().optional(),
+  automated: z.boolean().optional(),
   groups: z
     .array(
       z.object({

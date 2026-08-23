@@ -1,8 +1,10 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
+import { Pagination } from 'antd';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
@@ -80,6 +82,10 @@ interface AgentTasksPageProps {
 }
 
 type TaskCollection = 'scheduled' | 'tasks';
+const SCHEDULED_TASK_PAGE_SIZE = 50;
+
+export const resolveTaskCollection = (searchParams: URLSearchParams): TaskCollection =>
+  searchParams.get('collection') === 'scheduled' ? 'scheduled' : 'tasks';
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
@@ -87,8 +93,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
-  const [collection, setCollection] = useState<TaskCollection>('tasks');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [scheduledPage, setScheduledPage] = useState(1);
   const canSwitchCollection = !agentId && !projectId;
+  const collection = canSwitchCollection ? resolveTaskCollection(searchParams) : 'tasks';
   const isScheduledCollection = canSwitchCollection && collection === 'scheduled';
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
@@ -111,8 +119,13 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const isTaskListInit = useTaskStore(taskListSelectors.isTaskListInit);
   const isEmptyHero = useTaskStore(taskListSelectors.isListEmpty);
   const useFetchScheduledTaskList = useTaskStore((s) => s.useFetchScheduledTaskList);
-  const scheduledSWR = useFetchScheduledTaskList({ enabled: isScheduledCollection });
+  const scheduledSWR = useFetchScheduledTaskList({
+    enabled: isScheduledCollection,
+    limit: SCHEDULED_TASK_PAGE_SIZE,
+    offset: (scheduledPage - 1) * SCHEDULED_TASK_PAGE_SIZE,
+  });
   const scheduledTasks = useTaskStore(taskListSelectors.scheduledTaskList);
+  const scheduledTasksTotal = useTaskStore(taskListSelectors.scheduledTaskListTotal);
   const isScheduledTaskListInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
@@ -166,6 +179,20 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
     setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
   }, [setViewOptions]);
 
+  const handleCollectionChange = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (value === 'scheduled') {
+        next.set('collection', 'scheduled');
+      } else {
+        next.delete('collection');
+      }
+      setScheduledPage(1);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   const headerVisibility = getTaskPageHeaderVisibility({
     agentId,
     isEmptyHero: isScheduledCollection ? false : isEmptyHero,
@@ -173,11 +200,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   });
 
   const collectionTabs = canSwitchCollection ? (
-    <TabsRoot
-      size={'small'}
-      value={collection}
-      onValueChange={(value) => setCollection(value as TaskCollection)}
-    >
+    <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
       <TabsList>
         <TabsIndicator />
         <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
@@ -241,6 +264,17 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
             routeScope={routeScope}
             onRetry={() => scheduledSWR.mutate()}
           />
+          {scheduledTasksTotal > SCHEDULED_TASK_PAGE_SIZE && (
+            <Flexbox horizontal justify={'center'} paddingBlock={8}>
+              <Pagination
+                current={scheduledPage}
+                pageSize={SCHEDULED_TASK_PAGE_SIZE}
+                showSizeChanger={false}
+                total={scheduledTasksTotal}
+                onChange={setScheduledPage}
+              />
+            </Flexbox>
+          )}
         </WideScreenContainer>
       ) : isEmptyHero ? (
         <EmptyState agentId={agentId} projectId={projectId} />

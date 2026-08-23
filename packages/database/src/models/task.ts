@@ -539,6 +539,7 @@ export class TaskModel {
 
   async groupList(options: {
     assigneeAgentId?: string;
+    automated?: boolean;
     groups: Array<{
       key: string;
       limit?: number;
@@ -562,10 +563,13 @@ export class TaskModel {
       total: number;
     }>
   > {
-    const { groups, assigneeAgentId, hasGoal, parentTaskId, projectId, visibility } = options;
+    const { groups, assigneeAgentId, automated, hasGoal, parentTaskId, projectId, visibility } =
+      options;
 
     const baseConditions = [this.ownership()];
     if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (automated === true) baseConditions.push(RUNNABLE_AUTOMATION);
+    if (automated === false) baseConditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
     if (hasGoal === true) baseConditions.push(HAS_GOAL);
     if (hasGoal === false) baseConditions.push(sql`NOT ${HAS_GOAL}`);
     if (projectId) baseConditions.push(eq(tasks.projectId, projectId));
