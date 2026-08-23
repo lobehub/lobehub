@@ -1001,6 +1001,37 @@ describe('GeneralChatAgent', () => {
       });
     });
 
+    it('should honor an explicit recompression threshold below the initial threshold', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig: {
+          enabled: true,
+          maxWindowToken: 64_000,
+          recompressionThresholdRatio: 0.6,
+          thresholdRatio: 0.8,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [
+          { content: 'Existing summary', role: 'compressedGroup' },
+          {
+            content: '',
+            metadata: { usage: { totalOutputTokens: 32_000 } },
+            role: 'assistant',
+          },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tool_result', { parentMessageId: 'tool-msg-1' }),
+        state,
+      );
+
+      expect((result as any).type).toBe('compress_context');
+    });
+
     // follow-up: when state.forceFinish is set, RuntimeExecutors strips
     // every tool before the LLM call (buildStepToolDelta returns deactivatedToolIds
     // ['*']). The compression budget must mirror that stripping — otherwise the

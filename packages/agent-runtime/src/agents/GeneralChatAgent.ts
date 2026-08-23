@@ -511,11 +511,10 @@ export class GeneralChatAgent implements Agent {
     const initialRatio = this.config.compressionConfig?.thresholdRatio;
     if (!this.findExistingSummary(messages)) return initialRatio;
 
-    const recompressionRatio =
-      this.config.compressionConfig?.recompressionThresholdRatio ??
-      DEFAULT_RECOMPRESSION_THRESHOLD_RATIO;
+    const configuredRecompressionRatio = this.config.compressionConfig?.recompressionThresholdRatio;
+    if (configuredRecompressionRatio !== undefined) return configuredRecompressionRatio;
 
-    return Math.max(initialRatio ?? 0, recompressionRatio);
+    return Math.max(initialRatio ?? 0, DEFAULT_RECOMPRESSION_THRESHOLD_RATIO);
   }
 
   /**
