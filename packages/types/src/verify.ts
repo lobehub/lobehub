@@ -305,6 +305,7 @@ export interface VerifyCheckDecisionDetail {
 export type VerifyRunStatus =
   | 'unverified'
   | 'planned'
+  | 'collecting_evidence'
   | 'verifying'
   | 'passed'
   | 'failed'
@@ -353,7 +354,8 @@ export type VerifyEvidenceType =
   'screenshot' | 'gif' | 'video' | 'audio' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
-export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
+export type VerifyEvidenceCapturedBy =
+  'agent' | 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
 
 /**
  * Provenance of a user's acceptance decision on a verify round

@@ -638,7 +638,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
       '  Produce concrete evidence while you work, and include artifact paths, commands, and observed results in your final response.',
     );
     taskLines.push(
-      '  Do not judge or submit the Acceptance yourself; an independent verifier decides whether this Task is complete.',
+      '  Do not judge the Acceptance. A dedicated post-run phase will ask you to submit the evidence you produced; an independent verifier decides whether this Task is complete.',
     );
   }
 

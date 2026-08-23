@@ -75,7 +75,7 @@ describe('GoalService', () => {
     );
     expect(task?.instruction).toContain('Do not implement, validate, or pre-empt any sibling');
     expect(task?.instruction).toContain(
-      'do not invoke Acceptance skills or Acceptance CLI commands',
+      'Do not invoke Acceptance skills or Acceptance CLI commands',
     );
   });
 
@@ -100,7 +100,8 @@ describe('GoalService', () => {
 
     expect(taskModel.shouldPauseOnTopicComplete(task!)).toBe(false);
     expect(task?.config).not.toHaveProperty('verify');
-    expect(acceptance).toMatchObject({ config: { enabled: true, verifierAgentId: agentId } });
+    expect(acceptance).toMatchObject({ config: { enabled: true } });
+    expect(acceptance?.config).not.toHaveProperty('verifierAgentId');
     expect(acceptance?.requirement).toContain('Verify only this Work: Generate isolated data.');
     expect(acceptance?.requirement).toContain(
       'Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',

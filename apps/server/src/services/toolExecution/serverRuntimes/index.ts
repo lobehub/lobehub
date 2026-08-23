@@ -9,6 +9,7 @@
 import { GoalIdentifier } from '@lobechat/builtin-tool-goal';
 
 import type { ToolExecutionContext } from '../types';
+import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
 import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
@@ -69,6 +70,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  acceptanceEvidenceRuntime,
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,

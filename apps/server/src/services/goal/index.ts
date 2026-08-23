@@ -280,14 +280,7 @@ export class GoalService {
           projectId: graph.goal.projectId ?? undefined,
         });
         const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
-          config: {
-            enabled: true,
-            // Keep the verifier in an isolated thread, but let it inherit the
-            // Goal agent's execution target. This is what gives it access to
-            // local artifacts produced by the responsible Task instead of
-            // forcing it to trust the builder's textual summary.
-            ...(graph.goal.agentId ? { verifierAgentId: graph.goal.agentId } : {}),
-          },
+          config: { enabled: true },
           requirement: this.buildWorkAcceptanceRequirement(
             graph,
             frontier.title,
@@ -456,7 +449,7 @@ export class GoalService {
       `Current Work contract (authoritative execution scope): ${title}`,
       description,
       'Execute only the Current Work contract. Do not implement, validate, or pre-empt any sibling or downstream Work node, even when the overall goal context describes it.',
-      'The complete requirements for this Work are included here. Do not inspect unrelated agent documents to recover requirements, and do not invoke Acceptance skills or Acceptance CLI commands; the coordinator and independent verifier own Acceptance execution.',
+      'The complete requirements for this Work are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Work; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
       'Create implementation-level subtasks when useful. Finish the operation once the Current Work deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
       'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',
     ]
