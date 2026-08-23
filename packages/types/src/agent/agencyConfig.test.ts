@@ -610,6 +610,12 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
   });
 
+  it('uses the model-specific levels supported by custom server-default models', () => {
+    expect(getCodexReasoningEffortLevels('deepseek-v4-flash')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('deepseek-v4-pro')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('glm-5.2')).toEqual(['high', 'max']);
+  });
+
   it('uses conservative common levels for old, unknown, and default models', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);

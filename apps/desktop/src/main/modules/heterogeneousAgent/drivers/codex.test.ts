@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import type { PrepareProviderBindingContext } from '../types';
@@ -41,9 +43,52 @@ describe('codexDriver provider binding', () => {
     expect(config).toContain('model = "lobehub/gpt-5.4"');
     expect(config).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
     expect(config).toContain('env_key = "LOBEHUB_HETERO_TOKEN"');
+    expect(config).not.toContain('model_catalog_json');
+    expect(plan.profileFiles).toHaveLength(1);
     expect(config).not.toContain('stale');
     expect(plan.env.LOBEHUB_HETERO_TOKEN).toBeUndefined();
   });
+
+  it.each([
+    ['deepseek-v4-flash', 'high', ['low', 'high', 'max'], 'tokens'],
+    ['deepseek-v4-pro', 'high', ['low', 'high', 'max'], 'tokens'],
+    ['glm-5.2', 'max', ['high', 'max'], 'bytes'],
+  ] as const)(
+    'writes a current Codex model catalog for %s',
+    async (selectedModel, defaultReasoningLevel, reasoningLevels, truncationMode) => {
+      const profileDir = 'C:\\managed\\codex';
+      const plan = await codexDriver.prepareServerDefaultBinding!({
+        args: [],
+        endpoint: 'https://app.example.com',
+        env: {},
+        model: selectedModel,
+        profileDir,
+      });
+      const config = plan.profileFiles?.find(({ path }) => path === 'config.toml')?.content ?? '';
+      const catalogContent = plan.profileFiles?.find(({ path }) => path === 'models.json')?.content;
+      const catalog = JSON.parse(catalogContent ?? '{}');
+      const model = catalog.models?.[0];
+
+      expect(plan.args).toEqual(['--model', `lobehub/${selectedModel}`]);
+      expect(config).toContain(
+        `model_catalog_json = ${JSON.stringify(path.join(profileDir, 'models.json'))}`,
+      );
+      expect(catalog.models).toHaveLength(1);
+      expect(model).toMatchObject({
+        apply_patch_tool_type: null,
+        context_window: 1_048_576,
+        default_reasoning_level: defaultReasoningLevel,
+        max_context_window: 1_048_576,
+        shell_type: 'unified_exec',
+        slug: `lobehub/${selectedModel}`,
+        supports_reasoning_summary_parameter: false,
+        truncation_policy: { limit: 10_000, mode: truncationMode },
+      });
+      expect(
+        model.supported_reasoning_levels.map(({ effort }: { effort: string }) => effort),
+      ).toEqual(reasoningLevels);
+    },
+  );
 
   it('writes a secret-free Responses provider config and injects the key through env', async () => {
     const plan = await codexDriver.prepareProviderBinding!(bindingContext());

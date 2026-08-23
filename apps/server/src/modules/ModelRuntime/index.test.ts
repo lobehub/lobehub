@@ -205,13 +205,31 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
   });
 
-  it('offers every tool-capable relay model to Claude Code without widening Codex', async () => {
+  it('offers tool-capable relay models to Claude Code and only explicit custom models to Codex', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
           enabled: true,
           serverModelLists: [
             { abilities: { functionCall: true }, enabled: true, id: 'kimi-k2.6', type: 'chat' },
+            {
+              abilities: { functionCall: true },
+              enabled: true,
+              id: 'deepseek-v4-flash',
+              type: 'chat',
+            },
+            {
+              abilities: { functionCall: true },
+              enabled: true,
+              id: 'deepseek-v4-pro',
+              type: 'chat',
+            },
+            {
+              abilities: { functionCall: true },
+              enabled: true,
+              id: 'glm-5.2',
+              type: 'chat',
+            },
             {
               abilities: { functionCall: true },
               enabled: true,
@@ -227,8 +245,14 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
 
     await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
-      'claude-code': [{ model: 'kimi-k2.6' }, { model: 'gemini-3.1-pro-preview' }],
-      'codex': [],
+      'claude-code': [
+        { model: 'kimi-k2.6' },
+        { model: 'deepseek-v4-flash' },
+        { model: 'deepseek-v4-pro' },
+        { model: 'glm-5.2' },
+        { model: 'gemini-3.1-pro-preview' },
+      ],
+      'codex': [{ model: 'deepseek-v4-flash' }, { model: 'deepseek-v4-pro' }, { model: 'glm-5.2' }],
     });
   });
 

@@ -5,7 +5,12 @@ import type {
   OpenAIChatMessage,
   UserMessageContentPart,
 } from '@lobechat/model-runtime';
-import { RequestTrigger } from '@lobechat/types';
+import type { CodexReasoningEffort } from '@lobechat/types';
+import {
+  getCodexReasoningEffortLevels,
+  isCodexServerDefaultCustomModel,
+  RequestTrigger,
+} from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import type { ServerDefaultHeterogeneousAgentType } from '@/server/modules/ModelRuntime';
@@ -829,9 +834,24 @@ export const invokeServerDefaultModel = async (params: {
     actorUserId: params.userId,
     workspaceId: params.workspaceId,
   });
+  const { reasoning, ...chatCompletionsPayload } = params.payload;
+  const requestedReasoningEffort = reasoning?.effort;
+  const reasoningEffort = getCodexReasoningEffortLevels(params.model).includes(
+    requestedReasoningEffort as CodexReasoningEffort,
+  )
+    ? (requestedReasoningEffort as ChatStreamPayload['reasoning_effort'])
+    : undefined;
+  const payload =
+    params.agentType === 'codex' && isCodexServerDefaultCustomModel(params.model)
+      ? {
+          ...chatCompletionsPayload,
+          apiMode: 'chatCompletion' as const,
+          reasoning_effort: params.payload.reasoning_effort ?? reasoningEffort,
+        }
+      : params.payload;
   const response = await runtime.chat(
     {
-      ...params.payload,
+      ...payload,
       model,
       stream: true,
     },

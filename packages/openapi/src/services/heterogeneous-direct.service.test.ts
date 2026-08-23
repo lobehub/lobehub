@@ -99,15 +99,62 @@ describe('heterogeneous direct invocation protocol', () => {
     const result = await invokeServerDefaultModel({
       agentType: 'codex',
       model: 'gpt-5.4',
-      payload: { messages: [], model: 'lobehub-default', stream: true },
+      payload: {
+        apiMode: 'responses',
+        messages: [],
+        model: 'lobehub-default',
+        reasoning: { effort: 'high', summary: 'detailed' },
+        stream: true,
+      },
       signal: new AbortController().signal,
       userId: 'user-1',
     });
 
     const runtimePayload = chat.mock.calls[0][0];
     expect(result.model).toBe('prod-gpt');
-    expect(runtimePayload).toMatchObject({ messages: [], model: 'prod-gpt', stream: true });
+    expect(runtimePayload).toMatchObject({
+      apiMode: 'responses',
+      messages: [],
+      model: 'prod-gpt',
+      reasoning: { effort: 'high', summary: 'detailed' },
+      stream: true,
+    });
     expect(runtimePayload).not.toHaveProperty('deploymentName');
+  });
+
+  it('adapts custom Codex relay models to chat completions with their reasoning effort', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'deepseek-v4-pro',
+      provider: 'lobehub',
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'codex',
+      model: 'deepseek-v4-pro',
+      payload: {
+        apiMode: 'responses',
+        messages: [],
+        model: 'lobehub-default',
+        reasoning: { effort: 'max', summary: 'detailed' },
+        stream: true,
+      },
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    const runtimePayload = chat.mock.calls[0][0];
+    expect(runtimePayload).toMatchObject({
+      apiMode: 'chatCompletion',
+      messages: [],
+      model: 'deepseek-v4-pro',
+      reasoning_effort: 'max',
+      stream: true,
+    });
+    expect(runtimePayload).not.toHaveProperty('reasoning');
   });
 
   it('fails closed before runtime initialization for an unsupported direct protocol route', async () => {
