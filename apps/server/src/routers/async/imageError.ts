@@ -1,6 +1,8 @@
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType } from '@lobechat/types';
 
+import { AicoManagedPolicyError } from '@/server/services/aico/managedPolicy';
+
 import { CONTENT_POLICY_ERROR_MESSAGE, getContentPolicyErrorMessage } from './contentPolicyError';
 
 const IMAGE_EDITING_NO_IMAGE_MESSAGE = [
@@ -88,6 +90,13 @@ export const categorizeImageGenerationError = ({
   if (error.errorType === AgentRuntimeErrorType.PermissionDenied) {
     return {
       errorMessage: error.error?.message || error.message || AgentRuntimeErrorType.PermissionDenied,
+      errorType: AsyncTaskErrorType.InvalidProviderAPIKey,
+    };
+  }
+
+  if (error instanceof AicoManagedPolicyError) {
+    return {
+      errorMessage: error.code || error.message || 'Billing or authorization error',
       errorType: AsyncTaskErrorType.InvalidProviderAPIKey,
     };
   }

@@ -22,6 +22,7 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { AicoBillingModel } from '@/database/models/aicoBilling';
 import {
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
@@ -46,6 +47,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { resolvePreferredGenerationBilling } from '@/server/services/aico/generationBilling';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
@@ -123,7 +125,14 @@ const searchUserMemories = async (
   const normalizedInput = normalizeSearchMemoryParams(input);
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-  const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+  const billingModel = new AicoBillingModel(ctx.serverDB);
+  const billingContext = await resolvePreferredGenerationBilling(
+    (userId) => billingModel.getUserWallet(userId),
+    ctx.userId,
+  );
+  const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider, undefined, {
+    billingContext,
+  });
   const normalizedQueries = [
     ...new Set((normalizedInput.queries ?? []).map((query) => query.trim()).filter(Boolean)),
   ];
@@ -164,11 +173,18 @@ const searchUserMemories = async (
 const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-  // Read user's provider config from database
+  const resolvedProvider = ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider;
+  const billingModel = new AicoBillingModel(serverDB);
+  const billingContext = await resolvePreferredGenerationBilling(
+    (uid) => billingModel.getUserWallet(uid),
+    userId,
+  );
   const agentRuntime = await initModelRuntimeFromDB(
     serverDB,
     userId,
-    ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+    resolvedProvider,
+    undefined,
+    { billingContext },
   );
 
   return { agentRuntime, embeddingModel };

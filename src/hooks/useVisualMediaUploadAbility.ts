@@ -1,4 +1,5 @@
 import { useModelSupportAudio } from '@/hooks/useModelSupportAudio';
+import { useModelSupportFiles } from '@/hooks/useModelSupportFiles';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useModelSupportVideo } from '@/hooks/useModelSupportVideo';
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
@@ -11,6 +12,7 @@ export const useVisualMediaUploadAbility = (model: string, provider: string, age
   const supportVision = useModelSupportVision(model, provider);
   const supportVideo = useModelSupportVideo(model, provider);
   const supportAudio = useModelSupportAudio(model, provider);
+  const supportFiles = useModelSupportFiles(model, provider);
   const supportToolUse = useModelSupportToolUse(model, provider);
   const enableVisualUnderstanding = useServerConfigStore(
     serverConfigSelectors.enableVisualUnderstanding,
@@ -40,11 +42,14 @@ export const useVisualMediaUploadAbility = (model: string, provider: string, age
   );
 
   if (bypassMediaGate) {
-    return { canUploadAudio: true, canUploadImage: true, canUploadVideo: true };
+    return { canUploadAudio: true, canUploadDocument: true, canUploadImage: true, canUploadVideo: true };
   }
 
   return {
     canUploadAudio: supportAudio,
+    // Default true — RAG handles document extraction for all models.
+    // Only block when model explicitly declares files: false.
+    canUploadDocument: supportFiles !== false,
     canUploadImage: supportVision || (canUseVisualUnderstanding && fallbackSupportVision),
     canUploadVideo: supportVideo || (canUseVisualUnderstanding && fallbackSupportVideo),
   };

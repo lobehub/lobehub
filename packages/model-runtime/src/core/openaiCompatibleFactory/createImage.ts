@@ -12,7 +12,8 @@ import type {
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseDataUri } from '../../utils/uriParser';
 import { convertImageUrlToFile } from '../contextBuilders/openai';
-import { convertOpenAIImageUsage } from '../usageConverters/openai';
+import { convertOpenAIImageUsage, convertOpenAIUsage } from '../usageConverters/openai';
+import { computeImageCost } from '../usageConverters/utils/computeImageCost';
 
 const log = createDebug('lobe-image:openai-compatible');
 
@@ -242,6 +243,8 @@ export const extractImageUrlFromChatMessage = (message: unknown): string | undef
 async function generateByChatModel(
   client: OpenAI,
   payload: CreateImagePayload,
+  provider: string,
+  imageOptions?: CreateOpenAICompatibleImageOptions,
   requestModel?: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
@@ -299,7 +302,35 @@ async function generateByChatModel(
   const imageUrl = extractImageUrlFromChatMessage(message);
   if (imageUrl) {
     log('Successfully extracted image from chat response');
-    return { imageUrl };
+
+    // Extract usage/cost from the chat completion response
+    const pricingModel = imageOptions?.pricingModel ?? model;
+    const pricing = await getModelPricing(pricingModel, provider, imageOptions?.pricingContext);
+
+    let modelUsage = response.usage
+      ? convertOpenAIUsage(response.usage, {
+          model: pricingModel,
+          pricing,
+          provider,
+        })
+      : undefined;
+
+    // Fallback: estimate cost from model-bank pricing when provider doesn't report usage
+    if (modelUsage && modelUsage.cost === undefined && pricing) {
+      const estimated = computeImageCost(
+        pricing,
+        { width: params.width, height: params.height, size: params.size as string },
+        params.n ?? 1,
+      );
+      if (estimated) {
+        modelUsage = { ...modelUsage, cost: estimated.totalCost };
+      }
+    }
+
+    return {
+      imageUrl,
+      ...(modelUsage ? { modelUsage } : {}),
+    };
   }
 
   throw new Error('No image generated in chat completion response');
@@ -324,7 +355,7 @@ export async function createOpenAICompatibleImage(
   const useChatImage = routingModel.endsWith(':image') || provider === 'openrouter';
   if (useChatImage) {
     try {
-      return await generateByChatModel(client, payload, requestModel);
+      return await generateByChatModel(client, payload, provider, options, requestModel);
     } catch (error) {
       if (routingModel.endsWith(':image') || !(error instanceof Error)) throw error;
       if (!error.message.includes('No image generated in chat completion response')) throw error;

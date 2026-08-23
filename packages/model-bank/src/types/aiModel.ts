@@ -75,7 +75,7 @@ export interface ModelAbilities {
 
 const AiModelAbilitiesSchema = z.object({
   audio: z.boolean().optional(),
-  // files: z.boolean().optional(),
+  files: z.boolean().optional(),
   functionCall: z.boolean().optional(),
   imageOutput: z.boolean().optional(),
   reasoning: z.boolean().optional(),

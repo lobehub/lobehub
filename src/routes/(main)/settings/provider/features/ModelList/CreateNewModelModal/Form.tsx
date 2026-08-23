@@ -192,14 +192,14 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
               placeholder={t('providerModels.item.modelConfig.type.placeholder')}
             />
           </Form.Item>
-          {/*<Form.Item*/}
-          {/*  extra={t('providerModels.item.modelConfig.files.extra')}*/}
-          {/*  label={t('providerModels.item.modelConfig.files.title')}*/}
-          {/*  name={['abilities', 'files']}*/}
-          {/*  valuePropName={'checked'}*/}
-          {/*>*/}
-          {/*  <Checkbox />*/}
-          {/*</Form.Item>*/}
+          <Form.Item
+            extra={t('providerModels.item.modelConfig.files.extra')}
+            label={t('providerModels.item.modelConfig.files.title')}
+            name={['abilities', 'files']}
+            valuePropName={'checked'}
+          >
+            <Checkbox />
+          </Form.Item>
         </Form>
       </div>
     );
