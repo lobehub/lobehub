@@ -220,7 +220,14 @@ const ChatList = memo<ChatListProps>(
     }
 
     if (feedback.showSkeleton) {
-      return <SkeletonList />;
+      // The header is chrome, not async content: dropping it here blanks a
+      // server-rendered title the moment the list mounts to fetch.
+      return (
+        <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+          {headerSlot}
+          <SkeletonList />
+        </Flexbox>
+      );
     }
 
     const content =

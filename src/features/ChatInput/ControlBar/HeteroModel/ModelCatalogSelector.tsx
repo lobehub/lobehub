@@ -279,6 +279,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
     }
 
     const handleModelSelect = variant === 'submenu' ? onSelect : handleSelect;
+    const closeOnSelect = variant !== 'submenu';
     const menu = (
       <>
         <DropdownMenuHeader className={styles.search}>
@@ -305,6 +306,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
         <DropdownMenuScrollViewport>
           <DropdownMenuItem
             className={styles.item}
+            closeOnClick={closeOnSelect}
             onClick={() => handleModelSelect(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)}
           >
             <DropdownMenuItemContent>
@@ -357,6 +359,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                 return (
                   <DropdownMenuItem
                     className={styles.item}
+                    closeOnClick={closeOnSelect}
                     key={item.id}
                     onClick={() => handleModelSelect(item.id)}
                   >

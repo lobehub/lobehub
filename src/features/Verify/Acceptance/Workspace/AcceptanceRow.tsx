@@ -12,6 +12,7 @@ import {
   CircleDashed,
   CircleHelp,
   CircleX,
+  GitMerge,
   LoaderCircle,
   MoreHorizontal,
   Pencil,
@@ -31,6 +32,8 @@ import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 import { getAcceptanceStatusActions } from '../statusActions';
+import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
+import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 
 const styles = createStaticStyles(({ css }) => ({
   editRow: css`
@@ -119,7 +122,7 @@ const AcceptanceRow = memo<{
   item: AcceptanceListItem;
   onChanged: () => Promise<unknown> | unknown;
 }>(({ active, item, onChanged }) => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -148,7 +151,7 @@ const AcceptanceRow = memo<{
     if (isSavingRef.current) return;
     const next = draftTitle.trim();
     if (!next) {
-      toast.error(t('verify:acceptance.workspace.renameEmpty'));
+      toast.error(t('acceptance.workspace.renameEmpty'));
       setDraftTitle(title);
       setEditing(false);
       return;
@@ -162,11 +165,11 @@ const AcceptanceRow = memo<{
     try {
       await verifyService.renameAcceptance(item.id, next);
       await refresh();
-      toast.success(t('verify:acceptance.workspace.renameSuccess'));
+      toast.success(t('acceptance.workspace.renameSuccess'));
       setEditing(false);
     } catch (error) {
       console.error('[acceptance:rename]', error);
-      toast.error(t('verify:acceptance.workspace.renameError'));
+      toast.error(t('acceptance.workspace.renameError'));
     } finally {
       isSavingRef.current = false;
       setMutating(false);
@@ -178,36 +181,91 @@ const AcceptanceRow = memo<{
     try {
       await verifyService.updateAcceptanceStatus(item.id, status);
       await refresh();
-      toast.success(t('verify:acceptance.workspace.statusSuccess'));
+      toast.success(t('acceptance.workspace.statusSuccess'));
     } catch (error) {
       console.error('[acceptance:status]', error);
-      toast.error(t('verify:acceptance.workspace.statusError'));
+      toast.error(t('acceptance.workspace.statusError'));
     } finally {
       setMutating(false);
     }
   };
 
+  const assignProject = async (projectId: string | null) => {
+    setMutating(true);
+    try {
+      await verifyService.setAcceptanceProject(item.id, projectId);
+      await refresh();
+      toast.success(
+        projectId
+          ? t(
+              item.project?.id
+                ? 'acceptance.workspace.project.moveSuccess'
+                : 'acceptance.workspace.project.addSuccess',
+            )
+          : t('acceptance.workspace.project.removeSuccess'),
+      );
+    } catch (error) {
+      console.error('[acceptance:project]', error);
+      toast.error(t('acceptance.workspace.project.error'));
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const projectItem = useAcceptanceProjectMenuItem({
+    currentProjectId: item.project?.id,
+    onSelect: (projectId) => void assignProject(projectId),
+  });
+
+  /**
+   * Fold this entry into another acceptance — its checks (with rounds and
+   * evidence) move over and this row disappears. Navigating the active row to
+   * the target keeps the reviewer on the surface their checks just moved to,
+   * instead of on a 404.
+   */
+  const mergeIntoAcceptance = () => {
+    openMergeAcceptanceModal({
+      source: item,
+      onConfirm: async (targetId) => {
+        setMutating(true);
+        try {
+          const summary = await verifyService.mergeAcceptance(item.id, targetId);
+          if (active) navigate(`/acceptance/${targetId}`, { replace: true });
+          await Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(targetId))]);
+          toast.success(t('acceptance.workspace.merge.success', { count: summary.movedChecks }));
+          return true;
+        } catch (error) {
+          console.error('[acceptance:merge]', error);
+          toast.error(t('acceptance.workspace.merge.error'));
+          return false;
+        } finally {
+          setMutating(false);
+        }
+      },
+    });
+  };
+
   const removeAcceptance = () => {
     confirmModal({
-      cancelText: t('common:cancel'),
-      content: t('verify:acceptance.workspace.deleteConfirmDescription', { title }),
+      cancelText: t('actions.cancel'),
+      content: t('acceptance.workspace.deleteConfirmDescription', { title }),
       okButtonProps: { danger: true },
-      okText: t('common:delete'),
+      okText: t('actions.delete'),
       onOk: async () => {
         setMutating(true);
         try {
           await verifyService.deleteAcceptance(item.id);
           if (active) navigate('/acceptance', { replace: true });
           await onChanged();
-          toast.success(t('verify:acceptance.workspace.deleteSuccess'));
+          toast.success(t('acceptance.workspace.deleteSuccess'));
         } catch (error) {
           console.error('[acceptance:delete]', error);
-          toast.error(t('verify:acceptance.workspace.deleteError'));
+          toast.error(t('acceptance.workspace.deleteError'));
         } finally {
           setMutating(false);
         }
       },
-      title: t('verify:acceptance.workspace.deleteConfirmTitle'),
+      title: t('acceptance.workspace.deleteConfirmTitle'),
     });
   };
 
@@ -216,7 +274,7 @@ const AcceptanceRow = memo<{
       return {
         icon: <Icon icon={CircleCheck} />,
         key: action,
-        label: t('verify:acceptance.workspace.actions.markAccepted'),
+        label: t('acceptance.workspace.actions.markAccepted'),
         onClick: () => void changeStatus('accepted'),
       };
     }
@@ -224,14 +282,14 @@ const AcceptanceRow = memo<{
       return {
         icon: <Icon icon={RotateCcw} />,
         key: action,
-        label: t('verify:acceptance.workspace.actions.reopen'),
+        label: t('acceptance.workspace.actions.reopen'),
         onClick: () => void changeStatus('delivered'),
       };
     }
     return {
       icon: <Icon icon={X} />,
       key: action,
-      label: t('verify:acceptance.workspace.actions.markClosed'),
+      label: t('acceptance.workspace.actions.markClosed'),
       onClick: () => void changeStatus('closed'),
     };
   });
@@ -240,8 +298,15 @@ const AcceptanceRow = memo<{
     {
       icon: <Icon icon={Pencil} />,
       key: 'rename',
-      label: t('verify:acceptance.workspace.actions.rename'),
+      label: t('acceptance.workspace.actions.rename'),
       onClick: startRename,
+    },
+    projectItem,
+    {
+      icon: <Icon icon={GitMerge} />,
+      key: 'merge',
+      label: t('acceptance.workspace.actions.merge'),
+      onClick: mergeIntoAcceptance,
     },
     ...(statusItems.length > 0
       ? [
@@ -249,7 +314,7 @@ const AcceptanceRow = memo<{
             children: statusItems,
             icon: <Icon icon={CircleDashed} />,
             key: 'status',
-            label: t('verify:acceptance.workspace.actions.status'),
+            label: t('acceptance.workspace.actions.status'),
           },
           { type: 'divider' as const },
         ]
@@ -258,7 +323,7 @@ const AcceptanceRow = memo<{
       danger: true,
       icon: <Icon icon={Trash2} />,
       key: 'delete',
-      label: t('verify:acceptance.workspace.actions.delete'),
+      label: t('acceptance.workspace.actions.delete'),
       onClick: removeAcceptance,
     },
   ];
@@ -306,7 +371,7 @@ const AcceptanceRow = memo<{
           <ActionIcon
             icon={MoreHorizontal}
             size={'small'}
-            title={t('verify:acceptance.workspace.actions.more')}
+            title={t('acceptance.workspace.actions.more')}
           />
         </DropdownMenu>
       }

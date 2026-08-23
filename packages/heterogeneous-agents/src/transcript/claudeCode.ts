@@ -73,10 +73,12 @@ const textOfContent = (content: any, img?: ImageStats): string => {
 };
 
 /**
- * Claude Code prepends an injected `## Workspace` preamble to the first user
- * message; strip it when the message doubles as the title / prompt preview.
+ * Older LobeHub versions prepended an injected `## Workspace` preamble to the
+ * first user message; strip both historical variants when that message doubles
+ * as the title / prompt preview.
  */
-const CC_PREAMBLE_RE = /^##\s*workspace\b[\S\s]+?working directory is[^\n]*?\.\s*/i;
+const CC_PREAMBLE_RE =
+  /^##\s*workspace\s*\nYou are running on the user's own machine\. Your working directory is `[^`\n]*`\.\s*(?:This is a persistent local filesystem — changes are not lost when the task ends, so\s*\nthere is no need to commit or push purely to preserve your work\.\s*)?/i;
 const stripCcPreamble = (text: string): string => {
   if (!/^##\s*workspace\b/i.test(text)) return text;
   const stripped = text.replace(CC_PREAMBLE_RE, '').trim();

@@ -52,7 +52,7 @@ export const { POST } = serve<RunThreadTrajectoryPayload>(
       return { error: data.error, success: false };
     }
 
-    const { run, testCase, envPrompt } = data;
+    const { environment, envPrompt, run, testCase } = data;
 
     if (run.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s threadId=%s', runId, testCaseId, threadId);
@@ -69,6 +69,7 @@ export const { POST } = serve<RunThreadTrajectoryPayload>(
         testCaseId,
         threadId,
         topicId,
+        environment,
       }),
     );
 

@@ -35,6 +35,38 @@ describe('refineErrorCode', () => {
       ).toBe(AgentRuntimeErrorType.DatabasePersistError);
     });
 
+    it('reclassifies a 500-wrapped V8 JSON.parse throw into HarnessJsonParseError', () => {
+      // The production shape: a `SyntaxError` out of some harness `JSON.parse`,
+      // wrapped as a bare 500 and therefore invisible to every dashboard.
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: 'Bad escaped character in JSON at position 46269 (line 1 column 46270)',
+        }),
+      ).toBe(AgentRuntimeErrorType.HarnessJsonParseError);
+    });
+
+    it.each([
+      'Unterminated string in JSON at position 12 (line 1 column 13)',
+      "Expected ',' or '}' after property value in JSON at position 23",
+      'Unexpected end of JSON input',
+    ])('covers the other V8 JSON.parse phrasings: %s', (message) => {
+      expect(
+        refineErrorCode({ errorType: String(ChatErrorType.InternalServerError), message }),
+      ).toBe(AgentRuntimeErrorType.HarnessJsonParseError);
+    });
+
+    it('does not claim a JSON-parse phrase coming from a typed provider error', () => {
+      // Only the catch-all wrappers are refinable, so an upstream body that
+      // merely quotes a parse failure keeps its own provider code.
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.ProviderServiceUnavailable,
+          message: 'upstream said: Unexpected end of JSON input',
+        }),
+      ).toBeUndefined();
+    });
+
     it('leaves a 500 wrapper unrefined when nothing matches', () => {
       expect(
         refineErrorCode({

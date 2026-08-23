@@ -187,6 +187,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     params: {
       instruction: string;
       assigneeAgentId?: string;
+      // Bind a goal entity to the created task (see TaskService.createTask).
+      goal?: {
+        maxRounds?: number | null;
+        maxTotalCost?: number | null;
+        requirement?: string | null;
+        title?: string;
+      };
       name: string;
       parentIdentifier?: string;
       priority?: number;
@@ -202,6 +209,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         assigneeAgentId:
           params.assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         createdByAgentId: ctx?.agentId,
+        goal: params.goal,
         instruction: params.instruction,
         name: params.name,
         parentTaskId: parentIdentifier,
@@ -305,6 +313,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     const created = await this.#createTask(
       {
         assigneeAgentId: ctx.agentId,
+        // The goals row is created together with the task, so the "is a goal"
+        // marker can never race the verify-config write below.
+        goal: {
+          maxRounds: params.maxIterations,
+          maxTotalCost: params.maxTotalCost ?? null,
+          requirement: params.name,
+          title: params.name,
+        },
         instruction: params.instruction,
         name: params.name,
       },
@@ -328,19 +344,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       );
       const maxIterations = Math.min(10, Math.max(2, params.maxIterations ?? 3));
 
-      // Both APIs merge into tasks.config with a read-modify-write cycle. Keep
-      // them sequential so the verify write cannot overwrite the goal metadata.
-      await taskService.updateConfig(identifier, {
-        goal: {
-          // `null` is the user's explicit "no cap"; `undefined` means they
-          // never chose, which must fall back to the documented default.
-          // Coercing the second into the first made an uncapped loop the
-          // default for every goal that omitted the field.
-          maxIterations: params.maxIterations,
-          maxTotalCost: params.maxTotalCost ?? null,
-          originTopicId: ctx.topicId ?? null,
-        },
-      });
       await taskService.updateVerifyConfig({
         id: identifier,
         verify: {

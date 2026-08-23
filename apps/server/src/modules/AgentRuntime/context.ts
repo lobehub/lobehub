@@ -20,6 +20,12 @@ import { type ToolExecutionService } from '@/server/services/toolExecution';
 import { type IStreamEventManager } from './types';
 
 export interface RuntimeExecutorContext {
+  /**
+   * Cancels tool work that is still in flight for this step. Driven by the
+   * persisted interruption flag (the step runs in its own invocation, so there
+   * is no in-process controller to share with whoever requested the stop).
+   */
+  abortSignal?: AbortSignal;
   agentConfig?: any;
   /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool

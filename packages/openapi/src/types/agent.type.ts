@@ -1,5 +1,5 @@
-import type { LobeAgentChatConfig } from '@lobechat/types';
-import { ReasoningGraphSchema } from '@lobechat/types';
+import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { z } from 'zod';
 
 import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
@@ -11,6 +11,7 @@ import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
  * Create Agent request parameters
  */
 export interface CreateAgentRequest {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'enableGraphMode' | 'graph'>;
   avatar?: string;
   chatConfig?: LobeAgentChatConfig;
   description?: string;
@@ -24,18 +25,22 @@ export interface CreateAgentRequest {
 export type GetAgentsRequest = IPaginationQuery;
 
 export const CreateAgentRequestSchema = z.object({
+  agencyConfig: z
+    .object({
+      enableGraphMode: z.boolean().nullish(),
+      graph: AgentGraphSchema.nullish(),
+    })
+    .nullish(),
   avatar: z.string().nullish(),
   chatConfig: z
     .object({
       disableContextCaching: z.boolean().nullish(),
       displayMode: z.enum(['chat', 'docs']).nullish(),
       enableCompressHistory: z.boolean().nullish(),
-      enableGraphMode: z.boolean().nullish(),
       enableHistoryCount: z.boolean().nullish(),
       enableMaxTokens: z.boolean().nullish(),
       enableReasoning: z.boolean().nullish(),
       enableReasoningEffort: z.boolean().nullish(),
-      graph: ReasoningGraphSchema.nullish(),
       historyCount: z.number().nullish(),
       reasoningBudgetToken: z.number().nullish(),
       reasoningEffort: z.enum(['low', 'medium', 'high']).nullish(),

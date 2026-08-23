@@ -49,6 +49,7 @@ export const readAgentSignalMarker = (
 
   return {
     kind: kind as AgentSignalOperationKind,
+    ...(str(marker.agentId) ? { agentId: str(marker.agentId) } : {}),
     ...(str(marker.anchorMessageId) ? { anchorMessageId: str(marker.anchorMessageId) } : {}),
     ...(str(marker.localDate) ? { localDate: str(marker.localDate) } : {}),
     ...(str(marker.reviewWindowEnd) ? { reviewWindowEnd: str(marker.reviewWindowEnd) } : {}),

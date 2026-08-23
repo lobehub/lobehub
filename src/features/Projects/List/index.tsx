@@ -1,10 +1,26 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Center,
+  ContextMenuTrigger,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
+import { Button, confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import { PlusIcon, SearchXIcon, SquareKanbanIcon } from 'lucide-react';
+import {
+  FolderClosedIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  SearchXIcon,
+  TrashIcon,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,13 +38,32 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  actions: css`
+    flex: none;
+    opacity: 0;
+    transition: opacity ${cssVar.motionDurationFast};
+
+    @media (hover: none) {
+      opacity: 1;
+    }
+  `,
   identifier: css`
     flex: none;
     min-width: 72px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  link: css`
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+
+    color: inherit;
   `,
   owner: css`
     flex: none;
@@ -42,6 +77,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
+    }
+
+    &:hover .project-row-actions,
+    &:focus-within .project-row-actions {
+      opacity: 1;
     }
   `,
   updatedAt: css`
@@ -72,13 +112,48 @@ const ProjectOwnerAvatar = memo<{ userId: string }>(({ userId }) => {
 ProjectOwnerAvatar.displayName = 'ProjectOwnerAvatar';
 
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
-  const { t } = useTranslation('project');
+  const { t } = useTranslation(['project', 'common']);
+  const [deleting, setDeleting] = useState(false);
+  const deleteProject = useProjectStore((s) => s.deleteProject);
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const canDelete = currentUserId === project.userId;
   const status = resolveProjectStatus(project.status);
   const statusVisual = PROJECT_STATUS_VISUALS[status];
 
-  return (
-    <WorkspaceLink to={`/project/${project.id}`}>
-      <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteProject(project.id);
+      toast.success(t('list.deleteSuccess', { name: project.name }));
+    } catch (error) {
+      console.error('Failed to delete project', error);
+      toast.error(t('list.deleteError'));
+      setDeleting(false);
+    }
+  };
+
+  const menuItems: DropdownItem[] = [
+    {
+      danger: true,
+      icon: <Icon icon={TrashIcon} />,
+      key: 'delete',
+      label: t('list.deleteAction'),
+      onClick: () => {
+        confirmModal({
+          cancelText: t('cancel', { ns: 'common' }),
+          content: t('list.deleteConfirmDescription', { name: project.name }),
+          okButtonProps: { danger: true },
+          okText: t('delete', { ns: 'common' }),
+          onOk: () => void handleDelete(),
+          title: t('list.deleteConfirmTitle'),
+        });
+      },
+    },
+  ];
+
+  const row = (
+    <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
+      <WorkspaceLink className={styles.link} to={`/project/${project.slug ?? project.id}`}>
         <Tooltip title={t(`acceptance.status.${status}`)}>
           <Icon color={statusVisual.color} icon={statusVisual.icon} size={16} />
         </Tooltip>
@@ -98,9 +173,23 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
         >
           {dayjs(project.updatedAt).fromNow()}
         </Text>
-      </Flexbox>
-    </WorkspaceLink>
+      </WorkspaceLink>
+      {canDelete && (
+        <span className={`${styles.actions} project-row-actions`}>
+          <DropdownMenu items={menuItems} placement={'bottomRight'}>
+            <ActionIcon
+              icon={MoreHorizontalIcon}
+              loading={deleting}
+              size={'small'}
+              title={t('list.moreActions')}
+            />
+          </DropdownMenu>
+        </span>
+      )}
+    </Flexbox>
   );
+
+  return canDelete ? <ContextMenuTrigger items={menuItems}>{row}</ContextMenuTrigger> : row;
 });
 
 ProjectRow.displayName = 'ProjectRow';
@@ -143,7 +232,7 @@ const ProjectListPage = memo(() => {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} onClick={openCreateProjectModal}>
+          <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
             {t('create.action')}
           </Button>
         </Flexbox>
@@ -155,7 +244,7 @@ const ProjectListPage = memo(() => {
           <Center flex={1} padding={48}>
             <Empty
               description={keyword.trim() ? t('list.searchEmpty') : t('list.emptyDescription')}
-              icon={keyword.trim() ? SearchXIcon : SquareKanbanIcon}
+              icon={keyword.trim() ? SearchXIcon : FolderClosedIcon}
             />
           </Center>
         ) : (

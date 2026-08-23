@@ -10,7 +10,7 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -18,29 +18,16 @@ import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+  openCriterionEditModal,
+} from '@/features/Verify/CriterionList';
+
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
-import { openCriterionEditModal } from './CriterionEditModal';
 
 const styles = createStaticStyles(({ css }) => ({
-  criterion: css`
-    cursor: pointer;
-    padding-block: 7px;
-    padding-inline: 10px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    /* Kept after :hover so specificity stays ascending for stylelint — the
-      secondary border is too faint to read on the dark elevated surface. */
-    html[data-theme='dark'] & + & {
-      border-block-start-color: ${cssVar.colorBorder};
-    }
-  `,
   header: css`
     position: sticky;
     z-index: 2;
@@ -71,24 +58,13 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   list: css`
-    overflow: hidden;
-    padding: 0;
     background: transparent;
-  `,
-  criterionTitle: css`
-    font-size: 13px;
-  `,
-  optional: css`
-    flex: none;
 
-    padding-block: 2px;
-    padding-inline: 7px;
-    border-radius: 6px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
+    /* The secondary border is too faint to read on the dark elevated surface
+      the intervention card sits on. */
+    html[data-theme='dark'] & > * + * {
+      border-block-start-color: ${cssVar.colorBorder};
+    }
   `,
   /**
    * Cancels the intervention scroller's own top padding. It has to sit on the
@@ -98,18 +74,6 @@ const styles = createStaticStyles(({ css }) => ({
    */
   root: css`
     margin-block-start: -8px;
-  `,
-  required: css`
-    flex: none;
-
-    padding-block: 2px;
-    padding-inline: 7px;
-    border-radius: 6px;
-
-    font-size: 11px;
-    color: ${cssVar.colorInfo};
-
-    background: ${cssVar.colorInfoBg};
   `,
   section: css`
     padding-block: 8px;
@@ -190,7 +154,6 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
       openCriterionEditModal({
         criterion: args.criteria[index],
         onSubmit: (value) => updateCriterion(index, value),
-        seq: index + 1,
       });
     const updateCriterion = (index: number, value: Partial<GoalCriterionDraft>) =>
       patch({
@@ -273,61 +236,50 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
           onToggle={() => toggleSection('criteria')}
         >
           <Flexbox gap={7}>
-            <Block className={styles.list} variant={'outlined'}>
+            <CriterionList className={styles.list}>
+              {/* Rows are read-only on purpose. A focusable input sitting in a
+                dense list is one stray click away from silently rewriting a
+                criterion; edits belong in the modal, where they are deliberate
+                and cancellable. */}
               {args.criteria.map((criterion, index) => (
-                <Flexbox
-                  horizontal
-                  align={'center'}
-                  className={styles.criterion}
-                  gap={8}
+                <CriterionRow
                   key={index}
-                  onClick={() => openEditModal(index)}
+                  seq={index + 1}
+                  title={criterion.title}
+                  actions={
+                    <>
+                      <ActionIcon
+                        icon={Pencil}
+                        size={'small'}
+                        title={t('builtins.lobe-task.goal.editCriterion')}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEditModal(index);
+                        }}
+                      />
+                      <ActionIcon
+                        icon={Trash2}
+                        size={'small'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          patch({
+                            criteria: args.criteria.filter((_, itemIndex) => itemIndex !== index),
+                          });
+                        }}
+                      />
+                    </>
+                  }
+                  onOpen={() => openEditModal(index)}
                 >
-                  <Text as={'span'} className={styles.seq}>
-                    C{index + 1}
-                  </Text>
-                  {/* Read-only on purpose. A focusable input sitting in a dense
-                    list is one stray click away from silently rewriting a
-                    criterion; edits belong in the modal, where they are
-                    deliberate and cancellable. */}
-                  <Text ellipsis className={styles.criterionTitle} style={{ flex: 1 }}>
-                    {criterion.title}
-                  </Text>
-                  <Button
-                    className={(criterion.required ?? true) ? styles.required : styles.optional}
-                    size={'small'}
-                    type={'text'}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      updateCriterion(index, { required: !(criterion.required ?? true) });
-                    }}
-                  >
-                    {(criterion.required ?? true)
-                      ? t('builtins.lobe-task.goal.required')
-                      : t('builtins.lobe-task.goal.optional')}
-                  </Button>
-                  <ActionIcon
-                    icon={Pencil}
-                    size={'small'}
-                    title={t('builtins.lobe-task.goal.editCriterion', { seq: index + 1 })}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEditModal(index);
-                    }}
+                  <CriterionRequiredChip
+                    required={criterion.required ?? true}
+                    onToggle={() =>
+                      updateCriterion(index, { required: !(criterion.required ?? true) })
+                    }
                   />
-                  <ActionIcon
-                    icon={Trash2}
-                    size={'small'}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      patch({
-                        criteria: args.criteria.filter((_, itemIndex) => itemIndex !== index),
-                      });
-                    }}
-                  />
-                </Flexbox>
+                </CriterionRow>
               ))}
-            </Block>
+            </CriterionList>
             <Flexbox horizontal>
               <Button
                 icon={<Icon icon={Plus} />}
@@ -343,7 +295,6 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
                     },
                     isNew: true,
                     onSubmit: (value) => patch({ criteria: [...args.criteria, value] }),
-                    seq: args.criteria.length + 1,
                   })
                 }
               >

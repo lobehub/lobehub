@@ -26,8 +26,8 @@ Four write paths, two timing classes:
 | Path                                                                    | When                                | Where                                                                                                                                                               |
 | ----------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Skill structured tools + sandbox `runCommand` (github / linear)         | at tool execution                   | `WorkModel.handleSkillToolResult`, called from server `toolExecution` and the client executor (`registerClientWorkFromIntent.ts` on the legacy non-gateway runtime) |
-| Shell Work scan (hetero codex/claude-code + device `lobe-local-system`) | at operation completion             | `apps/server/src/services/agentRuntime/shellWorkRegistration.ts` via `registerWorksForOperation`                                                                    |
-| File Work scan (sandbox entity files)                                   | at operation completion             | `apps/server/src/services/agentRuntime/workRegistration.ts`                                                                                                         |
+| Shell Work scan (hetero codex/claude-code + device `lobe-local-system`) | at operation completion             | `apps/server/src/services/workRegistration/shellWorkRegistration.ts` via `registerWorksForOperation`                                                                |
+| File Work scan (sandbox entity files)                                   | at operation completion             | `apps/server/src/services/workRegistration/registerWorksForOperation.ts`                                                                                            |
 | Task / document works                                                   | at creation by their owning feature | `WorkModel.registerTask` / `registerDocument`                                                                                                                       |
 
 ### Execution-time: skill providers
@@ -41,7 +41,7 @@ A normalizer turns one tool result into `ExternalToolWorkOperation | null` — n
 Heterogeneous CLI agents (codex, claude-code) and the device `lobe-local-system` tool run CLIs like `gh` through their own shell surfaces, which never pass the skill-tool hook. `registerWorksForOperation` recovers their Works at completion from the persisted command text + stdout. Layering:
 
 ```
-registerWorksForOperation (workRegistration.ts)
+registerWorksForOperation (registerWorksForOperation.ts)
   ├─ collectOperationRecords         one pass over the operation tree, shared by both scans
   ├─ registerShellWorks              (shellWorkRegistration.ts — the ENGINE, command-agnostic)
   │    ├─ SHELL_COMMAND_SOURCES      identifier→apiName scoping of shell surfaces
@@ -98,7 +98,7 @@ The whole scan returns `{attempted, failed}` and the completion backstop (`Compl
 **New shell CLI scanner, e.g. `linear` CLI or `vercel deploy`:**
 
 1. Add a normalizer in `packages/database/src/models/work/` reusing `parseShellCommandSegments`, plus a `WorkModel.registerShell<X>Result` facade method.
-2. Add `apps/server/src/services/agentRuntime/shellWorkScanners/<name>.ts` with `{ matches, name, register }` — `matches` stays a cheap substring check.
+2. Add `apps/server/src/services/workRegistration/shellWorkScanners/<name>.ts` with `{ matches, name, register }` — `matches` stays a cheap substring check.
 3. Append it to `SHELL_WORK_SCANNERS` in `shellWorkScanners/index.ts`. The engine needs zero changes.
 4. Pin the parsing edge cases in `packages/database/src/models/work/__tests__/` (wrapper unwrap, chained segments, failed/read-only commands must not register).
 
@@ -111,14 +111,15 @@ The whole scan returns `{attempted, failed}` and the completion backstop (`Compl
 
 ## File map
 
-| Concern                                              | Path                                                             |
-| ---------------------------------------------------- | ---------------------------------------------------------------- |
-| Schema                                               | `packages/database/src/schemas/work.ts`                          |
-| Type registry + read gate                            | `packages/database/src/models/work/registry.ts`                  |
-| WorkModel facade + provider normalizer map           | `packages/database/src/models/work/index.ts`                     |
-| gh CLI + structured github normalizer                | `packages/database/src/models/work/githubToolResult.ts`          |
-| Command-agnostic shell parsing                       | `packages/database/src/models/work/shellCommandParsing.ts`       |
-| Completion scan orchestrator (file + shell + anchor) | `apps/server/src/services/agentRuntime/workRegistration.ts`      |
-| Shell scan engine                                    | `apps/server/src/services/agentRuntime/shellWorkRegistration.ts` |
-| Per-CLI scanners                                     | `apps/server/src/services/agentRuntime/shellWorkScanners/`       |
-| Client (non-gateway) registration                    | `src/store/chat/agents/registerClientWorkFromIntent.ts`          |
+| Concern                                              | Path                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| Schema                                               | `packages/database/src/schemas/work.ts`                                  |
+| Type registry + read gate                            | `packages/database/src/models/work/registry.ts`                          |
+| WorkModel facade + provider normalizer map           | `packages/database/src/models/work/index.ts`                             |
+| gh CLI + structured github normalizer                | `packages/database/src/models/work/githubToolResult.ts`                  |
+| Command-agnostic shell parsing                       | `packages/database/src/models/work/shellCommandParsing.ts`               |
+| Completion scan orchestrator (file + shell + anchor) | `apps/server/src/services/workRegistration/registerWorksForOperation.ts` |
+| Shell scan engine                                    | `apps/server/src/services/workRegistration/shellWorkRegistration.ts`     |
+| Desktop-local run scan (client-reported)             | `apps/server/src/services/workRegistration/localRunWorkRegistration.ts`  |
+| Per-CLI scanners                                     | `apps/server/src/services/workRegistration/shellWorkScanners/`           |
+| Client (non-gateway) registration                    | `src/store/chat/agents/registerClientWorkFromIntent.ts`                  |

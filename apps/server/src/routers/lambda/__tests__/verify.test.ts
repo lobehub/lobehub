@@ -1,5 +1,7 @@
+import { getHTTPStatusCodeFromError } from '@trpc/server/http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { verifyRouter } from '@/server/routers/lambda/verify';
 import { FileService } from '@/server/services/file';
 import type * as VerifyServiceModule from '@/server/services/verify';
@@ -13,6 +15,7 @@ const modelMocks = vi.hoisted(() => ({
   findRunById: vi.fn(),
   findResultById: vi.fn(),
   generateCriteria: vi.fn(),
+  generateGoalCriteria: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
   updateRun: vi.fn(),
@@ -57,6 +60,12 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
   VerifyReporterService: class VerifyReporterService {},
 }));
 
+vi.mock('@/server/services/goal/criteriaGenerator', () => ({
+  GoalCriteriaGeneratorService: class GoalCriteriaGeneratorService {
+    generate = modelMocks.generateGoalCriteria;
+  },
+}));
+
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(() => ({
     getFullFileUrl: modelMocks.getFullFileUrl,
@@ -87,15 +96,31 @@ describe('verifyRouter', () => {
   });
 
   describe('generateCriteria', () => {
-    it('preserves InvalidProviderAPIKey as an actionable client error', async () => {
+    it('preserves InvalidProviderAPIKey without returning a session-expired HTTP status', async () => {
       modelMocks.generateCriteria.mockRejectedValueOnce({ errorType: 'InvalidProviderAPIKey' });
 
-      await expect(
-        createCaller().generateCriteria({
+      const error = await createCaller()
+        .generateCriteria({
           goal: 'Ship a responsive task board',
           modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-        }),
-      ).rejects.toMatchObject({ code: 'UNAUTHORIZED', message: 'InvalidProviderAPIKey' });
+        })
+        .catch((error) => error);
+
+      expect(error).toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: 'InvalidProviderAPIKey',
+      });
+      expect(getHTTPStatusCodeFromError(error)).toBe(412);
+
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      createTRPCErrorLogger('/api/trpc')({
+        error,
+        path: 'verify.generateCriteria',
+        type: 'mutation',
+      });
+      expect(infoSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
     });
 
     it('does not rewrite unrelated generation failures', async () => {
@@ -108,6 +133,18 @@ describe('verifyRouter', () => {
           modelConfig: { model: 'claude-sonnet-4-6', provider: 'anthropic' },
         }),
       ).rejects.toThrow('Provider timed out');
+    });
+  });
+
+  describe('generateGoalCriteria', () => {
+    it('does not accept a caller-selected model config', async () => {
+      modelMocks.generateGoalCriteria.mockResolvedValueOnce([]);
+
+      await createCaller().generateGoalCriteria({ goal: 'Ship a responsive task board' });
+
+      expect(modelMocks.generateGoalCriteria).toHaveBeenCalledWith({
+        goal: 'Ship a responsive task board',
+      });
     });
   });
 

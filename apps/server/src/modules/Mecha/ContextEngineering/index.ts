@@ -124,6 +124,7 @@ export const serverMessagesEngine = async ({
   systemRole,
   inputTemplate,
   enableAgentMode,
+  enableExpertise,
   enableHistoryCount,
   forceFinish,
   historyCount,
@@ -142,6 +143,7 @@ export const serverMessagesEngine = async ({
   botPlatformContext,
   discordContext,
   evalContext,
+  expertise,
   agentManagementContext,
   groupAgentBuilderContext,
   onboardingContext,
@@ -163,7 +165,9 @@ export const serverMessagesEngine = async ({
 
     // Agent configuration
     enableAgentMode,
+    enableExpertise,
     enableHistoryCount,
+    expertise,
 
     // Server-side file access URLs resolve to stable file-proxy URLs in production.
     fileContext: { enabled: true, includeFileUrl: true },

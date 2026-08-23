@@ -1,13 +1,17 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainFollowUpAction,
+  FOLLOW_UP_JSON_SCHEMA,
+  FOLLOW_UP_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import type { FollowUpChip, FollowUpExtractInput, FollowUpExtractResult } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildSuggestionPrompt, FOLLOW_UP_PROMPT_VERSION } from './prompts';
-import { RawResponseSchema, SUGGESTION_RESPONSE_JSON_SCHEMA } from './schema';
+import { RawResponseSchema } from './schema';
 
 const log = debug('lobe-server:follow-up-action-service');
 
@@ -55,7 +59,7 @@ export class FollowUpActionService {
     const text = (row.content ?? '').trim();
     if (!text) return EMPTY_RESULT(row.id);
 
-    const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
+    const chain = chainFollowUpAction({ assistantText: text, hint });
     const { model, provider } = modelConfig;
 
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
@@ -63,19 +67,16 @@ export class FollowUpActionService {
     try {
       raw = await ai.generateObject(
         {
-          messages: [
-            { content: system, role: 'system' as const },
-            { content: user, role: 'user' as const },
-          ],
+          ...chain,
           model,
           provider,
-          schema: SUGGESTION_RESPONSE_JSON_SCHEMA,
+          schema: FOLLOW_UP_JSON_SCHEMA,
         },
         {
           tracing: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.FollowUp,
-            schemaName: 'FollowUpSuggestionResponse',
+            schemaName: FOLLOW_UP_JSON_SCHEMA.name,
             topicId,
           } satisfies TracingOptions,
         },

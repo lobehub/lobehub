@@ -205,6 +205,48 @@ describe('nightlyReviewScheduleService', () => {
       expect(deps.listActiveAgentTargets).not.toHaveBeenCalled();
       expect(deps.enqueueSource).not.toHaveBeenCalled();
     });
+
+    /**
+     * ROOT CAUSE:
+     *
+     * The candidate scan had no predicate, so every cron fire walked all 321k users to reach
+     * the handful actually inside their 02:00-04:00 window — ~18h of flow-controlled work per
+     * hourly fire, which drifted every user's review later each day. The local window itself
+     * stays here rather than in SQL; only the activity floor is pushed down.
+     *
+     * @example
+     * expect(deps.listEligibleUsers).toHaveBeenCalledWith(
+     *   expect.objectContaining({ activeSince: new Date('2026-05-02T12:05:00.000Z') }),
+     * );
+     */
+    it('narrows the candidate scan to recently active users', async () => {
+      const deps = createDeps();
+      deps.listEligibleUsers.mockResolvedValue([]);
+      const service = createSelfReviewScheduleService(deps);
+      const requestedAt = new Date('2026-05-03T18:05:00.000Z');
+
+      await service.listEligibleUsersPage({ limit: 50, requestedAt });
+
+      expect(deps.listEligibleUsers).toHaveBeenCalledWith({
+        activeSince: new Date('2026-05-02T12:05:00.000Z'),
+        limit: 50,
+        requestedAt,
+      });
+    });
+
+    /**
+     * @example
+     * expect(deps.listEligibleUsers).toHaveBeenCalledWith({ limit: 50 });
+     */
+    it('leaves the scan unnarrowed when no schedule instant is supplied', async () => {
+      const deps = createDeps();
+      deps.listEligibleUsers.mockResolvedValue([]);
+      const service = createSelfReviewScheduleService(deps);
+
+      await service.listEligibleUsersPage({ limit: 50 });
+
+      expect(deps.listEligibleUsers).toHaveBeenCalledWith({ limit: 50 });
+    });
   });
 
   describe('buildNightlyReviewSourceId', () => {

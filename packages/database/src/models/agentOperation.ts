@@ -196,6 +196,29 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()));
   }
 
+  /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
+  async settleRunning(
+    operationId: string,
+    status: 'done' | 'error' | 'interrupted',
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: status === 'interrupted' ? 'interrupted' : status,
+        status,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
   /**
    * Sum the terminal usage of every child operation forked from `parentOperationId`
    * (`callSubAgent` children, isolated group members).

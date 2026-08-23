@@ -163,6 +163,16 @@ export const AgentRuntimeErrorType = {
    * to this code in the spec table).
    */
   ContextEnginePipelineError: 'ContextEnginePipelineError',
+  /**
+   * A `JSON.parse` inside the harness threw on data the harness itself
+   * produced, stored or round-tripped — V8 reports it as `SyntaxError: … in
+   * JSON at position N` / `Unexpected end of JSON input`. Always our bug: the
+   * value should have been valid JSON by construction, so a failure means some
+   * serialization step corrupted or truncated it. Kept out of the
+   * `AgentRuntimeError` catch-all so this class stays countable on its own
+   * instead of hiding inside the generic fallback bucket.
+   */
+  HarnessJsonParseError: 'HarnessJsonParseError',
 
   InvalidGithubToken: 'InvalidGithubToken',
   InvalidGithubCopilotToken: 'InvalidGithubCopilotToken',

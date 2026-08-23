@@ -30,7 +30,12 @@ import type {
 import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import debug from 'debug';
 
+import {
+  notifyScheduledTaskCompleted,
+  notifyScheduledTaskFailed,
+} from '@/business/server/task/notifyScheduledTaskResult';
 import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -199,7 +204,12 @@ export class TaskLifecycleService {
       //    that actually needs the user. The settle path owns those moments:
       //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
       //    loop succeeds and the budget-exhausted alert when it stops.
-      const isGoalLoopRound = !!currentTask && !!this.taskModel.getGoalConfig(currentTask);
+      const isGoalLoopRound =
+        !!currentTask &&
+        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findBySubject(
+          'task',
+          currentTask.id,
+        ));
       if (
         !isGoalLoopRound &&
         getBriefMode(currentTask) === 'auto' &&
@@ -229,11 +239,15 @@ export class TaskLifecycleService {
       //      'scheduled' to wait for the next tick. They never auto-pause
       //      on success — only `reason === 'error'` below puts them in
       //      'paused' for human attention.
-      //    - Non-automation tasks fall back to the legacy "pause for user
-      //      review" behavior: a 'result' brief from the agent is a
-      //      *proposal* of completion, and the user must explicitly approve
-      //      via the brief action to transition to 'completed'. Auto-complete
-      //      only happens via the Judge path above.
+      //    - Goal-owned root tasks complete immediately. The Goal coordinator
+      //      owns the broader delivery decision and cannot consume a task that
+      //      merely stays running after its topic has already finished.
+      //    - Subtasks complete immediately. Their parent owns the broader
+      //      delivery decision, so pausing every successful child for a second
+      //      user review stalls an otherwise autonomous task graph. Completing
+      //      the child also unlocks its downstream siblings.
+      //    - Root non-automation tasks keep the legacy "pause for user review"
+      //      behavior: their result is the user-facing delivery boundary.
       // "Let go" for verify-bound runs: when a confirmed verify plan exists for
       // this op, delivery acceptance is decided asynchronously by Verify
       // (driveTaskFromVerify completes / pauses the task on settle), so we must
@@ -251,6 +265,13 @@ export class TaskLifecycleService {
       }
 
       if (currentTask) {
+        const completionRequestedByCurrentOperation =
+          (
+            currentTask.context as {
+              completion?: { requestedByOperationId?: string };
+            } | null
+          )?.completion?.requestedByOperationId === params.operationId;
+
         if (
           currentTask.automationMode === 'schedule' &&
           (await this.scheduleCapReached(currentTask))
@@ -265,9 +286,56 @@ export class TaskLifecycleService {
           // failed — the live `error` alone would silently self-heal.
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
+        } else if (!verifyBound && completionRequestedByCurrentOperation) {
+          if (currentTask.parentTaskId) {
+            await this.completeSubtask(currentTask);
+          } else {
+            await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
+              completedAt: new Date(),
+              error: null,
+            });
+          }
+        } else if (!verifyBound && params.runTrigger === 'goal' && !currentTask.parentTaskId) {
+          await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
+            completedAt: new Date(),
+            error: null,
+          });
+        } else if (!verifyBound && currentTask.parentTaskId) {
+          const checkpoint = this.taskModel.getCheckpointConfig(currentTask);
+          if (checkpoint.topic?.after) {
+            await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'paused', {
+              error: null,
+            });
+          } else {
+            await this.completeSubtask(currentTask);
+          }
         } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
         }
+      }
+
+      // 6. Recall the user when a scheduled tick lands: fire-and-forget through
+      //    the `@/business` slot (default impl is a no-op; a notification
+      //    failure must never affect the task lifecycle). Only genuine
+      //    scheduled ticks notify — manual "run now" runs and high-frequency
+      //    heartbeat ticks stay silent to avoid flooding the inbox.
+      if (currentTask?.automationMode === 'schedule' && params.runTrigger === 'schedule') {
+        void notifyScheduledTaskCompleted({
+          lastAssistantContent,
+          operationId: params.operationId,
+          taskId,
+          taskIdentifier,
+          taskName: currentTask.name ?? undefined,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          log(
+            'scheduled-task success notification failed for task=%s (non-fatal): %O',
+            taskIdentifier,
+            error,
+          ),
+        );
       }
     } else if (reason === 'error') {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
@@ -340,6 +408,12 @@ export class TaskLifecycleService {
       const runTrigger = params.runTrigger ?? 'manual';
       const isAutomationTick = runTrigger === 'schedule' || runTrigger === 'heartbeat';
 
+      // Captured by the schedule sub-branch below for the failure notification:
+      // how deep into the fuse this failure is, and whether it blew the fuse
+      // and auto-paused the task.
+      let scheduleConsecutiveFailures: number | undefined;
+      let pausedByFuse = false;
+
       if (!currentTask) {
         // Task vanished mid-run — nothing to transition.
       } else if (!currentTask.automationMode) {
@@ -363,8 +437,10 @@ export class TaskLifecycleService {
         // maybeRearmHeartbeat below, which owns their fuse + re-arm.)
         const ctx = (currentTask.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
         const consecutiveFailures = (ctx.scheduler?.consecutiveFailures ?? 0) + 1;
+        scheduleConsecutiveFailures = consecutiveFailures;
 
         if (consecutiveFailures >= AUTOMATION_FAILURE_FUSE) {
+          pausedByFuse = true;
           log(
             'schedule fuse blown: task=%s consecutiveFailures=%d — pausing',
             taskIdentifier,
@@ -390,9 +466,50 @@ export class TaskLifecycleService {
       } else {
         // Heartbeat tick failed: record the error and keep the resting
         // 'scheduled' state. maybeRearmHeartbeat (below) owns the consecutive-
-        // failure fuse and the re-arm decision for heartbeat tasks.
+        // failure fuse and the re-arm decision for heartbeat tasks — mirror its
+        // fuse arithmetic here (it reads the same pre-increment context) so the
+        // notification below can tell a fuse-stop from a transient failure.
+        const ctx = (currentTask.context as { scheduler?: TaskSchedulerContext } | null) ?? {};
+        scheduleConsecutiveFailures = (ctx.scheduler?.consecutiveFailures ?? 0) + 1;
+        pausedByFuse = scheduleConsecutiveFailures >= AUTOMATION_FAILURE_FUSE;
         await this.recordAutomationError(currentTask, errorText, runTrigger);
         await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+      }
+
+      // Tell the user their automation failed: fire-and-forget through the
+      // `@/business` slot (default impl is a no-op; a notification failure
+      // must never affect the task lifecycle). Manual "run now" failures are
+      // ad-hoc debug runs — the error brief above already covers them, and
+      // they are not an automation-health signal, so only automation ticks
+      // notify. Heartbeat ticks can fire every few seconds, so they only
+      // notify at the fuse-stop moment (the automation stopped re-arming);
+      // low-frequency scheduled ticks notify on every failure. Only the
+      // structured `errorCode` crosses the slot boundary; raw error text
+      // stays in the brief.
+      if (
+        currentTask?.automationMode &&
+        isAutomationTick &&
+        (runTrigger === 'schedule' || pausedByFuse)
+      ) {
+        void notifyScheduledTaskFailed({
+          consecutiveFailures: scheduleConsecutiveFailures,
+          errorCode,
+          operationId: params.operationId,
+          paused: pausedByFuse,
+          runTrigger: runTrigger === 'schedule' ? 'schedule' : 'heartbeat',
+          taskId,
+          taskIdentifier,
+          taskName: currentTask.name ?? undefined,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          log(
+            'scheduled-task failure notification failed for task=%s (non-fatal): %O',
+            taskIdentifier,
+            error,
+          ),
+        );
       }
     }
 
@@ -414,6 +531,40 @@ export class TaskLifecycleService {
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Settle a successful child task and advance its sibling dependency graph.
+   *
+   * This mirrors the completion side effects of TaskService.updateStatus
+   * without importing TaskService here (TaskRunner already depends on this
+   * lifecycle service). The dynamic import keeps that module cycle out of
+   * initialization while preserving the runner's single cascade implementation.
+   */
+  private async completeSubtask(task: TaskItem): Promise<void> {
+    const completedTask = await this.taskModel.updateStatusIfCurrent(
+      task.id,
+      'running',
+      'completed',
+      {
+        completedAt: new Date(),
+        error: null,
+      },
+    );
+    if (!completedTask) {
+      log('subtask=%s no longer running — skipping completion cascade', task.identifier);
+      return;
+    }
+
+    const parentTask = await this.taskModel.findById(completedTask.parentTaskId!);
+    if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
+      await this.taskModel.updateStatus(parentTask.id, 'paused');
+    }
+
+    const { TaskRunnerService } = await import('@/server/services/taskRunner');
+    await new TaskRunnerService(this.db, this.userId, this.workspaceId).cascadeOnCompletion(
+      task.id,
+    );
   }
 
   /**

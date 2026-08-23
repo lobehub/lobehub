@@ -17,18 +17,17 @@ export const usePanelHandlers = ({
 
   const handleModelChange = useCallback(
     (modelId: string, providerId: string) => {
-      // Defer store update so the panel close animation completes
-      // before React re-renders with new data (prevents detail panel flash).
-      setTimeout(() => {
-        if (!canCreateContent) return;
+      if (!canCreateContent) return;
 
-        const params = { model: modelId, provider: providerId };
-        if (onModelChangeProp) {
-          onModelChangeProp(params);
-        } else {
-          updateAgentConfig(params);
-        }
-      }, 150);
+      // Commit the selection synchronously. Conversation sends resolve their
+      // runtime model from the store, so delaying this write lets a quick Enter
+      // after closing the panel run on the previously selected model (#15933).
+      const params = { model: modelId, provider: providerId };
+      if (onModelChangeProp) {
+        void onModelChangeProp(params);
+      } else {
+        void updateAgentConfig(params);
+      }
     },
     [canCreateContent, onModelChangeProp, updateAgentConfig],
   );

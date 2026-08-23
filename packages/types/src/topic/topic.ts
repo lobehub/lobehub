@@ -152,6 +152,13 @@ export interface ChatTopicMetadata {
    */
   heteroCurrentMsgId?: { msgId: string; operationId: string };
   /**
+   * Secret-free identity of the provider/auth binding that created
+   * `heteroSessionId`. Resume is allowed only when this identity still matches.
+   */
+  heteroSessionBindingKey?: string;
+  /** Binding identities paired with `heteroSessionIdByWorkingDirectory`. */
+  heteroSessionBindingKeyByWorkingDirectory?: Record<string, string>;
+  /**
    * Persistent session id for a heterogeneous agent.
    * Saved after each turn so the next message in the same topic can resume
    * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).
@@ -214,6 +221,18 @@ export interface ChatTopicMetadata {
    */
   runningOperation?: {
     assistantMessageId: string;
+    childOperations?: Array<{
+      assistantMessageId: string;
+      deviceId?: string;
+      deviceUserId?: string;
+      deviceWorkspaceId?: string;
+      heteroType?: string;
+      hooks?: SerializedAgentHook[];
+      operationId: string;
+      orchestrationRole?: 'supervisor' | 'member';
+      scope?: string;
+      threadId?: string | null;
+    }>;
     /** Device selected for a notify-based platform task. */
     deviceId?: string;
     /** Personal-device owner used to route dispatch and cancellation through the same principal. */
@@ -238,6 +257,7 @@ export interface ChatTopicMetadata {
      */
     hooks?: SerializedAgentHook[];
     operationId: string;
+    orchestrationRole?: 'supervisor' | 'member';
     scope?: string;
     threadId?: string | null;
   } | null;
@@ -436,6 +456,8 @@ export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null =
 /** Metadata patch accepted by the topic update API. */
 export const chatTopicMetadataUpdateSchema = z.object({
   boundDeviceId: z.string().optional(),
+  heteroSessionBindingKey: z.string().optional(),
+  heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),
@@ -476,12 +498,29 @@ export const chatTopicMetadataUpdateSchema = z.object({
   runningOperation: z
     .object({
       assistantMessageId: z.string(),
+      childOperations: z
+        .array(
+          z.object({
+            assistantMessageId: z.string(),
+            deviceId: z.string().optional(),
+            deviceUserId: z.string().optional(),
+            deviceWorkspaceId: z.string().optional(),
+            heteroType: z.string().optional(),
+            hooks: z.array(serializedAgentHookSchema).optional(),
+            operationId: z.string(),
+            orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+            scope: z.string().optional(),
+            threadId: z.string().nullish(),
+          }),
+        )
+        .optional(),
       deviceId: z.string().optional(),
       deviceUserId: z.string().optional(),
       deviceWorkspaceId: z.string().optional(),
       heteroType: z.string().optional(),
       hooks: z.array(serializedAgentHookSchema).optional(),
       operationId: z.string(),
+      orchestrationRole: z.enum(['supervisor', 'member']).optional(),
       scope: z.string().optional(),
       threadId: z.string().nullish(),
     })

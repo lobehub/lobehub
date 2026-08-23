@@ -53,6 +53,32 @@ describe('acquireTopicStartReservation', () => {
       topicModel,
     });
 
-    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'new-start', 'old-operation');
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith(
+      'topic-1',
+      'new-start',
+      undefined,
+      'old-operation',
+    );
+  });
+
+  it('passes the parent operation ownership through for in-group children', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await expect(
+      acquireTopicStartReservation({
+        allowRunningOperationId: 'parent-operation',
+        reservationId: 'child-operation',
+        topicId: 'topic-1',
+        topicModel,
+      }),
+    ).resolves.toBe(true);
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith(
+      'topic-1',
+      'child-operation',
+      'parent-operation',
+      undefined,
+    );
   });
 });

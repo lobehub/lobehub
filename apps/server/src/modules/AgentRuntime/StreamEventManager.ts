@@ -55,6 +55,7 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
  *   via the local `HookContext` channel, not via the stream.
  * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
  *   — operation-level snapshot; back-compat copies of one struct.
+ * - `expertise` — immutable operation-level snapshot retained in working state.
  *
  * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
  * keep the two lists in sync if either set changes.
@@ -64,6 +65,7 @@ const stripStateForStream = <T extends Record<string, any>>(
 ): T | undefined => {
   if (!state) return state;
   const {
+    expertise: _expertise,
     messages: _messages,
     operationToolSet: _operationToolSet,
     toolManifestMap: _toolManifestMap,
@@ -76,8 +78,8 @@ const stripStateForStream = <T extends Record<string, any>>(
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * If the event `data` carries a `finalState`, strip `messages` + the
- * tool-set group off it (see `stripStateForStream` for the rationale).
+ * If the event `data` carries a `finalState`, strip `expertise`, `messages`,
+ * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
  * Centralizing the strip here means new callers — including direct
  * `publishStreamEvent` users (e.g. `RuntimeExecutors`, the per-step

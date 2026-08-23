@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/lobehub",
-  "version": "2.2.12",
+  "version": "2.2.13",
   "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
   "keywords": [
     "framework",
@@ -30,28 +30,30 @@
     "./src/spa/entry.desktop.tsx",
     "./src/spa/entry.mobile.tsx",
     "./src/spa/entry.popup.tsx",
-    "./src/spa/entry.workbench.tsx",
     "./src/spa/entry.web.tsx"
   ],
   "workspaces": [
     "packages/*",
     "packages/business/*",
     "e2e",
-    "apps/desktop/src/main"
+    "apps/desktop/src/main",
+    "apps/share",
+    "apps/workbench"
   ],
   "scripts": {
-    "build": "bun run build:spa && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:copy && bun run build:next",
+    "build": "bun run build:spa && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:share && bun run build:spa:copy && bun run build:next",
     "build:analyze": "cross-env NODE_OPTIONS=--max-old-space-size=81920 next experimental-analyze",
-    "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:auth && pnpm run build:spa:workbench && pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build",
+    "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:auth && pnpm run build:spa:workbench && pnpm run build:spa:share && cross-env WORKBENCH_REQUIRED=1 SHARE_REQUIRED=1 pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build",
     "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=7168 bun run build:next:raw",
     "build:next:raw": "next build",
-    "build:raw": "bun run build:spa:raw && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:copy && bun run build:next:raw",
+    "build:raw": "bun run build:spa:raw && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:share && bun run build:spa:copy && bun run build:next:raw",
     "build:spa": "cross-env NODE_OPTIONS=--max-old-space-size=8192 pnpm run build:spa:raw",
     "build:spa:auth": "rm -rf public/_spa public/_spa-auth && cross-env NODE_OPTIONS=--max-old-space-size=8192 AUTH=true vite build",
     "build:spa:copy": "tsx scripts/copySpaBuild.mts && tsx scripts/generateSpaTemplates.mts",
     "build:spa:mobile": "cross-env NODE_OPTIONS=--max-old-space-size=8192 MOBILE=true vite build",
     "build:spa:raw": "rm -rf public/_spa && vite build",
-    "build:spa:workbench": "rm -rf dist/workbench public/_spa-workbench && cross-env NODE_OPTIONS=--max-old-space-size=8192 SPA_TARGET=workbench vite build",
+    "build:spa:share": "rm -rf dist/share public/_spa-share && cross-env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @lobehub/share build",
+    "build:spa:workbench": "rm -rf dist/workbench public/_spa-workbench && cross-env NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @lobehub/workbench build",
     "build:vercel": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 \"bun run build:raw && bun run db:migrate\"",
     "build-migrate-db": "bun run db:migrate",
     "check": "bun run .agents/scripts/check/cli.ts",
@@ -78,7 +80,8 @@
     "dev:spa": "vite",
     "dev:spa:auth": "cross-env AUTH=true vite",
     "dev:spa:mobile": "cross-env MOBILE=true vite",
-    "dev:spa:workbench": "cross-env SPA_TARGET=workbench vite --port 3014",
+    "dev:spa:share": "pnpm --filter @lobehub/share dev",
+    "dev:spa:workbench": "pnpm --filter @lobehub/workbench dev",
     "docs:cdn": "npm run workflow:docs-cdn && npm run lint:mdx",
     "docs:i18n": "lobe-i18n md && npm run lint:mdx",
     "docs:seo": "lobe-seo && npm run lint:mdx",
@@ -240,7 +243,6 @@
     "@lobechat/builtin-tool-image-generation": "workspace:*",
     "@lobechat/builtin-tool-knowledge-base": "workspace:*",
     "@lobechat/builtin-tool-lobe-agent": "workspace:*",
-    "@lobechat/builtin-tool-lobe-delivery-checker": "workspace:*",
     "@lobechat/builtin-tool-local-system": "workspace:*",
     "@lobechat/builtin-tool-memory": "workspace:*",
     "@lobechat/builtin-tool-message": "workspace:*",
@@ -305,7 +307,7 @@
     "@lobehub/icons": "^5.15.0",
     "@lobehub/market-sdk": "0.39.2",
     "@lobehub/tts": "^5.1.2",
-    "@lobehub/ui": "^5.30.0",
+    "@lobehub/ui": "^5.32.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.3.0",
@@ -334,6 +336,7 @@
     "@vercel/speed-insights": "^1.3.1",
     "@virtuoso.dev/masonry": "^1.4.3",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
     "@zumer/snapdom": "^1.9.14",
@@ -577,7 +580,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@lobehub/editor",
-      "ffmpeg-static"
+      "ffmpeg-static",
+      "workerd"
     ],
     "overrides": {
       "@react-pdf/image": "3.0.4",

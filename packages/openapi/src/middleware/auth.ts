@@ -102,6 +102,9 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
       try {
         // Use direct JWT validation instead of OIDCService
         const tokenInfo = await validateOIDCJWT(bearerToken);
+        if (tokenInfo.tokenData?.purpose === 'hetero-operation') {
+          throw new Error('Operation tokens are only accepted by heterogeneous model endpoints');
+        }
         const db = await getServerDB();
         await assertOIDCUserActive(db, tokenInfo.userId);
 

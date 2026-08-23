@@ -298,7 +298,25 @@ the case's `observation` so the viewer is told before they see it.
 
 ---
 
-## M14 — Verifying only the entry surface when a shared component also renders deeper
+## M14 — Downscaling a neutral UI into one global GIF palette destroys the evidence
+
+**Wrong approach**: downscale high-resolution screenshots by default and encode the
+whole recording with one shared 256-color palette and ordinary dithering.
+
+**Why it's wrong**: pale skeletons and thin borders need many nearby neutral tones.
+A shared palette converts them into colored speckles, while downscaling blurs text and
+one-pixel geometry. The GIF then documents encoder artifacts instead of the product.
+
+**What it breaks**: reviewers cannot reliably judge alignment, visual weight, or
+loading continuity, even though the source PNG frames are clear.
+
+**Correct approach**: keep source resolution by default, generate palettes per frame,
+disable dithering for neutral application UI, and inspect the first, middle, and final
+frames at readable size before publishing. Downscale only when file size requires it.
+
+---
+
+## M15 — Verifying only the entry surface when a shared component also renders deeper
 
 **Wrong approach**: after changing a shared UI component, publishing a passing report
 from one surface only, even though the same component also renders on other pages.
@@ -317,7 +335,7 @@ skipped surface explicitly blocked or untested.
 
 ---
 
-## M15 — Verifying a UI change only in its default state, not its collapsed/overflow state
+## M16 — Verifying a UI change only in its default state, not its collapsed/overflow state
 
 **Wrong approach**: after changing something inside an action bar / toolbar / list
 row, checking only the normal expanded state and publishing, without forcing the
@@ -336,7 +354,7 @@ verify both the default and the collapsed/overflow state, with evidence for each
 
 ---
 
-## M16 — Publishing a component harness when the user asked for full product verification
+## M17 — Publishing a component harness when the user asked for full product verification
 
 **Wrong approach**: when the product surface hit friction once, declaring it blocked
 and publishing a narrow component harness as the main answer — even though another
@@ -358,7 +376,7 @@ after every known path is measured.
 
 ---
 
-## M17 — Turning a feature verification into an unbounded environment repair
+## M18 — Turning a feature verification into an unbounded environment repair
 
 **Wrong approach**: after the normal surface fails to boot, repeatedly modifying
 shared dev configuration, reinstalling the whole workspace, and chasing unrelated
@@ -379,7 +397,7 @@ without direction.
 
 ---
 
-## M18 — Probing the wrong layer: asserting a fixture landed because the write succeeded
+## M19 — Probing the wrong layer: asserting a fixture landed because the write succeeded
 
 **Wrong approach**: writing a fixture directly to the database, reloading the page, and
 reading what the UI shows — then treating a stale value as a product bug.
@@ -399,7 +417,7 @@ is where the behavior _reads_ it — verify at the layer the behavior reads. See
 
 ---
 
-## M19 — Building an elaborate mock before checking whether the env already has the real thing
+## M20 — Building an elaborate mock before checking whether the env already has the real thing
 
 **Wrong approach**: needing a capability (a working provider key, a service) and,
 finding none in the shell env, building a mock server and seeding it — then watching
@@ -421,7 +439,7 @@ path_ — everything "verified" through it is unverified.
 
 ---
 
-## M20 — Bare invocation: narrating skill setup, then asking an open "what should I test?"
+## M21 — Bare invocation: narrating skill setup, then asking an open "what should I test?"
 
 **Wrong approach**: invoked with no test target, the agent announces "I'm loading the
 mandatory living logs first", reads both logs in full, then asks an open "what should I
@@ -443,7 +461,7 @@ skill-internal setup.
 
 ---
 
-## M21 — A status badge is not proof the error message rendered
+## M22 — A status badge is not proof the error message rendered
 
 **Wrong approach**: marking an error-state UI case passed because the page showed a
 `Failed` badge, while the screenshot did not actually contain the error alert or its
@@ -463,7 +481,7 @@ assertion.
 
 ---
 
-## M22 — Coordinator hand-driving a broken flow instead of re-delegating
+## M23 — Coordinator hand-driving a broken flow instead of re-delegating
 
 **Wrong approach**: after a delegated verification subagent dies mid-case, the
 coordinator takes over and drives the remaining flow inline — dozens of small steps
@@ -484,7 +502,7 @@ diagnosing shared infrastructure.
 
 ---
 
-## M23 — Stopping after a fix without publishing the next verification round
+## M24 — Stopping after a fix without publishing the next verification round
 
 **Wrong approach**: implementing and locally validating a requested iteration, then
 ending the task without committing, pushing, or publishing a fresh immutable acceptance run
@@ -505,7 +523,7 @@ production link.
 
 ---
 
-## M24 — Labeling sequential flow steps as a before/after comparison
+## M25 — Labeling sequential flow steps as a before/after comparison
 
 **Wrong approach**: attaching two sequential steps of one flow as a `comparison`
 pair with `before` and `after` roles.
@@ -518,7 +536,7 @@ flow steps as ordinary ordered evidence with a caption naming each step.
 
 ---
 
-## M25 — Publishing locally because the acceptance subject exists only locally
+## M26 — Publishing locally because the acceptance subject exists only locally
 
 **Wrong approach**: ingesting the primary report into a local instance because
 its task or topic is absent from production.
@@ -533,7 +551,7 @@ supplement the run, but never replace the production deliverable.
 
 ---
 
-## M26 — Creating an acceptance without its requirement
+## M27 — Creating an acceptance without its requirement
 
 **Wrong approach**: using a bare subject string on the first ingest and assuming
 the acceptance goal is inferred automatically.
@@ -546,7 +564,7 @@ first ingest. State the cross-round business goal, not the current round's scope
 
 ---
 
-## M27 — Treating explanation and raw output as interchangeable text evidence
+## M28 — Treating explanation and raw output as interchangeable text evidence
 
 **Wrong approach**: attaching only a polished explanation with no concrete
 observations, attaching only a green test transcript and expecting the reviewer
@@ -572,7 +590,7 @@ every follow-up round so the round remains self-contained.
 
 ---
 
-## M28 — Writing a report field from the router's summary instead of opening the linked schema
+## M29 — Writing a report field from the router's summary instead of opening the linked schema
 
 **Wrong approach**: reading SKILL.md's Step 5, seeing that it describes `result.json`
 and links the format reference, and then writing the file from that summary plus
@@ -600,7 +618,7 @@ suspect your own metadata shape before the renderer.
 
 ---
 
-## M29 — Using a full-page browser screenshot for an Electron window
+## M30 — Using a full-page browser screenshot for an Electron window
 
 **Wrong approach**: capturing Electron evidence with `agent-browser screenshot --full` and publishing it because the target UI is technically visible in the
 top-left corner.

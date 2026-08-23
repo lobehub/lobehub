@@ -1,3 +1,5 @@
+import type { ToolRunResult } from '../transport/tool';
+
 /**
  * Agent Runtime Hook Types
  *
@@ -148,7 +150,7 @@ export interface ToolCallHookEvent {
   args: Record<string, any>;
   callIndex: number;
   identifier: string;
-  mock: (result: { content: string }) => void;
+  mock: (result: ToolRunResult) => void;
   operationId: string;
   stepIndex: number;
 }

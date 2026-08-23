@@ -11,6 +11,7 @@ exports[`PPIO > models > should get models 1`] = `
     "id": "deepseek/deepseek-r1/community",
     "reasoning": true,
     "type": "chat",
+    "video": false,
     "vision": false,
   },
   {
@@ -22,7 +23,21 @@ exports[`PPIO > models > should get models 1`] = `
     "id": "deepseek/deepseek-v3/community",
     "reasoning": false,
     "type": "chat",
+    "video": false,
     "vision": false,
+  },
+  {
+    "contextWindowTokens": 131072,
+    "description": "Qwen3.5 VL multimodal instruction model.",
+    "displayName": "Qwen3.5 VL 72B Instruct",
+    "enabled": false,
+    "functionCall": true,
+    "id": "qwen/qwen3.5-vl-72b-instruct",
+    "maxOutput": 32768,
+    "reasoning": true,
+    "type": "chat",
+    "video": true,
+    "vision": true,
   },
 ]
 `;

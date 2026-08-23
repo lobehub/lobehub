@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "Modelweergavenaam",
   "providerModels.item.modelConfig.extendParams.extra": "Kies uitgebreide parameters die door het model worden ondersteund. Beweeg met de muis over een optie om de instellingen te bekijken. Onjuiste configuraties kunnen leiden tot fouten bij het uitvoeren van verzoeken.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "Voor Codex-modellen; regelt de intensiteit van het redeneren.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "Voor DeepSeek V4 GA denkmodus; regelt de intensiteit van het redeneren. Voegt een `laag` niveau toe bovenop de oorspronkelijke V4-niveaus. `hoog` is de standaard, `max` ontgrendelt het diepste redeneren dat wordt gebruikt door complexe agent-workflows.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "Voor DeepSeek V4-denkmodus; bepaalt de intensiteit van het redeneerproces. `high` is de standaardwaarde, `max` ontgrendelt de diepste redeneerniveaus die gebruikt worden in complexe agent-workflows.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Voor Claude-modellen; kan kosten verlagen en reacties versnellen.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "Voor Claude Opus 4.6; bepaalt het inspanningsniveau (laag/middel/hoog/maximaal).",

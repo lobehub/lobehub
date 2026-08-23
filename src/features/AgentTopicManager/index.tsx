@@ -5,12 +5,12 @@ import {
   groupTopicsByProject,
   groupTopicsByUpdatedTime,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
@@ -200,7 +200,7 @@ const AgentTopicManager = memo(() => {
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView, loadMoreError]);
 
-  if (!activeAgentId) return <SurfaceSkeleton variant={'list'} />;
+  if (!activeAgentId) return <TopicsSkeleton />;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -235,7 +235,7 @@ const AgentTopicManager = memo(() => {
               }}
             />
           ) : isLoading && baseTopics.length === 0 ? (
-            <Skeleton active paragraph={{ rows: 6 }} title={false} />
+            <TopicsSkeleton chrome={'body'} />
           ) : totalAfterFilter === 0 ? (
             <EmptyState
               agentId={activeAgentId}
