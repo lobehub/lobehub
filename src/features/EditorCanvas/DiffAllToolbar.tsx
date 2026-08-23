@@ -1,13 +1,13 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor';
-import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
+import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND, useHasDiffNode } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { Space } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
@@ -37,74 +37,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const useIsEditorInit = (editor?: IEditor) => {
-  const [isEditInit, setEditInit] = useState<boolean>(!!editor?.getLexicalEditor());
-
-  useEffect(() => {
-    if (!editor) return;
-
-    // The editor may have initialized between render and this effect
-    // (the Editor canvas mounts earlier and emits 'initialized' synchronously),
-    // so re-check before subscribing to avoid missing the event forever.
-    if (editor.getLexicalEditor()) {
-      setEditInit(true);
-      return;
-    }
-
-    const onInit = () => {
-      setEditInit(true);
-    };
-    editor.on('initialized', onInit);
-    return () => {
-      editor.off('initialized', onInit);
-    };
-  }, [editor]);
-
-  return isEditInit;
-};
-
-const useEditorHasPendingDiffs = (editor?: IEditor) => {
-  const [hasPendingDiffs, setHasPendingDiffs] = useState(false);
-  const isEditInit = useIsEditorInit(editor);
-
-  // Listen to editor state changes to detect diff nodes
-  useEffect(() => {
-    if (!editor) return;
-
-    const lexicalEditor = editor.getLexicalEditor();
-
-    if (!lexicalEditor || !isEditInit) return;
-
-    const checkForDiffNodes = () => {
-      const editorState = lexicalEditor.getEditorState();
-      editorState.read(() => {
-        // Get all nodes and check if any is a diff node
-        const nodeMap = editorState._nodeMap;
-        let hasDiffs = false;
-        nodeMap.forEach((node) => {
-          if (node.getType() === 'diff') {
-            hasDiffs = true;
-          }
-        });
-        setHasPendingDiffs(hasDiffs);
-      });
-    };
-
-    // Check initially
-    checkForDiffNodes();
-
-    const unregister = lexicalEditor.registerUpdateListener(() => {
-      checkForDiffNodes();
-    });
-    // Register update listener
-    return () => {
-      unregister();
-    };
-  }, [editor, isEditInit]);
-
-  return hasPendingDiffs;
-};
-
 interface DiffAllToolbarProps {
   documentId: string;
   editor?: IEditor;
@@ -114,7 +46,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
   const isDarkMode = useIsDark();
   const [performSave, markDirty] = useDocumentStore((s) => [s.performSave, s.markDirty]);
 
-  const hasPendingDiffs = useEditorHasPendingDiffs(editor);
+  const { hasDiff: hasPendingDiffs } = useHasDiffNode(editor);
 
   if (!editor || !hasPendingDiffs) return null;
 

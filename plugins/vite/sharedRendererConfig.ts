@@ -428,9 +428,28 @@ export const sharedOptimizeDeps = {
   ],
 };
 
-// Workspace packages can resolve @lobehub/editor through different peer-dependency
-// snapshots. They must still share one LexicalComposerContext at runtime.
-export const sharedRendererDedupe = ['@lobehub/editor', 'react', 'react-dom'];
+// Workspace packages and a source-linked @lobehub/editor can resolve the Lexical
+// packages from different physical node_modules trees. Lexical validates custom
+// nodes with instanceof, so two package instances make otherwise valid nodes
+// (for example Page's ActionTagNode) fail during the first editor mount.
+export const sharedRendererDedupe = [
+  '@lobehub/editor',
+  '@lexical/clipboard',
+  '@lexical/code-core',
+  '@lexical/dragon',
+  '@lexical/headless',
+  '@lexical/history',
+  '@lexical/link',
+  '@lexical/list',
+  '@lexical/rich-text',
+  '@lexical/selection',
+  '@lexical/table',
+  '@lexical/utils',
+  '@lexical/yjs',
+  'lexical',
+  'react',
+  'react-dom',
+];
 
 export const __testing = {
   sharedChunkFileNames,

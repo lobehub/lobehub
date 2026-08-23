@@ -42,12 +42,6 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
 /**
  * Base plugins for the editor (without image and toolbar, which need dynamic config)
  */
-const STATIC_PLUGINS = [
-  ReactLiteXmlPlugin,
-  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
-  ReactTablePlugin,
-];
-
 const EDITOR_INIT_DATA_SOURCE_TYPES = ['json', 'markdown'] as const;
 const EDITOR_INIT_RETRY_LIMIT = 30;
 const EDITOR_INIT_RETRY_INTERVAL = 16;
@@ -104,6 +98,7 @@ const InternalEditor = memo<InternalEditorProps>(
     editor,
     extraPlugins,
     floatingToolbar = true,
+    linkPlugin = ReactLinkPlugin,
     onContentChange,
     onInit,
     onPressEnter,
@@ -112,6 +107,7 @@ const InternalEditor = memo<InternalEditorProps>(
     slashItems,
     style,
     toolbarExtraItems,
+    wrapperStyle,
   }) => {
     const { t } = useTranslation('file');
     const editorState = useEditorState(editor);
@@ -131,7 +127,7 @@ const InternalEditor = memo<InternalEditorProps>(
     }, []);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
-    const wrapperStyle = useMemo<CSSProperties>(
+    const mergedWrapperStyle = useMemo<CSSProperties>(
       () => ({
         cursor: disabled ? 'not-allowed' : undefined,
         maxWidth: '100%',
@@ -140,8 +136,9 @@ const InternalEditor = memo<InternalEditorProps>(
         overflow: 'hidden',
         pointerEvents: disabled ? 'none' : undefined,
         width: '100%',
+        ...wrapperStyle,
       }),
-      [disabled],
+      [disabled, wrapperStyle],
     );
 
     // Build plugins array
@@ -160,10 +157,16 @@ const InternalEditor = memo<InternalEditorProps>(
         theme: { file: fileNodeStyles.fileWrapper as unknown as string },
       });
 
+      const staticPlugins = [
+        ReactLiteXmlPlugin,
+        ...createChatInputRichPlugins({ linkPlugin }),
+        ReactTablePlugin,
+      ];
+
       // Build base plugins with optional extra plugins prepended
       const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
-        : [...STATIC_PLUGINS, imagePlugin, filePlugin];
+        ? [...extraPlugins, ...staticPlugins, imagePlugin, filePlugin]
+        : [...staticPlugins, imagePlugin, filePlugin];
 
       // Add toolbar only when the editor is actually editable — a locked /
       // read-only page must not surface the floating formatting toolbar on
@@ -196,6 +199,7 @@ const InternalEditor = memo<InternalEditorProps>(
       handleFileUpload,
       handleImageUpload,
       handlePickFile,
+      linkPlugin,
       toolbarExtraItems,
     ]);
 
@@ -303,7 +307,7 @@ const InternalEditor = memo<InternalEditorProps>(
 
     return (
       <div
-        style={wrapperStyle}
+        style={mergedWrapperStyle}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();

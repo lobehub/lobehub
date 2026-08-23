@@ -1,7 +1,7 @@
 'use client';
 
 import { useEditor } from '@lobehub/editor/react';
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { memo } from 'react';
 
 import { createStore, Provider } from './store';
@@ -32,6 +32,21 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
     emoji,
   }) => {
     const editor = useEditor();
+    const cleanupGenerationRef = useRef(0);
+
+    useEffect(() => {
+      const generation = ++cleanupGenerationRef.current;
+
+      return () => {
+        queueMicrotask(() => {
+          // StrictMode replays effects during development. A later setup owns
+          // the same editor, while a real page-provider unmount destroys it.
+          // The current ref value is intentionally checked after the microtask.
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+          if (cleanupGenerationRef.current === generation) editor.destroy();
+        });
+      };
+    }, [editor]);
 
     return (
       <Provider

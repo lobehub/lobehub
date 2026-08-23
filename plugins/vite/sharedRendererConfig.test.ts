@@ -30,8 +30,17 @@ describe('sharedOptimizeDeps', () => {
 });
 
 describe('sharedRendererDedupe', () => {
-  it('keeps editor entrypoints on one shared context instance', () => {
-    expect(sharedRendererDedupe).toContain('@lobehub/editor');
+  it('keeps editor and Lexical entrypoints on one runtime instance', () => {
+    expect(sharedRendererDedupe).toEqual(
+      expect.arrayContaining([
+        '@lobehub/editor',
+        '@lexical/headless',
+        '@lexical/table',
+        '@lexical/utils',
+        '@lexical/yjs',
+        'lexical',
+      ]),
+    );
   });
 });
 

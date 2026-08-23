@@ -1,0 +1,249 @@
+import type { LookupAddress } from 'node:dns';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+
+import { parseHTML } from 'linkedom';
+
+const FETCH_TIMEOUT_MS = 5000;
+const MAX_HTML_BYTES = 1024 * 1024;
+const MAX_REDIRECTS = 3;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
+
+export interface UrlMetadata {
+  description?: string;
+  icon: string;
+  title: string;
+  url: string;
+}
+
+interface FetchUrlMetadataOptions {
+  allowLocalhost?: boolean;
+  fetchImpl?: typeof fetch;
+}
+
+export class UrlMetadataError extends Error {
+  constructor(
+    message: string,
+    public status = 400,
+  ) {
+    super(message);
+    this.name = 'UrlMetadataError';
+  }
+}
+
+export const getLobeDocumentIdentifierFromUrl = (
+  rawUrl: string,
+  applicationUrl: string,
+  allowLoopback = false,
+): string | undefined => {
+  let target: URL;
+  let application: URL;
+
+  try {
+    target = new URL(rawUrl);
+    application = new URL(applicationUrl);
+  } catch {
+    return;
+  }
+
+  const isSameOrigin = target.origin === application.origin;
+  const isSameLoopbackApplication =
+    allowLoopback &&
+    LOOPBACK_HOSTS.has(target.hostname) &&
+    LOOPBACK_HOSTS.has(application.hostname) &&
+    target.port === application.port;
+  if (!isSameOrigin && !isSameLoopbackApplication) return;
+
+  const match = target.pathname.match(/^\/(?:page|share\/page)\/([^/]+)\/?$/);
+  if (!match?.[1]) return;
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+};
+
+export const isBlockedUrlMetadataAddress = (address: string): boolean => {
+  const normalized = address.toLowerCase().split('%')[0];
+
+  if (isIP(normalized) === 4) {
+    const [a, b] = normalized.split('.').map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 0 || b === 168)) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+
+  if (isIP(normalized) === 6) {
+    if (normalized === '::' || normalized === '::1') return true;
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+    if (/^fe[89ab]/.test(normalized)) return true;
+    if (normalized.startsWith('2001:db8:')) return true;
+    if (normalized.startsWith('::ffff:')) {
+      return isBlockedUrlMetadataAddress(normalized.slice('::ffff:'.length));
+    }
+  }
+
+  return false;
+};
+
+const assertSafeUrl = async (url: URL, allowLocalhost: boolean) => {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new UrlMetadataError('Only http and https URLs are supported');
+  }
+
+  if (url.username || url.password) {
+    throw new UrlMetadataError('URLs containing credentials are not supported');
+  }
+
+  const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (allowLocalhost && isLocalhost) return;
+
+  let addresses: LookupAddress[];
+  try {
+    addresses = await lookup(url.hostname, { all: true, verbatim: true });
+  } catch {
+    throw new UrlMetadataError('Unable to resolve URL hostname', 422);
+  }
+
+  if (
+    addresses.length === 0 ||
+    addresses.some(({ address }) => isBlockedUrlMetadataAddress(address))
+  ) {
+    throw new UrlMetadataError('Private or non-routable URL targets are not allowed', 403);
+  }
+};
+
+const readLimitedHtml = async (response: Response): Promise<string> => {
+  const contentLength = Number(response.headers.get('content-length') || 0);
+  if (contentLength > MAX_HTML_BYTES) {
+    throw new UrlMetadataError('URL response is too large', 422);
+  }
+
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let html = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    bytes += value.byteLength;
+    if (bytes > MAX_HTML_BYTES) {
+      await reader.cancel();
+      throw new UrlMetadataError('URL response is too large', 422);
+    }
+    html += decoder.decode(value, { stream: true });
+  }
+
+  return html + decoder.decode();
+};
+
+const resolveMetadataUrl = (value: string | null | undefined, pageUrl: string) => {
+  if (!value) return;
+
+  try {
+    return new URL(value, pageUrl).toString();
+  } catch {
+    return;
+  }
+};
+
+const cleanText = (value: string | null | undefined, maxLength: number) => {
+  const cleaned = value?.replaceAll(/\s+/g, ' ').trim();
+  return cleaned ? cleaned.slice(0, maxLength) : undefined;
+};
+
+export const extractUrlMetadata = (html: string, pageUrl: string): UrlMetadata => {
+  const { document } = parseHTML(html);
+  const meta = new Map<string, string>();
+
+  for (const element of document.querySelectorAll('meta')) {
+    const key = (element.getAttribute('property') || element.getAttribute('name'))?.toLowerCase();
+    const content = cleanText(element.getAttribute('content'), 500);
+    if (key && content && !meta.has(key)) meta.set(key, content);
+  }
+
+  const iconElement = Array.from(document.querySelectorAll('link[rel]')).find((element) =>
+    element
+      .getAttribute('rel')
+      ?.toLowerCase()
+      .split(/\s+/)
+      .some((value) => value === 'icon' || value === 'shortcut'),
+  );
+  const page = new URL(pageUrl);
+  const title =
+    cleanText(meta.get('og:title') || meta.get('twitter:title') || document.title, 200) ||
+    page.hostname;
+  const description = cleanText(
+    meta.get('og:description') || meta.get('description') || meta.get('twitter:description'),
+    500,
+  );
+  const icon =
+    resolveMetadataUrl(iconElement?.getAttribute('href'), pageUrl) ||
+    new URL('/favicon.ico', pageUrl).toString();
+
+  return { description, icon, title, url: pageUrl };
+};
+
+export const fetchUrlMetadata = async (
+  rawUrl: string,
+  options: FetchUrlMetadataOptions = {},
+): Promise<UrlMetadata> => {
+  const fetchImpl = options.fetchImpl || fetch;
+  let currentUrl: URL;
+
+  try {
+    currentUrl = new URL(rawUrl);
+  } catch {
+    throw new UrlMetadataError('Invalid URL');
+  }
+
+  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+    await assertSafeUrl(currentUrl, Boolean(options.allowLocalhost));
+
+    const response = await fetchImpl(currentUrl, {
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent': 'LobeHub-Link-Metadata/1.0',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) throw new UrlMetadataError('URL redirect is missing a location', 422);
+      if (redirectCount === MAX_REDIRECTS) {
+        throw new UrlMetadataError('URL redirected too many times', 422);
+      }
+      currentUrl = new URL(location, currentUrl);
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new UrlMetadataError(`URL returned HTTP ${response.status}`, 422);
+    }
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+      throw new UrlMetadataError('URL did not return HTML', 422);
+    }
+
+    const html = await readLimitedHtml(response);
+    return extractUrlMetadata(html, currentUrl.toString());
+  }
+
+  throw new UrlMetadataError('Unable to fetch URL metadata', 422);
+};

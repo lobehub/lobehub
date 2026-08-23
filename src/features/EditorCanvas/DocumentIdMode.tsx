@@ -38,6 +38,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     editor,
     documentId,
     autoSave = true,
+    collaborationEnabled = false,
     sourceType = 'page',
     topicId,
     onContentChange,
@@ -68,19 +69,11 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
 
     useSaveDocumentHotkey(handleManualSave);
 
-    const handleEditorInit = useCallback(
-      (editorInstance: IEditor) => {
-        void onEditorInit(editorInstance).finally(() => {
-          onInit?.(editorInstance);
-        });
-      },
-      [onEditorInit, onInit],
-    );
-
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
     const {
       data: remoteDocument,
       error,
+      hasFreshData,
       isLoading: isFetchingDocument,
       mutate,
     } = useFetchDocument(documentId, {
@@ -133,6 +126,37 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     // Track which documentId has already had onEditorInit called
     const initializedDocIdRef = useRef<string | null>(null);
     const hydratedVersionRef = useRef<string | undefined>(undefined);
+    const isWaitingForFreshCollaborationSnapshot =
+      collaborationEnabled && initializedDocIdRef.current !== documentId && !hasFreshData;
+
+    const handleEditorInit = useCallback(
+      (editorInstance: IEditor) => {
+        // InternalEditor and the already-created-editor fallback can fire in
+        // the same commit. Claim this document/version synchronously so the
+        // server snapshot is applied exactly once.
+        if (
+          initializedDocIdRef.current === documentId &&
+          hydratedVersionRef.current === remoteDocumentVersion
+        ) {
+          return Promise.resolve();
+        }
+
+        const runId = ++initRunIdRef.current;
+        initializedDocIdRef.current = documentId;
+        hydratedVersionRef.current = remoteDocumentVersion;
+        contentChangeLockRef.current = true;
+
+        return onEditorInit(editorInstance).finally(() => {
+          onInit?.(editorInstance);
+          queueMicrotask(() => {
+            if (initRunIdRef.current === runId) {
+              contentChangeLockRef.current = false;
+            }
+          });
+        });
+      },
+      [documentId, onEditorInit, onInit, remoteDocumentVersion],
+    );
 
     // Critical fix: if the editor is already initialized, we need to manually call onEditorInit
     // because the onInit callback only fires on the first editor initialization
@@ -142,64 +166,44 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         editor &&
         isEditorInitialized &&
         !isLoading &&
+        !isWaitingForFreshCollaborationSnapshot &&
         initializedDocIdRef.current !== documentId
       ) {
-        const runId = ++initRunIdRef.current;
-        initializedDocIdRef.current = documentId;
-        hydratedVersionRef.current = remoteDocumentVersion;
-
-        // Lock content-change callback while hydrating document content into editor.
-        contentChangeLockRef.current = true;
-
-        void onEditorInit(editor).finally(() => {
-          onInit?.(editor);
-          queueMicrotask(() => {
-            if (initRunIdRef.current === runId) {
-              contentChangeLockRef.current = false;
-            }
-          });
-        });
+        void handleEditorInit(editor);
       }
     }, [
       documentId,
       editor,
+      handleEditorInit,
       isEditorInitialized,
       isLoading,
-      onEditorInit,
-      onInit,
-      remoteDocumentVersion,
+      isWaitingForFreshCollaborationSnapshot,
     ]);
 
     useEffect(() => {
+      // In collaboration mode Yjs owns all live updates after this document's
+      // one-time database bootstrap. Re-applying an autosave/refetch response
+      // through setDocument turns the same tree into a new local Yjs insertion
+      // and duplicates blocks on every save.
+      if (collaborationEnabled) return;
       if (!editor || !isEditorInitialized || isLoading || !remoteDocumentVersion) return;
       if (initializedDocIdRef.current !== documentId) return;
       if (hydratedVersionRef.current === remoteDocumentVersion) return;
       if (isDirty) return;
 
-      const runId = ++initRunIdRef.current;
-      hydratedVersionRef.current = remoteDocumentVersion;
-      contentChangeLockRef.current = true;
-
-      void onEditorInit(editor).finally(() => {
-        onInit?.(editor);
-        queueMicrotask(() => {
-          if (initRunIdRef.current === runId) {
-            contentChangeLockRef.current = false;
-          }
-        });
-      });
+      void handleEditorInit(editor);
     }, [
+      collaborationEnabled,
       documentId,
       editor,
+      handleEditorInit,
       isDirty,
       isEditorInitialized,
       isLoading,
-      onEditorInit,
-      onInit,
       remoteDocumentVersion,
     ]);
 
-    if (error && isLoading && !isFetchingDocument) {
+    if (error && (isLoading || isWaitingForFreshCollaborationSnapshot) && !isFetchingDocument) {
       return (
         <>
           {unsavedGuardNode}
@@ -224,7 +228,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     }
 
     // Show loading state
-    if (isLoading) {
+    if (isLoading || isWaitingForFreshCollaborationSnapshot) {
       return (
         <>
           {unsavedGuardNode}
