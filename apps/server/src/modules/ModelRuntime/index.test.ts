@@ -328,6 +328,7 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
         enabled: true,
         id: 'claude-sonnet-4-6',
         providerId: 'lobehub',
+        settings: { extendParams: ['enableAdaptiveThinking'] },
         source: 'builtin',
         type: 'chat',
       },
@@ -335,7 +336,11 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
 
     await expect(
       resolveServerDefaultHeterogeneousModel('claude-code', 'claude-sonnet-4-6'),
-    ).resolves.toEqual({ model: 'claude-sonnet-4-6', provider: 'lobehub' });
+    ).resolves.toEqual({
+      model: 'claude-sonnet-4-6',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: true,
+    });
   });
 
   it('accepts a tool-capable third-party relay model for Claude Code only', async () => {
@@ -353,7 +358,11 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
 
     await expect(
       resolveServerDefaultHeterogeneousModel('claude-code', 'kimi-k2.6'),
-    ).resolves.toEqual({ model: 'kimi-k2.6', provider: 'lobehub' });
+    ).resolves.toEqual({
+      model: 'kimi-k2.6',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
 
     await expect(resolveServerDefaultHeterogeneousModel('codex', 'kimi-k2.6')).rejects.toThrow(
       'not compatible with this heterogeneous agent',
@@ -387,6 +396,7 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
       deploymentName: 'kimi-prod',
       model: 'kimi-k2.6',
       provider: 'lobehub',
+      supportsAdaptiveThinking: false,
     });
   });
 });
