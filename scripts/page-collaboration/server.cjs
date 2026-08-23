@@ -161,28 +161,36 @@ function createCollaborationServer(options = {}) {
     );
   };
 
-  const assignBootstrapOwner = (room, socket, clientId) => {
-    if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
-    room.bootstrapOwner = socket;
-    room.bootstrapOwnerClientId = clientId;
-    logRoomEvent('bootstrap.owner-assigned', room, { clientId });
-    sendRoomSync(room, socket, clientId);
-    room.bootstrapTimer = setTimeout(() => {
-      if (room.hasReceivedUpdate || room.bootstrapOwner !== socket) return;
+  const getNextDeferredBootstrapClient = (room) => {
+    for (const [candidate, clientId] of room.deferredSyncClients) {
+      if (candidate.readyState === WebSocket.OPEN) return [candidate, clientId];
+      if (candidate.readyState === WebSocket.CLOSED) room.deferredSyncClients.delete(candidate);
+    }
+    return null;
+  };
 
-      logRoomEvent('bootstrap.timeout', room, { clientId });
+  const armBootstrapTimer = (room) => {
+    if (room.hasReceivedUpdate || !room.bootstrapOwner || room.bootstrapTimer) return;
+
+    const owner = room.bootstrapOwner;
+    const ownerClientId = room.bootstrapOwnerClientId;
+    room.bootstrapTimer = setTimeout(() => {
+      if (room.hasReceivedUpdate || room.bootstrapOwner !== owner) return;
+
+      const nextOwner = getNextDeferredBootstrapClient(room);
       room.bootstrapTimer = null;
+
+      // A solo owner is allowed to remain connected. A later deferred client
+      // will re-arm this timer when it joins, so there is no polling timer or
+      // repeated timeout log while a room is idle.
+      if (!nextOwner) return;
+
+      logRoomEvent('bootstrap.timeout', room, { clientId: ownerClientId });
       room.bootstrapOwner = null;
       room.bootstrapOwnerClientId = null;
-
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close(1013, 'Bootstrap owner timed out.');
+      if (owner.readyState === WebSocket.OPEN) {
+        owner.close(1013, 'Bootstrap owner timed out.');
       }
-
-      const nextOwner = Array.from(room.deferredSyncClients).find(
-        ([candidate]) => candidate.readyState === WebSocket.OPEN,
-      );
-      if (!nextOwner) return;
 
       const [nextSocket, nextClientId] = nextOwner;
       room.deferredSyncClients.delete(nextSocket);
@@ -193,6 +201,15 @@ function createCollaborationServer(options = {}) {
       assignBootstrapOwner(room, nextSocket, nextClientId);
     }, config.bootstrapTimeoutMs);
     room.bootstrapTimer.unref?.();
+  };
+
+  const assignBootstrapOwner = (room, socket, clientId) => {
+    if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
+    room.bootstrapOwner = socket;
+    room.bootstrapOwnerClientId = clientId;
+    logRoomEvent('bootstrap.owner-assigned', room, { clientId });
+    sendRoomSync(room, socket, clientId);
+    armBootstrapTimer(room);
   };
 
   const flushDeferredSyncClients = (room) => {
@@ -217,9 +234,7 @@ function createCollaborationServer(options = {}) {
   };
 
   const promoteDeferredBootstrapClient = (room, reason) => {
-    const nextOwner = Array.from(room.deferredSyncClients).find(
-      ([candidate]) => candidate.readyState === WebSocket.OPEN,
-    );
+    const nextOwner = getNextDeferredBootstrapClient(room);
     if (!nextOwner) return;
     const [nextSocket, nextClientId] = nextOwner;
     room.deferredSyncClients.delete(nextSocket);
@@ -268,6 +283,7 @@ function createCollaborationServer(options = {}) {
     if (!room.hasReceivedUpdate && room.bootstrapOwner) {
       room.deferredSyncClients.set(socket, clientId);
       logRoomEvent('sync.deferred', room, { clientId });
+      armBootstrapTimer(room);
     } else if (!room.hasReceivedUpdate) {
       assignBootstrapOwner(room, socket, clientId);
     } else {

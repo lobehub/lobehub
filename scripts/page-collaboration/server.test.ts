@@ -43,10 +43,6 @@ const nextMessage = (socket: WebSocket) =>
 
 const waitForClose = (socket: WebSocket) =>
   new Promise<{ code: number; reason: string }>((resolve) => {
-    if (socket.readyState === WebSocket.CLOSED) {
-      resolve({ code: socket.closeCode, reason: socket.closeReason });
-      return;
-    }
     socket.once('close', (code, reason) => resolve({ code, reason: String(reason) }));
   });
 
@@ -168,6 +164,50 @@ describe('page collaboration server', () => {
     expect((await firstClosed).code).toBe(1013);
     expect((await promotedSync).type).toBe('sync');
     second.close();
+  });
+
+  it('keeps a solo bootstrap owner open after its timeout expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const server = createServer({ bootstrapTimeoutMs: 100 });
+      const address = await server.listen(0);
+      const { socket } = await connectWithFirstMessage(
+        `ws://127.0.0.1:${address.port}/collaboration/solo-owner?clientId=1`,
+      );
+
+      await vi.advanceTimersByTimeAsync(101);
+      expect(socket.readyState).toBe(WebSocket.OPEN);
+      socket.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-arms the owner timeout when a deferred client joins later', async () => {
+    vi.useFakeTimers();
+    try {
+      const server = createServer({ bootstrapTimeoutMs: 100 });
+      const address = await server.listen(0);
+      const { socket: first } = await connectWithFirstMessage(
+        `ws://127.0.0.1:${address.port}/collaboration/rearm-owner?clientId=1`,
+      );
+
+      await vi.advanceTimersByTimeAsync(101);
+      expect(first.readyState).toBe(WebSocket.OPEN);
+
+      const second = await connect(
+        `ws://127.0.0.1:${address.port}/collaboration/rearm-owner?clientId=2`,
+      );
+      const firstClosed = waitForClose(first);
+      const promotedSync = nextMessage(second);
+      await vi.advanceTimersByTimeAsync(101);
+
+      expect((await firstClosed).code).toBe(1013);
+      expect((await promotedSync).type).toBe('sync');
+      second.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('broadcasts updates within a room and never across rooms', async () => {
