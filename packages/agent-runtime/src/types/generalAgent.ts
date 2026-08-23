@@ -92,6 +92,8 @@ export interface GeneralAgentConfig {
     enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
+    /** Threshold used after a compression summary already exists (default: 0.8) */
+    recompressionThresholdRatio?: number;
     /** Threshold ratio for triggering compression (default: 0.5) */
     thresholdRatio?: number;
   };

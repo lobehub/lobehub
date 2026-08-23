@@ -30,6 +30,7 @@ import { shouldCompress } from '../utils/tokenCounter';
 const TOOL_NOT_ALLOWED_CONTENT =
   'Tool execution blocked because the tool is not allowed in the current execution scope.';
 const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
+const DEFAULT_RECOMPRESSION_THRESHOLD_RATIO = 0.8;
 
 /**
  * ChatAgent - The "Brain" of the chat agent
@@ -497,6 +498,24 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Use hysteresis after the first compression. A freshly compressed context can
+   * sit just below the ordinary threshold; applying the same threshold again
+   * makes one small tool result trigger another compression before the model can
+   * act on it. Keep the initial threshold conservative, then allow the compressed
+   * context to grow to a higher watermark before compressing it again.
+   */
+  private getCompressionThresholdRatio(messages: any[]): number | undefined {
+    const initialRatio = this.config.compressionConfig?.thresholdRatio;
+    if (!this.findExistingSummary(messages)) return initialRatio;
+
+    const recompressionRatio =
+      this.config.compressionConfig?.recompressionThresholdRatio ??
+      DEFAULT_RECOMPRESSION_THRESHOLD_RATIO;
+
+    return Math.max(initialRatio ?? 0, recompressionRatio);
+  }
+
+  /**
    * Proceed to the next LLM call, inserting compression first when needed.
    */
   private toLLMCall(
@@ -514,7 +533,7 @@ export class GeneralChatAgent implements Agent {
     // we'd burn an extra summarization pass on tool tokens that won't be sent.
     const compressionOptions = {
       maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-      thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+      thresholdRatio: this.getCompressionThresholdRatio(payloadWithAllowedToolNames.messages),
       tools: state.forceFinish ? undefined : payloadWithAllowedToolNames.tools,
     };
 
@@ -585,7 +604,7 @@ export class GeneralChatAgent implements Agent {
         // so they must not count against the compression budget here either.
         const compressionOptions = {
           maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-          thresholdRatio: this.config.compressionConfig?.thresholdRatio,
+          thresholdRatio: this.getCompressionThresholdRatio(state.messages),
           tools: state.forceFinish ? undefined : this.getTools(state),
         };
 
