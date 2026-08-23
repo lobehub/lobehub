@@ -36,6 +36,20 @@ afterEach(async () => {
 });
 
 describe('GoalService', () => {
+  it('creates only one responsible task when ticks race on the same work node', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Concurrent goal', work: ['Single owner work'] });
+
+    const results = await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+    const current = await service.graph(graph.goal.id);
+    const taskRows = await serverDB.select().from(tasks);
+
+    expect(results.filter((result) => result.outcome === 'advanced')).toHaveLength(1);
+    expect(taskRows).toHaveLength(1);
+    expect(current.nodes.find((node) => node.kind === 'work')?.taskId).toBe(taskRows[0].id);
+    expect(current.workVersions).toHaveLength(1);
+  });
+
   it('advances create task -> finding -> achieved without treating task creation as completion', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);

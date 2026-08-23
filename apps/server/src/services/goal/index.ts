@@ -4,6 +4,7 @@ import type {
   GoalNodeKind,
   GoalNodeStatus,
   GoalTickResult,
+  TaskItem,
   TaskTopicHandoff,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -19,6 +20,8 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+
+const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 
 export interface CreateGoalGraphInput {
   agentId?: string;
@@ -240,15 +243,55 @@ export class GoalService {
     }
 
     if (!frontier.taskId) {
-      const task = await this.taskService.createTask({
-        assigneeAgentId: graph.goal.agentId ?? undefined,
-        config: { checkpoint: { topic: { after: false } } },
-        description: frontier.description ?? graph.goal.requirement ?? undefined,
-        instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
-        name: frontier.title,
-        projectId: graph.goal.projectId ?? undefined,
-      });
-      await this.graphModel.bindTask(goalId, frontier.id, task.id);
+      const claim = await this.graphModel.claimWorkNode(
+        goalId,
+        frontier.id,
+        new Date(Date.now() - WORK_NODE_CLAIM_TTL_MS),
+      );
+      if (!claim) {
+        const current = (await this.requireGraph(goalId)).nodes.find(
+          (node) => node.id === frontier.id,
+        );
+        return {
+          goalId,
+          message: current?.taskId
+            ? 'Responsible task was created by another coordinator'
+            : 'Work node is being claimed by another coordinator',
+          nodeId: frontier.id,
+          outcome: 'waiting_external',
+          taskId: current?.taskId ?? undefined,
+        };
+      }
+
+      let task: TaskItem | undefined;
+      try {
+        task = await this.taskService.createTask({
+          assigneeAgentId: graph.goal.agentId ?? undefined,
+          config: { checkpoint: { topic: { after: false } } },
+          description: frontier.description ?? graph.goal.requirement ?? undefined,
+          instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
+          name: frontier.title,
+          projectId: graph.goal.projectId ?? undefined,
+        });
+        const bound = await this.graphModel.bindTask(goalId, frontier.id, task.id);
+        if (!bound) {
+          await this.taskModel.delete(task.id);
+          return {
+            goalId,
+            message: 'Responsible task was created by another coordinator',
+            nodeId: frontier.id,
+            outcome: 'waiting_external',
+          };
+        }
+      } catch (error) {
+        if (task) {
+          await this.taskModel.delete(task.id).catch((cleanupError) => {
+            console.error('[GoalService.tick] failed to delete unbound task:', cleanupError);
+          });
+        }
+        await this.graphModel.updateNodeStatus(goalId, frontier.id, 'proposed');
+        throw error;
+      }
       const work = await this.workModel.registerTask({
         changeType: 'created',
         taskId: task.id,

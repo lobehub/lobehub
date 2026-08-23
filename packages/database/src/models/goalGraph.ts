@@ -10,7 +10,7 @@ import type {
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
 } from '@lobechat/types';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -226,7 +226,12 @@ export class GoalGraphModel {
         .update(goalNodes)
         .set({ status: 'active', taskId, updatedAt: new Date() })
         .where(
-          and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId), eq(goalNodes.kind, 'work')),
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.id, nodeId),
+            eq(goalNodes.kind, 'work'),
+            isNull(goalNodes.taskId),
+          ),
         )
         .returning();
       if (!node) return undefined;
@@ -235,6 +240,34 @@ export class GoalGraphModel {
         entityType: 'task',
         eventType: 'linked',
         taskId,
+      });
+      return node;
+    });
+
+  claimWorkNode = async (goalId: string, nodeId: string, staleBefore: Date) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.id, nodeId),
+            eq(goalNodes.kind, 'work'),
+            or(
+              eq(goalNodes.status, 'proposed'),
+              and(eq(goalNodes.status, 'active'), lt(goalNodes.updatedAt, staleBefore)),
+            ),
+            isNull(goalNodes.taskId),
+          ),
+        )
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'activated',
       });
       return node;
     });
@@ -335,7 +368,9 @@ export class GoalGraphModel {
           status: 'resolved',
           updatedAt: new Date(),
         })
-        .where(eq(goalNodeDecisions.id, ownedDecision.id))
+        .where(
+          and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
+        )
         .returning();
       if (!decision) return undefined;
       await tx
