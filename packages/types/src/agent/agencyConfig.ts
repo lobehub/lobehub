@@ -93,12 +93,45 @@ export interface HeterogeneousProviderApiConfig {
   source?: 'provider';
 }
 
-export const formatServerDefaultHeterogeneousModel = (model: string): string => `lobehub/${model}`;
+/** Legacy Claude Code request alias. Current CLIs send `lobehub/${catalogId}`. */
+export const SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS = 'lobehub-default';
+
+const SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE = 'lobehub/';
+
+export const formatServerDefaultHeterogeneousModel = (model: string): string =>
+  `${SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE}${model}`;
 
 export const isServerDefaultHeterogeneousModel = (
   requestModel: unknown,
   operationModel: string,
 ): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
+
+/**
+ * Map a CLI-reported server-default model back to the catalog id.
+ *
+ * Both CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
+ * {@link SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS}. Neither is the catalog id
+ * the user picked.
+ */
+export const unwrapServerDefaultHeterogeneousModel = (
+  reportedModel: string | undefined,
+  configuredModel?: string,
+): string | undefined => {
+  const configured = configuredModel?.trim() || undefined;
+
+  if (!reportedModel) return configured;
+
+  if (reportedModel === SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS) {
+    return configured ?? reportedModel;
+  }
+
+  if (reportedModel.startsWith(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE)) {
+    const unwrapped = reportedModel.slice(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE.length);
+    return unwrapped || reportedModel;
+  }
+
+  return reportedModel;
+};
 
 /** Deployment-owned API binding whose provider and credentials stay on the server. */
 export interface HeterogeneousServerDefaultApiConfig {

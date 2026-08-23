@@ -20,7 +20,7 @@ const buildParams = (
 });
 
 describe('claudeCodeDriver', () => {
-  it('prepares server-default aliases without persisting the operation token', async () => {
+  it('prepares the namespaced server-default model without persisting the operation token', async () => {
     const plan = await claudeCodeDriver.prepareServerDefaultBinding!({
       args: [],
       endpoint: 'https://app.example.com',
@@ -29,11 +29,12 @@ describe('claudeCodeDriver', () => {
       profileDir: '/tmp/profile',
     });
 
+    expect(plan.args).toEqual(expect.arrayContaining(['--model', 'lobehub/claude-sonnet-4-6']));
     expect(plan.env).toMatchObject({
       ANTHROPIC_BASE_URL: 'https://app.example.com/api/v1/anthropic',
-      ANTHROPIC_MODEL: 'lobehub-default',
-      ANTHROPIC_SMALL_FAST_MODEL: 'lobehub-default',
-      CLAUDE_CODE_SUBAGENT_MODEL: 'lobehub-default',
+      ANTHROPIC_MODEL: 'lobehub/claude-sonnet-4-6',
+      ANTHROPIC_SMALL_FAST_MODEL: 'lobehub/claude-sonnet-4-6',
+      CLAUDE_CODE_SUBAGENT_MODEL: 'lobehub/claude-sonnet-4-6',
     });
     expect(plan.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
   });

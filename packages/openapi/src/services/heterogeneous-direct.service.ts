@@ -10,6 +10,7 @@ import {
   getCodexReasoningEffortLevels,
   isCodexServerDefaultCustomModel,
   RequestTrigger,
+  SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS,
 } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
@@ -21,7 +22,7 @@ import {
 
 import type { BaseStreamEvent } from '../types/responses.type';
 
-export const SERVER_DEFAULT_MODEL_ALIAS = 'lobehub-default';
+export const SERVER_DEFAULT_MODEL_ALIAS = SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS;
 
 const textFromParts = (content: unknown): string => {
   if (typeof content === 'string') return content;
@@ -359,7 +360,7 @@ const toAnthropicStreamUsage = (data: Record<string, unknown>): AnthropicStreamU
   };
 };
 
-export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
+export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>, model: string) => {
   const messageId = `msg_${randomUUID().replaceAll('-', '')}`;
   let finalized = false;
   let nextIndex = 0;
@@ -410,7 +411,7 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
               message: {
                 content: [],
                 id: messageId,
-                model: SERVER_DEFAULT_MODEL_ALIAS,
+                model,
                 role: 'assistant',
                 stop_reason: null,
                 type: 'message',
@@ -515,7 +516,7 @@ export const encodeAnthropicStream = (source: ReadableStream<Uint8Array>) => {
     .pipeThrough(new TextEncoderStream());
 };
 
-export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
+export const encodeResponsesStream = (source: ReadableStream<Uint8Array>, model: string) => {
   const responseId = `resp_${randomUUID().replaceAll('-', '')}`;
   let finalized = false;
   let nextOutputIndex = 0;
@@ -538,7 +539,7 @@ export const encodeResponsesStream = (source: ReadableStream<Uint8Array>) => {
     id: responseId,
     incomplete_details: null,
     instructions: null,
-    model: SERVER_DEFAULT_MODEL_ALIAS,
+    model,
     object: 'response',
     output: [],
     status: 'in_progress',

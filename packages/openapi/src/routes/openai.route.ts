@@ -1,4 +1,7 @@
-import { isServerDefaultHeterogeneousModel } from '@lobechat/types';
+import {
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
+} from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -31,6 +34,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
     throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
   }
   const workspaceId = context.get('workspaceId');
+  const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
   const { response } = await invokeServerDefaultModel({
     agentType: 'codex',
     model: claims.model,
@@ -39,7 +43,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
     userId: String(context.get('userId')),
     workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
   });
-  return new Response(encodeResponsesStream(response.body!), {
+  return new Response(encodeResponsesStream(response.body!, requestModel), {
     headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'text/event-stream' },
   });
 });
