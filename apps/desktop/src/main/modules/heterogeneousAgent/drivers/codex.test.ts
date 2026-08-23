@@ -81,9 +81,41 @@ describe('codexDriver provider binding', () => {
         max_context_window: 1_048_576,
         shell_type: 'unified_exec',
         slug: `lobehub/${selectedModel}`,
+        supports_parallel_tool_calls: true,
         supports_reasoning_summary_parameter: false,
         truncation_policy: { limit: 10_000, mode: truncationMode },
       });
+      // The whole key set, not a sample. codex-cli rejects the catalog outright
+      // on a field it requires and we do not write — it failed to parse for
+      // `supports_parallel_tool_calls` while the `toMatchObject` above passed,
+      // because a partial match cannot see what is missing. Any key added or
+      // dropped here should be a decision, so it fails this list first.
+      expect(Object.keys(model).sort()).toEqual([
+        'apply_patch_tool_type',
+        'availability_nux',
+        'base_instructions',
+        'context_window',
+        'default_reasoning_level',
+        'default_reasoning_summary',
+        'default_verbosity',
+        'description',
+        'display_name',
+        'effective_context_window_percent',
+        'experimental_supported_tools',
+        'input_modalities',
+        'max_context_window',
+        'priority',
+        'shell_type',
+        'slug',
+        'support_verbosity',
+        'supported_in_api',
+        'supported_reasoning_levels',
+        'supports_parallel_tool_calls',
+        'supports_reasoning_summary_parameter',
+        'truncation_policy',
+        'upgrade',
+        'visibility',
+      ]);
       expect(
         model.supported_reasoning_levels.map(({ effort }: { effort: string }) => effort),
       ).toEqual(reasoningLevels);
