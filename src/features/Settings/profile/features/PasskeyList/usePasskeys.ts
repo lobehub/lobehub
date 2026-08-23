@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useListPasskeys } from '@/libs/better-auth/auth-client';
+import { PASSKEY_DELETE_REQUIRES_FALLBACK_ERROR } from '@/libs/better-auth/constants';
 
 export interface PasskeyItem {
   createdAt?: Date | string | null;
@@ -62,7 +63,11 @@ export const usePasskeys = () => {
 
       const result = await passkey.deletePasskey({ id });
       if (result?.error) {
-        toast.error(result.error.message || t('profile.passkey.deleteError'));
+        toast.error(
+          result.error.code === PASSKEY_DELETE_REQUIRES_FALLBACK_ERROR
+            ? t('profile.passkey.delete.forbidden')
+            : result.error.message || t('profile.passkey.deleteError'),
+        );
         return false;
       }
 

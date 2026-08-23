@@ -47,10 +47,12 @@ export const PasskeyList = memo(() => {
   // `SignInEmailStep` hides when email/password is disabled — so an enabled
   // magic link is unreachable there and cannot justify deleting the last key.
   const canUseMagicLink = enableMagicLink && !disableEmailPassword;
-  const usableProviders = providers.filter((provider) => (ssoProviders ?? []).includes(provider));
+  const canUseConfiguredSSO = providers.some(({ provider }) =>
+    (ssoProviders ?? []).includes(provider),
+  );
 
   const allowDelete =
-    passkeys.length > 1 || canUsePassword || usableProviders.length > 0 || canUseMagicLink;
+    passkeys.length > 1 || canUsePassword || canUseConfiguredSSO || canUseMagicLink;
   const enableActions = !isDesktop && isLogin;
 
   const handleAdd = async () => {
@@ -124,12 +126,12 @@ export const PasskeyList = memo(() => {
                 editing={editingId === item.id}
                 showEditIcon={false}
                 style={{ flex: 1, height: 24, minWidth: 0 }}
-                value={item.name || t('profile.passkey.unnamed')}
+                value={displayName}
                 onEditingChange={(next) => setEditingId(next ? item.id : null)}
                 onChangeEnd={async (input) => {
                   const name = input.trim();
                   setEditingId(null);
-                  if (name && name !== item.name) await renamePasskey(item.id, name);
+                  if (name && name !== displayName) await renamePasskey(item.id, name);
                 }}
               />
               {item.createdAt && (

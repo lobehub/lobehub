@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   disableEmailPassword: false,
   enableMagicLink: false,
   hasPasswordAccount: false,
-  linkedProviders: [] as string[],
+  linkedProviders: [] as { provider: string; providerAccountId: string }[],
   ssoProviders: [] as string[],
   isError: false,
   passkeys: [] as { createdAt?: string; id: string; name?: string }[],
@@ -126,7 +126,7 @@ describe('PasskeyList', () => {
   });
 
   it('does not count a provider the server no longer offers', () => {
-    mocks.linkedProviders = ['github'];
+    mocks.linkedProviders = [{ provider: 'github', providerAccountId: 'github-user' }];
     mocks.ssoProviders = [];
     mocks.passkeys = [{ id: 'a', name: 'Touch ID' }];
     render(<PasskeyList />);
@@ -135,7 +135,7 @@ describe('PasskeyList', () => {
   });
 
   it('counts a provider that is still configured', () => {
-    mocks.linkedProviders = ['github'];
+    mocks.linkedProviders = [{ provider: 'github', providerAccountId: 'github-user' }];
     mocks.ssoProviders = ['github'];
     mocks.passkeys = [{ id: 'a', name: 'Touch ID' }];
     render(<PasskeyList />);
@@ -155,15 +155,19 @@ describe('PasskeyList', () => {
   });
 
   // The editable field shows "Unnamed passkey" when the authenticator gave no
-  // name; blurring without typing must not save that placeholder as the name.
+  // name; submitting without typing must not save that placeholder as the name.
   it('does not persist the unnamed placeholder on a no-op rename', async () => {
     mocks.passkeys = [{ id: 'a' }];
     const user = userEvent.setup();
     render(<PasskeyList />);
 
     await user.click(screen.getByRole('button', { name: 'profile.passkey.rename' }));
-    await user.tab();
+    const input = screen.getByRole('textbox');
+    expect(input).toHaveValue('profile.passkey.unnamed');
 
-    await waitFor(() => expect(mocks.renamePasskey).not.toHaveBeenCalled());
+    await user.keyboard('{Enter}');
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(mocks.renamePasskey).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import {
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
 import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
+import { passkeyDeleteGuard } from '@/libs/better-auth/plugins/passkey-delete-guard';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { expireLegacyHostOnlyCookies } from '@/libs/better-auth/utils/host-only-cookies';
@@ -350,6 +351,11 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
             ...template,
           });
         },
+      }),
+      passkeyDeleteGuard({
+        disableEmailPassword: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
+        enabledSSOProviders,
+        enableMagicLink,
       }),
       passkey({
         rpName: 'LobeHub',

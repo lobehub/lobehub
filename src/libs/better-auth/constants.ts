@@ -17,3 +17,8 @@ export const BUILTIN_BETTER_AUTH_PROVIDERS = [
 export const PROVIDER_ALIAS_MAP: Record<string, string> = {
   'microsoft-entra-id': 'microsoft',
 };
+
+/**
+ * Returned when deleting a passkey would remove the account's last currently usable sign-in method.
+ */
+export const PASSKEY_DELETE_REQUIRES_FALLBACK_ERROR = 'PASSKEY_DELETE_REQUIRES_FALLBACK';

@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PASSKEY_DELETE_REQUIRES_FALLBACK_ERROR } from '@/libs/better-auth/constants';
+
 import { usePasskeys } from './usePasskeys';
 
 const mocks = vi.hoisted(() => ({
@@ -134,6 +136,24 @@ describe('usePasskeys', () => {
 
     expect(returned).toBe(false);
     expect(mocks.toastError).toHaveBeenCalledWith('nope');
+    expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+
+  it('localizes the server guard when a concurrent deletion would remove the last passkey', async () => {
+    mocks.deletePasskey.mockResolvedValue({
+      data: null,
+      error: {
+        code: PASSKEY_DELETE_REQUIRES_FALLBACK_ERROR,
+        message: PASSKEY_DELETE_REQUIRES_FALLBACK_ERROR,
+      },
+    });
+
+    const { result } = renderHook(() => usePasskeys());
+    await act(async () => {
+      await result.current.deletePasskey('a');
+    });
+
+    expect(mocks.toastError).toHaveBeenCalledWith('profile.passkey.delete.forbidden');
     expect(mocks.refetch).not.toHaveBeenCalled();
   });
 
