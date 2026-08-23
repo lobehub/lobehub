@@ -1442,6 +1442,41 @@ describe('GatewayService', () => {
       expect(connected.every((id: string) => drained.includes(id))).toBe(true);
     });
 
+    it('completes a node-to-default rollback in one round, not the round after', async () => {
+      // Rollback shape: node gateway still configured, but wechat is no longer
+      // routed to it. `hosts` is ['default','node'], so a per-host sync would
+      // run the destination first (deferring everything, nothing drained yet),
+      // drain the source second, and never revisit the destination.
+      mockNodeGateway.platforms = [];
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wechat-app',
+                credentials: { botToken: 'token' },
+                id: 'wechat-provider',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindByIds.mockResolvedValue([
+        { enabled: true, id: 'wechat-provider', platform: 'wechat', settings: {} },
+      ]);
+      // Still live on node, which no longer owns it.
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
+      expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'wechat-provider', platform: 'wechat' }),
+        { ensure: true },
+      );
+    });
+
     it('makes no cross-host change when the messenger link lookup fails', async () => {
       mockFindAllLinksByPlatform.mockRejectedValue(new Error('db unavailable'));
       // A stray poller on the default host would normally be drained here —

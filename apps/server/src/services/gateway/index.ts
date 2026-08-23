@@ -125,6 +125,13 @@ interface ActualConnectionsSnapshot {
   connections: Map<string, string | null>;
 }
 
+/** What one host's drain phase removed, carried into its connect-phase log line. */
+interface HostDrainCounts {
+  gatedDisconnected: number;
+  gatedSize: number;
+  stale: number;
+}
+
 function mapGatewayStatusToRuntimeStatus(
   status: MessageGatewayConnectionStatus['state']['status'],
 ): BotRuntimeStatus {
@@ -269,16 +276,38 @@ export class GatewayService {
     // is what releases that id for connecting on its new owner.
     const drainedThisRound = new Set<string>();
 
+    // Two phases across ALL hosts rather than a full sync per host: every
+    // drain completes before any build-up. Interleaving them makes correctness
+    // depend on the order `hosts` happens to be in — with `['default','node']`
+    // a node→default rollback would run the destination's connect pass first
+    // (deferring everything, since nothing is drained yet), then drain the
+    // source, and never revisit the destination, leaving every migrated bot
+    // down for a whole round. Splitting the phases makes the ordering
+    // structural instead of emergent, in both directions.
+    const drainCounts = new Map<MessageGatewayHost, HostDrainCounts>();
     for (const host of hosts) {
-      await this.syncHostConnections({
+      drainCounts.set(
+        host,
+        await this.drainHostConnections({
+          desired,
+          desiredComplete,
+          drainedThisRound,
+          gated,
+          host,
+          hostsReadyToReceive,
+          serverDB,
+          snapshot: snapshots.get(host) ?? null,
+        }),
+      );
+    }
+
+    for (const host of hosts) {
+      await this.connectHostConnections({
+        counts: drainCounts.get(host) ?? { gatedDisconnected: 0, gatedSize: 0, stale: 0 },
         currentlyElsewhere,
         desired,
-        desiredComplete,
         drainedThisRound,
-        gated,
         host,
-        hostsReadyToReceive,
-        serverDB,
         snapshot: snapshots.get(host) ?? null,
       });
     }
@@ -299,9 +328,32 @@ export class GatewayService {
     );
   }
 
-  /** Run the desired/actual diff for the bot-provider connections one host owns. */
-  private async syncHostConnections(params: {
-    currentlyElsewhere: Set<string>;
+  /** Slice of the desired set whose platforms route to `host`. */
+  private hostDesiredSlice(
+    desired: Map<string, DesiredGatewayConnection>,
+    host: MessageGatewayHost,
+  ): Map<string, DesiredGatewayConnection> {
+    return new Map(
+      [...desired].filter(([, entry]) => resolveMessageGatewayHost(entry.platform) === host),
+    );
+  }
+
+  /** Slice of the gated set whose platforms route to `host`. */
+  private hostGatedSlice(gated: Map<string, string>, host: MessageGatewayHost): Set<string> {
+    return new Set(
+      [...gated]
+        .filter(([, platform]) => resolveMessageGatewayHost(platform) === host)
+        .map(([id]) => id),
+    );
+  }
+
+  /**
+   * Phase 1 for one host: remove what should no longer be there (paid-gated
+   * connections, then stale ones). Runs for every host before any host's
+   * connect pass, so a connection is always gone from its old owner before it
+   * is built on its new one.
+   */
+  private async drainHostConnections(params: {
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
     drainedThisRound: Set<string>;
@@ -310,9 +362,8 @@ export class GatewayService {
     hostsReadyToReceive: Set<MessageGatewayHost>;
     serverDB: Awaited<ReturnType<typeof getServerDB>>;
     snapshot: ActualConnectionsSnapshot | null;
-  }): Promise<void> {
+  }): Promise<HostDrainCounts> {
     const {
-      currentlyElsewhere,
       desiredComplete,
       drainedThisRound,
       host,
@@ -321,16 +372,8 @@ export class GatewayService {
       snapshot: actual,
     } = params;
     const client = getMessageGatewayClientForHost(host);
-
-    // Slice of desired/gated owned by this host, by platform routing.
-    const desired = new Map(
-      [...params.desired].filter(([, entry]) => resolveMessageGatewayHost(entry.platform) === host),
-    );
-    const gated = new Set(
-      [...params.gated]
-        .filter(([, platform]) => resolveMessageGatewayHost(platform) === host)
-        .map(([id]) => id),
-    );
+    const desired = this.hostDesiredSlice(params.desired, host);
+    const gated = this.hostGatedSlice(params.gated, host);
 
     const gatedDisconnected = await this.disconnectGatedConnections(client, actual, gated);
 
@@ -353,7 +396,24 @@ export class GatewayService {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
     }
 
-    // ── desired − actual → connect ──
+    return { gatedDisconnected, gatedSize: gated.size, stale };
+  }
+
+  /**
+   * Phase 2 for one host: `desired − actual → connect`. Every host has already
+   * been drained by the time this runs.
+   */
+  private async connectHostConnections(params: {
+    counts: HostDrainCounts;
+    currentlyElsewhere: Set<string>;
+    desired: Map<string, DesiredGatewayConnection>;
+    drainedThisRound: Set<string>;
+    host: MessageGatewayHost;
+    snapshot: ActualConnectionsSnapshot | null;
+  }): Promise<void> {
+    const { counts, currentlyElsewhere, drainedThisRound, host, snapshot: actual } = params;
+    const client = getMessageGatewayClientForHost(host);
+    const desired = this.hostDesiredSlice(params.desired, host);
 
     let connected = 0;
     let deferred = 0;
@@ -391,10 +451,11 @@ export class GatewayService {
             return;
           }
 
-          // Mid-move and not yet drained from its old host: the source pass is
-          // capped per round, so connecting here would leave the provider live
-          // on both gateways, double-delivering until a later round catches
-          // up. Wait for the drain — at worst this costs one round.
+          // Mid-move and STILL not drained, even though every host's drain
+          // phase has already run — so it is over this round's disconnect cap
+          // or its disconnect failed. Connecting now would leave the provider
+          // live on both gateways, double-delivering until a later round
+          // catches up.
           if (currentlyElsewhere.has(provider.id) && !drainedThisRound.has(provider.id)) {
             deferred++;
             log(
@@ -494,9 +555,9 @@ export class GatewayService {
       connected,
       skipped,
       deferred,
-      gated.size,
-      gatedDisconnected,
-      stale,
+      counts.gatedSize,
+      counts.gatedDisconnected,
+      counts.stale,
       failed,
       registeredOnlyWakes,
       registeredOnlyDeferred,
