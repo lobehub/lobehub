@@ -1078,13 +1078,21 @@ export const taskRouter = router({
       const { id, verify } = input;
       try {
         const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
+        const task = await resolveOrThrow(model, id);
         const acceptanceService = new AcceptanceService(
           ctx.serverDB,
           ctx.userId,
           ctx.workspaceId ?? undefined,
         );
-        const acceptance = await acceptanceService.ensureForSubject('task', resolved.id);
+        const resolvedAcceptance = await resolveTaskAcceptance(
+          ctx.serverDB,
+          ctx.userId,
+          task.id,
+          ctx.workspaceId ?? undefined,
+        );
+        const acceptance =
+          resolvedAcceptance?.acceptance ??
+          (await acceptanceService.ensureForSubject('task', task.id));
         const nextConfig = { ...acceptance.config } as Record<string, unknown>;
         for (const [key, value] of Object.entries(verify)) {
           if (key === 'requirement') continue;

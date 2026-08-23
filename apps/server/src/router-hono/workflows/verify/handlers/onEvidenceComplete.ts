@@ -4,6 +4,8 @@ import { getServerDB } from '@/database/server';
 import { runVerifyAfterEvidenceSubmission } from '@/server/services/verify/lifecycle';
 
 interface OnEvidenceCompletePayload {
+  deliverable: string;
+  goal: string;
   parentOperationId: string;
   userId: string;
   workspaceId?: string;
@@ -11,7 +13,7 @@ interface OnEvidenceCompletePayload {
 
 export async function onEvidenceComplete(c: Context) {
   const body = (await c.req.json()) as OnEvidenceCompletePayload;
-  if (!body.parentOperationId || !body.userId) {
+  if (!body.parentOperationId || !body.userId || typeof body.deliverable !== 'string') {
     return c.json({ error: 'Missing required fields' }, 400);
   }
 
@@ -19,7 +21,7 @@ export async function onEvidenceComplete(c: Context) {
   await runVerifyAfterEvidenceSubmission(
     db,
     body.userId,
-    { deliverable: '', goal: '', operationId: body.parentOperationId },
+    { deliverable: body.deliverable, goal: body.goal ?? '', operationId: body.parentOperationId },
     body.workspaceId,
   );
   return c.json({ success: true });

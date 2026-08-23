@@ -70,7 +70,8 @@ export const instantiateVerifyPlanOnStart = async (
     const hasCriteria = Boolean(
       verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length,
     );
-    const holistic = !hasCriteria;
+    const holistic =
+      !hasCriteria && (verifyConfig.enabled === true || Boolean(requirement?.trim()));
     if (!hasCriteria && !holistic) return;
 
     const runModel = new VerifyRunModel(db, userId, workspaceId);

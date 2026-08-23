@@ -53,6 +53,12 @@ describe('startEvidenceSubmission', () => {
     const call = execAgent.mock.calls[0][0];
     expect(call.ephemeralUserMessage).toContain('criterion-1: Model artifact exists');
     expect(call.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(call.hooks[0].webhook.body).toMatchObject({
+      deliverable: 'artifact summary',
+      goal: 'ship model',
+      parentOperationId: 'work-op',
+      userId: 'user-1',
+    });
   });
 
   it('rejects operations that cannot preserve builder identity and topic context', async () => {

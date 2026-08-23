@@ -47,7 +47,13 @@ export const startEvidenceSubmission = async (params: {
       id: 'acceptance-evidence-on-complete',
       type: 'onComplete',
       webhook: {
-        body: { parentOperationId, userId, ...(workspaceId ? { workspaceId } : {}) },
+        body: {
+          deliverable,
+          goal,
+          parentOperationId,
+          userId,
+          ...(workspaceId ? { workspaceId } : {}),
+        },
         delivery: 'qstash',
         fallback: 'none',
         url: '/api/workflows/verify/on-evidence-complete',

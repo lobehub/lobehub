@@ -98,6 +98,20 @@ describe('Verify acceptance lifecycle', () => {
     expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
   });
 
+  it('keeps an empty Acceptance opted out of verification', async () => {
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: {},
+    });
+
+    await instantiateVerifyPlanOnStart(db, 'user-1', {
+      operationId: 'operation-1',
+      taskId: 'task-1',
+    });
+
+    expect(mocks.generateDraftPlan).not.toHaveBeenCalled();
+  });
+
   it('attaches an auto-repair verify run as the next round of the same acceptance', async () => {
     mocks.operationFindById.mockResolvedValue({ parentOperationId: null });
     mocks.agentExec.mockResolvedValue({ operationId: 'repair-operation' });

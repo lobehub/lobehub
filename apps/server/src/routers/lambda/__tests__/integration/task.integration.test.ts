@@ -538,6 +538,27 @@ describe('Task Router Integration', () => {
       const verify = await caller.getVerifyConfig({ id: task.data.id });
       expect(verify.data).toEqual({ enabled: true, maxIterations: 4 });
     });
+
+    it('preserves legacy verify fields when applying a partial Acceptance patch', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+      await new TaskModel(serverDB, userId).updateVerifyConfig(task.data.id, {
+        enabled: true,
+        maxIterations: 4,
+        verifierAgentId: 'legacy-verifier',
+      });
+
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: { maxIterations: 2 },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({
+        enabled: true,
+        maxIterations: 2,
+        verifierAgentId: 'legacy-verifier',
+      });
+    });
   });
 
   describe('run idempotency', () => {
