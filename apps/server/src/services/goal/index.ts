@@ -22,6 +22,7 @@ import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 
 const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
+const TASK_DESCRIPTION_MAX_LENGTH = 255;
 
 export interface CreateGoalGraphInput {
   agentId?: string;
@@ -265,10 +266,11 @@ export class GoalService {
 
       let task: TaskItem | undefined;
       try {
+        const description = frontier.description ?? graph.goal.requirement;
         task = await this.taskService.createTask({
           assigneeAgentId: graph.goal.agentId ?? undefined,
           config: { checkpoint: { topic: { after: false } } },
-          description: frontier.description ?? graph.goal.requirement ?? undefined,
+          description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
           instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
           name: frontier.title,
           projectId: graph.goal.projectId ?? undefined,

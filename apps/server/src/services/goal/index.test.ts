@@ -50,6 +50,23 @@ describe('GoalService', () => {
     expect(current.workVersions).toHaveLength(1);
   });
 
+  it('keeps long goal requirements in the task instruction without overflowing its description', async () => {
+    const service = new GoalService(serverDB, userId);
+    const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;
+    const graph = await service.create({
+      requirement,
+      title: 'Long requirement goal',
+      work: ['Generate training data'],
+    });
+
+    const created = await service.tick(graph.goal.id);
+    const task = await new TaskModel(serverDB, userId).findById(created.taskId!);
+
+    expect(created.outcome).toBe('advanced');
+    expect(task?.description).toHaveLength(255);
+    expect(task?.instruction).toContain(requirement);
+  });
+
   it('advances create task -> finding -> achieved without treating task creation as completion', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
