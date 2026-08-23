@@ -8,6 +8,13 @@ interface GenerateGoalCriteriaParams {
   goal: string;
 }
 
+const preserveOriginalGoal = (goal: string, generatedInstruction: string) => {
+  const original = goal.trim();
+  const generated = generatedInstruction.trim();
+
+  return generated.includes(original) ? generated : `${original}\n\n${generated}`;
+};
+
 export interface GeneratedGoalPlan {
   criteria: GoalCriterionDraft[];
   instruction: string;
@@ -43,5 +50,6 @@ export const generateGoalCriteria = async ({
   return {
     ...generated,
     criteria: generated.criteria.map(withGoalCriterionDefaults),
+    instruction: preserveOriginalGoal(goal, generated.instruction),
   };
 };

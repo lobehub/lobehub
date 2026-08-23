@@ -357,7 +357,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     try {
       const generated = await generateGoalCriteria({
         context: name ? `Goal: ${name}` : undefined,
-        goal: initialRequirement?.trim() || instruction,
+        goal: instruction,
       });
       instructionRef.current = generated.instruction;
       setPlan((current) => ({
@@ -378,7 +378,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
-  }, [canCreate, initialRequirement, plan.instruction, plan.name, t]);
+  }, [canCreate, plan.instruction, plan.name, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;

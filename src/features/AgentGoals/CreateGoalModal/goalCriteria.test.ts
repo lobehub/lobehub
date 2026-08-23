@@ -15,7 +15,8 @@ describe('generateGoalCriteria', () => {
         { title: 'Paper draft is complete' },
         { required: false, title: 'Results are reproducible', verifierType: 'llm' },
       ],
-      instruction: 'Write and publish the benchmark paper.',
+      instruction:
+        'Complete an RSI benchmark paper in three months. Write and publish the benchmark paper.',
       title: 'Publish benchmark paper',
     });
 
@@ -44,7 +45,8 @@ describe('generateGoalCriteria', () => {
           verifierType: 'llm',
         },
       ],
-      instruction: 'Write and publish the benchmark paper.',
+      instruction:
+        'Complete an RSI benchmark paper in three months. Write and publish the benchmark paper.',
       title: 'Publish benchmark paper',
     });
   });
@@ -61,6 +63,22 @@ describe('generateGoalCriteria', () => {
         goal: 'Ship the project',
       }),
     ).rejects.toThrow('No goal plan was generated.');
+  });
+
+  it('keeps the exact user goal when the generated instruction omits it', async () => {
+    vi.spyOn(verifyService, 'generateGoalCriteria').mockResolvedValue({
+      criteria: [{ title: 'Training loop works' }],
+      instruction: 'Implement a reproducible self-improvement training loop.',
+      title: 'Reproduce self-improvement training',
+    });
+    const goal =
+      'Reproduce https://ornith.ai/ornith_1_5.html with a three-round budget and export results.';
+
+    const result = await generateGoalCriteria({ goal });
+
+    expect(result.instruction).toBe(
+      `${goal}\n\nImplement a reproducible self-improvement training loop.`,
+    );
   });
 
   it('uses the original goal as a reviewable criterion when AI generation fails', () => {
