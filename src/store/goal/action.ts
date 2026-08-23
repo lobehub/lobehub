@@ -25,14 +25,7 @@ const GOAL_STATUSES: GoalStatus[] = [...goalStatuses];
 // The home roll-up only renders goals that are still open: terminal states
 // (achieved / canceled) stay on the server, `review` is included because a
 // converged goal is still awaiting the user's sign-off.
-const HOME_GOAL_STATUSES: GoalStatus[] = [
-  'planning',
-  'running',
-  'verifying',
-  'review',
-  'paused',
-  'failed',
-];
+const HOME_GOAL_STATUSES: GoalStatus[] = ['planning', 'running', 'verifying', 'review'];
 const HOME_GOAL_FETCH_LIMIT = 100;
 
 export type GoalStore = GoalState & GoalAction;

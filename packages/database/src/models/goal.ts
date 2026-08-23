@@ -34,6 +34,15 @@ export class GoalModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
 
+  /** Visibility-aware task scope for recursive raw-SQL carrier aggregation. */
+  private taskOwnershipSql = (alias?: string) => {
+    const prefix = alias ? sql.raw(`${alias}.`) : sql.raw('');
+    return this.workspaceId
+      ? sql`${prefix}workspace_id = ${this.workspaceId}
+            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`
+      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL`;
+  };
+
   create = async (params: Omit<NewGoal, 'userId' | 'workspaceId'>): Promise<GoalItem> => {
     const [row] = await this.db
       .insert(goals)
@@ -144,36 +153,48 @@ export class GoalModel {
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
     const { agentId, limit = 50, offset = 0, projectId, statuses } = options;
 
-    const conditions = [this.ownership()];
-    if (agentId) conditions.push(eq(goals.agentId, agentId));
-    if (projectId) conditions.push(eq(goals.projectId, projectId));
+    // A list item is backed by a carrier task, so task visibility is the
+    // effective read boundary. Goal rows themselves intentionally have no
+    // visibility column and workspace ownership alone is not sufficient.
+    const taskOwnership = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: tasks.createdByUserId,
+        visibility: tasks.visibility,
+        workspaceId: tasks.workspaceId,
+      },
+    );
+    const conditions = [
+      this.ownership(),
+      eq(goals.subjectType, 'task'),
+      eq(goals.subjectId, tasks.id),
+      taskOwnership,
+    ];
+    // Scope against the current carrier instead of the goal's creation-time
+    // snapshot, because tasks can be reassigned or moved between projects.
+    if (agentId) conditions.push(eq(tasks.assigneeAgentId, agentId));
+    if (projectId) conditions.push(eq(tasks.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));
 
     const [countRow] = await this.db
       .select({ count: sql<number>`count(*)` })
       .from(goals)
+      .innerJoin(tasks, eq(goals.subjectId, tasks.id))
       .where(and(...conditions));
 
     const total = Number(countRow?.count ?? 0);
     if (total === 0) return { goals: [], total };
 
-    const goalRows = await this.db
-      .select()
+    const rows = await this.db
+      .select({ goal: goals, task: tasks })
       .from(goals)
+      .innerJoin(tasks, eq(goals.subjectId, tasks.id))
       .where(and(...conditions))
       .orderBy(desc(goals.createdAt))
       .limit(limit)
       .offset(offset);
 
-    const taskIds = goalRows
-      .filter((g) => g.subjectType === 'task' && g.subjectId)
-      .map((g) => g.subjectId!);
-
-    const taskRows =
-      taskIds.length === 0
-        ? []
-        : await this.db.select().from(tasks).where(inArray(tasks.id, taskIds));
-    const taskByTaskId = new Map(taskRows.map((t) => [t.id, t]));
+    const taskIds = rows.map(({ task }) => task.id);
 
     const runStats =
       taskIds.length === 0
@@ -187,11 +208,12 @@ export class GoalModel {
               WITH RECURSIVE goal_tree AS (
                 SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id
                 FROM ${tasks}
-                WHERE ${inArray(tasks.id, taskIds)}
+                WHERE ${inArray(tasks.id, taskIds)} AND ${this.taskOwnershipSql()}
                 UNION ALL
                 SELECT goal_tree.root_id, child.id
                 FROM ${tasks} child
                 JOIN goal_tree ON child.parent_task_id = goal_tree.task_id
+                WHERE ${this.taskOwnershipSql('child')}
               )
               SELECT
                 goal_tree.root_id,
@@ -218,21 +240,15 @@ export class GoalModel {
       ]),
     );
 
-    const items: GoalListItem[] = goalRows.flatMap((goal) => {
-      if (goal.subjectType !== 'task' || !goal.subjectId) return [];
-      const task = taskByTaskId.get(goal.subjectId);
-      if (!task) return [];
-
+    const items: GoalListItem[] = rows.map(({ goal, task }) => {
       const stats = runStatsByTaskId.get(task.id) ?? { totalRunCost: 0, totalRunDuration: 0 };
 
-      return [
-        {
-          ...task,
-          goal,
-          totalRunCost: stats.totalRunCost,
-          totalRunDuration: stats.totalRunDuration,
-        },
-      ];
+      return {
+        ...task,
+        goal,
+        totalRunCost: stats.totalRunCost,
+        totalRunDuration: stats.totalRunDuration,
+      };
     });
 
     return { goals: items, total };

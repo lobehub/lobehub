@@ -86,7 +86,7 @@ describe('GoalAction', () => {
     expect(useGoalStore.getState().homeGoalsInitializedScopes).toEqual(['user:ws-b', 'user:ws-a']);
   });
 
-  it('asks only for the statuses a goal can still be open in', () => {
+  it('asks only for statuses rendered by the home roll-up', () => {
     useGoalStore.getState().useFetchHomeGoals(true, 'user:ws-a');
     const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
 
@@ -94,11 +94,13 @@ describe('GoalAction', () => {
 
     expect(goalService.list).toHaveBeenCalledWith(
       expect.objectContaining({
-        statuses: expect.arrayContaining(['planning', 'running', 'review', 'paused', 'failed']),
+        statuses: ['planning', 'running', 'verifying', 'review'],
       }),
     );
     expect(goalService.list).toHaveBeenCalledWith(
-      expect.not.objectContaining({ statuses: expect.arrayContaining(['achieved', 'canceled']) }),
+      expect.not.objectContaining({
+        statuses: expect.arrayContaining(['paused', 'failed', 'achieved', 'canceled']),
+      }),
     );
   });
 

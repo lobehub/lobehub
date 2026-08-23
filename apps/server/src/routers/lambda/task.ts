@@ -499,9 +499,8 @@ export const taskRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a goal root' });
       }
       assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
-      // `goals` has no FK to tasks by design (polymorphic subject), so the row
-      // must be removed explicitly alongside the task subtree.
-      await ctx.goalModel.deleteBySubject('task', task.id);
+      // TaskModel owns the transaction and removes goal rows for the complete
+      // subtree before deleting its tasks.
       const count = await model.deleteSubtree(task.id);
       return { count, data: task, message: 'Goal deleted', success: true };
     } catch (error) {
@@ -784,8 +783,9 @@ export const taskRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const task = await resolveOrThrow(ctx.taskModel, input.id);
         // A manually (re)started goal leaves its paused/review state and runs.
-        const goal = await ctx.goalModel.findBySubject('task', input.id);
+        const goal = await ctx.goalModel.findBySubject('task', task.id);
         if (goal) await ctx.goalModel.updateStatus(goal.id, 'running');
 
         const runner = new TaskRunnerService(
@@ -796,7 +796,7 @@ export const taskRouter = router({
         return await runner.runTask({
           continueTopicId: input.continueTopicId,
           extraPrompt: input.prompt,
-          taskId: input.id,
+          taskId: task.id,
         });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -1357,7 +1357,7 @@ export const taskRouter = router({
       try {
         const result = await ctx.taskService.updateStatus(input);
         // Manual task status changes drive the bound goal's own state machine.
-        const goal = await ctx.goalModel.findBySubject('task', input.id);
+        const goal = await ctx.goalModel.findBySubject('task', result.task.id);
         if (goal) {
           const goalStatus = taskStatusToGoalStatus[input.status];
           if (goalStatus) await ctx.goalModel.updateStatus(goal.id, goalStatus);
