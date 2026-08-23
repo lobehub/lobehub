@@ -11,6 +11,8 @@ import { AutoComplete, type AutoCompleteProps } from '@lobehub/ui/base-ui';
 import { type FC } from 'react';
 import { memo } from 'react';
 
+import { parseCommandInput } from './parseCommandInput';
+
 // Define preset command options
 const STDIO_COMMAND_OPTIONS: {
   // Assuming icon is a React function component
@@ -30,19 +32,36 @@ const STDIO_COMMAND_OPTIONS: {
   { color: '#2496ED', icon: SiDocker, value: 'docker' },
 ];
 
-const MCPStdioCommandInput = memo<AutoCompleteProps>((props) => (
-  <AutoComplete
-    options={STDIO_COMMAND_OPTIONS.map(({ value, icon: Icon, color }) => ({
-      label: (
-        <Flexbox horizontal align={'center'} gap={8}>
-          {Icon && <Icon color={color} size={16} />}
-          {value}
-        </Flexbox>
-      ),
-      value,
-    }))}
-    {...props}
-  />
-));
+interface MCPStdioCommandInputProps extends AutoCompleteProps {
+  onParsedArgs?: (args: string[]) => void;
+}
+
+const MCPStdioCommandInput = memo<MCPStdioCommandInputProps>(({ onParsedArgs, ...props }) => {
+  const handleBlur = () => {
+    if (typeof props.value !== 'string') return;
+    const parsed = parseCommandInput(props.value);
+    if (!parsed) return;
+
+    props.onChange?.(parsed.command);
+    if (parsed.args.length > 0) onParsedArgs?.(parsed.args);
+  };
+
+  return (
+    <div style={{ display: 'contents' }} onBlur={handleBlur}>
+      <AutoComplete
+        options={STDIO_COMMAND_OPTIONS.map(({ value, icon: Icon, color }) => ({
+          label: (
+            <Flexbox horizontal align={'center'} gap={8}>
+              {Icon && <Icon color={color} size={16} />}
+              {value}
+            </Flexbox>
+          ),
+          value,
+        }))}
+        {...props}
+      />
+    </div>
+  );
+});
 
 export default MCPStdioCommandInput;
