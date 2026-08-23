@@ -1,6 +1,10 @@
 'use client';
 
-import type { AgentModelSelectionPolicy, LobeAgentAgencyConfig } from '@lobechat/types';
+import type {
+  AgentModelSelectionPolicy,
+  AgentTopicSharePolicy,
+  LobeAgentAgencyConfig,
+} from '@lobechat/types';
 import { useCallback, useMemo } from 'react';
 
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
@@ -9,21 +13,38 @@ import {
   resolveExecutionTargetSelection,
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 export interface AgentSelectionPoliciesState {
+  /**
+   * Whether the viewer may write these policies at all.
+   *
+   * Deliberately narrower than the Permission page's `canEditConfig`: a
+   * workspace Admin holds `agent:update:all` and so may edit the agent, but the
+   * server strips every policy key unless the caller is the agent's creator or
+   * the workspace owner — and it strips them from an otherwise *successful*
+   * mutation. An enabled control would therefore accept the choice, report no
+   * error, and silently discard it.
+   */
+  canEditPolicies: boolean;
   /** Members can be assigned a target only if one is actually resolvable. */
   canFixExecutionTarget: boolean;
   executionTargetPolicy: AgentModelSelectionPolicy;
   modelPolicy: AgentModelSelectionPolicy;
   setExecutionTargetPolicy: (policy: AgentModelSelectionPolicy) => void;
   setModelPolicy: (policy: AgentModelSelectionPolicy) => void;
+  setTopicSharePolicy: (policy: AgentTopicSharePolicy) => void;
+  topicSharePolicy: AgentTopicSharePolicy;
 }
 
 /**
- * The "Editable settings" half of a Permission page: what a workspace member
- * may switch for their own conversations / runs with ONE agent.
+ * The member-facing policies of a Permission page: what a workspace member may
+ * switch for their own conversations / runs with ONE agent, plus whether they
+ * may publish that agent's topics as share links.
  *
  * Shared by the Agent page and the Agent Group page, because a group's
  * conversation *is* a conversation with its supervisor agent — the group chat
@@ -40,6 +61,12 @@ export interface AgentSelectionPoliciesState {
 export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPoliciesState => {
   const agent = useAgentStore(agentByIdSelectors.getAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  // Mirrors the server's policy-write gate. The workspace `owner` role is
+  // bound to `workspaces.primaryOwnerId` (a second 'owner' membership resolves
+  // to 'admin'), so this is the same single user the server checks; personal
+  // mode reports allowed, which is right — there are no members to govern.
+  const { allowed: isWorkspaceOwner } = usePermission('edit_others_content');
+  const viewerId = useUserStore(userProfileSelectors.userId);
 
   const { data: devices } = useDeviceList();
   const publicWorkspaceDevices = useMemo(
@@ -86,7 +113,16 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     [saveAgencyConfig],
   );
 
+  const setTopicSharePolicy = useCallback(
+    (policy: AgentTopicSharePolicy) => void saveAgencyConfig({ topicSharePolicy: policy }),
+    [saveAgencyConfig],
+  );
+
   return {
+    // An unresolved agent leaves the controls disabled rather than enabled:
+    // the values shown above come from the same row, so there is nothing
+    // meaningful to edit until it loads.
+    canEditPolicies: isWorkspaceOwner || (!!agent?.userId && agent.userId === viewerId),
     canFixExecutionTarget:
       !!executionSelection &&
       (executionSelection.target !== 'sandbox' ||
@@ -95,5 +131,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     modelPolicy: agencyConfig?.modelSelectionPolicy ?? 'member',
     setExecutionTargetPolicy,
     setModelPolicy,
+    setTopicSharePolicy,
+    topicSharePolicy: agencyConfig?.topicSharePolicy ?? 'member',
   };
 };

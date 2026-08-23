@@ -76,6 +76,7 @@ vi.mock('antd', () => ({
 }));
 
 vi.mock('antd-style', () => ({
+  cx: (...classNames: unknown[]) => classNames.filter(Boolean).join(' '),
   createStaticStyles: () => ({
     body: 'body',
     drawerBody: 'drawerBody',
@@ -99,7 +100,9 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <div>loading</div> }));
 
-vi.mock('@/features/Verify', () => ({
+vi.mock('@/features/Verify', async () => ({
+  // The real row/list primitives: the assertions cover the shared grammar.
+  ...(await vi.importActual('@/features/Verify/CriterionList')),
   CheckRow: ({ check }: { check: { title: string } }) => (
     <div data-testid="acceptance-check-detail">detail: {check.title}</div>
   ),

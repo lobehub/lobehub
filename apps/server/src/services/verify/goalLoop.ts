@@ -1,7 +1,8 @@
-import type { BriefAction, TaskContext, TaskGoalConfig, TaskItem } from '@lobechat/types';
+import type { BriefAction, GoalItem, TaskContext, TaskItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { MessageModel } from '@/database/models/message';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
@@ -25,7 +26,7 @@ export type GoalLoopOutcome = 'continued' | 'exhausted-cost' | 'exhausted-rounds
  */
 export const maybeContinueGoalLoop = async (params: {
   db: LobeChatDatabase;
-  goal: TaskGoalConfig;
+  goal: GoalItem;
   task: TaskItem;
   userId: string;
   workspaceId?: string;
@@ -52,6 +53,10 @@ export const maybeContinueGoalLoop = async (params: {
       taskId: task.id,
       trigger: 'goal',
     });
+    // The spawned round makes the goal `running` right away, instead of
+    // waiting for the runner's async start notification to flip it — the
+    // UI should never show a paused/review goal that is already looping.
+    await new GoalModel(db, userId, workspaceId).updateStatus(goal.id, 'running');
     log('task %s → goal round %d spawned', task.identifier, roundsRun + 1);
     return 'continued';
   } catch (error) {
@@ -66,7 +71,7 @@ export const maybeContinueGoalLoop = async (params: {
 export const goalExhaustedBriefCopy = (
   task: TaskItem,
   outcome: Extract<GoalLoopOutcome, 'exhausted-cost' | 'exhausted-rounds'>,
-  goal: TaskGoalConfig,
+  goal: GoalItem,
 ): { summary: string; title: string } =>
   outcome === 'exhausted-cost'
     ? {

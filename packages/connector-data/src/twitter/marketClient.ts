@@ -1,7 +1,7 @@
 import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
-import { ConnectorDataError } from '../errors';
+import { ConnectorDataError, getConnectorErrorMessage } from '../errors';
 import { withConnectorRetry } from '../retry';
 import { parseTwitterPosts, parseTwitterProfile } from './parser';
 import type { TwitterConnectorClient } from './types';
@@ -13,21 +13,9 @@ const RECENT_SEARCH_TOOL_NAME = 'search_tweets';
 const log = debug('lobe-server:connector-data:twitter');
 
 interface TwitterMarketToolFailure {
-  reason: string;
+  message: string;
   statusCode?: number;
 }
-
-/** Maps an untrusted provider error to a bounded, non-sensitive diagnostic reason. */
-const readSafeToolFailureReason = (error: string, statusCode?: number): string => {
-  const normalizedError = error.toLowerCase();
-  if (normalizedError.includes('credits depleted')) return 'credits_depleted';
-  if (normalizedError.includes('token expired')) return 'token_expired';
-  if (normalizedError.includes('not connected')) return 'not_connected';
-  if (normalizedError.includes('rate limit') || statusCode === 429) return 'rate_limited';
-  if (statusCode === 402) return 'payment_required';
-
-  return 'upstream_error';
-};
 
 /** Result returned by one Market X tool execution. */
 export interface TwitterMarketToolResult {
@@ -53,10 +41,7 @@ export interface CreateTwitterMarketConnectorClientOptions {
 }
 
 /**
- * Extracts a bounded diagnostic from an embedded Market X tool error.
- *
- * The upstream message is intentionally mapped to a safe reason instead of being logged verbatim,
- * because provider errors may include credentials or user content.
+ * Extracts the original diagnostic from an embedded Market X tool error.
  */
 const readEmbeddedToolFailure = (value: unknown): TwitterMarketToolFailure | undefined => {
   const record = toRecord(value);
@@ -67,10 +52,10 @@ const readEmbeddedToolFailure = (value: unknown): TwitterMarketToolFailure | und
       : undefined;
   if (record.isError !== true && (statusCode === undefined || statusCode < 400)) return;
 
-  const error = typeof record.error === 'string' ? record.error : '';
-  const reason = readSafeToolFailureReason(error, statusCode);
+  const message = getConnectorErrorMessage(record.error) ?? getConnectorErrorMessage(value);
+  if (!message) return;
 
-  return { reason, ...(statusCode === undefined ? {} : { statusCode }) };
+  return { message, ...(statusCode === undefined ? {} : { statusCode }) };
 };
 
 /**
@@ -85,7 +70,7 @@ const readEmbeddedToolFailure = (value: unknown): TwitterMarketToolFailure | und
  * - Tool responses follow the Market skill result contract
  *
  * Returns:
- * - A client that normalizes Market response variants and sanitizes provider failures
+ * - A client that normalizes Market response variants and retains provider failure messages
  */
 export const createTwitterMarketConnectorClient = ({
   market,
@@ -95,28 +80,27 @@ export const createTwitterMarketConnectorClient = ({
     operation: string,
     arguments_: Record<string, unknown>,
   ) =>
-    withConnectorRetry(
-      async () => {
-        const response = await market.callTool(toolName, arguments_);
-        const failure = readEmbeddedToolFailure(response.data);
-        if (response.success !== true || failure) {
-          log('Market X tool call failed: %O', {
-            operation,
-            reason: failure?.reason ?? 'market_call_unsuccessful',
-            ...(failure?.statusCode === undefined ? {} : { statusCode: failure.statusCode }),
-            toolName,
-          });
-          throw new ConnectorDataError({
-            code: `twitter_${operation}_failed`,
-            operation,
-            provider: 'twitter',
-            retryable: false,
-          });
-        }
-        return response.data;
-      },
-      { code: `twitter_${operation}_failed`, operation, provider: 'twitter' },
-    );
+    withConnectorRetry(async () => {
+      const response = await market.callTool(toolName, arguments_);
+      const failure = readEmbeddedToolFailure(response.data);
+      if (response.success !== true || failure) {
+        log('Market X tool call failed: %O', {
+          message: failure?.message ?? getConnectorErrorMessage(response),
+          operation,
+          ...(failure?.statusCode === undefined ? {} : { statusCode: failure.statusCode }),
+          toolName,
+        });
+        throw new ConnectorDataError({
+          cause: response,
+          code: `twitter_${operation}_failed`,
+          message: failure?.message ?? getConnectorErrorMessage(response),
+          operation,
+          provider: 'twitter',
+          retryable: false,
+        });
+      }
+      return response.data;
+    });
 
   return {
     getProfile: async () => {
@@ -135,7 +119,9 @@ export const createTwitterMarketConnectorClient = ({
       const profile = parseTwitterProfile(response);
       if (!profile) {
         throw new ConnectorDataError({
+          cause: response,
           code: 'twitter_response_invalid',
+          message: getConnectorErrorMessage(response),
           operation: 'getProfile',
           provider: 'twitter',
           retryable: false,
@@ -174,7 +160,9 @@ export const createTwitterMarketConnectorClient = ({
       const posts = parseTwitterPosts(response, boundedMaxResults);
       if (!posts) {
         throw new ConnectorDataError({
+          cause: response,
           code: 'twitter_response_invalid',
+          message: getConnectorErrorMessage(response),
           operation: 'searchRecentPosts',
           provider: 'twitter',
           retryable: false,

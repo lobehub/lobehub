@@ -192,13 +192,25 @@ export default {
     'No published artifacts yet. Publish an Artifact from the chat to see it here.',
   'resource.artifacts.error': 'Failed to load artifacts.',
   'resource.artifacts.fromTopic': 'from {{topic}}',
+  'resource.artifacts.moreActions': 'More actions',
+  'resource.artifacts.noRelease': 'No release yet',
   'resource.artifacts.open': 'Open',
+  'resource.artifacts.openHistory': 'Version history',
   'resource.artifacts.overLimit':
     'Existing projects remain online. New projects are blocked until you unpublish one or upgrade.',
   'resource.artifacts.refresh': 'Refresh',
+  'resource.artifacts.retryLoad': 'Retry',
   'resource.artifacts.quotaUsage': '{{used}} / {{limit}} public projects',
   'resource.artifacts.size': '{{size}} bytes',
+  'resource.artifacts.status.failed': 'Failed',
+  'resource.artifacts.status.online': 'Online',
+  'resource.artifacts.status.publishing': 'Publishing',
+  'resource.artifacts.status.updateFailed': 'Update failed',
+  'resource.artifacts.statusDetail.failed': 'Build failed',
+  'resource.artifacts.statusDetail.publishing': 'Publishing…',
+  'resource.artifacts.statusDetail.updateFailed': 'Latest update failed',
   'resource.artifacts.title': 'Artifacts',
+  'resource.artifacts.type': 'Artifact',
   'resource.artifacts.unpublish': 'Unpublish',
   'resource.artifacts.unpublishConfirm':
     'Unpublish this artifact? The public URL will stop working.',
@@ -494,8 +506,12 @@ export default {
   'heteroAgent.cliModel.timeout': 'Model discovery timed out.',
   'heteroAgent.cliModel.unsupportedClient':
     'Update the target device client to discover CLI models.',
+  'heteroAgent.resumeReset.bindingChanged':
+    'Authentication binding changed. The previous local agent session could not be resumed safely, so a new conversation has started.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
+  'heteroAgent.resumeReset.cursorAcpIncompatible':
+    'The previous Cursor session could not be restored through ACP, so a new conversation has started with fresh context.',
   'heteroAgent.resumeReset.resumeFailed':
     'The saved Codex thread could not be resumed safely, so a new conversation has started for this topic.',
   'heteroAgent.switchCwd.cancel': 'Cancel',
@@ -507,6 +523,32 @@ export default {
   'heteroAgent.cloudNotConfigured.desc':
     'Configure your Claude Code token in agent profile to start sending messages.',
   'heteroAgent.cloudNotConfigured.title': 'Cloud credentials required',
+  'heteroAgent.apiMode.agentUnsupported': '{{name}} does not support LobeHub Provider binding.',
+  'heteroAgent.apiMode.configMissing':
+    'Provider binding requires a provider and model. Open the agent profile to configure it.',
+  'heteroAgent.apiMode.defaultProviderConfigMissing':
+    'LobeHub requires a compatible model. Open the agent profile to select one.',
+  'heteroAgent.apiMode.credentialUnsupported':
+    'The provider "{{providerId}}" uses an authentication method this agent does not support.',
+  'heteroAgent.apiMode.credentialsMissing':
+    'The provider "{{providerId}}" has no API key configured.',
+  'heteroAgent.apiMode.endpointMissing':
+    'The provider "{{providerId}}" requires a base URL for this agent.',
+  'heteroAgent.apiMode.endpointUnsupported':
+    'The provider "{{providerId}}" has an unsupported base URL.',
+  'heteroAgent.apiMode.labDisabled.action': 'Enable in Labs',
+  'heteroAgent.apiMode.labDisabled.desc':
+    'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
+  'heteroAgent.apiMode.labDisabled.title': 'Provider binding is a Labs experiment',
+  'heteroAgent.apiMode.localOnly.desc':
+    'Switch the execution environment to Local device, or use Subscription authentication.',
+  'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',
+  'heteroAgent.apiMode.modelUnavailable':
+    'The model "{{providerId}}/{{model}}" is disabled or no longer available.',
+  'heteroAgent.apiMode.protocolMismatch':
+    'The provider "{{providerId}}" does not expose a protocol supported by {{agentType}}.',
+  'heteroAgent.apiMode.providerUnavailable':
+    'The provider "{{providerId}}" is disabled or no longer available.',
   'heteroAgent.cloudRepo.sectionTitle': 'Repositories',
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
@@ -1191,6 +1233,7 @@ export default {
   'sendPlaceholderHeterogeneous': 'Describe a task or ask a question to {{name}}',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
+  'sender.unknownMember': 'Member',
   'sessionGroup.config': 'Category Management',
   'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
@@ -1254,6 +1297,7 @@ export default {
   'shareModal.pdfGenerationError': 'PDF generation failed',
   'shareModal.pdfReady': 'PDF is ready',
   'shareModal.popover.export': 'Export',
+  'shareModal.popover.loadError': 'Failed to load sharing settings, please try again later',
   'shareModal.popover.privacyWarning.confirm': 'Share & copy link',
   'shareModal.popover.privacyWarning.content':
     "Anyone with the link can open this whole conversation, so take a moment to make sure there's nothing here you'd rather keep private. A shared topic may include:",
@@ -1291,6 +1335,8 @@ export default {
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
+  'sharePage.meta.pageDescription': 'A page shared from {{appName}}.',
+  'sharePage.meta.topicDescription': 'A conversation shared from {{appName}}.',
   'sharePage.pill.edit': 'Edit',
   'sharePage.pill.openInApp': 'Open in {{appName}}',
   'sharePage.pill.sharedVia': 'Shared via {{appName}}',
@@ -1542,6 +1588,10 @@ export default {
   'taskDetail.topicDrawer.untitled': 'Untitled',
   'taskDetail.topicMenu.copyId': 'Copy Topic ID',
   'taskDetail.topicMenu.copyOperationId': 'Copy Operation ID',
+  'taskDetail.topicMenu.delete': 'Delete Run',
+  'taskDetail.topicMenu.deleteConfirm.content':
+    'This run and its messages will be permanently deleted. This action cannot be undone.',
+  'taskDetail.topicMenu.deleteConfirm.title': 'Delete Run?',
   'taskDetail.topicMenu.openAgentTopic': 'Go to Agent conversation',
   'taskDetail.topicMenu.open': 'Open Run',
   'taskDetail.topicMenu.stop': 'Stop Run',
@@ -1744,17 +1794,21 @@ export default {
   'taskList.emptyHero.greeting': 'What should we tackle today?',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
   'taskList.form.grouping': 'Grouping',
+  'taskList.form.nestedSubTasks': 'Nested sub-tasks',
   'taskList.form.orderCompletedByRecency': 'Sort completed tasks by recency',
   'taskList.form.ordering': 'Ordering',
   'taskList.form.showCompleted': 'Show completed & canceled',
+  'taskList.form.showSubTasks': 'Show sub-tasks',
   'taskList.form.subGrouping': 'Sub-grouping',
   'taskList.hiddenCompleted.count_one': '{{count}} task',
   'taskList.hiddenCompleted.count_other': '{{count}} tasks',
   'taskList.hiddenCompleted.show': 'Show',
   'taskList.hiddenCompleted.suffix': 'hidden by display options',
   'taskList.groupBy.assignee': 'Assignee',
+  'taskList.groupBy.heartbeat': 'Heartbeat',
   'taskList.groupBy.none': 'No grouping',
   'taskList.groupBy.priority': 'Priority',
+  'taskList.groupBy.schedule': 'Schedule',
   'taskList.groupBy.status': 'Status',
   'taskList.orderBy.assignee': 'Assignee',
   'taskList.orderBy.createdAt': 'Created at',
@@ -1762,6 +1816,8 @@ export default {
   'taskList.orderBy.status': 'Status',
   'taskList.orderBy.title': 'Title',
   'taskList.orderBy.updatedAt': 'Updated at',
+  'taskList.scheduled.empty': 'No scheduled tasks yet',
+  'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.title': 'Tasks',
   'taskList.unassigned': 'Unassigned',
   'taskList.unassignedHint': 'Lobe AI will run this task when no assignee is set',
@@ -1781,13 +1837,13 @@ export default {
   'taskList.contextMenu.priority': 'Priority',
   'taskList.contextMenu.runNow': 'Run now',
   'taskList.contextMenu.status': 'Status',
-  'taskList.contextMenu.transferConfirm': 'Transfer',
+  'taskList.contextMenu.transferConfirm': 'Move',
   'taskList.contextMenu.transferDescription':
     'Move this task (and all its subtasks) to another workspace. Identifiers will be re-assigned.',
-  'taskList.contextMenu.transferFailed': 'Failed to transfer task',
-  'taskList.contextMenu.transferSuccess': 'Task transferred',
-  'taskList.contextMenu.transferTitle': 'Transfer task',
-  'taskList.contextMenu.transferTo': 'Transfer to…',
+  'taskList.contextMenu.transferFailed': 'Failed to move task',
+  'taskList.contextMenu.transferSuccess': 'Task moved',
+  'taskList.contextMenu.transferTitle': 'Move task',
+  'taskList.contextMenu.transferTo': 'Move to…',
   'taskList.contextMenu.transferWarning':
     'Cross-workspace references like assigned agent and active topic will be cleared.',
   'taskList.kanban.addTask': 'Create task',
@@ -1828,9 +1884,11 @@ export default {
     'SubAgent conversations are read-only — execution is driven by the parent agent.',
   'terminalPanel.close': 'Close terminal panel',
   'terminalPanel.closeOtherTabs': 'Close other terminals',
+  'terminalPanel.closePane': 'Close pane',
   'terminalPanel.closeTab': 'Close terminal',
   'terminalPanel.createFailed': 'Failed to start the terminal session',
   'terminalPanel.newTab': 'New terminal',
+  'terminalPanel.split': 'Split terminal',
   'terminalPanel.title': 'Terminal',
   'thread.threadMessageCount': '{{messageCount}} messages',
   'thread.title': 'Subtopic',
@@ -1991,6 +2049,48 @@ export default {
     'Unsupported file type: {{files}}. Supported images: JPG, PNG, GIF, WebP. Supported documents include PDF, Word, Excel, PowerPoint, Markdown, text, CSV, JSON, and code files.',
   'upload.validation.videoSizeExceeded':
     'Video file size must not exceed {{maxSize}}. Current file size is {{actualSize}}.',
+  'voiceDictation.action': 'Dictate with microphone',
+  'voiceDictation.cancel': 'Cancel dictation',
+  'voiceDictation.connecting': 'Connecting…',
+  'voiceDictation.dismiss': 'Dismiss dictation error',
+  'voiceDictation.error.AUDIO_CAPTURE_FAILED':
+    'Microphone capture failed. Check the selected input device and retry.',
+  'voiceDictation.error.AUDIO_FORMAT_INVALID': 'The captured audio format was rejected.',
+  'voiceDictation.error.AUTH_FAILED': 'The dictation session could not be authorized.',
+  'voiceDictation.error.BACKPRESSURE':
+    'The connection could not keep up with live audio. Retry on a stable network.',
+  'voiceDictation.error.FINAL_TIMEOUT':
+    'Dictation took too long to finish. Confirmed text has been kept.',
+  'voiceDictation.error.INTERNAL_ERROR': 'Dictation stopped because of an internal error.',
+  'voiceDictation.error.MICROPHONE_NOT_SUPPORTED':
+    'Realtime dictation is not supported in this browser. Try the latest Chrome or Safari.',
+  'voiceDictation.error.MICROPHONE_PERMISSION_DENIED':
+    'Microphone access is blocked. Allow it in browser site settings, then retry.',
+  'voiceDictation.error.NETWORK_DISCONNECTED':
+    'The dictation connection was interrupted. Confirmed text has been kept.',
+  'voiceDictation.error.PROTOCOL_ERROR': 'The dictation service returned an invalid response.',
+  'voiceDictation.error.PROVIDER_BILLING_BLOCKED':
+    'Realtime dictation is unavailable for this account.',
+  'voiceDictation.error.PROVIDER_CAPACITY': 'Realtime dictation is busy. Try again shortly.',
+  'voiceDictation.error.PROVIDER_DISCONNECTED':
+    'The transcription service disconnected. Confirmed text has been kept.',
+  'voiceDictation.error.PROVIDER_NOT_CONFIGURED': 'Realtime dictation is not configured.',
+  'voiceDictation.error.PROVIDER_REGION_UNAVAILABLE':
+    'Realtime dictation is unavailable in the current region.',
+  'voiceDictation.error.PROVIDER_TIMEOUT': 'The transcription service timed out.',
+  'voiceDictation.error.PROVIDER_UNAVAILABLE': 'Realtime dictation is temporarily unavailable.',
+  'voiceDictation.error.SESSION_CREATE_FAILED': 'A dictation session could not be created.',
+  'voiceDictation.error.SESSION_EXPIRED': 'The dictation session expired. Start a new session.',
+  'voiceDictation.error.SESSION_LIMIT_EXCEEDED': 'The dictation session limit was reached.',
+  'voiceDictation.error.WORKER_RESTART': 'The dictation service restarted. Try again.',
+  'voiceDictation.finalizing': 'Finishing dictation…',
+  'voiceDictation.listening': 'Listening…',
+  'voiceDictation.otherAudioModeActive': 'Finish the voice message recording first.',
+  'voiceDictation.replyInProgress': 'Wait for the current response to finish before dictating.',
+  'voiceDictation.requestingPermission': 'Requesting microphone access…',
+  'voiceDictation.retry': 'Retry dictation',
+  'voiceDictation.statusLabel': 'Realtime dictation',
+  'voiceDictation.stop': 'Finish dictation',
   'voiceMessage.action': 'Send voice message',
   'voiceMessage.cancel': 'Cancel recording',
   'voiceMessage.cancelUpload': 'Cancel voice message upload',
@@ -2237,6 +2337,39 @@ export default {
   'workingPanel.localFile.preview.reload': 'Reload preview',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.preview.source': 'Source',
+  'workingPanel.localFile.publish.action': 'Publish',
+  'workingPanel.localFile.publish.confirmTitle': 'Before you publish this page',
+  'workingPanel.localFile.publish.details': 'What will be published',
+  'workingPanel.localFile.publish.dynamic': 'Files loaded later by scripts will not be included.',
+  'workingPanel.localFile.publish.failed': "Couldn't publish this page",
+  'workingPanel.localFile.publish.files_one':
+    'This page includes {{count}} local file. It will be published together with the HTML.',
+  'workingPanel.localFile.publish.files_other':
+    'This page includes {{count}} local files. They will be published together with the HTML.',
+  'workingPanel.localFile.publish.inline_one':
+    '1 small file (under {{limit}}) is inlined into the HTML.',
+  'workingPanel.localFile.publish.inline_other':
+    '{{count}} small files (under {{limit}}) are inlined into the HTML.',
+  'workingPanel.localFile.publish.live': 'Live',
+  'workingPanel.localFile.publish.upload_one': '1 larger file will be uploaded with the page.',
+  'workingPanel.localFile.publish.upload_other':
+    '{{count}} larger files will be uploaded with the page.',
+  'workingPanel.localFile.publish.missing': 'Missing files will not be included: {{list}}',
+  'workingPanel.localFile.publish.noLocalFiles': 'This page has no local files besides the HTML.',
+  'workingPanel.localFile.publish.noTopic': 'Open a topic to publish this page',
+  'workingPanel.localFile.publish.note': 'You can unpublish it at any time.',
+  'workingPanel.localFile.publish.oversized': 'These files are too large to publish: {{list}}',
+  'workingPanel.localFile.publish.remotes':
+    'These remote URLs stay as they are. After publish they still load from the original hosts.',
+  'workingPanel.localFile.publish.scanning': 'Preparing this page…',
+  'workingPanel.localFile.publish.privacy':
+    'Anyone with the link can open this page. Before publishing, make sure it does not contain anything you would rather keep private, such as credentials, API keys, personal information, uploaded files, or images.',
+  'workingPanel.localFile.publish.success': 'Published',
+  'workingPanel.localFile.publish.tooLarge': 'This page is too large to publish ({{size}} bytes).',
+  'workingPanel.localFile.publish.tooMany': 'This page references too many local files to publish.',
+  'workingPanel.localFile.publish.unresolvedLocals':
+    'This page still points at local files that were not packed, so those assets would break after publish.',
+  'workingPanel.localFile.publish.version': 'Publish this version',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
   'workingPanel.skills.actions.comingSoon': 'Coming soon',
   'workingPanel.skills.actions.delete': 'Delete',
@@ -2350,15 +2483,10 @@ export default {
   'workingPanel.documents.unsaved': 'Unsaved changes',
   'workingPanel.title': 'Working Panel',
   'verifyConfig.addCriterion': 'Add criterion',
-  'verifyConfig.cancel': 'Cancel',
   'verifyConfig.collapsedHint': 'Generate criteria from the task',
   'verifyConfig.criteriaCount': '{{count}} criteria',
   'verifyConfig.criterionTitlePlaceholder': 'Describe what to check',
-  'verifyConfig.detail.descriptionLabel': 'Notes',
-  'verifyConfig.detail.descriptionPlaceholder': 'Add extra context for the checker (optional)',
   'verifyConfig.detail.title': 'Acceptance criterion',
-  'verifyConfig.detail.titleLabel': 'Title',
-  'verifyConfig.detail.verifierLabel': 'Checked by',
   'verifyConfig.disabled': 'Acceptance disabled',
   'verifyConfig.done': 'Done',
   'verifyConfig.edit': 'Edit',
@@ -2376,25 +2504,16 @@ export default {
   'verifyConfig.generating': 'Breaking down acceptance criteria…',
   'verifyConfig.manualAdd': 'Add manually',
   'verifyConfig.moreActions': 'More actions',
-  'verifyConfig.optional': 'Optional',
   'verifyConfig.regenerate': 'Regenerate',
   'verifyConfig.removeCriterion': 'Remove criterion',
-  'verifyConfig.required': 'Required',
   'verifyConfig.requirementEmpty': 'No acceptance requirement yet',
   'verifyConfig.requirementLabel': 'Acceptance requirement',
   'verifyConfig.requirementPlaceholder':
     'Describe how you want to accept the result in one sentence, e.g. the PDF export must work, the homepage must render correctly.',
-  'verifyConfig.save': 'Save',
   'verifyConfig.saveAsTemplate': 'Save as template',
   'verifyConfig.saveAsTemplateSuccess': 'Saved as template',
   'verifyConfig.templatePlaceholder': 'Select a template',
   'verifyConfig.unconfigured': 'Set acceptance criteria',
-  'verifyConfig.verifierType.agent': 'Agent',
-  'verifyConfig.verifierType.llm': 'LLM',
-  'verifyConfig.verifierType.program': 'Program',
-  'verifyConfig.verifierTypeDesc.agent': 'Spawn a sub-agent to investigate and judge',
-  'verifyConfig.verifierTypeDesc.llm': 'Let an LLM judge the result',
-  'verifyConfig.verifierTypeDesc.program': 'Run a deterministic script to check',
   'internalLink.preview.acceptance': 'Acceptance',
   'internalLink.preview.acceptanceCounts':
     '{{passed}}/{{total}} passed · {{exceptions}} exceptions',

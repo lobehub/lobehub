@@ -371,7 +371,7 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'transfer.title': 'Move',
-  'transfer.copyTo': 'Copy to...',
+  'transfer.copyTo': 'Copy to…',
   'transfer.desc': 'Move this Agent to another Workspace or your personal account.',
   'transfer.button': 'Move',
   'transfer.selectTarget': 'Move Agent to',
@@ -385,6 +385,77 @@ export default {
   'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
   'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after moving',
   'transfer.success': 'Agent moved successfully',
-  'transfer.transferTo': 'Move to...',
+  'transfer.transferTo': 'Move to…',
+  'transfer.transferToMember': 'Transfer to member...',
   'transfer.error': 'Failed to move agent',
+  'transferRequest.accept': 'Accept',
+  'transferRequest.acceptedToast': 'Transfer complete',
+  'transferRequest.acceptedToastDesc': 'Transfer accepted — you are now the owner of “{{name}}”.',
+  'transferRequest.acceptedToastAction': 'Open',
+  'transferRequest.actionFailed':
+    'The request could not be updated. It may have already been resolved.',
+  'transferRequest.decline': 'Decline',
+  'transferRequest.declinedToast': 'Transfer declined',
+  'transferRequest.declinedToastDesc': '“{{name}}” stays with its current owner.',
+  'transferRequest.incomingDesc':
+    'Accepting makes you the owner of this agent. Its settings and everyone’s conversations stay untouched.',
+  'transferRequest.incomingTitle': '{{name}} wants to transfer this agent to you',
+  'transferRequest.itemIncoming': '{{name}} wants to transfer this to you',
+  'transferRequest.itemOutgoing': 'Waiting for {{name}} to accept',
+  'transferRequest.manifest.bots':
+    '{{count}} bot binding(s) ({{platforms}}) transfer with it, disabled until you re-enable them',
+  'transferRequest.manifest.cronJobs':
+    '{{count}} scheduled job(s) transfer with it, disabled until you re-enable them',
+  'transferRequest.manifest.deviceReset':
+    'Device bindings you cannot access will be reset on transfer',
+  'transferRequest.manifest.expertiseAdjust':
+    '{{count}} private expertise domain(s) adjust — agent-exclusive ones transfer to you, shared ones unbind',
+  'transferRequest.manifest.connectorsReset':
+    '{{count}} connector(s) will be disconnected — reauthorize them with your own account',
+  'transferRequest.manifest.knowledgeDetach':
+    '{{count}} knowledge base / file attachment(s) you cannot access will be detached',
+  'transferRequest.manifest.hiddenMember':
+    'This group references a private agent you cannot access — its owner must share it before you can accept',
+  'transferRequest.manifestInitiator.bots':
+    '{{count}} bot binding(s) ({{platforms}}) transfer with it, disabled until the new owner re-enables them',
+  'transferRequest.manifestInitiator.cronJobs':
+    '{{count}} scheduled job(s) transfer with it, disabled until the new owner re-enables them',
+  'transferRequest.manifestInitiator.groupsLeave':
+    'This private agent will leave {{count}} group(s) not owned by the recipient',
+  'transferRequest.manifestInitiator.projectsLeave':
+    'This private agent will leave {{count}} project(s) not owned by the recipient',
+  'transferRequest.manifestInitiator.deviceReset':
+    'Device bindings the new owner cannot access will be reset',
+  'transferRequest.manifestInitiator.expertiseAdjust':
+    '{{count}} private expertise domain(s) adjust — ones exclusive to this agent transfer with it, shared ones unbind',
+  'transferRequest.manifestInitiator.connectorsReset':
+    '{{count}} connector(s) will be disconnected — your credentials never transfer; the new owner reauthorizes with their own account',
+  'transferRequest.manifestInitiator.knowledgeDetach':
+    '{{count}} knowledge base / file attachment(s) the new owner cannot access will be detached',
+  'transferRequest.manifestInitiator.hiddenMember':
+    'This group references a private agent the recipient cannot access — they cannot accept until its owner shares it',
+  'transferRequest.manifestInitiator.tasksDetach':
+    '{{count}} task assignment(s) on this private agent (yours or other members’) will be detached',
+  'transferRequest.manifest.unavailable':
+    'The transfer summary could not be loaded. Retry to review it before accepting.',
+  'transferRequest.manifestInitiator.unavailable':
+    'The transfer summary could not be loaded. Retry to review it before sending the request.',
+  'transferRequest.manifestLoading': 'Checking what this transfer includes…',
+  'transferRequest.manifestRetry': 'Retry',
+  'transferRequest.manifestTitle': 'This transfer will include',
+  'transferRequest.outgoingDesc':
+    'Nothing changes until they respond. You can withdraw the request at any time.',
+  'transferRequest.outgoingTitle': 'Waiting for {{name}} to accept this transfer',
+  'transferRequest.modalTitle': 'Transfer to Member',
+  'transferRequest.outcomeOwnership': 'They become the owner once they accept',
+  'transferRequest.outcomeUntouched': 'Settings and everyone’s conversations stay untouched',
+  'transferRequest.outcomeWithdraw': 'You can withdraw the request anytime before they respond',
+  'transferRequest.recipientLabel': 'Transfer to',
+  'transferRequest.recipientPlaceholder': 'Select a workspace member...',
+  'transferRequest.resourceType.agent': 'Agent',
+  'transferRequest.resourceType.agentGroup': 'Group',
+  'transferRequest.someone': 'A workspace member',
+  'transferRequest.untitledResource': 'Untitled',
+  'transferRequest.withdraw': 'Withdraw',
+  'transferRequest.withdrawnToast': 'Transfer request withdrawn.',
 } as const;

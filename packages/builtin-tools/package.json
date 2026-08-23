@@ -37,7 +37,6 @@
     "@lobechat/builtin-tool-image-generation": "workspace:*",
     "@lobechat/builtin-tool-knowledge-base": "workspace:*",
     "@lobechat/builtin-tool-lobe-agent": "workspace:*",
-    "@lobechat/builtin-tool-lobe-delivery-checker": "workspace:*",
     "@lobechat/builtin-tool-local-system": "workspace:*",
     "@lobechat/builtin-tool-memory": "workspace:*",
     "@lobechat/builtin-tool-message": "workspace:*",

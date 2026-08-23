@@ -5,11 +5,11 @@ import { t } from 'i18next';
 
 import AgentArtworkStudioContent from './Content';
 
-export { styleReferencesForArtworkStyle } from './lobeStyleReferences';
+export { styleReferencesForArtworkStyle } from '@/features/ArtworkStudio';
 
 /**
- * Large avatar workshop for one agent: make your own (upload) or one-click
- * generate in the official style. Reads everything from the agent store, so
+ * Character workshop for one agent: upload an image or generate either an
+ * avatar or full-body composition. Reads everything from the agent store, so
  * any surface that knows an agent id can open it.
  */
 export const openAgentArtworkStudio = (agentId: string): ModalInstance =>
@@ -17,6 +17,7 @@ export const openAgentArtworkStudio = (agentId: string): ModalInstance =>
     content: <AgentArtworkStudioContent agentId={agentId} />,
     footer: null,
     maskClosable: true,
+    styles: { content: { paddingBlockStart: 0 } },
     title: t('settingAgent.artwork.studio.title', { ns: 'setting' }),
-    width: 'min(92vw, 820px)',
+    width: 'min(94vw, 920px)',
   });

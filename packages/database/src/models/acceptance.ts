@@ -107,7 +107,7 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'requirement'>>,
+    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -116,22 +116,25 @@ export class AcceptanceModel {
       // non-empty statement a later round supplies, instead of staying blank
       // forever ("尚未记录该对象的验收目标").
       const nextRequirement = !existing.requirement ? defaults?.requirement : undefined;
+      const nextProjectId = !existing.projectId ? defaults?.projectId : undefined;
       const nextTitle =
         !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
           ? defaults.metadata.title
           : undefined;
-      if (nextRequirement || nextTitle) {
+      if (nextProjectId || nextRequirement || nextTitle) {
         const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
         await this.db
           .update(acceptances)
           .set({
             metadata,
+            projectId: nextProjectId ?? existing.projectId,
             requirement: nextRequirement ?? existing.requirement,
           })
           .where(eq(acceptances.id, existing.id));
         return {
           ...existing,
           metadata,
+          projectId: nextProjectId ?? existing.projectId,
           requirement: nextRequirement ?? existing.requirement,
         };
       }
@@ -165,7 +168,10 @@ export class AcceptanceModel {
   update = async (
     id: string,
     value: Partial<
-      Pick<NewAcceptance, 'config' | 'metadata' | 'requirement' | 'visibility' | 'visualRender'>
+      Pick<
+        NewAcceptance,
+        'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility' | 'visualRender'
+      >
     >,
   ): Promise<AcceptanceItem | undefined> => {
     const [row] = await this.db

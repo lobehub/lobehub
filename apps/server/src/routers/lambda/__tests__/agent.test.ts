@@ -23,7 +23,10 @@ import {
   canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  hasWorkspaceScopedPermission,
+  isWorkspacePrimaryOwner,
+} from '@/server/services/workspacePermission';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
@@ -79,6 +82,7 @@ vi.mock('@/server/services/agent', () => ({
 
 vi.mock('@/server/services/workspacePermission', () => ({
   hasWorkspaceScopedPermission: vi.fn(),
+  isWorkspacePrimaryOwner: vi.fn(),
 }));
 
 // The serverDatabase middleware replaces ctx.serverDB with this. The chain is
@@ -127,6 +131,7 @@ describe('agentRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(assertCanPerformResourceAction).mockResolvedValue();
+    vi.mocked(isWorkspacePrimaryOwner).mockResolvedValue(false);
     vi.mocked(getResourceMeta).mockResolvedValue({
       userId: 'creator-1',
       visibility: 'public',
@@ -151,6 +156,7 @@ describe('agentRouter', () => {
       deleteAgentFile: vi.fn(),
       deleteAgentKnowledgeBase: vi.fn(),
       duplicate: vi.fn(),
+      existsOwnedById: vi.fn().mockResolvedValue(false),
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
@@ -844,8 +850,75 @@ describe('agentRouter', () => {
         expect(agentServiceMock.updateAgentConfig).not.toHaveBeenCalled();
       });
 
+      it.each(['executionTargetSelectionPolicy', 'modelSelectionPolicy'] as const)(
+        'strips %s from workspace admin updates',
+        async (policyKey) => {
+          agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+          vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+          const caller = agentRouter.createCaller(wsCtx());
+          await caller.updateAgentConfig({
+            agentId: 'agent-1',
+            value: { agencyConfig: { boundDeviceId: 'device-1', [policyKey]: 'fixed' } },
+          });
+
+          expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
+            agencyConfig: { boundDeviceId: 'device-1' },
+          });
+        },
+      );
+
+      it('strips fully merged stale policies before a collaborator update', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.updateAgentConfig({
+          agentId: 'agent-1',
+          value: {
+            agencyConfig: {
+              boundDeviceId: 'device-1',
+              executionTargetSelectionPolicy: 'member',
+              modelSelectionPolicy: 'member',
+            },
+          },
+        });
+
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
+          agencyConfig: { boundDeviceId: 'device-1' },
+        });
+      });
+
+      it('preserves policy updates from the agent creator', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        agentModelMock.existsOwnedById.mockResolvedValueOnce(true);
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        const value = { agencyConfig: { modelSelectionPolicy: 'fixed' as const } };
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.updateAgentConfig({ agentId: 'agent-1', value });
+
+        expect(isWorkspacePrimaryOwner).not.toHaveBeenCalled();
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value);
+      });
+
+      it('preserves policy updates from the workspace primary owner', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.mocked(isWorkspacePrimaryOwner).mockResolvedValueOnce(true);
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        const value = { agencyConfig: { executionTargetSelectionPolicy: 'fixed' as const } };
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.updateAgentConfig({ agentId: 'agent-1', value });
+
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value);
+      });
+
       it('allows the update when no other member holds the lock', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
+          new TRPCError({ code: 'FORBIDDEN', message: 'Unexpected manage check' }),
+        );
         vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
 
         const caller = agentRouter.createCaller(wsCtx());

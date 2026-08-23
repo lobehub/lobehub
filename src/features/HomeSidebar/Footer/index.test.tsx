@@ -1,5 +1,4 @@
 import type * as LobechatConst from '@lobechat/const';
-import { DOWNLOAD_URL } from '@lobechat/const';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -173,17 +172,17 @@ describe('Footer help menu tracking', () => {
     const getApp = await screen.findByRole('link', { name: 'Get App' });
     const github = screen.getByRole('link', { name: 'GitHub' });
 
-    expect(getApp).toHaveAttribute('href', DOWNLOAD_URL.default);
+    expect(getApp).toHaveAttribute('href', '/apps');
     expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }, 20000);
 
-  it('does not show Get App in desktop builds', async () => {
+  it('shows Get App in desktop builds too', async () => {
     const user = userEvent.setup();
     await renderFooter({ desktop: true, hideGitHub: false });
 
     await user.click(screen.getByRole('button', { name: 'Help' }));
 
-    expect(screen.queryByRole('link', { name: 'Get App' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Get App' })).toHaveAttribute('href', '/apps');
   }, 20000);
 
   it('tracks menu open with the visible item keys', async () => {

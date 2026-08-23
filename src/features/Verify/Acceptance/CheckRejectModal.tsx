@@ -1,7 +1,6 @@
 'use client';
 
-import { acceptanceRejectIntents } from '@lobechat/const/verify';
-import type { AcceptanceRejectIntent, AcceptanceReviewAnnotation } from '@lobechat/types';
+import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { Button, createModal, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -213,7 +212,6 @@ interface CheckRejectModalProps {
     annotations: AcceptanceReviewAnnotation[];
     comment: string;
     fileIds: string[];
-    rejectIntent: AcceptanceRejectIntent;
   }) => Promise<boolean>;
 }
 
@@ -240,13 +238,6 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
     );
     const [loading, setLoading] = useState(false);
     const [activeEvidenceId, setActiveEvidenceId] = useState(evidence[0]?.id);
-    /**
-     * Which of the three jobs this reject is doing. Defaults to `unmet` — the
-     * common case, and the only one the check spec can be judged against — but
-     * the reviewer can reclassify, which is the entire point: a `new-idea`
-     * logged as `unmet` is the label noise that caps every downstream model.
-     */
-    const [intent, setIntent] = useState<AcceptanceRejectIntent>('unmet');
     const [annotations, setAnnotations] = useState<DraftAnnotationEntry[]>(() => {
       const source = initialAnnotations?.length ? initialAnnotations : (draft?.annotations ?? []);
       return (
@@ -348,7 +339,6 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
             })),
           comment: comment.trim(),
           fileIds,
-          rejectIntent: intent,
         });
         if (confirmed) {
           if (draftKey) localStorage.removeItem(draftStorageKey(draftKey));
@@ -425,24 +415,6 @@ const CheckRejectModalContent = memo<CheckRejectModalProps>(
             ? translate('acceptance.review.supplement')
             : translate('acceptance.review.rejectDescription', { title: checkTitle })}
         </Text>
-        {/* Classifying the reject costs one click and is what keeps the three
-            jobs this button does from collapsing into one unusable label. */}
-        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          <Text fontSize={12} type={'secondary'}>
-            {translate('acceptance.review.intentLabel')}
-          </Text>
-          {acceptanceRejectIntents.map((value) => (
-            <Button
-              disabled={loading}
-              key={value}
-              size={'small'}
-              type={intent === value ? 'primary' : 'default'}
-              onClick={() => setIntent(value)}
-            >
-              {translate(`acceptance.review.intent.${value}` as never)}
-            </Button>
-          ))}
-        </Flexbox>
         <TextArea
           autoSize={{ maxRows: 5, minRows: 2 }}
           placeholder={translate('acceptance.review.rejectPlaceholder')}

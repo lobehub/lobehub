@@ -399,6 +399,65 @@ describe('eval command', () => {
       );
     });
 
+    it('should create a test case with an environment', async () => {
+      mockTrpcClient.agentEval.createTestCase.mutate.mockResolvedValue({ id: 'tc1' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'eval',
+        'testcase',
+        'create',
+        '--dataset-id',
+        'd1',
+        '--input',
+        'Q?',
+        '--environment',
+        '{"toolForwarding":{"memory":{"endpoint":"https://mock.test/tool-calls"}}}',
+      ]);
+
+      expect(mockTrpcClient.agentEval.createTestCase.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: expect.objectContaining({
+            environment: {
+              toolForwarding: {
+                memory: { endpoint: 'https://mock.test/tool-calls' },
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should update a test case environment', async () => {
+      mockTrpcClient.agentEval.updateTestCase.mutate.mockResolvedValue({ id: 'tc1' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'eval',
+        'testcase',
+        'update',
+        '--id',
+        'tc1',
+        '--environment',
+        '{"toolForwarding":{"memory":{"endpoint":"https://mock.test/tool-calls"}}}',
+      ]);
+
+      expect(mockTrpcClient.agentEval.updateTestCase.mutate).toHaveBeenCalledWith({
+        content: {
+          environment: {
+            toolForwarding: {
+              memory: { endpoint: 'https://mock.test/tool-calls' },
+            },
+          },
+        },
+        id: 'tc1',
+      });
+    });
+
     it('should delete a test case', async () => {
       mockTrpcClient.agentEval.deleteTestCase.mutate.mockResolvedValue({ success: true });
 

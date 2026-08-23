@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "Nome de Exibição do Modelo",
   "providerModels.item.modelConfig.extendParams.extra": "Escolha os parâmetros estendidos compatíveis com o modelo. Passe o mouse sobre uma opção para visualizar os controles. Configurações incorretas podem causar falhas na solicitação.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "Para modelos Codex; controla a intensidade do raciocínio.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "Para o modo de pensamento DeepSeek V4 GA; controla a intensidade do raciocínio. Adiciona um nível `baixo` além dos níveis originais do V4. `alto` é o padrão, `máximo` desbloqueia o raciocínio mais profundo usado por fluxos de trabalho de agentes complexos.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "Para o modo de raciocínio do DeepSeek V4; controla a intensidade do raciocínio. `high` é o padrão, `max` libera o nível mais profundo de raciocínio usado por fluxos de trabalho complexos de agentes.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Para modelos Claude; pode reduzir custos e acelerar as respostas.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "Para Claude Opus 4.6; controla o nível de esforço (baixo/médio/alto/máximo).",

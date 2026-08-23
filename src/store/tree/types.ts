@@ -1,11 +1,19 @@
 import type { StoreHandle } from '@/store/utils/optimisticEngine';
 
 export interface TreeItem {
+  /**
+   * Underlying `files.id` for file nodes. The unified resource list addresses
+   * a file that backs a derived page by the page id, so file-table lookups
+   * (e.g. the messenger push) must go through this instead of `id`.
+   */
+  fileId?: string | null;
   fileType: string;
   id: string;
   isFolder: boolean;
   metadata?: Record<string, any>;
   name: string;
+  /** Byte size for file nodes — drives the push modal's oversize pre-warning. */
+  size?: number;
   slug?: string | null;
   sourceType?: string;
   url: string;

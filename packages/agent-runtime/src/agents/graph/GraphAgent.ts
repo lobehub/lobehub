@@ -1,5 +1,5 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
-import type { AgentGraphEdge, AgentGraphNode, ReasoningGraph } from '@lobechat/types';
+import type { AgentGraph, AgentGraphEdge, AgentGraphNode } from '@lobechat/types';
 import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types';
 import { toJsonSafe } from '@lobechat/utils/json';
 import type { UnknownRecord } from '@lobechat/utils/object';
@@ -161,9 +161,9 @@ interface PromptObject {
  */
 export class GraphAgent implements Agent {
   private generalConfig: GeneralAgentConfig;
-  private graph: ReasoningGraph;
+  private graph: AgentGraph;
 
-  constructor(config: GeneralAgentConfig & { graph: ReasoningGraph }) {
+  constructor(config: GeneralAgentConfig & { graph: AgentGraph }) {
     const { graph, ...generalConfig } = config;
     this.graph = graph;
     this.generalConfig = generalConfig;

@@ -2,6 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';
+import { useChatStore } from '@/store/chat';
 import { type ChatAudioItem } from '@/types/index';
 
 interface AudioFileListViewerProps {
@@ -10,6 +11,12 @@ interface AudioFileListViewerProps {
 }
 
 const AudioFileListViewer = memo<AudioFileListViewerProps>(({ items, messageId }) => {
+  const [uploadState, cancelVoiceMessage, retryVoiceMessage] = useChatStore((s) => [
+    s.voiceMessageUploadMap[messageId],
+    s.cancelVoiceMessage,
+    s.retryVoiceMessage,
+  ]);
+
   return (
     <Flexbox gap={8}>
       {items.map((item) => (
@@ -17,8 +24,10 @@ const AudioFileListViewer = memo<AudioFileListViewerProps>(({ items, messageId }
           alt={item.alt}
           durationMs={item.durationMs}
           key={item.id}
-          messageId={messageId}
+          uploadState={uploadState}
           url={item.url}
+          onCancelUpload={() => void cancelVoiceMessage(messageId)}
+          onRetryUpload={() => retryVoiceMessage(messageId)}
         />
       ))}
     </Flexbox>

@@ -1,5 +1,6 @@
 import type { ConversationContext } from '@lobechat/types';
 
+import { getEffectiveAgentModePreference } from '@/features/ChatInput/hooks/effectiveAgentModePreference';
 import {
   getVoiceMessageCapability,
   useVoiceMessageCapability,
@@ -11,12 +12,13 @@ import {
 
 export const canSendVoiceMessage = (context: ConversationContext) => {
   const { model, provider } = getEffectiveConversationModelConfig(context);
+  const enableAgentMode = getEffectiveAgentModePreference(context.agentId);
 
-  return getVoiceMessageCapability(model, provider);
+  return getVoiceMessageCapability({ enableAgentMode, model, provider });
 };
 
 export const useCanSendVoiceMessage = (context: ConversationContext) => {
   const { model, provider } = useEffectiveConversationModelConfig(context);
 
-  return useVoiceMessageCapability(model, provider);
+  return useVoiceMessageCapability(model, provider, context.agentId);
 };

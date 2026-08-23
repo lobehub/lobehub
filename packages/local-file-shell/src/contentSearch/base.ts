@@ -2,6 +2,8 @@ import { readFile, stat } from 'node:fs/promises';
 
 import fg from 'fast-glob';
 
+import { expandTilde } from '../file/expandTilde';
+import { isMissingPath } from '../file/isMissingPath';
 import { createLogger } from '../logger';
 import type { ToolDetector } from '../toolDetector';
 import type { GrepContentParams, GrepContentResult } from '../types';
@@ -63,6 +65,37 @@ export abstract class BaseContentSearch {
    */
   protected resolveSearchPath(params: GrepContentParams): string {
     return params.path ?? params.scope ?? params.cwd ?? process.cwd();
+  }
+
+  /**
+   * The result to return when `scope` points at nothing.
+   *
+   * Every engine answers a non-existent search root with "no matches": `rg` gets
+   * an unusable `cwd` and produces empty stdout, the Node fallback throws and is
+   * swallowed by the caller's catch. An agent that mistypes a directory
+   * (`src/locales` instead of `locales/`) therefore reads "Found 0 matches" and
+   * concludes the CODE doesn't exist — the one answer the search cannot support.
+   * Report the missing scope by name so the next call fixes the path instead of
+   * the hypothesis.
+   *
+   * Only a path that is definitively absent short-circuits: a scope that exists
+   * but cannot be stat'd (an unreadable parent, a transient fd exhaustion) still
+   * goes to the engine, whose own error is the accurate one. Claiming "does not
+   * exist" there would be a confidently wrong diagnosis — exactly what this
+   * guard exists to remove.
+   */
+  protected async missingScopeResult(
+    params: GrepContentParams,
+  ): Promise<GrepContentResult | undefined> {
+    const searchPath = expandTilde(this.resolveSearchPath(params))!;
+    if (!(await isMissingPath(searchPath))) return undefined;
+
+    return {
+      error: `Search scope does not exist: ${searchPath}`,
+      matches: [],
+      success: false,
+      total_matches: 0,
+    };
   }
 
   /**

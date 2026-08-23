@@ -6,6 +6,7 @@ import type {
   AcceptanceReviewAnnotation,
   AcceptanceStatus,
   AcceptanceSubjectType,
+  GoalStatus,
   ReviewProposalOutcome,
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
@@ -18,7 +19,10 @@ import debug from 'debug';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
+import { GoalModel } from '@/database/models/goal';
+import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
@@ -33,6 +37,7 @@ import type {
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
+import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
 import { computeFalseFlags } from './feedbackService';
 import { maybeContinueGoalLoop, syncGoalToolState } from './goalLoop';
 
@@ -473,12 +478,39 @@ export class AcceptanceService {
     defaults?: { requirement?: string; title?: string },
   ): Promise<AcceptanceItem> => {
     await this.assertSubjectExists(subjectType, subjectId);
+    const projectId = await this.resolveSubjectProjectId(subjectType, subjectId);
     return this.acceptanceModel.ensureForSubject(subjectType, subjectId, {
+      projectId,
       requirement: defaults?.requirement,
       ...(subjectType === 'standalone' && defaults?.title
         ? { metadata: { title: defaults.title } }
         : {}),
     });
+  };
+
+  private resolveSubjectProjectId = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+  ): Promise<string | null> => {
+    if (subjectType === 'task') {
+      return (
+        (await new TaskModel(this.db, this.userId, this.workspaceId).resolve(subjectId))
+          ?.projectId ?? null
+      );
+    }
+    if (subjectType === 'topic') {
+      const taskTopic = await new TaskTopicModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findByTopicId(subjectId);
+      if (!taskTopic) return null;
+      return (
+        (await new TaskModel(this.db, this.userId, this.workspaceId).resolve(taskTopic.taskId))
+          ?.projectId ?? null
+      );
+    }
+    return null;
   };
 
   /**
@@ -512,6 +544,54 @@ export class AcceptanceService {
   };
 
   /**
+   * Fold one acceptance into another — the source's checks (with their rounds,
+   * verdicts and evidence) become part of the target's inventory, and the
+   * source entry goes away.
+   *
+   * The two aggregates are the same delivery arriving twice: a second CLI
+   * ingest that minted a new standalone acceptance, or a topic and the task it
+   * was promoted into. Merging is what makes them one review surface again.
+   */
+  merge = async (sourceId: string, targetId: string): Promise<AcceptanceMergeSummary> => {
+    if (sourceId === targetId) throw new Error('An acceptance cannot be merged into itself');
+
+    const source = await this.acceptanceModel.findById(sourceId);
+    if (!source) throw new Error(`Acceptance "${sourceId}" not found`);
+    const target = await this.acceptanceModel.findById(targetId);
+    if (!target) throw new Error(`Acceptance "${targetId}" not found`);
+
+    // Same rule as attaching a single round: a settled aggregate must be
+    // re-opened deliberately before more checks land in it, or an `accepted`
+    // sign-off would silently start covering checks nobody signed off on.
+    if (target.status === 'accepted' || target.status === 'closed') {
+      throw new Error(
+        `This acceptance has already been ${target.status} — reopen it before merging into it`,
+      );
+    }
+
+    const summary = await mergeAcceptanceRounds({
+      db: this.db,
+      source,
+      target,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
+    // Past this point the merge is COMMITTED and the source no longer exists —
+    // so a failure here must not be reported as a failed merge. The caller
+    // would surface a retry that can only ever fail ("Acceptance not found"),
+    // for a rollup that is derived and re-derived by every later round,
+    // decision and sweep. Log it and return the merge that did happen.
+    try {
+      await this.recomputeStatus(targetId);
+    } catch (error) {
+      log('acceptance %s merged, but status recompute failed (non-fatal): %O', targetId, error);
+    }
+
+    return summary;
+  };
+
+  /**
    * Re-derive the aggregate's lifecycle state from its current round. The
    * user's `accepted` / `closed` are terminal; `rejected` is sticky until a
    * round newer than the decision arrives.
@@ -534,9 +614,45 @@ export class AcceptanceService {
     const status = statusFromRound(current, Boolean(report));
     if (status !== acceptance.status) {
       await this.acceptanceModel.updateStatus(acceptanceId, status);
+      await this.mirrorGoalStatus(acceptance.subjectType, acceptance.subjectId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }
     return status;
+  };
+
+  /**
+   * Keep a task-carried goal's live phase in lockstep with the acceptance
+   * lifecycle. Only the in-flight phases are mirrored here — the decision
+   * transitions (`achieved` / `paused` / `running` next round / `failed`) are
+   * written by their owning flows (accept / reject / settle / goal loop).
+   * Best-effort: goal state must never break acceptance recompute.
+   */
+  private mirrorGoalStatus = async (
+    subjectType: string,
+    subjectId: string,
+    status: AcceptanceStatus,
+  ): Promise<void> => {
+    if (subjectType !== 'task') return;
+    // `planned` is deliberately NOT mirrored: the plan being confirmed at run
+    // start says nothing about verification running — the round is still
+    // executing, and flipping the goal to `verifying` here would show 验证中
+    // for the whole execution phase (caught by the E2E acceptance run).
+    const mirrored: Partial<Record<AcceptanceStatus, GoalStatus>> = {
+      delivered: 'review',
+      repairing: 'verifying',
+      verifying: 'verifying',
+    };
+    const next = mirrored[status];
+    if (!next) return;
+
+    try {
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', subjectId);
+      if (!goal || goal.status === 'achieved' || goal.status === 'canceled') return;
+      if (goal.status !== next) await goalModel.updateStatus(goal.id, next);
+    } catch (error) {
+      log('mirrorGoalStatus failed (non-fatal): %O', error);
+    }
   };
 
   /** Latest round of an aggregate — the row `stampDecision` would write to. */
@@ -564,15 +680,17 @@ export class AcceptanceService {
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
 
-  /** Flip a goal task's origin card to its terminal "done" state. Best-effort. */
+  /** Flip a goal (and its origin card) to the terminal "achieved" state. Best-effort. */
   private syncGoalStateOnAccept = async (subjectId: string): Promise<void> => {
     try {
       const taskModel = new TaskModel(this.db, this.userId, this.workspaceId);
       const task = await taskModel.findById(subjectId);
       if (!task) return;
-      const goal = taskModel.getGoalConfig(task);
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', task.id);
       if (!goal) return;
 
+      await goalModel.updateStatus(goal.id, 'achieved');
       await syncGoalToolState({
         db: this.db,
         state: { phase: 'done', roundsRun: task.totalTopics || 0 },
@@ -620,7 +738,8 @@ export class AcceptanceService {
       const task = await taskModel.findById(subjectId);
       if (!task) return;
 
-      const goal = taskModel.getGoalConfig(task);
+      const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+      const goal = await goalModel.findBySubject('task', task.id);
       if (!goal) return;
 
       const outcome = await maybeContinueGoalLoop({
@@ -630,6 +749,11 @@ export class AcceptanceService {
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
+      // `continued` already flipped the goal to `running` inside the loop; a
+      // budget-blocked or failed spawn leaves the rejected goal parked on the
+      // user (raise the budget / retry), which is `paused` in the goal
+      // vocabulary.
+      if (outcome !== 'continued') await goalModel.updateStatus(goal.id, 'paused');
       log('reject on goal task %s → loop outcome: %s', task.identifier, outcome);
     } catch (error) {
       log('spawnGoalRoundOnReject failed (non-fatal): %O', error);
@@ -856,6 +980,33 @@ export class AcceptanceService {
     };
   };
 
+  /** Resolve the projects referenced directly by acceptances in one bounded read. */
+  private resolveProjects = async (
+    acceptances: AcceptanceItem[],
+  ): Promise<Map<string, { id: string; name: string }>> => {
+    const result = new Map<string, { id: string; name: string }>();
+    const projectIds = [
+      ...new Set(acceptances.map(({ projectId }) => projectId).filter((id): id is string => !!id)),
+    ];
+    if (projectIds.length === 0) return result;
+
+    try {
+      const projects = await new ProjectModel(this.db, this.userId, this.workspaceId).findByIds(
+        projectIds,
+      );
+      const projectById = new Map(projects.map((project) => [project.id, project]));
+
+      for (const acceptance of acceptances) {
+        if (!acceptance.projectId) continue;
+        const project = projectById.get(acceptance.projectId);
+        if (project) result.set(acceptance.id, { id: project.id, name: project.name });
+      }
+    } catch (error) {
+      log('resolveProjects failed (non-fatal): %O', error);
+    }
+    return result;
+  };
+
   /**
    * The latest round's total-check count per acceptance — a cheap glance for the
    * list panel (two batched reads, never a per-row union recompute). The signed-
@@ -896,11 +1047,15 @@ export class AcceptanceService {
    */
   listWithSubjects = async (limit = 50) => {
     const rows = await this.acceptanceModel.query(limit);
-    const checkCounts = await this.latestCheckCounts(rows.map((row) => row.id));
+    const [checkCounts, projects] = await Promise.all([
+      this.latestCheckCounts(rows.map((row) => row.id)),
+      this.resolveProjects(rows),
+    ]);
     return Promise.all(
       rows.map(async (row) => ({
         ...row,
         checkCount: checkCounts.get(row.id) ?? null,
+        project: projects.get(row.id) ?? null,
         subject: await this.resolveSubject(row),
       })),
     );

@@ -1,0 +1,532 @@
+import type {
+  GoalEdgeKind,
+  GoalGraphSnapshot,
+  GoalNodeKind,
+  GoalNodeStatus,
+  GoalTickResult,
+  TaskItem,
+  TaskTopicHandoff,
+} from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
+
+import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
+import { ProjectModel } from '@/database/models/project';
+import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
+import { WorkModel } from '@/database/models/work';
+import type { LobeChatDatabase } from '@/database/type';
+import { assertAgentUsableBy } from '@/database/utils/agent-access';
+
+import { TaskService } from '../task';
+import { TaskRunnerService } from '../taskRunner';
+
+const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
+const TASK_DESCRIPTION_MAX_LENGTH = 255;
+
+export interface CreateGoalGraphInput {
+  agentId?: string;
+  maxRounds?: number;
+  maxTotalCost?: number;
+  projectId?: string;
+  requirement?: string;
+  title: string;
+  work?: string[];
+}
+
+export interface CreateGoalNodeInput {
+  description?: string;
+  kind: GoalNodeKind;
+  priority?: number;
+  status?: GoalNodeStatus;
+  title: string;
+}
+
+/** Application service shared by CLI today and Graph UI/schedulers later. */
+export class GoalService {
+  private readonly goalModel: GoalModel;
+  private readonly graphModel: GoalGraphModel;
+  private readonly taskModel: TaskModel;
+  private readonly taskService: TaskService;
+  private readonly taskTopicModel: TaskTopicModel;
+  private readonly workModel: WorkModel;
+
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {
+    this.goalModel = new GoalModel(db, userId, workspaceId);
+    this.graphModel = new GoalGraphModel(db, userId, workspaceId);
+    this.taskModel = new TaskModel(db, userId, workspaceId);
+    this.taskService = new TaskService(db, userId, workspaceId);
+    this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
+    this.workModel = new WorkModel(db, userId, workspaceId);
+  }
+
+  create = async (input: CreateGoalGraphInput): Promise<GoalGraphSnapshot> => {
+    if (input.agentId) {
+      await assertAgentUsableBy(this.db, input.agentId, {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    }
+    if (input.projectId) {
+      const project = await new ProjectModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findManageableById(input.projectId);
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+    }
+    const goal = await this.goalModel.create({
+      agentId: input.agentId,
+      maxRounds: input.maxRounds,
+      maxTotalCost: input.maxTotalCost,
+      projectId: input.projectId,
+      requirement: input.requirement,
+      subjectType: 'standalone',
+      title: input.title,
+    });
+    try {
+      const problem = await this.graphModel.createNode(goal.id, {
+        description: input.requirement,
+        kind: 'problem',
+        status: 'active',
+        title: input.title,
+      });
+      if (!problem) throw new Error('Failed to seed goal problem');
+
+      for (const title of input.work ?? []) {
+        const work = await this.graphModel.createNode(goal.id, { kind: 'work', title });
+        if (!work) throw new Error('Failed to seed goal work');
+        await this.graphModel.createEdge(goal.id, problem.id, work.id, 'decomposes');
+      }
+    } catch (error) {
+      await this.goalModel.delete(goal.id).catch(() => {});
+      throw error;
+    }
+    return (await this.graphModel.getGraph(goal.id))!;
+  };
+
+  graph = async (goalId: string) => this.requireGraph(goalId);
+
+  addNode = async (goalId: string, input: CreateGoalNodeInput) => {
+    const node = await this.graphModel.createNode(goalId, input);
+    if (!node) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return node;
+  };
+
+  addEdge = async (
+    goalId: string,
+    sourceNodeId: string,
+    targetNodeId: string,
+    kind: GoalEdgeKind,
+  ) => {
+    const edge = await this.graphModel.createEdge(goalId, sourceNodeId, targetNodeId, kind);
+    if (!edge) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return edge;
+  };
+
+  pause = async (goalId: string) => {
+    const goal = await this.goalModel.updateStatus(goalId, 'paused');
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
+  };
+
+  setBudget = async (
+    goalId: string,
+    budget: { maxRounds?: number | null; maxTotalCost?: number | null },
+  ) => {
+    const goal = await this.goalModel.update(goalId, budget);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
+  };
+
+  resume = async (goalId: string) => {
+    const graph = await this.requireGraph(goalId);
+    const status = graph.decisions.some((decision) => decision.status === 'pending')
+      ? 'review'
+      : 'running';
+    return this.goalModel.updateStatus(goalId, status);
+  };
+
+  decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
+    const graph = await this.requireGraph(goalId);
+    const decision = graph.decisions.find((item) => item.id === decisionId);
+    if (!decision || decision.status !== 'pending') {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
+    }
+    if (decision.options?.length && !decision.options.some((option) => option.id === optionId)) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
+    }
+    const resolved = await this.graphModel.resolveDecision(
+      goalId,
+      decisionId,
+      optionId,
+      resolution,
+    );
+    if (!resolved)
+      throw new TRPCError({ code: 'CONFLICT', message: 'Decision was already resolved' });
+
+    const incoming = graph.edges.find(
+      (edge) => edge.targetNodeId === decision.nodeId && edge.kind === 'leads_to',
+    );
+    const source = incoming && graph.nodes.find((node) => node.id === incoming.sourceNodeId);
+    if (source?.kind === 'work') {
+      if (optionId === 'retry' && source.taskId) {
+        await this.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
+        await this.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
+      } else if (optionId === 'retire') {
+        await this.graphModel.updateNodeStatus(goalId, source.id, 'retired', resolution);
+      }
+    }
+    await this.goalModel.updateStatus(goalId, 'running');
+    return resolved;
+  };
+
+  tick = async (goalId: string): Promise<GoalTickResult> => {
+    const graph = await this.requireGraph(goalId);
+    if (graph.goal.status === 'paused') {
+      return { goalId, message: 'Goal is paused', outcome: 'no_progress' };
+    }
+    if (graph.goal.status === 'achieved') {
+      return { goalId, message: 'Goal is already achieved', outcome: 'achieved' };
+    }
+    if (graph.goal.status === 'failed' || graph.goal.status === 'canceled') {
+      return { goalId, message: `Goal is ${graph.goal.status}`, outcome: 'failed' };
+    }
+
+    const pendingDecision = graph.decisions.find((decision) => decision.status === 'pending');
+    if (pendingDecision) {
+      await this.goalModel.updateStatus(goalId, 'review');
+      return {
+        goalId,
+        message: pendingDecision.question,
+        nodeId: pendingDecision.nodeId,
+        outcome: 'waiting_human',
+      };
+    }
+
+    const resolvedNodeIds = new Set(
+      graph.nodes.filter((node) => node.status === 'resolved').map((node) => node.id),
+    );
+    const frontier = graph.nodes
+      .filter((node) => {
+        if (node.kind !== 'work' || ['resolved', 'rejected', 'retired'].includes(node.status)) {
+          return false;
+        }
+
+        const dependencies = graph.edges.filter(
+          (edge) => edge.kind === 'depends_on' && edge.sourceNodeId === node.id,
+        );
+        return dependencies.every((edge) => resolvedNodeIds.has(edge.targetNodeId));
+      })
+      .sort((a, b) => b.priority - a.priority || a.createdAt.getTime() - b.createdAt.getTime())[0];
+
+    if (!frontier) {
+      const workNodes = graph.nodes.filter((node) => node.kind === 'work');
+      const allWorkTerminal =
+        workNodes.length > 0 &&
+        workNodes.every((node) => ['resolved', 'rejected', 'retired'].includes(node.status));
+      if (allWorkTerminal) {
+        await this.goalModel.updateStatus(goalId, 'achieved');
+        return { goalId, message: 'All work nodes reached a terminal state', outcome: 'achieved' };
+      }
+      return {
+        goalId,
+        message:
+          workNodes.length === 0
+            ? 'No work frontier exists; add a work node'
+            : 'No work node is ready; resolve its dependencies first',
+        outcome: 'no_progress',
+      };
+    }
+
+    if (!frontier.taskId) {
+      const claim = await this.graphModel.claimWorkNode(
+        goalId,
+        frontier.id,
+        new Date(Date.now() - WORK_NODE_CLAIM_TTL_MS),
+      );
+      if (!claim) {
+        const current = (await this.requireGraph(goalId)).nodes.find(
+          (node) => node.id === frontier.id,
+        );
+        return {
+          goalId,
+          message: current?.taskId
+            ? 'Responsible task was created by another coordinator'
+            : 'Work node is being claimed by another coordinator',
+          nodeId: frontier.id,
+          outcome: 'waiting_external',
+          taskId: current?.taskId ?? undefined,
+        };
+      }
+
+      let task: TaskItem | undefined;
+      try {
+        const description = frontier.description ?? graph.goal.requirement;
+        task = await this.taskService.createTask({
+          assigneeAgentId: graph.goal.agentId ?? undefined,
+          config: { checkpoint: { topic: { after: false } } },
+          description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
+          instruction: this.buildWorkInstruction(graph, frontier.title, frontier.description),
+          name: frontier.title,
+          projectId: graph.goal.projectId ?? undefined,
+        });
+        const bound = await this.graphModel.bindTask(goalId, frontier.id, task.id);
+        if (!bound) {
+          await this.taskModel.delete(task.id);
+          return {
+            goalId,
+            message: 'Responsible task was created by another coordinator',
+            nodeId: frontier.id,
+            outcome: 'waiting_external',
+          };
+        }
+      } catch (error) {
+        if (task) {
+          await this.taskModel.delete(task.id).catch((cleanupError) => {
+            console.error('[GoalService.tick] failed to delete unbound task:', cleanupError);
+          });
+        }
+        await this.graphModel.updateNodeStatus(goalId, frontier.id, 'proposed');
+        throw error;
+      }
+      const work = await this.workModel.registerTask({
+        changeType: 'created',
+        taskId: task.id,
+        toolIdentifier: 'goal-coordinator',
+        toolName: 'createResponsibleTask',
+      });
+      if (work?.currentVersionId) {
+        await this.graphModel.attachWorkVersion(
+          goalId,
+          frontier.id,
+          work.currentVersionId,
+          'produced',
+        );
+      }
+      await this.goalModel.updateStatus(goalId, 'running');
+      return {
+        goalId,
+        message: `Created responsible task ${task.identifier}`,
+        nodeId: frontier.id,
+        outcome: 'advanced',
+        taskId: task.id,
+      };
+    }
+
+    const task = await this.taskModel.findById(frontier.taskId);
+    if (!task) {
+      await this.graphModel.updateNodeStatus(
+        goalId,
+        frontier.id,
+        'waiting',
+        'Responsible task is missing',
+      );
+      return {
+        goalId,
+        message: 'Responsible task is missing',
+        nodeId: frontier.id,
+        outcome: 'failed',
+      };
+    }
+    await this.ensureTaskWorkVersion(graph.goal.id, frontier.id, task.id);
+
+    if (task.status === 'completed') return this.consumeCompletedWork(graph, frontier.id, task.id);
+    if (
+      task.status === 'failed' ||
+      task.status === 'canceled' ||
+      (task.status === 'paused' && task.error)
+    ) {
+      return this.openFailureDecision(
+        graph,
+        frontier.id,
+        task.id,
+        task.error ?? `Task ${task.status}`,
+      );
+    }
+    if (task.status === 'paused') {
+      return {
+        goalId,
+        message: `Task ${task.identifier} is paused`,
+        nodeId: frontier.id,
+        outcome: 'waiting_human',
+        taskId: task.id,
+      };
+    }
+    if (task.status === 'running' || task.status === 'scheduled') {
+      return {
+        goalId,
+        message: `Task ${task.identifier} is ${task.status}`,
+        nodeId: frontier.id,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
+    const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
+    const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
+    const roundLimitReached = graph.goal.maxRounds !== null && runs.length >= graph.goal.maxRounds;
+    const costLimitReached =
+      graph.goal.maxTotalCost !== null && totalCost >= Number(graph.goal.maxTotalCost);
+    if (roundLimitReached || costLimitReached) {
+      await this.goalModel.updateStatus(goalId, 'paused');
+      return {
+        goalId,
+        message: roundLimitReached
+          ? `Round budget reached (${runs.length}/${graph.goal.maxRounds})`
+          : `Cost budget reached ($${totalCost.toFixed(4)}/$${graph.goal.maxTotalCost})`,
+        nodeId: frontier.id,
+        outcome: 'no_progress',
+        taskId: task.id,
+      };
+    }
+
+    const run = await new TaskRunnerService(this.db, this.userId, this.workspaceId).runTask({
+      taskId: task.id,
+      trigger: 'goal',
+    });
+    return {
+      goalId,
+      message: `Started task ${task.identifier}`,
+      nodeId: frontier.id,
+      outcome: 'waiting_external',
+      taskId: run.taskId,
+    };
+  };
+
+  private requireGraph = async (goalId: string) => {
+    const graph = await this.graphModel.getGraph(goalId);
+    if (!graph) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return graph;
+  };
+
+  private ensureTaskWorkVersion = async (goalId: string, nodeId: string, taskId: string) => {
+    const graph = await this.graphModel.getGraph(goalId);
+    if (graph?.workVersions.some((link) => link.nodeId === nodeId)) return;
+    const work = await this.workModel.registerTask({
+      changeType: 'created',
+      taskId,
+      toolIdentifier: 'goal-coordinator',
+      toolName: 'createResponsibleTask',
+    });
+    if (work?.currentVersionId) {
+      await this.graphModel.attachWorkVersion(goalId, nodeId, work.currentVersionId, 'produced');
+    }
+  };
+
+  private buildWorkInstruction = (
+    graph: GoalGraphSnapshot,
+    title: string,
+    description: string | null,
+  ) =>
+    [
+      `Long-horizon goal: ${graph.goal.title}`,
+      graph.goal.requirement ? `Acceptance requirement: ${graph.goal.requirement}` : undefined,
+      `Current work objective: ${title}`,
+      description,
+      'Complete this work objective. Create implementation-level subtasks when useful. Return concrete evidence, key findings, and the recommended next action.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+  private consumeCompletedWork = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    taskId: string,
+  ): Promise<GoalTickResult> => {
+    const existingFinding = graph.edges.some(
+      (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
+    );
+    const [latest] = await this.taskTopicModel.findWithHandoff(taskId, 1);
+    const completedWork = await this.workModel.registerTask({
+      changeType: 'updated',
+      rootOperationId: latest?.operationId,
+      taskId,
+      toolIdentifier: 'goal-coordinator',
+      toolName: 'synthesizeTaskOutcome',
+      topicId: latest?.topicId,
+    });
+    if (completedWork?.currentVersionId) {
+      await this.graphModel.attachWorkVersion(
+        graph.goal.id,
+        nodeId,
+        completedWork.currentVersionId,
+        'produced',
+      );
+    }
+    if (!existingFinding) {
+      const handoff = latest?.handoff as TaskTopicHandoff | null;
+      const finding = await this.graphModel.createNode(graph.goal.id, {
+        confidence: 1,
+        description: handoff?.content ?? handoff?.summary ?? undefined,
+        kind: 'finding',
+        status: 'resolved',
+        title:
+          handoff?.title ??
+          handoff?.summary ??
+          `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`,
+      });
+      if (finding) await this.graphModel.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
+    }
+    await this.graphModel.updateNodeStatus(
+      graph.goal.id,
+      nodeId,
+      'resolved',
+      'Responsible task completed',
+    );
+    return {
+      goalId: graph.goal.id,
+      message: 'Task outcome was synthesized into a finding',
+      nodeId,
+      outcome: 'advanced',
+      taskId,
+    };
+  };
+
+  private openFailureDecision = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    taskId: string,
+    reason: string,
+  ): Promise<GoalTickResult> => {
+    const existingDecisionNode = graph.edges
+      .filter((edge) => edge.sourceNodeId === nodeId && edge.kind === 'leads_to')
+      .map((edge) => graph.nodes.find((node) => node.id === edge.targetNodeId))
+      .find((node) => node?.kind === 'decision' && node.status !== 'resolved');
+    if (!existingDecisionNode) {
+      const node = await this.graphModel.createNode(graph.goal.id, {
+        description: reason,
+        kind: 'decision',
+        status: 'waiting',
+        title: 'Choose how to recover failed work',
+      });
+      if (node) {
+        await this.graphModel.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
+        await this.graphModel.createDecision(graph.goal.id, node.id, {
+          authority: 'user',
+          options: [
+            { id: 'retry', label: 'Retry work' },
+            { id: 'retire', label: 'Retire work' },
+          ],
+          question: `${reason}. Retry or retire this work node?`,
+          recommendedOptionId: 'retry',
+          requestedUserId: this.userId,
+        });
+      }
+    }
+    await this.graphModel.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
+    await this.goalModel.updateStatus(graph.goal.id, 'review');
+    return {
+      goalId: graph.goal.id,
+      message: 'Task failed; a human decision gate was opened',
+      nodeId,
+      outcome: 'waiting_human',
+      taskId,
+    };
+  };
+}
