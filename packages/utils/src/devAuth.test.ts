@@ -34,6 +34,12 @@ describe('development auth bypass', () => {
       requestToken: 'too-short',
     },
     {
+      configuredToken: 'replace-with-at-least-32-random-characters',
+      enabled: '1',
+      name: 'the configured token is the documented placeholder',
+      requestToken: 'replace-with-at-least-32-random-characters',
+    },
+    {
       configuredToken: bypassToken,
       enabled: '1',
       name: 'the request uses the legacy spoofable value',
