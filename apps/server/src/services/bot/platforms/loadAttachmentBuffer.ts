@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import { fetchPublicUrl } from './publicUrlFetch';
+import { fetchPublicUrl, redactUrlForLog } from './publicUrlFetch';
 
 const log = debug('bot-platform:load-attachment');
 
@@ -137,7 +137,9 @@ export const fetchCappedBuffer = async (
         // Warn, not debug: this is the step whose silent `undefined` turns an
         // image into a download link, and in a deployed server a debug-only
         // trace leaves no record of which status caused it.
-        console.warn(`[messenger:attachment] download failed: HTTP ${response.status} for ${url}`);
+        console.warn(
+          `[messenger:attachment] download failed: HTTP ${response.status} for ${redactUrlForLog(url)}`,
+        );
         return undefined;
       }
 
@@ -150,7 +152,7 @@ export const fetchCappedBuffer = async (
           'fetchCappedBuffer: content-length %d exceeds the %d byte cap for %s',
           declared,
           limit,
-          url,
+          redactUrlForLog(url),
         );
         return undefined;
       }
@@ -162,7 +164,8 @@ export const fetchCappedBuffer = async (
         limit,
         Number.isFinite(declared) ? declared : undefined,
       );
-      if (!buffer) log('fetchCappedBuffer: %s exceeded the %d byte cap', url, limit);
+      if (!buffer)
+        log('fetchCappedBuffer: %s exceeded the %d byte cap', redactUrlForLog(url), limit);
       return buffer;
     } finally {
       // Only safe once the body has been read: disposing earlier would abort
@@ -170,7 +173,7 @@ export const fetchCappedBuffer = async (
       await fetched.dispose();
     }
   } catch (error) {
-    console.warn(`[messenger:attachment] download threw for ${url}`, error);
+    console.warn(`[messenger:attachment] download threw for ${redactUrlForLog(url)}`, error);
     return undefined;
   }
 };

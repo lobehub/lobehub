@@ -2,16 +2,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchCappedBuffer, loadAttachmentBuffer } from './loadAttachmentBuffer';
+import type * as PublicUrlFetch from './publicUrlFetch';
 
 // These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
 // for real, which has nothing to do with what they assert. Its own behaviour is
 // covered in publicUrlFetch.test.ts.
-vi.mock('./publicUrlFetch', () => ({
+vi.mock('./publicUrlFetch', async () => ({
+  // Real redaction — a stub here would let a leaking log line pass the test
+  // that exists to catch exactly that.
+  ...(await vi.importActual<typeof PublicUrlFetch>('./publicUrlFetch')),
   fetchPublicUrl: async (url: string, timeoutMs: number) => ({
     dispose: async () => undefined,
     response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
   }),
 }));
+
+/** A presigned storage URL: everything sensitive lives in the query string. */
+const SIGNED_URL =
+  'https://bucket.example.com/asset/1/photo.png?X-Amz-Credential=AKIAEXAMPLE%2F20260823%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=deadbeefcafe&X-Amz-Expires=7200';
 
 const streamOf = (chunks: Uint8Array[], cancel = vi.fn()) => {
   let i = 0;
@@ -139,6 +147,39 @@ describe('loadAttachmentBuffer', () => {
     expect(await loadAttachmentBuffer({ fetchUrl: 'https://x/f' }, { limit: 100 })).toEqual(
       Buffer.from([7]),
     );
+  });
+
+  it('never writes a presigned URL query string to the log', async () => {
+    // Regression: the download failure path logged the full `fetchUrl` at warn
+    // level. Logs outlive the signature, and this loader is reachable from
+    // `botMessage`, whose schema takes a caller-supplied URL.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ headers: new Headers(), ok: false, status: 403 }),
+    );
+
+    await loadAttachmentBuffer({ fetchUrl: SIGNED_URL }, { limit: 100 });
+
+    const logged = warn.mock.calls.flat().join(' ');
+    expect(logged).not.toContain('X-Amz-Signature');
+    expect(logged).not.toContain('X-Amz-Credential');
+    expect(logged).not.toContain('deadbeefcafe');
+    // The origin and path still identify which object failed.
+    expect(logged).toContain('https://bucket.example.com/asset/1/photo.png');
+    warn.mockRestore();
+  });
+
+  it('never writes a presigned URL query string when the download throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
+
+    await loadAttachmentBuffer({ fetchUrl: SIGNED_URL }, { limit: 100 });
+
+    const logged = warn.mock.calls.flat().join(' ');
+    expect(logged).not.toContain('X-Amz-Signature');
+    expect(logged).toContain('https://bucket.example.com/asset/1/photo.png');
+    warn.mockRestore();
   });
 
   it('returns undefined when the attachment carries no source', async () => {
