@@ -6,6 +6,7 @@ import {
 } from '@/server/modules/ModelRuntime';
 
 import {
+  describeRelayFailure,
   encodeAnthropicStream,
   encodeResponsesStream,
   invokeServerDefaultModel,
@@ -528,5 +529,54 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(reasoningAdded[0].data.item.id).toBe('reasoning-current');
     expect(reasoningDone[0].data.item).toEqual(reasoningItem);
     expect(completed?.data.response.output).toEqual([reasoningItem]);
+  });
+});
+
+/**
+ * `runtime.chat` rejects with a plain `{ error, errorType, provider }` object
+ * rather than an `Error`. Hono cannot serialise that, so before this helper an
+ * uncaught rejection reached the client as a 500 with an EMPTY body — which is
+ * how a Volcengine `invalid value adaptive` looked to Claude Code:
+ * `API Error: 500 status code (no body)`, retried for 98 seconds.
+ */
+describe('describeRelayFailure', () => {
+  it('carries the provider’s own words out of a runtime rejection', () => {
+    expect(
+      describeRelayFailure({
+        error: {
+          message:
+            'The parameter `type` specified in the request are not valid: invalid value adaptive.',
+        },
+        errorType: 'ProviderBizError',
+        provider: 'volcengine',
+      }),
+    ).toEqual({
+      message:
+        '[volcengine] ProviderBizError: The parameter `type` specified in the request are not valid: invalid value adaptive.',
+      status: 502,
+    });
+  });
+
+  it('falls back to the serialized body when the provider names no message', () => {
+    const { message } = describeRelayFailure({
+      error: { code: 'InvalidParameter' },
+      errorType: 'ProviderBizError',
+      provider: 'volcengine',
+    });
+
+    expect(message).toContain('InvalidParameter');
+  });
+
+  it('still says something for a plain Error', () => {
+    expect(describeRelayFailure(new Error('socket hang up'))).toEqual({
+      message: 'socket hang up',
+      status: 502,
+    });
+  });
+
+  it('never returns an empty message, whatever it was handed', () => {
+    for (const thrown of [undefined, null, '', 0, {}]) {
+      expect(describeRelayFailure(thrown).message).not.toBe('');
+    }
   });
 });
