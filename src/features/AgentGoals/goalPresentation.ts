@@ -1,8 +1,8 @@
 import type { GoalStatus } from '@lobechat/const/goal';
 
 export interface GoalPresentationInput {
-  goalStatus: GoalStatus;
   checks?: Array<{ state: string }>;
+  goalStatus: GoalStatus;
   maxRounds?: number | null;
   rounds: number;
 }

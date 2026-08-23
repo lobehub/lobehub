@@ -21,7 +21,6 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { acceptanceRouter } from './acceptance';
 import { agentRouter } from './agent';
-import { goalRouter } from './goal';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
@@ -109,8 +108,6 @@ export const lambdaRouter = router({
   agentSkills: agentSkillsRouter,
   expertise: expertiseRouter,
   agentSignal: agentSignalRouter,
-  goal: goalRouter,
-  task: taskRouter,
   changelog: changelogRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
@@ -162,6 +159,7 @@ export const lambdaRouter = router({
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
   share: shareRouter,
+  task: taskRouter,
   thread: threadRouter,
   topic: topicRouter,
   topicComment: topicCommentRouter,

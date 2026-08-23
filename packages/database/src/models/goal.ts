@@ -1,13 +1,13 @@
 import type { GoalStatus, GoalSubjectType } from '@lobechat/const/goal';
+import type { TaskItem } from '@lobechat/types';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
-import { taskTopics, tasks } from '../schemas/task';
+import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
-import type { TaskItem } from './task';
 
 /** States after which a goal's loop no longer advances. */
 const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
@@ -133,13 +133,15 @@ export class GoalModel {
    * `TaskModel.groupList`'s `goal_tree` recursive CTE, so the goal UI reads
    * the goal's own lifecycle state the same way from either endpoint.
    */
-  list = async (options: {
-    agentId?: string;
-    limit?: number;
-    offset?: number;
-    projectId?: string;
-    statuses?: GoalStatus[];
-  } = {}): Promise<{ goals: GoalListItem[]; total: number }> => {
+  list = async (
+    options: {
+      agentId?: string;
+      limit?: number;
+      offset?: number;
+      projectId?: string;
+      statuses?: GoalStatus[];
+    } = {},
+  ): Promise<{ goals: GoalListItem[]; total: number }> => {
     const { agentId, limit = 50, offset = 0, projectId, statuses } = options;
 
     const conditions = [this.ownership()];

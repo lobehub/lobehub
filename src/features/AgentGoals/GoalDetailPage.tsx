@@ -340,7 +340,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   </Flexbox>
                   <Flexbox gap={4}>
                     <Flexbox horizontal align={'center'} className={styles.treeRow} gap={8}>
-                      <GoalStatusGlyph size={14} statusKey={presentation.statusKey} />
+                      <GoalStatusGlyph size={14} status={goalStatus} />
                       <Text fontSize={12} type={'secondary'}>
                         {task.identifier}
                       </Text>

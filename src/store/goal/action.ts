@@ -1,4 +1,4 @@
-import { goalStatuses, type GoalStatus } from '@lobechat/const/goal';
+import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskKeys } from '@/libs/swr/keys';
@@ -8,7 +8,7 @@ import type { StoreSetter } from '@/store/types';
 
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 
-const GOAL_STATUSES: GoalStatus[] = goalStatuses;
+const GOAL_STATUSES: GoalStatus[] = [...goalStatuses];
 
 /**
  * The home roll-up only ever renders goals that are still open, so it asks for
