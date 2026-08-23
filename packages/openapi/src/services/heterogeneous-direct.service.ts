@@ -900,3 +900,50 @@ export const invokeServerDefaultModel = async (params: {
   if (!response.body) throw new Error('Model runtime returned an empty stream');
   return { model, response };
 };
+
+const readMessage = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return value;
+  if (!isRecord(value)) return undefined;
+  if (typeof value.message === 'string') return value.message;
+  return undefined;
+};
+
+/**
+ * Describe a failed relay in terms its caller can act on.
+ *
+ * `runtime.chat` rejects with a plain `{ error, errorType, provider }` object
+ * rather than an `Error`, and Hono's default handler cannot serialise that: an
+ * uncaught one leaves the client a **500 with an empty body**. That is how an
+ * Ark rejection ("The parameter `type` specified in the request are not valid:
+ * invalid value adaptive") reached Claude Code — as `API Error: 500 status code
+ * (no body)`, retried for a minute and a half because nothing in the response
+ * said it could never succeed.
+ *
+ * The upstream's own status is deliberately not forwarded: `handleOpenAIError`
+ * keeps the provider's error body and drops the status whenever there is one,
+ * so any status here would be invented. 502 says what is actually known — the
+ * request reached us, and the hop past us failed — and the message carries the
+ * provider's own words, which is the part that was missing.
+ */
+export const describeRelayFailure = (error: unknown) => {
+  const payload = isRecord(error) ? error : undefined;
+  const message =
+    readMessage(payload) ??
+    readMessage(payload?.error) ??
+    (payload?.error === undefined ? undefined : JSON.stringify(payload.error)) ??
+    String(error);
+  const provider = typeof payload?.provider === 'string' ? payload.provider : undefined;
+  const errorType = payload?.errorType;
+
+  return {
+    // Never empty. A blank message here would put the caller back where the
+    // bodyless 500 left it — a failure with no way to tell what failed — and
+    // `String(error)` is blank for a thrown empty string.
+    message:
+      [provider && `[${provider}]`, errorType && `${String(errorType)}:`, message]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'Model runtime failed without a message',
+    status: 502 as const,
+  };
+};

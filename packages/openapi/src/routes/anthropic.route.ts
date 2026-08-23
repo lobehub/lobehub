@@ -11,6 +11,7 @@ import type { HeteroOperationJwtClaims } from '@/libs/trpc/utils/internalJwt';
 
 import { requireHeteroModelInvocation } from '../middleware/hetero-operation-auth';
 import {
+  describeRelayFailure,
   encodeAnthropicStream,
   invokeServerDefaultModel,
   normalizeAnthropicRequest,
@@ -35,15 +36,32 @@ app.post('/v1/messages', requireHeteroModelInvocation, async (c) => {
   }
   const workspaceId = context.get('workspaceId');
   const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
-  const { response } = await invokeServerDefaultModel({
-    agentType: 'claude-code',
-    model: claims.model,
-    payload: normalizeAnthropicRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
-    signal: c.req.raw.signal,
-    userId: String(context.get('userId')),
-    workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
-  });
-  return new Response(encodeAnthropicStream(response.body!, requestModel), {
+
+  // Anything the model runtime throws has to be turned into an Anthropic error
+  // envelope here. Letting it escape hands the client a bodyless 500 — see
+  // `describeRelayFailure` for what that cost.
+  let body: ReadableStream<Uint8Array> | null;
+  try {
+    const { response } = await invokeServerDefaultModel({
+      agentType: 'claude-code',
+      model: claims.model,
+      payload: normalizeAnthropicRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
+      signal: c.req.raw.signal,
+      userId: String(context.get('userId')),
+      workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
+    });
+    body = response.body;
+  } catch (error) {
+    const { message, status } = describeRelayFailure(error);
+    return c.json({ error: { message, type: 'api_error' }, type: 'error' }, status);
+  }
+  if (!body) {
+    return c.json(
+      { error: { message: 'Upstream returned no stream', type: 'api_error' }, type: 'error' },
+      502,
+    );
+  }
+  return new Response(encodeAnthropicStream(body, requestModel), {
     headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'text/event-stream' },
   });
 });
