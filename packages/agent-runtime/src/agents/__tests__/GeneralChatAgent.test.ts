@@ -963,7 +963,7 @@ describe('GeneralChatAgent', () => {
       expect((result as any).type).toBe('call_llm');
     });
 
-    it('should recompress an existing summary when it crosses the higher watermark', async () => {
+    it('should recompress an existing summary before consuming reserved prompt headroom', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
         compressionConfig: {
@@ -979,7 +979,7 @@ describe('GeneralChatAgent', () => {
           { content: 'Existing summary', role: 'compressedGroup' },
           {
             content: '',
-            metadata: { usage: { totalOutputTokens: 42_000 } },
+            metadata: { usage: { totalOutputTokens: 34_000 } },
             role: 'assistant',
           },
           { content: 'Large tool result', role: 'tool', tool_call_id: 'call-1' },

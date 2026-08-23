@@ -30,7 +30,10 @@ import { shouldCompress } from '../utils/tokenCounter';
 const TOOL_NOT_ALLOWED_CONTENT =
   'Tool execution blocked because the tool is not allowed in the current execution scope.';
 const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
-const DEFAULT_RECOMPRESSION_THRESHOLD_RATIO = 0.8;
+// Leave 35% of the model window for server-side context engineering (system
+// role, knowledge, memories, skills, etc.) and the model's completion. The
+// initial 50% threshold still supplies the lower side of the hysteresis band.
+const DEFAULT_RECOMPRESSION_THRESHOLD_RATIO = 0.65;
 
 /**
  * ChatAgent - The "Brain" of the chat agent
