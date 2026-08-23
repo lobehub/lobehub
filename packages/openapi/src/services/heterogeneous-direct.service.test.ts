@@ -61,7 +61,7 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.clearAllMocks();
   });
 
-  it('invokes Claude Code through an Anthropic-compatible LobeHub relay model', async () => {
+  it('preserves adaptive thinking through the Anthropic relay for a compatible model', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
       model: 'claude-sonnet-4-6',
@@ -75,12 +75,15 @@ describe('heterogeneous direct invocation protocol', () => {
     const result = await invokeServerDefaultModel({
       agentType: 'claude-code',
       model: 'claude-sonnet-4-6',
-      payload: {
-        messages: [],
-        model: 'lobehub-default',
-        stream: true,
-        thinking: { type: 'adaptive' },
-      },
+      payload: normalizeAnthropicRequest(
+        {
+          messages: [],
+          model: 'lobehub-default',
+          stream: true,
+          thinking: { type: 'adaptive' },
+        },
+        'lobehub-default',
+      ),
       signal: new AbortController().signal,
       userId: 'user-1',
     });
@@ -91,12 +94,12 @@ describe('heterogeneous direct invocation protocol', () => {
       'claude-sonnet-4-6',
     );
     expect(chat).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         messages: [],
         model: 'claude-sonnet-4-6',
         stream: true,
         thinking: { type: 'adaptive' },
-      },
+      }),
       expect.any(Object),
     );
   });
