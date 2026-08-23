@@ -13,12 +13,17 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
+export type TaskKanbanGroupBy = 'assignee' | 'priority' | 'status';
 
 export interface TaskListSliceState {
   groupListQueryAutomated?: boolean;
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
+  /** Grouping dimension of the task data currently stored in `taskGroups`. */
+  listGroupBy: TaskKanbanGroupBy;
+  /** Excluded statuses of the current grouped query, as a sorted signature. */
+  listGroupExcludeStatuses?: string;
   /**
    * Automation filter of the task data currently stored in `tasks` — `false`
    * for Home's recent block (live schedules excluded server-side), undefined
@@ -44,9 +49,10 @@ export interface TaskListSliceState {
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
+  groupListQueryAutomated: undefined,
   isTaskGroupListInit: false,
   isTaskListInit: false,
-  groupListQueryAutomated: undefined,
+  listGroupBy: 'status',
   listQueryVisibility: 'all',
   listVisibility: 'all',
   taskGroups: [],

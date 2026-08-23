@@ -1511,6 +1511,7 @@
   "taskList.empty": "暂无任务",
   "taskList.emptyHero.greeting": "今天想搞定点什么？",
   "taskList.emptyHero.templatesTitle": "为你推荐的模板",
+  "taskList.form.columns": "列",
   "taskList.form.grouping": "分组",
   "taskList.form.nestedSubTasks": "缩进显示子任务",
   "taskList.form.orderCompletedByRecency": "按最近完成排序",

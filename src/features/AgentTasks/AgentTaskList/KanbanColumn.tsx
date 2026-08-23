@@ -6,11 +6,13 @@ import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import TaskStatusIcon from '../features/TaskStatusIcon';
+import type { TaskGroupMeta } from './listViewOptions';
+import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 
 export const COLUMN_WIDTH = 300;
@@ -172,6 +174,8 @@ export const COLUMN_STATUS_ICON: Record<string, TaskStatus> = {
 interface KanbanColumnProps {
   columnKey: string;
   droppable: boolean;
+  groupBy: TaskKanbanGroupBy;
+  groupMeta?: TaskGroupMeta;
   loading?: boolean;
   onCreate?: () => void;
   onHide?: () => void;
@@ -181,7 +185,18 @@ interface KanbanColumnProps {
 }
 
 const KanbanColumn = memo<KanbanColumnProps>(
-  ({ columnKey, droppable, loading, onCreate, onHide, routeScope, tasks, total }) => {
+  ({
+    columnKey,
+    droppable,
+    groupBy,
+    groupMeta,
+    loading,
+    onCreate,
+    onHide,
+    routeScope,
+    tasks,
+    total,
+  }) => {
     const { t } = useTranslation('chat');
     const { active } = useDndContext();
     const { isOver, setNodeRef } = useDroppable({
@@ -191,7 +206,7 @@ const KanbanColumn = memo<KanbanColumnProps>(
 
     const statusIcon = COLUMN_STATUS_ICON[columnKey];
     const i18nKey = COLUMN_I18N_KEYS[columnKey];
-    const label = i18nKey ? t(i18nKey as any) : columnKey;
+    const label = i18nKey ? t(i18nKey as any) : t(`taskList.groupBy.${groupBy}` as any);
     const isDragActive = !!active;
 
     // Don't highlight if dragging a card that's already in this column
@@ -226,8 +241,14 @@ const KanbanColumn = memo<KanbanColumnProps>(
         )}
       >
         <div className={styles.header}>
-          {statusIcon && <TaskStatusIcon size={18} status={statusIcon} />}
-          <Text weight={500}>{label}</Text>
+          {groupMeta ? (
+            <TaskGroupLabel group={groupMeta} />
+          ) : (
+            <>
+              {statusIcon && <TaskStatusIcon size={18} status={statusIcon} />}
+              <Text weight={500}>{label}</Text>
+            </>
+          )}
           {!loading && (
             <Text fontSize={12} type={'secondary'}>
               {total}

@@ -283,15 +283,22 @@ export const taskKeys = {
     (
       agentKey: string | undefined,
       visibility: 'all' | 'private' | 'workspace' = 'all',
+      groupBy: 'assignee' | 'priority' | 'status' = 'status',
+      excludeStatuses?: string,
       projectId?: string,
       automated?: boolean,
-    ) => [
-      'task:groupList',
-      agentKey,
-      visibility,
-      ...(projectId ? [projectId] : []),
-      ...(automated === undefined ? [] : [{ automated }]),
-    ],
+    ) => {
+      const hasBoardFilter = groupBy !== 'status' || excludeStatuses !== undefined;
+      const key = hasBoardFilter
+        ? projectId
+          ? ['task:groupList', agentKey, visibility, groupBy, excludeStatuses, projectId]
+          : ['task:groupList', agentKey, visibility, groupBy, excludeStatuses]
+        : projectId
+          ? ['task:groupList', agentKey, visibility, projectId]
+          : ['task:groupList', agentKey, visibility];
+
+      return automated === undefined ? key : [...key, { automated }];
+    },
   ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the

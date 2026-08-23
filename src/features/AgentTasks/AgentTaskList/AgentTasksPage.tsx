@@ -302,7 +302,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         <EmptyState agentId={agentId} projectId={projectId} />
       ) : viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard agentId={agentId} projectId={projectId} routeScope={routeScope} />
+          <KanbanBoard
+            agentId={agentId}
+            options={viewOptions}
+            projectId={projectId}
+            routeScope={routeScope}
+          />
         </Flexbox>
       ) : (
         <WideScreenContainer

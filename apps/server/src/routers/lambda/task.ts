@@ -160,25 +160,32 @@ const listSchema = z.object({
   visibility: z.enum(['private', 'public']).optional(),
 });
 
-const groupListSchema = z.object({
-  assigneeAgentId: z.string().optional(),
-  automated: z.boolean().optional(),
-  groups: z
-    .array(
-      z.object({
-        key: z.string(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-        statuses: z.array(z.string()).min(1).max(10),
-      }),
-    )
-    .min(1)
-    .max(10),
-  hasGoal: z.boolean().optional(),
-  parentTaskId: z.string().nullish(),
-  projectId: z.string().optional(),
-  visibility: z.enum(['private', 'public']).optional(),
-});
+const groupListSchema = z
+  .object({
+    assigneeAgentId: z.string().optional(),
+    automated: z.boolean().optional(),
+    excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
+    groupBy: z.enum(['assignee', 'priority']).optional(),
+    groups: z
+      .array(
+        z.object({
+          key: z.string(),
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+          statuses: z.array(z.string()).min(1).max(10),
+        }),
+      )
+      .min(1)
+      .max(10)
+      .optional(),
+    hasGoal: z.boolean().optional(),
+    parentTaskId: z.string().nullish(),
+    projectId: z.string().optional(),
+    visibility: z.enum(['private', 'public']).optional(),
+  })
+  .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
+    message: 'Provide either groups or groupBy',
+  });
 
 // Helper: resolve id/identifier and throw if not found
 async function resolveOrThrow(model: TaskModel, id: string) {
