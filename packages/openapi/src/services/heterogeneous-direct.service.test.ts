@@ -580,3 +580,50 @@ describe('describeRelayFailure', () => {
     }
   });
 });
+
+/**
+ * The relay points an Anthropic-protocol client at whatever model the
+ * deployment chose — usually not an Anthropic one. So the body arrives written
+ * for Claude, and the parts that only Anthropic understands must not travel
+ * with it.
+ */
+describe('normalizeAnthropicRequest thinking', () => {
+  const request = (thinking: unknown) => ({
+    messages: [{ content: 'hi', role: 'user' }],
+    thinking,
+  });
+
+  /**
+   * Captured from claude-code 2.1.241 against a local stand-in for
+   * ANTHROPIC_BASE_URL — it sends this on every request, with a model id it does
+   * not recognise. Forwarded verbatim it becomes `invalid value adaptive` on
+   * Volcengine, and the equivalent on every other provider that re-emits
+   * `thinking.type` to its own API.
+   */
+  it('does not forward Anthropic’s adaptive thinking to a relay model', () => {
+    expect(normalizeAnthropicRequest(request({ type: 'adaptive' }), 'm').thinking).toBeUndefined();
+  });
+
+  it('drops it even when the client pairs it with a display mode', () => {
+    expect(
+      normalizeAnthropicRequest(request({ display: 'summarized', type: 'adaptive' }), 'm').thinking,
+    ).toBeUndefined();
+  });
+
+  // Losing `adaptive` costs nothing on a genuinely Anthropic target:
+  // `resolveClaudeThinkingConfig` restores it for models that default to it
+  // exactly because the field is absent.
+  it('still forwards the types every provider shares', () => {
+    expect(
+      normalizeAnthropicRequest(request({ budget_tokens: 2048, type: 'enabled' }), 'm').thinking,
+    ).toEqual({ budget_tokens: 2048, type: 'enabled' });
+    expect(normalizeAnthropicRequest(request({ type: 'disabled' }), 'm').thinking).toEqual({
+      type: 'disabled',
+    });
+  });
+
+  it('leaves a request that asks for nothing alone', () => {
+    expect(normalizeAnthropicRequest(request(undefined), 'm').thinking).toBeUndefined();
+    expect(normalizeAnthropicRequest(request('adaptive'), 'm').thinking).toBeUndefined();
+  });
+});
