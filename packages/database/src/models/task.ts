@@ -112,7 +112,7 @@ interface TaskListOptions extends TaskListFilterOptions {
   statuses?: string[];
 }
 
-interface TaskRunStats {
+interface TaskRunStats extends Record<string, unknown> {
   root_id: string;
   total_run_cost: number;
   total_run_duration: number;
