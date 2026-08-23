@@ -1628,6 +1628,12 @@ export default {
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed':
     'Could not draft acceptance criteria, so your goal was used as the criterion.',
+  'createGoal.generating': 'Understanding your goal…',
+  'createGoal.generatingAlmostDone': 'Almost done…',
+  'createGoal.generatingCountdown': 'About {{time}} remaining',
+  'createGoal.generatingCriteria': 'Drafting acceptance criteria…',
+  'createGoal.generatingInstruction': 'Writing the execution brief…',
+  'createGoal.generatingReview': 'Checking the complete plan…',
   'createGoal.instructionPlaceholder':
     'Add any context the agent needs — scope, constraints, where to look…',
   'createGoal.next': 'Next',

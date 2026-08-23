@@ -8,6 +8,12 @@ interface GenerateGoalCriteriaParams {
   goal: string;
 }
 
+export interface GeneratedGoalPlan {
+  criteria: GoalCriterionDraft[];
+  instruction: string;
+  title: string;
+}
+
 export const withGoalCriterionDefaults = (draft: VerifyCriterionDraft): GoalCriterionDraft => ({
   ...draft,
   onFail: draft.onFail ?? 'auto_repair',
@@ -25,14 +31,17 @@ export const createFallbackGoalCriterion = (goal: string): GoalCriterionDraft =>
 export const generateGoalCriteria = async ({
   context,
   goal,
-}: GenerateGoalCriteriaParams): Promise<GoalCriterionDraft[]> => {
+}: GenerateGoalCriteriaParams): Promise<GeneratedGoalPlan> => {
   const generated = await verifyService.generateGoalCriteria({
     context,
     goal,
     maxCriteria: 8,
   });
 
-  if (generated.length === 0) throw new Error('No acceptance criteria were generated.');
+  if (!generated || generated.criteria.length === 0) throw new Error('No goal plan was generated.');
 
-  return generated.map(withGoalCriterionDefaults);
+  return {
+    ...generated,
+    criteria: generated.criteria.map(withGoalCriterionDefaults),
+  };
 };

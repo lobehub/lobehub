@@ -378,8 +378,12 @@ export class VerifyService {
     context?: string;
     goal: string;
     maxCriteria?: number;
-  }): Promise<VerifyCriterionDraft[]> =>
-    lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+  }): Promise<
+    { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+  > =>
+    lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<
+      { criteria: VerifyCriterionDraft[]; instruction: string; title: string } | undefined
+    >;
 
   /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
   createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>
