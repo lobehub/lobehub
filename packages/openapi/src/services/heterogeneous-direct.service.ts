@@ -205,18 +205,30 @@ export const normalizeResponsesRequest = (request: Record<string, unknown>, mode
           >[number],
         );
       } else if (item.type === 'function_call' && typeof item.call_id === 'string') {
-        messages.push({
-          content: '',
-          role: 'assistant',
-          ...takePendingReasoning(),
-          tool_calls: [
-            {
-              function: { arguments: String(item.arguments || ''), name: String(item.name || '') },
-              id: item.call_id,
-              type: 'function',
-            },
-          ],
-        });
+        const toolCall = {
+          function: { arguments: String(item.arguments || ''), name: String(item.name || '') },
+          id: item.call_id,
+          type: 'function' as const,
+        };
+        const previousMessage = messages.at(-1);
+
+        // Responses history records every parallel call before their outputs.
+        // Chat Completions requires those calls in one assistant message, followed
+        // by the contiguous batch of tool-result messages.
+        if (
+          !pendingReasoningItems?.length &&
+          previousMessage?.role === 'assistant' &&
+          previousMessage.tool_calls?.length
+        ) {
+          previousMessage.tool_calls.push(toolCall);
+        } else {
+          messages.push({
+            content: '',
+            role: 'assistant',
+            ...takePendingReasoning(),
+            tool_calls: [toolCall],
+          });
+        }
       } else if (item.type === 'function_call_output' && typeof item.call_id === 'string') {
         messages.push({
           content: String(item.output || ''),

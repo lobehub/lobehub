@@ -356,6 +356,38 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(payload.messages[3].reasoning?.responseItems).toEqual([secondReasoning]);
   });
 
+  it('groups parallel Responses function calls before their contiguous outputs', () => {
+    const reasoning = {
+      encrypted_content: 'encrypted-parallel',
+      id: 'reasoning-parallel',
+      status: 'completed',
+      summary: [{ text: 'parallel thought', type: 'summary_text' }],
+      type: 'reasoning',
+    };
+    const payload = normalizeResponsesRequest(
+      {
+        input: [
+          reasoning,
+          { arguments: '{"q":"x"}', call_id: 'call-1', name: 'search', type: 'function_call' },
+          { arguments: '{"path":"/tmp"}', call_id: 'call-2', name: 'read', type: 'function_call' },
+          { call_id: 'call-1', output: 'search result', type: 'function_call_output' },
+          { call_id: 'call-2', output: 'file result', type: 'function_call_output' },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages.map(({ role }) => role)).toEqual(['assistant', 'tool', 'tool']);
+    expect(payload.messages[0]).toMatchObject({
+      reasoning: { responseItems: [reasoning] },
+      tool_calls: [{ id: 'call-1' }, { id: 'call-2' }],
+    });
+    expect(payload.messages.slice(1).map(({ tool_call_id }) => tool_call_id)).toEqual([
+      'call-1',
+      'call-2',
+    ]);
+  });
+
   it('parses the final protocol event without a trailing newline', async () => {
     const encoder = new TextEncoder();
     const source = new ReadableStream<Uint8Array>({
