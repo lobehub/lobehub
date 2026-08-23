@@ -39,11 +39,12 @@ export interface AskUserQuestionArgs {
  * `pluginState.askUserDraft` so HMR reloads, store re-mounts, and tab switches
  * all keep partial answers around — only a fresh `tool_use` starts blank.
  *
- * Three independent answer slices, kept apart so picks and custom text can
+ * Four independent answer slices, kept apart so picks and custom text can
  * coexist on one question (multi-select) and a half-typed escape reply never
  * bleeds into the form payload:
  *   - `picks`   → multi-choice selections, keyed by question text
  *   - `custom`  → per-question "write your own" text, keyed by question text
+ *   - `supplement*` → optional notes appended to the structured answers
  *   - `escape*` → the global "Or type directly" box (whole-form bypass)
  *
  * Declared as a `type` (not `interface`) so it satisfies the
@@ -55,4 +56,6 @@ export type AskUserDraft = {
   escapeActive: boolean;
   escapeText: string;
   picks: Record<string, string | string[]>;
+  supplementActive: boolean;
+  supplementText: string;
 };

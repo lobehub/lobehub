@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
+import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
+  CreateTaskGoalInput,
+  GoalItem,
   TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
@@ -16,6 +19,7 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
+import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -61,6 +65,11 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
+  /**
+   * Bind a goal entity (`goals` row) to the created task — the task becomes the
+   * goal's execution carrier and the outer verify-driven round loop applies.
+   */
+  goal?: CreateTaskGoalInput;
   identifierPrefix?: string;
   instruction: string;
   name?: string;
@@ -123,7 +132,10 @@ export class TaskService {
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
 
-    const createData: CreateTaskInput & { config?: Record<string, unknown> } = { ...input };
+    const { goal, ...taskInput } = input;
+    const createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> } = {
+      ...taskInput,
+    };
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
@@ -181,7 +193,42 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    return this.taskModel.create(createData);
+    const task = await this.taskModel.create(createData);
+
+    if (goal) {
+      // Not a transaction on purpose: TaskModel.create's identifier-conflict
+      // retry loop relies on continuing after a 23505, which an enclosing
+      // transaction would abort. Compensate instead — a task committed without
+      // its promised goal is a ghost on goal surfaces (it never lists as a
+      // goal), and a retry would stack another one.
+      let created: GoalItem;
+      try {
+        created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
+          agentId: task.assigneeAgentId,
+          // `null` is the user's explicit "no cap"; `undefined` means they never
+          // chose, which falls back to the documented default. The floor keeps a
+          // degenerate 1-round loop from ever passing verify-then-stop.
+          maxRounds:
+            goal.maxRounds === undefined
+              ? DEFAULT_GOAL_MAX_ROUNDS
+              : goal.maxRounds === null
+                ? null
+                : Math.max(2, goal.maxRounds),
+          maxTotalCost: goal.maxTotalCost ?? null,
+          projectId: task.projectId,
+          requirement: goal.requirement ?? null,
+          subjectId: task.id,
+          subjectType: 'task',
+          title: goal.title?.trim() || task.name?.trim() || task.instruction,
+        });
+      } catch (error) {
+        await this.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
+      return { ...task, goal: created };
+    }
+
+    return task;
   }
 
   /**
@@ -388,6 +435,20 @@ export class TaskService {
     const task = await this.taskModel.updateStatus(resolved.id, status, extra);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
+    // Canceling the carrier task cancels its goal: the loop has no executor
+    // left, and a "running" goal over a canceled task would be a lie. The
+    // user's positive sign-off (`achieved`) is never downgraded. Best-effort —
+    // goal state must not block the task transition.
+    if (status === 'canceled') {
+      try {
+        const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+        const goal = await goalModel.findBySubject('task', task.id);
+        if (goal && goal.status !== 'achieved') await goalModel.updateStatus(goal.id, 'canceled');
+      } catch (err) {
+        console.error('[TaskService.updateStatus] goal cancel mirror failed:', err);
+      }
+    }
+
     // Stamp the schedule run-count window each time the user (re)starts a
     // scheduled task. The cron dispatcher itself flips a task running →
     // scheduled on every tick, so we exclude that natural cycle by only
@@ -591,13 +652,19 @@ export class TaskService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace] = await Promise.all([
-      this.taskModel.findAllDescendants(task.id),
-      this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
-      this.taskModel.getComments(task.id).catch(() => []),
-      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-    ]);
+    const [allDescendants, dependencies, directTopics, comments, workspace, goal] =
+      await Promise.all([
+        this.taskModel.findAllDescendants(task.id),
+        this.taskModel.getDependencies(task.id),
+        this.taskTopicModel
+          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
+          .catch(() => []),
+        this.taskModel.getComments(task.id).catch(() => []),
+        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+        new GoalModel(this.db, this.userId, this.workspaceId)
+          .findBySubject('task', task.id)
+          .catch(() => undefined),
+      ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
@@ -903,6 +970,7 @@ export class TaskService {
       editorData: task.editorData ?? undefined,
       error: task.error,
       files: taskFiles.length > 0 ? taskFiles : undefined,
+      goal: goal ?? null,
       heartbeat:
         task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {

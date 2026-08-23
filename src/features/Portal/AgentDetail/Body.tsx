@@ -1,11 +1,12 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import Avatar from '@/components/Avatar';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { AgentNotFound } from '@/features/AgentNotFound';
 import { useAgentStore } from '@/store/agent';
@@ -23,6 +24,7 @@ const Body = memo(() => {
     (s) => agentSelectors.getAgentConfigById(agentId)(s)?.openingMessage,
   );
   const isNotFound = useAgentStore(agentByIdSelectors.isAgentNotFoundById(agentId));
+  const displayName = agentDisplayName(meta, t('defaultSession', { ns: 'common' }));
 
   if (!agentId) return null;
 
@@ -48,9 +50,15 @@ const Body = memo(() => {
 
   return (
     <Flexbox align="center" flex={1} gap={16} padding={32} style={{ overflowY: 'auto' }}>
-      <Avatar avatar={meta.avatar} background={meta.backgroundColor} shape="square" size={80} />
+      <Avatar
+        avatar={meta.avatar}
+        background={meta.backgroundColor}
+        name={displayName}
+        shape="square"
+        size={80}
+      />
       <Text align="center" fontSize={24} weight="bold">
-        {agentDisplayName(meta, t('defaultSession', { ns: 'common' }))}
+        {displayName}
       </Text>
       {meta.description && (
         <Text align="center" type="secondary">

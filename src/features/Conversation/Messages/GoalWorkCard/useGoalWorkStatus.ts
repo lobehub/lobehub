@@ -28,8 +28,7 @@ export const useGoalWorkStatus = ({
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(identifier);
   const task = useTaskStore((s) => (identifier ? s.taskDetailMap[identifier] : undefined));
-  const config = task?.config as { goal?: { maxIterations?: number | null } } | undefined;
-  const isGoal = goalKnown || !!config?.goal;
+  const isGoal = goalKnown || !!task?.goal;
   const { data: acceptance } = useAcceptanceBySubject('task', isGoal ? (taskId ?? null) : null);
   const { data: bundle } = useAcceptanceBundle(acceptance?.id ?? null);
 
@@ -37,7 +36,7 @@ export const useGoalWorkStatus = ({
     acceptanceStatus: acceptance?.status,
     checks: bundle?.checks,
     criteriaCount,
-    maxRounds: config?.goal?.maxIterations ?? maxRounds,
+    maxRounds: task?.goal?.maxRounds ?? maxRounds,
     rounds: task?.topicCount ?? 0,
     taskStatus: task?.status,
   });

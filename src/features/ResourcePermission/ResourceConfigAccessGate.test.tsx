@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ResourceConfigAccessGate from './ResourceConfigAccessGate';
 
 const mocks = vi.hoisted(() => ({
+  accessResolved: true,
   canEditContent: true,
   canEditResource: false,
   navigate: vi.fn(),
@@ -14,7 +15,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@lobehub/ui/base-ui', () => ({ toast: { info: mocks.toastInfo } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/components/AsyncBoundary', () => ({
-  default: ({ children }: { children: ReactNode }) => children,
+  default: ({
+    children,
+    isLoading,
+    loading,
+  }: {
+    children: ReactNode;
+    isLoading: boolean;
+    loading: ReactNode;
+  }) => (isLoading ? loading : children),
 }));
 vi.mock('@/components/Skeleton/Surface', () => ({ default: () => null }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -27,15 +36,16 @@ vi.mock('./useResourceAccess', () => ({
   useResourceAccess: () => ({
     accessError: undefined,
     canEditResource: mocks.canEditResource,
-    isAccessResolved: true,
+    isAccessResolved: mocks.accessResolved,
     isLoading: false,
     retryAccess: vi.fn(),
   }),
 }));
 
-const renderGate = (resourceType: 'agent' | 'agentGroup' = 'agent') =>
+const renderGate = (resourceType: 'agent' | 'agentGroup' = 'agent', loading?: ReactNode) =>
   render(
     <ResourceConfigAccessGate
+      loading={loading}
       redirectPath="/agent/agent-1"
       resourceId="agent-1"
       resourceType={resourceType}
@@ -49,6 +59,7 @@ describe('ResourceConfigAccessGate', () => {
     vi.clearAllMocks();
     mocks.canEditContent = true;
     mocks.canEditResource = false;
+    mocks.accessResolved = true;
   });
 
   it('uses workspace-aware navigation when returning a chat-only collaborator to chat', async () => {
@@ -90,5 +101,13 @@ describe('ResourceConfigAccessGate', () => {
     await waitFor(() => {
       expect(mocks.toastInfo).toHaveBeenCalledWith('permission.configAccess.groupChatOnly');
     });
+  });
+
+  it('uses the surface-specific loading state while access is resolving', () => {
+    mocks.accessResolved = false;
+
+    const { getByText } = renderGate('agent', <div>Profile loading</div>);
+
+    expect(getByText('Profile loading')).toBeInTheDocument();
   });
 });

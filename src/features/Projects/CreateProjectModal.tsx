@@ -1,11 +1,10 @@
 import { Flexbox, Input, Text } from '@lobehub/ui';
 import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useProjectStore } from '@/store/project';
+import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
   getCreateProjectInput,
@@ -13,6 +12,15 @@ import {
   isProjectIdentifierValid,
   isProjectSlugValid,
 } from './createProjectForm';
+
+interface CreateProjectOptions {
+  /**
+   * Handle the created project instead of opening it. Callers that create a
+   * project as a step of another action (filing a delivery under a new one)
+   * must not have the user navigated away from what they were doing.
+   */
+  onCreated?: (project: ProjectListItem) => void;
+}
 
 interface CreateProjectFormState {
   identifier: string;
@@ -23,7 +31,13 @@ interface CreateProjectFormState {
   slugEdited: boolean;
 }
 
-const CreateProjectContent = memo(() => {
+const CreateProjectTitle = memo(() => {
+  const { t } = useTranslation('project');
+
+  return t('create.title');
+});
+
+const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { t } = useTranslation(['project', 'common']);
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
@@ -62,7 +76,8 @@ const CreateProjectContent = memo(() => {
     try {
       const project = await createProject(createInput);
       close();
-      navigate(`/project/${project.id}`);
+      if (onCreated) onCreated(project);
+      else navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
       console.error('Failed to create project', error);
       toast.error(t('operationFailed', { ns: 'common' }));
@@ -139,11 +154,11 @@ const CreateProjectContent = memo(() => {
   );
 });
 
-export const openCreateProjectModal = () =>
+export const openCreateProjectModal = (options: CreateProjectOptions = {}) =>
   createModal({
-    content: <CreateProjectContent />,
+    content: <CreateProjectContent {...options} />,
     footer: null,
     styles: { content: { padding: 0 } },
-    title: translate('create.title', { ns: 'project' }),
+    title: <CreateProjectTitle />,
     width: 460,
   });

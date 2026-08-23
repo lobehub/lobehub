@@ -24,8 +24,15 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
+  // Pinned to the same 28px row as the plain ControlBar so the composer footer
+  // keeps its rhythm regardless of which chips render. `flex: none` matters:
+  // the bar sits in a column flex parent and would otherwise shrink to the
+  // (compact) chips' min-content height.
   bar: css`
     container: runtimebar / inline-size;
+    flex: none;
+
+    height: 28px;
     padding-block: 0;
     padding-inline: 4px;
   `,
@@ -142,12 +149,18 @@ const HeteroControlBar = memo(() => {
     workspaceScoped,
   });
   const isLocalHeteroExecution = executionTarget === 'local';
+  // Subscription windows (5h / weekly) only exist when the CLI is signed into
+  // a Claude / Codex account. API mode bills the bound provider key instead,
+  // so the remaining-quota chip in the corner would be stale or empty.
+  const isSubscriptionAuth = (heteroProvider?.authMode ?? 'subscription') === 'subscription';
   // An explicit bound device (including web's device-upgraded "local" pick)
   // samples quota through the gateway; `auto` has no concrete device to ask
   // and the cloud sandbox has no sampler, so both stay quota-less.
   const quotaDeviceId = executionTarget === 'device' ? agencyConfig?.boundDeviceId : undefined;
   const shouldShowClaudeQuota =
-    heteroProvider?.type === 'claude-code' && (isLocalHeteroExecution || !!quotaDeviceId);
+    isSubscriptionAuth &&
+    heteroProvider?.type === 'claude-code' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
 
   if (isAccessLoading) return null;
 
@@ -201,7 +214,8 @@ const HeteroControlBar = memo(() => {
   // Codex quota still needs the local CLI (spawned over IPC), so it stays
   // desktop-local; the SDK runtime badge likewise reports this desktop's own
   // in-process runtime, not a remote device's.
-  const shouldShowCodexQuota = heteroProvider?.type === 'codex' && isLocalHeteroExecution;
+  const shouldShowCodexQuota =
+    isSubscriptionAuth && heteroProvider?.type === 'codex' && isLocalHeteroExecution;
   const shouldShowSdkRuntime =
     heteroProvider?.type === 'claude-code' &&
     isLocalHeteroExecution &&

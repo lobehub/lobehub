@@ -340,6 +340,8 @@
   "payDiffPrice": "پرداخت مابه‌التفاوت",
   "payDiffPriceApprox": "تقریباً",
   "payDiffPriceTip": "مبلغ نهایی در صفحه پرداخت مشخص می‌شود",
+  "payment.downgradeFailed.desc": "برنامه‌ریزی کاهش سطح شما ناموفق بود. لطفاً بعداً دوباره تلاش کنید، یا اگر مشکل ادامه داشت، از طریق ایمیل با ما تماس بگیرید.",
+  "payment.downgradeFailed.title": "کاهش سطح ناموفق بود",
   "payment.error.actions.billing": "مدیریت صورتحساب",
   "payment.error.actions.home": "بازگشت به خانه",
   "payment.error.desc": "شناسه اشتراک: {{id}} یافت نشد. در صورت وجود سوال، لطفاً از طریق ایمیل با ما تماس بگیرید",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "طرح قفل شده",
   "plans.btn.payment": "خرید",
   "plans.btn.paymentDesc": "پشتیبانی از کارت اعتباری / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "پشتیبانی از کارت اعتباری",
   "plans.btn.soon": "به‌زودی",
   "plans.cancelDowngrade": "لغو کاهش برنامه زمان‌بندی شده",
   "plans.cancelDowngradeSuccess": "کاهش برنامه زمان‌بندی شده لغو شد",
@@ -633,11 +634,5 @@
   "usage.overview.title": "نمای کلی استفاده",
   "usage.remaining": "باقی‌مانده",
   "usage.storage.embeddings.used": "ذخیره‌سازی برداری",
-  "usage.storage.file.used": "استفاده از فایل",
-  "zarinpal.infoModal.desc": "به دلیل الزامات سیاستی، لطفاً اطلاعات شخصی زیر را پیش از ثبت سفارش تکمیل کنید:",
-  "zarinpal.infoModal.phone.label": "شماره تلفن",
-  "zarinpal.infoModal.phone.placeholder": "لطفاً شماره تلفن را وارد کنید",
-  "zarinpal.infoModal.phone.rule": "لطفاً یک شماره تلفن معتبر وارد کنید",
-  "zarinpal.infoModal.submit": "خرید",
-  "zarinpal.infoModal.title": "تکمیل اطلاعات مورد نیاز"
+  "usage.storage.file.used": "استفاده از فایل"
 }

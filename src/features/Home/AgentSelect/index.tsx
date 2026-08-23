@@ -1,13 +1,14 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
 import { Button, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
@@ -112,6 +113,7 @@ const AgentSelect = memo(() => {
         <Avatar
           avatar={displayAvatar}
           background={displayMeta?.backgroundColor || undefined}
+          name={displayTitle}
           shape={'square'}
           size={24}
         />

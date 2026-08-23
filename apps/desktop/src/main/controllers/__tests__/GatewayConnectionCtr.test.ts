@@ -858,10 +858,11 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
-    it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
+    it('forwards cwd and primary/fallback context from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('claude-code', 'op-ctx', 'hi', 'mock-jwt', {
         cwd: '/Users/alice/repo',
+        resumeFallbackSystemContext: 'RECOVERY CONTEXT',
         systemContext: 'WORKSPACE CONTEXT',
       });
       await vi.advanceTimersByTimeAsync(0);
@@ -869,6 +870,7 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/Users/alice/repo',
+          resumeFallbackSystemContext: 'RECOVERY CONTEXT',
           systemContext: 'WORKSPACE CONTEXT',
         }),
       );
@@ -897,6 +899,18 @@ describe('GatewayConnectionCtr', () => {
         expect.objectContaining({
           args: ['--model', 'opus', '--effort', 'high'],
         }),
+      );
+    });
+
+    it('forwards ingestWorkspaceId to spawnLhHeteroExec as workspaceId', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('grok-build', 'op-ws', 'hi', 'mock-jwt', {
+        ingestWorkspaceId: 'ws-lobehub',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-lobehub' }),
       );
     });
 
@@ -1073,9 +1087,59 @@ describe('GatewayConnectionCtr', () => {
       ];
       expect(spawnCommand).toBe('/resolved/bin/openclaw');
       expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
+      expect(spawnOptions.env.LOBEHUB_OPERATION_ID).toBe('op-1');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
+    });
+
+    it('reports a failed child process as a terminal error', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-failed-child',
+        prompt: 'hello',
+        taskId: 'task-failed-child',
+        topicId: 'topic-failed-child',
+      });
+      child._emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          done: true,
+          error: { message: 'Task failed (exit code: 1)', type: 'HeteroProcessError' },
+          operationId: 'op-failed-child',
+        }),
+      );
+    });
+
+    it('reports a signal exit as a cancelled terminal signal', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-cancelled-child',
+        prompt: 'hello',
+        taskId: 'task-cancelled-child',
+        topicId: 'topic-cancelled-child',
+      });
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancelled: true,
+          done: true,
+          error: undefined,
+          operationId: 'op-cancelled-child',
+        }),
+      );
     });
 
     it.each([
@@ -1173,6 +1237,39 @@ describe('GatewayConnectionCtr', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
       expect(killSpy).toHaveBeenCalledWith(-2222, 'SIGINT');
+
+      killSpy.mockRestore();
+    });
+
+    it('isolates concurrent group members that share a topic', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-1',
+        parentOperationId: 'op-parent',
+        prompt: 'member one',
+        taskId: 'task-child-1',
+        topicId: 'topic-shared',
+      });
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-2',
+        parentOperationId: 'op-parent',
+        prompt: 'member two',
+        taskId: 'task-child-2',
+        topicId: 'topic-shared',
+      });
+
+      expect(killSpy).not.toHaveBeenCalled();
+      const firstArgs = spawnMock.mock.calls[0][1] as string[];
+      const secondArgs = spawnMock.mock.calls[1][1] as string[];
+      expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+      expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+      expect((ctr as any).platformTasks.get('task-child-2')).toMatchObject({
+        parentOperationId: 'op-parent',
+      });
 
       killSpy.mockRestore();
     });
@@ -1383,6 +1480,7 @@ describe('GatewayConnectionCtr', () => {
         expect(notifySpy).toHaveBeenCalledWith(
           expect.objectContaining({
             content: 'session_id: part of the final answer\nHello from Hermes',
+            operationId: 'op-hermes-1',
             topicId: 'topic-hermes',
           }),
         );

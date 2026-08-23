@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "Tên hiển thị mô hình",
   "providerModels.item.modelConfig.extendParams.extra": "Chọn các tham số mở rộng được hỗ trợ bởi mô hình. Di chuột vào một tùy chọn để xem trước điều khiển. Cấu hình sai có thể khiến yêu cầu thất bại.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "Dành cho các mô hình Codex; kiểm soát cường độ suy luận.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "Đối với chế độ tư duy DeepSeek V4 GA; kiểm soát cường độ lý luận. Thêm một cấp độ `thấp` trên các cấp độ V4 ban đầu. `cao` là mặc định, `tối đa` mở khóa lý luận sâu nhất được sử dụng bởi các quy trình làm việc của tác nhân phức tạp.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "Dành cho chế độ tư duy của DeepSeek V4; điều chỉnh mức độ suy luận. `high` là mặc định, `max` mở khóa khả năng suy luận sâu nhất được sử dụng trong các quy trình agent phức tạp.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Dành cho các mô hình Claude; có thể giảm chi phí và tăng tốc độ phản hồi.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "Dành cho Claude Opus 4.6; điều chỉnh mức độ nỗ lực (thấp/trung bình/cao/tối đa).",

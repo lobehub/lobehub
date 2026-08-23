@@ -322,12 +322,16 @@ describe('conversationSelectors', () => {
 
 describe('dataSelectors', () => {
   describe('getToolMessageCreatedAt', () => {
-    const createToolMessage = (createdAt: Date | number | string) =>
+    const createToolMessage = (
+      createdAt: Date | number | string,
+      id = 'tool-message-1',
+      toolCallId = 'tool-call-1',
+    ) =>
       ({
         createdAt,
-        id: 'tool-message-1',
+        id,
         role: 'tool',
-        tool_call_id: 'tool-call-1',
+        tool_call_id: toolCallId,
       }) as unknown as State['dbMessages'][number];
 
     it.each([
@@ -336,19 +340,36 @@ describe('dataSelectors', () => {
     ])('normalizes a %s createdAt to epoch milliseconds', (_, createdAt, expected) => {
       const store = createMockState({ dbMessages: [createToolMessage(createdAt)] });
 
-      expect(dataSelectors.getToolMessageCreatedAt('tool-call-1')(store)).toBe(expected);
+      expect(dataSelectors.getToolMessageCreatedAt('tool-message-1')(store)).toBe(expected);
+    });
+
+    it('resolves the current result row when Codex reuses a tool call id', () => {
+      const store = createMockState({
+        dbMessages: [
+          createToolMessage(1000, 'old-result', 'item_1'),
+          createToolMessage(5000, 'current-result', 'item_1'),
+        ],
+      });
+
+      expect(dataSelectors.getToolMessageCreatedAt('current-result')(store)).toBe(5000);
     });
 
     it('returns undefined when the tool message is absent', () => {
       expect(
-        dataSelectors.getToolMessageCreatedAt('tool-call-1')(createMockState()),
+        dataSelectors.getToolMessageCreatedAt('tool-message-1')(createMockState()),
       ).toBeUndefined();
+    });
+
+    it('returns undefined while the result message id is unavailable', () => {
+      const store = createMockState({ dbMessages: [createToolMessage(2000)] });
+
+      expect(dataSelectors.getToolMessageCreatedAt(undefined)(store)).toBeUndefined();
     });
 
     it('returns undefined for an invalid createdAt', () => {
       const store = createMockState({ dbMessages: [createToolMessage('not-a-date')] });
 
-      expect(dataSelectors.getToolMessageCreatedAt('tool-call-1')(store)).toBeUndefined();
+      expect(dataSelectors.getToolMessageCreatedAt('tool-message-1')(store)).toBeUndefined();
     });
   });
 });

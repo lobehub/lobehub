@@ -1,3 +1,4 @@
+import { LAB_FEATURES } from '@/features/Settings/labs/features';
 import { SettingsTabs } from '@/store/global/initialState';
 
 export interface SettingsSearchContext {
@@ -49,7 +50,7 @@ export interface SettingsSearchItem {
 export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
   [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
-  [SettingsTabs.APIKey]: ['api key', 'apikey', 'token', 'secret'],
+  [SettingsTabs.APIKey]: ['api', 'api key', 'apikey', 'token', 'secret', 'personal key'],
   [SettingsTabs.Labels]: ['label', 'labels', 'tag', 'tags', 'group', 'grouping'],
   [SettingsTabs.Appearance]: [
     'appearance',
@@ -59,6 +60,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'font',
     'language',
     'color',
+    'background',
   ],
   [SettingsTabs.Billing]: ['billing', 'payment', 'invoice', 'card', 'transaction'],
   [SettingsTabs.Connector]: ['connectors', 'integrations', 'mcp', 'oauth'],
@@ -68,8 +70,27 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
-  [SettingsTabs.Messenger]: ['messenger', 'chat platform', 'bot'],
-  [SettingsTabs.Notification]: ['notification', 'email', 'push', 'alerts'],
+  [SettingsTabs.Messenger]: [
+    'messenger',
+    'chat platform',
+    'bot',
+    'telegram',
+    'slack',
+    'discord',
+    'wechat',
+  ],
+  [SettingsTabs.Notification]: [
+    'notification',
+    'email',
+    'push',
+    'alerts',
+    'inbox',
+    'telegram',
+    'slack',
+    'discord',
+    'wechat',
+  ],
+  [SettingsTabs.OAuthApps]: ['oauth', 'oauth apps', 'developer apps'],
   [SettingsTabs.Plans]: ['subscription', 'plan', 'upgrade', 'pricing', 'membership'],
   [SettingsTabs.Profile]: [
     'profile',
@@ -85,13 +106,17 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'provider',
     'model',
     'llm',
+    'api',
     'api key',
     'apikey',
     'byok',
     'bring your own key',
     'endpoint',
+    'model provider',
+    'language model',
+    'custom provider',
   ],
-  [SettingsTabs.Proxy]: ['proxy', 'network', 'connection'],
+  [SettingsTabs.Proxy]: ['proxy', 'network', 'connection', 'proxy settings'],
   [SettingsTabs.Referral]: ['referral', 'invite', 'rewards', 'bonus'],
   [SettingsTabs.ServiceModel]: [
     'service model',
@@ -99,6 +124,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'topic naming',
     'translation',
     'tts',
+    'tts settings',
     'voice',
     'speech',
     'image',
@@ -106,6 +132,8 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'embedding',
     'prompt rewrite',
     'suggestion',
+    'search',
+    'search model',
   ],
   [SettingsTabs.Skill]: ['skill', 'skills', 'plugins', 'tools'],
   [SettingsTabs.Stats]: ['analytics', 'statistics', 'stats'],
@@ -117,10 +145,20 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'backup',
     'reset',
     'clear data',
+    'clear storage',
+    'knowledge base',
     'account deletion',
     'delete account',
   ],
-  [SettingsTabs.SystemTools]: ['system tools', 'built-in tools'],
+  [SettingsTabs.SystemTools]: [
+    'system tools',
+    'built-in tools',
+    'system',
+    'node',
+    'python',
+    'cli',
+    'environment',
+  ],
   [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
 };
 
@@ -143,9 +181,11 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
   [SettingsTabs.Labels]: 'settingsSearch.tabKeywords.labels',
   [SettingsTabs.Hotkey]: 'settingsSearch.tabKeywords.hotkey',
+  [SettingsTabs.Labs]: 'settingsSearch.tabKeywords.labs',
   [SettingsTabs.Memory]: 'settingsSearch.tabKeywords.memory',
   [SettingsTabs.Messenger]: 'settingsSearch.tabKeywords.messenger',
   [SettingsTabs.Notification]: 'settingsSearch.tabKeywords.notification',
+  [SettingsTabs.OAuthApps]: 'settingsSearch.tabKeywords.oauthApps',
   [SettingsTabs.Plans]: 'settingsSearch.tabKeywords.plans',
   [SettingsTabs.Profile]: 'settingsSearch.tabKeywords.profile',
   [SettingsTabs.Provider]: 'settingsSearch.tabKeywords.provider',
@@ -351,6 +391,18 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
   },
+  // Labs — derived from the LAB_FEATURES catalog the page renders, so a new
+  // lab flag becomes searchable without a second registration. Anchors use
+  // `labs-${flag}`, matching the SettingsSearchAnchor wrap on each toggle.
+  ...LAB_FEATURES.map(({ desktopOnly, flag, i18nKey, searchKeywords }): SettingsSearchItem => ({
+    anchor: `labs-${flag}`,
+    descKey: `features.${i18nKey}.desc`,
+    keywords: searchKeywords,
+    labelKey: `features.${i18nKey}.title`,
+    ns: 'labs',
+    tab: SettingsTabs.Labs,
+    ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
+  })),
   // Service Model
   {
     anchor: 'service-model-assignments',
@@ -372,7 +424,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   {
     anchor: 'service-model-tts',
-    keywords: ['tts', 'voice', 'speech', 'text to speech'],
+    keywords: ['tts', 'tts settings', 'voice', 'speech', 'text to speech'],
     labelKey: 'settingTTS.openai.ttsModel',
     tab: SettingsTabs.ServiceModel,
     visible: (ctx) => ctx.enableSTT,
@@ -601,6 +653,12 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Usage,
   },
   // Notification
+  {
+    anchor: 'notification-inbox',
+    keywords: ['inbox', 'in-app notification'],
+    labelKey: 'notification.inbox.title',
+    tab: SettingsTabs.Notification,
+  },
   {
     anchor: 'notification-email',
     keywords: ['email'],

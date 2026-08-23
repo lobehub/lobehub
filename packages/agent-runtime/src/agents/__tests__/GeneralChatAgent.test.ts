@@ -2102,6 +2102,32 @@ describe('GeneralChatAgent', () => {
       });
     });
 
+    it('should fall back to state messages when a new producer omits compressed messages', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const compressedMessages = [
+        { content: 'Compressed summary', id: 'group-1', role: 'compressedGroup' },
+        { content: 'Latest user follow-up', role: 'user' },
+      ] as any;
+      const state = createMockState({ messages: compressedMessages });
+      const context = createMockContext('compression_result', {
+        groupId: 'group-1',
+        parentMessageId: 'assistant-msg-after-compression',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          payload: expect.objectContaining({ messages: compressedMessages }),
+          type: 'call_llm',
+        }),
+      );
+    });
+
     // High-context tool-first resume: when the first post-tool turn compresses
     // before running, the seeded placeholder must still be reused after
     // compression rather than orphaned by createAssistantMessage.

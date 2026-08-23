@@ -76,14 +76,24 @@ const buildEvent = (
   type,
 });
 
-const createService = (overrides: { streamEventManager?: IStreamEventManager } = {}) => {
+const createService = (
+  overrides: { operationId?: string; streamEventManager?: IStreamEventManager } = {},
+) => {
   const { manager, published } = createFakeStreamManager();
   const persistenceHandler = createFakePersistenceHandler();
+  const topicModel = {
+    settleRunningOperation: vi.fn(async (_topicId: string, operationId: string): Promise<any> => ({
+      assistantMessageId: 'asst-1',
+      operationId,
+      status: 'settled',
+    })),
+  };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
     persistenceHandler,
     streamEventManager: overrides.streamEventManager ?? manager,
+    topicModel: topicModel as any,
   });
-  return { manager, persistenceHandler, published, service };
+  return { manager, persistenceHandler, published, service, topicModel };
 };
 
 describe('HeterogeneousAgentService', () => {
@@ -406,7 +416,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('forwards classified error details when the run failed', async () => {
-      const { published, service } = createService();
+      const { published, service } = createService({ operationId: 'op-2' });
 
       await service.heteroFinish({
         agentType: 'codex',
@@ -425,7 +435,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('persists and publishes a structured auth_required error from a flattened finish', async () => {
-      const { persistenceHandler, published, service } = createService();
+      const { persistenceHandler, published, service } = createService({ operationId: 'op-auth' });
 
       await service.heteroFinish({
         agentType: 'claude-code',
@@ -466,6 +476,39 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
+    it('ignores a delayed finish when a newer operation owns the topic', async () => {
+      const { manager, published } = createFakeStreamManager();
+      const persistenceHandler = createFakePersistenceHandler();
+      const topicModel = {
+        settleRunningOperation: vi.fn(async () => ({
+          activeOperationId: 'op-new',
+          status: 'conflict' as const,
+        })),
+      } as any;
+      const completeOperationSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue();
+      const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        persistenceHandler,
+        snapshotStore: null,
+        streamEventManager: manager,
+        topicModel,
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-old',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
+      expect(published).toHaveLength(0);
+      expect(completeOperationSpy).not.toHaveBeenCalled();
+
+      completeOperationSpy.mockRestore();
+    });
+
     // The unified terminal funnel: heteroFinish must drive the run's lifecycle
     // hooks through the shared hookDispatcher (the same mechanism the normal LLM
     // path uses), which is what marks the owning task done/failed and fires any
@@ -483,7 +526,7 @@ describe('HeterogeneousAgentService', () => {
     };
 
     it('fires onComplete (reason=done) hooks on a successful run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-hook-success' });
       const { onComplete, onError } = registerHook('op-hook-success');
 
       await service.heteroFinish({
@@ -504,7 +547,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('fires both onComplete and onError (reason=error) hooks on a failed run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-hook-error' });
       const { onComplete, onError } = registerHook('op-hook-error');
 
       await service.heteroFinish({
@@ -531,7 +574,7 @@ describe('HeterogeneousAgentService', () => {
     // gate on success — and the gate bails unless op.model/provider are set, so the
     // synthetic state MUST carry the model/provider backfilled from the CLI stream.
     it('routes the terminal transition through CompletionLifecycle with backfilled model/provider', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-verify-align' });
 
       const finalizeSpy = vi.spyOn(HeteroTraceRecorder.prototype, 'finalize').mockResolvedValue({
         llmCalls: 3,
@@ -576,13 +619,38 @@ describe('HeterogeneousAgentService', () => {
       dispatchSpy.mockRestore();
     });
 
+    it('forwards a group member role to the completion lifecycle', async () => {
+      const { service, topicModel } = createService({ operationId: 'op-member' });
+      topicModel.settleRunningOperation.mockResolvedValue({
+        assistantMessageId: 'asst-member',
+        orchestrationRole: 'member',
+        status: 'settled',
+      });
+      const completeOperationSpy = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue(undefined);
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-member',
+        result: 'success',
+        topicId: 'topic-member',
+      });
+
+      expect(completeOperationSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-member', orchestrationRole: 'member' }),
+        'done',
+      );
+      completeOperationSpy.mockRestore();
+    });
+
     // Cross-instance race guard: recordStart's in-memory verify-plan promise lives
     // on a DIFFERENT CompletionLifecycle (execAgent), so heteroFinish can't await
     // it. A fast run could reach the gate before the plan persists. heteroFinish
     // must therefore re-run the idempotent durable instantiation and AWAIT it
     // before dispatching the gate.
     it('awaits durable verify-plan instantiation before the completion gate for a task-bound run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-race-guard' });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -619,7 +687,7 @@ describe('HeterogeneousAgentService', () => {
     });
 
     it('skips verify-plan instantiation for a non-task hetero run', async () => {
-      const { service } = createService();
+      const { service } = createService({ operationId: 'op-no-task' });
 
       const findByIdSpy = vi
         .spyOn(AgentOperationModel.prototype, 'findById')
@@ -695,11 +763,12 @@ describe('HeterogeneousAgentService', () => {
       const topicModel = {
         // Mirror what execAgent persisted at dispatch: the serialized hooks live
         // under runningOperation. heteroFinish must read them from here.
-        findById: vi.fn(async () => ({
-          id: 'topic-q',
-          metadata: { runningOperation: { hooks, operationId: 'op-q' } },
+        settleRunningOperation: vi.fn(async () => ({
+          assistantMessageId: undefined,
+          hooks,
+          status: 'settled' as const,
+          threadId: undefined,
         })),
-        updateMetadata: vi.fn(async () => {}),
       } as any;
       const { manager } = createFakeStreamManager();
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
@@ -788,13 +857,58 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata:
-    // a non-atomic read-modify-write that shallow-merges the patch over a
-    // snapshot. `mergeBase` lets a test force the "read a stale snapshot" race.
+    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata.
+    // `mergeBase` lets a test force the historical stale-snapshot race, while
+    // settleRunningOperation models the operation-owned terminal CAS.
     const makeStore = () => {
       let meta: Record<string, any> = {};
       const topicModel = {
-        findById: vi.fn(async () => ({ id: TOPIC, metadata: meta })),
+        settleRunningOperation: vi.fn(async (_id: string, operationId: string) => {
+          const runningOperation = meta.runningOperation;
+          if (!runningOperation) {
+            const currentMessage = meta.heteroCurrentMsgId;
+            return {
+              assistantMessageId:
+                currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+              status: 'missing' as const,
+            };
+          }
+          const isRoot = runningOperation.operationId === operationId;
+          const operation = isRoot
+            ? runningOperation
+            : runningOperation.childOperations?.find(
+                (candidate: any) => candidate.operationId === operationId,
+              );
+          if (!operation) {
+            return {
+              activeOperationId: runningOperation.operationId,
+              status: 'conflict' as const,
+            };
+          }
+
+          const currentMessage = meta.heteroCurrentMsgId;
+          meta = {
+            ...meta,
+            runningOperation: isRoot
+              ? null
+              : {
+                  ...runningOperation,
+                  childOperations: runningOperation.childOperations.filter(
+                    (candidate: any) => candidate.operationId !== operationId,
+                  ),
+                },
+          };
+          return {
+            assistantMessageId:
+              currentMessage?.operationId === operationId
+                ? currentMessage.msgId
+                : operation.assistantMessageId,
+            hooks: operation.hooks,
+            orchestrationRole: operation.orchestrationRole,
+            status: 'settled' as const,
+            threadId: operation.threadId,
+          };
+        }),
         updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
           meta = { ...(mergeBase ?? meta), ...patch };
         }),

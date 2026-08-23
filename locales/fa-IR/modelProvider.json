@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "نام نمایشی مدل",
   "providerModels.item.modelConfig.extendParams.extra": "پارامترهای پیشرفته‌ای را که توسط مدل پشتیبانی می‌شوند انتخاب کنید. برای پیش‌نمایش کنترل‌ها، نشانگر را روی گزینه‌ها نگه دارید. پیکربندی‌های نادرست ممکن است باعث شکست درخواست شوند.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "برای مدل‌های Codex؛ شدت استدلال را کنترل می‌کند.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "برای حالت تفکر DeepSeek V4 GA؛ شدت استدلال را کنترل می‌کند. یک سطح `پایین` به سطوح اصلی V4 اضافه می‌شود. `بالا` به صورت پیش‌فرض است، `حداکثر` عمیق‌ترین استدلال مورد استفاده در جریان‌های کاری پیچیده عامل‌ها را باز می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "برای حالت تفکر DeepSeek V4؛ شدت استدلال را کنترل می‌کند. «high» مقدار پیش‌فرض است و «max» عمیق‌ترین سطح استدلال را که در جریان‌های کاری پیچیده عامل‌ها استفاده می‌شود، فعال می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "برای مدل‌های Claude؛ می‌تواند هزینه را کاهش داده و پاسخ‌ها را سریع‌تر کند.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "برای Claude Opus 4.6؛ سطح تلاش را کنترل می‌کند (کم/متوسط/زیاد/حداکثر).",

@@ -107,7 +107,7 @@ const ProjectWorkspace = memo(() => {
   const startConversation = () => {
     const content = message.trim();
     if (!content || !projectId) return;
-    navigate(getProjectConversationStartPath(projectId, content));
+    navigate(getProjectConversationStartPath(detail.project.slug ?? projectId, content));
   };
   const prompts = [
     t('overview.prompts.summarizeProgress'),
@@ -174,7 +174,7 @@ const ProjectWorkspace = memo(() => {
               </Flexbox>
             </Flexbox>
           </Flexbox>
-          <ProjectDashboard detail={detail} projectId={projectId!} />
+          <ProjectDashboard detail={detail} projectId={detail.project.id} />
         </Flexbox>
       </div>
     </Flexbox>
