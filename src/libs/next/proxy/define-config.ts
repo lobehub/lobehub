@@ -303,7 +303,7 @@ export function defineConfig() {
           signInUrl.searchParams.set('utm_source', utmSource);
           logBetterAuth('Preserving utm_source to sign-in: %s', utmSource);
         }
-        return applyRuntimeFrameProtections(Response.redirect(signInUrl));
+        return applyRuntimeFrameProtections(NextResponse.redirect(signInUrl));
       }
       logBetterAuth('Request a free route but not login, allow visit without auth header');
     }

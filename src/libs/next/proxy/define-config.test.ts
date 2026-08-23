@@ -4,6 +4,8 @@
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { auth } from '@/auth';
+
 import { defineConfig } from './define-config';
 
 vi.mock('@/auth', () => ({
@@ -76,6 +78,19 @@ describe('defineConfig Docker runtime frame protections', () => {
 
     expect(response?.headers.get('X-Frame-Options')).toBeNull();
     expect(response?.headers.get('Content-Security-Policy')).toBeNull();
+  });
+
+  it('adds frame protections to an unauthenticated redirect without throwing', async () => {
+    vi.stubEnv('DOCKER', 'true');
+    vi.stubEnv('ENABLED_CSP', undefined);
+    vi.mocked(auth.api.getSession).mockResolvedValueOnce(null);
+
+    const response = await runResponse('http://localhost:3010/agent?hl=en-US');
+
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get('location')).toContain('/signin');
+    expect(response?.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(response?.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none';");
   });
 });
 
