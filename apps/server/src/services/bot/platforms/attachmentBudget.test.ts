@@ -39,6 +39,7 @@ const {
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
+  summarizeDegradations,
 } = await import('./attachmentBudget');
 
 const MB = 1024 * 1024;
@@ -463,5 +464,56 @@ describe('splitFallbackMessages', () => {
     const line = 'x'.repeat(50);
 
     expect(splitFallbackMessages([line], 10)).toEqual([line]);
+  });
+});
+
+describe('summarizeDegradations', () => {
+  it('flattens a filename that would forge extra log lines', () => {
+    // A filename is attacker-controlled and lands in persistent logs; a newline
+    // in it fabricates a whole additional entry that a reader cannot tell from
+    // a real one.
+    const summary = summarizeDegradations([
+      {
+        name: 'invoice.png\n[messenger:wechat] 0 attachment(s) could not be sent as files',
+        reason: 'source-unavailable',
+        type: 'image',
+      },
+    ]);
+
+    expect(summary.split('\n')).toHaveLength(1);
+    expect(summary).toContain('invoice.png');
+  });
+
+  it('strips control characters', () => {
+    const summary = summarizeDegradations([
+      { name: 'a b c\td', reason: 'upload-failed', type: 'file' },
+    ]);
+
+    expect(summary).toBe('a b c d: upload-failed');
+  });
+
+  it('caps an absurd filename so it cannot crowd out the rest of the line', () => {
+    const summary = summarizeDegradations([
+      { name: 'n'.repeat(500), reason: 'compression-failed', type: 'image' },
+    ]);
+
+    expect(summary.length).toBeLessThan(120);
+    expect(summary).toContain('compression-failed');
+  });
+
+  it('sanitizes caller-supplied reason detail too', () => {
+    // `failures.detail` carries platform error text, no more trusted than the
+    // filename it sits next to.
+    const summary = summarizeDegradations([
+      { name: 'a.png', reason: 'upload-failed (bad\nmedia)', type: 'image' },
+    ]);
+
+    expect(summary.split('\n')).toHaveLength(1);
+  });
+
+  it('names the type when the attachment has no filename', () => {
+    expect(summarizeDegradations([{ reason: 'not-compressible', type: 'video' }])).toBe(
+      '(unnamed video): not-compressible',
+    );
   });
 });

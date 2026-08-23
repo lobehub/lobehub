@@ -217,6 +217,13 @@ const deliver = async (
   // ONE line per push, at the boundary that knows whose push it is — not one
   // per attachment inside the helpers. Everything finer stays on `debug()`.
   // Degradation is a handled outcome, so this is `warn`, never `error`.
+  //
+  // It says the attachments could not be sent AS FILES, which is the part
+  // already settled here. It deliberately does not claim a link was delivered:
+  // the link legs below can still throw, and `source-unavailable` /
+  // `over-budget-no-link` have no `fetchUrl` to build a link from at all — those
+  // are requeued instead. Logging before those sends is on purpose, so a push
+  // that dies mid-delivery still leaves the reasons behind.
   const degradedHere = [
     ...prepared.degradations.filter((d) => d.reason !== 'strategy-link'),
     ...sendResult.failures.map((f) => ({
@@ -227,7 +234,7 @@ const deliver = async (
   ];
   if (degradedHere.length > 0)
     console.warn(
-      `[messenger:wechat] ${degradedHere.length} attachment(s) sent as a download link — ${summarizeDegradations(degradedHere)}`,
+      `[messenger:wechat] ${degradedHere.length} attachment(s) could not be sent as files — ${summarizeDegradations(degradedHere)}`,
     );
 
   const failedOriginals = failed.map(

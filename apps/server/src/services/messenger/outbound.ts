@@ -89,11 +89,13 @@ export const sendOutboundDirectMessage = async (params: {
   );
 
   // One line per DM, at the boundary — same rule as the WeChat path. A sender's
-  // own `link` choice is not a degradation worth recording.
+  // own `link` choice is not a degradation worth recording, and the wording
+  // claims only what is settled here: these could not go out as files. The link
+  // leg is sent below and can still fail.
   const unintended = prepared.degradations.filter((d) => d.reason !== 'strategy-link');
   if (unintended.length > 0)
     console.warn(
-      `[messenger:outbound] ${platform}: ${unintended.length} attachment(s) sent as a download link — ${summarizeDegradations(unintended)}`,
+      `[messenger:outbound] ${platform}: ${unintended.length} attachment(s) could not be sent as files — ${summarizeDegradations(unintended)}`,
     );
 
   switch (platform) {

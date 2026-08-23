@@ -278,13 +278,48 @@ export interface AttachmentDegradation {
 }
 
 /**
+ * Make one user-controlled string safe to put on a log line.
+ *
+ * A filename is attacker-controlled input that ends up in persistent logs. A
+ * newline in it forges a whole additional log entry — the reader cannot tell
+ * the forged line from a real one — and other control characters corrupt
+ * whatever consumes the stream. Length is capped too, so one absurd name
+ * cannot push the rest of the line out of a truncated log record.
+ *
+ * The name is sanitized rather than dropped: without it the line cannot say
+ * WHICH attachment degraded, which is the only reason it is written.
+ */
+const MAX_LOGGED_NAME_CHARS = 60;
+
+export const sanitizeForLog = (value: string): string => {
+  // Strip C0/C1 controls, DEL, and the Unicode line/paragraph separators —
+  // \u2028 and \u2029 are line breaks to plenty of log viewers.
+  const flattened = value
+    // eslint-disable-next-line no-control-regex
+    .replaceAll(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+  if (!flattened) return '(unnamed)';
+  return flattened.length <= MAX_LOGGED_NAME_CHARS
+    ? flattened
+    : `${flattened.slice(0, MAX_LOGGED_NAME_CHARS - 1)}…`;
+};
+
+/**
  * One short clause per degraded attachment, for the boundary's single log line.
  * Deliberately loose in `reason` so a caller can append platform detail (an
- * iLink `errmsg`) without widening the reason union itself.
+ * iLink `errmsg`) without widening the reason union itself — which is also
+ * caller-controlled text, so it goes through the same sanitizer.
  */
 export const summarizeDegradations = (
   degradations: { name?: string; reason: string; type: string }[],
-): string => degradations.map((d) => `${d.name ?? `(unnamed ${d.type})`}: ${d.reason}`).join('; ');
+): string =>
+  degradations
+    .map(
+      (d) =>
+        `${d.name ? sanitizeForLog(d.name) : `(unnamed ${d.type})`}: ${sanitizeForLog(d.reason)}`,
+    )
+    .join('; ');
 
 export interface PrepareAttachmentsOptions {
   /**
