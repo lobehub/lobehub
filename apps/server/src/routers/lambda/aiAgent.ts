@@ -970,6 +970,15 @@ export const aiAgentRouter = router({
       }
 
       return {
+        ...(input.agentType === 'codex' &&
+          selection.codexCompatibility && {
+            codexModel: {
+              compatibility: selection.codexCompatibility,
+              contextWindowTokens: selection.contextWindowTokens,
+              description: selection.description,
+              displayName: selection.displayName,
+            },
+          }),
         model: 'lobehub-default' as const,
         token: await signHeteroOperationJWT({
           capabilities: ['model:invoke'],

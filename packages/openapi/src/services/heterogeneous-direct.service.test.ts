@@ -122,10 +122,17 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(runtimePayload).not.toHaveProperty('deploymentName');
   });
 
-  it('adapts custom Codex relay models to chat completions with their reasoning effort', async () => {
+  it('uses operation-resolved Codex compatibility to select chat completions and effort', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
-      model: 'deepseek-v4-pro',
+      codexCompatibility: {
+        defaultReasoningEffort: 'high',
+        reasoningEfforts: ['low', 'high', 'max'],
+        runtimeApiMode: 'chatCompletion',
+        toolMode: 'function',
+        truncationMode: 'tokens',
+      },
+      model: 'relay-coding-model',
       provider: 'lobehub',
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
@@ -134,7 +141,7 @@ describe('heterogeneous direct invocation protocol', () => {
 
     await invokeServerDefaultModel({
       agentType: 'codex',
-      model: 'deepseek-v4-pro',
+      model: 'relay-coding-model',
       payload: {
         apiMode: 'responses',
         messages: [],
@@ -150,7 +157,7 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(runtimePayload).toMatchObject({
       apiMode: 'chatCompletion',
       messages: [],
-      model: 'deepseek-v4-pro',
+      model: 'relay-coding-model',
       reasoning_effort: 'max',
       stream: true,
     });

@@ -8,6 +8,15 @@ const deepseekChatModels: AIChatModelCard[] = [
       reasoning: true,
       structuredOutput: true,
     },
+    agentCompatibility: {
+      codex: {
+        defaultReasoningEffort: 'high',
+        reasoningEfforts: ['low', 'high', 'max'],
+        runtimeApiMode: 'chatCompletion',
+        toolMode: 'function',
+        truncationMode: 'tokens',
+      },
+    },
     contextWindowTokens: 1_048_576,
     description:
       'DeepSeek V4 Flash is the fast, cost-efficient member of the V4 family with a 1M context window and hybrid thinking — one of the cheapest capable models available.',
@@ -36,6 +45,15 @@ const deepseekChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       structuredOutput: true,
+    },
+    agentCompatibility: {
+      codex: {
+        defaultReasoningEffort: 'high',
+        reasoningEfforts: ['low', 'high', 'max'],
+        runtimeApiMode: 'chatCompletion',
+        toolMode: 'function',
+        truncationMode: 'tokens',
+      },
     },
     contextWindowTokens: 1_048_576,
     description:

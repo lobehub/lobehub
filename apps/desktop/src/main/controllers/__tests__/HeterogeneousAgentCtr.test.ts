@@ -1750,6 +1750,55 @@ describe('HeterogeneousAgentCtr', () => {
       });
     });
 
+    it('rebuilds the Codex profile from operation-scoped model metadata before launch', async () => {
+      beginServerDefaultOperationMock.mockResolvedValueOnce({
+        codexModel: {
+          compatibility: {
+            defaultReasoningEffort: 'high',
+            reasoningEfforts: ['low', 'high', 'max'],
+            runtimeApiMode: 'chatCompletion',
+            toolMode: 'function',
+            truncationMode: 'tokens',
+          },
+          contextWindowTokens: 256_000,
+          description: 'Catalog-owned description',
+          displayName: 'Relay Coding Model',
+        },
+        endpoint: 'https://app.example.com',
+        model: 'lobehub-default',
+        token: 'operation-token',
+      });
+      nextFakeProc = createFakeProc().proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'relay-coding-model', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-capability',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(spawnCalls[0].args).toEqual(
+        expect.arrayContaining([
+          '--config',
+          expect.stringMatching(/^model_catalog_json=.*models\.json"$/),
+          '--model',
+          'lobehub/relay-coding-model',
+        ]),
+      );
+    });
+
     it('does not launch server-default Codex when cancelled while authorization is pending', async () => {
       let resolveBegin!: (value: {
         endpoint: string;

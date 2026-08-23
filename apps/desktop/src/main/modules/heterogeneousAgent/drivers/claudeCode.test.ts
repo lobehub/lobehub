@@ -27,6 +27,7 @@ describe('claudeCodeDriver', () => {
       env: { ANTHROPIC_AUTH_TOKEN: 'stale' },
       model: 'claude-sonnet-4-6',
       profileDir: '/tmp/profile',
+      runDir: '/tmp/run',
     });
 
     expect(plan.env).toMatchObject({

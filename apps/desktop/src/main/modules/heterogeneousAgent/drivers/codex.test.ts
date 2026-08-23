@@ -36,6 +36,7 @@ describe('codexDriver provider binding', () => {
       env: { LOBEHUB_HETERO_TOKEN: 'stale' },
       model: 'gpt-5.4',
       profileDir: '/tmp/profile',
+      runDir: '/tmp/run',
     });
     const config = plan.profileFiles?.[0]?.content ?? '';
 
@@ -45,6 +46,7 @@ describe('codexDriver provider binding', () => {
     expect(config).toContain('env_key = "LOBEHUB_HETERO_TOKEN"');
     expect(config).not.toContain('model_catalog_json');
     expect(plan.profileFiles).toHaveLength(1);
+    expect(plan.runFiles).toBeUndefined();
     expect(config).not.toContain('stale');
     expect(plan.env.LOBEHUB_HETERO_TOKEN).toBeUndefined();
   });
@@ -57,22 +59,39 @@ describe('codexDriver provider binding', () => {
     'writes a current Codex model catalog for %s',
     async (selectedModel, defaultReasoningLevel, reasoningLevels, truncationMode) => {
       const profileDir = 'C:\\managed\\codex';
+      const runDir = 'C:\\managed\\run';
       const plan = await codexDriver.prepareServerDefaultBinding!({
         args: [],
+        codexModel: {
+          compatibility: {
+            defaultReasoningEffort: defaultReasoningLevel,
+            reasoningEfforts: [...reasoningLevels],
+            runtimeApiMode: 'chatCompletion',
+            toolMode: 'function',
+            truncationMode,
+          },
+          contextWindowTokens: 1_048_576,
+          description: `${selectedModel} catalog description`,
+          displayName: selectedModel,
+        },
         endpoint: 'https://app.example.com',
         env: {},
         model: selectedModel,
         profileDir,
+        runDir,
       });
       const config = plan.profileFiles?.find(({ path }) => path === 'config.toml')?.content ?? '';
-      const catalogContent = plan.profileFiles?.find(({ path }) => path === 'models.json')?.content;
+      const catalogContent = plan.runFiles?.find(({ path }) => path === 'models.json')?.content;
       const catalog = JSON.parse(catalogContent ?? '{}');
       const model = catalog.models?.[0];
 
-      expect(plan.args).toEqual(['--model', `lobehub/${selectedModel}`]);
-      expect(config).toContain(
-        `model_catalog_json = ${JSON.stringify(path.join(profileDir, 'models.json'))}`,
-      );
+      expect(plan.args).toEqual([
+        '--config',
+        `model_catalog_json=${JSON.stringify(path.join(runDir, 'models.json'))}`,
+        '--model',
+        `lobehub/${selectedModel}`,
+      ]);
+      expect(config).not.toContain('model_catalog_json');
       expect(catalog.models).toHaveLength(1);
       expect(model).toMatchObject({
         apply_patch_tool_type: null,

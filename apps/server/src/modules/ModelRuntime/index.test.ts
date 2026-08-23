@@ -23,7 +23,7 @@ import {
 } from '@lobechat/model-runtime';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
-import { ModelProvider } from 'model-bank';
+import { type CodexAgentCompatibility, ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -37,6 +37,14 @@ import {
 
 const getServerGlobalConfig = vi.hoisted(() => vi.fn());
 const loadModels = vi.hoisted(() => vi.fn());
+
+const codexCompatibility: CodexAgentCompatibility = {
+  defaultReasoningEffort: 'high',
+  reasoningEfforts: ['low', 'high', 'max'],
+  runtimeApiMode: 'chatCompletion',
+  toolMode: 'function',
+  truncationMode: 'tokens',
+};
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels,
@@ -205,7 +213,7 @@ describe('getServerDefaultHeterogeneousModels', () => {
     });
   });
 
-  it('offers tool-capable relay models to Claude Code and only explicit custom models to Codex', async () => {
+  it('offers tool-capable relay models to Claude Code and capability-declared models to Codex', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
@@ -214,20 +222,31 @@ describe('getServerDefaultHeterogeneousModels', () => {
             { abilities: { functionCall: true }, enabled: true, id: 'kimi-k2.6', type: 'chat' },
             {
               abilities: { functionCall: true },
+              agentCompatibility: { codex: codexCompatibility },
               enabled: true,
-              id: 'deepseek-v4-flash',
+              id: 'relay-coding-model',
+              type: 'chat',
+            },
+            {
+              abilities: { reasoning: true },
+              agentCompatibility: { codex: codexCompatibility },
+              enabled: true,
+              id: 'metadata-without-tools',
               type: 'chat',
             },
             {
               abilities: { functionCall: true },
+              agentCompatibility: {
+                codex: {
+                  defaultReasoningEffort: 'max',
+                  reasoningEfforts: ['high'],
+                  runtimeApiMode: 'chatCompletion',
+                  toolMode: 'function',
+                  truncationMode: 'tokens',
+                },
+              },
               enabled: true,
-              id: 'deepseek-v4-pro',
-              type: 'chat',
-            },
-            {
-              abilities: { functionCall: true },
-              enabled: true,
-              id: 'glm-5.2',
+              id: 'invalid-codex-metadata',
               type: 'chat',
             },
             {
@@ -247,12 +266,11 @@ describe('getServerDefaultHeterogeneousModels', () => {
     await expect(getServerDefaultHeterogeneousModels()).resolves.toEqual({
       'claude-code': [
         { model: 'kimi-k2.6' },
-        { model: 'deepseek-v4-flash' },
-        { model: 'deepseek-v4-pro' },
-        { model: 'glm-5.2' },
+        { model: 'relay-coding-model' },
+        { model: 'invalid-codex-metadata' },
         { model: 'gemini-3.1-pro-preview' },
       ],
-      'codex': [{ model: 'deepseek-v4-flash' }, { model: 'deepseek-v4-pro' }, { model: 'glm-5.2' }],
+      'codex': [{ model: 'relay-coding-model' }],
     });
   });
 
@@ -338,13 +356,23 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     ).resolves.toEqual({ model: 'claude-sonnet-4-6', provider: 'lobehub' });
   });
 
-  it('accepts a tool-capable third-party relay model for Claude Code only', async () => {
+  it('requires explicit compatibility metadata for a non-native Codex model', async () => {
     getServerGlobalConfig.mockResolvedValue({
       aiProvider: {
         lobehub: {
           enabled: true,
           serverModelLists: [
             { abilities: { functionCall: true }, enabled: true, id: 'kimi-k2.6', type: 'chat' },
+            {
+              abilities: { functionCall: true },
+              agentCompatibility: { codex: codexCompatibility },
+              contextWindowTokens: 256_000,
+              description: 'Catalog-owned description',
+              displayName: 'Relay Coding Model',
+              enabled: true,
+              id: 'relay-coding-model',
+              type: 'chat',
+            },
             { abilities: { reasoning: true }, enabled: true, id: 'no-tools-model', type: 'chat' },
           ],
         },
@@ -358,6 +386,16 @@ describe('resolveServerDefaultHeterogeneousModel', () => {
     await expect(resolveServerDefaultHeterogeneousModel('codex', 'kimi-k2.6')).rejects.toThrow(
       'not compatible with this heterogeneous agent',
     );
+    await expect(
+      resolveServerDefaultHeterogeneousModel('codex', 'relay-coding-model'),
+    ).resolves.toEqual({
+      codexCompatibility,
+      contextWindowTokens: 256_000,
+      description: 'Catalog-owned description',
+      displayName: 'Relay Coding Model',
+      model: 'relay-coding-model',
+      provider: 'lobehub',
+    });
     await expect(
       resolveServerDefaultHeterogeneousModel('claude-code', 'no-tools-model'),
     ).rejects.toThrow('not compatible with this heterogeneous agent');
