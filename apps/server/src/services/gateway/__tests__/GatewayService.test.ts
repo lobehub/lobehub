@@ -81,6 +81,14 @@ vi.mock('../MessageGatewayClient', () => {
         ? [mockGatewayClient, mockNodeGatewayClient]
         : [mockGatewayClient]
       ).some((client) => client.isEnabled),
+    isMessageGatewayHostConfigured: (host: string) => {
+      const client = host === 'node' ? mockNodeGatewayClient : mockGatewayClient;
+      // Production defines isEnabled as (ENABLED === '1' && isConfigured), so
+      // an enabled client is configured by construction. These fixtures set
+      // the two flags independently, so mirror the real implication here
+      // rather than letting a test express a state the runtime cannot reach.
+      return client.isConfigured || client.isEnabled;
+    },
     resolveMessageGatewayHost,
   };
 });
@@ -1333,13 +1341,14 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     });
 
-    it('treats the deployment as gateway-managed when only the node host is configured', async () => {
-      // Node-only deployment: no MESSAGE_GATEWAY_URL at all. Reading the
-      // default host alone would report "no gateway", send the runtime down
-      // the in-process path, and disconnectAll() the very host holding the
-      // connections.
+    it('treats the deployment as gateway-managed when every platform has a configured host', async () => {
+      // Node-only deployment where the node host owns EVERY platform this
+      // process can run. Reading the default host alone would report "no
+      // gateway", send the runtime down the in-process path, and
+      // disconnectAll() the very host holding the connections.
       mockGatewayClient.isConfigured = false;
       mockGatewayClient.isEnabled = false;
+      mockNodeGateway.platforms = ['discord', 'telegram', 'wechat', 'slack'];
 
       expect(service.useMessageGateway).toBe(true);
 
@@ -1347,6 +1356,18 @@ describe('GatewayService', () => {
 
       expect(mockGatewayManager.start).not.toHaveBeenCalled();
       expect(mockNodeGatewayClient.disconnectAll).not.toHaveBeenCalled();
+    });
+
+    it('stays on the in-process runtime when a platform has no configured host', async () => {
+      // Node host owns wechat only, and there is no default URL — so discord,
+      // telegram and slack would resolve to a client that throws on every
+      // call, with the in-process runtime already skipped. Better to run
+      // everything the old way than to strand them.
+      mockGatewayClient.isConfigured = false;
+      mockGatewayClient.isEnabled = false;
+      mockNodeGateway.platforms = ['wechat'];
+
+      expect(service.useMessageGateway).toBe(false);
     });
 
     it('defers a cross-host move while the destination host has no usable snapshot', async () => {
@@ -1482,6 +1503,28 @@ describe('GatewayService', () => {
       // A stray poller on the default host would normally be drained here —
       // draining it before discovering the links are unreadable would strand
       // that user offline until a later round.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('leaves an unusable link running on its current host instead of stranding the user', async () => {
+      // Credentials fail to decrypt, so this link cannot be rebuilt on the
+      // owning host. Draining it off the other host first would take the user
+      // offline with nothing able to bring them back.
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'bot-1@im.bot',
+          credentials: {},
+          tenantId: 'alice@im.wechat',
+          userId: 'user-1',
+        },
+      ]);
       mockGatewayClient.getRegisteredIds.mockResolvedValue({
         ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
       });

@@ -39,6 +39,7 @@ import {
   getMessageGatewayClient,
   getMessageGatewayClientForHost,
   isAnyMessageGatewayEnabled,
+  isMessageGatewayHostConfigured,
   type MessageGatewayCapabilities,
   type MessageGatewayConnectionStatus,
   type MessageGatewayHost,
@@ -179,7 +180,29 @@ export class GatewayService {
    * the client reachable for cleanup.
    */
   get useMessageGateway(): boolean {
-    return isAnyMessageGatewayEnabled();
+    if (!isAnyMessageGatewayEnabled()) return false;
+
+    // Gateway mode is a whole-process switch — taking it means the in-process
+    // runtime never starts. So every platform this process can run needs a
+    // configured owning host: a platform absent from
+    // MESSAGE_GATEWAY_NODE_PLATFORMS still resolves to `default`, and if that
+    // host has no URL it would be handed a client that throws on every call,
+    // with no in-process fallback left to catch it. Better to run everything
+    // the old way than to strand half the platforms.
+    const orphaned = [
+      ...platformRegistry.listPlatforms().map((definition) => definition.id),
+      ...messengerPlatformRegistry.listPlatforms().map((definition) => definition.id),
+    ].filter((platform) => !isMessageGatewayHostConfigured(resolveMessageGatewayHost(platform)));
+
+    if (orphaned.length > 0) {
+      log(
+        'Gateway mode off: no configured gateway host for %o — staying on the in-process runtime',
+        [...new Set(orphaned)],
+      );
+      return false;
+    }
+
+    return true;
   }
 
   async ensureRunning(): Promise<void> {
@@ -614,6 +637,32 @@ export class GatewayService {
         continue;
       }
 
+      // Classify BEFORE draining anything: the teardown below has to know
+      // which ids it must not touch, and a link is only safe to move once we
+      // know we can rebuild it on the other side.
+      const desired = new Map<string, DecryptedMessengerAccountLink>();
+      // Linked accounts we cannot connect but must not treat as unlinked.
+      const unusable = new Set<string>();
+      for (const link of links) {
+        const credentials = link.credentials as { botToken?: string };
+        const connectionId = messengerConnectionIdForUser({
+          connectionMode: 'polling',
+          installationKey: `${platform}:${link.tenantId}`,
+          userId: link.userId,
+        });
+        // A link whose credentials fail to decrypt comes back with an empty
+        // object, indistinguishable here from one that never had a token.
+        // Either way a connect can only fail — but the account IS still
+        // linked, so it must stay out of the stale pass: otherwise a
+        // key-vault mismatch reads as "everyone unlinked" and tears down
+        // every healthy poller in a single round.
+        if (!link.applicationId || !credentials.botToken) {
+          unusable.add(connectionId);
+          continue;
+        }
+        desired.set(connectionId, link);
+      }
+
       // Ids this round leaves running on a host that no longer owns them —
       // past the per-round cap, failed to disconnect, or not attempted at all.
       // The connect pass must skip these: connecting one while it still polls
@@ -644,8 +693,11 @@ export class GatewayService {
           continue;
         }
 
-        const strayIds = [...otherSnapshot.connections.keys()].filter((id) =>
-          id.startsWith(prefix),
+        // An unusable link cannot be rebuilt on the owning host, so moving it
+        // is a one-way trip to offline. Leave its existing connection alone —
+        // wherever it currently runs, it is still serving that user.
+        const strayIds = [...otherSnapshot.connections.keys()].filter(
+          (id) => id.startsWith(prefix) && !unusable.has(id),
         );
         if (strayIds.length === 0) continue;
 
@@ -691,29 +743,6 @@ export class GatewayService {
           },
           { concurrency: GATEWAY_SYNC_CONCURRENCY },
         );
-      }
-
-      const desired = new Map<string, DecryptedMessengerAccountLink>();
-      // Linked accounts we cannot connect but must not treat as unlinked.
-      const unusable = new Set<string>();
-      for (const link of links) {
-        const credentials = link.credentials as { botToken?: string };
-        const connectionId = messengerConnectionIdForUser({
-          connectionMode: 'polling',
-          installationKey: `${platform}:${link.tenantId}`,
-          userId: link.userId,
-        });
-        // A link whose credentials fail to decrypt comes back with an empty
-        // object, indistinguishable here from one that never had a token.
-        // Either way a connect can only fail — but the account IS still
-        // linked, so it must stay out of the stale pass: otherwise a
-        // key-vault mismatch reads as "everyone unlinked" and tears down
-        // every healthy poller in a single round.
-        if (!link.applicationId || !credentials.botToken) {
-          unusable.add(connectionId);
-          continue;
-        }
-        desired.set(connectionId, link);
       }
 
       const snapshot = snapshots.get(host) ?? null;
