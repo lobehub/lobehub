@@ -237,13 +237,13 @@ describe('Footer help menu tracking', () => {
     20000,
   );
 
-  it('does not show Get App in desktop builds', async () => {
+  it('shows Get App in desktop builds too', async () => {
     const user = userEvent.setup();
     await renderFooter({ desktop: true, hideGitHub: false });
 
     await user.click(screen.getByRole('button', { name: 'Help' }));
 
-    expect(screen.queryByRole('link', { name: 'Get App' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Get App' })).toHaveAttribute('href', '/apps');
   }, 20000);
 
   it('drops the entries the distribution hides, and the separators they strand', async () => {

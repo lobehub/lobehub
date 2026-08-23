@@ -792,6 +792,26 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        // Completing the task that owns the current operation is a delivery
+        // request, not an external cancellation. TaskService.updateStatus
+        // interrupts every still-running topic when a task leaves `running`;
+        // calling it here would therefore make the agent cancel itself and
+        // leave an `interrupted` operation / `canceled` topic. Persist the
+        // intent instead and let onTopicComplete finalize it after the runtime
+        // has reached `done`.
+        if (args.status === 'completed' && operationId && taskId) {
+          const target = await taskModel().resolve(id);
+          if (target?.id === taskId) {
+            await taskModel().updateContext(target.id, {
+              completion: { requestedByOperationId: operationId },
+            });
+            return {
+              content: `Task ${target.identifier} completion requested. It will be finalized when the current run finishes.`,
+              success: true,
+            };
+          }
+        }
+
         const result = await taskCaller().updateStatus({
           error: args.error,
           id,

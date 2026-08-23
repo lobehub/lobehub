@@ -208,6 +208,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   generation: { any: 'model:invoke' },
   generationBatch: { any: 'model:invoke' },
   generationTopic: { any: 'model:invoke' },
+  goal: rw('agent:read', 'agent:write'),
   group: rw('agent:read', 'agent:write'),
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),

@@ -5,12 +5,9 @@ import { cssVar } from 'antd-style';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
-
-interface GoalDetailSkeletonProps {
-  showHeader?: boolean;
-}
 
 const GoalDetailContentSkeleton = () => (
   <Flexbox aria-busy gap={20} paddingBlock={8}>
@@ -36,9 +33,9 @@ const GoalDetailContentSkeleton = () => (
   </Flexbox>
 );
 
-const GoalDetailSkeleton = ({ showHeader = true }: GoalDetailSkeletonProps) => (
+const GoalDetailSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox flex={1} height={'100%'}>
-    {showHeader && <NavHeader />}
+    {chrome !== 'body' && <NavHeader />}
     <Flexbox flex={1} style={{ overflowY: 'auto' }}>
       <WideScreenContainer gap={20} paddingBlock={16}>
         <GoalDetailContentSkeleton />

@@ -340,6 +340,8 @@
   "payDiffPrice": "دفع الفرق",
   "payDiffPriceApprox": "تقريبًا",
   "payDiffPriceTip": "المبلغ الفعلي يعتمد على صفحة الدفع",
+  "payment.downgradeFailed.desc": "فشل في جدولة تخفيض خطتك. يرجى المحاولة مرة أخرى لاحقًا، أو التواصل معنا عبر البريد الإلكتروني إذا استمرت المشكلة.",
+  "payment.downgradeFailed.title": "فشل التخفيض",
   "payment.error.actions.billing": "إدارة الفوترة",
   "payment.error.actions.home": "العودة إلى الصفحة الرئيسية",
   "payment.error.desc": "معرّف الاشتراك: {{id}} غير موجود. إذا كانت لديك أسئلة، يرجى التواصل معنا عبر البريد الإلكتروني",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "الخطة مقفلة",
   "plans.btn.payment": "شراء",
   "plans.btn.paymentDesc": "يدعم بطاقات الائتمان / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "يدعم بطاقات الائتمان",
   "plans.btn.soon": "قريبًا",
   "plans.cancelDowngrade": "إلغاء التخفيض المجدول",
   "plans.cancelDowngradeSuccess": "تم إلغاء التخفيض المجدول",
@@ -633,11 +634,5 @@
   "usage.overview.title": "نظرة عامة على الاستخدام",
   "usage.remaining": "المتبقي",
   "usage.storage.embeddings.used": "تخزين المتجهات",
-  "usage.storage.file.used": "استخدام الملفات",
-  "zarinpal.infoModal.desc": "بسبب المتطلبات التنظيمية، يرجى إكمال المعلومات الشخصية التالية قبل تقديم الطلب:",
-  "zarinpal.infoModal.phone.label": "رقم الهاتف",
-  "zarinpal.infoModal.phone.placeholder": "يرجى إدخال رقم الهاتف",
-  "zarinpal.infoModal.phone.rule": "يرجى إدخال رقم هاتف صالح",
-  "zarinpal.infoModal.submit": "شراء",
-  "zarinpal.infoModal.title": "املأ المعلومات المطلوبة"
+  "usage.storage.file.used": "استخدام الملفات"
 }

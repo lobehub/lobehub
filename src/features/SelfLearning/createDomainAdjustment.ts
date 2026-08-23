@@ -1,6 +1,7 @@
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 
-export type AdjustmentTarget = 'canonEntries' | 'domainFilter' | 'layers' | 'outOfScope';
+export type AdjustmentTarget =
+  'canonEntries' | 'domainFilter' | 'layers' | 'outOfScope' | 'rationale';
 
 export const mergeAdjustedBlock = (
   current: ExpertiseDomainDraft,

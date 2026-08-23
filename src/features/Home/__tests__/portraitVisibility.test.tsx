@@ -1,5 +1,6 @@
 import type * as BusinessConst from '@lobechat/business-const';
 import { cleanup, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
@@ -8,6 +9,7 @@ interface RenderHomeOptions {
   isLogin?: boolean;
   portalViewType?: PortalViewType;
   portraitEnabled?: boolean;
+  promo?: ReactNode;
   search?: string;
   showHomePortrait?: boolean;
 }
@@ -16,6 +18,13 @@ const stub = (testId: string) => ({ default: () => <div data-testid={testId} /> 
 const modeStub = (testId: string) => ({
   default: ({ mode }: { mode?: string }) => <div data-mode={mode} data-testid={testId} />,
 });
+const homeHeaderStub = {
+  default: ({ promo }: { promo?: ReactNode }) => (
+    <div data-testid={'home-header'}>
+      {promo && <div data-testid={'home-header-promo'}>{promo}</div>}
+    </div>
+  ),
+};
 
 function translate() {
   return { i18n: { language: 'en-US' }, t: (key: string) => key };
@@ -25,6 +34,7 @@ const renderHome = async ({
   isLogin = true,
   portalViewType,
   portraitEnabled = true,
+  promo,
   search = '',
   showHomePortrait,
 }: RenderHomeOptions = {}) => {
@@ -40,12 +50,18 @@ const renderHome = async ({
     HOME_PORTRAIT_ENABLED: portraitEnabled,
   }));
   vi.doMock('react-i18next', () => ({ useTranslation: translate }));
-  vi.doMock('../HomeHeader', () => stub('home-header'));
+  vi.doMock('../HomeHeader', () => homeHeaderStub);
   vi.doMock('../HomeModeContent', () => modeStub('home-mode-content'));
   vi.doMock('../HomePortrait', () => stub('home-portrait'));
   vi.doMock('../InputArea', () => modeStub('home-input-area'));
+  vi.doMock('../NewModelShortcuts', () => ({
+    NewModelShortcuts: () => <div data-testid={'new-model-shortcuts'} />,
+  }));
   vi.doMock('../PortraitBubble', () => stub('portrait-bubble'));
   vi.doMock('../AcceptancePortalDrawer', () => stub('acceptance-portal-drawer'));
+  vi.doMock('@/business/client/features/useHomePromoLine', () => ({
+    useHomePromoLine: vi.fn(() => promo),
+  }));
   vi.doMock('@/features/HomeInbox', () => stub('home-inbox'));
   function selectFromChatStore(selector: (state: unknown) => unknown) {
     return selector({ portalViewType });
@@ -94,8 +110,10 @@ afterEach(() => {
   vi.doUnmock('../HomeModeContent');
   vi.doUnmock('../HomePortrait');
   vi.doUnmock('../InputArea');
+  vi.doUnmock('../NewModelShortcuts');
   vi.doUnmock('../PortraitBubble');
   vi.doUnmock('../AcceptancePortalDrawer');
+  vi.doUnmock('@/business/client/features/useHomePromoLine');
   vi.doUnmock('@/features/HomeInbox');
   vi.doUnmock('@/store/chat');
   vi.doUnmock('@/store/chat/selectors');
@@ -127,6 +145,14 @@ describe('Home portrait visibility', () => {
     expect(screen.queryByTestId('portrait-bubble')).not.toBeInTheDocument();
   }, 20000);
 
+  it('shows a live promotion in the header without competing with the portrait bubble', async () => {
+    await renderHome({ promo: <span>Campaign</span> });
+
+    expect(screen.getByTestId('home-header-promo')).toHaveTextContent('Campaign');
+    expect(screen.getByTestId('home-portrait')).toBeInTheDocument();
+    expect(screen.queryByTestId('portrait-bubble')).not.toBeInTheDocument();
+  }, 20000);
+
   it('takes the bubble down with the portrait when the preference is off', async () => {
     await renderHome({ showHomePortrait: false });
 
@@ -147,6 +173,7 @@ describe('Home portrait visibility', () => {
 
     expect(screen.getByTestId('home-input-area')).toHaveAttribute('data-mode', 'chat');
     expect(screen.getByTestId('home-mode-content')).toHaveAttribute('data-mode', 'chat');
+    expect(screen.getByTestId('new-model-shortcuts')).toBeInTheDocument();
   }, 20000);
 
   it('opens the home dashboard in task mode for the post-onboarding entry', async () => {
@@ -154,6 +181,7 @@ describe('Home portrait visibility', () => {
 
     expect(screen.getByTestId('home-input-area')).toHaveAttribute('data-mode', 'task');
     expect(screen.getByTestId('home-mode-content')).toHaveAttribute('data-mode', 'task');
+    expect(screen.queryByTestId('new-model-shortcuts')).not.toBeInTheDocument();
     expect(window.location.search).toBe('');
   }, 20000);
 

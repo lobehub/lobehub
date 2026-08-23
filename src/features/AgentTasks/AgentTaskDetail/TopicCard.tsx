@@ -11,7 +11,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   ChevronDown,
@@ -22,6 +22,7 @@ import {
   ExternalLink,
   MessageCircle,
   MoreHorizontal,
+  Trash,
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -34,6 +35,7 @@ import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
@@ -87,6 +89,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
   const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
+  const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const addComment = useTaskStore((s) => s.addComment);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const { allowed: canEditTask } = usePermission('create_content');
@@ -166,6 +169,36 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
     });
   }, [activity.id, cancelTopic, t]);
 
+  // The server gates `task.deleteTopic` behind the same edit permission as
+  // every other task mutation — a workspace viewer's confirm would only ever
+  // come back FORBIDDEN. Route that through the shared toast instead of
+  // letting the mutation reject silently into the confirm modal.
+  const handleDelete = useCallback(() => {
+    if (!canEditTask || !activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.deleteConfirm.content', {
+        defaultValue:
+          'This run and its messages will be permanently deleted. This action cannot be undone.',
+      }),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onOk: async () => {
+        try {
+          await deleteTopic(topicId);
+        } catch (error) {
+          toast.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
+      },
+      title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
+    });
+  }, [activity.id, canEditTask, deleteTopic, t]);
+
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
@@ -205,6 +238,20 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
       key: 'copyOperationId',
       label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
       onClick: handleCopyOperationId,
+    },
+    { type: 'divider' as const },
+    {
+      danger: true,
+      // A running topic is deleted server-side via interrupt-then-remove, but
+      // the row already offers an explicit Stop for that case — keep delete
+      // scoped to finished runs so this menu doesn't offer two destructive
+      // exits for the same in-flight state. Also gated on edit permission,
+      // matching the server's `task.deleteTopic` authorization.
+      disabled: !activity.id || isRunning || !canEditTask,
+      icon: Trash,
+      key: 'delete',
+      label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onClick: handleDelete,
     },
   ];
 

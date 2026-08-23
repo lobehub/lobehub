@@ -2,6 +2,14 @@ import type { MessageItem, WechatApiClient } from '@lobechat/chat-adapter-wechat
 import { MessageItemType, WechatUploadMediaType } from '@lobechat/chat-adapter-wechat';
 import debug from 'debug';
 
+import {
+  buildAttachmentFallbackLine,
+  compressImageToBudget,
+  PLATFORM_ATTACHMENT_BUDGETS,
+  splitFallbackMessages,
+} from '../attachmentBudget';
+import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
+
 const log = debug('bot-platform:wechat:send-attachments');
 
 /**
@@ -19,6 +27,8 @@ export interface WechatOutboundAttachment {
   fetchUrl?: string;
   mimeType?: string;
   name?: string;
+  /** Byte size when known — lets the push path apply size budgets up front. */
+  size?: number;
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
@@ -40,36 +50,6 @@ const mapAttachmentTypeToUploadMediaType = (
       return WechatUploadMediaType.FILE;
     }
   }
-};
-
-/**
- * Materialize an attachment's bytes from `data` (base64) or `fetchUrl` (HTTP
- * GET, 15s timeout). Returns undefined if neither source resolves.
- */
-const loadAttachmentBuffer = async (
-  attachment: WechatOutboundAttachment,
-): Promise<Buffer | undefined> => {
-  if (attachment.data) {
-    try {
-      return Buffer.from(attachment.data, 'base64');
-    } catch (error) {
-      log('loadAttachmentBuffer: failed to decode base64: %O', error);
-    }
-  }
-  if (attachment.fetchUrl) {
-    try {
-      const response = await fetch(attachment.fetchUrl, {
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (response.ok) {
-        return Buffer.from(await response.arrayBuffer());
-      }
-      log('loadAttachmentBuffer: HTTP %d for %s', response.status, attachment.fetchUrl);
-    } catch (error) {
-      log('loadAttachmentBuffer: fetch failed for %s: %O', attachment.fetchUrl, error);
-    }
-  }
-  return undefined;
 };
 
 const buildMediaItemFromUpload = (
@@ -117,20 +97,62 @@ const buildMediaItemFromUpload = (
  * protocol §6.7, one MessageItem per request). Single-attachment failures
  * are logged and skipped so the rest still ship — mirroring the chat-adapter
  * adapter's per-item try/catch.
+ *
+ * Returns the attachments that did NOT reach the user, so a caller with a
+ * replay queue can requeue exactly those instead of assuming the whole leg
+ * landed. Attachments degraded to a download link count as delivered once
+ * the link message sends; if that send throws, the whole call throws and the
+ * return value is moot.
  */
 export const sendWechatAttachments = async (
   api: WechatApiClient,
   toUserId: string,
   attachments: WechatOutboundAttachment[],
   contextToken: string,
-): Promise<void> => {
+): Promise<WechatOutboundAttachment[]> => {
+  const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
+  const fallbackLines: string[] = [];
+  const undelivered: WechatOutboundAttachment[] = [];
+
   for (const attachment of attachments) {
     try {
-      const buffer = await loadAttachmentBuffer(attachment);
+      let buffer = await loadAttachmentBuffer(attachment);
       if (!buffer) {
         log('sendWechatAttachments: skipping attachment without resolvable bytes');
+        undelivered.push(attachment);
         continue;
       }
+
+      // Enforcement backstop for callers that reach this helper without the
+      // push path's budget pass (bot replies, queued payloads with no size):
+      // iLink accepts over-budget media with a 200 on every call and then
+      // never renders the message, so an unchecked upload is a silent loss.
+      const limit = attachment.type === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
+      if (buffer.length > limit && attachment.type === 'image') {
+        const compressed = await compressImageToBudget(buffer, budget.imageMaxBytes);
+        if (compressed) buffer = compressed;
+      }
+      if (buffer.length > limit) {
+        if (attachment.fetchUrl) {
+          log(
+            'sendWechatAttachments: "%s" (%d bytes) over %d-byte budget — sending link instead',
+            attachment.name ?? '(unnamed)',
+            buffer.length,
+            limit,
+          );
+          // Queued, not sent here: the send must sit OUTSIDE the per-attachment
+          // catch below. That catch exists so one bad upload cannot take down
+          // the rest, but a failing `sendMessage` means the text channel itself
+          // is down — swallowing it would let `deliver` resolve and the replay
+          // queue drop a payload that was never delivered.
+          fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
+        } else {
+          log('sendWechatAttachments: skipping over-budget attachment without fetchUrl');
+          undelivered.push(attachment);
+        }
+        continue;
+      }
+
       const mediaType = mapAttachmentTypeToUploadMediaType(attachment.type);
       const uploadResult = await api.uploadCdnMedia(toUserId, mediaType, buffer);
       const cdnMedia = {
@@ -153,6 +175,15 @@ export const sendWechatAttachments = async (
         attachment.name ?? '(unnamed)',
         error,
       );
+      undelivered.push(attachment);
     }
   }
+
+  // Deliberately outside the loop's try/catch — see the note above.
+  const linkMessages = splitFallbackMessages(fallbackLines, budget.textMaxChars);
+  for (const message of linkMessages) {
+    await api.sendMessage(toUserId, message, contextToken);
+  }
+
+  return undelivered;
 };

@@ -7,6 +7,16 @@ import {
   materializeAttachmentsForDiscord,
 } from './sendAttachments';
 
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', () => ({
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
+
 describe('materializeAttachmentsForDiscord', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());

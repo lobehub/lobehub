@@ -404,6 +404,9 @@ export const agentConfigKeys = {
   available: def('agent:available', () => ['agent:available']),
   config: def('agent:config', (agentId: string) => ['agent:config', agentId]),
   search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
+  serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
+    'agent:serverDefaultHeterogeneousCapability',
+  ]),
 };
 
 // ---- aiModel ------------------------------------------------------------
@@ -956,7 +959,11 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  acceptances: def('verify:acceptances', () => ['verify:acceptances']),
+  /** `limit` is part of the key: the merge picker asks for a wider window than the panel. */
+  acceptances: def('verify:acceptances', (limit?: number) => [
+    'verify:acceptances',
+    String(limit ?? ''),
+  ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',

@@ -5,6 +5,9 @@ import type {
   AgentRuntimeContext,
   AgentState,
   GeneralAgentConfig,
+  ToolCallHookEvent,
+  ToolForwardingRequest,
+  ToolRunResult,
 } from '@lobechat/agent-runtime';
 import {
   AgentRuntime,
@@ -29,13 +32,17 @@ import {
   invokeAgentSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   type ChatToolPayload,
+  type EvalToolForwardingConfig,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
   type UIChatMessage,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -61,6 +68,7 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
+import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
 import { isAbortError, throwIfAborted } from './abort';
 import {
@@ -71,7 +79,7 @@ import {
   normalizeCompletionMessages,
 } from './CompletionLifecycle';
 import { logToolCallPc } from './formalObservation';
-import { hookDispatcher } from './hooks';
+import { type AgentHook, hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
@@ -93,7 +101,6 @@ import {
   type StepCompletionReason,
   type SubAgentBridgeParams,
 } from './types';
-import { stateHasEntityFileEdits } from './workRegistration';
 
 if (process.env.VERCEL) {
   // Route debug output to stdout (`console.info`) instead of stderr, which
@@ -126,7 +133,101 @@ const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
 
 const STEP_LOCK_TTL_SECONDS = 120;
+/**
+ * How often a live step re-reads its own operation state to notice an
+ * interrupt. Interrupts are persisted by a different invocation, so this poll
+ * is the only way a running tool learns it should stop.
+ */
+const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
+/** Cap on the exponential backoff multiplier after consecutive poll failures. */
+const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
+const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
+
+const toToolForwardingFailure = (error?: unknown): ToolRunResult => ({
+  content: error === undefined ? 'Tool forwarding failed' : String(error),
+  error,
+  success: false,
+});
+
+export const createEvalToolForwardingHook = (
+  toolForwarding: EvalToolForwardingConfig,
+  caseId?: string,
+): AgentHook => ({
+  handler: async (event) => {
+    const { apiName, args, callIndex, identifier, mock, operationId, stepIndex } =
+      event as unknown as ToolCallHookEvent;
+    const target = toolForwarding[identifier];
+    if (!target) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), target.timeoutMs ?? 15_000);
+
+    try {
+      const payload: ToolForwardingRequest = {
+        data: { apiName, args, identifier },
+        metadata: { ...(caseId && { caseId }), callIndex, operationId, stepIndex },
+        type: 'toolCall',
+      };
+      const response = await ssrfSafeFetch(target.endpoint, {
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        signal: controller.signal,
+      });
+      if (!response.ok) throw `Tool forwarding server responded with HTTP ${response.status}`;
+
+      const body: unknown = await response.json();
+      if (!isRecord(body)) throw new Error('Invalid tool forwarding response');
+
+      if (body.success === true) {
+        const result = body.data;
+        if (
+          isRecord(result) &&
+          typeof result.content === 'string' &&
+          typeof result.success === 'boolean'
+        ) {
+          mock({ ...result, content: result.content, success: result.success });
+        } else {
+          mock({ content: 'No tool result', success: true });
+        }
+      } else {
+        mock(toToolForwardingFailure(body.error));
+      }
+    } catch (error) {
+      mock(toToolForwardingFailure(error));
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+  id: EVAL_TOOL_FORWARDING_HOOK_ID,
+  type: 'beforeToolCall',
+});
+
+/**
+ * How many times a delivery that lost the operation lock re-queues itself
+ * before giving up and falling back to a retryable response.
+ */
+const STEP_LOCK_RETRY_MAX_ATTEMPTS = 12;
+/** Base delay for the first lock-conflict re-delivery. */
+const STEP_LOCK_RETRY_BASE_DELAY_MS = 15_000;
+/**
+ * Ceiling on a single lock-conflict backoff. Together with the base delay,
+ * {@link STEP_LOCK_RETRY_MAX_ATTEMPTS} attempts span ~20 minutes — comfortably
+ * longer than the platform's hard step ceiling, so a step that legitimately
+ * holds the lock for minutes no longer strands the delivery waiting behind it.
+ */
+const STEP_LOCK_RETRY_MAX_DELAY_MS = 120_000;
+
+/**
+ * Exponential backoff for the Nth (1-based) lock-conflict re-delivery:
+ * 15s, 30s, 60s, 120s, then capped at {@link STEP_LOCK_RETRY_MAX_DELAY_MS}.
+ */
+const stepLockRetryDelayMs = (attempt: number): number =>
+  Math.min(
+    STEP_LOCK_RETRY_BASE_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
+    STEP_LOCK_RETRY_MAX_DELAY_MS,
+  );
 
 /**
  * Exponential backoff delay for the Nth (1-based) watchdog re-check:
@@ -750,6 +851,7 @@ export class AgentRuntimeService {
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
       externalRetryCount = 0,
+      lockRetryAttempt = 0,
     } = params;
 
     // Group member timeout watchdog: enforce a member's deadline without claiming
@@ -822,6 +924,81 @@ export class AgentRuntimeService {
         };
       }
 
+      // The lock is held by a live step of this operation, and this delivery is
+      // not a stale duplicate — it still has to run once the holder is done.
+      //
+      // Don't lean on the queue's own retry budget for that wait: the lock is
+      // heartbeat-refreshed for as long as the holding step runs (unbounded),
+      // while the budget is a handful of fixed-delay retries. A step that runs
+      // longer than the budget therefore exhausts it and the delivery is
+      // dead-lettered — the step it carried is then never executed. Re-queue a
+      // fresh delivery on our own bounded backoff instead, and ACK this one.
+      //
+      // The re-delivery has to carry this delivery's own resume/intervention
+      // payload: a human-intervention resume (`processHumanIntervention`) or an
+      // async-tool resume (`tryResumeParentFromAsyncTool`) can lose the lock
+      // race too, and re-queueing only the retry counter would run a plain step
+      // once the lock clears — silently dropping the approval / human input, or
+      // leaving a parked operation parked forever. Undefined fields drop out of
+      // the JSON body, so unrelated deliveries still send just the counter.
+      const nextLockRetryAttempt = lockRetryAttempt + 1;
+      if (this.queueService && nextLockRetryAttempt <= STEP_LOCK_RETRY_MAX_ATTEMPTS) {
+        const delay = stepLockRetryDelayMs(nextLockRetryAttempt);
+        log(
+          '[%s][%d] Step lock conflict — re-queueing attempt %d/%d in %dms',
+          operationId,
+          stepIndex,
+          nextLockRetryAttempt,
+          STEP_LOCK_RETRY_MAX_ATTEMPTS,
+          delay,
+        );
+
+        try {
+          await this.queueService.scheduleMessage({
+            context,
+            delay,
+            endpoint: `${this.baseURL}/run`,
+            operationId,
+            payload: {
+              approvedToolCall,
+              finishAfterAsyncTool,
+              humanInput,
+              lockRetryAttempt: nextLockRetryAttempt,
+              rejectAndContinue,
+              rejectionReason,
+              resumeAsyncTool,
+              toolMessageId,
+            },
+            priority: 'high',
+            retryDelay:
+              typeof currentState?.metadata?.queueRetryDelay === 'string'
+                ? currentState.metadata.queueRetryDelay
+                : undefined,
+            retries:
+              typeof currentState?.metadata?.queueRetries === 'number'
+                ? currentState.metadata.queueRetries
+                : undefined,
+            stepIndex,
+          });
+
+          return {
+            locked: true,
+            lockRescheduled: true,
+            nextStepScheduled: true,
+            state: {},
+            success: true,
+          };
+        } catch (error) {
+          // Fall through to the retryable response so the delivery isn't lost.
+          log(
+            '[%s][%d] Failed to re-queue after step lock conflict: %O',
+            operationId,
+            stepIndex,
+            error,
+          );
+        }
+      }
+
       log(
         '[%s][%d] Step lock conflict — another instance is executing this step, returning locked',
         operationId,
@@ -840,6 +1017,14 @@ export class AgentRuntimeService {
       stepIndex,
       stepLockOwner,
     );
+
+    // Hoisted so the shared `finally` can stop it on every exit path — an
+    // orphaned interval would keep polling Redis for a step that is long gone.
+    let stepAbortPoll: ReturnType<typeof setTimeout> | undefined;
+    // Clearing the timeout is not enough: a poll already awaiting the state read
+    // would schedule the next one after the step is gone, leaking a loop that
+    // re-reads the store forever for a finished operation.
+    let stepAbortPollStopped = false;
 
     // Hoisted so the error-path snapshot finalize can record an
     // approximate startedAt for the failing step. The inner `startAt` at the
@@ -1020,7 +1205,43 @@ export class AgentRuntimeService {
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
         // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
+        // Interrupts arrive as a flag on the persisted state — the request that
+        // asked for the stop runs in a different invocation, so there is no
+        // in-process controller to share. Poll for it while the step is alive
+        // and cancel locally, otherwise a multi-minute tool would keep running
+        // long after the user asked it to stop.
+        const stepAbortController = new AbortController();
+        // Serialized on purpose: `setInterval` would fire a new read without
+        // waiting for the last one, so a slow or failing state store turns every
+        // concurrent run into a growing pile of overlapping requests — the load
+        // spikes exactly when the store is already struggling. Each read is
+        // scheduled only after the previous one settles, and failures back off.
+        let abortPollFailures = 0;
+        const pollForAbort = async () => {
+          try {
+            const latest = await this.coordinator.loadAgentState(operationId);
+            abortPollFailures = 0;
+            if (latest?.status === 'interrupted') {
+              stepAbortController.abort();
+              return;
+            }
+          } catch (error) {
+            abortPollFailures += 1;
+            log('[%s][%d] Abort poll failed: %O', operationId, stepIndex, error);
+          }
+
+          if (stepAbortPollStopped || stepAbortController.signal.aborted) return;
+
+          stepAbortPoll = setTimeout(
+            pollForAbort,
+            STEP_ABORT_POLL_INTERVAL_MS *
+              Math.min(2 ** abortPollFailures, STEP_ABORT_POLL_MAX_BACKOFF),
+          );
+        };
+        stepAbortPoll = setTimeout(pollForAbort, STEP_ABORT_POLL_INTERVAL_MS);
+
         const { runtime } = await this.createAgentRuntime({
+          abortSignal: stepAbortController.signal,
           agentState,
           metadata: agentState?.metadata,
           operationId,
@@ -1122,7 +1343,7 @@ export class AgentRuntimeService {
           forcedFinish: Boolean(forcedFinishState),
           stateStatus: currentState.status,
         }));
-        const stepResult = forcedFinishState
+        let stepResult = forcedFinishState
           ? { events: [], newState: forcedFinishState, nextContext: undefined }
           : await runtime.step(currentState, currentContext);
 
@@ -1148,6 +1369,34 @@ export class AgentRuntimeService {
           interrupted: latestState?.status === 'interrupted',
         }));
         if (latestState?.status === 'interrupted') {
+          // Stop can be persisted after a client-tool executor's last local
+          // signal check but before this reconciliation read. If that executor
+          // just returned a parked state, run the agent's existing abort path
+          // once so every pending tool call gets a terminal row before the
+          // interrupted state is saved.
+          if (
+            stepResult.newState.status === 'waiting_for_async_tool' &&
+            stepResult.newState.pendingToolsCalling?.length &&
+            currentContext
+          ) {
+            const interruptedState = structuredClone(stepResult.newState);
+            interruptedState.status = 'interrupted';
+            const abortContext: AgentRuntimeContext = {
+              ...currentContext,
+              payload: {
+                ...(currentContext.payload as Record<string, unknown>),
+                hasToolsCalling: true,
+                toolsCalling: interruptedState.pendingToolsCalling,
+              },
+              phase: 'llm_result',
+            };
+            const abortResult = await runtime.step(interruptedState, abortContext);
+            stepResult = {
+              ...abortResult,
+              events: [...stepResult.events, ...abortResult.events],
+            };
+          }
+
           stepResult.newState.status = 'interrupted';
           stepResult.newState.lastModified = new Date().toISOString();
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
@@ -1576,6 +1825,8 @@ export class AgentRuntimeService {
       throw error;
     } finally {
       invokeAgentSpan.end();
+      stepAbortPollStopped = true;
+      if (stepAbortPoll) clearTimeout(stepAbortPoll);
       stopStepLockHeartbeat();
       await this.coordinator.releaseStepLock(operationId, stepIndex, stepLockOwner);
     }
@@ -2737,12 +2988,15 @@ export class AgentRuntimeService {
    * Create Agent Runtime instance
    */
   private async createAgentRuntime({
+    abortSignal,
     agentState,
     metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
   }: {
+    /** Cancels in-flight tool work when this step's operation is interrupted. */
+    abortSignal?: AbortSignal;
     /**
      * Current runtime state, when the caller has it. Only consulted to decide
      * whether the early final-answer `visible_output_end` must be suppressed
@@ -2777,12 +3031,26 @@ export class AgentRuntimeService {
       userId: metadata?.userId,
     };
 
+    if (
+      metadata?.trigger === RequestTrigger.Eval &&
+      metadata.evalContext?.toolForwarding &&
+      !hookDispatcher.hasHook(operationId, EVAL_TOOL_FORWARDING_HOOK_ID)
+    ) {
+      hookDispatcher.register(operationId, [
+        createEvalToolForwardingHook(
+          metadata.evalContext.toolForwarding,
+          metadata.evalContext.caseId,
+        ),
+      ]);
+    }
+
     const agent = this.agentFactory
       ? this.agentFactory(generalConfig)
       : new GeneralChatAgent(generalConfig);
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
+      abortSignal,
       agentConfig: metadata?.agentConfig,
       // The factory may be a Graph-aware dispatcher that still returns the
       // default agent for ordinary conversations. Keep the early visible

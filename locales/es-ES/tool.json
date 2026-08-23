@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Lista de tareas actualizada",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Cantidad de Caracteres",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Cantidad de Líneas",
+  "localFiles.editFile.ambiguous": "Este texto aparece {{times}} veces en el archivo. La edición será rechazada — necesita suficiente contexto circundante para identificar una ocurrencia, o \"reemplazar todo\".",
   "localFiles.editFile.newString": "Reemplazar con",
   "localFiles.editFile.oldString": "Buscar",
   "localFiles.editFile.replaceAll": "Reemplazar todas las ocurrencias",

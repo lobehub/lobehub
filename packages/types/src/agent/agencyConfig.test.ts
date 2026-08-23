@@ -4,10 +4,14 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
+  canPublishAgentTopicLink,
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
+  resolveAgentTopicSharePolicy,
 } from './agencyConfig';
 import {
   AMP_AGENT_MODES,
@@ -21,6 +25,15 @@ import {
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
 } from './heteroSelectorCapabilities';
+
+describe('server-default heterogeneous model request', () => {
+  it('only accepts the namespaced operation model used for CLI metadata', () => {
+    expect(formatServerDefaultHeterogeneousModel('gpt-5.4')).toBe('lobehub/gpt-5.4');
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.4', 'gpt-5.4')).toBe(true);
+    expect(isServerDefaultHeterogeneousModel('lobehub-default', 'gpt-5.4')).toBe(false);
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.5', 'gpt-5.4')).toBe(false);
+  });
+});
 
 describe('normalizeHeterogeneousProviderConfig', () => {
   it('recovers a legacy adapterType before considering the command', () => {
@@ -597,6 +610,12 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
   });
 
+  it('uses the model-specific levels supported by custom server-default models', () => {
+    expect(getCodexReasoningEffortLevels('deepseek-v4-flash')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('deepseek-v4-pro')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('glm-5.2')).toEqual(['high', 'max']);
+  });
+
   it('uses conservative common levels for old, unknown, and default models', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);
@@ -849,5 +868,64 @@ describe('resolveAgentAgencyConfig', () => {
         { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
       ),
     ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
+  });
+});
+
+describe('resolveAgentTopicSharePolicy', () => {
+  it('never restricts a personal agent — there is nobody to restrict', () => {
+    expect(
+      resolveAgentTopicSharePolicy({
+        agencyConfig: { topicSharePolicy: 'restricted' },
+        workspaceId: null,
+      }),
+    ).toBe('member');
+  });
+
+  it('keeps legacy workspace rows on the behaviour they were created with', () => {
+    expect(resolveAgentTopicSharePolicy({ workspaceId: 'workspace-1' })).toBe('member');
+    expect(resolveAgentTopicSharePolicy({ agencyConfig: {}, workspaceId: 'workspace-1' })).toBe(
+      'member',
+    );
+  });
+
+  it('honours an explicit restriction on a workspace agent', () => {
+    expect(
+      resolveAgentTopicSharePolicy({
+        agencyConfig: { topicSharePolicy: 'restricted' },
+        workspaceId: 'workspace-1',
+      }),
+    ).toBe('restricted');
+  });
+});
+
+describe('canPublishAgentTopicLink', () => {
+  const restricted = {
+    agencyConfig: { topicSharePolicy: 'restricted' as const },
+    userId: 'author',
+    workspaceId: 'workspace-1',
+  };
+
+  it('falls back to the role gate when no agent resolved', () => {
+    // Legacy session-only topics, or a row the caller cannot read: there is no
+    // policy to apply, so this must not become a second, silent denial.
+    expect(canPublishAgentTopicLink(undefined, { userId: 'member' })).toBe(true);
+    expect(canPublishAgentTopicLink(null, { userId: 'member' })).toBe(true);
+  });
+
+  it('blocks a plain member on a restricted agent', () => {
+    expect(canPublishAgentTopicLink(restricted, { userId: 'member' })).toBe(false);
+  });
+
+  it('lets the agent author and workspace owners through', () => {
+    expect(canPublishAgentTopicLink(restricted, { userId: 'author' })).toBe(true);
+    expect(canPublishAgentTopicLink(restricted, { isWorkspaceOwner: true, userId: 'member' })).toBe(
+      true,
+    );
+  });
+
+  it('does not match an author against a missing viewer id', () => {
+    expect(canPublishAgentTopicLink({ ...restricted, userId: null }, { userId: undefined })).toBe(
+      false,
+    );
   });
 });

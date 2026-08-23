@@ -1,6 +1,6 @@
+import type { AiFullModelCard } from 'model-bank';
 import type { PartialDeep } from 'type-fest';
 
-import type { ChatModelCard } from './llm';
 import type {
   GlobalLLMProviderKey,
   UserDefaultAgent,
@@ -80,7 +80,7 @@ export interface ServerModelProviderConfig {
   /**
    * the model lists defined in server
    */
-  serverModelLists?: ChatModelCard[];
+  serverModelLists?: AiFullModelCard[];
 }
 
 export type ServerLanguageModel = Partial<Record<GlobalLLMProviderKey, ServerModelProviderConfig>>;

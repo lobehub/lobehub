@@ -1,7 +1,6 @@
 'use client';
 
 import { DESKTOP_APP_ENABLED, FOOTER_HIDDEN_MENU_KEYS, SOCIAL_URL } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
@@ -201,7 +200,7 @@ const Footer = memo(() => {
         label: t('changelog'),
         onClick: handleOpenChangelogModal,
       },
-      ...(!isDesktop && DESKTOP_APP_ENABLED && footer.layout === 'compact'
+      ...(DESKTOP_APP_ENABLED && footer.layout === 'compact'
         ? [
             {
               icon: <Icon icon={Download} />,

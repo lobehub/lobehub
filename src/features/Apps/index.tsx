@@ -1,40 +1,23 @@
 'use client';
 
-import { CLI_INSTALL_COMMAND } from '@lobechat/business-const';
+import { APP_SHOWCASE_ENABLED, CLI_INSTALL_COMMAND } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
-import { Icon, Tag, Text } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import type { LucideIcon } from 'lucide-react';
-import { Check, Copy, Monitor, Terminal } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDesktopDownload } from '@/features/Downloads/useDesktopDownload';
 
+import { CliScene, DesktopScene } from './scenes';
 import { styles } from './style';
 
-const ALL_WAYS = [
-  {
-    ctaKey: 'apps.desktop.cta',
-    descKey: 'apps.desktop.desc',
-    icon: Monitor,
-    id: 'desktop',
-    titleKey: 'apps.desktop.title',
-  },
-  {
-    ctaKey: 'apps.cli.copy',
-    descKey: 'apps.cli.desc',
-    icon: Terminal,
-    id: 'cli',
-    titleKey: 'apps.cli.title',
-  },
-] as const satisfies ReadonlyArray<{
-  ctaKey: string;
-  descKey: string;
-  icon: LucideIcon;
-  id: string;
-  titleKey: string;
-}>;
+const openExternal = (url: string) => {
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
+const DESKTOP_FEATURES = ['files', 'tools', 'focus'] as const;
 
 const AppsPage = () => {
   const { t } = useTranslation('setting');
@@ -46,7 +29,7 @@ const AppsPage = () => {
   // left pointing at a dead end. Desktop only shows once there is somewhere
   // real for it to lead, same rule as everywhere else that offers it (see
   // useDesktopDownload's doc comment).
-  const WAYS = ALL_WAYS.filter((way) => way.id !== 'desktop' || desktopDownload.available);
+  const showDesktop = desktopDownload.available;
 
   const copyInstallCommand = async () => {
     try {
@@ -59,61 +42,71 @@ const AppsPage = () => {
     }
   };
 
-  const onAct = (id: (typeof WAYS)[number]['id']) => {
-    if (id === 'desktop') {
-      if (desktopDownload.href) window.open(desktopDownload.href, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    void copyInstallCommand();
-  };
-
   return (
     <div className={styles.page}>
       <main className={styles.content}>
+        <h1 className={styles.headline}>{t('apps.title')}</h1>
+
         <div className={styles.grid}>
-          <header className={styles.header}>
-            <div className={styles.headerTop}>
-              <span className={styles.index}>00</span>
-              <span className={styles.kicker}>{t('apps.kicker')}</span>
+          {showDesktop && (
+            <article className={`${styles.card} ${styles.spanFull}`}>
+              <div className={styles.heroInner}>
+                <div className={styles.cardBody}>
+                  <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+                    <h2 className={styles.cardTitle}>{t('apps.desktop.title')}</h2>
+                    {isDesktop && (
+                      <Tag icon={<Check size={12} />} size="small">
+                        {t('apps.desktop.inUse')}
+                      </Tag>
+                    )}
+                  </div>
+                  <Text style={{ marginTop: 8 }} type="secondary">
+                    {t(isDesktop ? 'apps.desktop.inUseDesc' : 'apps.desktop.desc')}
+                  </Text>
+                  <ul className={styles.bullets}>
+                    {DESKTOP_FEATURES.map((feature) => (
+                      <li key={feature}>
+                        <strong>{t(`apps.desktop.features.${feature}.label`)}</strong>
+                        {' — '}
+                        {t(`apps.desktop.features.${feature}.desc`)}
+                      </li>
+                    ))}
+                  </ul>
+                  {!isDesktop && (
+                    <div className={styles.ctaRow}>
+                      <Button
+                        type="primary"
+                        onClick={() =>
+                          desktopDownload.href && openExternal(desktopDownload.href)
+                        }
+                      >
+                        {t('apps.desktop.cta')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {APP_SHOWCASE_ENABLED && <DesktopScene />}
+              </div>
+            </article>
+          )}
+
+          <article className={`${styles.card} ${styles.spanFull}`}>
+            <div className={styles.cliInner}>
+              <div className={styles.cardBody}>
+                <h2 className={styles.cardTitle}>{t('apps.cli.title')}</h2>
+                <Text style={{ marginTop: 8 }} type="secondary">
+                  {t('apps.cli.desc')}
+                </Text>
+                <div className={styles.command}>
+                  {CLI_INSTALL_COMMAND}
+                  <Button icon={copied ? Check : Copy} size="small" onClick={copyInstallCommand}>
+                    {copied ? t('apps.cli.copied') : t('apps.cli.copy')}
+                  </Button>
+                </div>
+              </div>
+              {APP_SHOWCASE_ENABLED && <CliScene />}
             </div>
-            <h1 className={styles.pageTitle}>{t('apps.title')}</h1>
-          </header>
-
-          {WAYS.map((way, index) => {
-            const inUse = way.id === 'desktop' && isDesktop;
-
-            return (
-              <article className={styles.cell} key={way.id}>
-                <div className={styles.cellMeta}>
-                  <span className={styles.index}>{String(index + 1).padStart(2, '0')}</span>
-                  <span className={styles.iconBox}>
-                    <Icon icon={way.icon} size={18} />
-                  </span>
-                </div>
-                <div className={styles.cellBody}>
-                  <h2 className={styles.cellTitle}>{t(way.titleKey)}</h2>
-                  <Text type="secondary">{t(inUse ? 'apps.desktop.inUseDesc' : way.descKey)}</Text>
-                </div>
-                <div className={styles.actionSlot}>
-                  {way.id === 'cli' && (
-                    <code className={styles.command}>{CLI_INSTALL_COMMAND}</code>
-                  )}
-                  {inUse ? (
-                    <Tag icon={<Check size={12} />} size="small">
-                      {t('apps.desktop.inUse')}
-                    </Tag>
-                  ) : (
-                    <Button
-                      icon={way.id === 'cli' ? (copied ? Check : Copy) : undefined}
-                      onClick={() => onAct(way.id)}
-                    >
-                      {way.id === 'cli' && copied ? t('apps.cli.copied') : t(way.ctaKey)}
-                    </Button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+          </article>
         </div>
       </main>
     </div>

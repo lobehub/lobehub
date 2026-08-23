@@ -37,6 +37,7 @@ type SavingGroup = 'assignments' | 'memory' | 'optional';
 
 const SYSTEM_AGENT_MODEL_ITEMS: SystemAgentModelItem[] = [
   { key: 'expertise' },
+  { key: 'goal' },
   { key: 'topic' },
   { key: 'generationTopic' },
   { key: 'translation' },

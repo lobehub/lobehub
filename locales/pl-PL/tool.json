@@ -128,6 +128,7 @@
   "lobe-agent.updateTodos.updated": "Lista zadań zaktualizowana",
   "lobe-knowledge-base.readKnowledge.meta.chars": "Liczba znaków",
   "lobe-knowledge-base.readKnowledge.meta.lines": "Liczba linii",
+  "localFiles.editFile.ambiguous": "Ten tekst pojawia się {{times}} razy w pliku. Edycja zostanie odrzucona — potrzebny jest wystarczający kontekst otoczenia, aby zidentyfikować jedno wystąpienie, lub \"zamień wszystko\".",
   "localFiles.editFile.newString": "Zamień na",
   "localFiles.editFile.oldString": "Znajdź",
   "localFiles.editFile.replaceAll": "Zamień wszystkie wystąpienia",

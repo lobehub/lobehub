@@ -1,6 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
@@ -9,7 +8,6 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
-import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
@@ -17,6 +15,7 @@ import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
+import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 export interface SpawnAgentOptions {
   /** Registered local heterogeneous-agent type key. */
@@ -582,12 +581,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const cwd = options.cwd || process.cwd();
-  if (!existsSync(cwd)) {
-    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
-      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
-      workingDirectory: cwd,
-    });
-  }
+  assertSpawnableWorkingDirectory(cwd);
   if (options.agentType === 'grok-build') {
     return spawnGrokAcpAgent(options, command, cwd);
   }
@@ -783,12 +777,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const requestedCommand = resolveHeterogeneousAgentCommand('trae', options.command);
   const cwd = options.cwd || process.cwd();
-  if (!existsSync(cwd)) {
-    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
-      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
-      workingDirectory: cwd,
-    });
-  }
+  assertSpawnableWorkingDirectory(cwd);
   const command =
     isPathLikeCommand(requestedCommand) && !path.isAbsolute(requestedCommand)
       ? path.resolve(cwd, requestedCommand)

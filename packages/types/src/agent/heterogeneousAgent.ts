@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { TopicGroupMode } from '../topic/topic';
 
 export interface HeterogeneousAgentAuthDescriptor {
@@ -331,6 +333,10 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     type: 'trae',
   },
 ] as const satisfies readonly LocalHeterogeneousAgentDescriptor[];
+
+export const LOCAL_HETEROGENEOUS_AGENT_TYPES = HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type);
+
+export const LocalHeterogeneousAgentTypeSchema = z.enum(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 
 export interface RemoteHeterogeneousAgentDescriptor {
   kind: 'remote-task';

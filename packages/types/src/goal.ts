@@ -60,3 +60,132 @@ export interface CreateTaskGoalInput {
   requirement?: string | null;
   title?: string;
 }
+
+// ============================================
+// Goal Graph — durable long-horizon reasoning structure
+// ============================================
+
+/** Coarse-grained semantic role of a node in a Goal Graph. */
+export type GoalNodeKind = 'problem' | 'work' | 'finding' | 'decision';
+
+/** Semantic lifecycle of a node; independent from the execution status of its Task. */
+export type GoalNodeStatus =
+  'proposed' | 'active' | 'waiting' | 'resolved' | 'rejected' | 'retired';
+
+/** How two Goal Graph nodes are related. */
+export type GoalEdgeKind =
+  | 'decomposes'
+  | 'depends_on'
+  | 'investigates'
+  | 'produces'
+  | 'supports'
+  | 'contradicts'
+  | 'leads_to';
+
+/** The role an immutable Work version plays for a Goal Graph node. */
+export type GoalNodeWorkVersionRelation = 'input' | 'produced' | 'supports' | 'contradicts';
+
+export type GoalDecisionAuthority = 'agent' | 'user' | 'project_role';
+
+export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
+
+export interface GoalDecisionOption {
+  description?: string;
+  id: string;
+  label: string;
+}
+
+export type GoalEventActorType = 'agent' | 'user' | 'system';
+
+export type GoalEventEntityType = 'goal' | 'node' | 'edge' | 'decision' | 'task';
+
+export type GoalEventType =
+  'created' | 'updated' | 'activated' | 'resolved' | 'rejected' | 'retired' | 'linked' | 'unlinked';
+
+export interface GoalGraphNode {
+  confidence: string | null;
+  createdAt: Date;
+  createdByAgentId: string | null;
+  createdByUserId: string | null;
+  description: string | null;
+  goalId: string;
+  id: string;
+  kind: GoalNodeKind;
+  priority: number;
+  resolvedAt: Date | null;
+  status: GoalNodeStatus;
+  taskId: string | null;
+  title: string;
+  updatedAt: Date;
+}
+
+export interface GoalGraphEdge {
+  createdAt: Date;
+  goalId: string;
+  id: string;
+  kind: GoalEdgeKind;
+  sourceNodeId: string;
+  targetNodeId: string;
+}
+
+export interface GoalGraphDecision {
+  authority: GoalDecisionAuthority;
+  canceledAt: Date | null;
+  createdAt: Date;
+  id: string;
+  nodeId: string;
+  options: GoalDecisionOption[] | null;
+  question: string;
+  recommendedOptionId: string | null;
+  requestedProjectRole: string | null;
+  requestedUserId: string | null;
+  resolution: string | null;
+  resolvedAt: Date | null;
+  resolvedByAgentId: string | null;
+  resolvedByUserId: string | null;
+  resolvedOptionId: string | null;
+  status: GoalDecisionStatus;
+  updatedAt: Date;
+}
+
+export interface GoalGraphEvent {
+  actorId: string | null;
+  actorType: GoalEventActorType;
+  createdAt: Date;
+  entityId: string;
+  entityType: GoalEventEntityType;
+  eventType: GoalEventType;
+  goalId: string;
+  id: string;
+  operationId: string | null;
+  reason: string | null;
+  taskId: string | null;
+}
+
+export interface GoalGraphWorkVersionLink {
+  createdAt: Date;
+  id: string;
+  nodeId: string;
+  relation: GoalNodeWorkVersionRelation;
+  workVersionId: string;
+}
+
+export interface GoalGraphSnapshot {
+  decisions: GoalGraphDecision[];
+  edges: GoalGraphEdge[];
+  events: GoalGraphEvent[];
+  goal: GoalItem;
+  nodes: GoalGraphNode[];
+  workVersions: GoalGraphWorkVersionLink[];
+}
+
+export type GoalTickOutcome =
+  'advanced' | 'achieved' | 'waiting_human' | 'waiting_external' | 'no_progress' | 'failed';
+
+export interface GoalTickResult {
+  goalId: string;
+  message: string;
+  nodeId?: string;
+  outcome: GoalTickOutcome;
+  taskId?: string;
+}

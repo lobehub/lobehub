@@ -62,6 +62,7 @@ function createMockStore() {
         metadata: { startTime: 0 },
       },
     } as Record<string, any>,
+    operationsByContext: {},
     replaceMessages: vi.fn(),
     startOperation: vi.fn(() => {
       reasoningCounter += 1;

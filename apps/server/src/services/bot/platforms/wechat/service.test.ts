@@ -1,6 +1,16 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', () => ({
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
+
 const MessageItemType = vi.hoisted(() => ({
   FILE: 4,
   IMAGE: 1,

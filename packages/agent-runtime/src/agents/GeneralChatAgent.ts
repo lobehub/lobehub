@@ -911,7 +911,7 @@ export class GeneralChatAgent implements Agent {
               ? { assistantMessageId: seededAssistantMessageId }
               : // Force create new assistant message after compression
                 { createAssistantMessage: true }),
-            messages: compressionPayload.compressedMessages,
+            messages: compressionPayload.compressedMessages ?? state.messages,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId: compressionPayload.parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,

@@ -183,7 +183,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <WideScreenContainer gap={20} paddingBlock={16}>
           {isInitialLoading || !task ? (
-            <GoalDetailSkeleton showHeader={false} />
+            <GoalDetailSkeleton chrome={'body'} />
           ) : (
             <>
               <Flexbox className={styles.header} gap={8}>

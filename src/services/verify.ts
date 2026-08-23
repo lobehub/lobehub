@@ -167,7 +167,15 @@ export class VerifyService {
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
-  listAcceptances = (): Promise<AcceptanceListItem[]> => lambdaClient.acceptance.list.query();
+  listAcceptances = (options?: {
+    /** Widen the recency window (server-capped) — the merge picker asks for more. */
+    limit?: number;
+    quiet?: boolean;
+  }): Promise<AcceptanceListItem[]> =>
+    lambdaClient.acceptance.list.query(
+      options?.limit ? { limit: options.limit } : undefined,
+      options?.quiet ? { context: { showNotification: false } } : undefined,
+    );
 
   /**
    * Acceptance status for a known set of subjects. `listAcceptances` is capped
@@ -258,9 +266,24 @@ export class VerifyService {
   renameAcceptance = (id: string, title: string) =>
     lambdaClient.acceptance.rename.mutate({ id, title });
 
+  /**
+   * File the acceptance under a project (`null` takes it out of one). Only the
+   * grouping moves — the delivery and its rounds stay exactly where they are.
+   */
+  setAcceptanceProject = (id: string, projectId: string | null) =>
+    lambdaClient.acceptance.setProject.mutate({ id, projectId });
+
   /** Owner override of the acceptance's decision state from the list. */
   updateAcceptanceStatus = (id: string, status: 'accepted' | 'closed' | 'delivered' | 'rejected') =>
     lambdaClient.acceptance.updateStatus.mutate({ id, status });
+
+  /**
+   * Fold one acceptance into another — the source's checks (and the rounds /
+   * evidence behind them) move onto the target, and the source entry is
+   * removed. Returns what the merge actually moved.
+   */
+  mergeAcceptance = (sourceId: string, targetId: string) =>
+    lambdaClient.acceptance.merge.mutate({ sourceId, targetId });
 
   /** Delete the acceptance aggregate (its round reports detach, not delete). */
   deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
@@ -349,6 +372,14 @@ export class VerifyService {
     modelConfig: { model: string; provider: string };
   }): Promise<VerifyCriterionDraft[]> =>
     lambdaClient.verify.generateCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
+
+  /** Draft the standing acceptance criteria used by the create-goal review step. */
+  generateGoalCriteria = (input: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<VerifyCriterionDraft[]> =>
+    lambdaClient.verify.generateGoalCriteria.mutate(input) as Promise<VerifyCriterionDraft[]>;
 
   /** Persist (user-edited) drafts as standalone criteria; returns ids in order. */
   createCriteria = (drafts: VerifyCriterionDraft[]): Promise<string[]> =>

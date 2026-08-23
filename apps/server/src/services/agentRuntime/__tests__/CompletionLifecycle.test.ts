@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
+import { registerWorksForOperation } from '@/server/services/workRegistration';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
-import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
 // the returned promise, so a bare vi.fn() (returning undefined) would throw
@@ -22,7 +22,7 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
 }));
 
-vi.mock('../workRegistration', () => ({
+vi.mock('@/server/services/workRegistration', () => ({
   registerWorksForOperation: vi.fn(),
 }));
 
@@ -730,6 +730,17 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     await lifecycle.dispatchHooks('op-1', doneState, 'done');
 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
+  it('preserves an in-group member role in synthesized completion state', () => {
+    const lifecycle = buildLifecycle();
+
+    const state = (lifecycle as any).buildStateFromInput({
+      operationId: 'op-member',
+      orchestrationRole: 'member',
+    });
+
+    expect(state.metadata.orchestrationRole).toBe('member');
   });
 
   it.each(['max_steps', 'cost_limit'])(

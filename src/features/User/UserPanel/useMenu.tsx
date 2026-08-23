@@ -137,7 +137,11 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
-    ...(!isDesktop && DESKTOP_APP_ENABLED ? getApp : []),
+    // Canary now surfaces /apps on desktop too (it reads as "you are already
+    // running this"), so the `isDesktop` half is gone. The distribution flag
+    // stays: a build that ships no desktop download has nothing to send anyone
+    // to from here.
+    ...(DESKTOP_APP_ENABLED ? getApp : []),
   ]
     .filter(Boolean)
     // Remove consecutive dividers to prevent double divider lines

@@ -898,6 +898,22 @@ export class TaskModel {
     return this.update(id, { status, ...extra });
   }
 
+  /** Atomically transition a task only while it still has the expected status. */
+  async updateStatusIfCurrent(
+    id: string,
+    currentStatus: string,
+    status: string,
+    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+  ): Promise<TaskItem | null> {
+    const [task] = await this.db
+      .update(tasks)
+      .set({ status, updatedAt: new Date(), ...extra })
+      .where(and(eq(tasks.id, id), eq(tasks.status, currentStatus), this.ownership()))
+      .returning();
+
+    return task ?? null;
+  }
+
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {
     const result = await this.db
       .update(tasks)

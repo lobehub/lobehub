@@ -282,23 +282,13 @@ export class HeterogeneousAgentService {
       topicId,
     });
 
-    // Drive the run's lifecycle hooks (onComplete / onError) through the same
-    // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
-    // (onTopicComplete → task done/failed) and any IM bot completion callback
-    // fire uniformly. The hooks were registered in-memory (local mode) and
-    // serialized onto runningOperation (queue mode) at dispatch time.
-    //
-    // Skip on `cancelled` — heteroFinish may be called twice: first with
-    // result=cancelled (termination signal) then with result=success/error
-    // (normal process exit). We must NOT clear runningOperation or fire hooks on
-    // cancelled so the subsequent success/error call still finds the hooks +
-    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
-    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
-    // branch — and suppresses a spurious bot "stopped" message before the real
-    // result lands.)
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId = seedAssistantMessageId;
     let isolationThreadId: string | undefined;
+    let orchestrationRole: 'member' | 'supervisor' | undefined;
+
+    // `cancelled` is only an intermediate process signal. Keep the marker for
+    // the following success/error terminal callback, which owns completion.
     if (result !== 'cancelled') {
       try {
         const settled = await this.topicModel.settleRunningOperation(topicId, operationId);
@@ -316,6 +306,7 @@ export class HeterogeneousAgentService {
         if (settled.status === 'settled') {
           serializedHooks = settled.hooks as SerializedHook[] | undefined;
           isolationThreadId = settled.threadId;
+          orchestrationRole = settled.orchestrationRole;
         }
       } catch (err) {
         log('heteroFinish: failed to settle runningOperation (non-fatal): %O', err);
@@ -323,9 +314,8 @@ export class HeterogeneousAgentService {
     }
 
     // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
-    // if the CLI stream missed it (process killed mid-flight, network drop on
-    // last batch). A stale finish that conflicts with a newer operation returns
-    // above instead of projecting the old terminal state into the active run.
+    // if the CLI stream missed it. A stale callback that belongs to neither the
+    // root operation nor one of its children returns above.
     await this.streamEventManager.publishStreamEvent(operationId, {
       data: {
         agentType,
@@ -338,6 +328,20 @@ export class HeterogeneousAgentService {
       type: 'agent_runtime_end',
     });
 
+    // Drive the run's lifecycle hooks (onComplete / onError) through the same
+    // `hookDispatcher` the normal LLM runtime uses, so the task lifecycle
+    // (onTopicComplete → task done/failed) and any IM bot completion callback
+    // fire uniformly. The hooks were registered in-memory (local mode) and
+    // serialized onto runningOperation (queue mode) at dispatch time.
+    //
+    // Skip on `cancelled` — heteroFinish may be called twice: first with
+    // result=cancelled (termination signal) then with result=success/error
+    // (normal process exit). We must NOT clear runningOperation or fire hooks on
+    // cancelled so the subsequent success/error call still finds the hooks +
+    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
+    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
+    // branch — and suppresses a spurious bot "stopped" message before the real
+    // result lands.)
     if (result === 'cancelled') return;
 
     // The owning agentId is authoritatively encoded in the operationId
@@ -475,6 +479,7 @@ export class HeterogeneousAgentService {
         // Backfilled executed model/provider — the verify gate bails when absent.
         model: totals?.model,
         operationId,
+        orchestrationRole,
         provider: totals?.provider,
         serializedHooks,
         stepCount: totals?.stepCount ?? null,

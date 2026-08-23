@@ -5,6 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
+import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -21,6 +22,7 @@ import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
 import InputArea from './InputArea';
+import { NewModelShortcuts } from './NewModelShortcuts';
 import PortraitBubble from './PortraitBubble';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
@@ -305,6 +307,7 @@ const Home = memo(() => {
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+  const promo = useHomePromoLine();
   // The distribution flag outranks the user's switch here for the same reason it
   // does in useShowPortrait: where no portrait ships, a home with every widget
   // hidden really is minimal, and the stored preference must not say otherwise.
@@ -328,7 +331,11 @@ const Home = memo(() => {
   if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail });
   const railCollapsed = !railVisible;
+  // `useShowPortrait` is canary's `isLogin && showHomePortrait` plus the
+  // distribution flag — the artwork is served from the hosted ops bucket, so a
+  // build that does not ship it must not reserve its lane either.
   const showPortrait = useShowPortrait();
+  const promoVisible = Boolean(promo);
 
   useEffect(() => {
     clearOnboardingHomeModeParam();
@@ -371,9 +378,13 @@ const Home = memo(() => {
         className={cx(styles.header, styles.content, railCollapsed && styles.contentCollapsed)}
         data-portrait={showPortrait}
       >
-        <HomeHeader />
-        {/* The bubble is the portrait's line, so it goes wherever the portrait goes. */}
-        {showPortrait && (
+        <HomeHeader promo={promo} />
+        {/* The bubble is the portrait's line, so it goes wherever the portrait
+            goes. A campaign and the Agent's brief are both sentence-like
+            floating content in the same attention lane, so they take turns
+            instead of competing; dismissing or expiring the campaign hands the
+            lane back to the portrait. */}
+        {showPortrait && !promoVisible && (
           <div className={cx(styles.bubbleSlot, railCollapsed && styles.bubbleSlotCollapsed)}>
             <PortraitBubble />
           </div>
@@ -391,14 +402,15 @@ const Home = memo(() => {
         data-testid={'home-main'}
         gap={24}
       >
-        <div className={styles.inputArea}>
+        <Flexbox className={styles.inputArea} gap={12}>
           <InputArea
             inputValue={inputValue}
             mode={mode}
             onInputValueChange={handleInputValueChange}
             onModeChange={setMode}
           />
-        </div>
+          {mode === 'chat' && <NewModelShortcuts />}
+        </Flexbox>
         <HomeModeContent
           inlineRail={railCollapsed && isLogin}
           mode={mode}

@@ -17,6 +17,7 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIsHydrated } from '@/hooks/useIsHydrated';
 import type { AcceptanceBundle } from '@/services/verify';
 
 export type AcceptanceRound = AcceptanceBundle['rounds'][number];
@@ -110,6 +111,7 @@ interface LedgerPanelProps {
 const LedgerPanel = memo<LedgerPanelProps>(
   ({ hideCollapse, highlight, onCollapse, onOpenReport, reviewByRound, rounds }) => {
     const { t } = useTranslation('verify');
+    const hydrated = useIsHydrated();
     const latestIndex = rounds.at(-1)?.run.roundIndex;
 
     return (
@@ -215,7 +217,7 @@ const LedgerPanel = memo<LedgerPanelProps>(
                 </Flexbox>
                 <Flexbox flex={1} />
                 <Text fontSize={12} type={'secondary'}>
-                  {dayjs(round.run.createdAt).format('MM-DD HH:mm')}
+                  {hydrated ? dayjs(round.run.createdAt).format('MM-DD HH:mm') : null}
                 </Text>
                 {openable && (
                   <Icon

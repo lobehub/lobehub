@@ -197,6 +197,21 @@ export const AGENT_GROUP_CREATION_ENABLED = true;
 export const HOME_PORTRAIT_ENABLED = true;
 
 /**
+ * Whether the "ways to use" page illustrates each card with a product
+ * screenshot.
+ *
+ * Same reasoning as HOME_PORTRAIT_ENABLED, one step stronger: the shots live on
+ * the hosted landing CDN *and* they are pictures of the hosted product's own
+ * window — its title bar, its sidebar, its name. A rebranded build showing them
+ * is not just making a third-party request, it is illustrating its own download
+ * page with a screenshot of somebody else's app.
+ *
+ * The copy beside them stands on its own, so the cards collapse to a single
+ * column when this is off rather than leaving an empty stage.
+ */
+export const APP_SHOWCASE_ENABLED = true;
+
+/**
  * How tool calls are approved when the user has not chosen a mode.
  *
  * `manual` — every call waits for a confirmation — is the right default for a

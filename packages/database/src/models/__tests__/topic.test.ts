@@ -595,12 +595,61 @@ describe('TopicModel', () => {
       expect(settled).toEqual({
         assistantMessageId: 'msg-current',
         hooks,
+        orchestrationRole: undefined,
         status: 'settled',
         threadId: 'thread-old',
       });
       const row = await topicModel.findById(topic.id);
       expect(row?.metadata?.runningOperation).toBeNull();
       expect(row?.status).toBe('unread');
+    });
+
+    it('atomically removes only a matching child operation', async () => {
+      const childHooks = [
+        {
+          id: 'hook-child',
+          type: 'onComplete',
+          webhook: { url: '/child-callback' },
+        },
+      ];
+      const topic = await topicModel.create({
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'msg-child-current', operationId: 'op-child' },
+          runningOperation: {
+            assistantMessageId: 'msg-parent',
+            childOperations: [
+              {
+                assistantMessageId: 'msg-child',
+                hooks: childHooks,
+                operationId: 'op-child',
+                orchestrationRole: 'member',
+                threadId: 'thread-child',
+              },
+            ],
+            operationId: 'op-parent',
+            orchestrationRole: 'supervisor',
+          },
+        },
+        title: 'matching child operation',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-child');
+
+      expect(settled).toEqual({
+        assistantMessageId: 'msg-child-current',
+        hooks: childHooks,
+        orchestrationRole: 'member',
+        status: 'settled',
+        threadId: 'thread-child',
+      });
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toMatchObject({
+        operationId: 'op-parent',
+        orchestrationRole: 'supervisor',
+      });
+      expect(row?.metadata?.runningOperation?.childOperations).toEqual([]);
+      expect(row?.status).toBe('running');
     });
 
     it('does not let an old watchdog settle a newer operation', async () => {

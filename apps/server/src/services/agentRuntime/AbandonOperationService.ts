@@ -160,28 +160,27 @@ export class AbandonOperationService {
       }
     }
 
-    if (!metadata.isSubAgent && metadata.userId) {
-      if (metadata.topicId) {
-        try {
-          const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
-          await topicModel.settleRunningOperation(metadata.topicId, operationId);
-        } catch (e) {
-          log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
-        }
+    if (metadata.topicId && metadata.userId) {
+      try {
+        const topicModel = new TopicModel(this.db, metadata.userId, metadata.workspaceId);
+        await topicModel.settleRunningOperation(metadata.topicId, operationId);
+      } catch (e) {
+        log('[%s] abandoned op runningOperation cleanup failed (non-fatal): %O', operationId, e);
       }
+    }
 
-      if (shouldDispatchAbandonedLifecycle) {
-        try {
-          await new CompletionLifecycle(
-            this.db,
-            metadata.userId,
-            metadata.workspaceId,
-          ).dispatchHooks(operationId, finalState, 'error', {
+    if (!metadata.isSubAgent && metadata.userId && shouldDispatchAbandonedLifecycle) {
+      try {
+        await new CompletionLifecycle(this.db, metadata.userId, metadata.workspaceId).dispatchHooks(
+          operationId,
+          finalState,
+          'error',
+          {
             skipErrorMessageWrite: result.assistantMessageUpdated,
-          });
-        } catch (e) {
-          log('[%s] abandoned op lifecycle dispatch failed (non-fatal): %O', operationId, e);
-        }
+          },
+        );
+      } catch (e) {
+        log('[%s] abandoned op lifecycle dispatch failed (non-fatal): %O', operationId, e);
       }
     }
 

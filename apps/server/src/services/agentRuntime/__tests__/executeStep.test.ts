@@ -383,6 +383,146 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
   });
 
+  it('should re-queue the same step on its own backoff for a non-stale lock conflict', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      status: 'running',
+      stepCount: 5,
+      metadata: { queueRetries: 5, queueRetryDelay: '10000' },
+    });
+
+    const result = await service.executeStep({ operationId: 'op-requeue', stepIndex: 5 });
+
+    expect(result.locked).toBe(true);
+    expect(result.lockRescheduled).toBe(true);
+    // ACK so the queue doesn't retry on top of the re-delivery we just scheduled.
+    expect(result.success).toBe(true);
+    expect(scheduleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-requeue',
+        payload: { lockRetryAttempt: 1 },
+        retries: 5,
+        retryDelay: '10000',
+        stepIndex: 5,
+      }),
+    );
+    expect(coordinator.releaseStepLock).not.toHaveBeenCalled();
+  });
+
+  it('should carry the delivery resume payload into the re-queued lock-conflict message', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    // A human-intervention resume that lost the lock race. Re-queueing only the
+    // retry counter would run a plain step and drop the approval entirely.
+    await service.executeStep({
+      approvedToolCall: { id: 'call-1' },
+      humanInput: 'approved',
+      operationId: 'op-resume',
+      rejectAndContinue: false,
+      stepIndex: 5,
+      toolMessageId: 'msg-tool-1',
+    });
+
+    expect(scheduleMessage.mock.calls[0][0].payload).toMatchObject({
+      approvedToolCall: { id: 'call-1' },
+      humanInput: 'approved',
+      lockRetryAttempt: 1,
+      rejectAndContinue: false,
+      toolMessageId: 'msg-tool-1',
+    });
+  });
+
+  it('should carry an async-tool resume flag into the re-queued lock-conflict message', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    await service.executeStep({
+      operationId: 'op-async-resume',
+      resumeAsyncTool: true,
+      stepIndex: 5,
+    });
+
+    expect(scheduleMessage.mock.calls[0][0].payload).toMatchObject({
+      lockRetryAttempt: 1,
+      resumeAsyncTool: true,
+    });
+  });
+
+  it('should back off exponentially across successive lock-conflict re-deliveries', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    await service.executeStep({ lockRetryAttempt: 0, operationId: 'op-b', stepIndex: 5 });
+    await service.executeStep({ lockRetryAttempt: 2, operationId: 'op-b', stepIndex: 5 });
+
+    expect(scheduleMessage.mock.calls[0][0]).toMatchObject({
+      delay: 15_000,
+      payload: { lockRetryAttempt: 1 },
+    });
+    expect(scheduleMessage.mock.calls[1][0]).toMatchObject({
+      delay: 60_000,
+      payload: { lockRetryAttempt: 3 },
+    });
+  });
+
+  it('should fall back to a retryable response once the lock-conflict backoff is exhausted', async () => {
+    const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    const result = await service.executeStep({
+      lockRetryAttempt: 12,
+      operationId: 'op-exhausted',
+      stepIndex: 5,
+    });
+
+    expect(scheduleMessage).not.toHaveBeenCalled();
+    expect(result.locked).toBe(true);
+    expect(result.lockRescheduled).toBeUndefined();
+    expect(result.success).toBe(false);
+  });
+
+  it('should stay retryable when re-queueing after a lock conflict fails', async () => {
+    const scheduleMessage = vi.fn().mockRejectedValue(new Error('qstash down'));
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(false);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({ status: 'running', stepCount: 5 });
+
+    const result = await service.executeStep({ operationId: 'op-schedule-fail', stepIndex: 5 });
+
+    expect(result.locked).toBe(true);
+    expect(result.lockRescheduled).toBeUndefined();
+    expect(result.success).toBe(false);
+  });
+
   it('should ack stale duplicate deliveries even when the stale step lock is held', async () => {
     const service = createService();
     const coordinator = (service as any).coordinator;
