@@ -414,7 +414,11 @@ export class HeterogeneousPersistenceHandler {
     }
 
     const topic = await this.deps.topicModel.findById(topicId);
-    const running = topic?.metadata?.runningOperation;
+    const marker = topic?.metadata?.runningOperation;
+    const running =
+      marker?.operationId === operationId
+        ? marker
+        : marker?.childOperations?.find((child) => child.operationId === operationId);
 
     if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
       throw new StaleHeteroOperationError(
@@ -422,9 +426,9 @@ export class HeterogeneousPersistenceHandler {
       );
     }
 
-    if (running && running.operationId !== operationId) {
+    if (!running && !(allowMissingRunningOperation && seedAssistantMessageId)) {
       throw new StaleHeteroOperationError(
-        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
+        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${marker?.operationId ?? 'unknown'}`,
       );
     }
 
@@ -797,11 +801,15 @@ export class HeterogeneousPersistenceHandler {
 
   private async syncAssistantPointerForAdvancedStep(state: OperationState): Promise<void> {
     const topic = await this.deps.topicModel.findById(state.topicId);
-    const running = topic?.metadata?.runningOperation;
+    const marker = topic?.metadata?.runningOperation;
+    const running =
+      marker?.operationId === state.operationId
+        ? marker
+        : marker?.childOperations?.find((child) => child.operationId === state.operationId);
 
-    if (running && running.operationId !== state.operationId) {
+    if (!running) {
       throw new StaleHeteroOperationError(
-        `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${running.operationId}`,
+        `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${marker?.operationId ?? 'unknown'}`,
       );
     }
 
@@ -939,9 +947,17 @@ export class HeterogeneousPersistenceHandler {
           intent.messageId,
         );
 
-        await this.deps.topicModel.updateMetadata(state.topicId, {
-          heteroCurrentMsgId: { msgId: intent.messageId, operationId: state.operationId },
-        });
+        if (this.deps.topicModel.updateRunningOperationAssistantMessage) {
+          await this.deps.topicModel.updateRunningOperationAssistantMessage(
+            state.topicId,
+            state.operationId,
+            intent.messageId,
+          );
+        } else {
+          await this.deps.topicModel.updateMetadata(state.topicId, {
+            heteroCurrentMsgId: { msgId: intent.messageId, operationId: state.operationId },
+          });
+        }
         return;
       }
 

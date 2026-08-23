@@ -32,6 +32,7 @@ const createStore = (dbMessagesMap: Record<string, UIChatMessage[]> = {}) =>
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     operations: {},
+    operationsByContext: {},
     replaceMessages: vi.fn(),
     startOperation: vi.fn(() => ({
       abortController: new AbortController(),
@@ -827,6 +828,136 @@ describe('createGatewayEventHandler', () => {
     expect(lifecycle.afterRunComplete).toHaveBeenCalledWith(
       expect.objectContaining({ notification: { content: 'The final report.' } }),
     );
+  });
+
+  it('does not let a superseded run replace messages from a newer run', async () => {
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const contextKey = messageMapKey(context);
+    store.operations = {
+      'op-1': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-1',
+        metadata: { startTime: 2 },
+        status: 'running',
+        type: 'execServerAgentRuntime',
+      },
+      'op-2': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-2',
+        metadata: { startTime: 1 },
+        status: 'running',
+        type: 'sendMessage',
+      },
+    };
+    store.operationsByContext = { [contextKey]: ['op-1', 'op-2'] };
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+
+    handler(
+      makeEvent('agent_runtime_end', {
+        reason: 'completed',
+        uiMessages: [
+          { content: 'old answer', id: 'answer-msg', role: 'assistant' },
+        ] as unknown as UIChatMessage[],
+      }),
+    );
+    await flush();
+
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+    expect(lifecycle.completeRun).toHaveBeenCalled();
+  });
+
+  it('does not let a superseded run refetch an older terminal snapshot', async () => {
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const contextKey = messageMapKey(context);
+    store.operations = {
+      'op-1': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-1',
+        metadata: { startTime: 1 },
+        status: 'running',
+        type: 'execServerAgentRuntime',
+      },
+      'op-2': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-2',
+        metadata: { startTime: 2 },
+        status: 'running',
+        type: 'sendMessage',
+      },
+    };
+    store.operationsByContext = { [contextKey]: ['op-1', 'op-2'] };
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+
+    handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
+    await flush();
+
+    expect(getMessages).not.toHaveBeenCalled();
+    expect(store.replaceMessages).not.toHaveBeenCalled();
+    expect(lifecycle.completeRun).toHaveBeenCalled();
+  });
+
+  it('does not treat a later child operation as a new conversation owner', async () => {
+    const lifecycle = createLifecycle();
+    const store = createStore();
+    const contextKey = messageMapKey(context);
+    store.operations = {
+      'op-1': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-1',
+        metadata: { startTime: 1 },
+        status: 'running',
+        type: 'execServerAgentRuntime',
+      },
+      'op-member': {
+        abortController: new AbortController(),
+        context,
+        id: 'op-member',
+        metadata: { startTime: 2 },
+        parentOperationId: 'op-1',
+        status: 'completed',
+        type: 'execServerAgentRuntime',
+      },
+    };
+    store.operationsByContext = { [contextKey]: ['op-1', 'op-member'] };
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runLifecycle: lifecycle as any,
+      runtimeType: 'gateway',
+    });
+    const uiMessages = [
+      { content: 'council result', id: 'answer-msg', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+
+    handler(makeEvent('agent_runtime_end', { reason: 'completed', uiMessages }));
+    await flush();
+
+    expect(store.replaceMessages).toHaveBeenCalledWith(uiMessages, {
+      action: 'gateway/agent_runtime_end',
+      context,
+    });
+    expect(lifecycle.completeRun).toHaveBeenCalled();
   });
 
   it('falls back to the streamed accumulator when the terminal snapshot carries no assistant text', async () => {

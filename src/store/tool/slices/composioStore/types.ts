@@ -22,6 +22,8 @@ export interface ComposioServer {
   connectedAccountId: string;
   createdAt: number;
   errorMessage?: string;
+  /** Whether the active Gmail account granted a scope that permits reading messages. */
+  gmailReadPermission?: boolean;
   icon?: string;
   identifier: string;
   label: string;

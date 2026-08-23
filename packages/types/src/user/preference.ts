@@ -162,6 +162,17 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
+   * let supported local agents (Claude Code / Codex) use a configured API
+   * provider on Desktop instead of their subscription
+   */
+  enableAgentProviderBinding: z.boolean().optional(),
+  /**
+   * @deprecated superseded by `enableAgentProviderBinding` when the feature
+   * generalized beyond Claude Code. Kept so users who enabled it under the old
+   * key keep the feature on; the selector falls back to it.
+   */
+  enableClaudeCodeApiMode: z.boolean().optional(),
+  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
@@ -205,6 +216,10 @@ export const UserLabSchema = z.object({
    * enable the project workspace experiment
    */
   enableProjects: z.boolean().optional(),
+  /**
+   * show the per-agent self-learning (expertise) page and its sidebar entry
+   */
+  enableSelfLearning: z.boolean().optional(),
   /**
    * enable the task delivery-acceptance (verify) config UI on the task detail
    */

@@ -6,8 +6,20 @@ import type {
   ToolResultData,
   ToolStateChunkData,
 } from '../types';
+import { AcpStreamLifecycle } from './acpCommon';
 
-const PROVIDER = 'trae';
+const DEFAULT_PROVIDER = 'trae';
+
+/**
+ * Parameterization for reusing this adapter across standard-ACP agents:
+ * `provider` stamps stream/tool events, `eventPrefix` selects the synthetic
+ * session-lifecycle payloads (`{prefix}_session` / `{prefix}_prompt_completed`
+ * / `{prefix}_error`) the owning session emits.
+ */
+export interface AcpSessionAdapterOptions {
+  eventPrefix?: string;
+  provider?: string;
+}
 
 interface TraeAcpPayload {
   [key: string]: unknown;
@@ -76,19 +88,33 @@ const toolContent = (content: unknown, fallback: unknown): string => {
   return result || stringify(fallback);
 };
 
+/**
+ * Maps the standard ACP `sessionUpdate` vocabulary into the shared event
+ * contract. TRAE is the default provider; other standard-ACP agents reuse it
+ * via {@link AcpSessionAdapterOptions}.
+ */
 export class TraeAcpAdapter implements AgentEventAdapter {
   sessionId?: string;
 
+  private readonly eventPrefix: string;
+  private readonly provider: string;
   private completedTools = new Set<string>();
   private model?: string;
-  private pendingStepBoundary = false;
   private pendingTools = new Set<string>();
   private snapshotSeq = new Map<string, number>();
-  private stepIndex = 0;
-  private streamOpen = false;
+  private readonly stream = new AcpStreamLifecycle((stepIndex) => ({
+    ...(this.model ? { model: this.model } : {}),
+    ...(stepIndex > 0 ? { newStep: true } : {}),
+    provider: this.provider,
+    sessionId: this.sessionId,
+  }));
   private terminal = false;
   private toolResultStateById = new Map<string, TraeAcpToolResultState>();
-  private tools: ToolCallPayload[] = [];
+
+  constructor(options: AcpSessionAdapterOptions = {}) {
+    this.provider = options.provider ?? DEFAULT_PROVIDER;
+    this.eventPrefix = options.eventPrefix ?? this.provider;
+  }
 
   adapt(value: unknown): HeterogeneousAgentEvent[] {
     if (!value || typeof value !== 'object' || this.terminal) return [];
@@ -97,21 +123,23 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === 'trae_session') {
+    if (raw.type === `${this.eventPrefix}_session`) {
       if (typeof raw.sessionId === 'string') this.sessionId = raw.sessionId;
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === 'trae_prompt_completed') return this.complete(raw.stopReason);
-    if (raw.type === 'trae_error') return this.fail(stringify(raw.message) || 'TRAE ACP failed');
+    if (raw.type === `${this.eventPrefix}_prompt_completed`) return this.complete(raw.stopReason);
+    if (raw.type === `${this.eventPrefix}_error`) {
+      return this.fail(stringify(raw.message) || `${this.provider} ACP failed`);
+    }
 
     switch (raw.sessionUpdate) {
       case 'agent_message_chunk': {
         const text = (raw.content as { text?: unknown } | null)?.text;
         return typeof text === 'string' && text
           ? [
-              ...this.ensureStream(true),
-              this.event('stream_chunk', {
+              ...this.stream.ensureStream(true),
+              this.stream.event('stream_chunk', {
                 chunkType: 'text',
                 content: text,
               } satisfies StreamChunkData),
@@ -122,8 +150,8 @@ export class TraeAcpAdapter implements AgentEventAdapter {
         const reasoning = (raw.content as { text?: unknown } | null)?.text;
         return typeof reasoning === 'string' && reasoning
           ? [
-              ...this.ensureStream(true),
-              this.event('stream_chunk', {
+              ...this.stream.ensureStream(true),
+              this.stream.event('stream_chunk', {
                 chunkType: 'reasoning',
                 reasoning,
               } satisfies StreamChunkData),
@@ -157,7 +185,7 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       this.snapshotSeq.set(id, snapshotSeq);
       return [
         ...startEvents,
-        this.event('stream_chunk', {
+        this.stream.event('stream_chunk', {
           chunkType: 'tool_state',
           pluginState: { ...raw },
           snapshotMode: 'replace',
@@ -178,14 +206,14 @@ export class TraeAcpAdapter implements AgentEventAdapter {
           );
     const events = [
       ...startEvents,
-      this.event('tool_result', {
+      this.stream.event('tool_result', {
         content: result,
         isError: !isSuccess,
         toolCallId: id,
       } satisfies ToolResultData),
-      this.event('tool_end', { isSuccess, toolCallId: id }),
+      this.stream.event('tool_end', { isSuccess, toolCallId: id }),
     ];
-    if (this.pendingTools.size === 0) this.pendingStepBoundary = true;
+    if (this.pendingTools.size === 0) this.stream.pendingStepBoundary = true;
     return events;
   }
 
@@ -202,20 +230,21 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       apiName: apiName ?? 'unknown',
       arguments: stringify(raw.rawInput ?? raw.input ?? raw.parameters ?? {}),
       id,
-      identifier: PROVIDER,
+      identifier:
+        typeof raw.identifier === 'string' && raw.identifier ? raw.identifier : this.provider,
       type: 'default',
     };
-    const streamEvents = this.ensureStream(true);
+    const streamEvents = this.stream.ensureStream(true);
     this.pendingTools.add(id);
-    this.tools.push(payload);
+    this.stream.stepTools.push(payload);
 
     return [
       ...streamEvents,
-      this.event('stream_chunk', {
+      this.stream.event('stream_chunk', {
         chunkType: 'tools_calling',
-        toolsCalling: [...this.tools],
+        toolsCalling: [...this.stream.stepTools],
       } satisfies StreamChunkData),
-      this.event('tool_start', { toolCalling: payload, toolCallId: id }),
+      this.stream.event('tool_start', { toolCalling: payload, toolCallId: id }),
     ];
   }
 
@@ -231,37 +260,9 @@ export class TraeAcpAdapter implements AgentEventAdapter {
     return state;
   }
 
-  private ensureStream(consumeStepBoundary: boolean): HeterogeneousAgentEvent[] {
-    const events: HeterogeneousAgentEvent[] = [];
-    if (consumeStepBoundary && this.pendingStepBoundary) {
-      events.push(...this.closeStream());
-      this.pendingStepBoundary = false;
-      this.stepIndex += 1;
-      this.tools = [];
-    }
-    if (this.streamOpen) return events;
-
-    this.streamOpen = true;
-    events.push(
-      this.event('stream_start', {
-        ...(this.model ? { model: this.model } : {}),
-        ...(this.stepIndex > 0 ? { newStep: true } : {}),
-        provider: PROVIDER,
-        sessionId: this.sessionId,
-      }),
-    );
-    return events;
-  }
-
-  private closeStream(data: unknown = {}): HeterogeneousAgentEvent[] {
-    if (!this.streamOpen) return [];
-    this.streamOpen = false;
-    return [this.event('stream_end', data)];
-  }
-
   private closePending(): HeterogeneousAgentEvent[] {
     const events = [...this.pendingTools].map((toolCallId) =>
-      this.event('tool_end', { isSuccess: false, toolCallId }),
+      this.stream.event('tool_end', { isSuccess: false, toolCallId }),
     );
     this.pendingTools.clear();
     return events;
@@ -274,9 +275,9 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       stopReason === 'cancelled' ? { reason: 'interrupted', stopReason } : { stopReason };
     return [
       ...this.closePending(),
-      ...this.closeStream({ stopReason }),
-      this.event('visible_output_end', {}),
-      this.event('agent_runtime_end', runtimeEndData),
+      ...this.stream.closeStream({ stopReason }),
+      this.stream.event('visible_output_end', {}),
+      this.stream.event('agent_runtime_end', runtimeEndData),
     ];
   }
 
@@ -285,13 +286,9 @@ export class TraeAcpAdapter implements AgentEventAdapter {
     this.terminal = true;
     return [
       ...this.closePending(),
-      ...this.closeStream(),
-      this.event('visible_output_end', {}),
-      this.event('error', { agentType: PROVIDER, error: message, message }),
+      ...this.stream.closeStream(),
+      this.stream.event('visible_output_end', {}),
+      this.stream.event('error', { agentType: this.provider, error: message, message }),
     ];
-  }
-
-  private event(type: HeterogeneousAgentEvent['type'], data: unknown): HeterogeneousAgentEvent {
-    return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type };
   }
 }

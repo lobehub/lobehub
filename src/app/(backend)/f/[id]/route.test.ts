@@ -12,6 +12,7 @@ import { GET } from './route';
 const fileServiceMocks = vi.hoisted(() => {
   const instance = {
     createCachedPreSignedUrlForPreview: vi.fn(),
+    createDownloadUrl: vi.fn(),
     getFullFileUrl: vi.fn(),
   };
 
@@ -44,11 +45,15 @@ describe('file proxy route', () => {
     vi.mocked(getServerDB).mockResolvedValue(db);
     vi.mocked(FileModel.getFileById).mockResolvedValue({
       id: 'file-id',
+      name: 'image.png',
       url: 'files/user-id/image.png',
       userId: 'owner-user-id',
     } as FileItem);
     fileServiceMocks.instance.createCachedPreSignedUrlForPreview.mockResolvedValue(
       'https://s3.example.com/presigned-preview-url',
+    );
+    fileServiceMocks.instance.createDownloadUrl.mockResolvedValue(
+      'https://s3.example.com/presigned-download-url',
     );
   });
 
@@ -65,5 +70,19 @@ describe('file proxy route', () => {
       'files/user-id/image.png',
     );
     expect(fileServiceMocks.instance.getFullFileUrl).not.toHaveBeenCalled();
+  });
+
+  it('should redirect download requests to a content-disposition attachment URL', async () => {
+    const response = await GET(new Request('https://lobehub.com/f/file-id?download=1'), {
+      params: Promise.resolve({ id: 'file-id' }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('https://s3.example.com/presigned-download-url');
+    expect(fileServiceMocks.instance.createDownloadUrl).toHaveBeenCalledWith(
+      'files/user-id/image.png',
+      'image.png',
+    );
+    expect(fileServiceMocks.instance.createCachedPreSignedUrlForPreview).not.toHaveBeenCalled();
   });
 });

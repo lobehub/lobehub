@@ -5,6 +5,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { acceptances, topics, users, verifyRuns, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AcceptanceModel } from '../acceptance';
+import { ProjectModel } from '../project';
 import { VerifyRunModel } from '../verifyRun';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -65,6 +66,42 @@ describe('AcceptanceModel', () => {
       requirement: 'Different text',
     });
     expect(third.requirement).toBe('Review UX polish ships end to end');
+  });
+
+  it('stores the project on the acceptance and becomes ungrouped when it is deleted', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const project = await projectModel.create({ identifier: 'ACPT', name: 'Acceptance project' });
+    const model = new AcceptanceModel(serverDB, userId);
+
+    const first = await model.ensureForSubject('topic', topicId);
+    expect(first.projectId).toBeNull();
+
+    const grouped = await model.ensureForSubject('topic', topicId, { projectId: project.id });
+    expect(grouped.projectId).toBe(project.id);
+    expect((await model.findById(grouped.id))?.projectId).toBe(project.id);
+
+    await projectModel.delete(project.id);
+    expect((await model.findById(grouped.id))?.projectId).toBeNull();
+  });
+
+  it('files an acceptance under a project and takes it back out', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const project = await projectModel.create({ identifier: 'MOVE', name: 'Move target' });
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('topic', topicId);
+
+    await model.update(acceptance.id, { projectId: project.id });
+    expect((await model.findById(acceptance.id))?.projectId).toBe(project.id);
+
+    // Ungrouping is the same write with a null — the aggregate itself stays put.
+    await model.update(acceptance.id, { projectId: null });
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+
+    // Another user's model cannot re-file it: ownership scopes the update.
+    await new AcceptanceModel(serverDB, otherUserId).update(acceptance.id, {
+      projectId: project.id,
+    });
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
   });
 
   it('keeps the first standalone display title and backfills one when initially absent', async () => {

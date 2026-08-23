@@ -1,8 +1,12 @@
 // Note: To make the code more logic and readable, we just disable the auto sort key eslint rule
 // DON'T REMOVE THE FIRST LINE
-import { chainSummaryTitle } from '@lobechat/prompts';
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import { type ChatTopicMetadata, type MessageMapScope, type UIChatMessage } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -12,7 +16,7 @@ import useSWR from 'swr';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { cronKeys, deviceKeys, topicKeys } from '@/libs/swr/keys';
-import { chatService } from '@/services/chat';
+import { aiChatService } from '@/services/aiChat';
 import { type GitLinkedPRSummary, gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import type { TopicBatchDeleteScope } from '@/services/topic';
@@ -44,7 +48,6 @@ import {
   type CreateTopicParams,
   type TopicQuerySortBy,
 } from '@/types/topic';
-import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
@@ -289,44 +292,51 @@ export class ChatTopicActionImpl {
 
     // Keep an optimistic title like "阅读下面..." stable while AI rename runs;
     // otherwise the sidebar flickers `title -> ... -> final title`.
-    const shouldStreamSummaryTitle = !topic.title || topic.title === LOADING_FLAT;
+    const shouldShowPlaceholder = !topic.title || topic.title === LOADING_FLAT;
 
-    if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
+    if (shouldShowPlaceholder) internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
 
-    let output = '';
+    const restorePreviousTitle = () => {
+      if (shouldShowPlaceholder) internal_updateTopicTitleInSummary(topicId, topic.title);
+    };
 
     // Get current agent for topic
-    const topicConfig = systemAgentSelectors.topic(useUserStore.getState());
+    const { model, provider } = systemAgentSelectors.topic(useUserStore.getState());
 
-    // Automatically summarize the topic title
-    await chatService.fetchPresetTaskResult({
-      onError: () => {
-        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, topic.title);
-      },
-      onFinish: async (text) => {
-        await this.#get().internal_updateTopic(topicId, { title: text });
-      },
-      onMessageHandle: (chunk) => {
-        switch (chunk.type) {
-          case 'text': {
-            output += chunk.text;
-          }
-        }
+    // Structured generation, the same way `SystemAgentService.generateTopicTitle`
+    // does it: the chain asks for `TOPIC_TITLE_JSON_SCHEMA`, so read the title
+    // off the parsed object. Streaming a completion here used to write the raw
+    // answer to `topic.title`, which named topics `{"title":"简单问候"}`.
+    try {
+      const { data } = await aiChatService.generateJSON(
+        {
+          ...chainSummaryTitle(
+            messages,
+            userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
+          ),
+          model,
+          provider,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+            topicId,
+          },
+        },
+        new AbortController(),
+      );
 
-        if (shouldStreamSummaryTitle) internal_updateTopicTitleInSummary(topicId, output);
-      },
-      params: merge(
-        topicConfig,
-        chainSummaryTitle(
-          messages,
-          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
-        ),
-      ),
-      trace: this.#get().getCurrentTracePayload({
-        traceName: TraceNameMap.SummaryTopicTitle,
-        topicId,
-      }),
-    });
+      const title = (data as { title?: string } | undefined)?.title?.trim();
+      // An empty result must not blank the title — the placeholder would
+      // otherwise stay in the sidebar forever.
+      if (!title) return restorePreviousTitle();
+
+      await this.#get().internal_updateTopic(topicId, { title });
+    } catch (error) {
+      console.error('[summaryTopicTitle] failed to generate a title:', error);
+      restorePreviousTitle();
+    }
   };
 
   markTopicCompleted = async (id: string): Promise<void> => {
@@ -954,6 +964,34 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * By-id topic detail fetch, used as a fallback when a topic the UI is
+   * anchored on is missing from the loaded list bucket — e.g. an archived
+   * (`completed`) topic that the sidebar fetch excludes via `excludeStatuses`,
+   * or a topic deep-linked from the Topics management page. The result lands
+   * in `topicDetailMap`, which `currentActiveTopic` / `getTopicById` read as
+   * a fallback. Pass `undefined` to disable the fetch.
+   */
+  useFetchTopicDetail = (topicId?: string | null): SWRResponse<ChatTopic | null> =>
+    useClientDataSWRWithSync<ChatTopic | null>(
+      topicId ? topicKeys.detail(topicId) : null,
+      () => topicService.getTopicDetail(topicId!),
+      {
+        onData: (topic) => {
+          if (!topic) return;
+
+          const currentMap = this.#get().topicDetailMap;
+          if (isEqual(currentMap[topic.id], topic)) return;
+
+          this.#set(
+            { topicDetailMap: { ...currentMap, [topic.id]: topic } },
+            false,
+            n('useFetchTopicDetail(onData)', { topicId: topic.id }),
+          );
+        },
+      },
+    );
+
+  /**
    * Topic fetch dedicated to the Agent Topics management page.
    * Lives in its own SWR key + state bucket so the heavier `withDetails`
    * payload doesn't collide with the sidebar's cheap fetch — sharing one
@@ -1305,6 +1343,17 @@ export class ChatTopicActionImpl {
     if (!activeAgentId) return;
 
     await topicService.removeTopicsByAgentId(activeAgentId, scope);
+    this.#set(
+      (state) => ({
+        topicDetailMap: Object.fromEntries(
+          Object.entries(state.topicDetailMap).filter(
+            ([, topic]) => topic.sessionId !== activeAgentId,
+          ),
+        ),
+      }),
+      false,
+      n('removeSessionTopics/detail'),
+    );
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this agent)
     void evictMessageCache((ctx) => ctx.agentId === activeAgentId);
@@ -1320,6 +1369,9 @@ export class ChatTopicActionImpl {
     const { switchTopic, refreshTopic } = this.#get();
 
     await topicService.removeTopicsByGroupId(groupId, scope);
+    // Topic detail rows don't carry their group id, so the safe invalidation
+    // boundary for a group-wide delete is the whole by-id detail cache.
+    this.#set({ topicDetailMap: {} }, false, n('removeGroupTopics/detail'));
     await refreshTopic();
     // drop every deleted topic's message cache (all belong to this group)
     void evictMessageCache((ctx) => ctx.groupId === groupId);
@@ -1332,6 +1384,7 @@ export class ChatTopicActionImpl {
     const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
+    this.#set({ topicDetailMap: {} }, false, n('removeAllTopics/detail'));
     await refreshTopic();
     // every topic is gone — wipe all cached message lists
     void evictMessageCache(() => true);
@@ -1362,6 +1415,9 @@ export class ChatTopicActionImpl {
       .map((topic) => topic.id);
 
     await topicService.batchRemoveTopics(topicIds);
+    topicIds.forEach((id) =>
+      this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'removeUnstarredTopic'),
+    );
     await refreshTopic();
     // drop the deleted topics' message caches
     const removed = new Set(topicIds);
@@ -1606,9 +1662,31 @@ export class ChatTopicActionImpl {
     const nextViewItems = viewData ? topicReducer(viewData.items, payload) : undefined;
     const viewChanged = viewData ? !isEqual(nextViewItems, viewData.items) : false;
 
-    // no need to update if both maps are unchanged
+    const detailMap = this.#get().topicDetailMap ?? {};
+    const detailId = payload.type === 'addTopic' ? undefined : payload.id;
+    const detailTopic = detailId ? detailMap[detailId] : undefined;
+    let nextDetailMap = detailMap;
+
+    if (payload.type === 'updateTopic' && detailTopic) {
+      nextDetailMap = {
+        ...detailMap,
+        [payload.id]: { ...detailTopic, ...payload.value },
+      };
+    } else if (payload.type === 'deleteTopic' && detailTopic) {
+      const { [payload.id]: _deleted, ...remainingDetailMap } = detailMap;
+      nextDetailMap = remainingDetailMap;
+    } else if (payload.type === 'replaceTopicId' && detailTopic) {
+      const { [payload.id]: _replaced, ...remainingDetailMap } = detailMap;
+      nextDetailMap = {
+        ...remainingDetailMap,
+        [payload.nextId]: { ...detailTopic, ...payload.value, id: payload.nextId },
+      };
+    }
+
+    // no need to update if all maps are unchanged
     const mainChanged = !isEqual(nextItems, currentData?.items);
-    if (!mainChanged && !viewChanged) return;
+    const detailChanged = nextDetailMap !== detailMap;
+    if (!mainChanged && !viewChanged && !detailChanged) return;
 
     const currentTotal = currentData?.total ?? currentData?.items?.length ?? 0;
     const total =
@@ -1619,6 +1697,8 @@ export class ChatTopicActionImpl {
           : currentTotal;
 
     const nextState: Record<string, unknown> = {};
+
+    if (detailChanged) nextState.topicDetailMap = nextDetailMap;
 
     if (mainChanged) {
       nextState.topicDataMap = {

@@ -67,18 +67,46 @@ describe('cliSpawn', () => {
     expect(execFileMock).not.toHaveBeenCalled();
   });
 
-  it('prefers a Windows executable returned by where', async () => {
+  it('falls through to a later .exe only when an earlier .cmd shim cannot be unwrapped', async () => {
     platformMock.mockReturnValue('win32');
-    callExecFile(
-      ['C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd', 'C:\\Tools\\gemini.exe'].join('\r\n'),
-    );
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd';
+    callExecFile([shimPath, 'C:\\Tools\\gemini.exe'].join('\r\n'));
+    existingPaths(shimPath);
+    // Content that matches none of the known npm-shim patterns (a custom
+    // installer script, not a standard npm cmd-shim).
+    readFileMock.mockResolvedValue('@ECHO off\r\nset SOME_CUSTOM_LAUNCHER=1\r\n');
 
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
     await expect(resolveCliSpawnPlan('gemini', ['--version'])).resolves.toEqual({
       args: ['--version'],
       command: 'C:\\Tools\\gemini.exe',
     });
-    expect(readFileMock).not.toHaveBeenCalled();
+    expect(readFileMock).toHaveBeenCalledWith(shimPath, 'utf8');
+  });
+
+  it('does not skip an earlier resolvable .cmd shim in favour of a later bare .exe', async () => {
+    // Regression test: an MSIX App Execution Alias stub (e.g. the
+    // WindowsApps\...\codex.exe placeholder some MSIX-packaged tools add to
+    // PATH) can appear on PATH after a perfectly usable earlier `.cmd` shim
+    // (e.g. a WinGet-installed `codex.cmd`). Node's execFile/spawn throws
+    // EPERM on that stub, so PATH order must win over "prefer any .exe".
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\Microsoft\\WinGet\\Links\\codex.cmd';
+    const exePath =
+      'C:\\Users\\Hanam\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenAI.Codex\\codex-x86_64-pc-windows-msvc.exe';
+    const appExecutionAliasStub =
+      'C:\\Users\\Hanam\\AppData\\Local\\Microsoft\\WindowsApps\\OpenAI.Codex_1.0\\app\\resources\\codex.exe';
+    callExecFile([shimPath, appExecutionAliasStub].join('\r\n'));
+    existingPaths(shimPath, exePath);
+    readFileMock.mockResolvedValue(
+      `@ECHO off\r\n"%~dp0..\\Packages\\OpenAI.Codex\\codex-x86_64-pc-windows-msvc.exe" %*\r\n`,
+    );
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan('codex', ['--version'])).resolves.toEqual({
+      args: ['--version'],
+      command: exePath,
+    });
   });
 
   it('resolves Windows npm shell shim to a package executable', async () => {
@@ -112,6 +140,21 @@ describe('cliSpawn', () => {
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
     await expect(resolveCliSpawnPlan(shimPath, ['--version'])).resolves.toEqual({
       args: ['--version'],
+      command: exePath,
+    });
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves the TRAE Windows shim that uses the native %~dp0 batch expansion', async () => {
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\Programs\\TraeCLI\\bin\\traecli.cmd';
+    const exePath = 'C:\\Users\\Hanam\\AppData\\Local\\Programs\\TraeCLI\\bin\\traex.exe';
+    existingPaths(shimPath, exePath);
+    readFileMock.mockResolvedValue('@echo off\r\n"%~dp0traex.exe" %*\r\n');
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan(shimPath, ['acp', 'serve'])).resolves.toEqual({
+      args: ['acp', 'serve'],
       command: exePath,
     });
     expect(execFileMock).not.toHaveBeenCalled();

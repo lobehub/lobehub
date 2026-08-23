@@ -1298,6 +1298,78 @@ export class TopicModel {
   };
 
   /**
+   * Atomically clear and settle the operation that still owns a topic.
+   * A row lock keeps a stale terminal callback from clearing a newer operation
+   * between the ownership check and update. Missing markers are intentionally
+   * not settled because a client-side run can set `status = 'running'` without
+   * an operation marker, so there is no proof that the terminal callback owns it.
+   *
+   * The result distinguishes a missing marker from a conflicting operation:
+   * some legitimate hetero callbacks arrive after another terminal path has
+   * already cleared their marker, while a callback that observes a newer
+   * operation must stop before dispatching lifecycle hooks for the wrong run.
+   */
+  settleRunningOperation = async (id: string, operationId: string) => {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!runningOperation) {
+        const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        return {
+          assistantMessageId:
+            currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+          status: 'missing' as const,
+        };
+      }
+      const isRoot = runningOperation.operationId === operationId;
+      const operation = isRoot
+        ? runningOperation
+        : runningOperation.childOperations?.find((child) => child.operationId === operationId);
+      if (!operation) {
+        return { activeOperationId: runningOperation.operationId, status: 'conflict' as const };
+      }
+
+      const metadata = {
+        ...existing.metadata,
+        runningOperation: isRoot
+          ? null
+          : {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.filter(
+                (child) => child.operationId !== operationId,
+              ),
+            },
+      } as ChatTopicMetadata;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata,
+          ...(isRoot && existing.status === 'running' ? { status: 'unread' as const } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      const currentMessage = existing.metadata?.heteroCurrentMsgId;
+      return {
+        assistantMessageId:
+          currentMessage?.operationId === operationId
+            ? currentMessage.msgId
+            : operation.assistantMessageId,
+        hooks: operation.hooks,
+        orchestrationRole: operation.orchestrationRole,
+        status: 'settled' as const,
+        threadId: operation.threadId ?? undefined,
+      };
+    });
+  };
+
+  /**
    * Move multiple topics (and all their messages) to another agent.
    *
    * Reassigns ownership purely through the `agentId` foreign key (the new data
@@ -1417,6 +1489,163 @@ export class TopicModel {
     });
   };
 
+  appendRunningOperationChild = async (
+    id: string,
+    parentOperationId: string,
+    child: NonNullable<ChatTopicMetadata['runningOperation']>,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || runningOperation?.operationId !== parentOperationId) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: [
+                ...(runningOperation.childOperations ?? []).filter(
+                  (operation) => operation.operationId !== child.operationId,
+                ),
+                child,
+              ],
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  removeRunningOperationChild = async (id: string, operationId: string): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation?.childOperations) return false;
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations.filter(
+                (child) => child.operationId !== operationId,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  updateRunningOperationAssistantMessage = async (
+    id: string,
+    operationId: string,
+    assistantMessageId: string,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return false;
+
+      if (runningOperation.operationId === operationId) {
+        await tx
+          .update(topics)
+          .set({
+            metadata: {
+              ...existing.metadata,
+              heteroCurrentMsgId: { msgId: assistantMessageId, operationId },
+              runningOperation: { ...runningOperation, assistantMessageId },
+            },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return true;
+      }
+
+      const childOperations = runningOperation.childOperations?.map((child) =>
+        child.operationId === operationId ? { ...child, assistantMessageId } : child,
+      );
+      if (!childOperations?.some((child) => child.operationId === operationId)) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            heteroCurrentMsgId: { msgId: assistantMessageId, operationId },
+            runningOperation: { ...runningOperation, childOperations },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  takeRunningOperation = async (
+    id: string,
+    operationId: string,
+  ): Promise<
+    | {
+        isRoot: boolean;
+        operation: NonNullable<ChatTopicMetadata['runningOperation']>;
+      }
+    | undefined
+  > =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return undefined;
+
+      if (runningOperation.operationId === operationId) {
+        await tx
+          .update(topics)
+          .set({
+            metadata: { ...existing.metadata, runningOperation: null },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return { isRoot: true, operation: runningOperation };
+      }
+
+      const child = runningOperation.childOperations?.find(
+        (candidate) => candidate.operationId === operationId,
+      );
+      if (!child) return undefined;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.filter(
+                (candidate) => candidate.operationId !== operationId,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return { isRoot: false, operation: child };
+    });
+
   /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *
@@ -1429,6 +1658,7 @@ export class TopicModel {
   tryReserveTaskCallback = async (
     id: string,
     messageId: string,
+    allowRunningOperationId?: string,
     replacesOperationId?: string,
   ): Promise<boolean | null> =>
     this.db.transaction(async (tx) => {
@@ -1449,6 +1679,9 @@ export class TopicModel {
 
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
       const runningOperation = existing.metadata?.runningOperation;
+      const ownedRunningOperation =
+        !!allowRunningOperationId && runningOperation?.operationId === allowRunningOperationId;
+      if (allowRunningOperationId) return ownedRunningOperation;
       const canReplaceRunningOperation =
         !!replacesOperationId && runningOperation?.operationId === replacesOperationId;
       if ((runningOperation && !canReplaceRunningOperation) || hasLiveReservation) return false;

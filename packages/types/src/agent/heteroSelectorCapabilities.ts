@@ -32,6 +32,13 @@ const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', '
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
+/** Grok Build reasoning-effort levels accepted by the CLI's `--effort` flag. */
+const GROK_BUILD_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
+
+export type GrokBuildReasoningEffort = (typeof GROK_BUILD_REASONING_EFFORT_LEVELS)[number];
+
+export const GROK_BUILD_REASONING_EFFORT_FLAGS = ['--effort', '--reasoning-effort'] as const;
+
 /**
  * Codex reasoning-effort levels, mirrored to the CLI config key
  * `model_reasoning_effort`.
@@ -47,6 +54,23 @@ const CODEX_REASONING_EFFORT_LEVELS = [
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number];
 
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
+
+/**
+ * Non-OpenAI models explicitly supported through a model-specific Codex catalog
+ * and the deployment-owned server-default relay. Keep this list explicit: tool
+ * support alone does not prove that Codex's request and continuation behavior
+ * is compatible.
+ */
+export const CODEX_SERVER_DEFAULT_CUSTOM_MODELS = [
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'glm-5.2',
+] as const;
+
+export type CodexServerDefaultCustomModel = (typeof CODEX_SERVER_DEFAULT_CUSTOM_MODELS)[number];
+
+const CODEX_DEEPSEEK_V4_REASONING_EFFORT_LEVELS = ['low', 'high', 'max'] as const;
+const CODEX_GLM_5_2_REASONING_EFFORT_LEVELS = ['high', 'max'] as const;
 
 const CODEX_MAX_REASONING_EFFORT_LEVELS = [
   ...CODEX_COMMON_REASONING_EFFORT_LEVELS,
@@ -67,7 +91,10 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
 export type HeterogeneousReasoningEffortLevel =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | QoderReasoningEffort;
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | GrokBuildReasoningEffort
+  | QoderReasoningEffort;
 
 export type HeterogeneousReasoningEffort =
   HeterogeneousReasoningEffortLevel | HeterogeneousAgentDefaultSelection;
@@ -116,6 +143,16 @@ export const isClaudeCodeReasoningEffort = (
 export const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
   !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
 
+export const isCodexServerDefaultCustomModel = (
+  model: string,
+): model is CodexServerDefaultCustomModel =>
+  CODEX_SERVER_DEFAULT_CUSTOM_MODELS.includes(model as CodexServerDefaultCustomModel);
+
+export const isGrokBuildReasoningEffort = (
+  value: string | undefined,
+): value is GrokBuildReasoningEffort =>
+  !!value && GROK_BUILD_REASONING_EFFORT_LEVELS.includes(value as GrokBuildReasoningEffort);
+
 export const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
   !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
 
@@ -129,6 +166,12 @@ export const isCodexFastServiceTier = (value: string | undefined): boolean =>
  * cannot be known until the CLI resolves the model.
  */
 export const getCodexReasoningEffortLevels = (model: string): readonly CodexReasoningEffort[] => {
+  if (model === 'deepseek-v4-flash' || model === 'deepseek-v4-pro') {
+    return CODEX_DEEPSEEK_V4_REASONING_EFFORT_LEVELS;
+  }
+
+  if (model === 'glm-5.2') return CODEX_GLM_5_2_REASONING_EFFORT_LEVELS;
+
   if (
     CODEX_ULTRA_REASONING_MODELS.includes(model as (typeof CODEX_ULTRA_REASONING_MODELS)[number])
   ) {
@@ -214,6 +257,15 @@ export const resolveCodexSpeedMode = (
   )?.trim();
 
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const resolveGrokBuildReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getAnyCliFlagValue(source?.args, GROK_BUILD_REASONING_EFFORT_FLAGS) ?? source?.effort
+  )?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 const resolveQoderReasoningEffort = (
@@ -355,7 +407,18 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
-  'grok-build': {},
+  'grok-build': {
+    effort: {
+      encodings: [{ flags: GROK_BUILD_REASONING_EFFORT_FLAGS, kind: 'flag' }],
+      levels: () => GROK_BUILD_REASONING_EFFORT_LEVELS,
+      resolve: resolveGrokBuildReasoningEffort,
+    },
+    model: {
+      encodings: [MODEL_FLAGS_ENCODING],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'kimi-code': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },

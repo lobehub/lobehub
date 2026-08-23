@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
@@ -105,7 +106,8 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
-    const goal = taskModel.getGoalConfig(task);
+    const goalModel = new GoalModel(db, userId, workspaceId);
+    const goal = await goalModel.findBySubject('task', task.id);
 
     if (run.status === 'passed') {
       if (goal) {
@@ -128,6 +130,7 @@ export const driveTaskFromVerify = async (
         await taskModel.updateStatus(taskOperation.taskId, 'paused', {
           error: review.summary,
         });
+        await goalModel.updateStatus(goal.id, 'review');
         await new BriefModel(db, userId, workspaceId).create({
           actions: review.actions,
           agentId: task.assigneeAgentId || undefined,
@@ -185,7 +188,7 @@ export const driveTaskFromVerify = async (
             db,
             state: {
               phase: 'running',
-              roundBudget: goal.maxIterations === null ? null : resolveGoalRoundBudget(goal),
+              roundBudget: goal.maxRounds === null ? null : resolveGoalRoundBudget(goal),
               roundsRun: (task.totalTopics || 0) + 1,
             },
             task,
@@ -227,6 +230,10 @@ export const driveTaskFromVerify = async (
       // briefs, so a brief-only explanation is invisible from the task page.
       await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: pauseSummary });
       if (goal) {
+        // The goal's own lifecycle: an errored run means verification never
+        // evaluated the delivery — `failed` (infra gave up), while an exhausted
+        // budget or spawn failure parks the goal for the user (`paused`).
+        await goalModel.updateStatus(goal.id, isErrored ? 'failed' : 'paused');
         await syncGoalToolState({
           db,
           state: {

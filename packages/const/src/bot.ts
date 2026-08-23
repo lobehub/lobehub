@@ -16,3 +16,77 @@ export const MAX_BOT_HISTORY_LIMIT = 999;
 
 /** Minimum number of messages allowed for history limit. */
 export const MIN_BOT_HISTORY_LIMIT = 1;
+
+/**
+ * Per-platform attachment size budgets for the proactive messenger push path.
+ *
+ * Shared between the server (which enforces them: over-budget images are
+ * recompressed, files that cannot fit degrade to a download-link message —
+ * see apps/server/src/services/bot/platforms/attachmentBudget.ts) and the
+ * client (which uses them to warn the user in the push modal BEFORE sending).
+ *
+ * Values are deliberately conservative:
+ * - telegram: 5MB photo / 20MB file — Bot API caps for URL-sourced media.
+ * - discord: 10MB — default upload cap for bots (DMs never get guild boosts).
+ * - slack: 50MB — `files.upload` v2 itself allows 1GB, but every sender
+ *   materializes the file in memory to upload it, so the real ceiling is
+ *   MAX_IN_MEMORY_ATTACHMENT_BYTES. Budgeting at 1GB made the 50MB–1GB band
+ *   pass the budget pass as an upload and then fail during materialization,
+ *   dropping the attachment with neither a file nor a download link.
+ * - wechat: 2MB image — empirical: iLink silently drops larger images
+ *   (every API call returns 200 yet the message never renders); 20MB file
+ *   as a best-effort cap, the iLink protocol documents no explicit number.
+ *
+ * `textMaxChars` is the single-message character cap used to batch the
+ * download-link fallbacks: Discord rejects a message over 2000 chars,
+ * Telegram truncates at 4096 (which would cut a URL in half), Slack's
+ * practical `chat.postMessage` limit is ~3000, and iLink documents none —
+ * so WeChat reuses Discord's conservative number.
+ */
+export interface MessengerAttachmentBudget {
+  fileMaxBytes: number;
+  imageMaxBytes: number;
+  /**
+   * Character cap for a single outbound text message. Used to batch
+   * download-link fallbacks: a message over the cap is either rejected
+   * (Discord) or truncated mid-URL (Telegram), both of which lose the link.
+   */
+  textMaxChars: number;
+}
+
+const MB = 1024 * 1024;
+
+export const MESSENGER_ATTACHMENT_BUDGETS: Record<
+  'discord' | 'slack' | 'telegram' | 'wechat',
+  MessengerAttachmentBudget
+> = {
+  discord: { fileMaxBytes: 10 * MB, imageMaxBytes: 10 * MB, textMaxChars: 2000 },
+  slack: { fileMaxBytes: 50 * MB, imageMaxBytes: 50 * MB, textMaxChars: 3000 },
+  telegram: { fileMaxBytes: 20 * MB, imageMaxBytes: 5 * MB, textMaxChars: 4096 },
+  wechat: { fileMaxBytes: 20 * MB, imageMaxBytes: 2 * MB, textMaxChars: 2000 },
+};
+
+/**
+ * What to do with an image that does not fit the platform's `imageMaxBytes`.
+ *
+ * `compress` re-encodes it under the budget so the recipient gets an inline
+ * picture; `link` skips the re-encode and sends the original as a download
+ * link instead. The choice is the sender's because the trade-off is theirs:
+ * a chat screenshot survives recompression fine, while a design mock or a
+ * photo the recipient is meant to inspect does not.
+ */
+export type MessengerOversizeImageStrategy = 'compress' | 'link';
+
+/** Preserves the pre-choice behavior for every caller that sends none. */
+export const DEFAULT_OVERSIZE_IMAGE_STRATEGY: MessengerOversizeImageStrategy = 'compress';
+
+/**
+ * Hard ceiling on the source an image may be recompressed from.
+ *
+ * Buffering the original into memory is what recompression costs, so past this
+ * the server refuses and sends a download link instead — whatever the sender
+ * picked. It lives here, beside the budget table and for the same reason: the
+ * push modal must not offer "compress it" for a file the server will never
+ * compress, or the consequence it spells out is simply untrue.
+ */
+export const MESSENGER_MAX_COMPRESSION_SOURCE_BYTES = 100 * MB;

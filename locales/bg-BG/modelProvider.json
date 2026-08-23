@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "Показвано име на модела",
   "providerModels.item.modelConfig.extendParams.extra": "Изберете разширени параметри, поддържани от модела. Задръжте курсора върху опция, за да видите контролите. Неправилни конфигурации могат да доведат до неуспешни заявки.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "За модели Codex; контролира интензивността на разсъжденията.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "За режим на мислене DeepSeek V4 GA; контролира интензивността на разсъжденията. Добавя ниво `ниско` върху оригиналните нива на V4. `високо` е по подразбиране, `максимално` отключва най-дълбоките разсъждения, използвани от сложни работни процеси на агенти.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "За режима на мислене DeepSeek V4; контролира интензивността на разсъждението. `high` е стандартната стойност, а `max` отключва най-дълбокото разсъждение, използвано при сложни агентни работни процеси.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "За моделите Claude; може да намали разходите и да ускори отговорите.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "За Claude Opus 4.6; контролира нивото на усилие (ниско/средно/високо/максимално).",

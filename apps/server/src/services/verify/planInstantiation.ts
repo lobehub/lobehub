@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
@@ -35,6 +36,26 @@ export const instantiateVerifyPlanOnStart = async (
 ): Promise<void> => {
   try {
     const taskModel = new TaskModel(db, userId, workspaceId);
+
+    // A goal task entering a run round is `running` — the single transition
+    // point shared by round 1, reject-spawned rounds and manual restarts.
+    // Terminal decisions stay terminal: an accepted (`achieved`) or canceled
+    // goal is never silently re-opened by a stray run.
+    try {
+      const goalModel = new GoalModel(db, userId, workspaceId);
+      const goal = await goalModel.findBySubject('task', params.taskId);
+      if (
+        goal &&
+        goal.status !== 'running' &&
+        goal.status !== 'achieved' &&
+        goal.status !== 'canceled'
+      ) {
+        await goalModel.updateStatus(goal.id, 'running');
+      }
+    } catch (error) {
+      log('goal running transition failed for task %s (non-fatal): %O', params.taskId, error);
+    }
+
     const verifyConfig = await taskModel.resolveVerifyConfig(params.taskId);
 
     // Opt-in to verify, then pick the plan shape:

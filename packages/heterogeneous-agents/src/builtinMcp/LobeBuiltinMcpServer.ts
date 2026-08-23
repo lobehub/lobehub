@@ -548,6 +548,10 @@ const formatAnswerForCC = (answer: InterventionAnswer, args: unknown) => {
     const formatted = Array.isArray(a) ? a.join(', ') : a == null ? '(no answer)' : String(a);
     lines.push(`- ${q.question}: ${formatted}`);
   }
+  const supplement = answerObj['__supplement__'];
+  if (typeof supplement === 'string' && supplement.trim().length > 0) {
+    lines.push(`Additional notes: ${supplement.trim()}`);
+  }
   return {
     content: [{ text: lines.join('\n'), type: 'text' as const }],
   };

@@ -250,7 +250,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
       const agent = getLatestAgentFactory()({
         agentConfig: {
-          chatConfig: {
+          agencyConfig: {
             enableGraphMode: true,
             graph: minimalGraph,
           },
@@ -266,7 +266,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
       const agent = getLatestAgentFactory()({
         agentConfig: {
-          chatConfig: {
+          agencyConfig: {
             enableGraphMode: true,
             graph: { ...minimalGraph, edges: [] },
           },
@@ -275,6 +275,22 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       });
 
       expect(agent).toBeInstanceOf(GeneralChatAgent);
+    });
+
+    it('falls back to a legacy chatConfig graph snapshot', () => {
+      service = new AiAgentService(mockDb, userId);
+
+      const agent = getLatestAgentFactory()({
+        agentConfig: {
+          chatConfig: {
+            enableGraphMode: true,
+            graph: minimalGraph,
+          },
+        },
+        operationId: 'op-legacy-graph',
+      });
+
+      expect(agent).toBeInstanceOf(GraphAgent);
     });
 
     it('keeps an upstream runtime agent factory authoritative', () => {

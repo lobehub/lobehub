@@ -20,6 +20,7 @@ export const FeatureFlagsSchema = z.object({
 
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
+  voice_dictation: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
 
   welcome_suggest: FeatureFlagValue.optional(),
@@ -97,6 +98,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   market: true,
   speech_to_text: true,
+  voice_dictation: false,
   changelog: true,
 
   // the flags below can only be used with commercial license
@@ -142,6 +144,7 @@ export const mapFeatureFlagsEnvToState = (
 
     showMarket: evaluateFeatureFlag(config.market, userId),
     enableSTT: evaluateFeatureFlag(config.speech_to_text, userId),
+    enableVoiceDictation: evaluateFeatureFlag(config.voice_dictation, userId),
 
     hideGitHub: evaluateFeatureFlag(config.commercial_hide_github, userId),
     hideDocs: evaluateFeatureFlag(config.commercial_hide_docs, userId),

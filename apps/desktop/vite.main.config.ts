@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { defineConfig, type UserConfig } from 'vite';
 
+import { viteOsPlatformResolve } from '../../plugins/vite/osPlatformResolve';
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
 import { getNativeExternalDependencies } from './native-deps.config.mjs';
 import {
@@ -112,6 +113,7 @@ export default defineConfig(async (env) => {
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
+    plugins: [viteOsPlatformResolve()],
     publicDir: false,
     resolve: {
       alias: mainProcessAlias,

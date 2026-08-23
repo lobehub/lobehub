@@ -591,12 +591,19 @@ export const fileRouter = router({
     }),
 
   recentFiles: fileProcedure
-    .input(z.object({ limit: z.number().max(50).optional() }).optional())
+    .input(
+      z
+        .object({
+          limit: z.number().max(50).optional(),
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Files only (pages are excluded in SQL, so `limit` can't be eaten by
       // page rows that are then filtered out).
-      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file');
+      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file', input?.visibility);
 
       if (fileItems.length === 0) return [];
 
@@ -649,12 +656,19 @@ export const fileRouter = router({
     }),
 
   recentPages: fileProcedure
-    .input(z.object({ limit: z.number().max(50).optional() }).optional())
+    .input(
+      z
+        .object({
+          limit: z.number().max(50).optional(),
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Pages only (folders and files are excluded in SQL, so `limit` can't be
       // eaten by rows that are then filtered out).
-      return ctx.knowledgeRepo.queryRecent(limit, 'page');
+      return ctx.knowledgeRepo.queryRecent(limit, 'page', input?.visibility);
     }),
 
   removeFile: fileProcedure

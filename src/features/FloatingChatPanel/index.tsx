@@ -17,6 +17,8 @@ import {
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
+import CopilotToolbar from '@/features/PageEditor/Copilot/Toolbar';
+import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
 import { useAgentStore } from '@/store/agent';
@@ -147,17 +149,21 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
   }) => {
     useSingleInstanceGuard();
     const { t } = useTranslation('chat');
+    const isEmbedded = mode === 'embedded';
+    const [embeddedTopicId, setEmbeddedTopicId] = useState<string | null>(topicId);
+    const activeTopicId = isEmbedded ? embeddedTopicId : topicId;
 
     const context = useMemo<ConversationContext>(
       () => ({
         agentId,
         ...(agentDocumentId ? { agentDocumentId } : {}),
         ...(documentId ? { documentId } : {}),
+        ...(isEmbedded ? { isolatedTopic: true } : {}),
         scope: 'main',
         threadId: null,
-        topicId,
+        topicId: activeTopicId,
       }),
-      [agentId, agentDocumentId, documentId, topicId],
+      [activeTopicId, agentDocumentId, agentId, documentId, isEmbedded],
     );
 
     const chatKey = useMemo(() => messageMapKey(context), [context]);
@@ -180,8 +186,6 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
     const operationState = useOperationState(context);
     const defaultActionsBar = useActionsBarConfig();
     const resolvedActionsBar = actionsBar ?? defaultActionsBar;
-    const isEmbedded = mode === 'embedded';
-
     const [isCollapsed, setIsCollapsed] = useState(!defaultOpen);
     const [activeSnapPoint, setActiveSnapPoint] = useState<number>(MID_SNAP_POINT);
 
@@ -217,10 +221,13 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
             onBeforeSendMessage: async () => {
               expand();
             },
+            onTopicCreated: (createdTopicId) => {
+              if (isEmbedded) setEmbeddedTopicId(createdTopicId);
+            },
           },
           chatFollowUpHooks,
         ),
-      [hooks, chatFollowUpHooks, expand],
+      [chatFollowUpHooks, expand, hooks, isEmbedded],
     );
 
     const collapseAction = (
@@ -279,6 +286,9 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
         >
           {isEmbedded ? (
             <>
+              <PageAgentPanelOverrideProvider defaultExpand>
+                <CopilotToolbar topicId={activeTopicId} onTopicChange={setEmbeddedTopicId} />
+              </PageAgentPanelOverrideProvider>
               <ChatBody />
               <InputRow isCollapsed={false} showExpandBar={false} onExpand={expand} />
             </>

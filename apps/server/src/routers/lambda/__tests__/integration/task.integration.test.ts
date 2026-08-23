@@ -307,6 +307,18 @@ describe('Task Router Integration', () => {
       });
       expect(completed.data.status).toBe('completed');
     });
+
+    it('updates the bound goal when addressed by task identifier', async () => {
+      const task = await caller.create({
+        goal: { title: 'Identifier lifecycle goal' },
+        instruction: 'Test goal lifecycle',
+      });
+
+      await caller.updateStatus({ id: task.data.identifier, status: 'running' });
+
+      const goal = await serverDB.query.goals.findFirst();
+      expect(goal).toMatchObject({ status: 'running', subjectId: task.data.id });
+    });
   });
 
   describe('comments', () => {
@@ -488,6 +500,19 @@ describe('Task Router Integration', () => {
   });
 
   describe('run idempotency', () => {
+    it('starts the bound goal when addressed by task identifier', async () => {
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        goal: { title: 'Identifier run goal' },
+        instruction: 'Test',
+      });
+
+      await caller.run({ id: task.data.identifier });
+
+      const goal = await serverDB.query.goals.findFirst();
+      expect(goal).toMatchObject({ status: 'running', subjectId: task.data.id });
+    });
+
     it('should reject run when a topic is already running', async () => {
       const task = await caller.create({
         assigneeAgentId: testAgentId,
@@ -507,7 +532,7 @@ describe('Task Router Integration', () => {
         instruction: 'Test',
       });
 
-      const result = await caller.run({ id: task.data.id });
+      await caller.run({ id: task.data.id });
 
       await expect(caller.run({ continueTopicId: 'tpc_test', id: task.data.id })).rejects.toThrow(
         /already running/,

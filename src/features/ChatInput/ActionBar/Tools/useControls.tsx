@@ -54,17 +54,17 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
+import { SKILL_ICON_GAP, SKILL_ICON_SIZE, SKILL_TRAILING_CONTROL_SIZE } from './constants';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
 import MarketSkillIcon from './MarketSkillIcon';
+import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
-
-const SKILL_ICON_SIZE = 18;
-const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 
 const officialTag = (
   <Tooltip placement={'top'} title={'LobeHub'}>
@@ -108,8 +108,8 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 24px;
-    height: 24px;
+    width: ${SKILL_TRAILING_CONTROL_SIZE}px;
+    height: ${SKILL_TRAILING_CONTROL_SIZE}px;
 
     color: ${cssVar.colorTextTertiary};
   `,
@@ -123,8 +123,24 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   activationGroupTitleBlock: css`
     display: flex;
-    gap: 8px;
+    gap: ${SKILL_ICON_GAP}px;
     align-items: center;
+    min-width: 0;
+  `,
+  activationGroupIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: ${SKILL_ICON_SIZE}px;
+  `,
+  activationGroupTitleBody: css`
+    display: flex;
+    flex: 0 1 auto;
+    gap: 6px;
+    align-items: center;
+
     min-width: 0;
   `,
   activationGroupTitleText: css`
@@ -173,13 +189,17 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 24px;
-    height: 24px;
+    /* Connector rows hand this button to the menu's extra slot, a plain block
+       wrapper — without vertical-align its strut adds descender space below the
+       button and pushes those rows taller than the rest. */
+    width: ${SKILL_TRAILING_CONTROL_SIZE}px;
+    height: ${SKILL_TRAILING_CONTROL_SIZE}px;
     padding: 0;
     border: 0;
     border-radius: 6px;
 
     color: ${cssVar.colorTextTertiary};
+    vertical-align: top;
 
     background: transparent;
 
@@ -308,6 +328,15 @@ const styles = createStaticStyles(({ css }) => ({
   toolLabel: css`
     display: flex;
     flex: 1;
+    gap: ${SKILL_ICON_GAP}px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  toolLabelBody: css`
+    overflow: hidden;
+    display: flex;
+    flex: 0 1 auto;
     gap: 6px;
     align-items: center;
 
@@ -374,10 +403,8 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   addSkillRow: css`
-    cursor: pointer;
-
     display: flex;
-    gap: 8px;
+    gap: ${SKILL_ICON_GAP}px;
     align-items: center;
 
     width: calc(100% + 24px);
@@ -491,9 +518,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
-    }
+    closeToolDetailPopovers();
     setPolicyOpenId(id);
   }, []);
 
@@ -656,11 +681,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             className={cx(styles.policyButton)}
             disabled={!canEdit}
             type="button"
+            onPointerEnter={closeToolDetailPopovers}
             onClick={(event) => {
               event.stopPropagation();
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
-              }
+              closeToolDetailPopovers();
             }}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -669,14 +693,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             }}
             onPointerDown={(event) => {
               event.stopPropagation();
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
-              }
-            }}
-            onPointerEnter={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new Event(CLOSE_TOOL_DETAIL_POPOVER_EVENT));
-              }
+              closeToolDetailPopovers();
             }}
           >
             <Icon icon={MoreHorizontal} size={15} />
@@ -695,28 +712,34 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       badge?: ReactNode,
       icon?: ReactNode,
       extraTag?: ReactNode,
+      detailContent?: ReactNode,
     ) => (
-      <span
+      <SkillRow
         className={cx(styles.toolRow)}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openSkillPolicyMenu(id);
-        }}
-      >
-        <span className={cx(styles.toolLabel)}>
-          {icon}
-          <span className={cx(styles.toolLabelText)}>{label}</span>
-          {extraTag}
-        </span>
-        <span
-          data-tool-trailing
-          className={cx(styles.toolTrailing, policyOpenId === id && styles.toolTrailingVisible)}
-        >
-          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
-          {action}
-        </span>
-      </span>
+        detailContent={detailContent}
+        detailDisabled={policyOpenId !== null}
+        labelClassName={cx(styles.toolLabel)}
+        label={
+          <>
+            {icon}
+            <span className={cx(styles.toolLabelBody)}>
+              <span className={cx(styles.toolLabelText)}>{label}</span>
+              {extraTag}
+            </span>
+          </>
+        }
+        trailing={
+          <>
+            {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+            {action}
+          </>
+        }
+        trailingClassName={cx(
+          styles.toolTrailing,
+          policyOpenId === id && styles.toolTrailingVisible,
+        )}
+        onContextMenu={() => openSkillPolicyMenu(id)}
+      />
     ),
     [openSkillPolicyMenu, policyOpenId],
   );
@@ -757,8 +780,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           badge,
           icon,
           extraTag,
+          popoverContent,
         ),
-        popoverContent,
         searchText: searchText || String(title || id),
       }) as SkillMenuItem,
     [renderPolicyMenu, renderToolLabel],
@@ -940,6 +963,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               <ComposioServerItem
                 agentId={agentId}
                 appSlug={type.appSlug}
+                icon={icon}
                 identifier={type.identifier}
                 label={type.label}
                 server={server}
@@ -965,7 +989,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                   undefined,
                   true,
                 ),
-                icon,
                 key: removableId,
                 label: (
                   <span
@@ -984,7 +1007,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             }
 
             return {
-              icon,
               key: type.identifier,
               label: serverItem,
               popoverContent,
@@ -1049,11 +1071,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             }
 
             return {
-              icon,
               key: provider.id, // Use provider.id as key, consistent with pluginId
               label: (
                 <LobehubSkillServerItem
                   agentId={agentId}
+                  icon={icon}
                   label={provider.label}
                   provider={provider.id}
                 />
@@ -1519,9 +1541,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       }}
     >
       <div className={cx(styles.activationGroupTitleBlock)}>
-        {icon}
-        <span className={cx(styles.activationGroupTitleText)}>{title}</span>
-        {typeof count === 'number' && <span className={cx(styles.count)}>{count}</span>}
+        <span className={cx(styles.activationGroupIcon)}>{icon}</span>
+        <span className={cx(styles.activationGroupTitleBody)}>
+          <span className={cx(styles.activationGroupTitleText)}>{title}</span>
+          {typeof count === 'number' && <span className={cx(styles.count)}>{count}</span>}
+        </span>
       </div>
       <div className={cx(styles.activationGroupActions)}>
         {autoSwitch && (
