@@ -21,9 +21,8 @@ import {
   type SuperGrokKeyVault,
   type VertexAIKeyVault,
 } from '@lobechat/types';
-import { isCodexServerDefaultCustomModel } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import { type AiFullModelCard, ModelProvider } from 'model-bank';
+import { type AiFullModelCard, CodexAgentCompatibilitySchema, ModelProvider } from 'model-bank';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
@@ -549,19 +548,20 @@ export type ServerDefaultHeterogeneousModels = Record<
  * `parseClaudeModelId` arm keeps Claude ids eligible in deployments whose
  * catalog omits `abilities`.
  *
- * Codex accepts native Responses models plus an explicit set of tool-capable
- * relay models configured through its custom model-catalog path. Keep that set
- * narrow: the CLI branches reasoning and continuation behaviour on model
- * metadata, so function calling alone is not enough to establish compatibility.
+ * Codex accepts native Responses models automatically. Other relay models must
+ * explicitly publish Codex compatibility metadata in the authoritative model
+ * catalog in addition to supporting function tools. The metadata drives both
+ * the Desktop model catalog and the relay's upstream request mode.
  */
 const supportsServerDefaultHeterogeneousAgent = (
   agentType: ServerDefaultHeterogeneousAgentType,
-  model: Pick<AiFullModelCard, 'abilities' | 'id'>,
+  model: Pick<AiFullModelCard, 'abilities' | 'agentCompatibility' | 'id'>,
 ) =>
   agentType === 'claude-code'
     ? parseClaudeModelId(model.id) !== undefined || model.abilities?.functionCall === true
     : isResponsesAPIModel(model.id) ||
-      (isCodexServerDefaultCustomModel(model.id) && model.abilities?.functionCall === true);
+      (model.abilities?.functionCall === true &&
+        CodexAgentCompatibilitySchema.safeParse(model.agentCompatibility?.codex).success);
 
 const getEnabledServerChatModels = async (provider: ModelProvider) => {
   const providerConfig = (await getServerGlobalConfig()).aiProvider[provider];
@@ -588,13 +588,25 @@ const findEnabledServerChatModel = async (provider: string, model: string) => {
   return modelConfig;
 };
 
-const toServerModelSelection = (provider: string, modelConfig: AiFullModelCard) => ({
-  ...(modelConfig.config?.deploymentName && {
-    deploymentName: modelConfig.config.deploymentName,
-  }),
-  model: modelConfig.id,
-  provider,
-});
+const toServerModelSelection = (provider: string, modelConfig: AiFullModelCard) => {
+  const codexCompatibility = CodexAgentCompatibilitySchema.safeParse(
+    modelConfig.agentCompatibility?.codex,
+  );
+
+  return {
+    ...(modelConfig.config?.deploymentName && {
+      deploymentName: modelConfig.config.deploymentName,
+    }),
+    ...(codexCompatibility.success && { codexCompatibility: codexCompatibility.data }),
+    ...(modelConfig.contextWindowTokens && {
+      contextWindowTokens: modelConfig.contextWindowTokens,
+    }),
+    ...(modelConfig.description && { description: modelConfig.description }),
+    ...(modelConfig.displayName && { displayName: modelConfig.displayName }),
+    model: modelConfig.id,
+    provider,
+  };
+};
 
 /** Return compatible models from the single deployment-owned relay provider. */
 export const getServerDefaultHeterogeneousModels = async () => {

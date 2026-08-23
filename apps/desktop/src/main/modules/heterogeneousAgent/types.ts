@@ -3,6 +3,7 @@ import type {
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
+import type { CodexServerDefaultModelMetadata } from '@lobechat/types';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -54,10 +55,12 @@ export interface PrepareProviderBindingContext {
 
 export interface PrepareServerDefaultBindingContext {
   args: string[];
+  codexModel?: CodexServerDefaultModelMetadata;
   endpoint: string;
   env?: Record<string, string>;
   model: string;
   profileDir: string;
+  runDir: string;
 }
 
 export interface ProviderBindingPlan {

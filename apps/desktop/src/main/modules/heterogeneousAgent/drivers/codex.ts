@@ -5,12 +5,8 @@ import {
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
 } from '@lobechat/heterogeneous-agents/spawn';
-import type { CodexReasoningEffort, CodexServerDefaultCustomModel } from '@lobechat/types';
-import {
-  formatServerDefaultHeterogeneousModel,
-  getCodexReasoningEffortLevels,
-  isCodexServerDefaultCustomModel,
-} from '@lobechat/types';
+import type { CodexReasoningEffort, CodexServerDefaultModelMetadata } from '@lobechat/types';
+import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
@@ -21,38 +17,7 @@ const HOST_PROVIDER_ID = 'lobehub';
 const HOST_API_KEY_ENV = 'LOBEHUB_CODEX_API_KEY';
 const SERVER_TOKEN_ENV = 'LOBEHUB_HETERO_TOKEN';
 const SERVER_DEFAULT_MODEL_CATALOG_FILE = 'models.json';
-
-interface CodexServerDefaultModelMetadata {
-  contextWindow: number;
-  defaultReasoningLevel: CodexReasoningEffort;
-  description: string;
-  displayName: string;
-  truncationMode: 'bytes' | 'tokens';
-}
-
-const CODEX_SERVER_DEFAULT_MODEL_METADATA = {
-  'deepseek-v4-flash': {
-    contextWindow: 1_048_576,
-    defaultReasoningLevel: 'high',
-    description: 'Fast, cost-efficient DeepSeek V4 model for agentic coding.',
-    displayName: 'DeepSeek V4 Flash',
-    truncationMode: 'tokens',
-  },
-  'deepseek-v4-pro': {
-    contextWindow: 1_048_576,
-    defaultReasoningLevel: 'high',
-    description: 'DeepSeek V4 flagship model for complex agentic coding tasks.',
-    displayName: 'DeepSeek V4 Pro',
-    truncationMode: 'tokens',
-  },
-  'glm-5.2': {
-    contextWindow: 1_048_576,
-    defaultReasoningLevel: 'max',
-    description: 'GLM-5.2 flagship model for long-horizon engineering tasks.',
-    displayName: 'GLM-5.2',
-    truncationMode: 'bytes',
-  },
-} as const satisfies Record<CodexServerDefaultCustomModel, CodexServerDefaultModelMetadata>;
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 
 const CODEX_REASONING_LEVEL_DESCRIPTIONS = {
   high: 'Enhanced reasoning for complex tasks',
@@ -112,11 +77,13 @@ const sanitizeCodexProviderBindingEnv = (source: Record<string, string> | undefi
 const tomlString = (value: string): string => JSON.stringify(value);
 
 const buildServerDefaultModelCatalog = (
-  model: CodexServerDefaultCustomModel,
+  model: CodexServerDefaultModelMetadata,
   requestModel: string,
 ) => {
-  const metadata = CODEX_SERVER_DEFAULT_MODEL_METADATA[model];
-  const supportedReasoningLevels = getCodexReasoningEffortLevels(model).map((effort) => ({
+  const { compatibility } = model;
+  const contextWindow = model.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS;
+  const displayName = model.displayName ?? requestModel;
+  const supportedReasoningLevels = compatibility.reasoningEfforts.map((effort) => ({
     description: CODEX_REASONING_LEVEL_DESCRIPTIONS[effort] ?? `${effort} reasoning`,
     effort,
   }));
@@ -130,16 +97,16 @@ const buildServerDefaultModelCatalog = (
           apply_patch_tool_type: null,
           availability_nux: null,
           base_instructions: CODEX_SERVER_DEFAULT_BASE_INSTRUCTIONS,
-          context_window: metadata.contextWindow,
-          default_reasoning_level: metadata.defaultReasoningLevel,
+          context_window: contextWindow,
+          default_reasoning_level: compatibility.defaultReasoningEffort,
           default_reasoning_summary: 'none',
           default_verbosity: null,
-          description: metadata.description,
-          display_name: metadata.displayName,
+          description: model.description ?? displayName,
+          display_name: displayName,
           effective_context_window_percent: 95,
           experimental_supported_tools: [],
           input_modalities: ['text'],
-          max_context_window: metadata.contextWindow,
+          max_context_window: contextWindow,
           priority: 0,
           shell_type: 'unified_exec',
           slug: requestModel,
@@ -147,7 +114,7 @@ const buildServerDefaultModelCatalog = (
           supported_in_api: true,
           supported_reasoning_levels: supportedReasoningLevels,
           supports_reasoning_summary_parameter: false,
-          truncation_policy: { limit: 10_000, mode: metadata.truncationMode },
+          truncation_policy: { limit: 10_000, mode: compatibility.truncationMode },
           upgrade: null,
           visibility: 'list',
         },
@@ -224,16 +191,14 @@ export const codexDriver: HeterogeneousAgentDriver = {
       profileFiles: [{ content: config, path: 'config.toml' }],
     };
   },
-  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+  prepareServerDefaultBinding({ args, codexModel, endpoint, env, model, profileDir, runDir }) {
     const requestModel = formatServerDefaultHeterogeneousModel(model);
-    const customModel = isCodexServerDefaultCustomModel(model) ? model : undefined;
-    const modelCatalogPath = customModel
-      ? path.join(profileDir, SERVER_DEFAULT_MODEL_CATALOG_FILE)
+    const modelCatalogPath = codexModel
+      ? path.join(runDir, SERVER_DEFAULT_MODEL_CATALOG_FILE)
       : undefined;
     const config = [
       `model = ${tomlString(requestModel)}`,
       `model_provider = ${tomlString(HOST_PROVIDER_ID)}`,
-      ...(modelCatalogPath ? [`model_catalog_json = ${tomlString(modelCatalogPath)}`] : []),
       '',
       `[model_providers.${HOST_PROVIDER_ID}]`,
       `name = ${tomlString('LobeHub Server Default')}`,
@@ -245,19 +210,24 @@ export const codexDriver: HeterogeneousAgentDriver = {
       '',
     ].join('\n');
     return {
-      args: [...sanitizeCodexProviderBindingArgs(args), '--model', requestModel],
-      env: { ...sanitizeCodexProviderBindingEnv(env), CODEX_HOME: profileDir },
-      profileFiles: [
-        { content: config, path: 'config.toml' },
-        ...(customModel
-          ? [
-              {
-                content: buildServerDefaultModelCatalog(customModel, requestModel),
-                path: SERVER_DEFAULT_MODEL_CATALOG_FILE,
-              },
-            ]
+      args: [
+        ...sanitizeCodexProviderBindingArgs(args),
+        ...(modelCatalogPath
+          ? ['--config', `model_catalog_json=${tomlString(modelCatalogPath)}`]
           : []),
+        '--model',
+        requestModel,
       ],
+      env: { ...sanitizeCodexProviderBindingEnv(env), CODEX_HOME: profileDir },
+      profileFiles: [{ content: config, path: 'config.toml' }],
+      runFiles: codexModel
+        ? [
+            {
+              content: buildServerDefaultModelCatalog(codexModel, requestModel),
+              path: SERVER_DEFAULT_MODEL_CATALOG_FILE,
+            },
+          ]
+        : undefined,
     };
   },
 };

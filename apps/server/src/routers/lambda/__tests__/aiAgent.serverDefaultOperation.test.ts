@@ -105,6 +105,49 @@ describe('server-default heterogeneous operation control', () => {
     });
   });
 
+  it('returns Codex metadata from the operation-time model resolution without persisting it', async () => {
+    const compatibility = {
+      defaultReasoningEffort: 'high' as const,
+      reasoningEfforts: ['low', 'high', 'max'] as const,
+      runtimeApiMode: 'chatCompletion' as const,
+      toolMode: 'function' as const,
+      truncationMode: 'tokens' as const,
+    };
+    resolveModel.mockResolvedValueOnce({
+      codexCompatibility: compatibility,
+      contextWindowTokens: 256_000,
+      description: 'Catalog-owned description',
+      displayName: 'Relay Coding Model',
+      model: 'relay-coding-model',
+      provider: 'lobehub',
+    });
+
+    await expect(
+      caller().beginServerDefaultHeterogeneousOperation({
+        ...operationInput('desktop-operation-metadata'),
+        model: 'relay-coding-model',
+      }),
+    ).resolves.toMatchObject({
+      codexModel: {
+        compatibility,
+        contextWindowTokens: 256_000,
+        description: 'Catalog-owned description',
+        displayName: 'Relay Coding Model',
+      },
+      model: 'lobehub-default',
+      token: 'operation-token',
+    });
+
+    const [operation] = await testDB
+      .select()
+      .from(agentOperations)
+      .where(eq(agentOperations.id, 'desktop-operation-metadata'));
+    expect(operation.metadata).toEqual({
+      agentType: 'codex',
+      serverDefaultHeterogeneous: true,
+    });
+  });
+
   it('requires a normal user OIDC token for the control plane', async () => {
     await expect(
       caller('hetero-operation').beginServerDefaultHeterogeneousOperation(

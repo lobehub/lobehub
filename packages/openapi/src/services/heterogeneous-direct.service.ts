@@ -5,12 +5,7 @@ import type {
   OpenAIChatMessage,
   UserMessageContentPart,
 } from '@lobechat/model-runtime';
-import type { CodexReasoningEffort } from '@lobechat/types';
-import {
-  getCodexReasoningEffortLevels,
-  isCodexServerDefaultCustomModel,
-  RequestTrigger,
-} from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import type { ServerDefaultHeterogeneousAgentType } from '@/server/modules/ModelRuntime';
@@ -828,7 +823,7 @@ export const invokeServerDefaultModel = async (params: {
     params.agentType,
     params.model,
   );
-  const { deploymentName } = resolvedModel;
+  const { codexCompatibility, deploymentName } = resolvedModel;
   const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
@@ -836,13 +831,13 @@ export const invokeServerDefaultModel = async (params: {
   });
   const { reasoning, ...chatCompletionsPayload } = params.payload;
   const requestedReasoningEffort = reasoning?.effort;
-  const reasoningEffort = getCodexReasoningEffortLevels(params.model).includes(
-    requestedReasoningEffort as CodexReasoningEffort,
+  const reasoningEffort = codexCompatibility?.reasoningEfforts.includes(
+    requestedReasoningEffort as (typeof codexCompatibility.reasoningEfforts)[number],
   )
     ? (requestedReasoningEffort as ChatStreamPayload['reasoning_effort'])
     : undefined;
   const payload =
-    params.agentType === 'codex' && isCodexServerDefaultCustomModel(params.model)
+    params.agentType === 'codex' && codexCompatibility?.runtimeApiMode === 'chatCompletion'
       ? {
           ...chatCompletionsPayload,
           apiMode: 'chatCompletion' as const,

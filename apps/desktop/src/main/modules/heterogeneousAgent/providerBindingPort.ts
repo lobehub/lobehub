@@ -2,6 +2,7 @@ import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingRuntime,
 } from '@lobechat/heterogeneous-agents';
+import type { CodexServerDefaultModelMetadata } from '@lobechat/types';
 
 import {
   callLambdaMutation,
@@ -26,6 +27,7 @@ export const getProviderBindingRuntime = async (
 };
 
 export interface ServerDefaultOperationBinding {
+  codexModel?: CodexServerDefaultModelMetadata;
   endpoint: string;
   model: 'lobehub-default';
   token: string;

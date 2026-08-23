@@ -7,6 +7,7 @@ import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
+import type { CodexServerDefaultModelMetadata } from '@lobechat/types';
 
 import { HETERO_AGENT_BINDINGS_DIR, HETERO_AGENT_RUNS_DIR } from '@/const/heteroAgent';
 
@@ -137,6 +138,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
   agentType: string;
   appStoragePath: string;
   args: string[];
+  codexModel?: CodexServerDefaultModelMetadata;
   driver: HeterogeneousAgentDriver;
   endpoint: string;
   env?: Record<string, string>;
@@ -171,10 +173,12 @@ export const prepareHostedServerDefaultBinding = async (params: {
   try {
     const plan = await params.driver.prepareServerDefaultBinding({
       args: params.args,
+      codexModel: params.codexModel,
       endpoint: params.endpoint,
       env: params.env,
       model: params.model,
       profileDir,
+      runDir,
     });
     await writeManagedFiles(profileDir, runDir, plan.profileFiles);
     await writeManagedFiles(runDir, runDir, plan.runFiles);

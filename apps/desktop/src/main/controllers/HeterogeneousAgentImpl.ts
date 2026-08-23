@@ -1299,6 +1299,29 @@ export default class HeterogeneousAgentCtr {
         return;
       }
 
+      if (session.agentType === 'codex') {
+        // The server re-resolves model compatibility for every operation. Rebuild
+        // the Codex binding only after that authorization succeeds so models.json
+        // is always derived from the operation-scoped catalog snapshot rather
+        // than from persisted agent config or Desktop-side model IDs.
+        await session.hostedProviderBinding?.cleanup();
+        session.hostedProviderBinding = undefined;
+        const hostedProviderBinding = await prepareHostedServerDefaultBinding({
+          agentType: session.agentType,
+          appStoragePath: this.app.appStoragePath,
+          args: session.args,
+          codexModel: operation.codexModel,
+          driver: getHeterogeneousAgentDriver(session.agentType),
+          endpoint: operation.endpoint,
+          env: session.env,
+          model: serverDefaultApiConfig.model,
+          sessionId: session.sessionId,
+        });
+        session.args = hostedProviderBinding.args;
+        session.env = hostedProviderBinding.env;
+        session.hostedProviderBinding = hostedProviderBinding;
+      }
+
       session.serverOperationToken = operation.token;
       await this.sendPromptImpl(params);
       if (!session.cancelledByUs) result = 'done';

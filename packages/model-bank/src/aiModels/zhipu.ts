@@ -46,6 +46,15 @@ const zhipuChatModels: AIChatModelCard[] = [
       search: true,
       structuredOutput: true,
     },
+    agentCompatibility: {
+      codex: {
+        defaultReasoningEffort: 'max',
+        reasoningEfforts: ['high', 'max'],
+        runtimeApiMode: 'chatCompletion',
+        toolMode: 'function',
+        truncationMode: 'bytes',
+      },
+    },
     contextWindowTokens: 1_048_576,
     description:
       'GLM-5.2 is Zhipu’s flagship model for the era of long-horizon tasks. It supports a solid 1M context window that can hold project-scale engineering context, with more stable long-horizon execution and more reliable adherence to engineering conventions. A single task can complete the full development path from requirements to multi-platform deployable artifacts.',
