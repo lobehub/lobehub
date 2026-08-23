@@ -113,7 +113,7 @@ export const instantiateVerifyPlanOnStart = async (
       // planned/verifying/repairing progress instead of waiting for an external
       // ingest command to create the aggregate after verification has finished.
       const acceptanceService = new AcceptanceService(db, userId, workspaceId);
-      await acceptanceService.attachRun(run.id, acceptance.id);
+      await acceptanceService.attachPolicyRun(run.id, acceptance.id);
 
       log(
         'instantiated + confirmed verify plan for op %s (%d items), acceptance %s',

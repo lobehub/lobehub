@@ -1101,10 +1101,13 @@ export const taskRouter = router({
         }
         const requirement =
           verify.requirement === undefined ? acceptance.requirement : verify.requirement;
-        await acceptanceService.acceptanceModel.update(acceptance.id, {
+        const updated = await acceptanceService.acceptanceModel.updatePolicy(acceptance.id, {
           config: nextConfig,
           requirement,
         });
+        if (!updated) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance policy not found' });
+        }
         const data: TaskVerifyConfig = {
           ...(nextConfig as TaskVerifyConfig),
           requirement: requirement ?? undefined,

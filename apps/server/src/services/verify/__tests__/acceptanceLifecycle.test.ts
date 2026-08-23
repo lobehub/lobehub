@@ -5,7 +5,7 @@ import { instantiateVerifyPlanOnStart } from '../planInstantiation';
 import { createRepairRunner } from '../repairService';
 
 const mocks = vi.hoisted(() => ({
-  acceptanceAttachRun: vi.fn(),
+  acceptanceAttachPolicyRun: vi.fn(),
   acceptanceEnsureForSubject: vi.fn(),
   acceptanceUpdate: vi.fn(),
   agentExec: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../goalLoop', () => ({
 vi.mock('../acceptanceService', () => ({
   AcceptanceService: vi.fn(() => ({
     acceptanceModel: { update: mocks.acceptanceUpdate },
-    attachRun: mocks.acceptanceAttachRun,
+    attachPolicyRun: mocks.acceptanceAttachPolicyRun,
     ensureForSubject: mocks.acceptanceEnsureForSubject,
   })),
 }));
@@ -95,7 +95,7 @@ describe('Verify acceptance lifecycle', () => {
       'workspace-1',
     );
 
-    expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('run-1', 'acceptance-1');
   });
 
   it('keeps an empty Acceptance opted out of verification', async () => {
@@ -140,6 +140,6 @@ describe('Verify acceptance lifecycle', () => {
 
     expect(result).toEqual({ repairOperationId: 'repair-operation' });
     expect(mocks.agentExec).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1' }));
-    expect(mocks.acceptanceAttachRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
+    expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
   });
 });

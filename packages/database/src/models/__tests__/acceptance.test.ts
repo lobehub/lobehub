@@ -163,10 +163,15 @@ describe('AcceptanceModel', () => {
     expect(await collaboratorModel.findPolicyBySubject('topic', topicId)).toMatchObject({
       id: acceptance.id,
     });
+    expect(await collaboratorModel.findPolicyById(acceptance.id)).toMatchObject({
+      id: acceptance.id,
+    });
     await collaboratorModel.updatePolicy(acceptance.id, { requirement: 'Shared task contract' });
+    await collaboratorModel.updatePolicyStatus(acceptance.id, 'verifying');
     expect((await creatorModel.findBySubject('topic', topicId))?.requirement).toBe(
       'Shared task contract',
     );
+    expect((await creatorModel.findBySubject('topic', topicId))?.status).toBe('verifying');
 
     expect(
       await new AcceptanceModel(serverDB, otherUserId).findPolicyBySubject('topic', topicId),

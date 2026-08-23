@@ -523,6 +523,23 @@ export class AcceptanceService {
     const acceptance = await this.acceptanceModel.findById(acceptanceId);
     if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
 
+    return this.attachResolvedRun(runId, acceptance);
+  };
+
+  /** Attach a Task run using policy scope while preserving report visibility. */
+  attachPolicyRun = async (runId: string, acceptanceId: string): Promise<VerifyRunItem> => {
+    const acceptance = await this.acceptanceModel.findPolicyById(acceptanceId);
+    if (!acceptance) throw new Error(`Acceptance "${acceptanceId}" not found`);
+
+    return this.attachResolvedRun(runId, acceptance);
+  };
+
+  private attachResolvedRun = async (
+    runId: string,
+    acceptance: AcceptanceItem,
+  ): Promise<VerifyRunItem> => {
+    const acceptanceId = acceptance.id;
+
     // Idempotent for the re-ingest path (the CLI sidecar remembers the run):
     // an already-chained round keeps its index instead of being re-appended.
     const existing = await this.runModel.findById(runId);
@@ -599,7 +616,7 @@ export class AcceptanceService {
    * round newer than the decision arrives.
    */
   recomputeStatus = async (acceptanceId: string): Promise<AcceptanceStatus | null> => {
-    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    const acceptance = await this.acceptanceModel.findPolicyById(acceptanceId);
     if (!acceptance) return null;
     if (acceptance.status === 'accepted' || acceptance.status === 'closed') {
       return acceptance.status;
@@ -615,7 +632,7 @@ export class AcceptanceService {
     const report = await this.reportModel.findByRun(current.id);
     const status = statusFromRound(current, Boolean(report));
     if (status !== acceptance.status) {
-      await this.acceptanceModel.updateStatus(acceptanceId, status);
+      await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       await this.mirrorGoalStatus(acceptance.subjectType, acceptance.subjectId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }

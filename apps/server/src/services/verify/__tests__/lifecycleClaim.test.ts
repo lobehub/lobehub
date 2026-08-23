@@ -128,6 +128,27 @@ describe('runVerifyOnCompletion — verification claim', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps an interrupted evidence verification retryable until it can be reclaimed', async () => {
+    findByOperation.mockResolvedValue({ ...confirmedRun, status: 'verifying' });
+    operationFindById.mockResolvedValue({ id: 'op-1', taskId: 'task-1' });
+    claimVerifying.mockResolvedValue(false);
+
+    await expect(runVerifyAfterEvidenceSubmission(db, 'u1', params)).rejects.toThrow(
+      'still in progress',
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('propagates evidence verification failures so the queue retries them', async () => {
+    findByOperation.mockResolvedValue({ ...confirmedRun, status: 'collecting_evidence' });
+    operationFindById.mockResolvedValue({ id: 'op-1', taskId: 'task-1' });
+    execute.mockRejectedValue(new Error('judge unavailable'));
+
+    await expect(runVerifyAfterEvidenceSubmission(db, 'u1', params)).rejects.toThrow(
+      'judge unavailable',
+    );
+  });
+
   it('claims the run with the abandoned bound rather than reading its status', async () => {
     const before = Date.now();
     await runVerifyOnCompletion(db, 'u1', params);

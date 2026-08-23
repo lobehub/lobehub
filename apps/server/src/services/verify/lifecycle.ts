@@ -81,6 +81,7 @@ const executeVerifyLifecycle = async (
   params: RunVerifyOnCompletionParams,
   workspaceId?: string,
   evidenceSubmitted = false,
+  throwOnError = false,
 ): Promise<void> => {
   try {
     const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
@@ -96,32 +97,29 @@ const executeVerifyLifecycle = async (
       return;
     }
 
-    if (op.taskId) {
-      if (!evidenceSubmitted) {
-        const evidenceClaimed = await new VerifyRunModel(
-          db,
-          userId,
-          workspaceId,
-        ).claimEvidenceCollection(run.id);
-        if (evidenceClaimed) {
-          try {
-            await startEvidenceSubmission({
-              db,
-              deliverable: params.deliverable,
-              goal: params.goal,
-              operation: op,
-              plan: run.plan,
-              userId,
-              workspaceId,
-            });
-          } catch (error) {
-            await new VerifyRunModel(db, userId, workspaceId).updateStatus(run.id, 'planned');
-            throw error;
-          }
+    if (op.taskId && !evidenceSubmitted) {
+      const evidenceClaimed = await new VerifyRunModel(
+        db,
+        userId,
+        workspaceId,
+      ).claimEvidenceCollection(run.id);
+      if (evidenceClaimed) {
+        try {
+          await startEvidenceSubmission({
+            db,
+            deliverable: params.deliverable,
+            goal: params.goal,
+            operation: op,
+            plan: run.plan,
+            userId,
+            workspaceId,
+          });
+        } catch (error) {
+          await new VerifyRunModel(db, userId, workspaceId).updateStatus(run.id, 'planned');
+          throw error;
         }
-        return;
       }
-      if (run.status !== 'collecting_evidence') return;
+      return;
     }
 
     // Claim only after a task-bound builder has submitted evidence. Standalone
@@ -130,7 +128,15 @@ const executeVerifyLifecycle = async (
       params.operationId,
       new Date(Date.now() - VERIFY_ABANDONED_MS),
     );
-    if (!claimed) return;
+    if (!claimed) {
+      // A queued evidence callback that finds an unfinished judge must remain
+      // retryable. A later delivery either reclaims the stale run or observes
+      // its terminal status and exits normally.
+      if (evidenceSubmitted && run.status === 'verifying') {
+        throw new Error(`Verification for operation "${params.operationId}" is still in progress`);
+      }
+      return;
+    }
 
     // Task-bound runs may pin which agent verifies through its Acceptance policy.
     // Non-task runs leave it undefined → builtin fallback.
@@ -200,6 +206,7 @@ const executeVerifyLifecycle = async (
     );
   } catch (error) {
     log('runVerifyOnCompletion failed for op %s (non-fatal): %O', params.operationId, error);
+    if (throwOnError) throw error;
   }
 };
 
@@ -216,4 +223,4 @@ export const runVerifyAfterEvidenceSubmission = async (
   userId: string,
   params: RunVerifyOnCompletionParams,
   workspaceId?: string,
-): Promise<void> => executeVerifyLifecycle(db, userId, params, workspaceId, true);
+): Promise<void> => executeVerifyLifecycle(db, userId, params, workspaceId, true, true);

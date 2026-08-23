@@ -5,8 +5,6 @@ import { TaskModel } from '@/database/models/task';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { AcceptanceService } from './acceptanceService';
-
 export interface ResolvedTaskAcceptance {
   acceptance: AcceptanceItem;
   config: AcceptanceConfig;
@@ -42,11 +40,13 @@ export const resolveTaskAcceptance = async (
   let inheritedConfig: AcceptanceConfig | undefined;
   let inheritedRequirement: string | undefined;
   let policyAcceptance: AcceptanceItem | undefined;
+  let taskProjectId: string | null | undefined;
 
   while (currentTaskId && !seen.has(currentTaskId)) {
     seen.add(currentTaskId);
     const task = await taskModel.findById(currentTaskId);
     if (!task) break;
+    if (currentTaskId === taskId) taskProjectId = task.projectId;
 
     const acceptance =
       currentTaskId === taskId
@@ -81,14 +81,14 @@ export const resolveTaskAcceptance = async (
     };
   }
 
-  const acceptanceService = new AcceptanceService(db, userId, workspaceId);
   const acceptance = ownAcceptance
     ? (await acceptanceModel.updatePolicy(ownAcceptance.id, {
         config: inheritedConfig ?? {},
         requirement: inheritedRequirement,
       }))!
-    : await acceptanceService.ensureForSubject('task', taskId, {
+    : await acceptanceModel.ensureForSubject('task', taskId, {
         config: inheritedConfig,
+        projectId: taskProjectId,
         requirement: inheritedRequirement,
       });
 

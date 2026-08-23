@@ -10,12 +10,9 @@ const mocks = vi.hoisted(() => ({
   taskFindById: vi.fn(),
 }));
 
-vi.mock('../acceptanceService', () => ({
-  AcceptanceService: vi.fn(() => ({ ensureForSubject: mocks.acceptanceEnsure })),
-}));
-
 vi.mock('@/database/models/acceptance', () => ({
   AcceptanceModel: vi.fn(() => ({
+    ensureForSubject: mocks.acceptanceEnsure,
     findPolicyBySubject: mocks.acceptanceFindPolicyBySubject,
     updatePolicy: mocks.acceptanceUpdatePolicy,
   })),
@@ -77,6 +74,7 @@ describe('resolveTaskAcceptance', () => {
         maxIterations: 2,
         verifyRubricId: 'rubric-1',
       }),
+      projectId: undefined,
       requirement: 'Legacy requirement',
     });
     expect(resolved?.acceptance.id).toBe('acceptance-1');
@@ -101,6 +99,7 @@ describe('resolveTaskAcceptance', () => {
 
     expect(mocks.acceptanceEnsure).toHaveBeenCalledWith('task', 'child', {
       config: { enabled: true, verifierAgentId: 'parent-verifier' },
+      projectId: undefined,
       requirement: 'Parent contract',
     });
     expect(resolved?.acceptance.id).toBe('child-acceptance');

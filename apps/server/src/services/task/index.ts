@@ -18,7 +18,6 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
-import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
@@ -36,6 +35,7 @@ import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { createTaskSchedulerModule } from '../taskScheduler';
+import { resolveTaskAcceptance } from '../verify/taskAcceptance';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -665,9 +665,9 @@ export class TaskService {
         new GoalModel(this.db, this.userId, this.workspaceId)
           .findBySubject('task', task.id)
           .catch(() => undefined),
-        new AcceptanceModel(this.db, this.userId, this.workspaceId)
-          .findBySubject('task', task.id)
-          .catch(() => undefined),
+        resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(
+          () => undefined,
+        ),
       ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
@@ -1002,7 +1002,7 @@ export class TaskService {
       status: task.status,
       userId: task.assigneeUserId,
       verify: acceptance
-        ? { ...acceptance.config, requirement: acceptance.requirement ?? undefined }
+        ? { ...acceptance.config, requirement: acceptance.requirement }
         : this.taskModel.getVerifyConfig(task),
       visibility: task.visibility,
       subtasks,
