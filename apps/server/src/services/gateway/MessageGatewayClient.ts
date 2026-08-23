@@ -331,8 +331,12 @@ export function isMessageGatewayHostConfigured(host: MessageGatewayHost): boolea
  * is holding.
  */
 export function isAnyMessageGatewayEnabled(): boolean {
-  return (
-    gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' &&
-    getConfiguredMessageGatewayHosts().some(isMessageGatewayHostConfigured)
-  );
+  if (gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1') return false;
+  if (isMessageGatewayHostConfigured('default')) return true;
+  // The Node host counts only once it actually owns a platform. With an empty
+  // platform list every platform still resolves to `default`, so reporting
+  // "gateway mode" on the strength of a Node URL alone would send every
+  // connect to an unconfigured default client and take those platforms
+  // offline — worse than the in-process path this flag chooses between.
+  return isMessageGatewayHostConfigured('node') && parseNodePlatforms().size > 0;
 }

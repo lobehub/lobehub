@@ -4,6 +4,7 @@ import {
   getConfiguredMessageGatewayHosts,
   getMessageGatewayClient,
   getMessageGatewayClientForHost,
+  isAnyMessageGatewayEnabled,
   MessageGatewayClient,
   resolveMessageGatewayHost,
 } from '../MessageGatewayClient';
@@ -219,6 +220,41 @@ describe('MessageGatewayClient', () => {
       expect(nodeClient).not.toBe(defaultClient);
       // Node URL + the shared MESSAGE_GATEWAY_SERVICE_TOKEN are all it needs.
       expect(nodeClient.isConfigured).toBe(true);
+    });
+
+    describe('isAnyMessageGatewayEnabled', () => {
+      beforeEach(() => {
+        mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
+        mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = 'wechat';
+        mockGatewayEnv.MESSAGE_GATEWAY_NODE_URL = 'https://node-gateway.test.com';
+        mockGatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN = 'shared-token';
+        mockGatewayEnv.MESSAGE_GATEWAY_URL = 'https://message-gateway.test.com';
+      });
+
+      it('is false while the kill switch is off, whatever is configured', () => {
+        mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = undefined;
+        expect(isAnyMessageGatewayEnabled()).toBe(false);
+      });
+
+      it('is true for a node-only deployment that owns at least one platform', () => {
+        mockGatewayEnv.MESSAGE_GATEWAY_URL = undefined;
+        expect(isAnyMessageGatewayEnabled()).toBe(true);
+      });
+
+      it('is false when the only configured host owns no platform', () => {
+        // URL deployed ahead of the platform list: every platform still
+        // resolves to `default`, which has no URL — activating gateway mode
+        // here would route every connect to an unconfigured client.
+        mockGatewayEnv.MESSAGE_GATEWAY_URL = undefined;
+        mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = undefined;
+        expect(isAnyMessageGatewayEnabled()).toBe(false);
+      });
+
+      it('stays true on an empty platform list while the default host is configured', () => {
+        // The step-2 rollout shape: node URL deployed, nothing routed to it yet.
+        mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = '';
+        expect(isAnyMessageGatewayEnabled()).toBe(true);
+      });
     });
   });
 });

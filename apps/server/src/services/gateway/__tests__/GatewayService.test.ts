@@ -1396,9 +1396,9 @@ describe('GatewayService', () => {
 
       await service.ensureRunning();
 
-      const drained = mockGatewayClient.disconnect.mock.calls.map(([id]: [string]) => id);
+      const drained = mockGatewayClient.disconnect.mock.calls.map((call) => call[0] as string);
       const connected = mockNodeGatewayClient.connect.mock.calls.map(
-        ([config]: [{ connectionId: string }]) => config.connectionId,
+        (call) => (call[0] as { connectionId: string }).connectionId,
       );
 
       expect(drained).toHaveLength(50);
@@ -1406,6 +1406,55 @@ describe('GatewayService', () => {
       // and the undrained remainder is left for the next round.
       expect(connected.every((id: string) => drained.includes(id))).toBe(true);
       expect(connected).toHaveLength(50);
+    });
+
+    it('never connects a bot provider the capped stale pass left running on the old host', async () => {
+      // 60 wechat providers all live on the default host and all routed to
+      // node. Stale disconnects are capped at 50/round, so connecting all 60
+      // on node would leave 10 running on both gateways.
+      const providers = Array.from({ length: 60 }, (_, i) => ({
+        applicationId: `wechat-app-${i}`,
+        credentials: { botToken: 'token' },
+        id: `wechat-provider-${i}`,
+        settings: {},
+        userId: `u${i}`,
+      }));
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat' ? providers : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindByIds.mockImplementation(async (_db: unknown, ids: string[]) =>
+        ids.map((id) => ({ enabled: true, id, platform: 'wechat', settings: {} })),
+      );
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: providers.map((p) => p.id),
+      });
+
+      await service.ensureRunning();
+
+      const drained = mockGatewayClient.disconnect.mock.calls.map((call) => call[0] as string);
+      const connected = mockNodeGatewayClient.connect.mock.calls.map(
+        (call) => (call[0] as { connectionId: string }).connectionId,
+      );
+
+      expect(drained).toHaveLength(50);
+      expect(connected).toHaveLength(50);
+      expect(connected.every((id: string) => drained.includes(id))).toBe(true);
+    });
+
+    it('makes no cross-host change when the messenger link lookup fails', async () => {
+      mockFindAllLinksByPlatform.mockRejectedValue(new Error('db unavailable'));
+      // A stray poller on the default host would normally be drained here —
+      // draining it before discovering the links are unreadable would strand
+      // that user offline until a later round.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
     });
 
     it('keeps a linked account whose credentials are undecryptable out of the stale pass', async () => {

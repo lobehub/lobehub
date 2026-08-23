@@ -253,10 +253,28 @@ export class GatewayService {
       hosts.filter((host) => snapshots.get(host)?.complete === true),
     );
 
+    // Ids a snapshot shows on a host that no longer owns them — i.e. mid-move.
+    // Draining them is capped per round, so without this the destination's
+    // connect pass would happily build up every id the source pass had no
+    // budget to remove, and the overflow would run on both hosts at once.
+    const currentlyElsewhere = new Set<string>();
+    for (const [host, snapshot] of snapshots) {
+      if (!snapshot) continue;
+      for (const id of snapshot.connections.keys()) {
+        const entry = desired.get(id);
+        if (entry && resolveMessageGatewayHost(entry.platform) !== host) currentlyElsewhere.add(id);
+      }
+    }
+    // Filled in by each host's stale pass as it actually removes an id, which
+    // is what releases that id for connecting on its new owner.
+    const drainedThisRound = new Set<string>();
+
     for (const host of hosts) {
       await this.syncHostConnections({
+        currentlyElsewhere,
         desired,
         desiredComplete,
+        drainedThisRound,
         gated,
         host,
         hostsReadyToReceive,
@@ -283,15 +301,25 @@ export class GatewayService {
 
   /** Run the desired/actual diff for the bot-provider connections one host owns. */
   private async syncHostConnections(params: {
+    currentlyElsewhere: Set<string>;
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
+    drainedThisRound: Set<string>;
     gated: Map<string, string>;
     host: MessageGatewayHost;
     hostsReadyToReceive: Set<MessageGatewayHost>;
     serverDB: Awaited<ReturnType<typeof getServerDB>>;
     snapshot: ActualConnectionsSnapshot | null;
   }): Promise<void> {
-    const { desiredComplete, host, hostsReadyToReceive, serverDB, snapshot: actual } = params;
+    const {
+      currentlyElsewhere,
+      desiredComplete,
+      drainedThisRound,
+      host,
+      hostsReadyToReceive,
+      serverDB,
+      snapshot: actual,
+    } = params;
     const client = getMessageGatewayClientForHost(host);
 
     // Slice of desired/gated owned by this host, by platform routing.
@@ -319,6 +347,7 @@ export class GatewayService {
         gated,
         host,
         hostsReadyToReceive,
+        drainedThisRound,
       );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
@@ -359,6 +388,20 @@ export class GatewayService {
           if (Object.keys(provider.credentials).length === 0) {
             skipped++;
             log('Gateway sync: %s credentials unavailable, skipping connect', provider.id);
+            return;
+          }
+
+          // Mid-move and not yet drained from its old host: the source pass is
+          // capped per round, so connecting here would leave the provider live
+          // on both gateways, double-delivering until a later round catches
+          // up. Wait for the drain — at worst this costs one round.
+          if (currentlyElsewhere.has(provider.id) && !drainedThisRound.has(provider.id)) {
+            deferred++;
+            log(
+              'Gateway sync[%s]: %s not yet drained from its previous host, deferring connect',
+              host,
+              provider.id,
+            );
             return;
           }
 
@@ -494,6 +537,22 @@ export class GatewayService {
 
       const prefix = `messenger:${platform}:`;
 
+      // Load the links BEFORE touching any host. A migration that drains the
+      // old host and only then discovers it cannot read the account links
+      // leaves those users offline until a later round — so the lookup that
+      // can fail runs while a failure is still free.
+      let links: DecryptedMessengerAccountLink[];
+      try {
+        links = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
+          serverDB,
+          platform,
+          gateKeeper,
+        );
+      } catch (err) {
+        log('Gateway sync[%s]: messenger link listing failed for %s: %O', host, platform, err);
+        continue;
+      }
+
       // Ids this round leaves running on a host that no longer owns them —
       // past the per-round cap, failed to disconnect, or not attempted at all.
       // The connect pass must skip these: connecting one while it still polls
@@ -505,7 +564,25 @@ export class GatewayService {
       // before the owning host's connect pass for the same reason
       // (disconnect-then-connect ordering during a host migration).
       for (const [otherHost, otherSnapshot] of snapshots) {
-        if (otherHost === host || !otherSnapshot) continue;
+        if (otherHost === host) continue;
+
+        // A host we cannot see cannot be drained, and its admin surface being
+        // down does not mean its pollers stopped. Deliberate trade-off: we
+        // still connect on the owning host rather than block on it, because a
+        // steady-state deployment has no strays here at all, and holding every
+        // reconcile hostage to an unrelated host's admin outage costs far more
+        // availability than the duplicate-delivery window it would avoid —
+        // which only opens if that outage overlaps an actual migration.
+        if (!otherSnapshot) {
+          log(
+            'Gateway sync[%s]: %s host snapshot unavailable — cannot confirm %s is drained there',
+            host,
+            otherHost,
+            platform,
+          );
+          continue;
+        }
+
         const strayIds = [...otherSnapshot.connections.keys()].filter((id) =>
           id.startsWith(prefix),
         );
@@ -553,18 +630,6 @@ export class GatewayService {
           },
           { concurrency: GATEWAY_SYNC_CONCURRENCY },
         );
-      }
-
-      let links: DecryptedMessengerAccountLink[];
-      try {
-        links = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
-          serverDB,
-          platform,
-          gateKeeper,
-        );
-      } catch (err) {
-        log('Gateway sync[%s]: messenger link listing failed for %s: %O', host, platform, err);
-        continue;
       }
 
       const desired = new Map<string, DecryptedMessengerAccountLink>();
@@ -880,6 +945,7 @@ export class GatewayService {
     gated: Set<string>,
     host: MessageGatewayHost,
     hostsReadyToReceive: Set<MessageGatewayHost>,
+    drainedThisRound: Set<string>,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
       (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
@@ -950,6 +1016,8 @@ export class GatewayService {
 
           await client.disconnect(id);
           disconnected++;
+          // Releases the id for its new owner's connect pass this same round.
+          drainedThisRound.add(id);
 
           // Only disabled rows get their runtime snapshot marked
           // disconnected. After the guard above, the remaining enabled rows
