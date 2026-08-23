@@ -1,3 +1,4 @@
+import type { GoalStatus } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import type { GoalListItem } from '@/store/goal/initialState';
@@ -9,10 +10,15 @@ import {
   resolveHomeGoalView,
 } from './homeGoals';
 
-const goal = (overrides: Partial<GoalListItem> & Pick<GoalListItem, 'id'>): GoalListItem =>
+type GoalOverrides = Omit<Partial<GoalListItem>, 'goal' | 'id'> & {
+  goal?: Partial<NonNullable<GoalListItem['goal']>>;
+  id: string;
+};
+
+const goal = (overrides: GoalOverrides): GoalListItem =>
   ({
     assigneeAgentId: 'agt_1',
-    config: { goal: { maxIterations: 3 } },
+    goal: { id: `g-${overrides.id}`, maxRounds: 3, status: 'running' },
     identifier: `T-${overrides.id}`,
     instruction: 'do the thing',
     name: `goal ${overrides.id}`,
@@ -41,9 +47,9 @@ describe('indexAcceptanceStatuses', () => {
 describe('buildHomeGoalEntries', () => {
   it('puts the goals waiting on the user ahead of the ones still working', () => {
     const goals = [
-      goal({ id: 'r1', status: 'running' }),
-      goal({ id: 'd1', status: 'completed' }),
-      goal({ id: 'r2', status: 'scheduled' }),
+      goal({ id: 'r1', goal: { status: 'running' } }),
+      goal({ id: 'd1', goal: { status: 'review' } }),
+      goal({ id: 'r2', goal: { status: 'verifying' } }),
     ];
 
     const entries = buildHomeGoalEntries(goals);
@@ -54,34 +60,29 @@ describe('buildHomeGoalEntries', () => {
 
   it('drops goals that are finished or parked', () => {
     const goals = [
-      goal({ id: 'a', status: 'canceled' }),
-      goal({ id: 'b', status: 'failed' }),
-      goal({ id: 'c', status: 'paused' }),
-      goal({ id: 'd', status: 'running' }),
+      goal({ id: 'a', goal: { status: 'canceled' } }),
+      goal({ id: 'b', goal: { status: 'failed' } }),
+      goal({ id: 'c', goal: { status: 'paused' } }),
+      goal({ id: 'd', goal: { status: 'achieved' } }),
+      goal({ id: 'e', goal: { status: 'running' } }),
     ];
 
-    expect(titlesOf(buildHomeGoalEntries(goals))).toEqual(['goal d']);
+    expect(titlesOf(buildHomeGoalEntries(goals))).toEqual(['goal e']);
   });
 
-  it('lets an accepted acceptance retire a goal its task status still calls completed', () => {
-    const goals = [goal({ id: 'done', status: 'completed' })];
+  it('reads a review goal as pending the user even without an acceptance read', () => {
+    const goals = [goal({ id: 'live', goal: { status: 'review' } })];
 
-    expect(buildHomeGoalEntries(goals, { done: 'accepted' })).toEqual([]);
-  });
-
-  it('reads a delivered acceptance as pending review even while the task runs on', () => {
-    const goals = [goal({ id: 'live', status: 'running' })];
-
-    const [entry] = buildHomeGoalEntries(goals, { live: 'delivered' });
+    const [entry] = buildHomeGoalEntries(goals);
 
     expect(entry.bucket).toBe('review');
     expect(entry.statusKey).toBe('goalList.status.review');
   });
 
   it('keeps a verifying goal in the running bucket', () => {
-    const goals = [goal({ id: 'v', status: 'running' })];
+    const goals = [goal({ id: 'v', goal: { status: 'verifying' } })];
 
-    const [entry] = buildHomeGoalEntries(goals, { v: 'verifying' });
+    const [entry] = buildHomeGoalEntries(goals);
 
     expect(entry.bucket).toBe('running');
     expect(entry.statusKey).toBe('goalList.status.verifying');
@@ -89,7 +90,13 @@ describe('buildHomeGoalEntries', () => {
 
   it('carries the round budget and falls back to the identifier for an unnamed goal', () => {
     const goals = [
-      goal({ config: { goal: { maxIterations: 5 } }, id: 'x', instruction: '', name: null }),
+      goal({
+        goal: { id: 'g-x', maxRounds: 5, status: 'running' },
+        id: 'x',
+        instruction: '',
+        name: null,
+        totalTopics: 1,
+      }),
     ];
 
     expect(buildHomeGoalEntries(goals)[0]).toMatchObject({
@@ -100,17 +107,19 @@ describe('buildHomeGoalEntries', () => {
     });
   });
 
-  it('reports no round budget when the goal config carries none', () => {
-    const goals = [goal({ config: {}, id: 'x' })];
+  it('reports no round budget when the goal entity carries none', () => {
+    const goals = [goal({ goal: { id: 'g-x', maxRounds: null, status: 'running' }, id: 'x' })];
 
     expect(buildHomeGoalEntries(goals)[0].maxRounds).toBeNull();
   });
 });
 
 describe('resolveHomeGoalView', () => {
-  const entries = (count: number, status = 'running') =>
+  const entries = (count: number, status: GoalStatus = 'running') =>
     buildHomeGoalEntries(
-      Array.from({ length: count }, (_, index) => goal({ id: `g${index}`, status })),
+      Array.from({ length: count }, (_, index) =>
+        goal({ goal: { id: `g${index}`, status }, id: `g${index}` }),
+      ),
     );
 
   it('names each pile and leaves an empty one out', () => {
@@ -143,8 +152,10 @@ describe('resolveHomeGoalView', () => {
 
   it('cuts the least urgent rows, never the ones waiting on the user', () => {
     const goals = [
-      ...Array.from({ length: 6 }, (_, index) => goal({ id: `r${index}`, status: 'running' })),
-      goal({ id: 'd1', status: 'completed' }),
+      ...Array.from({ length: 6 }, (_, index) =>
+        goal({ goal: { id: `g-r${index}`, status: 'running' }, id: `r${index}` }),
+      ),
+      goal({ goal: { id: 'g-d1', status: 'review' }, id: 'd1' }),
     ];
 
     const { buckets } = resolveHomeGoalView(buildHomeGoalEntries(goals));

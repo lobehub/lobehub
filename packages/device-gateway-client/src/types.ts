@@ -234,19 +234,40 @@ export interface AgentRunRequestMessage {
    * `sendPrompt(imageList)` path. Optional — omitted for older servers.
    */
   imageList?: Array<{ id?: string; url: string }>;
+  /**
+   * Same meaning as {@link workspaceId}. The HTTP dispatch payload uses this
+   * name so it is not confused with the device-pool routing `workspaceId`.
+   * Naive gateways forward the POST body as-is; devices accept either field.
+   */
+  ingestWorkspaceId?: string;
   jwt: string;
   operationId: string;
   prompt: string;
+  /**
+   * Full system context used only when native resume fails and the device CLI
+   * retries with a fresh session. Optional for compatibility with older
+   * servers and devices. The gateway relay must preserve this optional field;
+   * older deployments safely degrade to a fresh retry without recovery history.
+   */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**
    * Static context injected before the user prompt (workspace conventions,
-   * conversation history on resume). The desktop sends it to `lh hetero exec`
-   * as the first text block of a content-block array. Optional — omitted for
-   * older servers that don't build a device-specific context.
+   * selected context). The desktop sends it to `lh hetero exec` as the first
+   * text block of a content-block array. Optional — omitted for older servers
+   * that don't build a device-specific context.
    */
   systemContext?: string;
   topicId: string;
   type: 'agent_run_request';
+  /**
+   * Workspace that owns the topic. `lh hetero exec` must send this as
+   * `X-Workspace-Id` on heteroIngest/heteroFinish; without it the write lands
+   * in personal scope and the workspace topic stays `running` with an empty
+   * assistant. Optional for older gateways — a workspace-enrolled connection
+   * falls back to its own enrollment id.
+   */
+  workspaceId?: string;
 }
 
 /** Client → Server: acknowledgement for an agent_run_request. */

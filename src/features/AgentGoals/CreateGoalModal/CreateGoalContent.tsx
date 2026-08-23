@@ -1,16 +1,14 @@
 'use client';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
-import { openCriterionEditModal } from '@lobechat/builtin-tool-task/client';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
-  CircleDashed,
   Paperclip,
   Pencil,
   PencilLine,
@@ -30,10 +28,14 @@ import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDispla
 import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
+import {
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+  openCriterionEditModal,
+} from '@/features/Verify';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 import { buildGoalTaskConfig } from './goalConfig';
@@ -68,27 +70,8 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-end: 14px;
   `,
   criteriaList: css`
-    overflow: hidden;
     overflow-y: auto;
     max-height: 320px;
-    padding: 0;
-  `,
-  criterion: css`
-    cursor: pointer;
-    padding-block: 10px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  criterionIndex: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
   `,
   footer: css`
     padding-block: 8px;
@@ -255,16 +238,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const activeWorkspaceId = useActiveWorkspaceId();
-  const model = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentModelById(agentId)(s)
-      : agentSelectors.currentAgentModel(s),
-  );
-  const provider = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentModelProviderById(agentId)(s)
-      : agentSelectors.currentAgentModelProvider(s),
-  );
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -301,7 +274,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const handleNext = useCallback(async () => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
-    if (!canCreate || !instruction || !model || !provider) return;
+    if (!canCreate || !instruction) return;
     const name = plan.name.trim() || deriveGoalTitle(instruction);
     setPlan((current) => ({
       ...current,
@@ -314,8 +287,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       const generated = await generateGoalCriteria({
         context: name ? `Goal: ${name}` : undefined,
         goal: initialRequirement?.trim() || instruction,
-        model,
-        provider,
       });
       setPlan((current) => ({
         ...current,
@@ -333,7 +304,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
-  }, [canCreate, initialRequirement, model, plan.instruction, plan.name, provider, t]);
+  }, [canCreate, initialRequirement, plan.instruction, plan.name, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
@@ -372,9 +343,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       isNew: true,
       onSubmit: (criterion) =>
         setPlan((current) => ({ ...current, criteria: [...current.criteria, criterion] })),
-      seq: plan.criteria.length + 1,
     });
-  }, [plan.criteria.length]);
+  }, []);
 
   const editCriterion = useCallback(
     (index: number) => {
@@ -383,7 +353,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       openCriterionEditModal({
         criterion,
         onSubmit: (next) => updateCriterion(index, next),
-        seq: index + 1,
       });
     },
     [plan.criteria, updateCriterion],
@@ -402,16 +371,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     let verifyCriteriaIds: string[] = [];
     try {
       verifyCriteriaIds = await verifyService.createCriteria(reviewedCriteria);
+      const { config, goal } = buildGoalTaskConfig({
+        costBudget: plan.maxTotalCost,
+        instruction,
+        requirement,
+        roundBudget: plan.maxIterations,
+        verifyCriteriaIds,
+      });
       const result = await createTask({
         assigneeAgentId: agentId,
-        config: buildGoalTaskConfig({
-          costBudget: plan.maxTotalCost,
-          instruction,
-          requirement,
-          roundBudget: plan.maxIterations,
-          verifyCriteriaIds,
-        }),
+        config,
         editorData,
+        goal,
         instruction,
         name: plan.name.trim() || undefined,
         projectId,
@@ -544,57 +515,49 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 {t('createGoal.addCriterion')}
               </Button>
             </Flexbox>
-            <Flexbox className={styles.criteriaList}>
+            {/* Draft rows keep the C{seq} anchor but no status icon — the pending
+                circle belongs to the post-creation check list, not to authoring. */}
+            <CriterionList className={styles.criteriaList}>
               {plan.criteria.map((criterion, index) => (
-                <Flexbox
-                  horizontal
-                  align={'center'}
-                  className={styles.criterion}
-                  gap={8}
+                <CriterionRow
                   key={index}
-                  onClick={() => editCriterion(index)}
+                  seq={index + 1}
+                  title={criterion.title || t('createGoal.criterionPlaceholder')}
+                  actions={
+                    <>
+                      <ActionIcon
+                        icon={Pencil}
+                        size={'small'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          editCriterion(index);
+                        }}
+                      />
+                      <ActionIcon
+                        icon={Trash2}
+                        size={'small'}
+                        title={t('createGoal.removeCriterion')}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeCriterion(index);
+                        }}
+                      />
+                    </>
+                  }
+                  onOpen={() => editCriterion(index)}
                 >
-                  <Icon color={cssVar.colorTextQuaternary} icon={CircleDashed} size={16} />
-                  <span className={styles.criterionIndex}>C{index + 1}</span>
-                  <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-                    {criterion.title || t('createGoal.criterionPlaceholder')}
-                  </Text>
-                  <Tag
-                    color={(criterion.required ?? true) ? 'info' : undefined}
-                    size={'small'}
-                    variant={'filled'}
-                    onClick={(event) => {
-                      event.stopPropagation();
+                  <CriterionRequiredChip
+                    required={criterion.required ?? true}
+                    onToggle={() =>
                       updateCriterion(index, {
                         ...criterion,
                         required: !(criterion.required ?? true),
-                      });
-                    }}
-                  >
-                    {(criterion.required ?? true)
-                      ? t('verifyConfig.required')
-                      : t('verifyConfig.optional')}
-                  </Tag>
-                  <ActionIcon
-                    icon={Pencil}
-                    size={'small'}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      editCriterion(index);
-                    }}
+                      })
+                    }
                   />
-                  <ActionIcon
-                    icon={Trash2}
-                    size={'small'}
-                    title={t('createGoal.removeCriterion')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      removeCriterion(index);
-                    }}
-                  />
-                </Flexbox>
+                </CriterionRow>
               ))}
-            </Flexbox>
+            </CriterionList>
           </Flexbox>
 
           <Flexbox className={styles.reviewSection} gap={10}>

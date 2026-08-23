@@ -60,6 +60,20 @@ describe('useReportPanelExpand', () => {
     expect(showPanel()).toBe(true);
   });
 
+  it('still toggles on a wide viewport when system status is not initialized', () => {
+    useGlobalStore.setState({ isStatusInit: false });
+    setViewport(true);
+    const { result } = renderHook(() => useReportPanelExpand());
+
+    act(() => result.current.setExpand(false));
+    expect(result.current.expand).toBe(false);
+    expect(showPanel()).toBe(false);
+
+    act(() => result.current.setExpand(true));
+    expect(result.current.expand).toBe(true);
+    expect(showPanel()).toBe(true);
+  });
+
   it('restores the preferred layout when the viewport widens again', () => {
     setViewport(false);
     const { rerender, result } = renderHook(() => useReportPanelExpand());

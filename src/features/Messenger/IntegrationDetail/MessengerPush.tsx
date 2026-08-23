@@ -11,7 +11,7 @@ import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 
 import type { MessengerPlatform } from '../constants';
-import { getMessengerErrorMessage } from '../i18n';
+import { getMessengerErrorMessage, getMessengerQueuedToast } from '../i18n';
 import { MessengerPushWindowState } from './MessengerPushWindowState';
 import { styles } from './shared';
 
@@ -92,7 +92,7 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
             break;
           }
           case 'queued': {
-            toast.info(t('messenger.push.queuedToast', { platform: name }));
+            toast.info(getMessengerQueuedToast(t, name, result.reason));
             setContent('');
             break;
           }

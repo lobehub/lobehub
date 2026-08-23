@@ -1,7 +1,6 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
@@ -168,15 +167,15 @@ const Footer = memo(() => {
         label: t('changelog'),
         onClick: handleOpenChangelogModal,
       },
-      ...(!isDesktop && footer.layout === 'compact'
+      ...(footer.layout === 'compact'
         ? [
             {
               icon: <Icon icon={Download} />,
               key: 'get-app',
               label: (
-                <a href={DOWNLOAD_URL.default} rel="noopener noreferrer" target="_blank">
+                <WorkspaceLink escape to="/apps">
                   {t('getApp')}
-                </a>
+                </WorkspaceLink>
               ),
             },
           ]

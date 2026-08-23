@@ -1,9 +1,36 @@
 import { describe, expect, it } from 'vitest';
 
-import { getTaskCreateActionBehavior, getTaskPageHeaderVisibility } from './AgentTasksPage';
+import {
+  clampScheduledPage,
+  getTaskCreateActionBehavior,
+  getTaskPageHeaderVisibility,
+  resolveTaskCollection,
+} from './AgentTasksPage';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
 describe('AgentTasksPage', () => {
+  describe('clampScheduledPage', () => {
+    it('moves a stale last page back into range when the result total shrinks', () => {
+      expect(clampScheduledPage(2, 50)).toBe(1);
+      expect(clampScheduledPage(3, 51)).toBe(2);
+    });
+
+    it('keeps the first page valid for an empty result', () => {
+      expect(clampScheduledPage(1, 0)).toBe(1);
+    });
+  });
+
+  describe('resolveTaskCollection', () => {
+    it('opens the scheduled collection from its addressable URL', () => {
+      expect(resolveTaskCollection(new URLSearchParams('collection=scheduled'))).toBe('scheduled');
+    });
+
+    it('falls back to ordinary tasks for absent or unknown values', () => {
+      expect(resolveTaskCollection(new URLSearchParams())).toBe('tasks');
+      expect(resolveTaskCollection(new URLSearchParams('collection=unknown'))).toBe('tasks');
+    });
+  });
+
   describe('getTaskCreateActionBehavior', () => {
     it('should allow workspace viewers to reopen the collapsed inline entry in list view', () => {
       expect(

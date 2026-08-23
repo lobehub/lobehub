@@ -11,7 +11,7 @@ describe('generateGoalCriteria', () => {
 
   it('generates and normalizes acceptance criteria for the goal review step', async () => {
     const generateCriteria = vi
-      .spyOn(verifyService, 'generateCriteria')
+      .spyOn(verifyService, 'generateGoalCriteria')
       .mockResolvedValue([
         { title: 'Paper draft is complete' },
         { required: false, title: 'Results are reproducible', verifierType: 'llm' },
@@ -20,15 +20,12 @@ describe('generateGoalCriteria', () => {
     const result = await generateGoalCriteria({
       context: 'Goal: Publish an ICLR paper',
       goal: 'Complete an RSI benchmark paper in three months',
-      model: 'test-model',
-      provider: 'test-provider',
     });
 
     expect(generateCriteria).toHaveBeenCalledWith({
       context: 'Goal: Publish an ICLR paper',
       goal: 'Complete an RSI benchmark paper in three months',
       maxCriteria: 8,
-      modelConfig: { model: 'test-model', provider: 'test-provider' },
     });
     expect(result).toEqual([
       {
@@ -47,13 +44,11 @@ describe('generateGoalCriteria', () => {
   });
 
   it('rejects an empty AI response instead of advancing with no criteria', async () => {
-    vi.spyOn(verifyService, 'generateCriteria').mockResolvedValue([]);
+    vi.spyOn(verifyService, 'generateGoalCriteria').mockResolvedValue([]);
 
     await expect(
       generateGoalCriteria({
         goal: 'Ship the project',
-        model: 'test-model',
-        provider: 'test-provider',
       }),
     ).rejects.toThrow('No acceptance criteria were generated.');
   });

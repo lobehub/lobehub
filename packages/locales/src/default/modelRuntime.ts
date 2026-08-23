@@ -26,6 +26,8 @@ export default {
     'A database operation failed while saving or loading this conversation. Please try again; if it persists, contact support.',
   ExceededContextWindow:
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  HarnessJsonParseError:
+    'An internal payload could not be read back, so this operation stopped. Retrying the same request will hit the same failure — please start a new message; if it persists, contact support.',
   InsufficientQuota:
     "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
   InvalidBedrockCredentials:

@@ -61,13 +61,7 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
     VERIFY_REPORT_SWR_CONFIG,
   );
 
-/** Cross-round acceptance decision bundle by acceptance id. */
-export const useAcceptanceBundle = (acceptanceId: string | null) =>
-  useClientDataSWR(
-    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
-    () => verifyService.getAcceptanceBundle(acceptanceId!),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
-  );
+export { useAcceptanceBundle } from './Acceptance/useAcceptanceBundle';
 
 /** The optional acceptance aggregate attached to a task/topic/document subject. */
 export const useAcceptanceBySubject = (
@@ -86,12 +80,27 @@ export const useAcceptanceBySubject = (
     },
   );
 
-/** The caller's recent acceptance aggregates (with subject headers) — the list panel. */
-export const useAcceptanceList = (enabled: boolean) =>
+/**
+ * The caller's recent acceptance aggregates (with subject headers) — the list
+ * panel. `limit` widens the recency window for surfaces that must reach further
+ * back than the panel does (the merge target picker).
+ *
+ * A widened window is its own SWR key, and the list's invalidations
+ * (`mutate(verifyKeys.acceptances())`) target the panel's key — so a surface
+ * that opens on demand asks for `revalidateOnMount` rather than deciding from a
+ * cache nothing refreshes.
+ */
+export const useAcceptanceList = (
+  enabled: boolean,
+  options?: { limit?: number; revalidateOnMount?: boolean },
+) =>
   useClientDataSWR(
-    enabled ? verifyKeys.acceptances() : null,
-    () => verifyService.listAcceptances(),
-    VERIFY_REPORT_SWR_CONFIG,
+    enabled ? verifyKeys.acceptances(options?.limit) : null,
+    () => verifyService.listAcceptances({ limit: options?.limit }),
+    {
+      ...VERIFY_REPORT_SWR_CONFIG,
+      ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),
+    },
   );
 
 /**

@@ -12,6 +12,7 @@ import { registerDocCommand } from './commands/doc';
 import { registerEvalCommand } from './commands/eval';
 import { registerFileCommand } from './commands/file';
 import { registerGenerateCommand } from './commands/generate';
+import { registerGoalCommand } from './commands/goal';
 import { registerHeteroCommand } from './commands/hetero';
 import { registerKbCommand } from './commands/kb';
 import { registerLoginCommand } from './commands/login';
@@ -84,6 +85,7 @@ export function createProgram() {
   registerAgentSignalCommand(program);
   registerBotCommand(program);
   registerGenerateCommand(program);
+  registerGoalCommand(program);
   registerFileCommand(program);
   registerHeteroCommand(program);
   registerSkillCommand(program);

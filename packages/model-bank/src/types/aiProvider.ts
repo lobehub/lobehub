@@ -443,5 +443,10 @@ export interface AiProviderRuntimeState {
    * same-named model under an unrelated provider is never treated as redirected.
    */
   modelRedirects?: Record<string, string>;
+  /**
+   * Secret-free provider-binding capabilities resolved by the server.
+   * Renderer consumers use this instead of inspecting provider runtime config.
+   */
+  providerBindingAgentTypes?: Record<string, string[]>;
   runtimeConfig: Record<string, AiProviderRuntimeConfig>;
 }

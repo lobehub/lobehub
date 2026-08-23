@@ -6,6 +6,8 @@ packages:
   - '../../packages/const'
   - '../../packages/electron-server-ipc'
   - '../../packages/electron-client-ipc'
+  - '../../packages/electron-mac-notifications'
+  - '../../packages/napi-loader'
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
   - '../../packages/device-control'

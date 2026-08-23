@@ -38,6 +38,8 @@ export type UIMessageRoleType =
 
 export interface ChatFileItem {
   content?: string;
+  /** Stable application proxy URL used for browser-native downloads. */
+  downloadUrl?: string;
   fileType: string;
   id: string;
   /**

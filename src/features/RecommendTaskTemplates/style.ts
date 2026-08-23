@@ -37,6 +37,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border: 0;
 
     text-align: start;
+
+    /* compactRow owns the hover highlight; the selector mirrors base-ui's
+       variantText hover rule so it can outrank its fill */
+    &:hover:not(:disabled, [aria-disabled='true']) {
+      background: none;
+    }
   `,
   compactTitle: css`
     min-width: 0;

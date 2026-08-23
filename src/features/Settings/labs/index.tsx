@@ -12,9 +12,11 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
-import { type UserLab } from '@/types/user';
+
+import { LAB_FEATURES, type LabFeatureItem, type LabStage } from './features';
 
 const styles = createStaticStyles(({ css }) => ({
   labItem: css`
@@ -23,13 +25,6 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
 }));
-
-/**
- * Maturity stage of a lab experiment:
- * - alpha: internal testing only, not recommended for daily use yet
- * - beta: relatively usable — core flow works, details still being polished
- */
-type LabStage = 'alpha' | 'beta';
 
 const StageTag = memo<{ stage: LabStage }>(({ stage }) => {
   const { t } = useTranslation('labs');
@@ -43,56 +38,20 @@ const StageTag = memo<{ stage: LabStage }>(({ stage }) => {
   );
 });
 
-interface LabToggle {
-  checked: boolean;
-  desc: string;
-  flag: keyof UserLab;
-  stage: LabStage;
-  title: string;
-}
-
 const LabsForm = memo(() => {
   const { t: tLabs } = useTranslation('labs');
 
-  const [
-    isPreferenceInit,
-    isUserStateInit,
-    isUserStateInitError,
-    refreshUserState,
-    enableAgentGraphConfig,
-    enableInputMarkdown,
-    enableImessage,
-    enableClaudeCodeSdk,
-    enableCodexAppServer,
-    enableDesktopSplitView,
-    enableHeteroSessionImport,
-    enableMessageTextSelectionActions,
-    enableOAuthApps,
-    enableProjects,
-    enableInAppBrowser,
-    enableArtifactDeployment,
-    enableTopicAcceptance,
-    updateLab,
-  ] = useUserStore((s) => [
-    preferenceSelectors.isPreferenceInit(s),
-    s.isUserStateInit,
-    s.isUserStateInitError,
-    s.refreshUserState,
-    labPreferSelectors.enableAgentGraphConfig(s),
-    labPreferSelectors.enableInputMarkdown(s),
-    labPreferSelectors.enableImessage(s),
-    labPreferSelectors.enableClaudeCodeSdk(s),
-    labPreferSelectors.enableCodexAppServer(s),
-    labPreferSelectors.enableDesktopSplitView(s),
-    labPreferSelectors.enableHeteroSessionImport(s),
-    labPreferSelectors.enableMessageTextSelectionActions(s),
-    labPreferSelectors.enableOAuthApps(s),
-    labPreferSelectors.enableProjects(s),
-    labPreferSelectors.enableInAppBrowser(s),
-    labPreferSelectors.enableArtifactDeployment(s),
-    labPreferSelectors.enableTopicAcceptance(s),
-    s.updateLab,
-  ]);
+  const [isPreferenceInit, isUserStateInit, isUserStateInitError, refreshUserState, updateLab] =
+    useUserStore((s) => [
+      preferenceSelectors.isPreferenceInit(s),
+      s.isUserStateInit,
+      s.isUserStateInitError,
+      s.refreshUserState,
+      s.updateLab,
+    ]);
+  const labChecked = useUserStore((s) =>
+    LAB_FEATURES.map(({ flag }) => labPreferSelectors[flag](s)),
+  );
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
@@ -107,127 +66,37 @@ const LabsForm = memo(() => {
     return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
   }
 
-  const toFormItem = ({ checked, desc, flag, stage, title }: LabToggle): FormItemProps => ({
+  const checkedByFlag = Object.fromEntries(
+    LAB_FEATURES.map(({ flag }, index) => [flag, labChecked[index]]),
+  );
+
+  const toFormItem = ({ flag, i18nKey, stage }: LabFeatureItem): FormItemProps => ({
     children: (
       <Switch
-        checked={checked}
+        checked={checkedByFlag[flag]}
         loading={!isPreferenceInit}
         onChange={(next: boolean) => updateLab({ [flag]: next })}
       />
     ),
     className: styles.labItem,
-    desc,
+    desc: tLabs(`features.${i18nKey}.desc`),
     label: (
-      <Flexbox horizontal align={'center'} gap={8}>
-        {title}
-        <StageTag stage={stage} />
-      </Flexbox>
+      <SettingsSearchAnchor id={`labs-${flag}`}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {tLabs(`features.${i18nKey}.title`)}
+          <StageTag stage={stage} />
+        </Flexbox>
+      </SettingsSearchAnchor>
     ),
     minWidth: undefined,
   });
 
   // Cross-surface experiments. Platform-specific ones (Electron main-process
   // features) live in the Desktop group below; everything else is General.
-  const generalItems: LabToggle[] = [
-    {
-      checked: enableAgentGraphConfig,
-      desc: tLabs('features.agentGraphConfig.desc'),
-      flag: 'enableAgentGraphConfig',
-      stage: 'alpha',
-      title: tLabs('features.agentGraphConfig.title'),
-    },
-    {
-      checked: enableInputMarkdown,
-      desc: tLabs('features.inputMarkdown.desc'),
-      flag: 'enableInputMarkdown',
-      stage: 'beta',
-      title: tLabs('features.inputMarkdown.title'),
-    },
-    {
-      checked: enableMessageTextSelectionActions,
-      desc: tLabs('features.messageTextSelectionActions.desc'),
-      flag: 'enableMessageTextSelectionActions',
-      stage: 'alpha',
-      title: tLabs('features.messageTextSelectionActions.title'),
-    },
-    {
-      checked: enableTopicAcceptance,
-      desc: tLabs('features.topicAcceptance.desc'),
-      flag: 'enableTopicAcceptance',
-      stage: 'alpha',
-      title: tLabs('features.topicAcceptance.title'),
-    },
-    {
-      checked: enableProjects,
-      desc: tLabs('features.projects.desc'),
-      flag: 'enableProjects',
-      stage: 'alpha',
-      title: tLabs('features.projects.title'),
-    },
-    {
-      checked: enableOAuthApps,
-      desc: tLabs('features.oauthApps.desc'),
-      flag: 'enableOAuthApps',
-      stage: 'beta',
-      title: tLabs('features.oauthApps.title'),
-    },
-    {
-      checked: enableArtifactDeployment,
-      desc: tLabs('features.artifactDeployment.desc'),
-      flag: 'enableArtifactDeployment',
-      stage: 'beta',
-      title: tLabs('features.artifactDeployment.title'),
-    },
-  ];
-
+  const generalItems = LAB_FEATURES.filter((feature) => !feature.desktopOnly);
   // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
   // in-app browser (renderer-retained Electron webviews).
-  const desktopItems: LabToggle[] = [
-    {
-      checked: enableDesktopSplitView,
-      desc: tLabs('features.desktopSplitView.desc'),
-      flag: 'enableDesktopSplitView',
-      stage: 'alpha',
-      title: tLabs('features.desktopSplitView.title'),
-    },
-    {
-      checked: enableImessage,
-      desc: tLabs('features.imessage.desc'),
-      flag: 'enableImessage',
-      stage: 'alpha',
-      title: tLabs('features.imessage.title'),
-    },
-    {
-      checked: enableClaudeCodeSdk,
-      desc: tLabs('features.claudeCodeSdk.desc'),
-      flag: 'enableClaudeCodeSdk',
-      stage: 'alpha',
-      title: tLabs('features.claudeCodeSdk.title'),
-    },
-    {
-      checked: enableCodexAppServer,
-      desc: tLabs('features.codexAppServer.desc'),
-      flag: 'enableCodexAppServer',
-      stage: 'alpha',
-      title: tLabs('features.codexAppServer.title'),
-    },
-    // rides on the Claude Code hetero-agent stack: scans local CLI
-    // transcripts via the Electron main process — desktop only
-    {
-      checked: enableHeteroSessionImport,
-      desc: tLabs('features.heteroSessionImport.desc'),
-      flag: 'enableHeteroSessionImport',
-      stage: 'beta',
-      title: tLabs('features.heteroSessionImport.title'),
-    },
-    {
-      checked: enableInAppBrowser,
-      desc: tLabs('features.inAppBrowser.desc'),
-      flag: 'enableInAppBrowser',
-      stage: 'beta',
-      title: tLabs('features.inAppBrowser.title'),
-    },
-  ];
+  const desktopItems = LAB_FEATURES.filter((feature) => feature.desktopOnly);
 
   const items: FormGroupItemType[] = [
     {

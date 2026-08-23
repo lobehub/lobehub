@@ -3,7 +3,14 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { devices, users, workspaceInvitations, workspaceMembers, workspaces } from '../../schemas';
+import {
+  devices,
+  resourcePermissions,
+  users,
+  workspaceInvitations,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -233,6 +240,57 @@ describe('WorkspaceMemberModel', () => {
         .map((d) => d.deviceId)
         .sort();
       expect(remaining).toEqual(['dep-personal', 'other-ws-private', 'team-box']);
+    });
+
+    it('revokes the departing member grants, so a re-invite does not restore them', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB.insert(resourcePermissions).values([
+        // the departing member's grant, and one in another workspace
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: memberId,
+          workspaceId,
+        },
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-9',
+          resourceType: 'knowledgeBase',
+          userId: memberId,
+          workspaceId: otherWorkspaceId,
+        },
+        // another member's grant, and the workspace-wide row on the same resource
+        {
+          accessLevel: 'edit',
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: otherUserId,
+          workspaceId,
+        },
+        { accessLevel: 'use', resourceId: 'kb-1', resourceType: 'knowledgeBase', workspaceId },
+      ]);
+
+      await model.removeMember(workspaceId, memberId);
+      // membership is only soft-deleted, and re-inviting revives that same row
+      await model.addMember({ userId: memberId, workspaceId });
+
+      const remaining = await serverDB
+        .select({
+          resourceId: resourcePermissions.resourceId,
+          userId: resourcePermissions.userId,
+          workspaceId: resourcePermissions.workspaceId,
+        })
+        .from(resourcePermissions);
+      expect(remaining).toEqual(
+        expect.arrayContaining([
+          { resourceId: 'kb-9', userId: memberId, workspaceId: otherWorkspaceId },
+          { resourceId: 'kb-1', userId: otherUserId, workspaceId },
+          { resourceId: 'kb-1', userId: null, workspaceId },
+        ]),
+      );
+      expect(remaining).toHaveLength(3);
     });
   });
 

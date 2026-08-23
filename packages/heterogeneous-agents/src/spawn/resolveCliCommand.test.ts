@@ -50,6 +50,13 @@ const existingFiles = (files: Record<string, string | true>) => {
 };
 
 const noErr = null;
+const TRAE_ACP_HELP = `Start the ACP server
+
+Usage:
+  trae-cli acp serve [flags]
+
+Flags:
+  -y, --yolo   Enable YOLO mode`;
 const callExecFile = (stdout: string, stderr = '') => {
   execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
     // promisify-wrapped: the callback is always the last positional arg.
@@ -284,9 +291,12 @@ describe('resolveCliCommand', () => {
       }
     });
 
-    it('resolves and validates the TRAE Enterprise CLI', async () => {
+    it('accepts the official TRAE banner when the CLI exposes the ACP runtime', async () => {
       callExecFile('/usr/local/bin/traecli\n');
-      callExecFile('TraeCode CLI 1.4.0');
+      callExecFile(`trae-cli version 0.120.52
+build date: 2026-08-12T01:31:30Z
+build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
+      callExecFile(TRAE_ACP_HELP);
 
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('trae', 'traecli');
@@ -294,13 +304,15 @@ describe('resolveCliCommand', () => {
       expect(status).toMatchObject({
         available: true,
         path: '/usr/local/bin/traecli',
-        version: '1.4.0',
+        version: '0.120.52',
       });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
     });
 
     it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
       callExecFile('/usr/local/bin/traecli\n');
       callExecFile('1.4.0');
+      callExecFile(TRAE_ACP_HELP);
 
       const { detectHeterogeneousCliCommand } = await importModule();
 
@@ -311,22 +323,38 @@ describe('resolveCliCommand', () => {
       });
     });
 
-    it('rejects the unrelated open-source trae-cli trajectory runner', async () => {
-      const { detectHeterogeneousCliCommand } = await importModule();
-      const status = await detectHeterogeneousCliCommand('trae', '/usr/local/bin/trae-cli');
+    it('accepts the official canonical trae-cli executable when it exposes ACP', async () => {
+      callExecFile('trae-cli version 0.120.52');
+      callExecFile(TRAE_ACP_HELP);
+      const probeEnv = { ...process.env, PATH: '/custom/node/bin:/usr/bin' };
 
-      expect(status.available).toBe(false);
-      expect(execFileMock).not.toHaveBeenCalled();
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand(
+        'trae',
+        '/usr/local/bin/trae-cli',
+        probeEnv,
+      );
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/trae-cli',
+        resolvedPathEnv: '/custom/node/bin:/usr/bin',
+        version: '0.120.52',
+      });
+      expect(execFileMock.mock.calls[0]![2]).toMatchObject({ env: probeEnv });
+      expect(execFileMock.mock.calls[1]![2]).toMatchObject({ env: probeEnv });
     });
 
-    it('rejects the unrelated trae-cli banner even when the executable was renamed', async () => {
+    it('rejects the unrelated trae-cli trajectory runner by its missing ACP capability', async () => {
       callExecFile('/usr/local/bin/traecli\n');
       callExecFile('trae-cli 0.1.0');
+      callExecFileError(new Error('unknown command "acp"'));
 
       const { detectHeterogeneousCliCommand } = await importModule();
-      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli-renamed');
 
       expect(status).toEqual({ available: false });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
     });
 
     it('finds OpenCode in its well-known user-local install path', async () => {
@@ -720,6 +748,69 @@ describe('resolveCliCommand', () => {
 
         expect(status.available).toBe(true);
         expect(status.path).toBe(bundledCli);
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocalAppData;
+      }
+    });
+
+    it('finds the current TRAE public CLI executable when PATH is missing it', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      const localAppData = 'C:\\Users\\x\\AppData\\Local';
+      const traeCli = `${localAppData}\\Programs\\TraeCLI\\bin\\traex.exe`;
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [traeCli]: true });
+        callExecFileError(new Error('not found')); // where traecli
+        callExecFileError(new Error('no registry')); // reg query HKLM
+        callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFile('traecli 0.201.2 (public edition)');
+        callExecFile(TRAE_ACP_HELP);
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: traeCli,
+          version: '0.201.2',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocalAppData;
+      }
+    });
+
+    it('still finds TRAE in its legacy Windows install directory', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      const localAppData = 'C:\\Users\\x\\AppData\\Local';
+      const traeCli = `${localAppData}\\trae-cli\\bin\\traecli.exe`;
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [traeCli]: true });
+        callExecFileError(new Error('not found')); // where traecli
+        callExecFileError(new Error('no registry')); // reg query HKLM
+        callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFileError(new Error('not found')); // current Programs/TraeCLI/bin/traex.exe
+        callExecFile('trae-cli version 0.120.52');
+        callExecFile(TRAE_ACP_HELP);
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: traeCli,
+          version: '0.120.52',
+        });
       } finally {
         process.env.PATH = originalPath;
         if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;

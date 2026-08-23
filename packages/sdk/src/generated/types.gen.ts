@@ -725,16 +725,8 @@ export type GetApiV1AgentsResponse = GetApiV1AgentsResponses[keyof GetApiV1Agent
 
 export type PostApiV1AgentsData = {
     body: {
-        avatar?: string | null;
-        chatConfig?: {
-            disableContextCaching?: boolean | null;
-            displayMode?: 'chat' | 'docs' | null;
-            enableCompressHistory?: boolean | null;
+        agencyConfig?: {
             enableGraphMode?: boolean | null;
-            enableHistoryCount?: boolean | null;
-            enableMaxTokens?: boolean | null;
-            enableReasoning?: boolean | null;
-            enableReasoningEffort?: boolean | null;
             graph?: {
                 description?: string;
                 fields: {
@@ -783,6 +775,16 @@ export type PostApiV1AgentsData = {
                     to: string;
                 }>;
             } | null;
+        } | null;
+        avatar?: string | null;
+        chatConfig?: {
+            disableContextCaching?: boolean | null;
+            displayMode?: 'chat' | 'docs' | null;
+            enableCompressHistory?: boolean | null;
+            enableHistoryCount?: boolean | null;
+            enableMaxTokens?: boolean | null;
+            enableReasoning?: boolean | null;
+            enableReasoningEffort?: boolean | null;
             historyCount?: number | null;
             reasoningBudgetToken?: number | null;
             reasoningEffort?: 'low' | 'medium' | 'high' | null;
@@ -967,16 +969,8 @@ export type GetApiV1AgentsByIdResponse = GetApiV1AgentsByIdResponses[keyof GetAp
 
 export type PatchApiV1AgentsByIdData = {
     body: {
-        avatar?: string | null;
-        chatConfig?: {
-            disableContextCaching?: boolean | null;
-            displayMode?: 'chat' | 'docs' | null;
-            enableCompressHistory?: boolean | null;
+        agencyConfig?: {
             enableGraphMode?: boolean | null;
-            enableHistoryCount?: boolean | null;
-            enableMaxTokens?: boolean | null;
-            enableReasoning?: boolean | null;
-            enableReasoningEffort?: boolean | null;
             graph?: {
                 description?: string;
                 fields: {
@@ -1025,6 +1019,16 @@ export type PatchApiV1AgentsByIdData = {
                     to: string;
                 }>;
             } | null;
+        } | null;
+        avatar?: string | null;
+        chatConfig?: {
+            disableContextCaching?: boolean | null;
+            displayMode?: 'chat' | 'docs' | null;
+            enableCompressHistory?: boolean | null;
+            enableHistoryCount?: boolean | null;
+            enableMaxTokens?: boolean | null;
+            enableReasoning?: boolean | null;
+            enableReasoningEffort?: boolean | null;
             historyCount?: number | null;
             reasoningBudgetToken?: number | null;
             reasoningEffort?: 'low' | 'medium' | 'high' | null;

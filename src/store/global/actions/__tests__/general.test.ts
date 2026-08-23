@@ -77,6 +77,21 @@ describe('generalActionSlice', () => {
       );
     });
 
+    it('should persist the selected task list view mode', () => {
+      const { result } = renderHook(() => useGlobalStore());
+      const saveToLocalStorageSpy = vi.spyOn(result.current.statusStorage, 'saveToLocalStorage');
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.updateSystemStatus({ taskListViewMode: 'kanban' });
+      });
+
+      expect(result.current.status.taskListViewMode).toBe('kanban');
+      expect(saveToLocalStorageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ taskListViewMode: 'kanban' }),
+      );
+    });
+
     it('should merge nested objects correctly', () => {
       const { result } = renderHook(() => useGlobalStore());
 

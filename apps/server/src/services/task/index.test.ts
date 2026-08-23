@@ -35,6 +35,15 @@ vi.mock('@/database/models/user', () => ({
   UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
 }));
 
+const { goalCreate, goalFindBySubject } = vi.hoisted(() => ({
+  goalCreate: vi.fn(),
+  goalFindBySubject: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(() => ({ create: goalCreate, findBySubject: goalFindBySubject })),
+}));
+
 // AiAgentService pulls in ~14 sub-dependencies in its constructor; mock it so
 // the running-status branch in updateStatus doesn't drag them in.
 vi.mock('@/server/services/aiAgent', () => ({
@@ -69,6 +78,7 @@ describe('TaskService', () => {
 
   const mockTaskModel = {
     create: vi.fn(),
+    delete: vi.fn(),
     findById: vi.fn(),
     findByIds: vi.fn(),
     findAllDescendants: vi.fn(),
@@ -1577,6 +1587,57 @@ describe('TaskService', () => {
     it('assertAgentVisibilityCompat allows private task + private agent', () => {
       const service = new TaskService(db, userId, 'ws-1');
       expect(() => service.assertAgentVisibilityCompat('private', 'private')).not.toThrow();
+    });
+  });
+
+  describe('createTask goal binding', () => {
+    beforeEach(() => {
+      mockTaskModel.create.mockResolvedValue({
+        assigneeAgentId: 'agent-1',
+        id: 'task_goal_1',
+        identifier: 'T-9',
+        instruction: 'reach the goal',
+        name: 'Goal task',
+        projectId: null,
+      });
+      mockTaskModel.delete.mockResolvedValue(true);
+      goalCreate.mockReset();
+    });
+
+    it('creates the bound goals row and returns it on the task', async () => {
+      goalCreate.mockResolvedValue({ id: 'goal-1', status: 'planning' });
+
+      const service = new TaskService(db, userId);
+      const result = await service.createTask({
+        goal: { maxRounds: 4, maxTotalCost: 10, requirement: 'done means done' },
+        instruction: 'reach the goal',
+      });
+
+      expect(goalCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          maxRounds: 4,
+          maxTotalCost: 10,
+          requirement: 'done means done',
+          subjectId: 'task_goal_1',
+          subjectType: 'task',
+        }),
+      );
+      expect((result as any).goal).toEqual({ id: 'goal-1', status: 'planning' });
+      expect(mockTaskModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('compensates a failed goal insert by deleting the just-created task', async () => {
+      // Regression (codex review): a task committed without its promised goal
+      // is a user-visible ghost — it never lists on goal surfaces, and a retry
+      // stacks another plain task.
+      goalCreate.mockRejectedValue(new Error('db down'));
+
+      const service = new TaskService(db, userId);
+      await expect(
+        service.createTask({ goal: { maxRounds: 3 }, instruction: 'reach the goal' }),
+      ).rejects.toThrow('db down');
+
+      expect(mockTaskModel.delete).toHaveBeenCalledWith('task_goal_1');
     });
   });
 

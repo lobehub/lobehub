@@ -16,7 +16,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 60%;
     margin-inline-start: 6px;
     padding-block: 1px;
     padding-inline: 8px;

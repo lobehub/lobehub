@@ -13,13 +13,14 @@ import { useResourceAccess } from './useResourceAccess';
 
 interface ResourceConfigAccessGateProps {
   children: ReactNode;
+  loading?: ReactNode;
   redirectPath: string;
   resourceId?: string;
   resourceType: 'agent' | 'agentGroup';
 }
 
 const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
-  ({ children, redirectPath, resourceId, resourceType }) => {
+  ({ children, loading, redirectPath, resourceId, resourceType }) => {
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const hasRedirected = useRef(false);
@@ -66,10 +67,10 @@ const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
         error={accessError}
         errorVariant={'page'}
         isLoading={!accessReady && !accessError}
-        loading={<SurfaceSkeleton variant={'form'} />}
+        loading={loading ?? <SurfaceSkeleton variant={'form'} />}
         onRetry={() => void retryAccess()}
       >
-        {canConfigure ? children : <SurfaceSkeleton variant={'form'} />}
+        {canConfigure ? children : (loading ?? <SurfaceSkeleton variant={'form'} />)}
       </AsyncBoundary>
     );
   },

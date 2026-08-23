@@ -560,6 +560,11 @@ export function registerEvalCommand(program: Command) {
     .option('--expected <text>', 'Expected output')
     .option('--category <cat>', 'Category')
     .option('--case-id <id>', 'Dataset-native case ID (stored in metadata.caseId)')
+    .option(
+      '--environment <json>',
+      'Test case environment JSON object',
+      parseJsonObject('--environment'),
+    )
     .option('--sort-order <n>', 'Sort order')
     .option('--json', 'Output JSON envelope')
     .action(
@@ -568,6 +573,7 @@ export function registerEvalCommand(program: Command) {
           caseId?: string;
           category?: string;
           datasetId: string;
+          environment?: Record<string, unknown>;
           expected?: string;
           input: string;
           sortOrder?: string;
@@ -577,9 +583,10 @@ export function registerEvalCommand(program: Command) {
           options,
           async () => {
             const client = await getTrpcClient();
-            const content: Record<string, any> = { input: options.input };
+            const content: Record<string, unknown> = { input: options.input };
             if (options.expected) content.expected = options.expected;
             if (options.category) content.category = options.category;
+            if (options.environment) content.environment = options.environment;
 
             const input: Record<string, any> = { content, datasetId: options.datasetId };
             if (options.caseId) input.metadata = { caseId: options.caseId };
@@ -597,6 +604,11 @@ export function registerEvalCommand(program: Command) {
     .option('--input <text>', 'New input text')
     .option('--expected <text>', 'New expected output')
     .option('--category <cat>', 'New category')
+    .option(
+      '--environment <json>',
+      'Test case environment JSON object',
+      parseJsonObject('--environment'),
+    )
     .option('--sort-order <n>', 'New sort order')
     .option('--json', 'Output JSON envelope')
     .action(
@@ -604,6 +616,7 @@ export function registerEvalCommand(program: Command) {
         options: JsonOption & {
           category?: string;
           expected?: string;
+          environment?: Record<string, unknown>;
           id: string;
           input?: string;
           sortOrder?: string;
@@ -618,6 +631,7 @@ export function registerEvalCommand(program: Command) {
             if (options.input) content.input = options.input;
             if (options.expected) content.expected = options.expected;
             if (options.category) content.category = options.category;
+            if (options.environment) content.environment = options.environment;
             if (Object.keys(content).length > 0) input.content = content;
             if (options.sortOrder) input.sortOrder = Number.parseInt(options.sortOrder, 10);
             return client.agentEval.updateTestCase.mutate(input as any);

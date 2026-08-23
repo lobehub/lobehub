@@ -4,6 +4,7 @@ import useSWR from 'swr';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
 import { augmentKey } from './augmentKey';
+import { isAutoRetryable } from './normalizeError';
 
 export { augmentKey };
 
@@ -32,8 +33,9 @@ export const useClientDataSWR: SWRHook = (key, fetch, config) => {
       const revalidate = args[2];
       const { retryCount } = args[3];
 
-      // Check if error is marked as non-retryable (e.g., 401 authentication errors)
-      if (error?.meta?.shouldRetry === false) {
+      // Auth walls, rate limits, and anything explicitly marked non-retryable:
+      // an automatic backoff can't help and, for 429, actively hurts.
+      if (!isAutoRetryable(error)) {
         return;
       }
       // For other errors, use default SWR retry behavior

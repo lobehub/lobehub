@@ -56,14 +56,15 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   const meta = useAgentStore(agentSelectors.getAgentMetaById(context.agentId));
 
   // Topic title tells the user *which* conversation this approval belongs to.
-  // Read agent-scoped (not active-scoped) so a non-active conversation resolves.
-  const topicTitle = useChatStore((s) =>
-    context.topicId
-      ? topicSelectors
-          .getTopicsByAgentId(context.agentId)(s)
-          ?.find((tp) => tp.id === context.topicId)?.title
-      : undefined,
-  );
+  // A parked approval can belong to an older topic outside the agent's loaded
+  // sidebar page, so resolve across every topic cache and fetch the detail by
+  // id when it is still missing. Falling back to the agent name here makes two
+  // approvals from the same agent indistinguishable.
+  const [topicTitle, useFetchTopicDetail] = useChatStore((s) => [
+    context.topicId ? topicSelectors.getTopicById(context.topicId)(s)?.title : undefined,
+    s.useFetchTopicDetail,
+  ]);
+  useFetchTopicDetail(context.topicId && !topicTitle ? context.topicId : undefined);
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -151,11 +152,8 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
             title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
-            <div className={styles.headerTitle}>
-              {topicTitle || agentDisplayName(meta, t('globalApproval.title'))}
-            </div>
             <div className={styles.headerSubtitle}>
-              {agentDisplayName(meta) ? `${agentDisplayName(meta)} · ` : ''}
+              {agentDisplayName(meta) && <span>{agentDisplayName(meta)}</span>}
               {t('globalApproval.subtitle')}
             </div>
           </div>
@@ -169,14 +167,14 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
           )}
         </div>
 
-        {userRequest && (
-          <div className={styles.userRequest}>
-            <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
+        <div className={styles.requestContext}>
+          <div className={styles.headerTitle}>{topicTitle || t('globalApproval.title')}</div>
+          {userRequest && (
             <div className={styles.userRequestBody}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {interventions.length > 1 && (
           <InterventionTabBar

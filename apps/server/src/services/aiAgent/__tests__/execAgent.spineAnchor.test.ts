@@ -205,6 +205,7 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
       'topic-1',
       expect.stringMatching(/^agent-start-/),
       undefined,
+      undefined,
     );
     expect(mockReleaseReservation).toHaveBeenCalledWith(
       'topic-1',

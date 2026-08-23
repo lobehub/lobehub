@@ -10,5 +10,6 @@ export * from './heteroSelectorCapabilities';
 export * from './item';
 export * from './modelSelection';
 export * from './pluginConfig';
+export * from './profile';
 export * from './runtimeAdditionalContext';
 export * from './tts';

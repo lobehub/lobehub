@@ -115,6 +115,26 @@ describe('TelegramApi HTML parse fallback', () => {
     expect(retryBody.caption).toContain('the answer is 42');
   });
 
+  it('sendVideo asks for a streaming-capable player on both source shapes', async () => {
+    // Without `supports_streaming` clients render a download-then-play blob
+    // instead of a seekable player. It does NOT prevent Telegram from badging
+    // a soundless MP4 as a GIF — nothing in the Bot API does.
+    // A Response body reads once, so each call needs its own.
+    fetchSpy.mockImplementation(async () => okResponse({ message_id: 3 }));
+    const api = new TelegramApi(BOT_TOKEN);
+
+    await api.sendVideo({ chatId: 'chat-1', source: { url: 'https://example.com/a.mp4' } });
+    const jsonBody = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(jsonBody.supports_streaming).toBe(true);
+
+    await api.sendVideo({
+      chatId: 'chat-1',
+      source: { buffer: Buffer.from('mp4'), filename: 'a.mp4', mimeType: 'video/mp4' },
+    });
+    const form = (fetchSpy.mock.calls[1][1] as RequestInit).body as FormData;
+    expect(form.get('supports_streaming')).toBe('true');
+  });
+
   it('sendDocument with Buffer source retries caption without HTML on parse error', async () => {
     fetchSpy
       .mockResolvedValueOnce(

@@ -346,7 +346,7 @@ describe('agent command', () => {
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
         agentId: 'a1',
         value: {
-          chatConfig: {
+          agencyConfig: {
             enableGraphMode: true,
             graph,
           },
@@ -386,7 +386,7 @@ describe('agent command', () => {
       await program.parseAsync(['node', 'test', 'agent', 'edit', 'a1', '--graph-file', graphFile]);
 
       expect(log.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to read graph JSON: Invalid ReasoningGraph'),
+        expect.stringContaining('Failed to read graph JSON: Invalid AgentGraph'),
       );
       expect(exitSpy).toHaveBeenCalledWith(1);
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).not.toHaveBeenCalled();
@@ -509,9 +509,11 @@ describe('agent command', () => {
       });
     });
 
-    it('should merge graph flags into a chatConfig supplied by --config-file', async () => {
+    it('should merge graph flags into an agencyConfig supplied by --config-file', async () => {
       mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
-      const configFile = await writeGraphFixture({ chatConfig: { historyCount: 12 } });
+      const configFile = await writeGraphFixture({
+        agencyConfig: { modelSelectionPolicy: 'member' },
+      });
 
       const program = createProgram();
       await program.parseAsync([
@@ -527,7 +529,45 @@ describe('agent command', () => {
 
       expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
         agentId: 'a1',
-        value: { chatConfig: { enableGraphMode: true, historyCount: 12 } },
+        value: { agencyConfig: { enableGraphMode: true, modelSelectionPolicy: 'member' } },
+      });
+    });
+
+    it('should merge graph flags into an agencyConfig supplied by --agency-config-file', async () => {
+      mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});
+      const agencyConfigFile = await writeGraphFixture({
+        executionTarget: 'local',
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'edit',
+        'a1',
+        '--agency-config-file',
+        agencyConfigFile,
+        '--graph-file',
+        await writeGraphFixture({
+          edges: [{ from: '__root__', instruction: 'Write the final answer.', to: 'answer' }],
+          fields: {},
+          name: 'answer-graph',
+          nodes: { answer: { type: 'llm' } },
+          terminal: 'answer',
+        }),
+        '--enable-graph',
+      ]);
+
+      expect(mockTrpcClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith({
+        agentId: 'a1',
+        value: {
+          agencyConfig: {
+            executionTarget: 'local',
+            enableGraphMode: true,
+            graph: expect.any(Object),
+          },
+        },
       });
     });
 

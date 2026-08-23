@@ -11,8 +11,9 @@ import {
 } from './public-fields';
 
 describe('public response field projections', () => {
-  it('keeps the Agent contract at the documented 12-field allowlist', () => {
+  it('keeps the Agent contract at the documented 13-field allowlist', () => {
     const projected = projectPublicAgent({
+      agencyConfig: null,
       avatar: null,
       chatConfig: null,
       clientId: 'internal-client',

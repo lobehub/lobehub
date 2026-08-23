@@ -11,6 +11,7 @@ import type {
   WorkVersionEventItem,
   WorkVersionEventMap,
   WorkVersionItem,
+  WorkVisibility,
 } from '@lobechat/types';
 
 import { mutate } from '@/libs/swr';
@@ -74,6 +75,7 @@ class WorkService {
     originAgentId?: string | null;
     provider?: WorkSkillProvider;
     type?: WorkType | null;
+    visibility?: WorkVisibility;
   }): Promise<WorkSummaryPage> =>
     lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });
 
@@ -104,6 +106,19 @@ class WorkService {
   handleSkillToolResult = async (
     params: RegisterSkillToolResultWorkParams,
   ): Promise<WorkItem | null> => lambdaClient.work.handleSkillToolResult.mutate(params);
+
+  /**
+   * Report a finished desktop-LOCAL hetero run's tool messages for the
+   * server-side shell Work scan (gh CLI → github Work cards). Local runs have
+   * no `agent_operations` row, so the server's completion scan never fires for
+   * them — the executor calls this at clean completion instead.
+   */
+  registerShellWorksForRun = async (params: {
+    anchorMessageId: string;
+    messageIds: string[];
+    topicId: string;
+  }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
+    lambdaClient.work.registerShellWorksForRun.mutate(params);
 
   /**
    * Invalidate everything a Work mutation can change for a conversation:

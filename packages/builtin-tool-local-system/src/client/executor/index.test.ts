@@ -109,7 +109,10 @@ describe('LocalSystemExecutor', () => {
         pattern: '**/*Financial*Statement*',
       });
 
-      expect(result.success).toBe(true);
+      // The failure is reported as one: `success` feeds the tool_end event and
+      // `usage.tools.byTool[].errors`, so a permission-denied glob must not
+      // count as a successful call.
+      expect(result.success).toBe(false);
       expect(result.content).toBeTruthy();
       expect(result.content).toContain('EACCES');
       expect(result.state).toEqual({

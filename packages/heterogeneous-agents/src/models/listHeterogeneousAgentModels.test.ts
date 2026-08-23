@@ -273,6 +273,47 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('parses and discovers Grok Build models', async () => {
+    const stdout = [
+      'You are not authenticated.',
+      '',
+      'Default model: grok-4.6',
+      '',
+      'Available models:',
+      '  * grok-4.6 (default)',
+      '  - grok-4.5',
+      '  - grok-4.6',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseGrokBuildModelCatalog } = await importModule();
+
+    expect(parseGrokBuildModelCatalog(stdout)).toEqual([
+      { id: 'grok-4.6', modelId: 'grok-4.6', providerId: 'grok-build' },
+      { id: 'grok-4.5', modelId: 'grok-4.5', providerId: 'grok-build' },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/grok',
+        cwd: '/repo',
+        env: { XAI_API_KEY: 'test-key' },
+        type: 'grok-build',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'grok-4.6', modelId: 'grok-4.6', providerId: 'grok-build' },
+        { id: 'grok-4.5', modelId: 'grok-4.5', providerId: 'grok-build' },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/grok',
+      ['models'],
+      expect.objectContaining({ cwd: '/repo', env: { XAI_API_KEY: 'test-key' } }),
+      expect.any(Function),
+    );
+  });
+
   it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
     resolveExecFile('openai/gpt-5.6\nopenrouter/google/gemini-2.5-pro\n');
     const { listHeterogeneousAgentModels } = await importModule();

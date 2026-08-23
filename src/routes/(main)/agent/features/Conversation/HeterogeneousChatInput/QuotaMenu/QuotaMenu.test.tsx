@@ -3,6 +3,7 @@
  */
 import type * as LobechatConstModule from '@lobechat/const';
 import type * as ElectronClientIpcModule from '@lobechat/electron-client-ipc';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,9 +20,12 @@ const mockService = vi.hoisted(() => ({
 
 const effectiveAgencyConfig = vi.hoisted(() => ({
   current: {
-    boundDeviceId: 'personal-device',
+    boundDeviceId: 'personal-device' as string | undefined,
     executionTarget: 'local' as const,
-    heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+    heterogeneousProvider: {
+      command: 'codex',
+      type: 'codex',
+    } as HeterogeneousProviderConfig,
   },
   workspaceScoped: false,
 }));
@@ -38,6 +42,14 @@ vi.mock('@lobechat/electron-client-ipc', async (importOriginal) => ({
 
 vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
   default: () => <div data-testid="workspace-controls" />,
+}));
+
+vi.mock('@/features/ChatInput/ControlBar/HeteroDeviceSwitcher', () => ({
+  default: () => <div data-testid="hetero-device-switcher" />,
+}));
+
+vi.mock('@/features/AgentQuotaCalendar', () => ({
+  openQuotaCalendarModal: vi.fn(),
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
@@ -330,6 +342,32 @@ describe('HeteroControlBar', () => {
 
     expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
     expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not show Codex quota in API mode', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', command: 'codex', type: 'codex' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
+    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not show Claude Code quota in API mode', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' })).toBeNull();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
   });
 });
 

@@ -109,11 +109,13 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }, [item.name]);
 
     const { menuItems } = useFileItemDropdown({
+      fileId: item.fileId,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
       libraryId,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
+      size: item.size,
       sourceType: item.sourceType,
       url: item.url,
       userId: item.userId,

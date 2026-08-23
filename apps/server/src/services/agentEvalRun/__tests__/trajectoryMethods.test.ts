@@ -1,3 +1,4 @@
+import type { EvalCaseEnvironment } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -60,6 +61,7 @@ async function setupTrajectoryChain(opts?: {
   input?: string;
   sortOrder?: number;
   targetAgentId?: string | null;
+  environment?: EvalCaseEnvironment;
 }) {
   const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
   const benchmark = await benchmarkModel.create({
@@ -83,7 +85,11 @@ async function setupTrajectoryChain(opts?: {
   const [testCase] = await serverDB
     .insert(agentEvalTestCases)
     .values({
-      content: { expected: '42', input: opts?.input ?? 'What is 6*7?' },
+      content: {
+        ...(opts?.environment && { environment: opts.environment }),
+        expected: '42',
+        input: opts?.input ?? 'What is 6*7?',
+      },
       datasetId: dataset.id,
       sortOrder: opts?.sortOrder ?? 1,
       userId,
@@ -127,6 +133,21 @@ describe('AgentEvalRunService', () => {
       if (!('error' in data)) {
         expect(data.envPrompt).toBeUndefined();
       }
+    });
+
+    it('should load the complete environment from the test case', async () => {
+      const environment = {
+        toolForwarding: {
+          memory: { endpoint: 'https://mock.test/tool-calls' },
+        },
+      };
+      const { run, testCase } = await setupTrajectoryChain({ environment });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      const data = await service.loadTrajectoryData(run.id, testCase.id);
+
+      expect('error' in data).toBe(false);
+      if (!('error' in data)) expect(data.environment).toEqual(environment);
     });
 
     it('should return error when run not found', async () => {
@@ -226,6 +247,54 @@ describe('AgentEvalRunService', () => {
         expect.objectContaining({
           evalContext: { envPrompt: 'You are a math tutor.' },
         }),
+      );
+    });
+
+    it('should derive tool forwarding from the case environment', async () => {
+      const { run, testCase } = await setupTrajectoryChain();
+      const environment = {
+        toolForwarding: {
+          memory: { endpoint: 'https://mock.test/tool-calls' },
+        },
+      };
+
+      mockExecAgent.mockResolvedValue({ operationId: 'op-789' });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.executeTrajectory({
+        run: { datasetId: run.datasetId, targetAgentId: null },
+        runId: run.id,
+        testCase: { content: { input: 'What is 6*7?' }, sortOrder: testCase.sortOrder },
+        testCaseId: testCase.id,
+        environment,
+      });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          evalContext: { envPrompt: undefined, toolForwarding: environment.toolForwarding },
+        }),
+      );
+    });
+
+    it('should pass the dataset case id through evalContext', async () => {
+      const { run, testCase } = await setupTrajectoryChain();
+
+      mockExecAgent.mockResolvedValue({ operationId: 'op-case-id' });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.executeTrajectory({
+        run: { datasetId: run.datasetId, targetAgentId: null },
+        runId: run.id,
+        testCase: {
+          content: { input: 'What is 6*7?' },
+          metadata: { caseId: 'case-42' },
+          sortOrder: testCase.sortOrder,
+        },
+        testCaseId: testCase.id,
+      });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ evalContext: { caseId: 'case-42' } }),
       );
     });
 
