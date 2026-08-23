@@ -1,5 +1,9 @@
 import type { MessengerAttachmentBudget, MessengerOversizeImageStrategy } from '@lobechat/const';
-import { DEFAULT_OVERSIZE_IMAGE_STRATEGY, MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
+import {
+  DEFAULT_OVERSIZE_IMAGE_STRATEGY,
+  MESSENGER_ATTACHMENT_BUDGETS,
+  MESSENGER_MAX_COMPRESSION_SOURCE_BYTES,
+} from '@lobechat/const';
 import debug from 'debug';
 
 import { loadAttachmentBuffer } from './loadAttachmentBuffer';
@@ -104,9 +108,10 @@ const toJpegFilename = (name: string | undefined): string | undefined => {
 /**
  * Refuse to buffer arbitrarily large remote files into memory for compression.
  * Enforced as the response streams in, so an image with an absent or lying
- * `content-length` cannot be fully allocated before it is rejected.
+ * `content-length` cannot be fully allocated before it is rejected. Shared with
+ * the push modal, which must not offer a choice this cap will overrule.
  */
-const MAX_COMPRESSION_SOURCE_BYTES = 100 * MB;
+const MAX_COMPRESSION_SOURCE_BYTES = MESSENGER_MAX_COMPRESSION_SOURCE_BYTES;
 
 const loadSourceBuffer = async (attachment: BotMessageAttachment): Promise<Buffer | undefined> =>
   loadAttachmentBuffer(attachment, { limit: MAX_COMPRESSION_SOURCE_BYTES });

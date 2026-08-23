@@ -1,7 +1,7 @@
 'use client';
 
 import type { MessengerOversizeImageStrategy } from '@lobechat/const';
-import { DEFAULT_OVERSIZE_IMAGE_STRATEGY, MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
+import { DEFAULT_OVERSIZE_IMAGE_STRATEGY } from '@lobechat/const';
 import { Block, Flexbox, Input, Text } from '@lobehub/ui';
 import {
   Alert,
@@ -26,6 +26,7 @@ import type { MessengerPlatform } from '../constants';
 import { getMessengerErrorMessage, getMessengerQueuedToast } from '../i18n';
 import { MessengerPushWindowState } from '../IntegrationDetail/MessengerPushWindowState';
 import { resolveAttachmentType } from './resolveAttachmentType';
+import { resolveOversizePlan } from './resolveOversizePlan';
 
 const PUSH_WINDOW_REFRESH_INTERVAL = 5000;
 
@@ -92,11 +93,12 @@ export const PushResourceContent = memo<PushResourceModalProps>(
     // statement of what will happen. Size unknown → neither; the server
     // applies the same budget either way.
     const attachmentType = resolveAttachmentType(file.name, file.fileType);
-    const budget = MESSENGER_ATTACHMENT_BUDGETS[platform];
-    const budgetLimit = attachmentType === 'image' ? budget.imageMaxBytes : budget.fileMaxBytes;
-    const isOversize = !!file.size && file.size > budgetLimit;
+    const {
+      limit: budgetLimit,
+      offersChoice: oversizeImage,
+      oversize: isOversize,
+    } = resolveOversizePlan({ attachmentType, platform, size: file.size });
     const limit = formatSize(budgetLimit, 0);
-    const oversizeImage = isOversize && attachmentType === 'image';
 
     // Why the file needs a decision reads as the file's own metadata, on the
     // line under its name — the size is the fact the limit is measured against,

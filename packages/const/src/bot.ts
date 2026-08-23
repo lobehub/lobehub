@@ -79,3 +79,14 @@ export type MessengerOversizeImageStrategy = 'compress' | 'link';
 
 /** Preserves the pre-choice behavior for every caller that sends none. */
 export const DEFAULT_OVERSIZE_IMAGE_STRATEGY: MessengerOversizeImageStrategy = 'compress';
+
+/**
+ * Hard ceiling on the source an image may be recompressed from.
+ *
+ * Buffering the original into memory is what recompression costs, so past this
+ * the server refuses and sends a download link instead — whatever the sender
+ * picked. It lives here, beside the budget table and for the same reason: the
+ * push modal must not offer "compress it" for a file the server will never
+ * compress, or the consequence it spells out is simply untrue.
+ */
+export const MESSENGER_MAX_COMPRESSION_SOURCE_BYTES = 100 * MB;
