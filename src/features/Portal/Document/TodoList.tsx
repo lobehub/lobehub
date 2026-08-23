@@ -79,6 +79,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   listContainer: css`
     overflow-x: hidden;
 
+    /* Blockify the inline-flex Base UI Checkbox labels — without this the todo
+       rows flow inline and wrap several per line. */
+    display: flex;
+    flex-direction: column;
+
     margin-block-start: 8px;
     padding-block: 4px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};

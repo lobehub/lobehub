@@ -340,6 +340,8 @@
   "payDiffPrice": "Farkı Öde",
   "payDiffPriceApprox": "Yaklaşık",
   "payDiffPriceTip": "Gerçek tutar ödeme sayfasında geçerlidir",
+  "payment.downgradeFailed.desc": "Düşürme işlemi planlanamadı. Lütfen daha sonra tekrar deneyin veya sorun devam ederse bize e-posta yoluyla ulaşın.",
+  "payment.downgradeFailed.title": "Düşürme Başarısız",
   "payment.error.actions.billing": "Fatura Yönetimi",
   "payment.error.actions.home": "Ana Sayfaya Dön",
   "payment.error.desc": "Abonelik ID'si: {{id}} bulunamadı. Sorularınız varsa lütfen e-posta yoluyla bizimle iletişime geçin",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Plan Kilitli",
   "plans.btn.payment": "Satın Al",
   "plans.btn.paymentDesc": "Kredi kartı / Alipay / WeChat Pay desteklenir",
-  "plans.btn.paymentDescForZarinpal": "Kredi kartı desteklenir",
   "plans.btn.soon": "Çok Yakında",
   "plans.cancelDowngrade": "Planlanan Düşürmeyi İptal Et",
   "plans.cancelDowngradeSuccess": "Planlanan düşürme iptal edildi",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Kullanım Genel Bakış",
   "usage.remaining": "Kalan",
   "usage.storage.embeddings.used": "Vektör Depolama",
-  "usage.storage.file.used": "Dosya Kullanımı",
-  "zarinpal.infoModal.desc": "Politika gereği, sipariş vermeden önce lütfen aşağıdaki kişisel bilgileri doldurun:",
-  "zarinpal.infoModal.phone.label": "Telefon Numarası",
-  "zarinpal.infoModal.phone.placeholder": "Lütfen telefon numaranızı girin",
-  "zarinpal.infoModal.phone.rule": "Lütfen geçerli bir telefon numarası girin",
-  "zarinpal.infoModal.submit": "Satın Al",
-  "zarinpal.infoModal.title": "Gerekli Bilgileri Doldurun"
+  "usage.storage.file.used": "Dosya Kullanımı"
 }

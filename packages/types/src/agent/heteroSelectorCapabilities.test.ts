@@ -4,8 +4,10 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import { buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
+  CODEX_SERVER_DEFAULT_CUSTOM_MODELS,
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  isCodexServerDefaultCustomModel,
   isHeteroSelectorAvailable,
 } from './heteroSelectorCapabilities';
 
@@ -16,6 +18,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
+    expect(isHeteroSelectorAvailable('grok-build')).toBe(true);
     expect(isHeteroSelectorAvailable('opencode')).toBe(true);
     expect(isHeteroSelectorAvailable('pi')).toBe(true);
     expect(isHeteroSelectorAvailable('qoder')).toBe(true);
@@ -37,12 +40,29 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('grok-build')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('grok-build')?.effort?.levels('grok-4.6')).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
     expect(getHeteroSelectorCapability('opencode')?.effort).toBeUndefined();
     expect(getHeteroSelectorCapability('qoder')?.effort).toBeDefined();
     expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('static');
     expect(getHeteroSelectorCapability('codebuddy')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('qoder')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('trae')?.model?.source).toBe('catalog');
+  });
+
+  it('keeps non-OpenAI Codex relay support on an explicit allowlist', () => {
+    expect(CODEX_SERVER_DEFAULT_CUSTOM_MODELS).toEqual([
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+      'glm-5.2',
+    ]);
+    expect(isCodexServerDefaultCustomModel('deepseek-v4-pro')).toBe(true);
+    expect(isCodexServerDefaultCustomModel('kimi-k2.6')).toBe(false);
   });
 
   it('reports codex effort levels per model', () => {
@@ -132,6 +152,27 @@ describe('applyHeteroSelection', () => {
       'plan',
       '--model',
       'claude-sonnet-4-6-thinking',
+    ]);
+  });
+
+  it('clears Grok Build model and effort flags before applying a selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m', 'old-model', '--reasoning-effort=low', '--no-subagents'],
+      type: 'grok-build',
+    };
+    const patch = applyHeteroSelection(provider, { effort: 'xhigh', model: 'grok-4.6' });
+
+    expect(patch).toEqual({
+      args: ['--no-subagents'],
+      effort: 'xhigh',
+      model: 'grok-4.6',
+    });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--no-subagents',
+      '--model',
+      'grok-4.6',
+      '--effort',
+      'xhigh',
     ]);
   });
 

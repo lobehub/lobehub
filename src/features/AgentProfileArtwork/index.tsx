@@ -18,6 +18,7 @@ import {
   openAgentArtworkStudio,
   styleReferencesForArtworkStyle,
 } from '@/features/AgentArtworkStudio';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
 import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -211,6 +212,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     onBackgroundChange,
   }) => {
     const { t } = useTranslation('setting');
+    const appOrigin = useAppOrigin();
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const canGenerate = useAiInfraStore(
       (state) => aiProviderSelectors.enabledImageModelList(state).length > 0,
@@ -273,7 +275,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             name,
             referenceImageUrl: kind === 'background' ? avatar : backgroundUrl,
             style,
-            styleReferenceImageUrls: styleReferencesForArtworkStyle(style),
+            styleReferenceImageUrls: styleReferencesForArtworkStyle(style, appOrigin),
             systemRole,
             title,
           });
@@ -283,6 +285,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
       },
       [
         agentId,
+        appOrigin,
         avatar,
         backgroundUrl,
         canEdit,
@@ -304,7 +307,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
         AGENT_ARTWORK_STYLES.map((style) => ({
           icon: style === artworkStyle ? Check : undefined,
           key: style,
-          label: t(`settingAgent.artwork.style.${style}`),
+          label: t(`artworkStudio.style.${style}`),
           onClick: () => {
             setArtworkStyle(style);
             void generateArtwork(kind, style);

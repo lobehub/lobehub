@@ -7,6 +7,15 @@ import type { AgentState } from '../types';
  * request; `stepIndex` advances per step.
  */
 export interface RuntimeOperationContext {
+  /**
+   * Cancels work that is still in flight for this operation. Executors that
+   * `await` something long (tool runs today) must race it so an interrupt does
+   * not have to wait for the call to finish on its own.
+   *
+   * Client adapter: the operation's own `AbortController`. Server adapter: a
+   * per-step controller driven by the persisted interruption flag.
+   */
+  abortSignal?: AbortSignal;
   /** Effective message owner for this operation (group member when applicable). */
   agentId?: string;
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;

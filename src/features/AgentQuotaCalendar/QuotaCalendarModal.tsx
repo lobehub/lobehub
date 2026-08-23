@@ -45,8 +45,32 @@ import {
 const styles = createStaticStyles(({ css }) => ({
   calendarGrid: css`
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 4px;
+  `,
+  /**
+   * Windows on the left, the month calendar on the right. Both are 7-column
+   * grids, so they get an even split — narrower than this and the day cells
+   * clip their cost badge.
+   */
+  layout: css`
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+
+    /* Nothing to pair the calendar with, so let it take the whole width. */
+    &[data-single='true'] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    @container quota-calendar (width < 900px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  `,
+  root: css`
+    container-name: quota-calendar;
+    container-type: inline-size;
   `,
   chartFrame: css`
     padding: 4px;
@@ -65,6 +89,9 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 14px;
     color: ${cssVar.colorTextSecondary};
 
+    /* "at least $404" must stay one line — a wrap pushes it out of the cell. */
+    white-space: nowrap;
+
     background: ${cssVar.colorBgContainer};
   `,
   /** Keep the content surface neutral; intensity is carried by the corner dot. */
@@ -82,10 +109,15 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
 
-    background: ${cssVar.colorFillQuaternary};
+    background: ${cssVar.colorBgContainer};
 
     &[data-in-month='false'] {
       opacity: 0.35;
+    }
+
+    /* The date labels the cell; the number below it carries the information. */
+    & [data-day-number] {
+      color: ${cssVar.colorTextSecondary};
     }
 
     /* Rate limited: the provider refused work that day — an error state, not heat. */
@@ -94,8 +126,14 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorErrorBg};
     }
 
+    /* A refused day states itself in one colour, date included. */
+    &[data-rate-limited='true'] [data-day-number] {
+      color: inherit;
+    }
+
+    /* Today is a marker, not an alarm — the lightest ring that still reads. */
     &[data-today='true'] {
-      box-shadow: inset 0 0 0 1.5px ${cssVar.colorPrimary};
+      box-shadow: inset 0 0 0 1px ${cssVar.colorPrimaryBorder};
     }
   `,
   dayFooter: css`
@@ -146,7 +184,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 10px;
     height: 10px;
     border-radius: 3px;
-    background: ${cssVar.colorFillQuaternary};
+    background: ${cssVar.colorBgContainer};
 
     &[data-rate-limited='true'] {
       background: ${cssVar.colorErrorBg};
@@ -200,7 +238,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   tokens: css`
-    font-size: 12px;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
   `,
   capacityFill: css`
@@ -231,7 +269,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 3px;
 
     min-width: 0;
-    height: 54px;
+    height: 38px;
     padding: 4px;
     border-radius: ${cssVar.borderRadiusSM};
 
@@ -239,6 +277,9 @@ const styles = createStaticStyles(({ css }) => ({
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
     color: ${cssVar.colorTextSecondary};
+
+    /* "09:42 100%" is one unit — wrapping it splits the percentage in half. */
+    white-space: nowrap;
 
     background: ${cssVar.colorBgContainer};
 
@@ -265,18 +306,10 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
-  windowSection: css`
+  sectionPanel: css`
     padding: 10px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
-  `,
-  windowSpend: css`
-    overflow: hidden;
-
-    font-size: 9px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   weekday: css`
     font-size: 11px;
@@ -559,11 +592,12 @@ const windowTooltip = (stat: WindowStat, t: TFunction<'chat'>) =>
     t('heteroAgent.claudeQuota.calendar.windowUtilization', {
       percent: Math.round(stat.peakUtilization),
     }),
-    stat.tokens > 0 &&
-      t('heteroAgent.claudeQuota.calendar.windowSpend', {
-        cost: formatTrackedCost(stat, t),
-        tokens: formatTokens(stat.tokens),
-      }),
+    stat.tokens > 0
+      ? t('heteroAgent.claudeQuota.calendar.windowSpend', {
+          cost: formatTrackedCost(stat, t),
+          tokens: formatTokens(stat.tokens),
+        })
+      : t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort'),
     stat.rateLimitedAt && t('heteroAgent.claudeQuota.calendar.rateLimited'),
   ].filter(Boolean) as string[];
 
@@ -580,7 +614,7 @@ const WindowHistory = memo<{
     const grid = buildSessionGrid(stats, latestDay);
 
     return (
-      <Flexbox className={styles.windowSection} gap={8}>
+      <Flexbox className={styles.sectionPanel} gap={8}>
         <Flexbox horizontal align={'baseline'} justify={'space-between'}>
           <Text strong style={{ fontSize: 13 }}>
             {t('heteroAgent.claudeQuota.calendar.sessionHistory')}
@@ -615,11 +649,6 @@ const WindowHistory = memo<{
                     <strong>{Math.round(stat.peakUtilization)}%</strong>
                   </Flexbox>
                   <CapacityMeter utilization={stat.peakUtilization} />
-                  <span className={styles.windowSpend}>
-                    {stat.tokens > 0
-                      ? `${formatTokens(stat.tokens)} · ${formatTrackedCost(stat, t)}`
-                      : t('heteroAgent.claudeQuota.calendar.noLedgerSpendShort')}
-                  </span>
                 </div>
               );
 
@@ -639,7 +668,7 @@ const WindowHistory = memo<{
   }
 
   return (
-    <Flexbox className={styles.windowSection} gap={6}>
+    <Flexbox className={styles.sectionPanel} gap={6}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'}>
         <Text strong style={{ fontSize: 13 }}>
           {t('heteroAgent.claudeQuota.calendar.weeklyHistory')}
@@ -854,153 +883,166 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
     return '';
   };
 
+  const hasWindowColumn = Boolean(chartWindow) || windowStats.length > 0;
+
   return (
-    <Flexbox gap={16}>
-      <Segmented
-        options={seriesOptions}
-        size={'small'}
-        style={{ alignSelf: 'flex-start' }}
-        value={seriesId(series)}
-        onChange={(value) => {
-          const [type, scopeKey = ''] = String(value).split(':');
-          setSeries({ scopeKey, type: type === 'session' ? 'session' : 'weekly' });
-        }}
-      />
+    <div className={styles.root}>
+      <div className={styles.layout} data-single={!hasWindowColumn}>
+        <Flexbox gap={16}>
+          {/* The series switcher heads the window column, so the calendar beside
+              it starts at the body top instead of below a full-width control. */}
+          <Segmented
+            options={seriesOptions}
+            size={'small'}
+            style={{ alignSelf: 'flex-start' }}
+            value={seriesId(series)}
+            onChange={(value) => {
+              const [type, scopeKey = ''] = String(value).split(':');
+              setSeries({ scopeKey, type: type === 'session' ? 'session' : 'weekly' });
+            }}
+          />
 
-      {chartWindow && (
-        <BurnChart
-          now={now}
-          readings={readings}
-          series={series}
-          turns={turns}
-          window={chartWindow}
-        />
-      )}
-
-      <WindowHistory series={series} stats={windowStats} />
-
-      <Flexbox gap={8}>
-        <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
-          <Flexbox horizontal align={'baseline'} gap={8}>
-            <Text strong style={{ fontSize: 13 }}>
-              {t('heteroAgent.claudeQuota.calendar.monthSpend')}
-            </Text>
-            <Text style={{ fontSize: 11 }} type={'secondary'}>
-              {month.format('YYYY/MM')}
-            </Text>
-          </Flexbox>
-          <Flexbox horizontal gap={2}>
-            <ActionIcon
-              disabled={!isCalendarMonthAvailable(previousMonth, now)}
-              icon={ChevronLeftIcon}
-              size={'small'}
-              onClick={() => setMonth((m) => m.subtract(1, 'month'))}
+          {chartWindow && (
+            <BurnChart
+              now={now}
+              readings={readings}
+              series={series}
+              turns={turns}
+              window={chartWindow}
             />
-            <ActionIcon
-              disabled={!isCalendarMonthAvailable(nextMonth, now)}
-              icon={ChevronRightIcon}
-              size={'small'}
-              onClick={() => setMonth((m) => m.add(1, 'month'))}
-            />
-          </Flexbox>
+          )}
+
+          <WindowHistory series={series} stats={windowStats} />
         </Flexbox>
 
-        <div className={styles.calendarGrid}>
-          {weekdayLabels.map((label) => (
-            <div className={styles.weekday} key={label}>
-              {label}
-            </div>
-          ))}
-          {grid.map((cell) => {
-            const spend = dailySpend.get(cell.key);
-            const burn = dailyBurn.get(cell.key) ?? 0;
-            const resetsAt = resetsByDay.get(cell.key);
-            const rateLimited = rateLimitedDays.has(cell.key);
-            const heatLevel = dailyHeatLevels.get(cell.key) ?? 0;
-            const label = dayLabel(spend, burn);
-            const tooltipParts = [
-              spend &&
-                spend.tokens > 0 &&
-                t('heteroAgent.claudeQuota.calendar.dayTokens', {
-                  cost: formatTrackedCost(spend, t),
-                  tokens: formatTokens(spend.tokens),
-                }),
-              burn > 0 &&
-                t('heteroAgent.claudeQuota.calendar.dayShare', { percent: Math.round(burn) }),
-              resetsAt &&
-                t('heteroAgent.claudeQuota.calendar.resetAt', {
-                  time: dayjs(resetsAt).format('HH:mm'),
-                }),
-              rateLimited && t('heteroAgent.claudeQuota.calendar.rateLimited'),
-            ].filter(Boolean) as string[];
-
-            const day = (
-              <div
-                className={styles.dayCell}
-                data-in-month={cell.inMonth}
-                data-rate-limited={rateLimited}
-                data-today={cell.key === todayKey}
-                key={cell.key}
-              >
-                <span>{cell.date.date()}</span>
-                {shouldShowHeatDot(heatLevel, rateLimited) && (
-                  <span aria-hidden className={styles.heatDot} data-heat={heatLevel} />
-                )}
-                <span className={styles.dayFooter}>
-                  <span className={styles.tokens}>{label}</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                    {rateLimited && <Icon color={cssVar.colorError} icon={BanIcon} size={12} />}
-                    {resetsAt && (
-                      <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
-                    )}
-                  </span>
-                </span>
-                {spend && (spend.cost > 0 || spend.hasUnpricedTurn) && (
-                  <span className={styles.cost}>{formatTrackedCost(spend, t)}</span>
-                )}
-              </div>
-            );
-
-            return tooltipParts.length > 0 ? (
-              <Tooltip key={cell.key} title={tooltipParts.join(' · ')}>
-                {day}
-              </Tooltip>
-            ) : (
-              day
-            );
-          })}
-        </div>
-
-        <Flexbox horizontal align={'center'} gap={12} style={{ fontSize: 11 }}>
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Text style={{ fontSize: 11 }} type={'secondary'}>
-              {t('heteroAgent.claudeQuota.calendar.legendLess')}
-            </Text>
-            {[1, 2, 3, 4].map((level) => (
-              <span className={styles.heatDot} data-heat={level} data-legend={'true'} key={level} />
-            ))}
-            <Text style={{ fontSize: 11 }} type={'secondary'}>
-              {t('heteroAgent.claudeQuota.calendar.legendMore')}
-            </Text>
-          </Flexbox>
-          <Flexbox horizontal align={'center'} gap={4}>
-            <span className={styles.legendSwatch} data-rate-limited={'true'} />
-            <Icon color={cssVar.colorError} icon={BanIcon} size={11} />
-            <Text style={{ fontSize: 11 }} type={'secondary'}>
-              {t('heteroAgent.claudeQuota.calendar.rateLimited')}
-            </Text>
-          </Flexbox>
-          {series.type !== 'session' && (
-            <Flexbox horizontal align={'center'} gap={4}>
-              <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
+        <Flexbox className={styles.sectionPanel} gap={8}>
+          <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
+            <Flexbox horizontal align={'baseline'} gap={8}>
+              <Text strong style={{ fontSize: 13 }}>
+                {t('heteroAgent.claudeQuota.calendar.monthSpend')}
+              </Text>
               <Text style={{ fontSize: 11 }} type={'secondary'}>
-                {t('heteroAgent.claudeQuota.calendar.legendReset')}
+                {month.format('YYYY/MM')}
               </Text>
             </Flexbox>
-          )}
+            <Flexbox horizontal gap={2}>
+              <ActionIcon
+                disabled={!isCalendarMonthAvailable(previousMonth, now)}
+                icon={ChevronLeftIcon}
+                size={'small'}
+                onClick={() => setMonth((m) => m.subtract(1, 'month'))}
+              />
+              <ActionIcon
+                disabled={!isCalendarMonthAvailable(nextMonth, now)}
+                icon={ChevronRightIcon}
+                size={'small'}
+                onClick={() => setMonth((m) => m.add(1, 'month'))}
+              />
+            </Flexbox>
+          </Flexbox>
+
+          <div className={styles.calendarGrid}>
+            {weekdayLabels.map((label) => (
+              <div className={styles.weekday} key={label}>
+                {label}
+              </div>
+            ))}
+            {grid.map((cell) => {
+              const spend = dailySpend.get(cell.key);
+              const burn = dailyBurn.get(cell.key) ?? 0;
+              const resetsAt = resetsByDay.get(cell.key);
+              const rateLimited = rateLimitedDays.has(cell.key);
+              const heatLevel = dailyHeatLevels.get(cell.key) ?? 0;
+              const label = dayLabel(spend, burn);
+              const tooltipParts = [
+                spend &&
+                  spend.tokens > 0 &&
+                  t('heteroAgent.claudeQuota.calendar.dayTokens', {
+                    cost: formatTrackedCost(spend, t),
+                    tokens: formatTokens(spend.tokens),
+                  }),
+                burn > 0 &&
+                  t('heteroAgent.claudeQuota.calendar.dayShare', { percent: Math.round(burn) }),
+                resetsAt &&
+                  t('heteroAgent.claudeQuota.calendar.resetAt', {
+                    time: dayjs(resetsAt).format('HH:mm'),
+                  }),
+                rateLimited && t('heteroAgent.claudeQuota.calendar.rateLimited'),
+              ].filter(Boolean) as string[];
+
+              const day = (
+                <div
+                  className={styles.dayCell}
+                  data-in-month={cell.inMonth}
+                  data-rate-limited={rateLimited}
+                  data-today={cell.key === todayKey}
+                  key={cell.key}
+                >
+                  <span data-day-number>{cell.date.date()}</span>
+                  {shouldShowHeatDot(heatLevel, rateLimited) && (
+                    <span aria-hidden className={styles.heatDot} data-heat={heatLevel} />
+                  )}
+                  <span className={styles.dayFooter}>
+                    <span className={styles.tokens}>{label}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                      {rateLimited && <Icon color={cssVar.colorError} icon={BanIcon} size={12} />}
+                      {resetsAt && (
+                        <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
+                      )}
+                    </span>
+                  </span>
+                  {spend && (spend.cost > 0 || spend.hasUnpricedTurn) && (
+                    <span className={styles.cost}>{formatTrackedCost(spend, t)}</span>
+                  )}
+                </div>
+              );
+
+              return tooltipParts.length > 0 ? (
+                <Tooltip key={cell.key} title={tooltipParts.join(' · ')}>
+                  {day}
+                </Tooltip>
+              ) : (
+                day
+              );
+            })}
+          </div>
+
+          <Flexbox horizontal align={'center'} gap={12} style={{ fontSize: 11 }} wrap={'wrap'}>
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Text style={{ fontSize: 11 }} type={'secondary'}>
+                {t('heteroAgent.claudeQuota.calendar.legendLess')}
+              </Text>
+              {[1, 2, 3, 4].map((level) => (
+                <span
+                  className={styles.heatDot}
+                  data-heat={level}
+                  data-legend={'true'}
+                  key={level}
+                />
+              ))}
+              <Text style={{ fontSize: 11 }} type={'secondary'}>
+                {t('heteroAgent.claudeQuota.calendar.legendMore')}
+              </Text>
+            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={4}>
+              <span className={styles.legendSwatch} data-rate-limited={'true'} />
+              <Icon color={cssVar.colorError} icon={BanIcon} size={11} />
+              <Text style={{ fontSize: 11 }} type={'secondary'}>
+                {t('heteroAgent.claudeQuota.calendar.rateLimited')}
+              </Text>
+            </Flexbox>
+            {series.type !== 'session' && (
+              <Flexbox horizontal align={'center'} gap={4}>
+                <Icon color={cssVar.colorTextSecondary} icon={RotateCcwIcon} size={11} />
+                <Text style={{ fontSize: 11 }} type={'secondary'}>
+                  {t('heteroAgent.claudeQuota.calendar.legendReset')}
+                </Text>
+              </Flexbox>
+            )}
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
-    </Flexbox>
+      </div>
+    </div>
   );
 });
 
@@ -1014,7 +1056,7 @@ export const openQuotaCalendarModal = (
     content: <QuotaCalendar externalAccountId={params.externalAccountId} />,
     footer: null,
     title: i18nT('heteroAgent.claudeQuota.calendar.title', { ns: 'chat' }),
-    width: 620,
+    width: 1040,
   });
 
 export default QuotaCalendar;

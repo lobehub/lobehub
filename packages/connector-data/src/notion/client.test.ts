@@ -76,15 +76,16 @@ describe('createNotionConnectorClient', () => {
     ]);
   });
 
-  /** @example Failed tool executions expose sanitized connector errors without account details. */
-  it('sanitizes Composio execution failures', async () => {
-    const client = createClient(
-      vi.fn(async () => ({ error: 'token=secret notion-account', successful: false })),
-    );
+  /** @example expect(error.message).toContain('notion-account'); */
+  it('retains Composio execution failure details', async () => {
+    const response = { error: 'token=secret notion-account', successful: false };
+    const client = createClient(vi.fn(async () => response));
 
     const error = await client.listItems().catch((reason) => reason);
     expect(error).toBeInstanceOf(ConnectorDataError);
     expect(error).toMatchObject({ operation: 'listItems', provider: 'notion', retryable: false });
-    expect(error.message).not.toMatch(/secret|notion-account/);
+    expect(error.message).toContain('token=secret notion-account');
+    /** @example expect(error.cause).toBe(response); */
+    expect(error.cause).toBe(response);
   });
 });

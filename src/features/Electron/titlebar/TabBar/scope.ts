@@ -18,6 +18,7 @@ const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
 
 const PERSONAL_TOP_LEVEL_SEGMENTS = new Set([
   'agent',
+  'apps',
   'community',
   'desktop-onboarding',
   'devtools',

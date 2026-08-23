@@ -1001,6 +1001,48 @@
       "when": 1786791246437,
       "tag": "0142_expertise_domain_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786847279485,
+      "tag": "0143_resource_transfer_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786968214710,
+      "tag": "0144_notifications_add_metadata_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1787141104502,
+      "tag": "0145_agents_add_identity_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1787188183549,
+      "tag": "0146_acceptance_project_association",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1787239313202,
+      "tag": "0147_resource_permissions_per_member_subject",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1787376421190,
+      "tag": "0148_goal_graph",
+      "breakpoints": true
     }
   ],
   "version": "6"

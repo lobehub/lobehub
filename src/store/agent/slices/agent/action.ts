@@ -14,7 +14,7 @@ import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
@@ -24,6 +24,7 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { aiAgentService } from '@/services/aiAgent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
@@ -44,7 +45,16 @@ import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -449,6 +459,11 @@ export class AgentSliceActionImpl {
     );
   };
 
+  useFetchServerDefaultHeterogeneousCapability = (enabled: boolean) =>
+    useClientDataSWR(enabled ? agentConfigKeys.serverDefaultHeterogeneousCapability() : null, () =>
+      aiAgentService.getServerDefaultHeterogeneousCapability(),
+    );
+
   /**
    * Re-trigger the agent config fetch after a failure. Clears the recorded
    * error first so consumers fall back to the loading skeleton, then
@@ -605,6 +620,10 @@ export class AgentSliceActionImpl {
         draft[id] = config;
       } else {
         draft[id] = merge(draft[id], config);
+        // The character sheet is authored as one document — `AgentModel`
+        // replaces it rather than merging — so mirror that here, or a trait the
+        // user just cleared reappears until the next full fetch.
+        if (Object.hasOwn(config, 'profile')) draft[id].profile = config.profile;
         // merge() can't drop keys; honor `undefined` as a per-device delete so
         // clearing a working directory takes effect optimistically.
         pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);

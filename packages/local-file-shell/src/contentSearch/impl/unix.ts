@@ -100,6 +100,12 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     const { tool: preferredTool } = params;
     const logPrefix = `[grepContent: ${params.pattern}]`;
 
+    const missingScope = await this.missingScopeResult(params);
+    if (missingScope) {
+      logger.warn(`${logPrefix} ${missingScope.error}`);
+      return missingScope;
+    }
+
     try {
       if (preferredTool && ['rg', 'ag', 'grep'].includes(preferredTool)) {
         logger.debug(`${logPrefix} Using preferred tool: ${preferredTool}`);

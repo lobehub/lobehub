@@ -24,6 +24,7 @@ import {
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
+import { resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
@@ -44,12 +45,17 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
 
   // In workspaces every user bubble shows its sender avatar so ownership is
   // visible even during single-user testing; personal mode keeps the legacy
-  // hidden-avatar behavior. Optimistic/streaming rows without a `sender`
-  // fall back to the current user, which is who authored them.
+  // hidden-avatar behavior. Self identity applies only to the viewer's own
+  // rows — see resolveSenderIdentity.
   const showSender = Boolean(activeWorkspaceId);
-  const senderName = sender?.fullName || sender?.username || '';
-  const avatar = sender?.avatar || senderName || selfAvatar;
-  const title = senderName || selfTitle;
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const { avatar, title } = resolveSenderIdentity({
+    currentUserId,
+    selfAvatar,
+    selfTitle,
+    sender,
+    unknownLabel: t('sender.unknownMember'),
+  });
 
   // Get editing and loading state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));

@@ -1,4 +1,4 @@
-import { ConnectorDataError } from '../errors';
+import { ConnectorDataError, getConnectorErrorMessage } from '../errors';
 import { createRecoverableMemo } from '../memo';
 import { withConnectorRetry } from '../retry';
 import { parseNotionItems, parseNotionPageMarkdown } from './parser';
@@ -68,7 +68,7 @@ const readToolVersion = (value: unknown): string | undefined => {
  * - Composio tool metadata exposes explicit versions when `toolVersion` is omitted
  *
  * Returns:
- * - A client that normalizes SDK response variants and sanitizes failures
+ * - A client that normalizes SDK response variants and retains provider failure messages
  */
 export const createNotionConnectorClient = ({
   composio,
@@ -90,6 +90,7 @@ export const createNotionConnectorClient = ({
           : undefined;
       if (discovered) return discovered;
       throw new ConnectorDataError({
+        cause: tool,
         code: 'notion_tool_version_unavailable',
         operation: 'resolveToolVersion',
         provider: 'notion',
@@ -100,32 +101,35 @@ export const createNotionConnectorClient = ({
     return resolver();
   };
 
-  const execute = async (toolSlug: string, operation: string, arguments_: Record<string, unknown>) =>
-    withConnectorRetry(
-      async () => {
-        const response = await composio.tools.execute(toolSlug, {
-          arguments: arguments_,
-          connectedAccountId,
-          userId,
-          version: await getToolVersion(toolSlug),
+  const execute = async (
+    toolSlug: string,
+    operation: string,
+    arguments_: Record<string, unknown>,
+  ) =>
+    withConnectorRetry(async () => {
+      const response = await composio.tools.execute(toolSlug, {
+        arguments: arguments_,
+        connectedAccountId,
+        userId,
+        version: await getToolVersion(toolSlug),
+      });
+      if (
+        typeof response !== 'object' ||
+        response === null ||
+        !('successful' in response) ||
+        response.successful !== true
+      ) {
+        throw new ConnectorDataError({
+          cause: response,
+          code: `notion_${operation}_failed`,
+          message: getConnectorErrorMessage(response),
+          operation,
+          provider: 'notion',
+          retryable: false,
         });
-        if (
-          typeof response !== 'object' ||
-          response === null ||
-          !('successful' in response) ||
-          response.successful !== true
-        ) {
-          throw new ConnectorDataError({
-            code: `notion_${operation}_failed`,
-            operation,
-            provider: 'notion',
-            retryable: false,
-          });
-        }
-        return response;
-      },
-      { code: `notion_${operation}_failed`, operation, provider: 'notion' },
-    );
+      }
+      return response;
+    });
 
   return {
     getPageMarkdown: async (pageId) => {
@@ -151,7 +155,9 @@ export const createNotionConnectorClient = ({
       const items = parseNotionItems(response, boundedMaxResults);
       if (!items) {
         throw new ConnectorDataError({
+          cause: response,
           code: 'notion_response_invalid',
+          message: getConnectorErrorMessage(response),
           operation: 'listItems',
           provider: 'notion',
           retryable: false,

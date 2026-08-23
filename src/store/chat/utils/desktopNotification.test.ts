@@ -10,18 +10,23 @@ import type { ChatStore } from '@/store/chat/store';
 
 import {
   buildNotificationBody,
+  buildNotificationSender,
   resolveNotificationNavigate,
   resolveNotificationNavigatePath,
   resolveNotificationTitle,
 } from './desktopNotification';
+import { renderAvatarToDataUrl } from './notificationAvatar';
 import { topicMapKey } from './topicMapKey';
 
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     getAgentMetaById: (agentId: string) => () =>
-      agentId === 'agent-named' ? { title: 'My Agent' } : undefined,
+      agentId === 'agent-named' ? { avatar: '🤖', title: 'My Agent' } : undefined,
   },
+}));
+vi.mock('./notificationAvatar', () => ({
+  renderAvatarToDataUrl: vi.fn(async () => 'data:image/png;base64,MOCK'),
 }));
 
 const FALLBACK = 'fallback';
@@ -138,5 +143,43 @@ describe('buildNotificationBody', () => {
   it('returns the fallback for empty / undefined content', () => {
     expect(buildNotificationBody(undefined, FALLBACK)).toBe(FALLBACK);
     expect(buildNotificationBody('   ', FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+describe('buildNotificationSender', () => {
+  it('returns undefined without an agent context', async () => {
+    expect(await buildNotificationSender({ topicId: 't1' })).toBeUndefined();
+  });
+
+  it('returns undefined when the agent has no display name', async () => {
+    expect(await buildNotificationSender({ agentId: 'agent-unknown' })).toBeUndefined();
+  });
+
+  it('builds the sender from agent meta with a rendered avatar', async () => {
+    expect(await buildNotificationSender({ agentId: 'agent-named', topicId: 't1' })).toEqual({
+      avatarDataUrl: 'data:image/png;base64,MOCK',
+      conversationId: 'agent-named:t1',
+      name: 'My Agent',
+    });
+  });
+
+  it('scopes the conversation to the group when present', async () => {
+    const sender = await buildNotificationSender({
+      agentId: 'agent-named',
+      groupId: 'g1',
+      topicId: 't1',
+    });
+
+    expect(sender?.conversationId).toBe('g1:t1');
+  });
+
+  it('keeps the sender when avatar rendering fails', async () => {
+    vi.mocked(renderAvatarToDataUrl).mockRejectedValueOnce(new Error('render failed'));
+
+    expect(await buildNotificationSender({ agentId: 'agent-named' })).toEqual({
+      avatarDataUrl: undefined,
+      conversationId: 'agent-named',
+      name: 'My Agent',
+    });
   });
 });

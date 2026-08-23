@@ -230,6 +230,57 @@ describe('WorkModel · listByWorkspace', () => {
     expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
   });
 
+  it('separates private and public Works for the Resources mode switch', async () => {
+    const workspaceId = 'work-test-gallery-visibility-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Gallery Visibility Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+
+    const taskModel = new TaskModel(serverDB, userId, workspaceId);
+    const workModel = new WorkModel(serverDB, userId, workspaceId);
+    const privateTask = await taskModel.create({
+      instruction: 'Private gallery task',
+      name: 'Private gallery task',
+      visibility: 'private',
+    });
+    const publicTask = await taskModel.create({
+      instruction: 'Public gallery task',
+      name: 'Public gallery task',
+      visibility: 'public',
+    });
+    const privateWork = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-gallery-private',
+      taskId: privateTask.id,
+      toolCallId: 'tool-call-gallery-private',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+    const publicWork = await workModel.registerTask({
+      changeType: 'created',
+      rootOperationId: 'op-gallery-public',
+      taskId: publicTask.id,
+      toolCallId: 'tool-call-gallery-public',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      topicId,
+    });
+
+    const combined = await workModel.listByWorkspace({});
+    const privateOnly = await workModel.listByWorkspace({ visibility: 'private' });
+    const publicOnly = await workModel.listByWorkspace({ visibility: 'public' });
+
+    expect(combined.items.map((item) => item.id).sort()).toEqual(
+      [privateWork!.id, publicWork!.id].sort(),
+    );
+    expect(privateOnly.items.map((item) => item.id)).toEqual([privateWork!.id]);
+    expect(publicOnly.items.map((item) => item.id)).toEqual([publicWork!.id]);
+  });
+
   it('flags an orphaned task work whose task was deleted without the tool', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);

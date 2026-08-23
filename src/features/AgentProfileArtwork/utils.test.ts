@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { selectAgentArtworkModel } from '@/store/agent/slices/artwork/utils';
+import { selectAgentArtworkModel } from '@/services/artworkGeneration/selectModel';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { avatarRemountKey, openFilePicker, resolveAgentBackground } from './utils';

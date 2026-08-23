@@ -216,9 +216,9 @@ describe('file operations', () => {
   // ─── editLocalFile ───
 
   describe('editLocalFile', () => {
-    it('should replace first occurrence by default', async () => {
+    it('should replace the single occurrence by default', async () => {
       const filePath = path.join(tmpDir, 'edit.txt');
-      await writeFile(filePath, 'hello world\nhello again');
+      await writeFile(filePath, 'hello world\ngoodbye again');
 
       const result = await editLocalFile({
         file_path: filePath,
@@ -228,10 +228,61 @@ describe('file operations', () => {
 
       expect(result.success).toBe(true);
       expect(result.replacements).toBe(1);
-      expect(fs.readFileSync(filePath, 'utf8')).toBe('hi world\nhello again');
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('hi world\ngoodbye again');
       expect(result.diffText).toBeDefined();
       expect(result.linesAdded).toBeDefined();
       expect(result.linesDeleted).toBeDefined();
+    });
+
+    // Picking the first of several matches silently resolves an ambiguity the
+    // caller never sees: the tool used to report "replaced 1 occurrence(s)"
+    // while the edit may have landed on the wrong one.
+    it('refuses an ambiguous old_string instead of editing an arbitrary match', async () => {
+      const filePath = path.join(tmpDir, 'ambiguous.txt');
+      await writeFile(filePath, 'hello world\nhello again');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'hello',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.replacements).toBe(0);
+      expect(result.error).toContain('not unique');
+      expect(result.error).toContain('L1, L2');
+      expect(result.error).toContain('replace_all');
+      // The file must be untouched.
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('hello world\nhello again');
+    });
+
+    it('reports at most five match locations for a heavily repeated old_string', async () => {
+      const filePath = path.join(tmpDir, 'many.txt');
+      await writeFile(filePath, Array.from({ length: 9 }, () => 'dup').join('\n'));
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'x',
+        old_string: 'dup',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('L1, L2, L3, L4, L5, …');
+    });
+
+    it('still allows an ambiguous old_string when replace_all is set', async () => {
+      const filePath = path.join(tmpDir, 'ambiguous-all.txt');
+      await writeFile(filePath, 'hello world\nhello again');
+
+      const result = await editLocalFile({
+        file_path: filePath,
+        new_string: 'hi',
+        old_string: 'hello',
+        replace_all: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.replacements).toBe(2);
     });
 
     it('should replace all occurrences when replace_all is true', async () => {
@@ -262,6 +313,85 @@ describe('file operations', () => {
 
       expect(result.success).toBe(false);
       expect(result.replacements).toBe(0);
+      expect(result.error).toContain(filePath);
+    });
+
+    // A bare "not found" makes the agent spend a readFile + LLM round trip just
+    // to learn why. The content is already in hand here, so name the cause.
+    describe('not-found diagnosis', () => {
+      it('points at whitespace when the block matches apart from indentation', async () => {
+        const filePath = path.join(tmpDir, 'indent.txt');
+        await writeFile(filePath, 'function f() {\n    return 1;\n}');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'function f() {\n  return 2;\n}',
+          // Same block, re-indented to 2 spaces — the classic miss.
+          old_string: 'function f() {\n  return 1;\n}',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('whitespace/indentation');
+      });
+
+      it('points at letter case when the block matches apart from case', async () => {
+        const filePath = path.join(tmpDir, 'case.txt');
+        await writeFile(filePath, 'const Enabled = true;');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'const enabled = false;',
+          old_string: 'const enabled = true;',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('letter case');
+      });
+
+      it('anchors on the first line when the block diverges partway', async () => {
+        const filePath = path.join(tmpDir, 'diverge.txt');
+        await writeFile(filePath, 'header\n## images\n- p01: current\nfooter');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: '## images\n- p01: next',
+          old_string: '## images\n- p01: stale',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('L2');
+        expect(result.error).toContain('diverges');
+      });
+
+      it('says the text is absent when nothing matches', async () => {
+        const filePath = path.join(tmpDir, 'absent.txt');
+        await writeFile(filePath, 'hello world');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'hi',
+          old_string: 'xyz',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('None of it appears in the file');
+      });
+
+      // The CRLF fallback runs before the diagnosis; a `\n` old_string against a
+      // CRLF file must still edit rather than report a whitespace mismatch.
+      it('still edits CRLF files instead of diagnosing them', async () => {
+        const filePath = path.join(tmpDir, 'crlf.txt');
+        await writeFile(filePath, 'alpha\r\nbeta\r\ngamma');
+
+        const result = await editLocalFile({
+          file_path: filePath,
+          new_string: 'beta\nBETA',
+          old_string: 'beta\ngamma',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.replacements).toBe(1);
+      });
     });
 
     it('should handle special regex characters in old_string with replace_all', async () => {

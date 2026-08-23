@@ -6,6 +6,7 @@ export interface TaskEntry {
   agentId?: string;
   agentType: 'hermes' | 'openclaw';
   operationId: string;
+  parentOperationId?: string;
   pid: number;
   startedAt: string;
   taskId: string;

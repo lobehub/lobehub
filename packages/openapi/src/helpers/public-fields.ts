@@ -27,6 +27,7 @@ const pickPublicFields = <T extends object, K extends readonly (keyof T)[]>(
 };
 
 export const PUBLIC_AGENT_FIELDS = [
+  'agencyConfig',
   'avatar',
   'chatConfig',
   'createdAt',

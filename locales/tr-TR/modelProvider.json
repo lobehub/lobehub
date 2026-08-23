@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "Model Görünen Adı",
   "providerModels.item.modelConfig.extendParams.extra": "Model tarafından desteklenen gelişmiş parametreleri seçin. Kontrolleri önizlemek için bir seçeneğin üzerine gelin. Hatalı yapılandırmalar istek hatalarına neden olabilir.",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "Codex modelleri için; akıl yürütme yoğunluğunu kontrol eder.",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "DeepSeek V4 GA düşünme modu için; akıl yürütme yoğunluğunu kontrol eder. Orijinal V4 seviyelerinin üzerine bir `düşük` katman ekler. `yüksek` varsayılan seviyedir, `maksimum` karmaşık ajan iş akışlarında kullanılan en derin akıl yürütmeyi açar.",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "DeepSeek V4 düşünme modu için; akıl yürütme yoğunluğunu kontrol eder. `high` varsayılandır, `max` ise karmaşık aracı iş akışlarında kullanılan en derin akıl yürütmeyi etkinleştirir.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Claude modelleri için; maliyeti azaltabilir ve yanıtları hızlandırabilir.",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "Claude Opus 4.6 için; çaba seviyesini kontrol eder (düşük/orta/yüksek/maksimum).",

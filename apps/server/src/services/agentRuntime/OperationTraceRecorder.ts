@@ -282,7 +282,9 @@ export class OperationTraceRecorder {
             // - messages: from messagesBaseline + messagesDelta chain
             // - operationToolSet: from toolsetBaseline (step 0)
             // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
+            // - expertise: immutable operation-level snapshot retained in working state
             const {
+              expertise: _expertise,
               messages: _msgs,
               operationToolSet: _ots,
               toolManifestMap: _tmm,

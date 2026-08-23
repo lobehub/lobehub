@@ -28,6 +28,7 @@ import {
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
+import { usePublishWorkspaceHtmlFromFile } from '@/features/Portal/LocalFile/usePublishWorkspaceHtmlFromFile';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { localFileService } from '@/services/electron/localFileService';
 import { projectFileService } from '@/services/projectFile';
@@ -290,6 +291,10 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   }, [revealRequest?.nonce, nodes]);
 
   const openLocalFile = useChatStore((s) => s.openLocalFile);
+  const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({
+    deviceId,
+    workingDirectory: projectRoot,
+  });
 
   const openNode = useCallback(
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
@@ -336,40 +341,51 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
 
       const { path, relativePath } = node.data;
       const isDirty = dirtyFilePaths.has(relativePath);
+      const items: NativeContextMenuItem[] = [];
 
-      // OS-level actions (open in app / reveal in Finder) only work on the local
-      // machine — omit them for a remote device.
-      const localActions: NativeContextMenuItem[] = isRemote
-        ? []
-        : [
-            {
-              key: 'open',
-              label: t('workingPanel.files.open'),
-              onClick: () => openNode(node),
-            },
-            { key: 'divider-reveal', type: 'divider' as const },
-            {
-              key: 'show-in-system',
-              label: t('workingPanel.files.showInSystem'),
-              onClick: () => void localFileService.openFileFolder(path),
-            },
-          ];
+      if (!isRemote) {
+        items.push({
+          key: 'open',
+          label: t('workingPanel.files.open'),
+          onClick: () => openNode(node),
+        });
+      }
 
-      const reviewActions: NativeContextMenuItem[] = isDirty
-        ? [
-            {
-              key: 'show-in-review',
-              label: t('workingPanel.files.showInReview'),
-              onClick: () => setWorkingSidebarTab('review'),
-            },
-          ]
-        : [];
+      if (canOfferFile(path, !!node.isFolder)) {
+        items.push({
+          key: 'publish',
+          label: t('workingPanel.localFile.publish.action'),
+          sfSymbol: 'square.and.arrow.up',
+          onClick: () => {
+            void publishFile(path);
+          },
+        });
+      }
 
-      const before = [...localActions, ...reviewActions];
+      if (!isRemote) {
+        items.push(
+          { key: 'divider-reveal', type: 'divider' as const },
+          {
+            key: 'show-in-system',
+            label: t('workingPanel.files.showInSystem'),
+            onClick: () => void localFileService.openFileFolder(path),
+          },
+        );
+      }
 
-      return [
-        ...before,
-        ...(before.length > 0 ? [{ key: 'divider-copy', type: 'divider' as const }] : []),
+      if (isDirty) {
+        items.push({
+          key: 'show-in-review',
+          label: t('workingPanel.files.showInReview'),
+          onClick: () => setWorkingSidebarTab('review'),
+        });
+      }
+
+      if (items.length > 0) {
+        items.push({ key: 'divider-copy', type: 'divider' as const });
+      }
+
+      items.push(
         {
           key: 'copy-absolute-path',
           label: t('workingPanel.files.copyAbsolutePath'),
@@ -388,9 +404,11 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           },
           sfSymbol: 'doc.on.doc',
         },
-      ];
+      );
+
+      return items;
     },
-    [dirtyFilePaths, isRemote, openNode, setWorkingSidebarTab, t],
+    [canOfferFile, dirtyFilePaths, isRemote, openNode, publishFile, setWorkingSidebarTab, t],
   );
 
   const isEmpty = nodes.length === 0;

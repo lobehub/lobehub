@@ -1,5 +1,5 @@
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
-import type { TaskGoalConfig } from '@lobechat/types';
+import type { GoalItem } from '@lobechat/types';
 
 /**
  * Pure goal-budget helpers, dependency-free on purpose: both the outer loop
@@ -9,18 +9,17 @@ import type { TaskGoalConfig } from '@lobechat/types';
  */
 
 /**
- * Applied when the user left the round budget untouched. `null` in the config
- * means the user explicitly opted out of a cap — that maps to Infinity, not to
- * this default.
+ * Applied at goal creation when the user left the round budget untouched
+ * (`goals.max_rounds` is resolved at write time; `null` in the row means the
+ * user explicitly opted out of a cap).
  *
  * Re-exported from `@lobechat/const/verify` so the create-goal UI and this loop
  * agree on one number; the const package is the single source of truth.
  */
 export { DEFAULT_GOAL_MAX_ROUNDS };
 
-/** Round budget: `null` = user opted out of a cap, absent = default. */
-export const resolveGoalRoundBudget = (goal: TaskGoalConfig): number => {
-  if (goal.maxIterations === null) return Number.POSITIVE_INFINITY;
-  if (typeof goal.maxIterations === 'number') return Math.max(2, goal.maxIterations);
-  return DEFAULT_GOAL_MAX_ROUNDS;
+/** Round budget: `null` = user opted out of a cap. */
+export const resolveGoalRoundBudget = (goal: Pick<GoalItem, 'maxRounds'>): number => {
+  if (typeof goal.maxRounds === 'number') return Math.max(2, goal.maxRounds);
+  return Number.POSITIVE_INFINITY;
 };

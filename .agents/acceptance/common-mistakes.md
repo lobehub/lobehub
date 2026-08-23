@@ -6,7 +6,16 @@ confused with the generic `M` catalogue.
 
 Keep this file at the level of durable LobeHub product and environment invariants.
 Exact copy, pixel values, component slot order, and one-off review directions belong
-in feature specifications or historical field notes, not in this living checklist.
+in feature specifications or in
+[the field notes](./references/common-mistakes-field-notes.md), not in this living
+checklist — the field notes keep the detailed incident narratives available without
+making them mandatory reading for every Acceptance run.
+
+Every entry lives under one of the three categories below, and its id prefix names
+that category: `L-E*` evidence and publication, `L-D*` product and interaction
+contracts, `L-S*` environment safety. Append a new entry inside the category it
+belongs to, with the next free number of that prefix — never after the last entry of
+the file.
 
 ## Evidence and publication
 
@@ -258,6 +267,25 @@ gateway/device route, then assert the complete persisted tree: original owner
 user, target assistant/tool call, tool result, and target final response. Also
 assert there is no owner assistant, `callAgent`, or synthetic target-user row.
 
+### L-E18 — Concluding a composer surface is dead code because nothing imports it
+
+**Wrong approach:** after changing a component the ActionBar reuses (a skill row, for
+instance), grep for a default import of `ActionBar/Tools`, find no hit, conclude the
+surface is not mounted, and verify only the `+` menu path.
+
+**Why it fails:** ActionBar surfaces are not mounted by a direct import. They are
+enabled by an action-key registry plus each route's own `leftActions` array.
+`ActionBar/config` registers `tools: Tools` at all times; what actually decides
+whether it renders is `leftActions` in `src/routes/(main)/**/MainChatInput` — the
+group-chat composer enables `'tools'` and reaches the component through
+`PopoverContent → ToolsList`, a different composition path from the `+` menu. Missing
+it makes a green verification cover only half of what users can see.
+
+**Correct approach:** after changing any component the ActionBar reuses, enumerate
+where the action key is actually enabled (grep each route's `leftActions` array, not
+the component's imports) and capture evidence for every surface that enables it. Mark
+any surface you deliberately skip as untested.
+
 ## Product and interaction contracts
 
 ### L-D1 — Rebuilding a canonical surface from visual impression
@@ -368,6 +396,55 @@ the envelope so the target assistant reply remains independently visible.
 Never infer authorship from agent-id differences or a parent tool call: a real
 cross-Agent user follow-up can have the same tree shape.
 
+### L-D9 — A Project conversation must preserve Project identity across routing and history
+
+**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
+ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
+history.
+
+**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
+the visible owner and navigation contract, so users reasonably read the conversation as belonging
+to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
+
+**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
+route and Project sidebar. The coordinator may still execute the conversation internally, but the
+visible URL, active list, empty state, and navigation must consistently identify the Project.
+
+### L-D10 — Long `confirmModal` bodies overlay the footer
+
+**Wrong approach:** put a long list into `confirmModal({ content })` and assume the
+library pins Cancel / OK below a scroll area.
+
+**Why it fails:** `confirmModal` renders `ConfirmBody` (content + footer) inside
+`ModalContent`, which is itself `overflow: auto`. A tall list makes the dialog
+scroll as one column, or the footer paints over the last rows. Callers cannot pass
+content styles to change that.
+
+**Correct approach:** for any confirm body that can exceed a few lines, use
+`createModal` with a height-capped `ScrollArea` as `content` and put the actions in
+the modal `footer` slot. Assert `footer.top === scroller.bottom` at both ends of the
+list, not just that the dialog opened.
+
+### L-D11 — Trusting a popover to flip itself away from the viewport edge
+
+**Wrong approach:** anchor a hover card to a full-width list row, screenshot it once from a
+row near the top of the list, and assume the popover library will flip or shift the card
+when a lower row leaves no room below.
+
+**Why it fails:** popovers here render into the app's portal container, and side flipping
+does not kick in from it — the popup keeps `data-side="bottom"` and simply extends past the
+viewport, even when the space above the trigger would have fitted it. Adding
+`collisionPadding` does not change that. The screenshot still looks like a working card,
+because the part that fell off the bottom is the part you cannot see; only the tail of the
+content (the last evidence row, a footer hint, an action) becomes unreachable.
+
+**Correct approach:** for any hover/click popup whose content height is data-dependent,
+assert its rect against the viewport (`getBoundingClientRect().bottom` vs
+`window.innerHeight`) with the trigger at the **bottom** of its list, not the top — a
+non-negative overflow is a defect regardless of how the screenshot reads. Bound the content
+by the space the positioner publishes (`--available-height`, less the popup's own chrome)
+rather than relying on collision flipping.
+
 ## Environment safety
 
 ### L-S0 — Concluding a dependency moved from the root manifest alone
@@ -463,6 +540,21 @@ the user's LobeHub instance may expose no debugging port at all.
 renderer marker before collecting evidence. If needed, start an isolated pool
 instance on a distinct port rather than guessing.
 
+**Same failure, second shape — the instance is LobeHub, but a different worktree.**
+A product-level marker passes for every worktree, so it cannot answer the question
+that matters: does this renderer serve _my_ working tree? Sibling worktrees each run
+their own `electron-dev.sh` legacy instance, and the first one started owns the
+default CDP 9222 and Vite 5173. Ask the renderer for the absolute source path of a
+module the change touches — the dev transform embeds it — and require both the
+worktree path and a marker unique to the change:
+
+```bash
+agent-browser --cdp 9222 eval "(async()=>{const t=await (await fetch('app://renderer/<repo-relative>.tsx')).text();return t.match(/_jsxFileName = \"[^\"]*\"/)[0]+' '+t.includes('<CHANGE_MARKER>')})()"
+```
+
+A wrong-worktree hit means the instance is someone else's session: do not restart or
+reuse it, start a pool instance (`electron-dev.sh start <id>`) or switch surface.
+
 ### L-S6 — Reading or writing the url from a portal'd sidebar on desktop
 
 **Wrong approach:** use `useSearchParams`, `useQueryState`, `useParams`,
@@ -516,6 +608,14 @@ server's port with `test-env.sh`'s resolved `PORT`; on a mismatch, `stop-dev` an
 restart before diagnosing anything. The restarted server is then yours to stop at
 teardown even though you did not start the original.
 
+**Same failure, third shape — files removed from the working tree still being served.**
+After a `git stash` used to capture a "before" frame, the dev server can keep serving the
+pre-stash transform: a file deleted from disk still answers **200** and the module body still
+contains the new code. Reloading the page does not help. Restart the process (and clear
+`node_modules/.vite`) before capturing, and gate the capture on a marker that cannot collide
+with unrelated identifiers — a component name like `SkillRow` also matches a CSS class such as
+`addSkillRow`, so a substring count "confirms" the wrong state.
+
 ---
 
 ### L-S8 — Reading a first-boot renderer crash as a defect of the change under test
@@ -537,22 +637,123 @@ to the code. Never attribute it to the change under test without that A/B — an
 note that `electron-dev.sh start` reports "Ready" even when the renderer never
 became interactive, so its own readiness line is not the gate.
 
-### L-P1 — A Project conversation must preserve Project identity across routing and history
+### L-S9 — Trusting "migration pass" on the shared acceptance Postgres
 
-**Wrong approach:** implement Project chat by navigating users to the Project coordinator's
-ordinary `/agent/:agentId/:topicId` surface and present that Agent's topic list as the Project
-history.
+**Wrong approach:** run `init-dev-env.sh migrate` in a worktree whose branch adds a
+migration, read `✅ database migration pass`, and start seeding fixtures against the
+new tables.
 
-**Why it fails:** the coordinator is an implementation detail. Leaving the Project route changes
-the visible owner and navigation contract, so users reasonably read the conversation as belonging
-to an Agent rather than to the Project that provides its tasks, goals, resources, and history.
+**Why it fails:** the managed `lobehub-agent-testing-postgres` container is shared by
+every worktree, and drizzle decides what to apply by comparing each journal entry's
+`when` timestamp against the newest `created_at` in `drizzle.__drizzle_migrations` —
+not by hash or by index. A sibling worktree that applied its own same-numbered
+migration a few minutes later leaves a newer row, after which your migration is
+skipped in silence and the command still reports success in \~40ms. Every later probe
+then fails as `relation ... does not exist`, which reads like a broken schema import
+rather than a migration that never ran.
 
-**Correct approach:** keep creation, topic selection, and resumed conversations under the Project
-route and Project sidebar. The coordinator may still execute the conversation internally, but the
-visible URL, active list, empty state, and navigation must consistently identify the Project.
+**Correct approach:** after any migrate, assert the tables/columns your fixtures need
+actually exist (`select tablename from pg_tables where tablename like '<prefix>%'`)
+rather than trusting the pass line. When it was skipped, apply the branch's SQL
+directly — strip `--> statement-breakpoint` and run it with `psql -v ON_ERROR_STOP=1`
+— and treat the collision as a local multi-worktree artifact, never as a defect of
+the branch or of canary (the numbers get rebased on merge).
 
-## Historical source
+### L-S10 — Judging popover/menu behaviour from a Chrome MCP tab (it is hidden)
 
-Detailed incident narratives and retired pixel- or component-specific directions
-belong in [the field notes](./references/common-mistakes-field-notes.md), where they
-remain available without becoming mandatory rules for every Acceptance run.
+**Wrong approach:** drive the debug-proxy page through the Chrome MCP tools, click a
+popover trigger, read the DOM \~500ms later, see no popup, and conclude the trigger is
+broken — then bisect, revert a refactor, and write up a root cause from those readings.
+
+**Why it fails:** the MCP tab is not the foreground tab. Measured inside it:
+`document.visibilityState === 'hidden'`, `requestAnimationFrame` delivers **0 frames**,
+and `setInterval(16ms)` fires **once per second** (Chrome's background throttling). A
+base-ui popup still opens in its store and mounts in the DOM, but its entry transition
+never advances, so it sits at `data-starting-style` with `visibility: hidden` and zero
+size — indistinguishable from "the click did nothing". Anything else timed from that
+tab (perceived latency, "it landed 7 seconds later") is an artifact of the same
+throttling, not of the code under test.
+
+**Correct approach:** in an MCP tab, assert on **state**, not on visibility — the
+component's own store/props (`handle.store.state.open`, a probed React state), or DOM
+presence with `data-open`, never `visibility`/painted pixels or a rAF-timed measurement.
+Confirm the tab's own health first (`visibilityState`, a rAF frame count) before
+trusting any negative UI observation, and get behaviour that depends on animation or
+input timing confirmed in a foreground tab — the user's window, or a screenshot-based
+check that tolerates a frozen transition. A negative result from a hidden tab is not
+evidence of a defect.
+
+### L-S11 — Bundled SPA HTML is not the whole site
+
+**Wrong approach:** collect only tags and CSS `url()` from `index.html`, then treat
+a Vite/webpack `dist` as publishable.
+
+**Why it fails:** hashed images and public sprites live in the JS bundle
+(`new URL('hero-….png', import.meta.url)`, `href: '/icons.svg#…'`). HTML-only
+collection ships CSS/JS and drops the files the app actually paints. Those JS
+references also cannot be inlined as data URIs: `import.meta.url` and SVG
+`<use href="/icons.svg#id">` need real sibling/root files.
+
+**Correct approach:** walk collected JS the same way as CSS. Keep
+`import.meta.url` targets and root-absolute sprites as sidecars even when they
+are under the inline size limit. Judge a Vite publish by the running page
+(images, icons, counter), not by whether `index.html` listed three tags.
+
+### L-S12 — macOS `/tmp` and `/private/tmp` are the same workspace
+
+**Wrong approach:** treat a Files-tree path and the topic working directory as
+outside each other when one string starts with `/tmp` and the other with
+`/private/tmp`.
+
+**Why it fails:** Darwin's `/tmp` is a symlink to `/private/tmp`. Electron's
+project index reports the real path; topic cwd is often the public alias. A
+prefix check then marks `./app.css` as an escape, HTML-only publish keeps the
+relative hrefs, and the live host 404s those files.
+
+**Correct approach:** canonicalize those Darwin private aliases before workspace
+containment. Prove a publish by fetching the public HTML (data URIs or 200
+sidecars) and opening the live page — in-app preview of the local file does not
+prove the hosted assets.
+
+### L-S13 — Treating a workspace another session has rewritten as your own code
+
+**Wrong approach:** edit and verify in place in this repo, and when the screenshots
+stop matching the source, suspect the Vite cache or your own CSS — restarting the
+dev server, adding more changes, and capturing again.
+
+**Why it fails:** a second session can be working on the same worktree. Its rebase
+helper stashes the **entire working tree** (stash message shaped like
+`pre-rebase2-<pr>-<sha>`), rebases the branch, and pops later; a conflicted pop
+leaves `<<<<<<<` markers inside the other session's files and breaks the whole SPA
+build. Both phases point away from the real cause: first "my change is written but
+has no effect" (the file was actually reverted to its HEAD version), then "the app
+will not open" (a conflict marker in someone else's file). Either one sends you
+debugging code you never broke.
+
+**Correct approach:** confirm your change is still on the tree both before and after
+capturing evidence — the file appears in `git status` and a marker unique to your
+change greps. On a mismatch, read `git stash list` timestamps and `git reflog`
+before suspecting the build cache. When your work has been stashed, recover only
+your own file with `git checkout stash@{n} -- <your file>`; **never pop or drop the
+whole stash** — it belongs to the other session, and popping it is that session's
+own action. When you find conflict markers in someone else's file, wait for them to
+resolve it rather than resolving it for them.
+
+### L-S14 — Claiming an image property from the prompt that asked for it
+
+**Wrong approach:** satisfy a requirement about a generated image (transparent
+background, exact aspect ratio, no text) by adding that wording to the prompt, then
+publish the prompt diff, a unit test asserting the wording, and a screenshot of the
+result as proof.
+
+**Why it fails:** the property lives in the returned bytes, not in the request. LobeHub's
+preferred artwork model returns JPEG, so an alpha channel is impossible regardless of
+wording — and asked for "a transparent background" the model _paints_ the grey-white
+checkerboard that UIs use to depict transparency. Both failures look correct in a
+screenshot and pass any prompt-level assertion.
+
+**Correct approach:** verify the produced artifact — decode it and assert the property
+numerically (alpha at the corners vs the subject, encoded format signature, dimensions),
+and where the property is compositional, show the artifact over a contrasting surface.
+When the model cannot deliver the property, produce it in code after generation rather
+than re-wording the prompt.
