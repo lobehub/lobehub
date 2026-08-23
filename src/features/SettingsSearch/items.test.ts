@@ -14,7 +14,7 @@ const webContext: SettingsSearchContext = {
   disableEmailPassword: false,
   enableBusinessFeatures: true,
   enableComposio: true,
-  enableGatewayMode: true,
+  showGatewayModeToggle: true,
   enableSTT: true,
   hasEmail: true,
   hideDocs: false,

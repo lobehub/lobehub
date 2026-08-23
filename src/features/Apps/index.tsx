@@ -76,9 +76,7 @@ const AppsPage = () => {
                     <div className={styles.ctaRow}>
                       <Button
                         type="primary"
-                        onClick={() =>
-                          desktopDownload.href && openExternal(desktopDownload.href)
-                        }
+                        onClick={() => desktopDownload.href && openExternal(desktopDownload.href)}
                       >
                         {t('apps.desktop.cta')}
                       </Button>
