@@ -16,7 +16,6 @@ export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
 
 export interface TaskListSliceState {
   groupListQueryAutomated?: boolean;
-  isScheduledTaskListInit: boolean;
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
@@ -39,25 +38,17 @@ export interface TaskListSliceState {
   /** Defaults to 'all' so the Tasks top entry shows every visible task
    *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
-  scheduledListQuerySignature?: string;
-  /** Tasks driven by a schedule or heartbeat — a separate query from `tasks`. */
-  scheduledTasks: TaskListItem[];
-  scheduledTasksTotal: number;
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
   tasksTotal: number;
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
-  isScheduledTaskListInit: false,
   isTaskGroupListInit: false,
   isTaskListInit: false,
   groupListQueryAutomated: undefined,
   listQueryVisibility: 'all',
   listVisibility: 'all',
-  scheduledTasks: [],
-  scheduledTasksTotal: 0,
-  scheduledListQuerySignature: undefined,
   taskGroups: [],
   tasks: [],
   tasksTotal: 0,

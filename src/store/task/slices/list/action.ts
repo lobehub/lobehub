@@ -188,29 +188,14 @@ export class TaskListSliceActionImpl {
   };
 
   /**
-   * The automated-task roll-up behind Home's "Scheduled" section. Always
-   * cross-agent and unnarrowed by visibility: Home is an overview, not a
-   * continuation of the Task page's filter chip — so it needs neither the
-   * agent scope nor the visibility argument the main list carries, and its
-   * own state fields keep it from colliding with `tasks`.
+   * The automated-task roll-up behind Home's "Scheduled" section. Each caller
+   * consumes its own SWR result because Home and the paginated Tasks page can
+   * coexist in Electron with different limits and offsets.
    */
   useFetchScheduledTaskList = (
     options: { enabled?: boolean; limit?: number; offset?: number } = {},
   ) => {
     const { enabled = true, limit, offset } = options;
-    const signature = `${limit ?? 'default'}:${offset ?? 0}`;
-    if (enabled && this.#get().scheduledListQuerySignature !== signature) {
-      this.#set(
-        {
-          isScheduledTaskListInit: false,
-          scheduledListQuerySignature: signature,
-          scheduledTasks: [],
-        },
-        false,
-        'useFetchScheduledTaskList/syncPage',
-      );
-    }
-
     return useClientDataSWR(
       enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY, 'all', limit, offset) : null,
       async () =>
@@ -221,20 +206,7 @@ export class TaskListSliceActionImpl {
           offset,
           orderBy: 'updatedAt',
         }),
-      {
-        onSuccess: (data: { data: TaskListItem[]; total: number }) => {
-          this.#set(
-            {
-              isScheduledTaskListInit: true,
-              scheduledTasks: data.data,
-              scheduledTasksTotal: data.total,
-            },
-            false,
-            'useFetchScheduledTaskList/onSuccess',
-          );
-        },
-        revalidateOnFocus: false,
-      },
+      { revalidateOnFocus: false },
     );
   };
 

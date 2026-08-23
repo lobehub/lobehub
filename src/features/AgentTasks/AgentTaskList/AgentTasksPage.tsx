@@ -2,7 +2,7 @@ import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
 import { Pagination } from 'antd';
 import { Plus } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -87,6 +87,9 @@ const SCHEDULED_TASK_PAGE_SIZE = 50;
 export const resolveTaskCollection = (searchParams: URLSearchParams): TaskCollection =>
   searchParams.get('collection') === 'scheduled' ? 'scheduled' : 'tasks';
 
+export const clampScheduledPage = (page: number, total: number): number =>
+  Math.min(page, Math.max(1, Math.ceil(total / SCHEDULED_TASK_PAGE_SIZE)));
+
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
@@ -124,15 +127,19 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
     limit: SCHEDULED_TASK_PAGE_SIZE,
     offset: (scheduledPage - 1) * SCHEDULED_TASK_PAGE_SIZE,
   });
-  const scheduledTasks = useTaskStore(taskListSelectors.scheduledTaskList);
-  const scheduledTasksTotal = useTaskStore(taskListSelectors.scheduledTaskListTotal);
-  const isScheduledTaskListInit = useTaskStore(taskListSelectors.isScheduledTaskListInit);
+  const scheduledTasks = scheduledSWR.data?.data ?? [];
+  const scheduledTasksTotal = scheduledSWR.data?.total ?? 0;
+  const isScheduledTaskListInit = scheduledSWR.data !== undefined;
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const scheduledViewOptions = useMemo(
     () => ({ ...viewOptions, groupBy: 'automationMode' as const, hideCompleted: false }),
     [viewOptions],
   );
+  useEffect(() => {
+    if (!isScheduledTaskListInit) return;
+    setScheduledPage((page) => clampScheduledPage(page, scheduledTasksTotal));
+  }, [isScheduledTaskListInit, scheduledTasksTotal]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
   const [showTaskAgentPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     systemStatusSelectors.showTaskAgentPanel(s),
@@ -142,7 +149,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const routeScope = agentId ? 'agent' : 'global';
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
-      const next = normalizeTaskListViewOptions(updater(viewOptions));
+      const normalized = normalizeTaskListViewOptions(updater(viewOptions));
+      const next = {
+        ...normalized,
+        groupBy: normalized.groupBy === 'automationMode' ? 'status' : normalized.groupBy,
+        subGroupBy: normalized.subGroupBy === 'automationMode' ? 'none' : normalized.subGroupBy,
+      };
       updateSystemStatus({ taskListViewOptions: next }, 'updateTaskListViewOptions');
     },
     [updateSystemStatus, viewOptions],
@@ -264,7 +276,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
             routeScope={routeScope}
             onRetry={() => scheduledSWR.mutate()}
           />
-          {scheduledTasksTotal > SCHEDULED_TASK_PAGE_SIZE && (
+          {(scheduledTasksTotal > SCHEDULED_TASK_PAGE_SIZE || scheduledPage > 1) && (
             <Flexbox horizontal justify={'center'} paddingBlock={8}>
               <Pagination
                 current={scheduledPage}

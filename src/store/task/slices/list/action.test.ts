@@ -265,6 +265,18 @@ describe('TaskListSliceAction', () => {
         expect.objectContaining({ automated: true, limit: 50, offset: 50 }),
       );
     });
+
+    it('keeps concurrent consumers isolated by their SWR keys', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 });
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 });
+
+      expect(vi.mocked(useClientDataSWR).mock.calls.map(([key]) => key)).toEqual([
+        ['task:scheduledList', '__all__', 'all', { limit: 5, offset: undefined }],
+        ['task:scheduledList', '__all__', 'all', { limit: 50, offset: 50 }],
+      ]);
+    });
   });
 
   describe('setListVisibility', () => {
