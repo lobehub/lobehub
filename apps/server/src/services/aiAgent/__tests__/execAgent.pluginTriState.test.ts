@@ -159,6 +159,9 @@ const agentConfigPluginsArg = () =>
 const disabledPluginIdsArg = () =>
   mockCreateServerAgentToolsEngine.mock.calls[0][1].disabledPluginIds as string[];
 
+const generateToolsArg = () =>
+  mockCreateServerAgentToolsEngine.mock.results[0].value.generateToolsDetailed.mock.calls[0][0];
+
 const toolManifestMapArg = () =>
   mockCreateOperation.mock.calls[0][0].toolSet.manifestMap as Record<string, unknown>;
 
@@ -235,6 +238,29 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     const installed = installedPluginsArg().map((p) => p.identifier);
     expect(installed).toEqual(['plugin-a', 'plugin-b', 'plugin-c']);
     expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+  });
+
+  it('restricts an orchestration turn to the exclusive plugin set', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: ['plugin-a'],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      exclusivePluginIds: ['evidence-only'],
+      prompt: 'Submit evidence',
+    } as any);
+
+    expect(agentConfigPluginsArg()).toEqual(['evidence-only']);
+    expect(generateToolsArg()).toMatchObject({
+      skipDefaultTools: true,
+      toolIds: ['evidence-only'],
+    });
   });
 
   it('excludes a disabled composio/lobehub-skill manifest from the activator-discovery toolManifestMap', async () => {

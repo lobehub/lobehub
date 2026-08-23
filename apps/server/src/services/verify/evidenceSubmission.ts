@@ -56,11 +56,11 @@ export const startEvidenceSubmission = async (params: {
   ];
 
   const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
-    additionalPluginIds: [AcceptanceEvidenceIdentifier],
     agentId: operation.agentId,
     appContext: { taskId: operation.taskId, topicId: operation.topicId },
     autoStart: true,
     ephemeralUserMessage: buildEvidencePrompt(plan),
+    exclusivePluginIds: [AcceptanceEvidenceIdentifier],
     hooks,
     parentOperationId,
     prompt: '',
