@@ -13,6 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { applyRuntimeFrameProtections } from '../runtimeSecurityHeaders';
 import { isShareSpaRoute } from '../shareRoutes';
 import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
@@ -23,17 +24,6 @@ const logBetterAuth = debug('middleware:better-auth');
 
 // Dev-only debug proxy route should bypass all middleware rewrites.
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
-
-const applyRuntimeFrameProtections = <T extends Response>(response: T): T => {
-  // The official standalone image is built with DOCKER=true. Keeping this check
-  // in the request path lets operators opt out when the published image starts.
-  if (process.env.DOCKER === 'true' && process.env.ENABLED_CSP !== '0') {
-    response.headers.set('X-Frame-Options', 'DENY');
-    response.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
-  }
-
-  return response;
-};
 
 // The locale is embedded raw into rewrite paths (/spa-auth/${locale}, /spa/${route}).
 // An unvalidated value (e.g. ?hl=../../api/dev) would let the URL parser collapse the

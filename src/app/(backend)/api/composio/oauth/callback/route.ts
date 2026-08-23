@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { applyRuntimeFrameProtections } from '@/libs/next/runtimeSecurityHeaders';
+
 /**
  * Composio OAuth callback.
  *
@@ -30,7 +32,9 @@ export const GET = async (req: NextRequest) => {
   </body>
 </html>`;
 
-  return new NextResponse(html, {
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  });
+  return applyRuntimeFrameProtections(
+    new NextResponse(html, {
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    }),
+  );
 };
