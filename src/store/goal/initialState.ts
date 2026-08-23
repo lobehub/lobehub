@@ -1,6 +1,6 @@
-import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
+import type { GoalListItem } from '@/services/goal';
 
-export type GoalListItem = TaskGroupItem['tasks'][number];
+export type { GoalListItem };
 export type GoalListFilter = 'active' | 'all';
 export type GoalViewMode = 'card' | 'list';
 

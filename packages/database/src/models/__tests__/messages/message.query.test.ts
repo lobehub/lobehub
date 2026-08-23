@@ -388,6 +388,59 @@ describe('MessageModel Query Tests', () => {
       );
     });
 
+    it('should hydrate sender in queryByIds like the main query path', async () => {
+      // Regression: messageGroup children are loaded through
+      // queryByIds; without the users join their sender was dropped and the
+      // client misattributed other members' messages to the viewer.
+      await serverDB.update(users).set({ fullName: 'Kermit' }).where(eq(users.id, otherUserId));
+      await serverDB.insert(messages).values({
+        content: 'sender hydration',
+        createdAt: new Date('2023-01-01'),
+        id: 'sender-hydration-message',
+        role: 'user',
+        userId: otherUserId,
+      });
+
+      const otherUserModel = new MessageModel(serverDB, otherUserId);
+      const [message] = await otherUserModel.queryByIds(['sender-hydration-message']);
+
+      expect(message.sender).toEqual({
+        avatar: null,
+        fullName: 'Kermit',
+        id: otherUserId,
+        username: null,
+      });
+    });
+
+    it('should keep sender for an avatar-less user in the main query path', async () => {
+      // Regression: drizzle nullifies a left-joined nested
+      // selection from its FIRST selected column. With `avatar` first, every
+      // avatar-less sender came back as `sender: null` and the client rendered
+      // the viewer's own identity on other members' messages.
+      await serverDB
+        .update(users)
+        .set({ avatar: null, fullName: 'Kermit', username: null })
+        .where(eq(users.id, otherUserId));
+      await serverDB.insert(messages).values({
+        content: 'avatar-less sender',
+        createdAt: new Date('2023-01-01'),
+        id: 'avatarless-sender-message',
+        role: 'user',
+        userId: otherUserId,
+      });
+
+      const otherUserModel = new MessageModel(serverDB, otherUserId);
+      const messagesResult = await otherUserModel.query();
+      const message = messagesResult.find((item) => item.id === 'avatarless-sender-message');
+
+      expect(message?.sender).toEqual({
+        avatar: null,
+        fullName: 'Kermit',
+        id: otherUserId,
+        username: null,
+      });
+    });
+
     it('materializes safe audio metadata and only validated duration in both query paths', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(messages).values({

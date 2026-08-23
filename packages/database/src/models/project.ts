@@ -1,16 +1,19 @@
 import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import { knowledgeBases } from '../schemas/file';
+import { goals } from '../schemas/goal';
 import {
   projectAgents,
   projectCompletionReviews,
   projectKnowledgeBases,
   projects,
+  projectWorks,
 } from '../schemas/project';
 import { tasks } from '../schemas/task';
+import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AgentModel } from './agent';
@@ -44,6 +47,11 @@ export interface ProjectKnowledgeBaseInput {
   enabled?: boolean;
   knowledgeBaseId: string;
   sortOrder?: number;
+}
+
+export interface ProjectWorkInput {
+  sortOrder?: number;
+  workId: string;
 }
 
 export class ProjectModel {
@@ -132,6 +140,23 @@ export class ProjectModel {
       .select()
       .from(projects)
       .where(and(eq(projects.id, id), this.readable()))
+      .limit(1);
+    return project ?? null;
+  }
+
+  async findByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(projects)
+      .where(and(inArray(projects.id, ids), this.readable()));
+  }
+
+  async findByIdOrSlug(reference: string) {
+    const [project] = await this.db
+      .select()
+      .from(projects)
+      .where(and(or(eq(projects.id, reference), eq(projects.slug, reference)), this.readable()))
       .limit(1);
     return project ?? null;
   }
@@ -320,9 +345,63 @@ export class ProjectModel {
     return deleted.length > 0;
   }
 
-  async listTasks(projectId: string) {
+  async listWorks(projectId: string) {
     if (!(await this.findById(projectId))) return null;
     return this.db
+      .select({ binding: projectWorks, work: works })
+      .from(projectWorks)
+      .innerJoin(works, eq(projectWorks.workId, works.id))
+      .where(
+        and(
+          eq(projectWorks.projectId, projectId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, works),
+        ),
+      )
+      .orderBy(asc(projectWorks.sortOrder), asc(projectWorks.createdAt));
+  }
+
+  async addWork(projectId: string, input: ProjectWorkInput) {
+    if (!(await this.findManageableById(projectId))) return null;
+    const [work] = await this.db
+      .select({ id: works.id })
+      .from(works)
+      .where(
+        and(
+          eq(works.id, input.workId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, works),
+        ),
+      )
+      .limit(1);
+    if (!work) throw new Error('Work not found');
+
+    const [binding] = await this.db
+      .insert(projectWorks)
+      .values({
+        ...input,
+        addedByUserId: this.userId,
+        projectId,
+        workspaceId: this.workspaceId ?? null,
+      })
+      .onConflictDoUpdate({
+        set: { sortOrder: input.sortOrder, updatedAt: new Date() },
+        target: [projectWorks.projectId, projectWorks.workId],
+      })
+      .returning();
+    return binding;
+  }
+
+  async removeWork(projectId: string, workId: string) {
+    if (!(await this.findManageableById(projectId))) return false;
+    const deleted = await this.db
+      .delete(projectWorks)
+      .where(and(eq(projectWorks.projectId, projectId), eq(projectWorks.workId, workId)))
+      .returning({ id: projectWorks.id });
+    return deleted.length > 0;
+  }
+
+  async listTasks(projectId: string) {
+    if (!(await this.findById(projectId))) return null;
+    const rows = await this.db
       .select()
       .from(tasks)
       .where(
@@ -339,6 +418,26 @@ export class ProjectModel {
         ),
       )
       .orderBy(asc(tasks.sortOrder), asc(tasks.seq));
+
+    // Attach the goal entity carried by each task so project surfaces can tell
+    // goal roots apart from plain tasks without re-querying per row.
+    const goalRows =
+      rows.length === 0
+        ? []
+        : await this.db
+            .select()
+            .from(goals)
+            .where(
+              and(
+                eq(goals.subjectType, 'task'),
+                inArray(
+                  goals.subjectId,
+                  rows.map(({ id }) => id),
+                ),
+              ),
+            );
+    const goalByTaskId = new Map(goalRows.map((row) => [row.subjectId!, row]));
+    return rows.map((row) => ({ ...row, goal: goalByTaskId.get(row.id) ?? null }));
   }
 
   async getEnabledKnowledgeBaseIdsForTask(taskId: string) {

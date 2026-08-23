@@ -50,6 +50,9 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const TRAE_ACP_HELP = `Start the ACP server
+Usage: trae-cli acp serve [flags]
+  -y, --yolo   Enable YOLO mode`;
 const callExecFile = (stdout: string, stderr = '') => {
   execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
     // promisify-wrapped: the callback is always the last positional arg.
@@ -324,20 +327,17 @@ describe('cliAgentBinaries', () => {
       });
     });
 
-    it('detects TRAE Enterprise and rejects the unrelated trae-cli binary', async () => {
+    it('detects the official TRAE CLI by its ACP capability', async () => {
       callExecFile('/Users/test/.local/bin/traecli\n');
-      callExecFile('TraeCode CLI 1.4.0');
+      callExecFile('trae-cli version 0.120.52');
+      callExecFile(TRAE_ACP_HELP);
 
       const { traeBinary } = await import('../cliAgentBinaries');
       await expect(traeBinary.detect()).resolves.toMatchObject({
         available: true,
         path: '/Users/test/.local/bin/traecli',
-        version: '1.4.0',
+        version: '0.120.52',
       });
-
-      callExecFile('/Users/test/.local/bin/traecli\n');
-      callExecFile('trae-cli 0.1.0');
-      await expect(traeBinary.detect()).resolves.toEqual({ available: false });
     });
 
     it('runs the binary directly via execFile (no shell)', async () => {

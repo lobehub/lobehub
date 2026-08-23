@@ -1,6 +1,7 @@
 import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { Checkbox } from '@lobehub/ui/base-ui';
 import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +13,8 @@ import { type ComposioServer } from '@/store/tool/slices/composioStore';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import { SKILL_ICON_GAP } from './constants';
 
 // Polling configuration
 const POLL_INTERVAL_MS = 1000; // Poll once per second
@@ -36,13 +39,19 @@ interface ComposioServerItemProps {
    * Composio toolkit slug used to call the Composio API (e.g., 'GOOGLECALENDAR')
    */
   appSlug: string;
+  /**
+   * Rendered inside the label so the row lines up with the managed skill rows;
+   * passing it through the menu's own icon slot would size and space it
+   * differently.
+   */
+  icon?: ReactNode;
   identifier: string;
   label: string;
   server?: ComposioServer;
 }
 
 const ComposioServerItem = memo<ComposioServerItemProps>(
-  ({ appSlug, identifier, label, server, agentId, agentScoped = false }) => {
+  ({ appSlug, icon, identifier, label, server, agentId, agentScoped = false }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
@@ -364,7 +373,8 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           }
         }}
       >
-        <Flexbox horizontal align={'center'} gap={8}>
+        <Flexbox horizontal align={'center'} gap={SKILL_ICON_GAP}>
+          {icon}
           {label}
         </Flexbox>
         {renderRightControl()}

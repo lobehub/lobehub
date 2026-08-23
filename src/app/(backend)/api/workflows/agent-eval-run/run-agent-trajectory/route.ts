@@ -42,7 +42,7 @@ export const { POST } = serve<RunAgentTrajectoryPayload>(
       return { error: data.error, success: false };
     }
 
-    const { run, testCase, envPrompt } = data;
+    const { environment, envPrompt, run, testCase } = data;
 
     if (run.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s', runId, testCaseId);
@@ -77,7 +77,7 @@ export const { POST } = serve<RunAgentTrajectoryPayload>(
 
     // Single execution path (k=1): existing logic
     const result = await runStep(context, 'agent-eval-run:exec-agent', () =>
-      service.executeTrajectory({ envPrompt, run, runId, testCase, testCaseId }),
+      service.executeTrajectory({ environment, envPrompt, run, runId, testCase, testCaseId }),
     );
 
     // If execAgent failed, record completion and check if run should be finalized

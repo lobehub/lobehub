@@ -1,3 +1,4 @@
+import type { EvalTestCaseContent } from '@lobechat/types';
 import { and, count, eq, sql } from 'drizzle-orm';
 
 import { agentEvalTestCases, type NewAgentEvalTestCase } from '../../schemas';
@@ -127,10 +128,22 @@ export class AgentEvalTestCaseModel {
   /**
    * Update test case
    */
-  update = async (id: string, value: Partial<Omit<NewAgentEvalTestCase, 'userId'>>) => {
+  update = async (
+    id: string,
+    value: Omit<Partial<NewAgentEvalTestCase>, 'content' | 'userId'> & {
+      content?: Partial<EvalTestCaseContent>;
+    },
+  ) => {
+    const { content, ...data } = value;
     const [result] = await this.db
       .update(agentEvalTestCases)
-      .set({ ...value, updatedAt: new Date() })
+      .set({
+        ...data,
+        ...(content !== undefined && {
+          content: sql`COALESCE(${agentEvalTestCases.content}, '{}'::jsonb) || ${JSON.stringify(content)}::jsonb`,
+        }),
+        updatedAt: new Date(),
+      })
       .where(and(eq(agentEvalTestCases.id, id), this.ownership()))
       .returning();
     return result;

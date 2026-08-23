@@ -1,6 +1,10 @@
-import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import { createAgentSignalAnalyzeIntentSkillIntentMessages } from '@lobechat/prompts';
+import { DEFAULT_MINI_SYSTEM_AGENT_ITEM, TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  AGENT_SIGNAL_SKILL_INTENT_JSON_SCHEMA,
+  AGENT_SIGNAL_SKILL_INTENT_PROMPT_VERSION,
+  chainAgentSignalSkillIntent,
+} from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -69,34 +73,6 @@ const SkillIntentClassificationSchema = z
     ...value,
     ...(actionIntent ? { actionIntent } : {}),
   }));
-
-const SkillIntentGenerateObjectSchema = {
-  name: 'agent_signal_skill_intent',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      actionIntent: {
-        enum: ['create', 'refine', 'consolidate', 'maintain', 'noop', null],
-        type: ['string', 'null'],
-      },
-      confidence: { maximum: 1, minimum: 0, type: 'number' },
-      explicitness: {
-        enum: [
-          'explicit_action',
-          'implicit_strong_learning',
-          'weak_positive',
-          'non_skill_preference',
-        ],
-        type: 'string',
-      },
-      reason: { type: 'string' },
-      route: { enum: ['direct_decision', 'accumulate', 'non_skill'], type: 'string' },
-    },
-    required: ['actionIntent', 'confidence', 'explicitness', 'reason', 'route'],
-    type: 'object',
-  },
-  strict: true,
-} satisfies GenerateObjectSchema;
 
 const redactErrorText = (value: string, maxLength = 480): string => {
   const redacted = value
@@ -319,11 +295,18 @@ export class SkillIntentClassifierAgentService implements SkillIntentClassifierS
 
     const result = await modelRuntime.generateObject(
       {
-        messages: createAgentSignalAnalyzeIntentSkillIntentMessages(input),
+        messages: chainAgentSignalSkillIntent(input),
         model: this.modelConfig.model,
-        schema: SkillIntentGenerateObjectSchema,
+        schema: AGENT_SIGNAL_SKILL_INTENT_JSON_SCHEMA,
       },
-      { metadata: { trigger: RequestTrigger.AgentSignal } },
+      {
+        metadata: { trigger: RequestTrigger.AgentSignal },
+        tracing: {
+          promptVersion: AGENT_SIGNAL_SKILL_INTENT_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.SignalSkillIntent,
+          schemaName: AGENT_SIGNAL_SKILL_INTENT_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
     );
 
     return SkillIntentClassificationSchema.parse(result);

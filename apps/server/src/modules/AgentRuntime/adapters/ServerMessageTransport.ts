@@ -85,6 +85,16 @@ export class ServerMessageTransport implements MessageTransport {
     await this.messageModel.deleteMessage(id);
   }
 
+  async findToolMessageIdByToolCallId(
+    toolCallId: string,
+    parentMessageId: string,
+  ): Promise<string | undefined> {
+    // Indexed on `message_plugins_tool_call_id_idx`; the model already uses this
+    // lookup for card updates, so the abort path adds no new access pattern.
+    const id = await this.messageModel.findToolMessageIdByToolCallId(toolCallId, parentMessageId);
+    return id ?? undefined;
+  }
+
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
     const message = await this.messageModel.findById(id);
     return message

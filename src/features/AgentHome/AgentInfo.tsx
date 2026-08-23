@@ -1,11 +1,12 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Markdown, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Markdown, Skeleton, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useAgentStore } from '@/store/agent';
@@ -57,6 +58,7 @@ const AgentInfo = memo(() => {
       <Avatar
         avatar={isInbox ? meta.avatar || DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
         background={meta.backgroundColor}
+        name={displayTitle}
         shape={'square'}
         size={64}
       />

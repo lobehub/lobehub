@@ -72,8 +72,8 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
   const fileDetail = fromStore ?? fromFetch;
 
   return (
-    <Flexbox horizontal height={'100%'} width={'100%'}>
-      <Flexbox flex={1} height={'100%'}>
+    <Flexbox horizontal height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
         <NavHeader
           left={
             <Flexbox
@@ -121,7 +121,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
             left: { flex: 1, minWidth: 0, overflow: 'hidden', padding: 0 },
           }}
         />
-        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+        <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <FileContent fileId={currentViewItemId} />
         </Flexbox>
       </Flexbox>

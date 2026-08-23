@@ -33,6 +33,21 @@ vi.mock('@/database/schemas', () => ({
   topics: {},
 }));
 vi.mock('@/utils/rbac', () => ({ getScopePermissions: () => [] }));
+// Values a caller could not have supplied by accident, so the assertions below
+// prove the service reads these constants rather than literals of its own.
+//
+// Mocked on `@lobechat/business-const`, which is where they are declared —
+// mocking them onto `@/const/settings` instead made these tests pass while the
+// build failed on `Export DEFAULT_PROVIDER doesn't exist in target module`:
+// that barrel re-exports `DEFAULT_MODEL` only, and a factory mock happily
+// invents any key asked of it.
+const DEFAULT_MODEL = 'default-model-from-const';
+const DEFAULT_PROVIDER = 'default-provider-from-const';
+
+vi.mock('@lobechat/business-const', () => ({
+  DEFAULT_MODEL: 'default-model-from-const',
+  DEFAULT_PROVIDER: 'default-provider-from-const',
+}));
 vi.mock('@/const/settings', () => ({
   DEFAULT_AGENT_CHAT_CONFIG: {},
   DEFAULT_SYSTEM_AGENT_CONFIG: {},
@@ -96,5 +111,87 @@ describe('ChatService payload construction', () => {
     await buildService().chat({ messages, temperature: 0.7 } as any);
 
     expect(chatMock.mock.calls[0][0]).toMatchObject({ temperature: 0.7 });
+  });
+});
+
+/**
+ * A provider row whose `keyVaults` is null is the ordinary shape for a
+ * deployment that supplies credentials through the environment: the row exists
+ * so the provider can be enabled, and no per-user vault is ever written.
+ *
+ * `decrypt` splits its argument on `:` in its first statement, so handing that
+ * null straight to it — which a `!` assertion used to allow — threw
+ * `Cannot read properties of null (reading 'split')` out of every
+ * `/api/v1/chat*` call, from inside a helper whose name gives no hint that a
+ * credential lookup is what failed.
+ */
+/**
+ * A request that names no model used to ask for `gpt-3.5-turbo` on `openai`,
+ * hard-coded here and unreachable by any caller — `ChatServiceConfig` only
+ * arrives through the constructor and the controller never passes one. On a
+ * deployment that does not run OpenAI, that surfaced as a credential error
+ * naming a provider the caller had never mentioned.
+ */
+describe('ChatService default model', () => {
+  // `chatMock` accumulates across describes; without this the assertions below
+  // read the first call of the whole file, which belongs to another test.
+  beforeEach(() => vi.clearAllMocks());
+
+  it('falls back to the product defaults, not to this service’s own literals', async () => {
+    const service = new ChatService({} as LobeChatDatabase, 'user-1');
+    (service as any).resolveOperationPermission = vi.fn().mockResolvedValue({ isPermitted: true });
+    (service as any).getApiKey = vi.fn().mockResolvedValue(JSON.stringify({ apiKey: 'k' }));
+
+    chatMock.mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: 'hi' } }] }), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    initModelRuntimeWithUserPayloadMock.mockResolvedValue({ chat: chatMock });
+
+    const result = await service.chat({ messages: [{ content: 'hi', role: 'user' }] } as any);
+
+    expect(chatMock.mock.calls[0][0]).toMatchObject({ model: DEFAULT_MODEL });
+    expect(initModelRuntimeWithUserPayloadMock.mock.calls[0][0]).toBe(DEFAULT_PROVIDER);
+    expect(result).toMatchObject({ model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER });
+  });
+});
+
+describe('ChatService.getApiKey provider credentials', () => {
+  const decrypt = vi.fn();
+
+  const serviceWith = (rows: unknown[]) => {
+    const service = new ChatService(
+      { query: { aiProviders: { findMany: vi.fn().mockResolvedValue(rows) } } } as any,
+      'user-1',
+    );
+    (service as any).buildWorkspaceWhere = vi.fn();
+    return service;
+  };
+
+  const apiKey = (service: ChatService) => (service as any).getApiKey('openai');
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    decrypt.mockResolvedValue({ plaintext: '{"apiKey":"from-vault"}' });
+    const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
+    (KeyVaultsGateKeeper.initWithEnvKey as any).mockResolvedValue({ decrypt });
+  });
+
+  it('falls back to an empty vault when the row stores no key', async () => {
+    await expect(apiKey(serviceWith([{ id: 'openai', keyVaults: null }]))).resolves.toBe('{}');
+    expect(decrypt).not.toHaveBeenCalled();
+  });
+
+  it('falls back to an empty vault when no row exists', async () => {
+    await expect(apiKey(serviceWith([]))).resolves.toBe('{}');
+    expect(decrypt).not.toHaveBeenCalled();
+  });
+
+  it('still decrypts a row that does store a key', async () => {
+    await expect(apiKey(serviceWith([{ id: 'openai', keyVaults: 'iv:tag:data' }]))).resolves.toBe(
+      '{"apiKey":"from-vault"}',
+    );
+    expect(decrypt).toHaveBeenCalledWith('iv:tag:data');
   });
 });

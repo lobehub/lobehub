@@ -21,6 +21,7 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import type { PermissionResourceType } from '@/services/resourcePermission';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
+import { AddCollaboratorButton, CollaboratorList } from './Collaborators';
 import PolicySelect from './PolicySelect';
 import { useAccessLevelOptions } from './useAccessLevelOptions';
 import { useResourcePermission } from './useResourcePermission';
@@ -58,6 +59,8 @@ interface ResourceAccessPageProps {
    * framing.
    */
   copy: {
+    /** Shown under the Collaborators group title when `showCollaborators` is on. */
+    collaboratorsDesc?: string;
     generalAccessDesc: string;
     privateHint: string;
     privateNotice: string;
@@ -70,6 +73,12 @@ interface ResourceAccessPageProps {
   /** Display name for the breadcrumb; omitted while it loads. */
   resourceName?: string | null;
   resourceType: PermissionResourceType;
+  /**
+   * Render the per-user Collaborators group below General access. Off by
+   * default — only resource types whose flows support per-user grants
+   * (knowledge bases today) turn it on.
+   */
+  showCollaborators?: boolean;
 }
 
 /**
@@ -80,7 +89,15 @@ interface ResourceAccessPageProps {
  * published (the server stores it ahead of publishing).
  */
 const ResourceAccessPage = memo<ResourceAccessPageProps>(
-  ({ copy, redirectPath, resourceHomePath, resourceId, resourceName, resourceType }) => {
+  ({
+    copy,
+    redirectPath,
+    resourceHomePath,
+    resourceId,
+    resourceName,
+    resourceType,
+    showCollaborators,
+  }) => {
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -129,6 +146,16 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       ],
       title: t('permission.page.memberGroup'),
     };
+
+    const formGroups: FormGroupItemType[] = [accessGroup];
+    if (showCollaborators) {
+      formGroups.push({
+        children: <CollaboratorList resourceId={resourceId} resourceType={resourceType} />,
+        desc: copy.collaboratorsDesc,
+        extra: <AddCollaboratorButton resourceId={resourceId} resourceType={resourceType} />,
+        title: t('permission.collaborators.title'),
+      });
+    }
 
     return (
       <Flexbox height={'100%'} width={'100%'}>
@@ -186,7 +213,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
                       type={'info'}
                     />
                   ) : null}
-                  <Form items={[accessGroup]} itemsType={'group'} {...FORM_STYLE} />
+                  <Form items={formGroups} itemsType={'group'} {...FORM_STYLE} />
                 </>
               )}
             </Flexbox>

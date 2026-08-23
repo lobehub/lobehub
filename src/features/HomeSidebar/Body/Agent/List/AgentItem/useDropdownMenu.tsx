@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -148,7 +149,7 @@ export const useAgentDropdownMenu = ({
   const { allowed: canManageLabels } = usePermission('manage_settings');
   const canCreateLabel =
     Boolean(openCreateLabelModal) && (activeWorkspaceId ? canManageLabels : true);
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess('agent', id);
   const canConfigure = canEdit && isAccessResolved && canEditResource;
 
   // Row-level ownership: delete/transfer/visibility management stays scoped
@@ -164,6 +165,13 @@ export const useAgentDropdownMenu = ({
       backgroundColor,
       title,
     },
+    { userId, visibility },
+  );
+  // Ownership handover to a workspace member (recipient must accept) — a
+  // separate entry from the cross-scope "Move to…" above.
+  const transferToMemberItem = useAgentTransferToMemberMenuItem(
+    id,
+    { avatar, backgroundColor, title },
     { userId, visibility },
   );
 
@@ -419,8 +427,9 @@ export const useAgentDropdownMenu = ({
         ...(canConfigure
           ? [
               // Permissions live on their own page now — the sidebar keeps a
-              // shortcut so members don't have to open the Agent first.
-              ...(activeWorkspaceId
+              // shortcut so creators and workspace owners don't have to open
+              // the Agent first.
+              ...(activeWorkspaceId && canManageResource
                 ? [
                     { type: 'divider' as const },
                     {
@@ -483,6 +492,8 @@ export const useAgentDropdownMenu = ({
                     },
                   ]
                 : []),
+              // Under "Publish to Workspace": hand ownership to a member.
+              ...(transferToMemberItem ? [transferToMemberItem] : []),
               ...(showMakePrivateAction
                 ? [
                     {
@@ -554,6 +565,7 @@ export const useAgentDropdownMenu = ({
       canConfigure,
       canEdit,
       canManage,
+      canManageResource,
       navigate,
       pinned,
       id,
@@ -575,6 +587,7 @@ export const useAgentDropdownMenu = ({
       isDefault,
       openCreateGroupModal,
       transferMenuItems,
+      transferToMemberItem,
       showPublishAction,
       showMakePrivateAction,
       isShownInSidebar,

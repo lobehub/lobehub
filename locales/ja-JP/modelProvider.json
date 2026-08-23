@@ -223,6 +223,7 @@
   "providerModels.item.modelConfig.displayName.title": "モデル表示名",
   "providerModels.item.modelConfig.extendParams.extra": "モデルがサポートする拡張パラメータを選択してください。オプションにカーソルを合わせるとコントロールのプレビューが表示されます。不正な設定はリクエストの失敗を引き起こす可能性があります。",
   "providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint": "Codexモデル用; 推論の強度を制御します。",
+  "providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint": "DeepSeek V4 GAの思考モード用；推論の強度を制御します。元のV4レベルに加えて「低」レベルを追加します。「高」がデフォルトで、「最大」は複雑なエージェントワークフローで使用される最深の推論を解放します。",
   "providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint": "DeepSeek V4 の思考モード用。推論強度を制御します。`high` がデフォルトで、`max` は高度なエージェントワークフローで使用される最深度の推論を有効にします。",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Claudeモデル向け；コストを抑え、応答速度を向上させる可能性があります。",
   "providerModels.item.modelConfig.extendParams.options.effort.hint": "Claude Opus 4.6 用：労力レベルを制御します（低／中／高／最大）。",

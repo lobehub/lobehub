@@ -1,0 +1,4 @@
+interface:
+  display_name: 'LLM Generation'
+  short_description: 'Build and trace application-level LLM generation calls'
+  default_prompt: 'Use $llm-generation to implement this LLM generation workflow with correct prompts, versions, models, tracing, and tests.'

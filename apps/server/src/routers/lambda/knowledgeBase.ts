@@ -7,10 +7,11 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { serverDBEnv } from '@/config/db';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS, insertKnowledgeBasesSchema } from '@/database/schemas';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import {
   getWorkspaceScopedPermissionMatches,
   hasWorkspaceScopedPermission,
@@ -27,6 +28,22 @@ import {
   filterRestrictedKnowledgeBases,
   getUseLevelKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
+
+/**
+ * Presentation metadata only. Deliberately NOT `insertKnowledgeBasesSchema.partial()`:
+ * that carries `id`, `userId`, `workspaceId` and `visibility`, and a shared
+ * knowledge base is now editable by any member holding `edit` access rather than
+ * only by its creator. Without this narrowing such a member could reassign the
+ * row, move it to another workspace, or take it private — bypassing the
+ * creator-only transfer and publish/make-private procedures and putting the
+ * library out of its own creator's reach. Mirrors the OpenAPI
+ * `UpdateKnowledgeBaseSchema` surface.
+ */
+const updatableKnowledgeBaseFields = z.object({
+  avatar: z.string().nullish(),
+  description: z.string().nullish(),
+  name: z.string().optional(),
+});
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -106,6 +123,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
@@ -408,13 +426,29 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         id: z.string(),
-        value: insertKnowledgeBasesSchema.partial(),
+        value: updatableKnowledgeBaseFields,
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing) return;
-      assertWorkspaceRowManageable(ctx, existing.userId, 'knowledge base');
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          grantedPermissions: (ctx as { workspacePermissionCodes?: string[] })
+            .workspacePermissionCodes,
+          meta: {
+            userId: existing.userId,
+            visibility: existing.visibility ?? null,
+            workspaceId: existing.workspaceId ?? null,
+          },
+          resourceId: input.id,
+          resourceType: 'knowledgeBase',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
 
       return ctx.knowledgeBaseModel.update(input.id, input.value);
     }),

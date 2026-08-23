@@ -45,7 +45,6 @@ export interface CliCommandStatus {
 }
 
 interface ValidateOptions {
-  rejectPattern?: RegExp;
   validateFlag?: string;
   /** Capability-probe argv. Defaults to `--help`. */
   validateHelpArgs?: string[];
@@ -59,6 +58,7 @@ interface ValidateOptions {
 interface ResolvedCommand {
   env?: NodeJS.ProcessEnv;
   path: string;
+  resolvedPathEnv?: string;
 }
 
 const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
@@ -252,17 +252,27 @@ const getCommandPathLines = async (
  * makes detection immune to unknown shim shapes instead of chasing them with
  * more regexes.
  */
-const resolveCommandCandidates = async (command: string): Promise<ResolvedCommand[]> => {
+const resolveCommandCandidates = async (
+  command: string,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<ResolvedCommand[]> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return [];
 
   if (isPathLikeCommand(trimmedCommand)) {
-    return [{ path: trimmedCommand }];
+    return [
+      {
+        env: probeEnv,
+        path: trimmedCommand,
+        resolvedPathEnv: probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH,
+      },
+    ];
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
-  let lines = await getCommandPathLines(whichCommand, trimmedCommand);
-  let lookupEnv: NodeJS.ProcessEnv | undefined;
+  let lines = await getCommandPathLines(whichCommand, trimmedCommand, probeEnv);
+  let lookupEnv = probeEnv;
+  let resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
 
   if (!lines) {
     // PATH recovery, per platform: macOS/Linux re-read the login shell's PATH,
@@ -271,15 +281,18 @@ const resolveCommandCandidates = async (command: string): Promise<ResolvedComman
     const recoveredPath = isWindows()
       ? await getWindowsRegistryPath()
       : await getCachedLoginShellPath();
-    const lookupPath = mergePathValues(recoveredPath, process.env.PATH);
+    const lookupPath = mergePathValues(recoveredPath, probeEnv?.PATH ?? process.env.PATH);
 
-    if (lookupPath && lookupPath !== process.env.PATH) {
+    if (lookupPath && lookupPath !== (probeEnv?.PATH ?? process.env.PATH)) {
       const fallbackEnv = {
-        ...process.env,
+        ...(probeEnv ?? process.env),
         PATH: lookupPath,
       };
       lines = await getCommandPathLines(whichCommand, trimmedCommand, fallbackEnv);
-      if (lines) lookupEnv = fallbackEnv;
+      if (lines) {
+        lookupEnv = fallbackEnv;
+        resolvedPathEnv = lookupPath;
+      }
     }
   }
 
@@ -292,10 +305,11 @@ const resolveCommandCandidates = async (command: string): Promise<ResolvedComman
     return pickWindowsRunnables(lines).map((runnablePath) => ({
       env: lookupEnv,
       path: runnablePath,
+      resolvedPathEnv,
     }));
   }
 
-  return [{ env: lookupEnv, path: lines[0] }];
+  return [{ env: lookupEnv, path: lines[0], resolvedPathEnv }];
 };
 
 const quoteWindowsShellToken = (token: string): string =>
@@ -381,13 +395,13 @@ const execProbe = async (
 export const detectValidatedCommand = async (
   command: string,
   options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return { available: false };
   if (isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand)) return { available: false };
 
   const {
-    rejectPattern,
     validateFlag = '--version',
     validateHelpArgs = ['--help'],
     validateHelpKeywords,
@@ -399,11 +413,11 @@ export const detectValidatedCommand = async (
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
   // alone won't apply PATHEXT and can't run .cmd files directly.
-  const candidates = await resolveCommandCandidates(trimmedCommand);
+  const candidates = await resolveCommandCandidates(trimmedCommand, probeEnv);
   if (candidates.length === 0) return { available: false };
 
   const validateCandidate = async (
-    { env, path: resolvedPath }: ResolvedCommand,
+    { env, path: resolvedPath, resolvedPathEnv }: ResolvedCommand,
     viaShell: boolean,
   ): Promise<CliCommandStatus | typeof UNRESOLVED_SHIM> => {
     let result;
@@ -417,9 +431,6 @@ export const detectValidatedCommand = async (
     const output = `${result.stdout}\n${result.stderr}`.trim();
     const firstLine = output.split(/\r?\n/)[0]!.trim();
     const loweredOutput = output.toLowerCase();
-    if (rejectPattern?.test(firstLine) || rejectPattern?.test(output)) {
-      return { available: false };
-    }
     const matchesKeyword = validateKeywords?.some((keyword) =>
       loweredOutput.includes(keyword.toLowerCase()),
     );
@@ -434,9 +445,9 @@ export const detectValidatedCommand = async (
       return { available: false };
     }
 
-    // Kimi Code shares the `kimi` executable name with the retired Python
-    // kimi-cli. Both can print a valid version, so capability-probe the exact
-    // resolved binary before accepting it as the stream-json runtime.
+    // Some command names and version banners identify multiple products. When
+    // configured, capability-probe the exact resolved binary before accepting
+    // it as the runtime this adapter needs.
     if (validateHelpKeywords?.length) {
       let helpResult;
       try {
@@ -473,12 +484,11 @@ export const detectValidatedCommand = async (
     return {
       available: true,
       path: resolvedPath,
-      // `env` is set only when resolution fell back to a recovered PATH (login
-      // shell on macOS/Linux, registry on Windows). Surface that PATH so the
-      // spawn site can carry it into the child env — otherwise a
-      // `#!/usr/bin/env node` shim resolved here can't find `node` under the
-      // leaner inherited PATH (Finder-launched Electron).
-      resolvedPathEnv: env?.PATH,
+      // Surface a caller-supplied or recovered PATH when it differs from the
+      // detector process, so the spawn site can preserve the environment that
+      // made validation succeed. Otherwise an `#!/usr/bin/env node` shim can
+      // validate here but fail when launched from a leaner host environment.
+      resolvedPathEnv,
       // CLIs format their banners differently (`codex-cli 0.147.0`,
       // `1.2.3 (Claude Code)`, etc.). Keep validation against the original
       // output, but expose only the version so every consumer renders the same
@@ -555,10 +565,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'trae': {
-    // TRAE Enterprise releases may print either a product-prefixed version or
-    // a bare semver. Reject the unrelated open-source trajectory runner even
-    // when its executable has been renamed.
-    rejectPattern: /^trae-cli\b/i,
+    // The official binary and the unrelated open-source trajectory runner both
+    // identify themselves as `trae-cli`. Distinguish them by the ACP runtime
+    // LobeHub actually needs rather than by executable name or version banner.
+    validateHelpArgs: ['acp', 'serve', '--help'],
+    validateHelpKeywords: ['Start the ACP server', '--yolo'],
     validateKeywords: ['trae', 'traecode'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
@@ -698,9 +709,24 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
       ];
     }
     case 'trae': {
-      // TRAE CLI is distributed through TRAE Enterprise and has no verified
-      // cross-platform standalone install location. Resolve it from PATH only.
-      return [];
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        if (!localAppData) return [];
+
+        const currentBinDir = path.win32.join(localAppData, 'Programs', 'TraeCLI', 'bin');
+        const legacyBinDir = path.win32.join(localAppData, 'trae-cli', 'bin');
+        return [
+          path.win32.join(currentBinDir, 'traex.exe'),
+          path.win32.join(legacyBinDir, 'traecli.exe'),
+          path.win32.join(legacyBinDir, 'trae-cli.exe'),
+        ];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'traecli'),
+        path.join(homedir(), '.local', 'bin', 'trae-cli'),
+      ];
     }
     default: {
       return [];
@@ -711,22 +737,12 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
 export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
+  probeEnv?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
-  const commandName = command
-    .trim()
-    .split(/[\\/]/)
-    .at(-1)
-    ?.replace(/\.(?:bat|cmd|exe)$/i, '');
-  // `trae-cli` belongs to the unrelated open-source trajectory runner. LobeHub
-  // integrates only the TRAE Enterprise `traecli acp serve` runtime.
-  if (agentType === 'trae' && commandName?.toLowerCase() === 'trae-cli') {
-    return { available: false };
-  }
-
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 
-  const status = await detectValidatedCommand(command, validator);
+  const status = await detectValidatedCommand(command, validator, probeEnv);
   if (status.available) return status;
 
   // The default command missing from PATH may still live at a well-known install
@@ -736,7 +752,7 @@ export const detectHeterogeneousCliCommand = async (
   // stock `claude` instead of reporting the configured command as missing.
   if (command.trim() === DEFAULT_HETERO_COMMAND[agentType]) {
     for (const candidate of getWellKnownCommandPaths(agentType)) {
-      const fallbackStatus = await detectValidatedCommand(candidate, validator);
+      const fallbackStatus = await detectValidatedCommand(candidate, validator, probeEnv);
       if (fallbackStatus.available) return fallbackStatus;
     }
   }

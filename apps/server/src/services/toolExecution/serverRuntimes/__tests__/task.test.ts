@@ -63,9 +63,10 @@ describe('createTaskRuntime', () => {
       });
 
       // `null` means "uncapped"; coercing an omitted budget into it would let a
-      // failing goal spawn rounds forever.
-      const [, config] = taskModel.updateTaskConfig.mock.calls[0];
-      expect(config.goal.maxIterations).toBeUndefined();
+      // failing goal spawn rounds forever. The service resolves `undefined`
+      // into the documented default at write time.
+      const [createInput] = taskService.createTask.mock.calls[0];
+      expect(createInput.goal.maxRounds).toBeUndefined();
     });
 
     it('creates, configures, and starts one verified task', async () => {
@@ -115,13 +116,19 @@ describe('createTaskRuntime', () => {
           verifyCriteriaIds: ['criterion-1'],
         }),
       });
-      expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-db-1', {
-        goal: { maxIterations: 3, maxTotalCost: 12, originTopicId: 'origin-topic' },
-      });
-      expect(taskCaller.run).toHaveBeenCalledWith({ id: 'task-db-1' });
-      expect(taskModel.updateTaskConfig.mock.invocationCallOrder[0]).toBeLessThan(
-        taskCaller.updateVerifyConfig.mock.invocationCallOrder[0],
+      // The goal entity is bound at task creation, not merged into config later.
+      expect(taskService.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          goal: {
+            maxRounds: 3,
+            maxTotalCost: 12,
+            requirement: 'Ship homepage',
+            title: 'Ship homepage',
+          },
+        }),
       );
+      expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+      expect(taskCaller.run).toHaveBeenCalledWith({ id: 'task-db-1' });
       // The success branch is the only one carrying `state`; narrow to it so
       // this asserts the shape rather than the union.
       expect(result).toHaveProperty('state');
@@ -838,6 +845,30 @@ describe('createTaskRuntime', () => {
         id: 'T-1',
         status: 'completed',
       });
+    });
+
+    it('defers completing the current task until its operation finishes', async () => {
+      const taskCaller = { updateStatus: vi.fn() };
+      const taskModel = {
+        resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        updateContext: vi.fn().mockResolvedValue({}),
+      };
+      const runtime = createTaskRuntime({
+        agentModel: { existsById: vi.fn() } as any,
+        operationId: 'operation-1',
+        taskCaller: taskCaller as any,
+        taskId: 'task-1',
+        taskModel: taskModel as any,
+        taskService: {} as any,
+      });
+
+      const result = await runtime.updateTaskStatus({ identifier: 'T-1', status: 'completed' });
+
+      expect(result).toMatchObject({ success: true });
+      expect(taskModel.updateContext).toHaveBeenCalledWith('task-1', {
+        completion: { requestedByOperationId: 'operation-1' },
+      });
+      expect(taskCaller.updateStatus).not.toHaveBeenCalled();
     });
   });
 

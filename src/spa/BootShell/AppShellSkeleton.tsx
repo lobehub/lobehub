@@ -11,6 +11,7 @@ import {
   getOuterCssVariables,
 } from '@/features/DesktopLayoutContainer/cssVariables';
 import { styles as containerStyles } from '@/features/DesktopLayoutContainer/style';
+import { electronStylish } from '@/styles/electron';
 
 import { readBootShellGeometry } from './geometry';
 
@@ -23,6 +24,12 @@ const CSS_VAR_CLASS = 'lobe-vars';
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
 const styles = createStaticStyles(({ css }) => ({
+  dragRegion: css`
+    pointer-events: auto;
+    flex-shrink: 0;
+    width: 100%;
+    height: ${TITLE_BAR_HEIGHT}px;
+  `,
   root: css`
     pointer-events: none;
 
@@ -44,7 +51,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
 
   return (
     <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
-      {isDesktop && <div style={{ flexShrink: 0, height: TITLE_BAR_HEIGHT }} />}
+      {isDesktop && <div className={`${styles.dragRegion} ${electronStylish.draggable}`} />}
       <Flexbox
         horizontal
         height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}

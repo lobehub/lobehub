@@ -45,9 +45,10 @@ export const buildAnthropicBlock = async (
   Anthropic.ContentBlock | Anthropic.ImageBlockParam | AnthropicVideoBlockParam | undefined
 > => {
   switch (content.type) {
+    case 'redacted_thinking':
     case 'thinking': {
       // just pass-through the content
-      return content as any;
+      return content;
     }
 
     case 'text': {

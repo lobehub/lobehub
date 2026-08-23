@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 12px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgElevated};
   `,
@@ -37,6 +37,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   description: css`
     min-width: 0;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  identifier: css`
+    flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
   `,
   icon: css`
@@ -75,6 +79,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   inlineDescription: css`
     min-width: 0;
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  inlineIdentifier: css`
+    flex-shrink: 0;
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
   `,
@@ -129,6 +139,11 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       descriptor.getIdentifier(item) ||
       item.resourceId ||
       item.id;
+    // Mirrors WorkVersionHistoryCard's label: surface the resource identifier
+    // (e.g. `QA-1989`, `owner/repo#2`) on the card itself, unless the title
+    // already fell back to it.
+    const identifier = descriptor.getIdentifier(item);
+    const showIdentifier = !!identifier && identifier !== title;
     const description = descriptor.getDescription(item);
     const openTarget = descriptor.getOpenTarget(item);
     // The backing task was deleted outside the tool path: the Work lingers as an
@@ -180,6 +195,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
               <Text ellipsis className={styles.inlineTitle}>
                 {title}
               </Text>
+              {showIdentifier && <span className={styles.inlineIdentifier}>{identifier}</span>}
               {taskDeleted && (
                 <Tag color={'warning'} icon={<Trash2Icon size={12} />} size={'small'}>
                   {t('workingPanel.works.taskDeleted')}
@@ -218,6 +234,11 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
               <Text ellipsis className={styles.title}>
                 {title}
               </Text>
+              {showIdentifier && (
+                <Text code className={styles.identifier} fontSize={12}>
+                  {identifier}
+                </Text>
+              )}
               {taskDeleted && (
                 <Tag color={'warning'} icon={<Trash2Icon size={12} />} size={'small'}>
                   {t('workingPanel.works.taskDeleted')}

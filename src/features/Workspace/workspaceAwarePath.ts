@@ -16,7 +16,7 @@ export interface WorkspaceAwareNavigateOptions extends NavigateOptions {
  * llm, referral, system-tools, etc.) stays personal.
  */
 const PERSONAL_PATH_REGEX =
-  /^\/(?:invite|onboarding|me|share|devtools|desktop-onboarding)(?:[/?#]|$)/;
+  /^\/(?:apps|invite|onboarding|me|share|devtools|desktop-onboarding)(?:[/?#]|$)/;
 
 const isPersonalPath = (to: string): boolean => PERSONAL_PATH_REGEX.test(to);
 

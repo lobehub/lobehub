@@ -185,15 +185,150 @@ describe('TopicModel - Update', () => {
       });
 
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'different-operation'),
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', undefined, 'different-operation'),
       ).resolves.toBe(false);
       await expect(
-        topicModel.tryReserveTaskCallback(topicId, 'new-start', 'old-operation'),
+        topicModel.tryReserveTaskCallback(topicId, 'new-start', undefined, 'old-operation'),
       ).resolves.toBe(true);
 
       const topic = await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) });
       expect(topic?.metadata?.runningOperation).toBeNull();
       expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('new-start');
+    });
+
+    it('allows a child operation to re-enter its parent running operation', async () => {
+      const topicId = 'task-callback-parent-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            operationId: 'operation-parent',
+          },
+        },
+      });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'child-operation-1', 'operation-parent'),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'child-operation-2', 'operation-parent'),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'unrelated-operation', 'operation-other'),
+      ).resolves.toBe(false);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.taskCallbackReservation).toBeUndefined();
+      expect(topic?.metadata?.runningOperation?.operationId).toBe('operation-parent');
+    });
+
+    it('atomically appends children to the parent running operation', async () => {
+      const topicId = 'task-callback-parent-operation-children';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            operationId: 'parent-operation',
+          },
+        },
+      });
+
+      await Promise.all([
+        topicModel.appendRunningOperationChild(topicId, 'parent-operation', {
+          assistantMessageId: 'assistant-child-1',
+          operationId: 'child-operation-1',
+        }),
+        topicModel.appendRunningOperationChild(topicId, 'parent-operation', {
+          assistantMessageId: 'assistant-child-2',
+          operationId: 'child-operation-2',
+        }),
+      ]);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ operationId: 'child-operation-1' }),
+          expect.objectContaining({ operationId: 'child-operation-2' }),
+        ]),
+      );
+    });
+
+    it('atomically takes a child running operation once', async () => {
+      const topicId = 'task-callback-take-child-operation';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+      });
+
+      const claims = await Promise.all([
+        topicModel.takeRunningOperation(topicId, 'child-operation'),
+        topicModel.takeRunningOperation(topicId, 'child-operation'),
+      ]);
+
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      expect(claims.find(Boolean)).toMatchObject({
+        isRoot: false,
+        operation: { operationId: 'child-operation' },
+      });
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({ operationId: 'parent-operation' });
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([]);
+    });
+
+    it('updates only the matching child assistant message pointer', async () => {
+      const topicId = 'task-callback-update-child-message';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child-1', operationId: 'child-operation-1' },
+              { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.updateRunningOperationAssistantMessage(
+          topicId,
+          'child-operation-1',
+          'assistant-child-1-next',
+        ),
+      ).resolves.toBe(true);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        assistantMessageId: 'assistant-parent',
+        childOperations: [
+          { assistantMessageId: 'assistant-child-1-next', operationId: 'child-operation-1' },
+          { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+        ],
+      });
+      expect(topic?.metadata?.heteroCurrentMsgId).toEqual({
+        msgId: 'assistant-child-1-next',
+        operationId: 'child-operation-1',
+      });
     });
 
     it('recovers a stale reservation left by a crashed delivery worker', async () => {
