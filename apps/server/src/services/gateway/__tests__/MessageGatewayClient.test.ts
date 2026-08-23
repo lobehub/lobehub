@@ -1,9 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageGatewayClient } from '../MessageGatewayClient';
+import {
+  getConfiguredMessageGatewayHosts,
+  getMessageGatewayClient,
+  getMessageGatewayClientForHost,
+  MessageGatewayClient,
+  resolveMessageGatewayHost,
+} from '../MessageGatewayClient';
 
 const mockGatewayEnv = vi.hoisted(() => ({
   MESSAGE_GATEWAY_ENABLED: undefined as string | undefined,
+  MESSAGE_GATEWAY_NODE_PLATFORMS: undefined as string | undefined,
+  MESSAGE_GATEWAY_NODE_URL: undefined as string | undefined,
+  MESSAGE_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
+  MESSAGE_GATEWAY_URL: undefined as string | undefined,
 }));
 
 vi.mock('@/envs/gateway', () => ({
@@ -166,6 +176,49 @@ describe('MessageGatewayClient', () => {
           webhookPath: '/test',
         }),
       ).rejects.toThrow('not configured');
+    });
+  });
+
+  describe('host routing', () => {
+    // Set once before the per-host singletons are first constructed — the
+    // client cache captures env at construction, while host RESOLUTION reads
+    // env live and can be toggled per test.
+    beforeAll(() => {
+      mockGatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS = ' wechat , whatsapp-baileys ';
+      mockGatewayEnv.MESSAGE_GATEWAY_NODE_URL = 'https://node-gateway.test.com';
+      mockGatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN = 'shared-token';
+      mockGatewayEnv.MESSAGE_GATEWAY_URL = 'https://message-gateway.test.com';
+    });
+
+    it('routes listed platforms to node only while the node gateway is configured', () => {
+      expect(resolveMessageGatewayHost('wechat')).toBe('node');
+      expect(resolveMessageGatewayHost('whatsapp-baileys')).toBe('node');
+      expect(resolveMessageGatewayHost('discord')).toBe('default');
+      expect(resolveMessageGatewayHost()).toBe('default');
+
+      mockGatewayEnv.MESSAGE_GATEWAY_NODE_URL = undefined;
+      // Rollback path: dropping the node URL sends everything back to default.
+      expect(resolveMessageGatewayHost('wechat')).toBe('default');
+      mockGatewayEnv.MESSAGE_GATEWAY_NODE_URL = 'https://node-gateway.test.com';
+    });
+
+    it('always reconciles the default host, and node only when configured', () => {
+      expect(getConfiguredMessageGatewayHosts()).toEqual(['default', 'node']);
+
+      mockGatewayEnv.MESSAGE_GATEWAY_NODE_URL = undefined;
+      expect(getConfiguredMessageGatewayHosts()).toEqual(['default']);
+      mockGatewayEnv.MESSAGE_GATEWAY_NODE_URL = 'https://node-gateway.test.com';
+    });
+
+    it('returns distinct per-host singletons; node uses the shared service token', () => {
+      const nodeClient = getMessageGatewayClient('wechat');
+      const defaultClient = getMessageGatewayClient('discord');
+
+      expect(nodeClient).toBe(getMessageGatewayClientForHost('node'));
+      expect(defaultClient).toBe(getMessageGatewayClientForHost('default'));
+      expect(nodeClient).not.toBe(defaultClient);
+      // Node URL + the shared MESSAGE_GATEWAY_SERVICE_TOKEN are all it needs.
+      expect(nodeClient.isConfigured).toBe(true);
     });
   });
 });

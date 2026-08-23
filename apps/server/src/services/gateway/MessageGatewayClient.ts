@@ -235,13 +235,74 @@ export class MessageGatewayClient {
   }
 }
 
-// ─── Singleton ───
+// ─── Host routing ───
 
-let _client: MessageGatewayClient | undefined;
+/**
+ * A "host" is one deployed message-gateway a platform's connections live on:
+ *
+ *  - `default` — the original gateway (`MESSAGE_GATEWAY_URL`), Cloudflare
+ *    Workers + Durable Objects. Right for webhook and hibernation-friendly
+ *    platforms.
+ *  - `node` — the Node gateway (`MESSAGE_GATEWAY_NODE_URL`), a long-lived
+ *    container speaking the same HTTP protocol. Right for platforms a DO
+ *    can't host economically (permanent long-polling loops such as WeChat)
+ *    or at all (native deps such as Baileys).
+ *
+ * `MESSAGE_GATEWAY_NODE_PLATFORMS` decides which platforms route to `node`;
+ * everything else stays on `default`. The reconcile sync uses the same
+ * resolution to move existing connections between hosts, so editing the env
+ * var is the entire migration/rollback procedure.
+ */
+export type MessageGatewayHost = 'default' | 'node';
 
-export function getMessageGatewayClient(): MessageGatewayClient {
-  if (!_client) {
-    _client = new MessageGatewayClient();
+const parseNodePlatforms = (): Set<string> =>
+  new Set(
+    (gatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+
+/** The host that should own connections for `platform` (default host when omitted). */
+export function resolveMessageGatewayHost(platform?: string): MessageGatewayHost {
+  if (!platform || !gatewayEnv.MESSAGE_GATEWAY_NODE_URL) return 'default';
+  return parseNodePlatforms().has(platform) ? 'node' : 'default';
+}
+
+/**
+ * Hosts the reconcile sync must visit. The default host is always included —
+ * even with every platform routed away it still needs stale cleanup.
+ */
+export function getConfiguredMessageGatewayHosts(): MessageGatewayHost[] {
+  return gatewayEnv.MESSAGE_GATEWAY_NODE_URL ? ['default', 'node'] : ['default'];
+}
+
+// ─── Singleton per host ───
+
+const clients = new Map<MessageGatewayHost, MessageGatewayClient>();
+
+export function getMessageGatewayClientForHost(host: MessageGatewayHost): MessageGatewayClient {
+  let client = clients.get(host);
+  if (!client) {
+    client =
+      host === 'node'
+        ? new MessageGatewayClient(
+            gatewayEnv.MESSAGE_GATEWAY_NODE_URL || '',
+            // Both gateways share one service token — inbound webhook/callback
+            // validation only accepts this value anyway.
+            gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN || '',
+          )
+        : new MessageGatewayClient();
+    clients.set(host, client);
   }
-  return _client;
+  return client;
+}
+
+/**
+ * Client for the gateway that owns `platform`'s connections. Callers that
+ * operate on a concrete connection must pass the platform; omitting it
+ * returns the default-host client (kill switch checks, legacy cleanup).
+ */
+export function getMessageGatewayClient(platform?: string): MessageGatewayClient {
+  return getMessageGatewayClientForHost(resolveMessageGatewayHost(platform));
 }

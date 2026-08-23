@@ -12,6 +12,10 @@ import {
   AgentBotProviderModel,
   type DecryptedBotProvider,
 } from '@/database/models/agentBotProvider';
+import {
+  type DecryptedMessengerAccountLink,
+  MessengerAccountLinkModel,
+} from '@/database/models/messengerAccountLink';
 import { gatewayEnv } from '@/envs/gateway';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
@@ -31,9 +35,13 @@ import {
 import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 import {
+  getConfiguredMessageGatewayHosts,
   getMessageGatewayClient,
+  getMessageGatewayClientForHost,
   type MessageGatewayCapabilities,
   type MessageGatewayConnectionStatus,
+  type MessageGatewayHost,
+  resolveMessageGatewayHost,
 } from './MessageGatewayClient';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
 
@@ -185,15 +193,16 @@ export class GatewayService {
     log('GatewayManager started');
 
     // Clean up leftover gateway connections to prevent duplicates.
-    const client = getMessageGatewayClient();
-    if (client.isConfigured) {
+    for (const host of getConfiguredMessageGatewayHosts()) {
+      const client = getMessageGatewayClientForHost(host);
+      if (!client.isConfigured) continue;
       try {
         const result = await client.disconnectAll();
         if (result.total > 0) {
-          log('Cleaned up %d gateway connections', result.total);
+          log('Cleaned up %d gateway connections on %s host', result.total, host);
         }
       } catch (err) {
-        log('Gateway cleanup skipped (non-critical): %O', err);
+        log('Gateway cleanup skipped on %s host (non-critical): %O', host, err);
       }
     }
   }
@@ -215,7 +224,6 @@ export class GatewayService {
    */
   private async syncGatewayConnections(): Promise<void> {
     const startedAt = Date.now();
-    const client = getMessageGatewayClient();
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
@@ -224,7 +232,61 @@ export class GatewayService {
       gateKeeper,
     );
 
-    const actual = await this.fetchActualConnections(client);
+    // Each configured host gets its own desired slice and its own actual
+    // snapshot, then runs the full diff independently. Cross-host moves fall
+    // out of the partition: a platform routed away from a host leaves its ids
+    // absent from that host's desired slice → the stale pass disconnects them
+    // there while the new host's connect pass builds them up.
+    const hosts = getConfiguredMessageGatewayHosts();
+    const snapshots = new Map<MessageGatewayHost, ActualConnectionsSnapshot | null>();
+    for (const host of hosts) {
+      snapshots.set(host, await this.fetchActualConnections(getMessageGatewayClientForHost(host)));
+    }
+
+    for (const host of hosts) {
+      await this.syncHostConnections({
+        desired,
+        desiredComplete,
+        gated,
+        host,
+        serverDB,
+        snapshot: snapshots.get(host) ?? null,
+      });
+    }
+
+    await this.syncMessengerPollingConnections(serverDB, gateKeeper, snapshots);
+
+    log(
+      'Gateway sync complete in %dms across %d host(s): desired=%d gated=%d',
+      Date.now() - startedAt,
+      hosts.length,
+      desired.size,
+      gated.size,
+    );
+  }
+
+  /** Run the desired/actual diff for the bot-provider connections one host owns. */
+  private async syncHostConnections(params: {
+    desired: Map<string, DesiredGatewayConnection>;
+    desiredComplete: boolean;
+    gated: Map<string, string>;
+    host: MessageGatewayHost;
+    serverDB: Awaited<ReturnType<typeof getServerDB>>;
+    snapshot: ActualConnectionsSnapshot | null;
+  }): Promise<void> {
+    const { desiredComplete, host, serverDB, snapshot: actual } = params;
+    const client = getMessageGatewayClientForHost(host);
+
+    // Slice of desired/gated owned by this host, by platform routing.
+    const desired = new Map(
+      [...params.desired].filter(([, entry]) => resolveMessageGatewayHost(entry.platform) === host),
+    );
+    const gated = new Set(
+      [...params.gated]
+        .filter(([, platform]) => resolveMessageGatewayHost(platform) === host)
+        .map(([id]) => id),
+    );
+
     const gatedDisconnected = await this.disconnectGatedConnections(client, actual, gated);
 
     // A partial desired set would make healthy connections look stale, so only
@@ -238,6 +300,7 @@ export class GatewayService {
         actual.connections,
         desired,
         gated,
+        host,
       );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
@@ -362,8 +425,8 @@ export class GatewayService {
     );
 
     log(
-      'Gateway sync complete in %dms: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d registeredOnlyWakes=%d registeredOnlyDeferred=%d',
-      Date.now() - startedAt,
+      'Gateway sync[%s]: desired=%d actual=%s snapshotComplete=%s connected=%d skipped=%d deferred=%d gated=%d gatedDisconnected=%d stale=%d failed=%d registeredOnlyWakes=%d registeredOnlyDeferred=%d',
+      host,
       desired.size,
       actual ? actual.connections.size : 'unavailable',
       actual?.complete ?? false,
@@ -377,6 +440,185 @@ export class GatewayService {
       registeredOnlyWakes,
       registeredOnlyDeferred,
     );
+  }
+
+  /**
+   * Reconcile per-user polling messenger connections (WeChat today) onto the
+   * gateway host that owns their platform.
+   *
+   * Bot-provider connections are covered by the desired/actual diff above,
+   * but messenger-owned ids (`messenger:<platform>:…`) were historically
+   * excluded from reconciliation: on the default gateway they are durable
+   * Durable Objects, lazily created at link time. Two things break that
+   * model:
+   *
+   *  - the Node gateway keeps connections in process memory, so without a
+   *    reconcile every redeploy would silently stop all polling until each
+   *    user re-linked;
+   *  - moving a platform between hosts needs the old host's connections torn
+   *    down and the new host's rebuilt, link by link.
+   *
+   * Webhook typing shards and websocket singletons stay excluded — they are
+   * lazily managed (`ensureUserMessengerConnected`) and harmless to lose.
+   */
+  private async syncMessengerPollingConnections(
+    serverDB: Awaited<ReturnType<typeof getServerDB>>,
+    gateKeeper: KeyVaultsGateKeeper,
+    snapshots: Map<MessageGatewayHost, ActualConnectionsSnapshot | null>,
+  ): Promise<void> {
+    for (const definition of messengerPlatformRegistry.listPlatforms()) {
+      if (definition.connectionMode !== 'polling') continue;
+      const platform = definition.id;
+      const host = resolveMessageGatewayHost(platform);
+      const client = getMessageGatewayClientForHost(host);
+      if (!client.isEnabled) continue;
+
+      const prefix = `messenger:${platform}:`;
+
+      // Tear down this platform's per-user connections on every other host —
+      // a polling platform hosted twice double-delivers every message. Runs
+      // before the owning host's connect pass for the same reason
+      // (disconnect-then-connect ordering during a host migration).
+      for (const [otherHost, otherSnapshot] of snapshots) {
+        if (otherHost === host || !otherSnapshot) continue;
+        const strayIds = [...otherSnapshot.connections.keys()]
+          .filter((id) => id.startsWith(prefix))
+          .slice(0, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT);
+        if (strayIds.length === 0) continue;
+        const otherClient = getMessageGatewayClientForHost(otherHost);
+        await pMap(
+          strayIds,
+          async (id) => {
+            try {
+              await otherClient.disconnect(id);
+              log('Gateway sync[%s]: moved %s off %s host', host, id, otherHost);
+            } catch (err) {
+              log('Gateway sync[%s]: cross-host disconnect failed %s: %O', host, id, err);
+            }
+          },
+          { concurrency: GATEWAY_SYNC_CONCURRENCY },
+        );
+      }
+
+      let links: DecryptedMessengerAccountLink[];
+      try {
+        links = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
+          serverDB,
+          platform,
+          gateKeeper,
+        );
+      } catch (err) {
+        log('Gateway sync[%s]: messenger link listing failed for %s: %O', host, platform, err);
+        continue;
+      }
+
+      const desired = new Map<string, DecryptedMessengerAccountLink>();
+      for (const link of links) {
+        const credentials = link.credentials as { botToken?: string };
+        // Links without a token can never poll — leave whatever state exists.
+        if (!link.applicationId || !credentials.botToken) continue;
+        const connectionId = messengerConnectionIdForUser({
+          connectionMode: 'polling',
+          installationKey: `${platform}:${link.tenantId}`,
+          userId: link.userId,
+        });
+        desired.set(connectionId, link);
+      }
+
+      const snapshot = snapshots.get(host) ?? null;
+
+      let connected = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      await pMap(
+        [...desired],
+        async ([connectionId, link]) => {
+          // Without any snapshot we can't tell existing from missing — blind
+          // reconnects would churn healthy pollers, so wait for a round with
+          // a working admin surface.
+          if (!snapshot) {
+            skipped++;
+            return;
+          }
+          const exists = snapshot.connections.has(connectionId);
+          const status = snapshot.connections.get(connectionId);
+          // Live and healthy → nothing to do. Registered-only (null) gets an
+          // ensure-connect wake (parked connections answer 409 and keep their
+          // park); missing from a complete snapshot gets a real connect.
+          if (exists && status !== null && status !== 'disconnected') {
+            skipped++;
+            return;
+          }
+          if (!exists && !snapshot.complete) {
+            skipped++;
+            return;
+          }
+          try {
+            const credentials = link.credentials as {
+              baseUrl?: string;
+              botId?: string;
+              botToken?: string;
+            };
+            await client.connect(
+              {
+                applicationId: link.applicationId!,
+                capabilities: { messageMonitoring: { enabled: false } },
+                connectionId,
+                connectionMode: 'polling',
+                credentials: {
+                  baseUrl: credentials.baseUrl,
+                  botId: credentials.botId,
+                  botToken: credentials.botToken,
+                  webhookToken: gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN,
+                },
+                platform,
+                userId: link.userId,
+                webhookPath: `/api/agent/messenger/webhooks/${platform}`,
+              },
+              { ensure: true },
+            );
+            connected++;
+          } catch (err) {
+            failed++;
+            log('Gateway sync[%s]: messenger connect failed %s: %O', host, connectionId, err);
+          }
+        },
+        { concurrency: GATEWAY_SYNC_CONCURRENCY },
+      );
+
+      // Unlinked accounts whose connection still exists on the owning host.
+      let stale = 0;
+      if (snapshot?.complete) {
+        const staleIds = [...snapshot.connections.keys()]
+          .filter((id) => id.startsWith(prefix) && !desired.has(id))
+          .slice(0, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT);
+        await pMap(
+          staleIds,
+          async (id) => {
+            try {
+              await client.disconnect(id);
+              stale++;
+              log('Gateway sync[%s]: disconnected unlinked messenger connection %s', host, id);
+            } catch (err) {
+              log('Gateway sync[%s]: messenger stale disconnect failed %s: %O', host, id, err);
+            }
+          },
+          { concurrency: GATEWAY_SYNC_CONCURRENCY },
+        );
+      }
+
+      log(
+        'Gateway sync[%s]: messenger %s links=%d connected=%d skipped=%d stale=%d failed=%d',
+        host,
+        platform,
+        desired.size,
+        connected,
+        skipped,
+        stale,
+        failed,
+      );
+    }
   }
 
   /**
@@ -394,11 +636,12 @@ export class GatewayService {
   ): Promise<{
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
-    gated: Set<string>;
+    /** Paid-gated provider id → platform (platform drives host partitioning). */
+    gated: Map<string, string>;
   }> {
     const desired = new Map<string, DesiredGatewayConnection>();
     let desiredComplete = true;
-    const gated = new Set<string>();
+    const gated = new Map<string, string>();
 
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
@@ -439,7 +682,7 @@ export class GatewayService {
           }
 
           if (!allowed) {
-            gated.add(provider.id);
+            gated.set(provider.id, platform);
             await updateBotRuntimeStatus({
               applicationId: provider.applicationId,
               errorMessage: getBotFeatureBlockedMessage(
@@ -555,6 +798,7 @@ export class GatewayService {
     actual: Map<string, string | null>,
     desired: Map<string, DesiredGatewayConnection>,
     gated: Set<string>,
+    host: MessageGatewayHost,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
       (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
@@ -593,9 +837,13 @@ export class GatewayService {
           // desired snapshot and the actual fetch shows up in `actual` but not
           // in `desired`. These rows were queried after both snapshots, so
           // trust them: an enabled persistent-mode row is not stale — leave it
-          // for the next round to classify with a fresh desired set.
+          // for the next round to classify with a fresh desired set. Only rows
+          // whose platform routes to THIS host are protected: an enabled row
+          // routed elsewhere is exactly the cross-host move the stale pass
+          // must clean up.
           if (
             row?.enabled &&
+            resolveMessageGatewayHost(row.platform) === host &&
             resolveConnectionMode(platformRegistry.getPlatform(row.platform), row.settings) !==
               'webhook'
           ) {
@@ -727,7 +975,6 @@ export class GatewayService {
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
     const providers = await AgentBotProviderModel.findByAgentId(serverDB, agentId, gateKeeper);
-    const client = getMessageGatewayClient();
 
     await Promise.all(
       providers.map(async (provider) => {
@@ -738,6 +985,7 @@ export class GatewayService {
         if (connectionMode === 'webhook') return;
 
         try {
+          const client = getMessageGatewayClient(provider.platform);
           const { state } = await client.getStatus(provider.id);
           await updateBotRuntimeStatus({
             applicationId: provider.applicationId,
@@ -790,7 +1038,7 @@ export class GatewayService {
     // is already the source of truth.
     if (connectionMode === 'webhook') return cached;
 
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platform);
     try {
       const { state } = await client.getStatus(provider.id);
       return await updateBotRuntimeStatus({
@@ -921,7 +1169,7 @@ export class GatewayService {
     }
 
     try {
-      const client = getMessageGatewayClient();
+      const client = getMessageGatewayClient(platform);
       const isPolling = connectionMode === 'polling';
       await client.connect({
         applicationId: creds.applicationId,
@@ -980,7 +1228,7 @@ export class GatewayService {
     const connectionId = messengerConnectionIdForUser({ connectionMode, installationKey, userId });
     userMessengerConnections.delete(connectionId);
 
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platform);
     if (!client.isConfigured) return;
 
     try {
@@ -998,7 +1246,7 @@ export class GatewayService {
     applicationId: string,
     userId: string,
   ): Promise<'started'> {
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platform);
 
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -1065,7 +1313,7 @@ export class GatewayService {
       await manager.stopClient(platform, applicationId);
     }
 
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platform);
 
     const serverDB = await getServerDB();
     const provider = await AgentBotProviderModel.findByPlatformAndAppId(

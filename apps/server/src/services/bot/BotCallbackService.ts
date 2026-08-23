@@ -679,7 +679,8 @@ export class BotCallbackService {
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    // Thread ids are platform-prefixed — route to the owning gateway host.
+    const client = getMessageGatewayClient(platformThreadId.split(':')[0]);
     if (!client.isEnabled) return;
 
     client.startTyping(connectionId, platformThreadId).catch((err) => {
@@ -689,7 +690,7 @@ export class BotCallbackService {
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformThreadId.split(':')[0]);
     if (!client.isEnabled) return;
 
     client.stopTyping(connectionId, platformThreadId).catch((err) => {

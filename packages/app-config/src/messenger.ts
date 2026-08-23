@@ -171,13 +171,24 @@ export const getMessengerDiscordConfig = async (): Promise<MessengerDiscordConfi
 };
 
 export const getMessengerWechatConfig = async (): Promise<MessengerWechatConfig | null> => {
-  // WeChat owns a long-polling connection in the Message Gateway, with Redis
+  // WeChat owns a long-polling connection in a message gateway, with Redis
   // backing its QR session and per-user connection state. Do not advertise an
   // enabled provider until the runtime can actually complete that lifecycle.
+  // The connection may live on either gateway host: the default one, or the
+  // Node gateway when `MESSAGE_GATEWAY_NODE_PLATFORMS` routes wechat there.
+  const wechatOnNodeGateway =
+    !!gatewayEnv.MESSAGE_GATEWAY_NODE_URL &&
+    !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN &&
+    (gatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .includes('wechat');
+  const gatewayReady =
+    wechatOnNodeGateway ||
+    (!!gatewayEnv.MESSAGE_GATEWAY_URL && !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN);
   if (
     gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1' ||
-    !gatewayEnv.MESSAGE_GATEWAY_URL ||
-    !gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN ||
+    !gatewayReady ||
     !redisEnv.REDIS_URL ||
     process.env.DISABLE_REDIS
   ) {

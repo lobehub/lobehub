@@ -836,7 +836,9 @@ export class AgentBridgeService {
     // gateway typing makes ack redundant as user feedback.
     // For platforms without typing support (no triggerTyping on messenger), the
     // gateway typing is invisible, so we still send an ack message as user feedback.
-    const gwClient = getMessageGatewayClient();
+    // Thread ids are platform-prefixed (`wechat:…`, `discord:…`), which is
+    // what routes typing to the gateway host that owns the connection.
+    const gwClient = getMessageGatewayClient(botContext?.platformThreadId?.split(':')[0]);
     const platformSupportsTyping =
       client && botContext?.platformThreadId
         ? !!client.getMessenger(botContext.platformThreadId).triggerTyping
@@ -1227,7 +1229,7 @@ export class AgentBridgeService {
 
     const stopGatewayTyping = () => {
       if (gatewayConnectionId && botContext?.platformThreadId) {
-        const gwClient = getMessageGatewayClient();
+        const gwClient = getMessageGatewayClient(botContext.platformThreadId.split(':')[0]);
         gwClient.stopTyping(gatewayConnectionId, botContext.platformThreadId).catch((err) => {
           log('executeWithCallback[local]: gateway stopTyping failed: %O', err);
         });
