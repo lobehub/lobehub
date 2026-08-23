@@ -67,6 +67,24 @@ describe('GoalCriteriaGeneratorService', () => {
 
     await expect(
       new GoalCriteriaGeneratorService({} as any, 'user-1').generate({ goal: 'Ship it' }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
+  });
+
+  it('keeps the array response for existing callers while exposing the full generated plan', async () => {
+    generateObject.mockResolvedValue({
+      criteria: [{ title: 'Benchmark is published', verifierType: 'agent' }],
+      instruction: 'Publish the benchmark paper.',
+      title: 'Publish benchmark paper',
+    });
+    const service = new GoalCriteriaGeneratorService({} as any, 'user-1');
+
+    await expect(service.generate({ goal: 'Publish a benchmark paper' })).resolves.toEqual([
+      { title: 'Benchmark is published', verifierType: 'agent' },
+    ]);
+    await expect(service.generatePlan({ goal: 'Publish a benchmark paper' })).resolves.toEqual({
+      criteria: [{ title: 'Benchmark is published', verifierType: 'agent' }],
+      instruction: 'Publish the benchmark paper.',
+      title: 'Publish benchmark paper',
+    });
   });
 });

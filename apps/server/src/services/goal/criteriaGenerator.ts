@@ -75,6 +75,16 @@ export class GoalCriteriaGeneratorService {
     context?: string;
     goal: string;
     maxCriteria?: number;
+  }): Promise<GoalCriterionDraft[]> {
+    const plan = await this.generatePlan(params);
+
+    return plan?.criteria ?? [];
+  }
+
+  async generatePlan(params: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
   }): Promise<GoalPlanDraft | undefined> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_CRITERIA;
     const modelConfig = await resolveGoalModelConfig(this.db, this.userId);

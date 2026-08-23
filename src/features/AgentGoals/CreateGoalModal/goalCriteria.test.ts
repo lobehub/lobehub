@@ -10,7 +10,7 @@ describe('generateGoalCriteria', () => {
   });
 
   it('generates and normalizes acceptance criteria for the goal review step', async () => {
-    const generateCriteria = vi.spyOn(verifyService, 'generateGoalCriteria').mockResolvedValue({
+    const generateCriteria = vi.spyOn(verifyService, 'generateGoalPlan').mockResolvedValue({
       criteria: [
         { title: 'Paper draft is complete' },
         { required: false, title: 'Results are reproducible', verifierType: 'llm' },
@@ -52,7 +52,7 @@ describe('generateGoalCriteria', () => {
   });
 
   it('rejects an empty AI response instead of advancing with no criteria', async () => {
-    vi.spyOn(verifyService, 'generateGoalCriteria').mockResolvedValue({
+    vi.spyOn(verifyService, 'generateGoalPlan').mockResolvedValue({
       criteria: [],
       instruction: 'Ship the project.',
       title: 'Ship the project',
@@ -66,7 +66,7 @@ describe('generateGoalCriteria', () => {
   });
 
   it('keeps the exact user goal when the generated instruction omits it', async () => {
-    vi.spyOn(verifyService, 'generateGoalCriteria').mockResolvedValue({
+    vi.spyOn(verifyService, 'generateGoalPlan').mockResolvedValue({
       criteria: [{ title: 'Training loop works' }],
       instruction: 'Implement a reproducible self-improvement training loop.',
       title: 'Reproduce self-improvement training',

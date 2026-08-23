@@ -39,7 +39,7 @@ export const generateGoalCriteria = async ({
   context,
   goal,
 }: GenerateGoalCriteriaParams): Promise<GeneratedGoalPlan> => {
-  const generated = await verifyService.generateGoalCriteria({
+  const generated = await verifyService.generateGoalPlan({
     context,
     goal,
     maxCriteria: 8,
