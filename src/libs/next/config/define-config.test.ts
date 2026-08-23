@@ -22,6 +22,7 @@ describe('defineConfig', () => {
 
   it('enables frame protections when ENABLED_CSP is unset', async () => {
     vi.stubEnv('ENABLED_CSP', undefined);
+    vi.stubEnv('DOCKER', undefined);
 
     const headers = await defineConfig({}).headers?.();
     const securityHeaders = headers?.find(({ source }) => source === '/:path*')?.headers;
@@ -34,7 +35,20 @@ describe('defineConfig', () => {
     );
   });
 
+  it('defers Docker frame protections to request-time middleware', async () => {
+    vi.stubEnv('DOCKER', 'true');
+    vi.stubEnv('ENABLED_CSP', undefined);
+
+    const headers = await defineConfig({}).headers?.();
+    const securityHeaders = headers?.find(({ source }) => source === '/:path*')?.headers;
+    const securityHeaderKeys = securityHeaders?.map(({ key }) => key);
+
+    expect(securityHeaderKeys).not.toContain('X-Frame-Options');
+    expect(securityHeaderKeys).not.toContain('Content-Security-Policy');
+  });
+
   it('allows frame protections to be explicitly disabled', async () => {
+    vi.stubEnv('DOCKER', undefined);
     vi.stubEnv('ENABLED_CSP', '0');
 
     const headers = await defineConfig({}).headers?.();

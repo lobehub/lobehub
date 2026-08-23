@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { NextRequest } from 'next/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { defineConfig } from './define-config';
 
@@ -12,12 +12,17 @@ vi.mock('@/auth', () => ({
 
 const { middleware } = defineConfig();
 
-const run = async (url: string, userAgent?: string) => {
-  const res = await middleware(
+const runResponse = async (url: string, userAgent?: string) =>
+  middleware(
     new NextRequest(url, userAgent ? { headers: { 'user-agent': userAgent } } : undefined),
   );
+
+const run = async (url: string, userAgent?: string) => {
+  const res = await runResponse(url, userAgent);
   return res?.headers.get('x-middleware-rewrite');
 };
+
+afterEach(() => vi.unstubAllEnvs());
 
 const MOBILE_USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
@@ -49,6 +54,28 @@ describe('defineConfig locale path-traversal hardening', () => {
     expect(new URL(rewrite!).pathname).toMatch(
       /^\/spa\/[^/]+\/oauth-preview-e2e-20260716\/settings\/oauth-apps$/,
     );
+  });
+});
+
+describe('defineConfig Docker runtime frame protections', () => {
+  it('enables frame protections by default for the standalone image', async () => {
+    vi.stubEnv('DOCKER', 'true');
+    vi.stubEnv('ENABLED_CSP', undefined);
+
+    const response = await runResponse('http://localhost:3010/signin?hl=en-US');
+
+    expect(response?.headers.get('X-Frame-Options')).toBe('DENY');
+    expect(response?.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none';");
+  });
+
+  it('honors the frame-protection opt-out when the image starts', async () => {
+    vi.stubEnv('DOCKER', 'true');
+    vi.stubEnv('ENABLED_CSP', '0');
+
+    const response = await runResponse('http://localhost:3010/signin?hl=en-US');
+
+    expect(response?.headers.get('X-Frame-Options')).toBeNull();
+    expect(response?.headers.get('Content-Security-Policy')).toBeNull();
   });
 });
 

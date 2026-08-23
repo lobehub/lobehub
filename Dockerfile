@@ -137,7 +137,8 @@ FROM scratch
 # Copy all the files from app, set the correct permission for prerender cache
 COPY --from=app / /
 
-ENV NODE_ENV="production" \
+ENV DOCKER="true" \
+    NODE_ENV="production" \
     NODE_OPTIONS="--dns-result-order=ipv4first --use-openssl-ca" \
     NODE_EXTRA_CA_CERTS="" \
     NODE_TLS_REJECT_UNAUTHORIZED="" \

@@ -24,6 +24,17 @@ const logBetterAuth = debug('middleware:better-auth');
 // Dev-only debug proxy route should bypass all middleware rewrites.
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
 
+const applyRuntimeFrameProtections = <T extends Response>(response: T): T => {
+  // The official standalone image is built with DOCKER=true. Keeping this check
+  // in the request path lets operators opt out when the published image starts.
+  if (process.env.DOCKER === 'true' && process.env.ENABLED_CSP !== '0') {
+    response.headers.set('X-Frame-Options', 'DENY');
+    response.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
+  }
+
+  return response;
+};
+
 // The locale is embedded raw into rewrite paths (/spa-auth/${locale}, /spa/${route}).
 // An unvalidated value (e.g. ?hl=../../api/dev) would let the URL parser collapse the
 // traversal and rewrite to a confused internal target, so allowlist it before use.
@@ -268,7 +279,7 @@ export function defineConfig() {
     logBetterAuth('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
 
     // Skip session lookup for public routes to reduce latency
-    if (!isProtected) return response;
+    if (!isProtected) return applyRuntimeFrameProtections(response);
 
     // Get full session with user data (Next.js 15.2.0+ feature)
     const session = await auth.api.getSession({
@@ -302,12 +313,12 @@ export function defineConfig() {
           signInUrl.searchParams.set('utm_source', utmSource);
           logBetterAuth('Preserving utm_source to sign-in: %s', utmSource);
         }
-        return Response.redirect(signInUrl);
+        return applyRuntimeFrameProtections(Response.redirect(signInUrl));
       }
       logBetterAuth('Request a free route but not login, allow visit without auth header');
     }
 
-    return response;
+    return applyRuntimeFrameProtections(response);
   };
 
   logDefault('Middleware configuration: %O', { enableOIDC: authEnv.ENABLE_OIDC });
