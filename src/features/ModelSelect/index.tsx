@@ -79,7 +79,14 @@ interface ModelOption {
 
 interface ModelSelectProps extends Pick<
   SelectProps,
-  'allowClear' | 'disabled' | 'loading' | 'placeholder' | 'size' | 'style' | 'variant'
+  | 'allowClear'
+  | 'disabled'
+  | 'labelRender'
+  | 'loading'
+  | 'placeholder'
+  | 'size'
+  | 'style'
+  | 'variant'
 > {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
@@ -107,6 +114,7 @@ const ModelSelect = memo<ModelSelectProps>(
     requiredAbilities,
     loading,
     disabled,
+    labelRender,
     size,
     style,
     variant,
@@ -348,6 +356,7 @@ const ModelSelect = memo<ModelSelectProps>(
           className={styles.select}
           defaultValue={value ? `${value.provider}/${value.model}` : null}
           disabled={disabled}
+          labelRender={labelRender}
           loading={loading || enabling}
           options={finalOptions}
           placeholder={placeholder}
