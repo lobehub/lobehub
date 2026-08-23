@@ -315,12 +315,11 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.attachments[0]).toMatchObject({ mimeType: 'image/jpeg' });
   });
 
-  it('names the step that failed when an image degrades to a link', async () => {
+  it('reports which step failed when an image degrades to a link', async () => {
     // Regression: every failure in this chain collapsed into the same silent
-    // `undefined` behind a `debug()` call, so a deployed server could degrade
-    // every image in a push without recording which step gave up — the sender
-    // could only report "it sent a link".
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    // `undefined`, so a caller could degrade every image in a push with no way
+    // to say which step gave up — the sender could only report "it sent a
+    // link". The reason rides the result; nothing in this module prints.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
 
     const result = await prepareAttachmentsForBudget(
@@ -336,8 +335,28 @@ describe('prepareAttachmentsForBudget', () => {
     );
 
     expect(result.fallbackLines).toHaveLength(1);
-    expect(warn.mock.calls.flat().join(' ')).toContain('source-unavailable');
-    warn.mockRestore();
+    expect(result.degradations).toEqual([
+      { name: 'big.png', reason: 'source-unavailable', size: 3 * MB, type: 'image' },
+    ]);
+  });
+
+  it("labels the sender's own link choice as a choice, not a failure", async () => {
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+      { oversizeImageStrategy: 'link' },
+    );
+
+    expect(result.degradations).toEqual([
+      { name: 'big.png', reason: 'strategy-link', size: 3 * MB, type: 'image' },
+    ]);
   });
 
   it('caps the displayed filename so one fallback line stays short', async () => {

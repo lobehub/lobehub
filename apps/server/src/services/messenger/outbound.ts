@@ -5,6 +5,7 @@ import {
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
+  summarizeDegradations,
 } from '@/server/services/bot/platforms/attachmentBudget';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import {
@@ -68,7 +69,7 @@ export const sendOutboundDirectMessage = async (params: {
   const prepared =
     attachments?.length && budget
       ? await prepareAttachmentsForBudget(attachments, budget, { oversizeImageStrategy })
-      : { attachments: attachments ?? [], fallbackLines: [] };
+      : { attachments: attachments ?? [], degradations: [], fallbackLines: [] };
 
   // Every prepared attachment lands in exactly one of these two legs, so the
   // guard above already covers "nothing to send". The link leg is batched to
@@ -86,6 +87,14 @@ export const sendOutboundDirectMessage = async (params: {
     files?.length ?? 0,
     prepared.fallbackLines.length,
   );
+
+  // One line per DM, at the boundary — same rule as the WeChat path. A sender's
+  // own `link` choice is not a degradation worth recording.
+  const unintended = prepared.degradations.filter((d) => d.reason !== 'strategy-link');
+  if (unintended.length > 0)
+    console.warn(
+      `[messenger:outbound] ${platform}: ${unintended.length} attachment(s) sent as a download link — ${summarizeDegradations(unintended)}`,
+    );
 
   switch (platform) {
     case 'telegram': {

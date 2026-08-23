@@ -32,6 +32,13 @@ const MB = 1024 * 1024;
 export interface PreparedAttachments {
   attachments: BotMessageAttachment[];
   /**
+   * Why each degraded attachment could not go out as a file, index-aligned with
+   * `degraded`. The delivery boundary logs these once per push; nothing in this
+   * module prints, so the volume stays one line per send rather than two per
+   * attachment.
+   */
+  degradations: AttachmentDegradation[];
+  /**
    * The original attachments behind `fallbackLines`. Callers with a replay
    * queue requeue these (rather than the whole input) when the link leg fails,
    * so an attachment that already uploaded is not sent twice.
@@ -165,10 +172,10 @@ export const compressImageToBudget = async (
     log('compression exhausted ladder without fitting %d bytes', maxBytes);
     return undefined;
   } catch (error) {
-    // A decode error is per-image; a failed `import('sharp')` means NO image
-    // can ever be compressed on this deployment. Both are invisible to the
-    // sender — they only ever see a link — so neither may stay debug-only.
-    console.error('[messenger:attachment] image compression failed', error);
+    // Routine input, not a system fault: plenty of things a user attaches are
+    // not images sharp can decode. The caller records `compression-failed`
+    // against the attachment, which is where the reason belongs.
+    log('compressImageToBudget failed: %O', error);
     return undefined;
   }
 };
@@ -238,34 +245,41 @@ const resolveSize = async (attachment: BotMessageAttachment): Promise<number | u
 /**
  * Why an attachment is going out as a download link instead of a file.
  *
- * Reported through `console.warn` rather than `debug()`: every failure in this
- * chain collapses into the same visible outcome — a link — and with only a
- * debug trace behind it a deployed server can degrade every image in a push
- * without leaving one line saying which step gave up. The sender then has
- * nothing to report but the symptom, and "the compression failed" becomes a
- * guess rather than a finding.
+ * Returned to the caller rather than printed here. Every failure in this chain
+ * collapses into the same visible outcome — a link — so without the reason the
+ * sender can only report the symptom, and "the compression failed" stays a
+ * guess. But a per-attachment print is the wrong carrier: it is unattributable
+ * prose, it scales with attachment count, and it would put routine input (an
+ * image sharp cannot decode) into the error stream. The reason travels with the
+ * result instead, and the delivery boundary decides what to record.
  */
-type DegradationReason =
+export type DegradationReason =
   /** Bytes downloaded, but no rung of the ladder produced a small enough JPEG. */
   | 'compression-failed'
   /** Over budget and not an image, so there is nothing smaller to send. */
   | 'not-compressible'
   /** The attachment's bytes could not be fetched at all. */
   | 'source-unavailable'
+  /** The sender chose to keep the original and send it as a link. */
+  | 'strategy-link'
   /** The server could not establish the byte size, so the budget cannot hold. */
   | 'unverifiable-size';
 
-const reportDegradation = (
-  attachment: BotMessageAttachment,
-  reason: DegradationReason,
-  size?: number,
-): void => {
-  console.warn(
-    `[messenger:attachment] "${attachment.name ?? '(unnamed)'}" (${attachment.type}, ${
-      size ?? attachment.size ?? '?'
-    } bytes) degraded to a download link: ${reason}`,
-  );
-};
+export interface AttachmentDegradation {
+  name?: string;
+  reason: DegradationReason;
+  size?: number;
+  type: BotMessageAttachment['type'];
+}
+
+/**
+ * One short clause per degraded attachment, for the boundary's single log line.
+ * Deliberately loose in `reason` so a caller can append platform detail (an
+ * iLink `errmsg`) without widening the reason union itself.
+ */
+export const summarizeDegradations = (
+  degradations: { name?: string; reason: string; type: string }[],
+): string => degradations.map((d) => `${d.name ?? `(unnamed ${d.type})`}: ${d.reason}`).join('; ');
 
 export interface PrepareAttachmentsOptions {
   /**
@@ -283,7 +297,22 @@ export const prepareAttachmentsForBudget = async (
   const kept: BotMessageAttachment[] = [];
   const keptOriginals: BotMessageAttachment[] = [];
   const degraded: BotMessageAttachment[] = [];
+  const degradations: AttachmentDegradation[] = [];
   const fallbackLines: string[] = [];
+
+  const recordDegradation = (
+    attachment: BotMessageAttachment,
+    reason: DegradationReason,
+    size?: number,
+  ) => {
+    log('degrading "%s" to a link: %s', attachment.name ?? '(unnamed)', reason);
+    degradations.push({
+      name: attachment.name,
+      reason,
+      size: size ?? attachment.size,
+      type: attachment.type,
+    });
+  };
 
   // Probe every unmeasured attachment at once rather than once per loop turn:
   // serially, N slow URLs cost N x the probe timeout before the first send.
@@ -311,7 +340,7 @@ export const prepareAttachmentsForBudget = async (
         keptOriginals.push(attachment);
         continue;
       }
-      reportDegradation(attachment, 'unverifiable-size');
+      recordDegradation(attachment, 'unverifiable-size');
       degraded.push(attachment);
       fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
       continue;
@@ -330,7 +359,7 @@ export const prepareAttachmentsForBudget = async (
       const source = await loadSourceBuffer(attachment);
       const compressed = source && (await compressImageToBudget(source, budget.imageMaxBytes));
       if (!compressed)
-        reportDegradation(attachment, source ? 'compression-failed' : 'source-unavailable', size);
+        recordDegradation(attachment, source ? 'compression-failed' : 'source-unavailable', size);
       if (compressed) {
         kept.push({
           ...attachment,
@@ -348,17 +377,13 @@ export const prepareAttachmentsForBudget = async (
     if (attachment.fetchUrl) {
       // A `link` strategy is the sender's deliberate choice, not a failure, and
       // an image that just failed to compress has already been reported above.
-      if (
-        oversizeImageStrategy === 'compress' &&
-        (attachment.type !== 'image' || size > MAX_COMPRESSION_SOURCE_BYTES)
-      )
-        reportDegradation(attachment, 'not-compressible', size);
-      log(
-        'attachment "%s" (%d bytes) exceeds %d-byte budget — degrading to link',
-        attachment.name ?? '(unnamed)',
-        size,
-        limit,
-      );
+      // An image that already recorded `compression-failed` / `source-unavailable`
+      // above is not recorded twice; `link` is the sender's own choice, not a
+      // failure, and is labelled as such.
+      if (oversizeImageStrategy === 'link' && attachment.type === 'image')
+        recordDegradation(attachment, 'strategy-link', size);
+      else if (attachment.type !== 'image' || size > MAX_COMPRESSION_SOURCE_BYTES)
+        recordDegradation(attachment, 'not-compressible', size);
       fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
       degraded.push(attachment);
       continue;
@@ -370,7 +395,7 @@ export const prepareAttachmentsForBudget = async (
     keptOriginals.push(attachment);
   }
 
-  return { attachments: kept, degraded, fallbackLines, keptOriginals };
+  return { attachments: kept, degradations, degraded, fallbackLines, keptOriginals };
 };
 
 /**

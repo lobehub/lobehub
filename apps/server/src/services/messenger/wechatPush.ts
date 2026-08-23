@@ -6,11 +6,13 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import type { LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import type { AttachmentDegradation } from '@/server/services/bot/platforms/attachmentBudget';
 import {
   buildAttachmentFallbackLine,
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
+  summarizeDegradations,
 } from '@/server/services/bot/platforms/attachmentBudget';
 import {
   consumeSendCredits,
@@ -123,6 +125,8 @@ interface PreparedWechatDelivery {
   /** In-budget attachments, uploaded as media. */
   attachments: WechatOutboundAttachment[];
   content?: string;
+  /** Why each `degraded` attachment is going out as a link — logged once below. */
+  degradations: AttachmentDegradation[];
   /** Originals behind `linkMessages`, requeued when the link leg fails. */
   degraded: WechatOutboundAttachment[];
   /** Untouched originals of `attachments`, index-aligned — see PreparedAttachments. */
@@ -139,11 +143,12 @@ const prepareWechatDelivery = async (
     ? await prepareAttachmentsForBudget(payload.attachments, budget, {
         oversizeImageStrategy: payload.oversizeImageStrategy,
       })
-    : { attachments: [], degraded: [], fallbackLines: [], keptOriginals: [] };
+    : { attachments: [], degradations: [], degraded: [], fallbackLines: [], keptOriginals: [] };
 
   return {
     attachments: prepared.attachments,
     content: payload.content?.trim() ? payload.content : undefined,
+    degradations: prepared.degradations,
     degraded: prepared.degraded,
     keptOriginals: prepared.keptOriginals,
     linkMessages: splitFallbackMessages(prepared.fallbackLines, budget.textMaxChars),
@@ -204,9 +209,27 @@ const deliver = async (
   // design, but it reports which attachments never landed. Map them back to
   // the untouched originals so a failed recompressed image is requeued as its
   // small source rather than megabytes of base64.
-  const failed = prepared.attachments.length
+  const sendResult = prepared.attachments.length
     ? await sendWechatAttachments(api, platformUserId, prepared.attachments, token)
-    : [];
+    : { failures: [], undelivered: [] };
+  const failed = sendResult.undelivered;
+
+  // ONE line per push, at the boundary that knows whose push it is — not one
+  // per attachment inside the helpers. Everything finer stays on `debug()`.
+  // Degradation is a handled outcome, so this is `warn`, never `error`.
+  const degradedHere = [
+    ...prepared.degradations.filter((d) => d.reason !== 'strategy-link'),
+    ...sendResult.failures.map((f) => ({
+      name: f.name,
+      reason: f.detail ? `${f.reason} (${f.detail})` : f.reason,
+      type: f.type,
+    })),
+  ];
+  if (degradedHere.length > 0)
+    console.warn(
+      `[messenger:wechat] ${degradedHere.length} attachment(s) sent as a download link — ${summarizeDegradations(degradedHere)}`,
+    );
+
   const failedOriginals = failed.map(
     (attachment) => prepared.keptOriginals[prepared.attachments.indexOf(attachment)] ?? attachment,
   );
