@@ -860,13 +860,21 @@ export const invokeServerDefaultModel = async (params: {
     params.agentType,
     params.model,
   );
-  const { deploymentName } = resolvedModel;
+  const { deploymentName, supportsAdaptiveThinking } = resolvedModel;
   const model = deploymentName ?? resolvedModel.model;
   const runtime = await initModelRuntimeFromServerConfig({
     actorUserId: params.userId,
     workspaceId: params.workspaceId,
   });
-  const { reasoning, ...chatCompletionsPayload } = params.payload;
+  const normalizedPayload = { ...params.payload };
+  if (
+    params.agentType === 'claude-code' &&
+    normalizedPayload.thinking?.type === 'adaptive' &&
+    !supportsAdaptiveThinking
+  ) {
+    delete normalizedPayload.thinking;
+  }
+  const { reasoning, ...chatCompletionsPayload } = normalizedPayload;
   const requestedReasoningEffort = reasoning?.effort;
   const reasoningEffort = getCodexReasoningEffortLevels(params.model).includes(
     requestedReasoningEffort as CodexReasoningEffort,
@@ -878,9 +886,9 @@ export const invokeServerDefaultModel = async (params: {
       ? {
           ...chatCompletionsPayload,
           apiMode: 'chatCompletion' as const,
-          reasoning_effort: params.payload.reasoning_effort ?? reasoningEffort,
+          reasoning_effort: normalizedPayload.reasoning_effort ?? reasoningEffort,
         }
-      : params.payload;
+      : normalizedPayload;
   const response = await runtime.chat(
     {
       ...payload,

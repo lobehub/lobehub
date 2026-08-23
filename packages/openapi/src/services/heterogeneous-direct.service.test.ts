@@ -65,6 +65,7 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
       model: 'claude-sonnet-4-6',
       provider: 'lobehub',
+      supportsAdaptiveThinking: true,
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
       chat,
@@ -73,7 +74,12 @@ describe('heterogeneous direct invocation protocol', () => {
     const result = await invokeServerDefaultModel({
       agentType: 'claude-code',
       model: 'claude-sonnet-4-6',
-      payload: { messages: [], model: 'lobehub-default', stream: true },
+      payload: {
+        messages: [],
+        model: 'lobehub-default',
+        stream: true,
+        thinking: { type: 'adaptive' },
+      },
       signal: new AbortController().signal,
       userId: 'user-1',
     });
@@ -88,9 +94,43 @@ describe('heterogeneous direct invocation protocol', () => {
         messages: [],
         model: 'claude-sonnet-4-6',
         stream: true,
+        thinking: { type: 'adaptive' },
       },
       expect.any(Object),
     );
+  });
+
+  it('drops adaptive thinking for Claude Code relay models without declared support', async () => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model: 'doubao-seed-2.1-pro',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'claude-code',
+      model: 'doubao-seed-2.1-pro',
+      payload: {
+        messages: [],
+        model: 'lobehub-default',
+        stream: true,
+        thinking: { type: 'adaptive' },
+      },
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    const runtimePayload = chat.mock.calls[0][0];
+    expect(runtimePayload).toMatchObject({
+      messages: [],
+      model: 'doubao-seed-2.1-pro',
+      stream: true,
+    });
+    expect(runtimePayload).not.toHaveProperty('thinking');
   });
 
   it('uses deployment names as model IDs for runtimes without a dedicated field', async () => {
@@ -99,6 +139,7 @@ describe('heterogeneous direct invocation protocol', () => {
       deploymentName: 'prod-gpt',
       model: 'gpt-5.4',
       provider: 'lobehub',
+      supportsAdaptiveThinking: false,
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
       chat,
@@ -135,6 +176,7 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
       model: 'deepseek-v4-pro',
       provider: 'lobehub',
+      supportsAdaptiveThinking: false,
     });
     vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
       chat,

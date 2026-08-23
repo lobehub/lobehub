@@ -625,7 +625,11 @@ export const resolveServerDefaultHeterogeneousModel = async (
     throw new Error('The selected server model is not compatible with this heterogeneous agent');
   }
 
-  return toServerModelSelection(ModelProvider.LobeHub, modelConfig);
+  return {
+    ...toServerModelSelection(ModelProvider.LobeHub, modelConfig),
+    supportsAdaptiveThinking:
+      modelConfig.settings?.extendParams?.includes('enableAdaptiveThinking') === true,
+  };
 };
 
 /**
