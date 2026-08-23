@@ -9,7 +9,9 @@ const FETCH_TIMEOUT_MS = 5000;
 const MAX_HTML_BYTES = 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const METADATA_CACHE_TTL_MS = 30_000;
+const METADATA_CACHE_MAX_ENTRIES = 500;
 const METADATA_RATE_LIMIT_MAX = 30;
+const METADATA_RATE_LIMIT_MAX_BUCKETS = 10_000;
 const METADATA_RATE_LIMIT_WINDOW_MS = 60_000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
 
@@ -30,6 +32,7 @@ export interface UrlMetadata {
 interface FetchUrlMetadataOptions {
   allowLocalhost?: boolean;
   cache?: boolean;
+  cacheMaxEntries?: number;
   cacheTtlMs?: number;
   fetchImpl?: MetadataFetchImpl;
   lookupImpl?: LookupImpl;
@@ -244,7 +247,12 @@ export const fetchUrlMetadata = async (
   const normalizedUrl = currentUrl.toString();
   const useCache = options.cache !== false;
   const now = options.now ?? Date.now;
+  const requestedCacheMaxEntries = options.cacheMaxEntries ?? METADATA_CACHE_MAX_ENTRIES;
+  const cacheMaxEntries = Number.isFinite(requestedCacheMaxEntries)
+    ? Math.max(1, Math.floor(requestedCacheMaxEntries))
+    : METADATA_CACHE_MAX_ENTRIES;
   const cacheKey = `${options.allowLocalhost ? 'local:' : 'public:'}${normalizedUrl}`;
+  if (useCache) cleanupExpiredMetadataCache(now());
   const cached = metadataCache.get(cacheKey);
   if (useCache && cached && cached.expiresAt > now()) return cached.value;
   if (useCache) {
@@ -307,6 +315,14 @@ export const fetchUrlMetadata = async (
   metadataInFlight.set(cacheKey, request);
   try {
     const value = await request;
+    cleanupExpiredMetadataCache(now());
+    // Map insertion order is the cache's oldest-first eviction order. Expired
+    // entries are removed first so a stale entry never consumes capacity.
+    while (metadataCache.size >= cacheMaxEntries) {
+      const oldestKey = metadataCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      metadataCache.delete(oldestKey);
+    }
     metadataCache.set(cacheKey, {
       expiresAt: now() + (options.cacheTtlMs ?? METADATA_CACHE_TTL_MS),
       value,
@@ -325,32 +341,61 @@ interface CachedMetadata {
 const metadataCache = new Map<string, CachedMetadata>();
 const metadataInFlight = new Map<string, Promise<UrlMetadata>>();
 
+const cleanupExpiredMetadataCache = (now: number) => {
+  for (const [key, entry] of metadataCache) {
+    if (entry.expiresAt <= now) metadataCache.delete(key);
+  }
+};
+
 interface RateLimitEntry {
   count: number;
-  windowStartedAt: number;
+  expiresAt: number;
 }
 
 const metadataRateLimits = new Map<string, RateLimitEntry>();
+
+const cleanupExpiredRateLimitBuckets = (now: number) => {
+  for (const [userId, entry] of metadataRateLimits) {
+    if (entry.expiresAt <= now) metadataRateLimits.delete(userId);
+  }
+};
 
 export const consumeUrlMetadataRateLimit = (
   userId: string,
   now = Date.now(),
   maxRequests = METADATA_RATE_LIMIT_MAX,
   windowMs = METADATA_RATE_LIMIT_WINDOW_MS,
+  maxBuckets = METADATA_RATE_LIMIT_MAX_BUCKETS,
 ): { allowed: boolean; retryAfterSeconds: number } => {
+  cleanupExpiredRateLimitBuckets(now);
   const current = metadataRateLimits.get(userId);
-  if (!current || now - current.windowStartedAt >= windowMs) {
-    metadataRateLimits.set(userId, { count: 1, windowStartedAt: now });
+  const bucketLimit = Number.isFinite(maxBuckets)
+    ? Math.max(1, Math.floor(maxBuckets))
+    : METADATA_RATE_LIMIT_MAX_BUCKETS;
+  if (!current && metadataRateLimits.size >= bucketLimit) {
+    const nextExpiry = Math.min(
+      ...Array.from(metadataRateLimits.values(), (entry) => entry.expiresAt),
+    );
+    // Never evict an active bucket: denying a new identity is safer than
+    // letting an attacker rotate user IDs to reset the request counter.
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((nextExpiry - now) / 1000)),
+    };
+  }
+
+  if (!current) {
+    metadataRateLimits.set(userId, {
+      count: 1,
+      expiresAt: now + windowMs,
+    });
     return { allowed: true, retryAfterSeconds: 0 };
   }
 
   if (current.count >= maxRequests) {
     return {
       allowed: false,
-      retryAfterSeconds: Math.max(
-        1,
-        Math.ceil((windowMs - (now - current.windowStartedAt)) / 1000),
-      ),
+      retryAfterSeconds: Math.max(1, Math.ceil((current.expiresAt - now) / 1000)),
     };
   }
 
@@ -363,3 +408,6 @@ export const clearUrlMetadataCaches = () => {
   metadataInFlight.clear();
   metadataRateLimits.clear();
 };
+
+export const getUrlMetadataCacheSize = () => metadataCache.size;
+export const getUrlMetadataRateLimitBucketCount = () => metadataRateLimits.size;

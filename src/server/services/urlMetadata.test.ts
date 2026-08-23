@@ -8,6 +8,8 @@ import {
   extractUrlMetadata,
   fetchUrlMetadata,
   getLobeDocumentIdentifierFromUrl,
+  getUrlMetadataCacheSize,
+  getUrlMetadataRateLimitBucketCount,
   isBlockedUrlMetadataAddress,
 } from './urlMetadata';
 
@@ -83,6 +85,45 @@ describe('urlMetadata', () => {
     clearUrlMetadataCaches();
   });
 
+  it('cleans expired cache entries and evicts the oldest entry at capacity', async () => {
+    clearUrlMetadataCaches();
+    let clock = 0;
+    const fetchImpl = vi.fn(async (input: string | URL) => {
+      const url = new URL(input).pathname;
+      return new Response(`<html><head><title>${url}</title></head></html>`, {
+        headers: { 'content-type': 'text/html' },
+      });
+    });
+    const options = {
+      cacheMaxEntries: 2,
+      cacheTtlMs: 10,
+      fetchImpl,
+      lookupImpl: publicLookup,
+      now: () => clock,
+    };
+
+    await fetchUrlMetadata('https://example.com/one', options);
+    await fetchUrlMetadata('https://example.com/two', options);
+    expect(getUrlMetadataCacheSize()).toBe(2);
+
+    clock = 11;
+    await fetchUrlMetadata('https://example.com/three', options);
+    expect(getUrlMetadataCacheSize()).toBe(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+
+    await fetchUrlMetadata('https://example.com/three', options);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    await fetchUrlMetadata('https://example.com/one', options);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+
+    await fetchUrlMetadata('https://example.com/four', options);
+    await fetchUrlMetadata('https://example.com/five', options);
+    expect(getUrlMetadataCacheSize()).toBe(2);
+    await fetchUrlMetadata('https://example.com/three', options);
+    expect(fetchImpl).toHaveBeenCalledTimes(7);
+    clearUrlMetadataCaches();
+  });
+
   it('uses the pinned lookup with the real Undici fetch implementation', async () => {
     const httpServer = createHttpServer((_request, response) => {
       response.setHeader('content-type', 'text/html');
@@ -119,6 +160,27 @@ describe('urlMetadata', () => {
       allowed: true,
       retryAfterSeconds: 0,
     });
+  });
+
+  it('cleans expired rate-limit buckets and never evicts active users at capacity', () => {
+    clearUrlMetadataCaches();
+    expect(consumeUrlMetadataRateLimit('active-user', 0, 1, 100, 1)).toEqual({
+      allowed: true,
+      retryAfterSeconds: 0,
+    });
+    expect(consumeUrlMetadataRateLimit('active-user', 1, 1, 100, 1).allowed).toBe(false);
+    expect(consumeUrlMetadataRateLimit('new-user', 1, 1, 100, 1)).toEqual({
+      allowed: false,
+      retryAfterSeconds: 1,
+    });
+    expect(getUrlMetadataRateLimitBucketCount()).toBe(1);
+
+    expect(consumeUrlMetadataRateLimit('new-user', 100, 1, 100, 1)).toEqual({
+      allowed: true,
+      retryAfterSeconds: 0,
+    });
+    expect(getUrlMetadataRateLimitBucketCount()).toBe(1);
+    clearUrlMetadataCaches();
   });
 
   it('extracts title, description and a resolved favicon', () => {
