@@ -18,7 +18,12 @@ describe('chainGoalCriteriaDraft', () => {
     expect(GOAL_CRITERIA_DRAFT_JSON_SCHEMA.name).toBe('goal_criteria_draft');
     expect(chain.messages[0].content).toContain('persistent autonomous goal');
     expect(chain.messages[0].content).toContain('at most 6 criteria');
-    expect(chain.messages[0].content).toContain('instruction is a complete, actionable task brief');
+    expect(chain.messages[0].content).toContain(
+      'top-level instruction is a complete, actionable task brief',
+    );
+    expect(chain.messages[0].content).toContain(
+      'criteria[].instruction is the exact, detailed judging rubric',
+    );
     expect(GOAL_CRITERIA_DRAFT_JSON_SCHEMA.schema.required).toEqual([
       'title',
       'instruction',
