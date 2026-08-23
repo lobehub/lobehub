@@ -321,7 +321,7 @@ function sortByRecency(docs: AgentContextDocument[]): AgentContextDocument[] {
 /**
  * Combine multiple documents into a single string.
  * Progressive documents are grouped into an `<agent_documents_index>` block
- * (web-crawled docs are hidden behind a count and surfaced via listDocuments);
+ * (web-crawled docs are hidden behind a stable hint and surfaced via listDocuments);
  * full-content documents are formatted individually.
  */
 export function combineDocuments(
@@ -346,7 +346,7 @@ export function combineDocuments(
 
   if (progressiveDocs.length > 0) {
     const userDocs = progressiveDocs.filter((d) => d.sourceType !== 'web');
-    const hiddenWebCount = progressiveDocs.length - userDocs.length;
+    const hasHiddenWebDocs = progressiveDocs.length > userDocs.length;
 
     // Loose docs render as flat rows; docs sharing a folder (≥2) collapse into
     // one summary row so archive-heavy agents don't spend tokens on every entry.
@@ -355,9 +355,9 @@ export function combineDocuments(
     const headerLines: string[] = [
       `${userDocs.length} user-created doc${userDocs.length === 1 ? '' : 's'}. Use readDocument(id) for full content.`,
     ];
-    if (hiddenWebCount > 0) {
+    if (hasHiddenWebDocs) {
       headerLines.push(
-        `${hiddenWebCount} web-crawled doc${hiddenWebCount === 1 ? '' : 's'} hidden — call listDocuments(sourceType='web') to see them.`,
+        `Web-crawled docs hidden — call listDocuments(sourceType='web') to see them.`,
       );
     }
     if (folders.length > 0) {
