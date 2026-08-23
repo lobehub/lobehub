@@ -959,6 +959,26 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
+      it('should accept an explicitly offered tool when no prompt manifest is available', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'workspace____search' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const result = resolver.resolve(toolCalls, {}, ['workspace____search']);
+
+        expect(result).toEqual([
+          expect.objectContaining({
+            apiName: 'search',
+            id: 'call_1',
+            identifier: 'workspace',
+          }),
+        ]);
+      });
+
       it('should treat an enabled call as unique when a disabled duplicate would have made it ambiguous', () => {
         const toolCalls = [
           {

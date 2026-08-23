@@ -210,8 +210,11 @@ export class ToolNameResolver {
         // previous operation; accepting a syntactically valid old identifier here
         // would let it escape an evidence-only or otherwise restricted turn.
         if (offeredSet) {
-          if (!manifest || !matchedApi) return null;
-          if (!offeredSet.has(this.generate(identifier, apiName, manifest.type))) return null;
+          const directlyOffered = offeredSet.has(toolCall.function.name);
+          if (!directlyOffered) {
+            if (!manifest || !matchedApi) return null;
+            if (!offeredSet.has(this.generate(identifier, apiName, manifest.type))) return null;
+          }
         }
 
         const payload: ChatToolPayload = {
