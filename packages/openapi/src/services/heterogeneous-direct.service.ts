@@ -94,37 +94,6 @@ const contentWithAnthropicThinking = (content: unknown): OpenAIChatMessage['cont
   ];
 };
 
-/**
- * Carry the client's thinking config across, minus the parts that only mean
- * something to Anthropic.
- *
- * This relay exists to point an Anthropic-protocol client at whatever model the
- * deployment chose, which is usually not an Anthropic one — that is the whole
- * purpose of a relay model. So the request body arrives written for Claude, and
- * `thinking.type: 'adaptive'` is the clearest example of the mismatch: Claude
- * Code sends it on every request whatever model it has been pointed at, and it
- * means nothing outside Anthropic's API. Forwarding it verbatim is how a
- * Volcengine-backed deployment answered every turn with
- *
- *     The parameter `type` specified in the request are not valid:
- *     invalid value adaptive.
- *
- * and Volcengine is not special here — `antgroup`, `spark`, `xiaomimimo` and
- * others all re-emit `thinking.type` to their own API unchanged, so each would
- * fail the same way on its own error string.
- *
- * Dropping it costs nothing when the target really is an Anthropic model:
- * `resolveClaudeThinkingConfig` puts `adaptive` back for every model that
- * defaults to it, precisely because the field was absent. `enabled` and
- * `disabled` are concepts every provider shares, so those still cross.
- */
-const relayThinking = (value: unknown) => {
-  if (!isRecord(value)) return undefined;
-  if (value.type === 'adaptive') return undefined;
-
-  return value;
-};
-
 export const normalizeAnthropicRequest = (request: Record<string, unknown>, model: string) => {
   const messages: OpenAIChatMessage[] = [];
   const system = textFromParts(request.system);
@@ -198,7 +167,7 @@ export const normalizeAnthropicRequest = (request: Record<string, unknown>, mode
           : [],
       )
     : undefined;
-  const thinking = relayThinking(request.thinking);
+  const thinking = isRecord(request.thinking) ? request.thinking : undefined;
   return {
     max_tokens: typeof request.max_tokens === 'number' ? request.max_tokens : undefined,
     messages,
