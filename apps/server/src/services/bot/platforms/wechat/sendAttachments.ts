@@ -118,7 +118,11 @@ export const sendWechatAttachments = async (
     try {
       let buffer = await loadAttachmentBuffer(attachment);
       if (!buffer) {
-        log('sendWechatAttachments: skipping attachment without resolvable bytes');
+        console.warn(
+          `[messenger:attachment] wechat: no resolvable bytes for "${
+            attachment.name ?? '(unnamed)'
+          }" — the caller will degrade it to a link`,
+        );
         undelivered.push(attachment);
         continue;
       }
@@ -169,10 +173,12 @@ export const sendWechatAttachments = async (
       );
       await api.sendItem(toUserId, item, contextToken);
     } catch (error) {
-      log(
-        'sendWechatAttachments: failed to send %s attachment "%s": %O',
-        attachment.type,
-        attachment.name ?? '(unnamed)',
+      // iLink refusing an upload is the other half of "it sent a link
+      // instead of the picture", and it is just as invisible to the sender.
+      console.warn(
+        `[messenger:attachment] wechat upload failed for ${attachment.type} "${
+          attachment.name ?? '(unnamed)'
+        }"`,
         error,
       );
       undelivered.push(attachment);

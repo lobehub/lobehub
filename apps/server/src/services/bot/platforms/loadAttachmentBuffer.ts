@@ -134,7 +134,10 @@ export const fetchCappedBuffer = async (
     const { response } = fetched;
     try {
       if (!response.ok) {
-        log('fetchCappedBuffer: HTTP %d for %s', response.status, url);
+        // Warn, not debug: this is the step whose silent `undefined` turns an
+        // image into a download link, and in a deployed server a debug-only
+        // trace leaves no record of which status caused it.
+        console.warn(`[messenger:attachment] download failed: HTTP ${response.status} for ${url}`);
         return undefined;
       }
 
@@ -167,7 +170,7 @@ export const fetchCappedBuffer = async (
       await fetched.dispose();
     }
   } catch (error) {
-    log('fetchCappedBuffer: fetch failed for %s: %O', url, error);
+    console.warn(`[messenger:attachment] download threw for ${url}`, error);
     return undefined;
   }
 };

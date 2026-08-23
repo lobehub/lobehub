@@ -1,4 +1,5 @@
 import { getWechatTextSendCount, WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import debug from 'debug';
 
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
@@ -131,11 +132,13 @@ interface PreparedWechatDelivery {
 }
 
 const prepareWechatDelivery = async (
-  payload: Pick<WechatPendingPush, 'attachments' | 'content'>,
+  payload: Pick<WechatPendingPush, 'attachments' | 'content' | 'oversizeImageStrategy'>,
 ): Promise<PreparedWechatDelivery> => {
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
   const prepared = payload.attachments?.length
-    ? await prepareAttachmentsForBudget(payload.attachments, budget)
+    ? await prepareAttachmentsForBudget(payload.attachments, budget, {
+        oversizeImageStrategy: payload.oversizeImageStrategy,
+      })
     : { attachments: [], degraded: [], fallbackLines: [], keptOriginals: [] };
 
   return {
@@ -323,10 +326,11 @@ export const getWechatPushWindowStatus = async (params: {
 export const sendProactiveWechatMessage = async (params: {
   attachments?: WechatOutboundAttachment[];
   content?: string;
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
   serverDB: LobeChatDatabase;
   userId: string;
 }): Promise<WechatPushResult> => {
-  const { serverDB, userId, content, attachments } = params;
+  const { serverDB, userId, content, attachments, oversizeImageStrategy } = params;
   if (!content?.trim() && !attachments?.length) return { status: 'unavailable' };
 
   const target = await resolveWechatTarget(serverDB, userId);
@@ -338,7 +342,12 @@ export const sendProactiveWechatMessage = async (params: {
     return { status: 'unavailable' };
   }
 
-  const payload: WechatPendingPush = { attachments, content, enqueuedAt: Date.now() };
+  const payload: WechatPendingPush = {
+    attachments,
+    content,
+    enqueuedAt: Date.now(),
+    oversizeImageStrategy,
+  };
 
   // Skip the budget pass entirely when the window is already closed: the queue
   // stores the untouched payload and the replay prepares it again.

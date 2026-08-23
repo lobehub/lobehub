@@ -1,3 +1,4 @@
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import debug from 'debug';
 
 import {
@@ -42,10 +43,12 @@ export const sendOutboundDirectMessage = async (params: {
   attachments?: BotMessageAttachment[];
   content?: string;
   credentials: InstallationCredentials;
+  /** The sender's choice for images over the platform budget. */
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
   /** Platform-side id of the recipient: Telegram chat id, Discord/Slack user id. */
   platformUserId: string;
 }): Promise<void> => {
-  const { attachments, content, credentials, platformUserId } = params;
+  const { attachments, content, credentials, oversizeImageStrategy, platformUserId } = params;
   const { botToken, platform } = credentials;
   const text = content?.trim();
 
@@ -64,7 +67,7 @@ export const sendOutboundDirectMessage = async (params: {
       : undefined;
   const prepared =
     attachments?.length && budget
-      ? await prepareAttachmentsForBudget(attachments, budget)
+      ? await prepareAttachmentsForBudget(attachments, budget, { oversizeImageStrategy })
       : { attachments: attachments ?? [], fallbackLines: [] };
 
   // Every prepared attachment lands in exactly one of these two legs, so the

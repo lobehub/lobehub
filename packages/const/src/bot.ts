@@ -65,3 +65,17 @@ export const MESSENGER_ATTACHMENT_BUDGETS: Record<
   telegram: { fileMaxBytes: 20 * MB, imageMaxBytes: 5 * MB, textMaxChars: 4096 },
   wechat: { fileMaxBytes: 20 * MB, imageMaxBytes: 2 * MB, textMaxChars: 2000 },
 };
+
+/**
+ * What to do with an image that does not fit the platform's `imageMaxBytes`.
+ *
+ * `compress` re-encodes it under the budget so the recipient gets an inline
+ * picture; `link` skips the re-encode and sends the original as a download
+ * link instead. The choice is the sender's because the trade-off is theirs:
+ * a chat screenshot survives recompression fine, while a design mock or a
+ * photo the recipient is meant to inspect does not.
+ */
+export type MessengerOversizeImageStrategy = 'compress' | 'link';
+
+/** Preserves the pre-choice behavior for every caller that sends none. */
+export const DEFAULT_OVERSIZE_IMAGE_STRATEGY: MessengerOversizeImageStrategy = 'compress';

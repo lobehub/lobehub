@@ -258,6 +258,82 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.fallbackLines[0]).toContain('https://example.com/f/huge.png');
   });
 
+  it('sends the original as a link when the sender picked the link strategy', async () => {
+    // The point of the choice is that the original survives: a `link` push must
+    // not download or re-encode the image at all, or the recipient would get a
+    // JPEG-shaped link to something that no longer matches the file.
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+      { oversizeImageStrategy: 'link' },
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sharpMocks.toBuffer).not.toHaveBeenCalled();
+    expect(result.attachments).toEqual([]);
+    expect(result.fallbackLines[0]).toContain('big.png');
+    expect(result.fallbackLines[0]).toContain('https://example.com/f/big.png');
+  });
+
+  it('still compresses when no strategy is given', async () => {
+    // The option is additive: every caller that predates it keeps compressing.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(Buffer.alloc(3 * MB, 1), { status: 200 })),
+    );
+    sharpMocks.toBuffer.mockResolvedValueOnce(Buffer.alloc(1 * MB, 2));
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+    );
+
+    expect(result.fallbackLines).toEqual([]);
+    expect(result.attachments[0]).toMatchObject({ mimeType: 'image/jpeg' });
+  });
+
+  it('names the step that failed when an image degrades to a link', async () => {
+    // Regression: every failure in this chain collapsed into the same silent
+    // `undefined` behind a `debug()` call, so a deployed server could degrade
+    // every image in a push without recording which step gave up — the sender
+    // could only report "it sent a link".
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+    );
+
+    expect(result.fallbackLines).toHaveLength(1);
+    expect(warn.mock.calls.flat().join(' ')).toContain('source-unavailable');
+    warn.mockRestore();
+  });
+
   it('caps the displayed filename so one fallback line stays short', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

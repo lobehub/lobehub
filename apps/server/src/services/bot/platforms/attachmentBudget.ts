@@ -1,5 +1,5 @@
-import type { MessengerAttachmentBudget } from '@lobechat/const';
-import { MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
+import type { MessengerAttachmentBudget, MessengerOversizeImageStrategy } from '@lobechat/const';
+import { DEFAULT_OVERSIZE_IMAGE_STRATEGY, MESSENGER_ATTACHMENT_BUDGETS } from '@lobechat/const';
 import debug from 'debug';
 
 import { loadAttachmentBuffer } from './loadAttachmentBuffer';
@@ -165,7 +165,10 @@ export const compressImageToBudget = async (
     log('compression exhausted ladder without fitting %d bytes', maxBytes);
     return undefined;
   } catch (error) {
-    log('compressImageToBudget failed: %O', error);
+    // A decode error is per-image; a failed `import('sharp')` means NO image
+    // can ever be compressed on this deployment. Both are invisible to the
+    // sender — they only ever see a link — so neither may stay debug-only.
+    console.error('[messenger:attachment] image compression failed', error);
     return undefined;
   }
 };
@@ -232,9 +235,50 @@ const resolveSize = async (attachment: BotMessageAttachment): Promise<number | u
   }
 };
 
+/**
+ * Why an attachment is going out as a download link instead of a file.
+ *
+ * Reported through `console.warn` rather than `debug()`: every failure in this
+ * chain collapses into the same visible outcome — a link — and with only a
+ * debug trace behind it a deployed server can degrade every image in a push
+ * without leaving one line saying which step gave up. The sender then has
+ * nothing to report but the symptom, and "the compression failed" becomes a
+ * guess rather than a finding.
+ */
+type DegradationReason =
+  /** Bytes downloaded, but no rung of the ladder produced a small enough JPEG. */
+  | 'compression-failed'
+  /** Over budget and not an image, so there is nothing smaller to send. */
+  | 'not-compressible'
+  /** The attachment's bytes could not be fetched at all. */
+  | 'source-unavailable'
+  /** The server could not establish the byte size, so the budget cannot hold. */
+  | 'unverifiable-size';
+
+const reportDegradation = (
+  attachment: BotMessageAttachment,
+  reason: DegradationReason,
+  size?: number,
+): void => {
+  console.warn(
+    `[messenger:attachment] "${attachment.name ?? '(unnamed)'}" (${attachment.type}, ${
+      size ?? attachment.size ?? '?'
+    } bytes) degraded to a download link: ${reason}`,
+  );
+};
+
+export interface PrepareAttachmentsOptions {
+  /**
+   * What to do with an image over `imageMaxBytes`. Defaults to `compress` —
+   * the behavior every caller had before the choice existed.
+   */
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
+}
+
 export const prepareAttachmentsForBudget = async (
   attachments: BotMessageAttachment[],
   budget: PlatformAttachmentBudget,
+  { oversizeImageStrategy = DEFAULT_OVERSIZE_IMAGE_STRATEGY }: PrepareAttachmentsOptions = {},
 ): Promise<PreparedAttachments> => {
   const kept: BotMessageAttachment[] = [];
   const keptOriginals: BotMessageAttachment[] = [];
@@ -267,7 +311,7 @@ export const prepareAttachmentsForBudget = async (
         keptOriginals.push(attachment);
         continue;
       }
-      log('prepareAttachmentsForBudget: unverifiable size for %s, degrading', attachment.name);
+      reportDegradation(attachment, 'unverifiable-size');
       degraded.push(attachment);
       fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
       continue;
@@ -275,10 +319,18 @@ export const prepareAttachmentsForBudget = async (
 
     // Only images are worth downloading — and only when the declared size is
     // small enough that buffering it for re-encode is safe. A 500MB "image"
-    // goes straight to the link fallback instead of into memory.
-    if (attachment.type === 'image' && size <= MAX_COMPRESSION_SOURCE_BYTES) {
+    // goes straight to the link fallback instead of into memory. `link` is the
+    // sender's explicit choice to keep the original, so the download and
+    // re-encode are skipped entirely rather than attempted and thrown away.
+    if (
+      oversizeImageStrategy === 'compress' &&
+      attachment.type === 'image' &&
+      size <= MAX_COMPRESSION_SOURCE_BYTES
+    ) {
       const source = await loadSourceBuffer(attachment);
       const compressed = source && (await compressImageToBudget(source, budget.imageMaxBytes));
+      if (!compressed)
+        reportDegradation(attachment, source ? 'compression-failed' : 'source-unavailable', size);
       if (compressed) {
         kept.push({
           ...attachment,
@@ -294,6 +346,13 @@ export const prepareAttachmentsForBudget = async (
     }
 
     if (attachment.fetchUrl) {
+      // A `link` strategy is the sender's deliberate choice, not a failure, and
+      // an image that just failed to compress has already been reported above.
+      if (
+        oversizeImageStrategy === 'compress' &&
+        (attachment.type !== 'image' || size > MAX_COMPRESSION_SOURCE_BYTES)
+      )
+        reportDegradation(attachment, 'not-compressible', size);
       log(
         'attachment "%s" (%d bytes) exceeds %d-byte budget — degrading to link',
         attachment.name ?? '(unnamed)',

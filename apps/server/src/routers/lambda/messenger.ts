@@ -864,6 +864,9 @@ export const messengerRouter = router({
             .max(10)
             .optional(),
           content: z.string().trim().max(MESSENGER_PUSH_CONTENT_MAX_LENGTH).optional(),
+          // What to do with an image the platform will not take at full size.
+          // Absent means `compress` — the behavior before the choice existed.
+          oversizeImageStrategy: z.enum(['compress', 'link']).optional(),
           platform: z.enum(MESSENGER_PUSH_PLATFORMS),
           tenantId: z.string().optional(),
         })
@@ -916,6 +919,7 @@ export const messengerRouter = router({
       return sendMessengerPush({
         attachments,
         content: input.content,
+        oversizeImageStrategy: input.oversizeImageStrategy,
         platform: input.platform,
         serverDB: ctx.serverDB,
         tenantId: input.tenantId,
