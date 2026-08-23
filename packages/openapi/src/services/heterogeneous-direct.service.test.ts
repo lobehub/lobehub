@@ -362,7 +362,35 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(events.filter(({ type }) => type === 'message_stop')).toHaveLength(1);
     expect(events.at(-2)?.data).toMatchObject({
       delta: { stop_reason: 'end_turn' },
-      usage: { output_tokens: 4 },
+    });
+    expect(events.at(-2)?.data.usage).toEqual({ input_tokens: 7, output_tokens: 4 });
+  });
+
+  it('forwards Anthropic cache-split input on message_delta without double-counting', async () => {
+    const output = await readText(
+      encodeAnthropicStream(
+        protocolStream([
+          { data: 'hello', type: 'text' },
+          {
+            data: {
+              inputCachedTokens: 10,
+              inputCacheMissTokens: 90,
+              inputWriteCacheTokens: 20,
+              totalInputTokens: 120,
+              totalOutputTokens: 5,
+            },
+            type: 'usage',
+          },
+        ]),
+      ),
+    );
+
+    const delta = parseSseEvents(output).find(({ type }) => type === 'message_delta');
+    expect(delta?.data.usage).toEqual({
+      cache_creation_input_tokens: 20,
+      cache_read_input_tokens: 10,
+      input_tokens: 90,
+      output_tokens: 5,
     });
   });
 
