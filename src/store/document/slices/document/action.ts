@@ -216,11 +216,11 @@ export class DocumentActionImpl {
   ): FetchDocumentResponse => {
     const { autoSave = true, editor, sourceType = 'page', topicId } = options;
     const swrKey = documentId && editor ? documentSWRKeys.editor(documentId) : null;
-    const [freshDocumentId, setFreshDocumentId] = useState<string>();
+    const [bootstrapDocumentId, setBootstrapDocumentId] = useState<string>();
 
     const syncDocument = (document: DocumentItem | null) => {
       // Both documentId and editor are guaranteed to be defined when this callback is called
-      if (!document || !documentId || !editor) return;
+      if (!documentId || !editor) return;
 
       // Check if this response is still for the current active document
       // This prevents race conditions when quickly switching between documents
@@ -231,25 +231,33 @@ export class DocumentActionImpl {
         return;
       }
 
-      // Initialize document with editor
-      this.#get().initDocumentWithEditor({
-        autoSave,
-        content: document.content,
-        contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
-        documentId,
-        editor,
-        editorData: document.editorData,
+      if (document) {
+        // Initialize document with editor
+        this.#get().initDocumentWithEditor({
+          autoSave,
+          content: document.content,
+          contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
+          documentId,
+          editor,
+          editorData: document.editorData,
 
-        sourceType,
-        topicId: topicId ?? undefined,
-      });
+          sourceType,
+          topicId: topicId ?? undefined,
+        });
 
-      // Mirror page metadata (title/emoji) into pageStore so PageExplorer
-      // selectors resolve correctly when the page is opened from a context
-      // that didn't pre-load the documents list (e.g. task workspace modal).
-      if (sourceType === 'page') {
-        usePageStore.getState().upsertDocument(document);
+        // Mirror page metadata (title/emoji) into pageStore so PageExplorer
+        // selectors resolve correctly when the page is opened from a context
+        // that didn't pre-load the documents list (e.g. task workspace modal).
+        if (sourceType === 'page') {
+          usePageStore.getState().upsertDocument(document);
+        }
       }
+
+      // SWR invokes onData for both persisted cache and network responses. The
+      // cache is safe to use only after its revalidation settles; exposing this
+      // explicit identity lets collaboration wait for that state instead of
+      // relying on onSuccess (which is skipped by deduped cache hits).
+      setBootstrapDocumentId(documentId);
     };
 
     const response = useClientDataSWRWithSync<DocumentItem | null>(
@@ -268,10 +276,9 @@ export class DocumentActionImpl {
         focusThrottleInterval: 20_000,
         onData: syncDocument,
         onSuccess: (document) => {
-          // onSuccess is network-backed, while onData may receive persisted SWR
-          // cache. Synchronize first, then release collaboration bootstrap.
+          // Synchronize first. onData already marks cached and network snapshots
+          // as eligible once SWR's validation state settles.
           syncDocument(document);
-          if (documentId) setFreshDocumentId(documentId);
         },
         revalidateOnFocus: true,
       },
@@ -279,7 +286,7 @@ export class DocumentActionImpl {
 
     return {
       ...response,
-      hasFreshData: !!documentId && freshDocumentId === documentId,
+      hasFreshData: !!documentId && bootstrapDocumentId === documentId && !response.isValidating,
     };
   };
 }

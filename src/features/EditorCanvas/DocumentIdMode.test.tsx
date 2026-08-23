@@ -18,6 +18,7 @@ const createFetchDocumentResult = (
     error: unknown;
     hasFreshData: boolean;
     isLoading: boolean;
+    isValidating: boolean;
     mutate: ReturnType<typeof vi.fn>;
   }> = {},
 ) => ({
@@ -25,6 +26,7 @@ const createFetchDocumentResult = (
   error: undefined,
   hasFreshData: true,
   isLoading: false,
+  isValidating: false,
   mutate: vi.fn(),
   ...overrides,
 });

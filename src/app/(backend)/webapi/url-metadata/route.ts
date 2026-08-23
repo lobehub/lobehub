@@ -3,6 +3,7 @@ import { DocumentModel } from '@/database/models/document';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
 import {
+  consumeUrlMetadataRateLimit,
   fetchUrlMetadata,
   getLobeDocumentIdentifierFromUrl,
   UrlMetadataError,
@@ -50,6 +51,17 @@ export const GET = checkAuth(async (request, { serverDB, userId }) => {
         title: document.title || document.filename || 'Untitled document',
         url: target.toString(),
       });
+    }
+
+    const rateLimit = consumeUrlMetadataRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { error: 'Too many URL metadata requests' },
+        {
+          headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) },
+          status: 429,
+        },
+      );
     }
 
     const metadata = await fetchUrlMetadata(url, {

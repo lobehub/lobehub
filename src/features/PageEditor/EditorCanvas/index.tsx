@@ -30,13 +30,13 @@ import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { usePageEditorStore } from '../store';
 import { usePageEditable } from '../usePageEditable';
+import { isPageAcceptanceEmbedEnabled, matchesPageAcceptanceEmbed } from './acceptanceEmbed';
 import { resolveYjsWebSocketUrl } from './collaborationUrl';
 import { resolveCollaborationUser } from './collaborationUser';
 import PageRichLinkCard from './PageRichLinkCard';
 import { useAskCopilotItem } from './useAskCopilotItem';
 import { useSlashItems } from './useSlashItems';
 
-const ACCEPTANCE_EMBED_PATH = '/lobe-editor-acceptance-embed.html';
 const PAGE_EDITOR_WRAPPER_STYLE: CSSProperties = { overflow: 'visible' };
 
 const getUrlCardPayload = async (url: string) => {
@@ -53,25 +53,24 @@ const getUrlCardPayload = async (url: string) => {
   };
 };
 
-const pageEmbedRule: LinkEmbedRule = {
+const createPageEmbedRule = (iframeTitle: string, enabled: boolean): LinkEmbedRule => ({
   allowBlockCard: true,
   allowCard: true,
   allowIframe: true,
   getCardPayload: getUrlCardPayload,
   getIframePayload: (url) => ({
     src: url,
-    title: 'Lobe Editor 内嵌视图',
+    title: iframeTitle,
     url,
   }),
   id: 'page-acceptance-embed',
-  match: (url) => {
-    try {
-      return new URL(url, 'http://localhost').pathname === ACCEPTANCE_EMBED_PATH;
-    } catch {
-      return false;
-    }
-  },
-};
+  match: (url) =>
+    matchesPageAcceptanceEmbed(
+      url,
+      typeof window === 'undefined' ? undefined : window.location,
+      enabled,
+    ),
+});
 
 const genericPageCardRule: LinkEmbedRule = {
   allowBlockCard: true,
@@ -81,13 +80,12 @@ const genericPageCardRule: LinkEmbedRule = {
   match: (url) => /^https?:\/\//.test(url),
 };
 
-const yjsProviderFactory: YjsProviderFactory = (id, yjsDocMap) =>
-  createWebSocketYjsProvider(id, yjsDocMap, {
-    wsBaseUrl: resolveYjsWebSocketUrl(
-      typeof window === 'undefined' ? undefined : window.location,
-      process.env.NEXT_PUBLIC_PAGE_COLLABORATION_URL,
-    ),
-  });
+const createYjsProviderFactory =
+  (wsBaseUrl: string): YjsProviderFactory =>
+  (id, yjsDocMap) =>
+    createWebSocketYjsProvider(id, yjsDocMap, {
+      wsBaseUrl,
+    });
 
 interface EditorCanvasProps {
   askCopilotTarget?: ComposerTarget;
@@ -99,28 +97,29 @@ type EditorPlugins = NonNullable<Parameters<typeof Editor>[0]['plugins']>;
 
 const AnnotationComposer = ({ close, quotedText, submit }: AnnotationComposerContext) => {
   const [text, setText] = useState('');
+  const { t } = useTranslation('editor');
 
   return (
-    <Card size="small" style={{ width: 320 }} title="添加评论">
+    <Card size="small" style={{ width: 320 }} title={t('annotation.add')}>
       <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         <Typography.Text ellipsis type="secondary">
           {quotedText}
         </Typography.Text>
         <Input.TextArea
           autoFocus
-          placeholder="输入评论内容"
+          placeholder={t('annotation.placeholder')}
           rows={3}
           value={text}
           onChange={(event) => setText(event.target.value)}
         />
         <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={close}>取消</Button>
+          <Button onClick={close}>{t('cancel')}</Button>
           <Button
             disabled={!text.trim()}
             type="fill"
             onClick={() => submit({ kind: 'comment', payload: { text: text.trim() } })}
           >
-            提交
+            {t('annotation.submit')}
           </Button>
         </Space>
       </Space>
@@ -128,30 +127,38 @@ const AnnotationComposer = ({ close, quotedText, submit }: AnnotationComposerCon
   );
 };
 
-const AnnotationBubble = ({ close, records }: AnnotationBubbleContext) => (
-  <Card
-    size="small"
-    style={{ maxWidth: 360, width: 320 }}
-    title="评论"
-    extra={
-      <Button size="small" type="text" onClick={close}>
-        关闭
-      </Button>
-    }
-  >
-    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-      {records.map((record) => {
-        const payload = record.payload as { text?: string } | string | null;
-        const text =
-          typeof payload === 'string' ? payload : payload?.text || JSON.stringify(payload);
-        return <Typography.Text key={record.id}>{text}</Typography.Text>;
-      })}
-    </Space>
-  </Card>
-);
+const AnnotationBubble = ({ close, records }: AnnotationBubbleContext) => {
+  const { t } = useTranslation('editor');
+
+  return (
+    <Card
+      size="small"
+      style={{ maxWidth: 360, width: 320 }}
+      title={t('annotation.title')}
+      extra={
+        <Button size="small" type="text" onClick={close}>
+          {t('annotation.close')}
+        </Button>
+      }
+    >
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+        {records.map((record) => {
+          const payload = record.payload as { text?: string } | string | null;
+          const text =
+            typeof payload === 'string'
+              ? payload
+              : typeof payload?.text === 'string'
+                ? payload.text
+                : t('annotation.invalidPayload');
+          return <Typography.Text key={record.id}>{text}</Typography.Text>;
+        })}
+      </Space>
+    </Card>
+  );
+};
 
 const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, style }) => {
-  const { t } = useTranslation(['file', 'ui']);
+  const { t } = useTranslation(['editor', 'file', 'ui']);
   const editable = usePageEditable();
 
   const editor = usePageEditorStore((s) => s.editor);
@@ -165,6 +172,16 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
         userId: collaborationUserId,
       }),
     [collaborationDisplayName, collaborationUserId],
+  );
+  const collaborationUrl = resolveYjsWebSocketUrl(
+    typeof window === 'undefined' ? undefined : window.location,
+    process.env.NEXT_PUBLIC_PAGE_COLLABORATION_URL,
+  );
+  const collaborationEnabled = Boolean(collaborationUrl);
+  const acceptanceEmbedEnabled = isPageAcceptanceEmbedEnabled();
+  const yjsProviderFactory = useMemo(
+    () => (collaborationUrl ? createYjsProviderFactory(collaborationUrl) : undefined),
+    [collaborationUrl],
   );
 
   const slashItems = useSlashItems();
@@ -183,7 +200,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       ReactTocPlugin,
     ];
 
-    if (documentId) {
+    if (documentId && collaborationUrl && yjsProviderFactory) {
       plugins.push(
         Editor.withProps(ReactYjsPlugin, {
           awarenessData: { userId: collaborationUser.userId },
@@ -196,7 +213,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
     }
 
     return plugins;
-  }, [collaborationUser, documentId, editable]);
+  }, [collaborationUrl, collaborationUser, documentId, editable, yjsProviderFactory]);
 
   const toolbarItems = useMemo(
     () => [
@@ -204,7 +221,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       {
         icon: MessageSquarePlusIcon,
         key: 'annotation-comment',
-        label: '评论',
+        label: t('annotation.toolbar'),
         onClick: () => {
           editor?.dispatchCommand(OPEN_ANNOTATION_COMPOSER_COMMAND, {
             kind: 'comment',
@@ -213,7 +230,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
         },
       },
     ],
-    [askCopilotItem, editor],
+    [askCopilotItem, editor, t],
   );
 
   const linkPlugin = useMemo(
@@ -221,27 +238,32 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       Editor.withProps(ReactLinkPlugin, {
         defaultToolbarItems: true,
         labels: {
-          convertToBlockCard: '转为块级卡片',
-          convertToCard: '转为标题卡片',
-          convertToIframe: '转为内嵌视图',
-          convertToLink: '转回链接',
-          convertToSchema: '转为结构化链接',
+          convertToBlockCard: t('link.convertToBlockCard', { ns: 'editor' }),
+          convertToCard: t('link.convertToCard', { ns: 'editor' }),
+          convertToIframe: t('link.convertToIframe', { ns: 'editor' }),
+          convertToLink: t('link.convertToLink', { ns: 'editor' }),
+          convertToSchema: t('link.convertToSchema', { ns: 'editor' }),
         },
-        linkEmbedRules: [pageEmbedRule, genericPageCardRule],
+        linkEmbedRules: [
+          ...(acceptanceEmbedEnabled
+            ? [createPageEmbedRule(t('link.iframeTitle', { ns: 'editor' }), acceptanceEmbedEnabled)]
+            : []),
+          genericPageCardRule,
+        ],
         renderLinkCard: (props) => <PageRichLinkCard {...props} />,
       }),
-    [],
+    [acceptanceEmbedEnabled, t],
   );
 
   return (
     <SharedEditorCanvas
-      collaborationEnabled
+      collaborationEnabled={collaborationEnabled}
       documentId={documentId}
       editable={editable}
       editor={editor}
       extraPlugins={extraPlugins}
       linkPlugin={linkPlugin}
-      placeholder={placeholder || t('pageEditor.editorPlaceholder')}
+      placeholder={placeholder || t('pageEditor.editorPlaceholder', { ns: 'file' })}
       slashItems={slashItems}
       style={style}
       toolbarExtraItems={editable ? toolbarItems : undefined}

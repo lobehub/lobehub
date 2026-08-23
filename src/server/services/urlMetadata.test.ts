@@ -1,12 +1,126 @@
-import { describe, expect, it } from 'vitest';
+import { createServer as createHttpServer } from 'node:http';
+
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  clearUrlMetadataCaches,
+  consumeUrlMetadataRateLimit,
   extractUrlMetadata,
+  fetchUrlMetadata,
   getLobeDocumentIdentifierFromUrl,
   isBlockedUrlMetadataAddress,
 } from './urlMetadata';
 
 describe('urlMetadata', () => {
+  const publicLookup = async () => [{ address: '93.184.216.34', family: 4 as const }];
+
+  it('deduplicates concurrent requests and caches metadata for a short TTL', async () => {
+    clearUrlMetadataCaches();
+    let resolveFetch: ((response: Response) => void) | undefined;
+    const fetchImpl = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    const options = { cacheTtlMs: 10, lookupImpl: publicLookup, fetchImpl };
+
+    const first = fetchUrlMetadata('https://example.com/article', options);
+    const second = fetchUrlMetadata('https://example.com/article', options);
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(1));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    resolveFetch?.(
+      new Response('<html><head><title>Cached page</title></head></html>', {
+        headers: { 'content-type': 'text/html' },
+      }),
+    );
+    await expect(first).resolves.toMatchObject({ title: 'Cached page' });
+    await expect(second).resolves.toMatchObject({ title: 'Cached page' });
+    await expect(
+      fetchUrlMetadata('https://example.com/article', { ...options, cacheTtlMs: 10 }),
+    ).resolves.toMatchObject({ title: 'Cached page' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    clearUrlMetadataCaches();
+  });
+
+  it('pins every redirect hop to the address that passed the DNS check', async () => {
+    clearUrlMetadataCaches();
+    const lookupImpl = vi
+      .fn()
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 as const }])
+      .mockResolvedValueOnce([{ address: '93.184.216.35', family: 4 as const }]);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          headers: { location: 'https://redirect.example.com/final' },
+          status: 302,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('<html><head><title>Pinned page</title></head></html>', {
+          headers: { 'content-type': 'text/html' },
+        }),
+      );
+
+    await expect(
+      fetchUrlMetadata('https://example.com/start', {
+        cache: false,
+        fetchImpl,
+        lookupImpl,
+      }),
+    ).resolves.toMatchObject({ title: 'Pinned page' });
+    expect(lookupImpl).toHaveBeenNthCalledWith(1, 'example.com', {
+      all: true,
+      verbatim: true,
+    });
+    expect(lookupImpl).toHaveBeenNthCalledWith(2, 'redirect.example.com', {
+      all: true,
+      verbatim: true,
+    });
+    expect(fetchImpl.mock.calls[0][1]).toHaveProperty('dispatcher');
+    expect(fetchImpl.mock.calls[1][1]).toHaveProperty('dispatcher');
+    clearUrlMetadataCaches();
+  });
+
+  it('uses the pinned lookup with the real Undici fetch implementation', async () => {
+    const httpServer = createHttpServer((_request, response) => {
+      response.setHeader('content-type', 'text/html');
+      response.end('<html><head><title>Local pinned response</title></head></html>');
+    });
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', () => resolve()));
+    const address = httpServer.address();
+    if (!address || typeof address === 'string') throw new Error('HTTP test server did not start');
+
+    try {
+      await expect(
+        fetchUrlMetadata(`http://localhost:${address.port}/`, {
+          allowLocalhost: true,
+          cache: false,
+          lookupImpl: async () => [{ address: '127.0.0.1', family: 4 as const }],
+        }),
+      ).resolves.toMatchObject({ title: 'Local pinned response' });
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        httpServer.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('limits requests per user and resets the window', () => {
+    clearUrlMetadataCaches();
+    expect(consumeUrlMetadataRateLimit('user-1', 0, 2, 100).allowed).toBe(true);
+    expect(consumeUrlMetadataRateLimit('user-1', 1, 2, 100).allowed).toBe(true);
+    expect(consumeUrlMetadataRateLimit('user-1', 2, 2, 100)).toEqual({
+      allowed: false,
+      retryAfterSeconds: 1,
+    });
+    expect(consumeUrlMetadataRateLimit('user-1', 100, 2, 100)).toEqual({
+      allowed: true,
+      retryAfterSeconds: 0,
+    });
+  });
+
   it('extracts title, description and a resolved favicon', () => {
     const metadata = extractUrlMetadata(
       `<!doctype html><html><head>

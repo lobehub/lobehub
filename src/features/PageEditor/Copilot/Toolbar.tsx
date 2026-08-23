@@ -24,7 +24,7 @@ interface CopilotToolbarProps {
 
 const CopilotToolbar = memo<CopilotToolbarProps>(
   ({ activeTab = 'topic', onTabChange, onTopicChange, topicId }) => {
-    const { t } = useTranslation('topic');
+    const { t } = useTranslation(['topic', 'editor']);
     const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
     const agentId = useConversationStore(conversationSelectors.agentId);
 
@@ -55,8 +55,8 @@ const CopilotToolbar = memo<CopilotToolbarProps>(
               size="small"
               variant="point"
               items={[
-                { key: 'topic', label: '话题' },
-                { key: 'annotations', label: '划词评论' },
+                { key: 'topic', label: t('copilot.tabs.topic', { ns: 'editor' }) },
+                { key: 'annotations', label: t('copilot.tabs.annotations', { ns: 'editor' }) },
               ]}
               onChange={(key) => onTabChange(key as CopilotPanelTab)}
             />

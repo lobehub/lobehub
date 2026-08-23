@@ -6,17 +6,19 @@ import { Button } from '@lobehub/ui/base-ui';
 import { Empty, Typography } from 'antd';
 import { MessageSquareTextIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { usePageEditorStore } from '../store';
 import { focusAnnotation } from './focusAnnotation';
 
-const getCommentText = (record: AnnotationRecord) => {
+const getCommentText = (record: AnnotationRecord, fallback: string) => {
   const payload = record.payload as { text?: string } | string | null;
   if (typeof payload === 'string') return payload;
-  return payload?.text || '';
+  return typeof payload?.text === 'string' ? payload.text : fallback;
 };
 
 const AnnotationPanel = memo(() => {
+  const { t } = useTranslation('editor');
   const editor = usePageEditorStore((s) => s.editor);
   const [records, setRecords] = useState<AnnotationRecord[]>([]);
 
@@ -50,7 +52,7 @@ const AnnotationPanel = memo(() => {
   if (records.length === 0) {
     return (
       <Flexbox align="center" flex={1} justify="center" padding={24}>
-        <Empty description="暂无划词评论" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty description={t('annotation.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       </Flexbox>
     );
   }
@@ -67,10 +69,12 @@ const AnnotationPanel = memo(() => {
           <Flexbox gap={6} style={{ minWidth: 0, width: '100%' }}>
             <Flexbox horizontal align="center" gap={6}>
               <MessageSquareTextIcon size={14} />
-              <Typography.Text strong>{getCommentText(record) || '评论'}</Typography.Text>
+              <Typography.Text strong>
+                {getCommentText(record, t('annotation.invalidPayload')) || t('annotation.title')}
+              </Typography.Text>
             </Flexbox>
             <Typography.Text ellipsis={{ tooltip: record.quotedText }} type="secondary">
-              {record.quotedText || '未保留引用文本'}
+              {record.quotedText || t('annotation.noQuote')}
             </Typography.Text>
           </Flexbox>
         </Button>

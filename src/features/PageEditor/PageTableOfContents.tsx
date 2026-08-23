@@ -6,6 +6,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import type { FC, RefObject } from 'react';
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { usePageTocVisibility } from './usePageTocVisibility';
 
@@ -180,6 +181,7 @@ const TocItems: FC<{
 );
 
 const PageTableOfContents: FC<PageTableOfContentsProps> = ({ editor, scrollContainerRef }) => {
+  const { t } = useTranslation('editor');
   const {
     closePreview,
     collapse,
@@ -205,7 +207,7 @@ const PageTableOfContents: FC<PageTableOfContentsProps> = ({ editor, scrollConta
       <aside
         data-collapsed
         data-page-toc
-        aria-label="文稿目录"
+        aria-label={t('toc.label')}
         className={styles.aside}
         onFocus={openPreview}
         onMouseEnter={handleMouseEnter}
@@ -216,9 +218,9 @@ const PageTableOfContents: FC<PageTableOfContentsProps> = ({ editor, scrollConta
         }}
       >
         <button
-          aria-label="展开目录"
+          aria-label={t('toc.expand')}
           className={styles.rail}
-          title="展开目录"
+          title={t('toc.expand')}
           type="button"
           onClick={expand}
         >
@@ -231,14 +233,14 @@ const PageTableOfContents: FC<PageTableOfContentsProps> = ({ editor, scrollConta
           ))}
         </button>
         {previewOpen && (
-          <div aria-label="目录预览" className={styles.preview} role="dialog">
+          <div aria-label={t('toc.preview')} className={styles.preview} role="dialog">
             <div className={styles.header}>
-              <div className={styles.heading}>目录</div>
+              <div className={styles.heading}>{t('toc.heading')}</div>
               <ActionIcon
-                aria-label="固定展开目录"
+                aria-label={t('toc.pin')}
                 icon={EyeIcon}
                 size={'small'}
-                title="固定展开目录"
+                title={t('toc.pin')}
                 onClick={expand}
               />
             </div>
@@ -250,14 +252,14 @@ const PageTableOfContents: FC<PageTableOfContentsProps> = ({ editor, scrollConta
   }
 
   return (
-    <aside data-page-toc aria-label="文稿目录" className={styles.aside}>
+    <aside data-page-toc aria-label={t('toc.label')} className={styles.aside}>
       <div className={styles.header}>
-        <div className={styles.heading}>目录</div>
+        <div className={styles.heading}>{t('toc.heading')}</div>
         <ActionIcon
-          aria-label="隐藏目录"
+          aria-label={t('toc.collapse')}
           icon={EyeOffIcon}
           size={'small'}
-          title="隐藏目录"
+          title={t('toc.collapse')}
           onClick={collapse}
         />
       </div>

@@ -3,11 +3,22 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
 import { parseHTML } from 'linkedom';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_HTML_BYTES = 1024 * 1024;
 const MAX_REDIRECTS = 3;
+const METADATA_CACHE_TTL_MS = 30_000;
+const METADATA_RATE_LIMIT_MAX = 30;
+const METADATA_RATE_LIMIT_WINDOW_MS = 60_000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost']);
+
+type LookupImpl = (
+  hostname: string,
+  options: { all: true; verbatim: true },
+) => Promise<LookupAddress[]>;
+
+type MetadataFetchImpl = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export interface UrlMetadata {
   description?: string;
@@ -18,7 +29,11 @@ export interface UrlMetadata {
 
 interface FetchUrlMetadataOptions {
   allowLocalhost?: boolean;
-  fetchImpl?: typeof fetch;
+  cache?: boolean;
+  cacheTtlMs?: number;
+  fetchImpl?: MetadataFetchImpl;
+  lookupImpl?: LookupImpl;
+  now?: () => number;
 }
 
 export class UrlMetadataError extends Error {
@@ -95,7 +110,11 @@ export const isBlockedUrlMetadataAddress = (address: string): boolean => {
   return false;
 };
 
-const assertSafeUrl = async (url: URL, allowLocalhost: boolean) => {
+const resolveSafeAddress = async (
+  url: URL,
+  allowLocalhost: boolean,
+  lookupImpl: LookupImpl = lookup,
+): Promise<LookupAddress> => {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new UrlMetadataError('Only http and https URLs are supported');
   }
@@ -104,23 +123,36 @@ const assertSafeUrl = async (url: URL, allowLocalhost: boolean) => {
     throw new UrlMetadataError('URLs containing credentials are not supported');
   }
 
-  const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-  if (allowLocalhost && isLocalhost) return;
-
   let addresses: LookupAddress[];
   try {
-    addresses = await lookup(url.hostname, { all: true, verbatim: true });
+    addresses = await lookupImpl(url.hostname, { all: true, verbatim: true });
   } catch {
     throw new UrlMetadataError('Unable to resolve URL hostname', 422);
   }
 
+  const isAllowedLoopback = allowLocalhost && LOOPBACK_HOSTS.has(url.hostname);
   if (
     addresses.length === 0 ||
-    addresses.some(({ address }) => isBlockedUrlMetadataAddress(address))
+    (!isAllowedLoopback && addresses.some(({ address }) => isBlockedUrlMetadataAddress(address)))
   ) {
     throw new UrlMetadataError('Private or non-routable URL targets are not allowed', 403);
   }
+
+  return addresses[0];
 };
+
+const createPinnedDispatcher = (address: LookupAddress) =>
+  new Agent({
+    connect: {
+      // Keep the URL hostname untouched so Undici sends the original Host and
+      // uses it for TLS SNI, while this lookup callback pins the socket to the
+      // address that passed the SSRF check above.
+      lookup: (_lookupHostname, options, callback) => {
+        if (options.all) callback(null, [{ address: address.address, family: address.family }]);
+        else callback(null, address.address, address.family);
+      },
+    },
+  });
 
 const readLimitedHtml = async (response: Response): Promise<string> => {
   const contentLength = Number(response.headers.get('content-length') || 0);
@@ -201,7 +233,6 @@ export const fetchUrlMetadata = async (
   rawUrl: string,
   options: FetchUrlMetadataOptions = {},
 ): Promise<UrlMetadata> => {
-  const fetchImpl = options.fetchImpl || fetch;
   let currentUrl: URL;
 
   try {
@@ -210,40 +241,125 @@ export const fetchUrlMetadata = async (
     throw new UrlMetadataError('Invalid URL');
   }
 
-  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
-    await assertSafeUrl(currentUrl, Boolean(options.allowLocalhost));
-
-    const response = await fetchImpl(currentUrl, {
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml',
-        'User-Agent': 'LobeHub-Link-Metadata/1.0',
-      },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new UrlMetadataError('URL redirect is missing a location', 422);
-      if (redirectCount === MAX_REDIRECTS) {
-        throw new UrlMetadataError('URL redirected too many times', 422);
-      }
-      currentUrl = new URL(location, currentUrl);
-      continue;
-    }
-
-    if (!response.ok) {
-      throw new UrlMetadataError(`URL returned HTTP ${response.status}`, 422);
-    }
-
-    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
-    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
-      throw new UrlMetadataError('URL did not return HTML', 422);
-    }
-
-    const html = await readLimitedHtml(response);
-    return extractUrlMetadata(html, currentUrl.toString());
+  const normalizedUrl = currentUrl.toString();
+  const useCache = options.cache !== false;
+  const now = options.now ?? Date.now;
+  const cacheKey = `${options.allowLocalhost ? 'local:' : 'public:'}${normalizedUrl}`;
+  const cached = metadataCache.get(cacheKey);
+  if (useCache && cached && cached.expiresAt > now()) return cached.value;
+  if (useCache) {
+    const pending = metadataInFlight.get(cacheKey);
+    if (pending) return pending;
   }
 
-  throw new UrlMetadataError('Unable to fetch URL metadata', 422);
+  const fetchImpl = options.fetchImpl || (undiciFetch as unknown as MetadataFetchImpl);
+  const request = (async () => {
+    for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+      const address = await resolveSafeAddress(
+        currentUrl,
+        Boolean(options.allowLocalhost),
+        options.lookupImpl,
+      );
+      const dispatcher = createPinnedDispatcher(address);
+
+      try {
+        const response = await fetchImpl(currentUrl, {
+          headers: {
+            'Accept': 'text/html,application/xhtml+xml',
+            'User-Agent': 'LobeHub-Link-Metadata/1.0',
+          },
+          redirect: 'manual',
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          dispatcher,
+        } as RequestInit & { dispatcher: Agent });
+
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location) throw new UrlMetadataError('URL redirect is missing a location', 422);
+          if (redirectCount === MAX_REDIRECTS) {
+            throw new UrlMetadataError('URL redirected too many times', 422);
+          }
+          currentUrl = new URL(location, currentUrl);
+          continue;
+        }
+
+        if (!response.ok) {
+          throw new UrlMetadataError(`URL returned HTTP ${response.status}`, 422);
+        }
+
+        const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+        if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
+          throw new UrlMetadataError('URL did not return HTML', 422);
+        }
+
+        const html = await readLimitedHtml(response);
+        return extractUrlMetadata(html, currentUrl.toString());
+      } finally {
+        await dispatcher.close();
+      }
+    }
+
+    throw new UrlMetadataError('Unable to fetch URL metadata', 422);
+  })();
+
+  if (!useCache) return request;
+
+  metadataInFlight.set(cacheKey, request);
+  try {
+    const value = await request;
+    metadataCache.set(cacheKey, {
+      expiresAt: now() + (options.cacheTtlMs ?? METADATA_CACHE_TTL_MS),
+      value,
+    });
+    return value;
+  } finally {
+    metadataInFlight.delete(cacheKey);
+  }
+};
+
+interface CachedMetadata {
+  expiresAt: number;
+  value: UrlMetadata;
+}
+
+const metadataCache = new Map<string, CachedMetadata>();
+const metadataInFlight = new Map<string, Promise<UrlMetadata>>();
+
+interface RateLimitEntry {
+  count: number;
+  windowStartedAt: number;
+}
+
+const metadataRateLimits = new Map<string, RateLimitEntry>();
+
+export const consumeUrlMetadataRateLimit = (
+  userId: string,
+  now = Date.now(),
+  maxRequests = METADATA_RATE_LIMIT_MAX,
+  windowMs = METADATA_RATE_LIMIT_WINDOW_MS,
+): { allowed: boolean; retryAfterSeconds: number } => {
+  const current = metadataRateLimits.get(userId);
+  if (!current || now - current.windowStartedAt >= windowMs) {
+    metadataRateLimits.set(userId, { count: 1, windowStartedAt: now });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  if (current.count >= maxRequests) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((windowMs - (now - current.windowStartedAt)) / 1000),
+      ),
+    };
+  }
+
+  current.count += 1;
+  return { allowed: true, retryAfterSeconds: 0 };
+};
+
+export const clearUrlMetadataCaches = () => {
+  metadataCache.clear();
+  metadataInFlight.clear();
+  metadataRateLimits.clear();
 };

@@ -82,11 +82,38 @@ Page 的 `documentId` 同时作为 Yjs `roomId`。因此不同文章不会共享
 
 接口实现位于 `src/server/services/urlMetadata.ts`，App Router 文件只负责请求适配。
 
-### 3.4 Lexical 补丁
+### 3.4 Lexical 补丁（必须在升级时重新验证）
 
-`patches/lexical@0.42.0.patch` 修复特定根节点重新挂载场景中的 Lexical 生命周期问题。
-补丁通过 `pnpm.patchedDependencies` 注册。升级 Lexical 时必须重新确认补丁是否仍然需要，
-不能静默沿用到未知版本。
+`patches/lexical@0.42.0.patch` 是针对 Lexical 0.42.0 的临时补丁，不是通用 fork。补丁通过
+`pnpm.patchedDependencies` 注册，具体改动如下：
+
+- `parseEditorState(serializedEditorState, editor, updateFn)` 调用 `updateFn(editorState)`，让
+  解析回调可以使用刚刚创建的 `EditorState`，而不是只能从外部 ref 猜测当前 state；
+- `resetRandomKey(targetId?)` 在传入目标值时恢复到指定 key counter，未传值时保持原有的从 1
+  开始的行为。
+
+这两个改动共同修复 Page 编辑器在 “已有 editor 实例被保留、根节点因 Page 切换或只读 / 可编辑
+边界重新挂载、随后再次从服务端快照初始化” 的生命周期问题。未修复时，解析回调可能观察到旧
+state，或新旧根节点的随机 key counter 不连续，表现为首次挂载成功但切换 / 刷新后内容不出现、
+节点 key 冲突，或者初始化回调重复触发。复现路径是：打开一个带 `documentId` 的 Page → 在
+编辑器已初始化后切换到另一篇 Page 或切换只读边界 → 让 SWR 返回快照并再次触发 editor init。
+
+只在业务层增加 “不要重复初始化” 判断不能修复这个问题：业务层无法改变 Lexical 内部解析回调
+拿到的 state，也无法控制 Lexical 模块级 key counter；继续堆 ref/timeout 只会把问题变成竞态。
+因此本分支同时保留 `DocumentIdMode` 的一次性 hydration 防护和这个明确锁定版本的补丁。
+
+覆盖情况包括 `DocumentIdMode.test.tsx` 的重复 init、协同快照屏障和 autosave echo 回归，以及
+`InternalEditor.readonly.test.tsx` 的 editor 生命周期行为；Lexical 解析 /key-counter 的直接
+单元测试随上游 editor PR #198 维护。本仓库截至本文更新时没有为这两个改动提交独立的上游
+Lexical issue/PR，依赖的 editor API 变更来自 [lobe-editor PR #198](https://github.com/lobehub/lobe-editor/pull/198)。
+
+升级 Lexical 时必须：
+
+1. 对比新版本 `parseEditorState` 和 `resetRandomKey` 的实现，确认两个行为是否已经由上游修复；
+2. 若已修复，删除 `patches/lexical@0.42.0.patch` 以及 `pnpm.patchedDependencies` 条目，并运行
+   Page editor 的相关测试和双页面人工切换验收；
+3. 若未修复，不要把旧 patch 静默改名套到新版本，先生成针对新版本的最小 patch，并记录新的
+   故障复现与验证结果。
 
 ## 4. 协同服务协议
 
@@ -129,23 +156,37 @@ active room --last client leaves--> idle room --TTL--> evicted
 
 ## 5. 环境变量
 
-| 变量                                       |    默认值 | 说明                                 |
-| ------------------------------------------ | --------: | ------------------------------------ |
-| `PAGE_COLLABORATION_PORT`                  |   `12345` | 协同服务监听端口                     |
-| `PAGE_COLLABORATION_ROOM_IDLE_TTL_MS`      | `1800000` | 空房间保留时间；验收可设 `30000`     |
-| `PAGE_COLLABORATION_CLEANUP_INTERVAL_MS`   |   `60000` | 空房间扫描周期；验收可设 `5000`      |
-| `PAGE_COLLABORATION_HEARTBEAT_INTERVAL_MS` |   `30000` | WebSocket 心跳周期                   |
-| `PAGE_COLLABORATION_MAX_IDLE_ROOMS`        |      `20` | 最多保留的空房间数量                 |
-| `PAGE_COLLABORATION_MAX_MESSAGE_BYTES`     | `2097152` | 单条 WebSocket 消息上限              |
-| `NEXT_PUBLIC_PAGE_COLLABORATION_URL`       |  同源推导 | Page 客户端使用的 WebSocket 基础地址 |
+| 变量                                       |      默认值 | 说明                                              |
+| ------------------------------------------ | ----------: | ------------------------------------------------- |
+| `PAGE_COLLABORATION_PORT`                  |     `12345` | 协同服务监听端口                                  |
+| `PAGE_COLLABORATION_HOST`                  | `127.0.0.1` | 监听地址；仅验收时显式改为外部地址                |
+| `PAGE_COLLABORATION_BOOTSTRAP_TIMEOUT_MS`  |     `10000` | 首次 bootstrap owner 超时后移交                   |
+| `PAGE_COLLABORATION_ROOM_IDLE_TTL_MS`      |   `1800000` | 空房间保留时间；验收可设 `30000`                  |
+| `PAGE_COLLABORATION_CLEANUP_INTERVAL_MS`   |     `60000` | 空房间扫描周期；验收可设 `5000`                   |
+| `PAGE_COLLABORATION_HEARTBEAT_INTERVAL_MS` |     `30000` | WebSocket 心跳周期                                |
+| `PAGE_COLLABORATION_MAX_IDLE_ROOMS`        |        `20` | 最多保留的空房间数量                              |
+| `PAGE_COLLABORATION_MAX_MESSAGE_BYTES`     |   `2097152` | 单条 WebSocket 消息上限                           |
+| `NEXT_PUBLIC_PAGE_COLLABORATION_URL`       |      未配置 | 显式启用协同的 WebSocket 基础地址；生产不再猜端口 |
+| `NEXT_PUBLIC_PAGE_EDITOR_ACCEPTANCE_EMBED` |      未启用 | 设为 `true` 或 `1` 才启用验收 iframe 规则         |
 
 30 秒回收的验收启动示例：
 
 ```bash
 PAGE_COLLABORATION_ROOM_IDLE_TTL_MS=30000 \
   PAGE_COLLABORATION_CLEANUP_INTERVAL_MS=5000 \
+  PAGE_COLLABORATION_HOST=127.0.0.1 \
   pnpm dev:page-collaboration
 ```
+
+生产或共享网络环境必须显式设置 `PAGE_COLLABORATION_HOST` 和
+`NEXT_PUBLIC_PAGE_COLLABORATION_URL`，并由反向代理补充鉴权。服务默认只绑定 loopback；它是
+内存验收服务，没有文档权限校验，`clientId` 来自 URL 查询参数、客户端可以伪造，不能作为
+身份认证，也不应直接暴露到生产网络。
+
+验收 iframe fixture 位于 `.agents/acceptance/fixtures/lobe-editor-acceptance-embed.html`，不在
+生产 `public/` 路径中。需要验收时由专用验收启动流程提供该 fixture，并设置
+`NEXT_PUBLIC_PAGE_EDITOR_ACCEPTANCE_EMBED=true`；规则还会校验 iframe URL 与当前页面 origin
+一致，未设置 flag 时不会注册。
 
 ## 6. 日志与排障
 
@@ -154,6 +195,7 @@ PAGE_COLLABORATION_ROOM_IDLE_TTL_MS=30000 \
 - `room.created`、`room.evicted`；
 - `client.connected`、`client.disconnected`；
 - `bootstrap.owner-assigned`、`bootstrap.completed`；
+- `bootstrap.owner-promoted`、`bootstrap.timeout`；
 - `sync.sent`、`sync.deferred`；
 - `update.applied`、`update.rejected`；
 - `awareness.updated`。
@@ -193,7 +235,8 @@ bun run check \
 4. 让一个用户把光标放入折叠块，确认另一个用户不能折叠该块；
 5. 打开另一篇 Page，确认内容和 awareness 不串房间；
 6. 关闭同一文档的全部页面，检查 `/rooms` 进入 idle；
-7. 等待 TTL，确认出现 `room.evicted`；
+7. 等待 TTL，确认出现 `room.evicted`；bootstrap owner 不发首个 update 时应先看到 timeout 和
+   单 owner 移交，不能看到多个客户端同时收到空 bootstrap；
 8. 重新打开文档，确认数据库内容只引导一次且没有整篇重复。
 
 链接验收：
@@ -206,7 +249,8 @@ bun run check \
 
 ## 8. 部署建议
 
-验收环境可以独立运行该服务，并由反向代理将 `/collaboration/*` 转发到 WebSocket 端口。
+验收环境可以独立运行该服务，并由反向代理将 `/collaboration/*` 转发到 WebSocket 端口。默认
+监听 `127.0.0.1`；只有在明确的验收网络边界内才通过 `PAGE_COLLABORATION_HOST` 改监听地址。
 建议为进程设置内存上限与自动重启，但不要把内存型服务横向扩容到多个实例。
 
 生产化前需要补齐：
@@ -229,6 +273,7 @@ bun run check \
 ## 10. 已知边界
 
 - 该服务不保存 Yjs update，房间回收后只依赖 Page 原有数据库内容重新引导；
+- `clientId` 是客户端自报值，可伪造；当前服务无鉴权，仅限本地 / 隔离验收环境；
 - 链接内嵌视图必须由目标站点允许 iframe；
 - 目标站点可能阻止抓取 favicon 或返回非 HTML 内容；
 - 双账号是最可靠的协同验收方式，无痕窗口只能模拟不同会话，不能覆盖账号权限差异；

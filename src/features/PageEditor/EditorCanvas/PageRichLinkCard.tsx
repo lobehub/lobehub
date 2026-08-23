@@ -3,6 +3,7 @@
 import type { LinkCardRendererProps } from '@lobehub/editor';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { FC } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css }) => ({
   blockCard: css`
@@ -148,6 +149,8 @@ const PageRichLinkCard: FC<LinkCardRendererProps> = ({
   title,
   url,
 }) => {
+  const { t } = useTranslation('editor');
+  const loadingLabel = t('link.loadingPreview');
   const sharedProps = {
     'aria-busy': isLoading || undefined,
     'data-page-rich-link-card': true,
@@ -164,7 +167,7 @@ const PageRichLinkCard: FC<LinkCardRendererProps> = ({
     return (
       <a className={styles.inlineCard} {...sharedProps}>
         {isLoading ? (
-          <span aria-label={'正在加载链接预览'} className={styles.loadingIcon} role={'status'} />
+          <span aria-label={loadingLabel} className={styles.loadingIcon} role={'status'} />
         ) : (
           <img alt="" className={styles.inlineIcon} src={icon || getFallbackIcon(url)} />
         )}
@@ -177,7 +180,7 @@ const PageRichLinkCard: FC<LinkCardRendererProps> = ({
     <a className={styles.blockCard} {...sharedProps}>
       {isLoading ? (
         <span
-          aria-label={'正在加载链接预览'}
+          aria-label={loadingLabel}
           className={`${styles.loadingIcon} ${styles.blockLoadingIcon}`}
           role={'status'}
         />

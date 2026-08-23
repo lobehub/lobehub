@@ -4,6 +4,7 @@ const { WebSocket, WebSocketServer } = require('ws');
 const { Doc, applyUpdate, encodeStateAsUpdate } = require('yjs');
 
 const DEFAULTS = {
+  bootstrapTimeoutMs: 10_000,
   cleanupIntervalMs: 60_000,
   heartbeatIntervalMs: 30_000,
   maxIdleRooms: 20,
@@ -21,20 +22,16 @@ const sendJson = (response, statusCode, data) => {
     'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json; charset=utf-8',
   });
-  response.end(JSON.stringify(data));
-};
-
-const getMessageSize = (message) => {
-  if (typeof message === 'string') return Buffer.byteLength(message);
-  if (Buffer.isBuffer(message) || message instanceof ArrayBuffer) return message.byteLength;
-  if (Array.isArray(message)) {
-    return message.reduce((total, item) => total + getMessageSize(item), 0);
-  }
-  return Buffer.byteLength(String(message));
+  response.end(data === undefined ? undefined : JSON.stringify(data));
 };
 
 function createCollaborationServer(options = {}) {
   const config = {
+    bootstrapTimeoutMs: Number(
+      options.bootstrapTimeoutMs ??
+        process.env.PAGE_COLLABORATION_BOOTSTRAP_TIMEOUT_MS ??
+        DEFAULTS.bootstrapTimeoutMs,
+    ),
     cleanupIntervalMs: Number(
       options.cleanupIntervalMs ??
         process.env.PAGE_COLLABORATION_CLEANUP_INTERVAL_MS ??
@@ -62,6 +59,7 @@ function createCollaborationServer(options = {}) {
     ),
   };
   const logger = options.logger || console;
+  const now = options.now || Date.now;
   const rooms = new Map();
   const timers = new Set();
 
@@ -82,18 +80,19 @@ function createCollaborationServer(options = {}) {
     let room = rooms.get(id);
     if (room) return room;
 
-    const now = Date.now();
+    const nowValue = now();
     room = {
       awareness: new Map(),
       bootstrapOwner: null,
       bootstrapOwnerClientId: null,
+      bootstrapTimer: null,
       clients: new Set(),
       deferredSyncClients: new Map(),
       doc: new Doc(),
       hasReceivedUpdate: false,
       id,
-      lastActiveAt: now,
-      lastEmptyAt: now,
+      lastActiveAt: nowValue,
+      lastEmptyAt: nowValue,
     };
     rooms.set(id, room);
     logRoomEvent('room.created', room);
@@ -115,19 +114,20 @@ function createCollaborationServer(options = {}) {
   const evictRoom = (room, reason) => {
     logRoomEvent('room.evicted', room, { reason });
     room.doc.destroy();
+    if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
     room.awareness.clear();
     room.deferredSyncClients.clear();
     rooms.delete(room.id);
   };
 
   const cleanupIdleRooms = () => {
-    const now = Date.now();
+    const nowValue = now();
     let idleRooms = Array.from(rooms.values())
       .filter((room) => room.clients.size === 0)
       .sort((a, b) => a.lastEmptyAt - b.lastEmptyAt);
 
     for (const room of idleRooms) {
-      if (now - room.lastEmptyAt >= config.roomIdleTtlMs) evictRoom(room, 'idle ttl');
+      if (nowValue - room.lastEmptyAt >= config.roomIdleTtlMs) evictRoom(room, 'idle ttl');
     }
 
     idleRooms = Array.from(rooms.values())
@@ -162,10 +162,37 @@ function createCollaborationServer(options = {}) {
   };
 
   const assignBootstrapOwner = (room, socket, clientId) => {
+    if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
     room.bootstrapOwner = socket;
     room.bootstrapOwnerClientId = clientId;
     logRoomEvent('bootstrap.owner-assigned', room, { clientId });
     sendRoomSync(room, socket, clientId);
+    room.bootstrapTimer = setTimeout(() => {
+      if (room.hasReceivedUpdate || room.bootstrapOwner !== socket) return;
+
+      logRoomEvent('bootstrap.timeout', room, { clientId });
+      room.bootstrapTimer = null;
+      room.bootstrapOwner = null;
+      room.bootstrapOwnerClientId = null;
+
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close(1013, 'Bootstrap owner timed out.');
+      }
+
+      const nextOwner = Array.from(room.deferredSyncClients).find(
+        ([candidate]) => candidate.readyState === WebSocket.OPEN,
+      );
+      if (!nextOwner) return;
+
+      const [nextSocket, nextClientId] = nextOwner;
+      room.deferredSyncClients.delete(nextSocket);
+      logRoomEvent('bootstrap.owner-promoted', room, {
+        clientId: nextClientId,
+        reason: 'timeout',
+      });
+      assignBootstrapOwner(room, nextSocket, nextClientId);
+    }, config.bootstrapTimeoutMs);
+    room.bootstrapTimer.unref?.();
   };
 
   const flushDeferredSyncClients = (room) => {
@@ -174,9 +201,11 @@ function createCollaborationServer(options = {}) {
     for (const [socket, clientId] of clients) sendRoomSync(room, socket, clientId);
   };
 
-  const completeBootstrap = (room, clientId) => {
-    if (room.hasReceivedUpdate) return;
+  const completeBootstrap = (room, socket, clientId) => {
+    if (room.hasReceivedUpdate || room.bootstrapOwner !== socket) return false;
     room.hasReceivedUpdate = true;
+    if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
+    room.bootstrapTimer = null;
     room.bootstrapOwner = null;
     room.bootstrapOwnerClientId = null;
     logRoomEvent('bootstrap.completed', room, {
@@ -184,20 +213,28 @@ function createCollaborationServer(options = {}) {
       deferredClientCount: room.deferredSyncClients.size,
     });
     flushDeferredSyncClients(room);
+    return true;
   };
 
-  const releaseBootstrapClient = (room, socket) => {
-    room.deferredSyncClients.delete(socket);
-    if (room.bootstrapOwner !== socket || room.hasReceivedUpdate) return;
-    room.bootstrapOwner = null;
-    room.bootstrapOwnerClientId = null;
+  const promoteDeferredBootstrapClient = (room, reason) => {
     const nextOwner = Array.from(room.deferredSyncClients).find(
       ([candidate]) => candidate.readyState === WebSocket.OPEN,
     );
     if (!nextOwner) return;
     const [nextSocket, nextClientId] = nextOwner;
     room.deferredSyncClients.delete(nextSocket);
+    logRoomEvent('bootstrap.owner-promoted', room, { clientId: nextClientId, reason });
     assignBootstrapOwner(room, nextSocket, nextClientId);
+  };
+
+  const releaseBootstrapClient = (room, socket) => {
+    room.deferredSyncClients.delete(socket);
+    if (room.bootstrapOwner !== socket || room.hasReceivedUpdate) return;
+    if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
+    room.bootstrapTimer = null;
+    room.bootstrapOwner = null;
+    room.bootstrapOwnerClientId = null;
+    promoteDeferredBootstrapClient(room, 'disconnect');
   };
 
   const handleSocketConnection = (socket, request) => {
@@ -218,9 +255,12 @@ function createCollaborationServer(options = {}) {
       socket.isAlive = true;
     });
     room.clients.add(socket);
-    room.lastActiveAt = Date.now();
+    room.lastActiveAt = now();
     room.lastEmptyAt = null;
     logRoomEvent('client.connected', room, { clientId });
+    socket.on('error', (error) => {
+      logRoomEvent('client.error', room, { clientId, message: error.message });
+    });
 
     // An empty Y.Doc may be bootstrapped by exactly one browser. Simultaneous
     // clients wait for its first update so a database snapshot is not inserted
@@ -235,11 +275,6 @@ function createCollaborationServer(options = {}) {
     }
 
     socket.on('message', (rawMessage) => {
-      if (getMessageSize(rawMessage) > config.maxMessageBytes) {
-        socket.close(1009, 'Message is too large.');
-        return;
-      }
-
       let message;
       try {
         message = JSON.parse(String(rawMessage));
@@ -249,11 +284,15 @@ function createCollaborationServer(options = {}) {
       }
 
       if (message.type === 'update') {
+        if (!room.hasReceivedUpdate && room.bootstrapOwner !== socket) {
+          socket.close(1008, 'Bootstrap owner required.');
+          return;
+        }
         try {
           const update = decodeUpdate(message.update);
           applyUpdate(room.doc, update, socket);
-          room.lastActiveAt = Date.now();
-          completeBootstrap(room, clientId);
+          room.lastActiveAt = now();
+          completeBootstrap(room, socket, clientId);
           logRoomEvent('update.applied', room, {
             clientId,
             updateBytes: update.byteLength,
@@ -281,14 +320,14 @@ function createCollaborationServer(options = {}) {
       broadcast(room, socket, { sender: clientId, state: null, type: 'awareness' });
       if (room.clients.size === 0) {
         room.awareness.clear();
-        room.lastEmptyAt = Date.now();
+        room.lastEmptyAt = now();
       }
       logRoomEvent('client.disconnected', room, { clientId });
     });
   };
 
   const server = http.createServer((request, response) => {
-    if (request.method === 'OPTIONS') return sendJson(response, 204, {});
+    if (request.method === 'OPTIONS') return sendJson(response, 204);
     if (request.method === 'GET' && request.url === '/health') {
       return sendJson(response, 200, { ok: true });
     }
@@ -297,7 +336,7 @@ function createCollaborationServer(options = {}) {
     }
     return sendJson(response, 404, { error: 'Not found' });
   });
-  const wsServer = new WebSocketServer({ noServer: true });
+  const wsServer = new WebSocketServer({ maxPayload: config.maxMessageBytes, noServer: true });
   server.on('upgrade', (request, socket, head) => {
     wsServer.handleUpgrade(request, socket, head, (websocket) => {
       handleSocketConnection(websocket, request);
@@ -323,7 +362,10 @@ function createCollaborationServer(options = {}) {
     close: async () => {
       for (const timer of timers) clearInterval(timer);
       for (const socket of wsServer.clients) socket.terminate();
-      for (const room of rooms.values()) room.doc.destroy();
+      for (const room of rooms.values()) {
+        if (room.bootstrapTimer) clearTimeout(room.bootstrapTimer);
+        room.doc.destroy();
+      }
       rooms.clear();
       await new Promise((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
@@ -338,14 +380,16 @@ function createCollaborationServer(options = {}) {
         });
       }),
     rooms,
+    cleanupIdleRooms,
   };
 }
 
 if (require.main === module) {
   const instance = createCollaborationServer();
   const port = Number(process.env.PAGE_COLLABORATION_PORT || 12_345);
-  instance.listen(port, '0.0.0.0').then(() => {
-    console.info(`[page-collaboration] listening on http://0.0.0.0:${port}`);
+  const host = process.env.PAGE_COLLABORATION_HOST || '127.0.0.1';
+  instance.listen(port, host).then(() => {
+    console.info(`[page-collaboration] listening on http://${host}:${port}`);
   });
 }
 

@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { resolveYjsWebSocketUrl } from './collaborationUrl';
 
 describe('resolveYjsWebSocketUrl', () => {
-  it('uses localhost while rendering without a browser location', () => {
-    expect(resolveYjsWebSocketUrl()).toBe('ws://localhost:12345');
+  it('uses localhost without a browser location only in development', () => {
+    expect(resolveYjsWebSocketUrl(undefined, undefined, 'development')).toBe(
+      'ws://localhost:12345',
+    );
+    expect(resolveYjsWebSocketUrl(undefined, undefined, 'production')).toBeUndefined();
   });
 
   it('uses the page hostname for an HTTP deployment', () => {
@@ -16,6 +19,7 @@ describe('resolveYjsWebSocketUrl', () => {
           protocol: 'http:',
         },
         undefined,
+        'development',
       ),
     ).toBe('ws://203.0.113.10:12345');
   });
@@ -29,6 +33,7 @@ describe('resolveYjsWebSocketUrl', () => {
           protocol: 'https:',
         },
         undefined,
+        'development',
       ),
     ).toBe('wss://page.example.com:12345');
   });
@@ -42,6 +47,7 @@ describe('resolveYjsWebSocketUrl', () => {
           protocol: 'http:',
         },
         undefined,
+        'development',
       ),
     ).toBe('ws://localhost:12345');
   });
@@ -51,7 +57,24 @@ describe('resolveYjsWebSocketUrl', () => {
       resolveYjsWebSocketUrl(
         { host: 'page.example.com', hostname: 'page.example.com', protocol: 'https:' },
         'wss://collaboration.example.com/yjs/',
+        'production',
       ),
     ).toBe('wss://collaboration.example.com/yjs');
+  });
+
+  it('removes every trailing slash from an explicit endpoint', () => {
+    expect(
+      resolveYjsWebSocketUrl(undefined, 'wss://collaboration.example.com/yjs////', 'production'),
+    ).toBe('wss://collaboration.example.com/yjs');
+  });
+
+  it('does not infer a production endpoint from the page host', () => {
+    expect(
+      resolveYjsWebSocketUrl(
+        { host: 'page.example.com', hostname: 'page.example.com', protocol: 'https:' },
+        undefined,
+        'production',
+      ),
+    ).toBeUndefined();
   });
 });
