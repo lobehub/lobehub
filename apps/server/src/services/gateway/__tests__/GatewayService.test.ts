@@ -76,6 +76,11 @@ vi.mock('../MessageGatewayClient', () => {
       resolveMessageGatewayHost(platform) === 'node' ? mockNodeGatewayClient : mockGatewayClient,
     getMessageGatewayClientForHost: (host: string) =>
       host === 'node' ? mockNodeGatewayClient : mockGatewayClient,
+    isAnyMessageGatewayEnabled: () =>
+      (mockNodeGateway.configured
+        ? [mockGatewayClient, mockNodeGatewayClient]
+        : [mockGatewayClient]
+      ).some((client) => client.isEnabled),
     resolveMessageGatewayHost,
   };
 });
@@ -1326,6 +1331,103 @@ describe('GatewayService', () => {
         expect.objectContaining({ connectionMode: 'polling', platform: 'wechat' }),
       );
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('treats the deployment as gateway-managed when only the node host is configured', async () => {
+      // Node-only deployment: no MESSAGE_GATEWAY_URL at all. Reading the
+      // default host alone would report "no gateway", send the runtime down
+      // the in-process path, and disconnectAll() the very host holding the
+      // connections.
+      mockGatewayClient.isConfigured = false;
+      mockGatewayClient.isEnabled = false;
+
+      expect(service.useMessageGateway).toBe(true);
+
+      await service.ensureRunning();
+
+      expect(mockGatewayManager.start).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.disconnectAll).not.toHaveBeenCalled();
+    });
+
+    it('defers a cross-host move while the destination host has no usable snapshot', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wechat-app',
+                credentials: { botToken: 'token' },
+                id: 'wechat-provider',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindByIds.mockResolvedValue([
+        { enabled: true, id: 'wechat-provider', platform: 'wechat', settings: {} },
+      ]);
+      // Live on the default host, routed to node — but node's admin surface is
+      // down, so its connect pass would defer. Disconnecting here first would
+      // take WeChat dark for the whole outage.
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+      mockNodeGatewayClient.getStats.mockRejectedValue(new Error('node stats unavailable'));
+      mockNodeGatewayClient.getRegisteredIds.mockRejectedValue(new Error('node registry down'));
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('never connects a messenger link the capped migration left running on the old host', async () => {
+      // 60 linked users, all still polling on the default host. Cross-host
+      // cleanup is capped at 50 per round, so connecting all 60 on node would
+      // double-deliver for the 10 that were not drained.
+      const links = Array.from({ length: 60 }, (_, i) => ({
+        applicationId: 'bot-1@im.bot',
+        credentials: { baseUrl: 'https://ilink.example.com', botId: 'bot-1', botToken: 'tok' },
+        tenantId: `tenant-${i}`,
+        userId: `user-${i}`,
+      }));
+      const strayIds = links.map((l) => `messenger:wechat:${l.tenantId}:user-${l.userId}`);
+      mockFindAllLinksByPlatform.mockResolvedValue(links);
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: strayIds });
+
+      await service.ensureRunning();
+
+      const drained = mockGatewayClient.disconnect.mock.calls.map(([id]: [string]) => id);
+      const connected = mockNodeGatewayClient.connect.mock.calls.map(
+        ([config]: [{ connectionId: string }]) => config.connectionId,
+      );
+
+      expect(drained).toHaveLength(50);
+      // Every id connected on the new host was drained from the old one first,
+      // and the undrained remainder is left for the next round.
+      expect(connected.every((id: string) => drained.includes(id))).toBe(true);
+      expect(connected).toHaveLength(50);
+    });
+
+    it('keeps a linked account whose credentials are undecryptable out of the stale pass', async () => {
+      // decryptRow returns `credentials: {}` on a key-vault mismatch, which is
+      // indistinguishable from "never had a token". Treating that as unlinked
+      // would tear down every healthy poller in one round.
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'bot-1@im.bot',
+          credentials: {},
+          tenantId: 'alice@im.wechat',
+          userId: 'user-1',
+        },
+      ]);
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({
+        ids: ['messenger:wechat:alice@im.wechat:user-user-1'],
+      });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
     });
   });
 });

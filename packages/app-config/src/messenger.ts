@@ -10,6 +10,10 @@ import {
 import { gatewayEnv } from '@/envs/gateway';
 import { redisEnv } from '@/envs/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  isMessageGatewayHostConfigured,
+  resolveMessageGatewayHost,
+} from '@/server/services/gateway/MessageGatewayClient';
 
 const log = debug('lobe-server:messenger:config');
 
@@ -174,18 +178,10 @@ export const getMessengerWechatConfig = async (): Promise<MessengerWechatConfig 
   // WeChat owns a long-polling connection in a message gateway, with Redis
   // backing its QR session and per-user connection state. Do not advertise an
   // enabled provider until the runtime can actually complete that lifecycle.
-  // The connection may live on either gateway host: the default one, or the
-  // Node gateway when `MESSAGE_GATEWAY_NODE_PLATFORMS` routes wechat there.
-  const wechatOnNodeGateway =
-    !!gatewayEnv.MESSAGE_GATEWAY_NODE_URL &&
-    !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN &&
-    (gatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS ?? '')
-      .split(',')
-      .map((entry) => entry.trim())
-      .includes('wechat');
-  const gatewayReady =
-    wechatOnNodeGateway ||
-    (!!gatewayEnv.MESSAGE_GATEWAY_URL && !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN);
+  // Which host holds that connection is the router's call, not ours — asking
+  // it keeps this in step with a deployment that runs only the Node gateway,
+  // where reading MESSAGE_GATEWAY_URL alone would report WeChat as unavailable.
+  const gatewayReady = isMessageGatewayHostConfigured(resolveMessageGatewayHost('wechat'));
   if (
     gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1' ||
     !gatewayReady ||

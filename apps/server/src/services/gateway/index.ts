@@ -38,6 +38,7 @@ import {
   getConfiguredMessageGatewayHosts,
   getMessageGatewayClient,
   getMessageGatewayClientForHost,
+  isAnyMessageGatewayEnabled,
   type MessageGatewayCapabilities,
   type MessageGatewayConnectionStatus,
   type MessageGatewayHost,
@@ -171,7 +172,7 @@ export class GatewayService {
    * the client reachable for cleanup.
    */
   get useMessageGateway(): boolean {
-    return getMessageGatewayClient().isEnabled;
+    return isAnyMessageGatewayEnabled();
   }
 
   async ensureRunning(): Promise<void> {
@@ -243,18 +244,33 @@ export class GatewayService {
       snapshots.set(host, await this.fetchActualConnections(getMessageGatewayClientForHost(host)));
     }
 
+    // A cross-host move must not tear the source down before the destination
+    // can take over. A host whose snapshot is missing or incomplete defers
+    // every connect for an id it cannot see (absence doesn't prove absence),
+    // so disconnecting there first would take the platform dark until some
+    // later round. Only hosts with a complete snapshot are safe destinations.
+    const hostsReadyToReceive = new Set(
+      hosts.filter((host) => snapshots.get(host)?.complete === true),
+    );
+
     for (const host of hosts) {
       await this.syncHostConnections({
         desired,
         desiredComplete,
         gated,
         host,
+        hostsReadyToReceive,
         serverDB,
         snapshot: snapshots.get(host) ?? null,
       });
     }
 
-    await this.syncMessengerPollingConnections(serverDB, gateKeeper, snapshots);
+    await this.syncMessengerPollingConnections(
+      serverDB,
+      gateKeeper,
+      snapshots,
+      hostsReadyToReceive,
+    );
 
     log(
       'Gateway sync complete in %dms across %d host(s): desired=%d gated=%d',
@@ -271,10 +287,11 @@ export class GatewayService {
     desiredComplete: boolean;
     gated: Map<string, string>;
     host: MessageGatewayHost;
+    hostsReadyToReceive: Set<MessageGatewayHost>;
     serverDB: Awaited<ReturnType<typeof getServerDB>>;
     snapshot: ActualConnectionsSnapshot | null;
   }): Promise<void> {
-    const { desiredComplete, host, serverDB, snapshot: actual } = params;
+    const { desiredComplete, host, hostsReadyToReceive, serverDB, snapshot: actual } = params;
     const client = getMessageGatewayClientForHost(host);
 
     // Slice of desired/gated owned by this host, by platform routing.
@@ -301,6 +318,7 @@ export class GatewayService {
         desired,
         gated,
         host,
+        hostsReadyToReceive,
       );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
@@ -465,6 +483,7 @@ export class GatewayService {
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     gateKeeper: KeyVaultsGateKeeper,
     snapshots: Map<MessageGatewayHost, ActualConnectionsSnapshot | null>,
+    hostsReadyToReceive: Set<MessageGatewayHost>,
   ): Promise<void> {
     for (const definition of messengerPlatformRegistry.listPlatforms()) {
       if (definition.connectionMode !== 'polling') continue;
@@ -475,24 +494,60 @@ export class GatewayService {
 
       const prefix = `messenger:${platform}:`;
 
+      // Ids this round leaves running on a host that no longer owns them —
+      // past the per-round cap, failed to disconnect, or not attempted at all.
+      // The connect pass must skip these: connecting one while it still polls
+      // elsewhere is exactly the double-delivery this pass exists to prevent.
+      const stillElsewhere = new Set<string>();
+
       // Tear down this platform's per-user connections on every other host —
       // a polling platform hosted twice double-delivers every message. Runs
       // before the owning host's connect pass for the same reason
       // (disconnect-then-connect ordering during a host migration).
       for (const [otherHost, otherSnapshot] of snapshots) {
         if (otherHost === host || !otherSnapshot) continue;
-        const strayIds = [...otherSnapshot.connections.keys()]
-          .filter((id) => id.startsWith(prefix))
-          .slice(0, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT);
+        const strayIds = [...otherSnapshot.connections.keys()].filter((id) =>
+          id.startsWith(prefix),
+        );
         if (strayIds.length === 0) continue;
+
+        // Same rule as the bot-provider stale pass: never strip the source
+        // while the destination cannot take over, or the platform goes dark
+        // for the length of the destination's outage.
+        if (!hostsReadyToReceive.has(host)) {
+          strayIds.forEach((id) => stillElsewhere.add(id));
+          log(
+            'Gateway sync[%s]: %s host has no usable snapshot — leaving %d %s connection(s) on %s host',
+            host,
+            host,
+            strayIds.length,
+            platform,
+            otherHost,
+          );
+          continue;
+        }
+
+        const batch = strayIds.slice(0, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT);
+        strayIds.slice(GATEWAY_SYNC_STALE_DISCONNECT_LIMIT).forEach((id) => stillElsewhere.add(id));
+        if (batch.length < strayIds.length) {
+          log(
+            'Gateway sync[%s]: capping cross-host %s migration to %d of %d this round',
+            host,
+            platform,
+            batch.length,
+            strayIds.length,
+          );
+        }
+
         const otherClient = getMessageGatewayClientForHost(otherHost);
         await pMap(
-          strayIds,
+          batch,
           async (id) => {
             try {
               await otherClient.disconnect(id);
               log('Gateway sync[%s]: moved %s off %s host', host, id, otherHost);
             } catch (err) {
+              stillElsewhere.add(id);
               log('Gateway sync[%s]: cross-host disconnect failed %s: %O', host, id, err);
             }
           },
@@ -513,15 +568,25 @@ export class GatewayService {
       }
 
       const desired = new Map<string, DecryptedMessengerAccountLink>();
+      // Linked accounts we cannot connect but must not treat as unlinked.
+      const unusable = new Set<string>();
       for (const link of links) {
         const credentials = link.credentials as { botToken?: string };
-        // Links without a token can never poll — leave whatever state exists.
-        if (!link.applicationId || !credentials.botToken) continue;
         const connectionId = messengerConnectionIdForUser({
           connectionMode: 'polling',
           installationKey: `${platform}:${link.tenantId}`,
           userId: link.userId,
         });
+        // A link whose credentials fail to decrypt comes back with an empty
+        // object, indistinguishable here from one that never had a token.
+        // Either way a connect can only fail — but the account IS still
+        // linked, so it must stay out of the stale pass: otherwise a
+        // key-vault mismatch reads as "everyone unlinked" and tears down
+        // every healthy poller in a single round.
+        if (!link.applicationId || !credentials.botToken) {
+          unusable.add(connectionId);
+          continue;
+        }
         desired.set(connectionId, link);
       }
 
@@ -539,6 +604,19 @@ export class GatewayService {
           // a working admin surface.
           if (!snapshot) {
             skipped++;
+            return;
+          }
+          // Still polling on a host that no longer owns it (past this round's
+          // migration cap, or its disconnect failed). Connecting here too
+          // would double-deliver every inbound message until the next round
+          // finishes the move.
+          if (stillElsewhere.has(connectionId)) {
+            skipped++;
+            log(
+              'Gateway sync[%s]: %s still live on another host, deferring connect',
+              host,
+              connectionId,
+            );
             return;
           }
           const exists = snapshot.connections.has(connectionId);
@@ -588,10 +666,12 @@ export class GatewayService {
       );
 
       // Unlinked accounts whose connection still exists on the owning host.
+      // `unusable` ids are linked but unconnectable — they belong to neither
+      // set and must survive this pass untouched.
       let stale = 0;
       if (snapshot?.complete) {
         const staleIds = [...snapshot.connections.keys()]
-          .filter((id) => id.startsWith(prefix) && !desired.has(id))
+          .filter((id) => id.startsWith(prefix) && !desired.has(id) && !unusable.has(id))
           .slice(0, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT);
         await pMap(
           staleIds,
@@ -799,6 +879,7 @@ export class GatewayService {
     desired: Map<string, DesiredGatewayConnection>,
     gated: Set<string>,
     host: MessageGatewayHost,
+    hostsReadyToReceive: Set<MessageGatewayHost>,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
       (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
@@ -833,22 +914,38 @@ export class GatewayService {
         try {
           const row = rowById.get(id);
 
-          // TOCTOU guard: a provider enabled (and connected) between the
-          // desired snapshot and the actual fetch shows up in `actual` but not
-          // in `desired`. These rows were queried after both snapshots, so
-          // trust them: an enabled persistent-mode row is not stale — leave it
-          // for the next round to classify with a fresh desired set. Only rows
-          // whose platform routes to THIS host are protected: an enabled row
-          // routed elsewhere is exactly the cross-host move the stale pass
-          // must clean up.
-          if (
+          // An enabled persistent-mode row that shows up in `actual` but not
+          // in `desired` is one of two things, and only one of them is stale.
+          const livePersistentRow =
             row?.enabled &&
-            resolveMessageGatewayHost(row.platform) === host &&
             resolveConnectionMode(platformRegistry.getPlatform(row.platform), row.settings) !==
-              'webhook'
-          ) {
-            log('Gateway sync: %s enabled during sync, skipping stale disconnect', id);
-            return;
+              'webhook';
+
+          if (livePersistentRow) {
+            const owner = resolveMessageGatewayHost(row.platform);
+
+            // TOCTOU: enabled (and connected) between the desired snapshot and
+            // the actual fetch. This row was queried after both, so trust it —
+            // leave it for the next round to classify with a fresh desired set.
+            if (owner === host) {
+              log('Gateway sync: %s enabled during sync, skipping stale disconnect', id);
+              return;
+            }
+
+            // Routed to another host: this IS the cross-host move the stale
+            // pass exists to perform — but only once the destination can
+            // actually take over. Disconnecting into a host that will defer
+            // every connect would take the connection dark for the whole
+            // outage, so hold it here and retry next round.
+            if (!hostsReadyToReceive.has(owner)) {
+              log(
+                'Gateway sync[%s]: %s belongs on %s host, which has no usable snapshot — deferring move',
+                host,
+                id,
+                owner,
+              );
+              return;
+            }
           }
 
           await client.disconnect(id);

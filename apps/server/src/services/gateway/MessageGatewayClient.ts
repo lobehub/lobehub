@@ -306,3 +306,33 @@ export function getMessageGatewayClientForHost(host: MessageGatewayHost): Messag
 export function getMessageGatewayClient(platform?: string): MessageGatewayClient {
   return getMessageGatewayClientForHost(resolveMessageGatewayHost(platform));
 }
+
+/**
+ * Whether `host` has both a URL and a token. Reads env directly rather than
+ * asking a client: clients capture their URL at construction and are cached
+ * per host, so they answer for the environment as it was the first time
+ * anyone asked.
+ */
+export function isMessageGatewayHostConfigured(host: MessageGatewayHost): boolean {
+  const baseUrl =
+    host === 'node' ? gatewayEnv.MESSAGE_GATEWAY_NODE_URL : gatewayEnv.MESSAGE_GATEWAY_URL;
+  return !!baseUrl && !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN;
+}
+
+/**
+ * Whether ANY configured host runs connections — the "is this deployment
+ * gateway-managed at all?" question, as opposed to "which host owns this
+ * platform?".
+ *
+ * Must not be answered by the default host alone: a deployment can configure
+ * only the Node gateway, and reading just `MESSAGE_GATEWAY_URL` there would
+ * report the gateway as unused, sending the runtime down the in-process
+ * connection path while it also tears down the very connections the Node host
+ * is holding.
+ */
+export function isAnyMessageGatewayEnabled(): boolean {
+  return (
+    gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' &&
+    getConfiguredMessageGatewayHosts().some(isMessageGatewayHostConfigured)
+  );
+}

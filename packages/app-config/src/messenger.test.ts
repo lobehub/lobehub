@@ -11,6 +11,8 @@ const {
 } = vi.hoisted(() => ({
   gatewayEnvState: {
     MESSAGE_GATEWAY_ENABLED: '1' as string | undefined,
+    MESSAGE_GATEWAY_NODE_PLATFORMS: undefined as string | undefined,
+    MESSAGE_GATEWAY_NODE_URL: undefined as string | undefined,
     MESSAGE_GATEWAY_SERVICE_TOKEN: 'gateway-token' as string | undefined,
     MESSAGE_GATEWAY_URL: 'https://gateway.example.com' as string | undefined,
   },
@@ -38,6 +40,8 @@ describe('getMessengerWechatConfig', () => {
     gatewayEnvState.MESSAGE_GATEWAY_ENABLED = '1';
     gatewayEnvState.MESSAGE_GATEWAY_URL = 'https://gateway.example.com';
     gatewayEnvState.MESSAGE_GATEWAY_SERVICE_TOKEN = 'gateway-token';
+    gatewayEnvState.MESSAGE_GATEWAY_NODE_URL = undefined;
+    gatewayEnvState.MESSAGE_GATEWAY_NODE_PLATFORMS = undefined;
     redisEnvState.REDIS_URL = 'redis://localhost:6379';
     mockGetServerDB.mockResolvedValue({});
     mockInitWithEnvKey.mockResolvedValue({});
@@ -61,6 +65,28 @@ describe('getMessengerWechatConfig', () => {
     ['Redis explicitly disabled', () => vi.stubEnv('DISABLE_REDIS', '1')],
   ])('does not advertise WeChat when %s', async (_case, arrange) => {
     arrange();
+
+    await expect(getMessengerWechatConfig()).resolves.toBeNull();
+    expect(mockFindEnabledByPlatform).not.toHaveBeenCalled();
+  });
+
+  it('advertises WeChat on a node-only deployment with no default gateway URL', async () => {
+    // Routed to the Node gateway, which is the only one configured. Reading
+    // MESSAGE_GATEWAY_URL alone would report WeChat as unavailable while its
+    // connections are running perfectly well on the other host.
+    gatewayEnvState.MESSAGE_GATEWAY_URL = undefined;
+    gatewayEnvState.MESSAGE_GATEWAY_NODE_URL = 'https://node-gateway.example.com';
+    gatewayEnvState.MESSAGE_GATEWAY_NODE_PLATFORMS = 'wechat';
+
+    await expect(getMessengerWechatConfig()).resolves.toEqual({ enabled: true });
+  });
+
+  it('does not advertise WeChat when it is not routed to the only configured host', async () => {
+    // Node gateway configured, but WeChat is not on it — so WeChat still needs
+    // the default host, which has no URL.
+    gatewayEnvState.MESSAGE_GATEWAY_URL = undefined;
+    gatewayEnvState.MESSAGE_GATEWAY_NODE_URL = 'https://node-gateway.example.com';
+    gatewayEnvState.MESSAGE_GATEWAY_NODE_PLATFORMS = 'whatsapp-baileys';
 
     await expect(getMessengerWechatConfig()).resolves.toBeNull();
     expect(mockFindEnabledByPlatform).not.toHaveBeenCalled();
