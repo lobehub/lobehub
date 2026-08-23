@@ -90,6 +90,16 @@ export const resolveTaskCollection = (searchParams: URLSearchParams): TaskCollec
 export const clampScheduledPage = (page: number, total: number): number =>
   Math.min(page, Math.max(1, Math.ceil(total / SCHEDULED_TASK_PAGE_SIZE)));
 
+export const getScheduledTaskViewOptions = (
+  viewOptions: TaskListViewOptions,
+): TaskListViewOptions => ({
+  ...viewOptions,
+  groupBy: 'automationMode',
+  hideCompleted: false,
+  orderBy: 'updatedAt',
+  orderDirection: 'desc',
+});
+
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
@@ -133,7 +143,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const scheduledViewOptions = useMemo(
-    () => ({ ...viewOptions, groupBy: 'automationMode' as const, hideCompleted: false }),
+    () => getScheduledTaskViewOptions(viewOptions),
     [viewOptions],
   );
   useEffect(() => {

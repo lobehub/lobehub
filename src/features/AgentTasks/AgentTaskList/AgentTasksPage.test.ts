@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   clampScheduledPage,
+  getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
   resolveTaskCollection,
 } from './AgentTasksPage';
+import { DEFAULT_TASK_LIST_VIEW_OPTIONS } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
 describe('AgentTasksPage', () => {
@@ -17,6 +19,26 @@ describe('AgentTasksPage', () => {
 
     it('keeps the first page valid for an empty result', () => {
       expect(clampScheduledPage(1, 0)).toBe(1);
+    });
+  });
+
+  describe('getScheduledTaskViewOptions', () => {
+    it('keeps client sorting aligned with the updatedAt-desc server pagination', () => {
+      expect(
+        getScheduledTaskViewOptions({
+          ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+          orderBy: 'title',
+          orderDirection: 'asc',
+          showSubTasks: true,
+        }),
+      ).toEqual({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        groupBy: 'automationMode',
+        hideCompleted: false,
+        orderBy: 'updatedAt',
+        orderDirection: 'desc',
+        showSubTasks: true,
+      });
     });
   });
 
