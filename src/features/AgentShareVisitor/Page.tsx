@@ -39,7 +39,7 @@ const AgentShareVisitorPage = memo<{ data: SharedAgentData }>(({ data }) => {
           style={{ borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}` }}
           width={260}
         >
-          <TopicPanel />
+          <TopicPanel shareId={data.shareId} />
         </Flexbox>
       )}
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
@@ -84,7 +84,11 @@ const AgentShareVisitorPage = memo<{ data: SharedAgentData }>(({ data }) => {
           onClose={() => setDrawerOpen(false)}
         >
           {/* The Drawer already renders the title bar — skip the panel's own. */}
-          <TopicPanel showTitle={false} />
+          <TopicPanel
+            shareId={data.shareId}
+            showTitle={false}
+            onSelect={() => setDrawerOpen(false)}
+          />
         </Drawer>
       )}
     </Flexbox>

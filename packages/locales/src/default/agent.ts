@@ -433,9 +433,19 @@ export default {
   'share.visibility.private': 'Private',
   'share.visibility.privateHint': 'Only you can access this agent for now.',
   'share.visibilityUpdated': 'Share visibility updated',
-  'share.visitor.sendDisabled': 'Sending messages to this shared agent is not available yet',
+  'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
+  'share.visitor.errors.insufficientBudget':
+    'This shared agent has run out of budget. Please contact its owner.',
+  'share.visitor.errors.topicLimit':
+    'You have reached the conversation limit on this shared agent.',
+  'share.visitor.errors.turnLimit':
+    'This conversation has reached its turn limit. Start a new conversation to continue.',
+  'share.visitor.input.placeholder': 'Message this shared agent…',
+  'share.visitor.input.send': 'Send',
   'share.visitor.topics.empty': 'No conversations yet',
+  'share.visitor.topics.new': 'New conversation',
   'share.visitor.topics.title': 'Conversations',
+  'share.visitor.topics.untitled': 'Untitled conversation',
 
   'transfer.title': 'Move',
   'transfer.copyTo': 'Copy to…',
