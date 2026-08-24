@@ -393,12 +393,20 @@ export class GatewayService {
       outcomes.set(host, { connected, failed, ok: !reason, reason });
     }
 
-    await this.syncMessengerPollingConnections(
+    // Runs after the connect phase, so its problems have to be folded back
+    // into the outcomes rather than reported alongside them — a per-user
+    // poller left offline is exactly the state a restarting gateway is
+    // waiting to hear about.
+    const messengerProblems = await this.syncMessengerPollingConnections(
       serverDB,
       gateKeeper,
       snapshots,
       hostsReadyToReceive,
     );
+    for (const [host, reason] of messengerProblems) {
+      const outcome = outcomes.get(host);
+      if (outcome?.ok) outcomes.set(host, { ...outcome, ok: false, reason });
+    }
 
     log(
       'Gateway sync complete in %dms across %d host(s): desired=%d gated=%d',
@@ -673,7 +681,9 @@ export class GatewayService {
     gateKeeper: KeyVaultsGateKeeper,
     snapshots: Map<MessageGatewayHost, ActualConnectionsSnapshot | null>,
     hostsReadyToReceive: Set<MessageGatewayHost>,
-  ): Promise<void> {
+  ): Promise<Map<MessageGatewayHost, string>> {
+    /** host → why its messenger pass could not finish. */
+    const problems = new Map<MessageGatewayHost, string>();
     for (const definition of messengerPlatformRegistry.listPlatforms()) {
       if (definition.connectionMode !== 'polling') continue;
       const platform = definition.id;
@@ -700,6 +710,7 @@ export class GatewayService {
         );
       } catch (err) {
         log('Gateway sync[%s]: messenger link listing failed for %s: %O', host, platform, err);
+        problems.set(host, `${platform} link listing failed`);
         continue;
       }
 
@@ -919,7 +930,11 @@ export class GatewayService {
         stale,
         failed,
       );
+
+      if (failed > 0) problems.set(host, `${failed} ${platform} link(s) failed`);
     }
+
+    return problems;
   }
 
   /**

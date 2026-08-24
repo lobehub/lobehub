@@ -10,7 +10,7 @@ const mockEnv = vi.hoisted(() => ({
 const mockReconcileHost = vi.hoisted(() => vi.fn());
 const mockRedis = vi.hoisted(() => ({
   client: null as null | {
-    del: ReturnType<typeof vi.fn>;
+    eval: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
     ttl: ReturnType<typeof vi.fn>;
   },
@@ -97,7 +97,7 @@ describe('gatewayAnnounce', () => {
   describe('with redis', () => {
     beforeEach(() => {
       mockRedis.client = {
-        del: vi.fn().mockResolvedValue(1),
+        eval: vi.fn().mockResolvedValue(1),
         set: vi.fn().mockResolvedValue('OK'),
         ttl: vi.fn().mockResolvedValue(-2),
       };
@@ -136,11 +136,35 @@ describe('gatewayAnnounce', () => {
 
     it('releases the lock whether the rebuild succeeded or not', async () => {
       await call({ host: 'node' });
-      expect(mockRedis.client!.del).toHaveBeenCalledTimes(1);
+      expect(mockRedis.client!.eval).toHaveBeenCalledTimes(1);
 
       mockReconcileHost.mockRejectedValue(new Error('boom'));
       await call({ host: 'node' });
-      expect(mockRedis.client!.del).toHaveBeenCalledTimes(2);
+      expect(mockRedis.client!.eval).toHaveBeenCalledTimes(2);
+    });
+
+    it('releases only its own lock, by token', async () => {
+      await call({ host: 'node' });
+
+      const token = mockRedis.client!.set.mock.calls.find(([key]) =>
+        String(key).includes('lock'),
+      )?.[1];
+      const [script, keyCount, , releasedToken] = mockRedis.client!.eval.mock.calls[0];
+
+      expect(script).toContain('redis.call("get", KEYS[1]) == ARGV[1]');
+      expect(keyCount).toBe(1);
+      expect(releasedToken).toBe(token);
+    });
+
+    it('never releases a lock it failed to acquire', async () => {
+      // A transient redis error lets the rebuild through without the lock;
+      // deleting on the way out would drop whoever actually holds it.
+      mockRedis.client!.ttl.mockRejectedValue(new Error('redis blip'));
+
+      await call({ host: 'node' });
+
+      expect(mockReconcileHost).toHaveBeenCalled();
+      expect(mockRedis.client!.eval).not.toHaveBeenCalled();
     });
 
     it('defers while another rebuild for the same host is in flight', async () => {

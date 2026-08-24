@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import debug from 'debug';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -93,13 +95,21 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
   // Cooldown and lock are best-effort: without Redis the rebuild still runs,
   // which is the behaviour worth protecting. Only the crash-loop cap and the
   // overlap guard are lost.
+  // Identifies THIS request's hold on the lock. Without it the release below
+  // could delete a lock this request never acquired — after a transient Redis
+  // error let it through, or after a rebuild outlived the lease and someone
+  // else took over — which would let a crash loop run overlapping rebuilds.
+  const lockToken = randomUUID();
+  let holdsLock = false;
+
   if (redis) {
     try {
       const cooling = await redis.ttl(cooldownKey(host));
       if (cooling > 0) return retryLater(c, cooling, 'cooldown');
 
-      const locked = await redis.set(lockKey(host), '1', 'EX', ANNOUNCE_LOCK_SECONDS, 'NX');
+      const locked = await redis.set(lockKey(host), lockToken, 'EX', ANNOUNCE_LOCK_SECONDS, 'NX');
       if (locked !== 'OK') return retryLater(c, 5, 'rebuild in progress');
+      holdsLock = true;
     } catch (err) {
       log('announce: redis guard unavailable, rebuilding anyway: %O', err);
     }
@@ -139,6 +149,16 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
     // the retry is not turned away.
     return c.json({ error: 'Reconcile failed', reconciled: false }, 503);
   } finally {
-    if (redis) await redis.del(lockKey(host)).catch(() => undefined);
+    // Compare-and-delete: only ever drop the lock while it is still ours.
+    if (redis && holdsLock) {
+      await redis
+        .eval(
+          `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+          1,
+          lockKey(host),
+          lockToken,
+        )
+        .catch(() => undefined);
+    }
   }
 }

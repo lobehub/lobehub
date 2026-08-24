@@ -1402,6 +1402,36 @@ describe('GatewayService', () => {
         expect(outcome.failed).toBe(1);
       });
 
+      it('reports failure when the messenger link lookup fails', async () => {
+        // The messenger pass runs after the connect phase and swallows this
+        // into a `continue`; if it did not reach the outcome, a restarting
+        // gateway would be told its fleet is back while every per-user poller
+        // stayed offline.
+        mockFindAllLinksByPlatform.mockRejectedValue(new Error('db unavailable'));
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/link listing/i);
+      });
+
+      it('reports failure when a messenger poller could not be rebuilt', async () => {
+        mockFindAllLinksByPlatform.mockResolvedValue([
+          {
+            applicationId: 'bot-1@im.bot',
+            credentials: { baseUrl: 'https://ilink.test', botId: 'bot-1', botToken: 'tok' },
+            tenantId: 'alice',
+            userId: 'user-1',
+          },
+        ]);
+        mockNodeGatewayClient.connect.mockRejectedValue(new Error('gateway refused'));
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/link\(s\) failed/i);
+      });
+
       it('reports success for a host that legitimately owns nothing', async () => {
         // The pre-cutover shape: node configured, no platform routed to it.
         // Nothing to rebuild is not a failure, and must not make the gateway
