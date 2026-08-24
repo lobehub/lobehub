@@ -280,7 +280,7 @@ describe('cliAgentBinaries', () => {
     });
   });
 
-  describe('on macOS / Linux with a Unix-style claude binary', () => {
+  describe('on macOS / Linux with Unix-style binaries', () => {
     beforeEach(() => {
       platformMock.mockReturnValue('darwin');
     });
@@ -479,7 +479,7 @@ describe('cliAgentBinaries', () => {
       expect(execFileMock).toHaveBeenCalledTimes(1);
     });
 
-    it('falls back to the login shell PATH for tools installed by shell setup', async () => {
+    it('falls back to the login shell PATH for Antigravity installed by shell setup', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       process.env.PATH = '/usr/bin:/bin';
@@ -488,15 +488,15 @@ describe('cliAgentBinaries', () => {
       try {
         callExecFileError(new Error('not found'));
         callExecFile('/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin');
-        callExecFile('/Users/Hanam/.local/share/mise/shims/gemini\n');
-        callExecFile('gemini 0.2.0');
+        callExecFile('/Users/Hanam/.local/share/mise/shims/agy\n');
+        callExecFile('1.0.7-beta.1+build.5');
 
-        const { geminiCliBinary } = await import('../cliAgentBinaries');
-        const status = await geminiCliBinary.detect();
+        const { antigravityCliBinary } = await import('../cliAgentBinaries');
+        const status = await antigravityCliBinary.detect();
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
-        expect(status.version).toBe('0.2.0');
+        expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/agy');
+        expect(status.version).toBe('1.0.7-beta.1+build.5');
         // The login-shell PATH that resolved the shim must be surfaced so the
         // spawn site can carry it into the child env (mise/nvm `node` lives
         // there, not on the leaner inherited PATH).
@@ -514,7 +514,7 @@ describe('cliAgentBinaries', () => {
             PATH: '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
           },
         });
-        expect(execFileMock.mock.calls[3]![0]).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
+        expect(execFileMock.mock.calls[3]![0]).toBe('/Users/Hanam/.local/share/mise/shims/agy');
         expect(execFileMock.mock.calls[3]![2]).toMatchObject({
           env: {
             PATH: '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
@@ -523,6 +523,36 @@ describe('cliAgentBinaries', () => {
       } finally {
         process.env.PATH = originalPath;
         process.env.SHELL = originalShell;
+      }
+    });
+
+    it('falls back to the official Antigravity user install path', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which agy
+        callExecFile('1.0.7'); // ~/.local/bin/agy --version
+
+        const { antigravityCliBinary } = await import('../cliAgentBinaries');
+        const status = await antigravityCliBinary.detect();
+
+        expect(status).toEqual({
+          available: true,
+          path: path.join(os.homedir(), '.local', 'bin', 'agy'),
+          version: '1.0.7',
+        });
+        expect(execFileMock).toHaveBeenCalledTimes(2);
+        expect(execFileMock.mock.calls[0]![0]).toBe('which');
+        expect(execFileMock.mock.calls[1]![0]).toBe(
+          path.join(os.homedir(), '.local', 'bin', 'agy'),
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
       }
     });
   });
