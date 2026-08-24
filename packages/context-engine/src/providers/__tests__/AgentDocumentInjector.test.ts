@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
+import type { AgentContextDocument } from '../AgentDocumentInjector';
 import {
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -241,7 +242,7 @@ describe('AgentDocumentInjector', () => {
           title: 'Note',
           updatedAt: new Date('2026-04-28T23:59:00.000Z'),
         },
-      ];
+      ] satisfies AgentContextDocument[];
       const renderAt = async (currentTime: Date) => {
         const provider = new AgentDocumentContextInjector({ currentTime, documents });
         const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
@@ -328,7 +329,7 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
         User-created docs, when present, are listed below — use readDocument(id) for full content.
-        Web-crawled docs hidden — call listDocuments(sourceType='web') to see them.
+        Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.
 
         TITLE        ID                                    SIZE  UPDATED
         Daily Brief  2af6eb88-8bdb-468f-887f-620baa394efa  9     2026-04-27
@@ -336,6 +337,7 @@ describe('AgentDocumentInjector', () => {
       `);
       expect(result.messages[0].content).not.toContain('Gold price');
       expect(result.messages[0].content).not.toContain('Gold news');
+      expect(result.messages[0].content.split("listDocuments(sourceType='web')")).toHaveLength(2);
 
       const oneWebDocumentProvider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),

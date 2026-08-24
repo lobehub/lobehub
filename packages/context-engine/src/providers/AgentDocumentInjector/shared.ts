@@ -357,7 +357,7 @@ export function combineDocuments(
     ];
     if (hasHiddenWebDocs) {
       headerLines.push(
-        `Web-crawled docs hidden — call listDocuments(sourceType='web') to see them.`,
+        `Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.`,
       );
     }
     if (folders.length > 0) {
