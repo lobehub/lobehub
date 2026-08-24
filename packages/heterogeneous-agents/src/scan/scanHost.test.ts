@@ -10,14 +10,16 @@ vi.mock('node:os', async () => {
   return { ...actual, platform: vi.fn(() => 'darwin') };
 });
 
-const { detectHeterogeneousCliCommandMock, detectValidatedCommandMock } = vi.hoisted(() => ({
-  detectHeterogeneousCliCommandMock: vi.fn(),
-  detectValidatedCommandMock: vi.fn(),
-}));
+const { detectHeterogeneousCliCommandMock, detectValidatedCommandCandidatesMock } = vi.hoisted(
+  () => ({
+    detectHeterogeneousCliCommandMock: vi.fn(),
+    detectValidatedCommandCandidatesMock: vi.fn(),
+  }),
+);
 
 vi.mock('../spawn/resolveCliCommand', () => ({
   detectHeterogeneousCliCommand: detectHeterogeneousCliCommandMock,
-  detectValidatedCommand: detectValidatedCommandMock,
+  detectValidatedCommandCandidates: detectValidatedCommandCandidatesMock,
 }));
 
 describe('platform command scanning', () => {
@@ -26,7 +28,7 @@ describe('platform command scanning', () => {
   });
 
   it('uses the shared PATH and Windows-shim-aware command resolver', async () => {
-    detectValidatedCommandMock.mockResolvedValue({
+    detectValidatedCommandCandidatesMock.mockResolvedValue({
       available: true,
       path: '/resolved/bin/openclaw',
       resolvedPathEnv: '/resolved/bin:/usr/bin',
@@ -39,15 +41,22 @@ describe('platform command scanning', () => {
       resolvedPathEnv: '/resolved/bin:/usr/bin',
       version: '1.2.3',
     });
-    expect(detectValidatedCommandMock).toHaveBeenCalledWith('openclaw', {
-      validateHelpKeywords: ['Usage: openclaw'],
-      validateKeywords: ['openclaw'],
-      validatePattern: expect.any(RegExp),
-    });
+    expect(detectValidatedCommandCandidatesMock).toHaveBeenCalledWith(
+      [
+        'openclaw',
+        path.join(os.homedir(), '.openclaw', 'bin', 'openclaw'),
+        path.join(os.homedir(), '.local', 'bin', 'openclaw'),
+      ],
+      {
+        validateHelpKeywords: ['Usage: openclaw'],
+        validateKeywords: ['openclaw'],
+        validatePattern: expect.any(RegExp),
+      },
+    );
   });
 
   it('accepts the bare version banner printed by OpenClaw 2026.1.29', async () => {
-    detectValidatedCommandMock.mockImplementation(async (_command, options) => ({
+    detectValidatedCommandCandidatesMock.mockImplementation(async (_commands, options) => ({
       available: options.validatePattern.test('2026.1.29'),
       path: '/resolved/bin/openclaw',
       version: '2026.1.29',
@@ -60,7 +69,7 @@ describe('platform command scanning', () => {
   });
 
   it('falls back to the official OpenClaw managed install path', async () => {
-    detectValidatedCommandMock.mockResolvedValueOnce({ available: false }).mockResolvedValueOnce({
+    detectValidatedCommandCandidatesMock.mockResolvedValue({
       available: true,
       path: path.join(os.homedir(), '.openclaw', 'bin', 'openclaw'),
       version: '2026.1.29',
@@ -70,14 +79,13 @@ describe('platform command scanning', () => {
       available: true,
       version: '2026.1.29',
     });
-    expect(detectValidatedCommandMock.mock.calls.map(([command]) => command)).toEqual([
-      'openclaw',
+    expect(detectValidatedCommandCandidatesMock.mock.calls[0]![0]).toContain(
       path.join(os.homedir(), '.openclaw', 'bin', 'openclaw'),
-    ]);
+    );
   });
 
   it('falls back to the official Hermes user-local install path', async () => {
-    detectValidatedCommandMock.mockResolvedValueOnce({ available: false }).mockResolvedValueOnce({
+    detectValidatedCommandCandidatesMock.mockResolvedValue({
       available: true,
       path: path.join(os.homedir(), '.local', 'bin', 'hermes'),
       version: '0.20.5',
@@ -87,14 +95,14 @@ describe('platform command scanning', () => {
       available: true,
       version: '0.20.5',
     });
-    expect(detectValidatedCommandMock.mock.calls.map(([command]) => command)).toEqual([
+    expect(detectValidatedCommandCandidatesMock.mock.calls[0]![0]).toEqual([
       'hermes',
       path.join(os.homedir(), '.local', 'bin', 'hermes'),
     ]);
   });
 
   it('keeps host scan responses free of executable paths', async () => {
-    detectValidatedCommandMock.mockResolvedValue({
+    detectValidatedCommandCandidatesMock.mockResolvedValue({
       available: true,
       path: '/private/bin/hermes',
       resolvedPathEnv: '/private/bin:/usr/bin',
@@ -108,7 +116,7 @@ describe('platform command scanning', () => {
   });
 
   it('surfaces the platform validation failure reason', async () => {
-    detectValidatedCommandMock.mockResolvedValue({ available: false });
+    detectValidatedCommandCandidatesMock.mockResolvedValue({ available: false });
 
     await expect(probeRemotePlatform('hermes')).resolves.toEqual({
       available: false,

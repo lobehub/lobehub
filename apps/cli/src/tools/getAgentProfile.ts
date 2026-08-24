@@ -1,9 +1,14 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
+import { resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
+
+const execFilePromise = promisify(execFile);
 
 export interface GetAgentProfileParams {
   /** Agent ID to query (openclaw only). Defaults to the default agent. */
@@ -48,13 +53,28 @@ interface OpenClawAgentEntry {
   workspace?: string;
 }
 
-function getOpenClawProfile(agentId?: string): AgentProfileResult {
+async function runPlatformCommand(
+  command: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+): Promise<string> {
+  const spawnPlan = await resolveCliSpawnPlan(command, args, env);
+  const { stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
+    encoding: 'utf8',
+    env,
+    timeout: 5000,
+  });
+  return stdout;
+}
+
+async function getOpenClawProfile(
+  command: string,
+  agentId?: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<AgentProfileResult> {
   let output: string;
   try {
-    output = execFileSync('openclaw', ['agents', 'list', '--json'], {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
+    output = await runPlatformCommand(command, ['agents', 'list', '--json'], env);
   } catch {
     return {};
   }
@@ -85,12 +105,12 @@ function getOpenClawProfile(agentId?: string): AgentProfileResult {
  * Read the active Hermes profile name from `hermes profile list` output.
  * The active profile is marked with ◆ in the first column.
  */
-function getActiveHermesProfileName(): string | undefined {
+async function getActiveHermesProfileName(
+  command: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
   try {
-    const output = execFileSync('hermes', ['profile', 'list'], {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
+    const output = await runPlatformCommand(command, ['profile', 'list'], env);
     const match = output.match(/◆(\S+)/);
     return match?.[1];
   } catch {
@@ -101,12 +121,13 @@ function getActiveHermesProfileName(): string | undefined {
 /**
  * Read the filesystem path of a Hermes profile from `hermes profile show <name>`.
  */
-function getHermesProfilePath(profileName: string): string | undefined {
+async function getHermesProfilePath(
+  command: string,
+  profileName: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
   try {
-    const output = execFileSync('hermes', ['profile', 'show', profileName], {
-      encoding: 'utf8',
-      timeout: 5000,
-    });
+    const output = await runPlatformCommand(command, ['profile', 'show', profileName], env);
     const match = output.match(/^Path:\s+(.+)/m);
     const raw = match?.[1]?.trim();
     // Expand leading `~` — Node does not auto-expand home-dir shorthands.
@@ -144,11 +165,14 @@ function readHermesSoulDescription(soulPath: string): string | undefined {
   }
 }
 
-function getHermesProfile(): AgentProfileResult {
-  const profileName = getActiveHermesProfileName();
+async function getHermesProfile(
+  command: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<AgentProfileResult> {
+  const profileName = await getActiveHermesProfileName(command, env);
   if (!profileName) return {};
 
-  const profilePath = getHermesProfilePath(profileName);
+  const profilePath = await getHermesProfilePath(command, profileName, env);
   const description = profilePath
     ? readHermesSoulDescription(path.join(profilePath, 'SOUL.md'))
     : undefined;
@@ -170,13 +194,19 @@ function getHermesProfile(): AgentProfileResult {
  */
 export async function getAgentProfile(params: GetAgentProfileParams): Promise<AgentProfileResult> {
   const { platform, agentId } = params;
+  const commandStatus = await resolveRemotePlatformCommand(platform);
+  if (!commandStatus.available || !commandStatus.path) return {};
+
+  const env = commandStatus.resolvedPathEnv
+    ? { ...process.env, PATH: commandStatus.resolvedPathEnv }
+    : undefined;
 
   if (platform === 'openclaw') {
-    return getOpenClawProfile(agentId);
+    return getOpenClawProfile(commandStatus.path, agentId, env);
   }
 
   if (platform === 'hermes') {
-    return getHermesProfile();
+    return getHermesProfile(commandStatus.path, env);
   }
 
   return {};

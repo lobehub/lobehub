@@ -4,7 +4,10 @@ import path from 'node:path';
 import type { RemoteHeterogeneousAgentType } from '../config';
 import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import type { CliCommandStatus } from '../spawn/resolveCliCommand';
-import { detectHeterogeneousCliCommand, detectValidatedCommand } from '../spawn/resolveCliCommand';
+import {
+  detectHeterogeneousCliCommand,
+  detectValidatedCommandCandidates,
+} from '../spawn/resolveCliCommand';
 import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './types';
 
 /**
@@ -49,10 +52,11 @@ export const resolveRemotePlatformCommand = async (
         }
       : { validateKeywords: ['hermes'] };
 
-  for (const command of getRemotePlatformCommandCandidates(type)) {
-    const status = await detectValidatedCommand(command, validation);
-    if (status.available) return status;
-  }
+  const status = await detectValidatedCommandCandidates(
+    getRemotePlatformCommandCandidates(type),
+    validation,
+  );
+  if (status.available) return status;
 
   return {
     available: false,

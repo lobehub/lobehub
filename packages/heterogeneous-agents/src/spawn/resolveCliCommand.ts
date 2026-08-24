@@ -62,6 +62,16 @@ interface ResolvedCommand {
   resolvedPathEnv?: string;
 }
 
+interface ResolvedCommandCandidates {
+  candidates: ResolvedCommand[];
+  /**
+   * PATH recovered while looking up a bare command. Keep it even when lookup
+   * found no executable so a subsequent absolute fallback can still run an
+   * env-based launcher with the interpreter PATH that a login shell exposes.
+   */
+  resolvedPathEnv?: string;
+}
+
 const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
 
 const extractVersion = (versionBanner: string): string | undefined =>
@@ -263,18 +273,16 @@ const getCommandPathLines = async (
 const resolveCommandCandidates = async (
   command: string,
   probeEnv?: NodeJS.ProcessEnv,
-): Promise<ResolvedCommand[]> => {
+): Promise<ResolvedCommandCandidates> => {
   const trimmedCommand = command.trim();
-  if (!trimmedCommand) return [];
+  if (!trimmedCommand) return { candidates: [] };
 
   if (isPathLikeCommand(trimmedCommand)) {
-    return [
-      {
-        env: probeEnv,
-        path: trimmedCommand,
-        resolvedPathEnv: probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH,
-      },
-    ];
+    const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
+    return {
+      candidates: [{ env: probeEnv, path: trimmedCommand, resolvedPathEnv }],
+      resolvedPathEnv,
+    };
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
@@ -297,27 +305,31 @@ const resolveCommandCandidates = async (
         PATH: lookupPath,
       };
       lines = await getCommandPathLines(whichCommand, trimmedCommand, fallbackEnv);
-      if (lines) {
-        lookupEnv = fallbackEnv;
-        resolvedPathEnv = lookupPath;
-      }
+      lookupEnv = fallbackEnv;
+      resolvedPathEnv = lookupPath;
     }
   }
 
-  if (!lines) return [];
+  if (!lines) return { candidates: [], resolvedPathEnv };
 
   // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships a
   // Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Keep only the
   // ones we can execute, still in PATH order.
   if (isWindows()) {
-    return pickWindowsRunnables(lines).map((runnablePath) => ({
-      env: lookupEnv,
-      path: runnablePath,
+    return {
+      candidates: pickWindowsRunnables(lines).map((runnablePath) => ({
+        env: lookupEnv,
+        path: runnablePath,
+        resolvedPathEnv,
+      })),
       resolvedPathEnv,
-    }));
+    };
   }
 
-  return [{ env: lookupEnv, path: lines[0], resolvedPathEnv }];
+  return {
+    candidates: [{ env: lookupEnv, path: lines[0], resolvedPathEnv }],
+    resolvedPathEnv,
+  };
 };
 
 const quoteWindowsShellToken = (token: string): string =>
@@ -383,7 +395,7 @@ const execProbe = async (
     });
   }
 
-  const spawnPlan = await resolveCliSpawnPlan(command, args);
+  const spawnPlan = await resolveCliSpawnPlan(command, args, env);
   if (isWindows() && spawnPlan.command === command && isWindowsShimPath(command)) {
     return UNRESOLVED_SHIM;
   }
@@ -421,8 +433,10 @@ export const detectValidatedCommand = async (
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
   // alone won't apply PATHEXT and can't run .cmd files directly.
-  const candidates = await resolveCommandCandidates(trimmedCommand, probeEnv);
-  if (candidates.length === 0) return { available: false };
+  const { candidates, resolvedPathEnv } = await resolveCommandCandidates(trimmedCommand, probeEnv);
+  if (candidates.length === 0) {
+    return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
+  }
 
   const validateCandidate = async (
     { env, path: resolvedPath, resolvedPathEnv }: ResolvedCommand,
@@ -525,7 +539,37 @@ export const detectValidatedCommand = async (
     if (status !== UNRESOLVED_SHIM && status.available) return status;
   }
 
-  return { available: false };
+  return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
+};
+
+/**
+ * Validate an ordered command chain while preserving PATH recovery between
+ * candidates. This is the shared contract for a bare command followed by
+ * well-known absolute install paths: an absolute launcher may live outside
+ * PATH while its `#!/usr/bin/env` interpreter only exists on the login PATH.
+ */
+export const detectValidatedCommandCandidates = async (
+  commands: string[],
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => {
+  let effectiveProbeEnv = probeEnv;
+  let lastStatus: CliCommandStatus = { available: false };
+
+  for (const command of commands) {
+    const status = await detectValidatedCommand(command, options, effectiveProbeEnv);
+    if (status.available) return status;
+
+    lastStatus = status;
+    if (status.resolvedPathEnv && status.resolvedPathEnv !== effectiveProbeEnv?.PATH) {
+      effectiveProbeEnv = {
+        ...(effectiveProbeEnv ?? process.env),
+        PATH: status.resolvedPathEnv,
+      };
+    }
+  }
+
+  return lastStatus;
 };
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
@@ -750,22 +794,17 @@ export const detectHeterogeneousCliCommand = async (
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
 
-  const status = await detectValidatedCommand(command, validator, probeEnv);
-  if (status.available) return status;
-
   // The default command missing from PATH may still live at a well-known install
   // location (e.g. the Codex desktop app's bundled CLI). Only probe those for the
   // default command: the well-known paths hold the *default* binary, so applying
   // them to a custom command (e.g. `claude-beta`) would silently resolve it to
   // stock `claude` instead of reporting the configured command as missing.
-  if (command.trim() === DEFAULT_HETERO_COMMAND[agentType]) {
-    for (const candidate of getWellKnownCommandPaths(agentType)) {
-      const fallbackStatus = await detectValidatedCommand(candidate, validator, probeEnv);
-      if (fallbackStatus.available) return fallbackStatus;
-    }
-  }
+  const commands =
+    command.trim() === DEFAULT_HETERO_COMMAND[agentType]
+      ? [command, ...getWellKnownCommandPaths(agentType)]
+      : [command];
 
-  return status;
+  return detectValidatedCommandCandidates(commands, validator, probeEnv);
 };
 
 /**

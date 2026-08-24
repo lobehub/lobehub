@@ -382,6 +382,37 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       }
     });
 
+    it('carries the recovered login PATH into an absolute fallback launcher', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const loginPath = '/opt/homebrew/bin:/usr/bin:/bin';
+
+      try {
+        callExecFileError(new Error('not found')); // which opencode (inherited PATH)
+        callExecFile(loginPath); // login shell PATH contains node, not opencode
+        callExecFileError(new Error('not found')); // which opencode (login PATH)
+        callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+          resolvedPathEnv: loginPath,
+          version: '1.18.3',
+        });
+        expect((execFileMock.mock.calls[3]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+          loginPath,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
     it('finds Kimi Code in its official user-local install path', async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;

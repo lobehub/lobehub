@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
+import { resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
 
 import { getTrpcClient } from '../api/client';
 import { getTask, listTasks, removeTask, saveTask } from '../daemon/taskRegistry';
@@ -196,15 +198,31 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   const sessionKey = parentOperationId ? operationId : topicId;
 
   if (agentType === 'openclaw') {
+    const commandStatus = await resolveRemotePlatformCommand('openclaw');
+    if (!commandStatus.available || !commandStatus.path) {
+      throw new Error('OpenClaw executable not found');
+    }
+    if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
+
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
     // The --session-id links turns into the same conversation history on disk.
-    // Requires the `openclaw` binary to be on PATH with Node >=22.19.
     const openclawAgent = platformAgentId?.trim() || process.env.OPENCLAW_AGENT_ID || 'main';
 
     // Always inject the notify protocol so openclaw knows how to report results
     // back to the LobeHub UI — even if the previous turn failed and the session
     // history was not cleanly committed.
     const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`;
+    const openclawArgs = [
+      'agent',
+      '--agent',
+      openclawAgent,
+      '--session-id',
+      sessionKey,
+      '--message',
+      enrichedPrompt,
+      '--local',
+    ];
+    const spawnPlan = await resolveCliSpawnPlan(commandStatus.path, openclawArgs, childEnv);
 
     // Top-level turns reuse one topic session and replace an older process. Group
     // members intentionally share a topic, so isolate them by operation instead.
@@ -225,25 +243,12 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       }
     }
 
-    const child = spawn(
-      'openclaw',
-      [
-        'agent',
-        '--agent',
-        openclawAgent,
-        '--session-id',
-        sessionKey,
-        '--message',
-        enrichedPrompt,
-        '--local',
-      ],
-      {
-        cwd: workDir,
-        detached: true,
-        env: childEnv,
-        stdio: 'ignore',
-      },
-    );
+    const child = spawn(spawnPlan.command, spawnPlan.args, {
+      cwd: workDir,
+      detached: true,
+      env: childEnv,
+      stdio: 'ignore',
+    });
 
     const pid = child.pid;
     if (pid === undefined) {
@@ -301,6 +306,20 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   }
 
   if (agentType === 'hermes') {
+    const commandStatus = await resolveRemotePlatformCommand('hermes');
+    if (!commandStatus.available || !commandStatus.path) {
+      throw new Error('Hermes executable not found');
+    }
+    if (commandStatus.resolvedPathEnv) childEnv.PATH = commandStatus.resolvedPathEnv;
+
+    // Resume the previous session for this topic if one exists.
+    const existingSessionId = getHermesSessionId(sessionKey);
+    const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
+    if (existingSessionId) {
+      hermesArgs.push('--resume', existingSessionId);
+    }
+    const spawnPlan = await resolveCliSpawnPlan(commandStatus.path, hermesArgs, childEnv);
+
     // Preserve parallel group members; only top-level turns replace the previous
     // topic process, while an exact task retry replaces itself.
     for (const existing of listTasks()) {
@@ -318,16 +337,9 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       }
     }
 
-    // Resume the previous session for this topic if one exists.
-    const existingSessionId = getHermesSessionId(sessionKey);
-    const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
-    if (existingSessionId) {
-      hermesArgs.push('--resume', existingSessionId);
-    }
-
     // Hermes keeps stdout response-only in --quiet mode and prints the final
     // session_id to stderr so callers can resume the session on the next turn.
-    const child = spawn('hermes', hermesArgs, {
+    const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: workDir,
       detached: true,
       env: childEnv,
