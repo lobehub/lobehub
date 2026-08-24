@@ -2,11 +2,13 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { copyFile, link, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { UpdateChannel } from '@lobechat/electron-client-ipc';
 import { app as electronApp } from 'electron';
 
 import { rendererDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import {
+  BUILD_CHANNEL,
   coerceStoredUpdateChannel,
   UPDATE_CHANNEL,
   UPDATE_SERVER_URL,
@@ -40,10 +42,12 @@ const FORCE_IN_DEV = process.env['RENDERER_OTA_FORCE'] === '1';
 const FIRST_CHECK_DELAY = Number(process.env['RENDERER_OTA_CHECK_DELAY']) || 90 * 1000;
 
 type OtaState = 'idle' | 'checking' | 'downloading' | 'staged';
+type RendererOtaChannel = UpdateChannel | 'beta';
 
 export class RendererUpdateManager {
   private readonly app: App;
-  private readonly otaDir: string;
+  private readonly otaRootDir: string;
+  private activeChannel: RendererOtaChannel;
   private pointer: OtaPointer;
   private state: OtaState = 'idle';
   private stagedManifest: RendererManifest | null = null;
@@ -51,11 +55,20 @@ export class RendererUpdateManager {
   private loadPingTimer: NodeJS.Timeout | null = null;
   private bootCrashCount = 0;
   private checkTimer: NodeJS.Timeout | null = null;
+  private checkGeneration = 0;
 
   constructor(app: App) {
     this.app = app;
-    this.otaDir = path.join(electronApp.getPath('userData'), 'renderer-ota');
+    this.otaRootDir = path.join(electronApp.getPath('userData'), 'renderer-ota');
+    this.activeChannel = this.rendererChannel(
+      coerceStoredUpdateChannel(this.app.storeManager.get('updateChannel') as string | undefined) ||
+        UPDATE_CHANNEL,
+    );
     this.pointer = emptyPointer(MAIN_HASH);
+  }
+
+  private get otaDir() {
+    return path.join(this.otaRootDir, this.activeChannel);
   }
 
   get enabled() {
@@ -96,6 +109,31 @@ export class RendererUpdateManager {
     if (!this.enabled) return;
     this.checkTimer = setTimeout(() => this.checkForUpdates(), FIRST_CHECK_DELAY);
     setInterval(() => this.checkForUpdates(), CHECK_INTERVAL);
+  };
+
+  switchChannel = (channel: UpdateChannel) => {
+    const nextChannel = this.rendererChannel(channel);
+    if (nextChannel === this.activeChannel) return;
+
+    if (!this.enabled) {
+      this.activeChannel = nextChannel;
+      return;
+    }
+
+    this.checkGeneration += 1;
+    this.clearBootTimers();
+    this.state = 'idle';
+    this.stagedManifest = null;
+    this.activeChannel = nextChannel;
+
+    mkdirSync(path.join(this.otaDir, 'versions'), { recursive: true });
+    this.pointer = readPointer(this.otaDir, MAIN_HASH);
+    if (this.pointer.pendingBootCheck) this.rollback();
+    this.state = this.pointer.staged ? 'staged' : 'idle';
+    this.gc();
+    writePointer(this.otaDir, this.pointer);
+    this.applyServingRoot();
+    this.reloadAllWindows();
   };
 
   handleBootPing = (stage?: 'loaded' | 'mounted') => {
@@ -146,27 +184,32 @@ export class RendererUpdateManager {
 
   checkForUpdates = async () => {
     if (!this.enabled || this.state !== 'idle') return;
+    const generation = this.checkGeneration;
+    const channel = this.activeChannel;
+    const otaDir = this.otaDir;
+    const pointer = this.pointer;
     this.state = 'checking';
 
     try {
-      const manifest = await this.fetchManifest();
-      if (!manifest) return;
+      const manifest = await this.fetchManifest(channel);
+      if (!manifest || generation !== this.checkGeneration) return;
 
-      const currentN = this.pointer.current ? patchNumber(this.pointer.current) : 0;
+      const currentN = pointer.current ? patchNumber(pointer.current) : 0;
       if (
         patchNumber(manifest.version) <= currentN ||
-        this.pointer.blacklist.includes(manifest.version) ||
-        this.pointer.staged === manifest.version
+        pointer.blacklist.includes(manifest.version) ||
+        pointer.staged === manifest.version
       ) {
         return;
       }
 
       this.state = 'downloading';
-      await this.downloadAndStage(manifest);
+      await this.downloadAndStage(manifest, otaDir, pointer);
+      if (generation !== this.checkGeneration) return;
 
       this.stagedManifest = manifest;
       this.pointer = { ...this.pointer, staged: manifest.version };
-      writePointer(this.otaDir, this.pointer);
+      writePointer(otaDir, this.pointer);
       this.state = 'staged';
 
       logger.info(`Renderer ${manifest.version} staged (app ${manifest.appVersion})`);
@@ -176,30 +219,27 @@ export class RendererUpdateManager {
       });
       return;
     } catch (error) {
-      logger.error('Renderer OTA check failed:', error);
-      rmSync(path.join(this.otaDir, 'staging'), { force: true, recursive: true });
+      if (generation === this.checkGeneration) logger.error('Renderer OTA check failed:', error);
+      rmSync(path.join(otaDir, 'staging'), { force: true, recursive: true });
     } finally {
-      if (this.state !== 'staged') this.state = 'idle';
+      if (generation === this.checkGeneration && this.state !== 'staged') this.state = 'idle';
     }
   };
 
-  private get channel() {
-    return (
-      coerceStoredUpdateChannel(this.app.storeManager.get('updateChannel') as string | undefined) ||
-      UPDATE_CHANNEL
-    );
+  private rendererChannel(channel: UpdateChannel): RendererOtaChannel {
+    return BUILD_CHANNEL === 'beta' && channel === 'canary' ? 'beta' : channel;
   }
 
-  private feedUrl() {
-    return `${UPDATE_SERVER_URL}/renderer/${this.channel}/${MAIN_HASH}/latest.json`;
+  private feedUrl(channel: RendererOtaChannel) {
+    return `${UPDATE_SERVER_URL}/renderer/${channel}/${MAIN_HASH}/latest.json`;
   }
 
   private fileUrl(sha256: string) {
     return `${UPDATE_SERVER_URL}/renderer/files/${sha256}.bin`;
   }
 
-  private async fetchManifest(): Promise<RendererManifest | null> {
-    const res = await fetch(this.feedUrl(), { cache: 'no-store' });
+  private async fetchManifest(channel: RendererOtaChannel): Promise<RendererManifest | null> {
+    const res = await fetch(this.feedUrl(channel), { cache: 'no-store' });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
 
@@ -210,13 +250,13 @@ export class RendererUpdateManager {
     return raw;
   }
 
-  private async downloadAndStage(manifest: RendererManifest) {
-    const stagingRoot = path.join(this.otaDir, 'staging');
+  private async downloadAndStage(manifest: RendererManifest, otaDir: string, pointer: OtaPointer) {
+    const stagingRoot = path.join(otaDir, 'staging');
     rmSync(stagingRoot, { force: true, recursive: true });
     const stagingDir = path.join(stagingRoot, manifest.version);
     mkdirSync(stagingDir, { recursive: true });
 
-    const { missing, reusable } = diffManifest(manifest, await this.hashLocalTree());
+    const { missing, reusable } = diffManifest(manifest, await this.hashLocalTree(otaDir, pointer));
     logger.info(
       `Renderer ${manifest.version}: ${reusable.length} files reused, ${missing.length} to download`,
     );
@@ -257,16 +297,14 @@ export class RendererUpdateManager {
       }
     }
 
-    const finalDir = path.join(this.otaDir, 'versions', manifest.version);
+    const finalDir = path.join(otaDir, 'versions', manifest.version);
     rmSync(finalDir, { force: true, recursive: true });
     renameSync(stagingDir, finalDir);
     rmSync(stagingRoot, { force: true, recursive: true });
   }
 
-  private async hashLocalTree(): Promise<Map<string, string>> {
-    const root = this.pointer.current
-      ? path.join(this.otaDir, 'versions', this.pointer.current)
-      : rendererDir;
+  private async hashLocalTree(otaDir: string, pointer: OtaPointer): Promise<Map<string, string>> {
+    const root = pointer.current ? path.join(otaDir, 'versions', pointer.current) : rendererDir;
     const hashes = new Map<string, string>();
 
     const walk = async (dir: string) => {

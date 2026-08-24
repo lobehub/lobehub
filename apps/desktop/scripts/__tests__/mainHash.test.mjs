@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -59,6 +59,29 @@ describe('mainHash', () => {
     } finally {
       if (originalCloudRef === undefined) delete process.env.CLOUD_REF;
       else process.env.CLOUD_REF = originalCloudRef;
+    }
+  });
+
+  it('shares a lineage across release versions but not verification keys', () => {
+    const packagePath = path.join(desktopRoot, 'package.json');
+    const originalPackage = readFileSync(packagePath, 'utf8');
+    const originalPublicKey = process.env.RENDERER_OTA_PUBLIC_KEY;
+    try {
+      process.env.RENDERER_OTA_PUBLIC_KEY = 'key-a';
+      const before = computeMainHash();
+      const packageJson = JSON.parse(originalPackage);
+      packageJson.name = 'lobehub-desktop-beta';
+      packageJson.productName = 'LobeHub-Beta';
+      packageJson.version = '99.0.0-beta.1';
+      writeFileSync(packagePath, JSON.stringify(packageJson, null, 2));
+      expect(computeMainHash()).toBe(before);
+
+      process.env.RENDERER_OTA_PUBLIC_KEY = 'key-b';
+      expect(computeMainHash()).not.toBe(before);
+    } finally {
+      writeFileSync(packagePath, originalPackage);
+      if (originalPublicKey === undefined) delete process.env.RENDERER_OTA_PUBLIC_KEY;
+      else process.env.RENDERER_OTA_PUBLIC_KEY = originalPublicKey;
     }
   });
 });

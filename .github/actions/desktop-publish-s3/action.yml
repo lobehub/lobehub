@@ -28,6 +28,10 @@ inputs:
     description: 'Custom S3 endpoint (for R2/MinIO etc.)'
     required: false
     default: ''
+  upload-release-files:
+    description: Upload installers and electron-updater manifests
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -50,6 +54,7 @@ runs:
         echo "📋 Version: ${{ inputs.version }}, Channel: ${{ inputs.channel }}"
 
     - name: Upload to S3
+      if: inputs.upload-release-files == 'true'
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}

@@ -337,6 +337,7 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
+          renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           retention-days: 3
 
   # ============================================

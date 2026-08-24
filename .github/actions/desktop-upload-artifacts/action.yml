@@ -9,12 +9,17 @@ inputs:
     description: Number of days to retain artifacts
     required: false
     default: '5'
+  renderer-ota-public-key:
+    description: Public key embedded in the packaged binary
+    required: true
 
 runs:
   using: composite
   steps:
     - name: Export renderer OTA base hash
       shell: bash
+      env:
+        RENDERER_OTA_PUBLIC_KEY: ${{ inputs.renderer-ota-public-key }}
       run: node apps/desktop/scripts/mainHash.mjs > apps/desktop/release/renderer-mainhash.txt
 
     - name: Rename macOS *-mac.yml for multi-architecture support

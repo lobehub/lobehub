@@ -99,6 +99,13 @@ export function computeMainHash() {
     } catch {
       continue;
     }
+    if (file === path.join(desktopRoot, 'package.json')) {
+      const packageJson = JSON.parse(content.toString());
+      delete packageJson.name;
+      delete packageJson.productName;
+      delete packageJson.version;
+      content = Buffer.from(JSON.stringify(packageJson));
+    }
     hash.update(path.relative(repoRoot, file).replaceAll('\\', '/'));
     hash.update('\0');
     hash.update(content);
@@ -107,6 +114,11 @@ export function computeMainHash() {
   if (process.env.CLOUD_REF) {
     hash.update('cloud-ref\0');
     hash.update(process.env.CLOUD_REF);
+    hash.update('\0');
+  }
+  if (process.env.RENDERER_OTA_PUBLIC_KEY) {
+    hash.update('renderer-ota-public-key\0');
+    hash.update(process.env.RENDERER_OTA_PUBLIC_KEY);
     hash.update('\0');
   }
   return hash.digest('hex');

@@ -15,6 +15,9 @@ const SERVER = 'https://updates.test';
 
 let userDataDir: string;
 let builtinDir: string;
+const { updaterConfigMock } = vi.hoisted(() => ({
+  updaterConfigMock: { buildChannel: 'stable' },
+}));
 
 vi.mock('electron', () => ({
   app: { getPath: () => userDataDir },
@@ -26,9 +29,12 @@ vi.mock('@/const/dir', () => ({
 }));
 vi.mock('@/const/env', () => ({ isDev: false }));
 vi.mock('@/modules/updater/configs', () => ({
+  get BUILD_CHANNEL() {
+    return updaterConfigMock.buildChannel;
+  },
   UPDATE_CHANNEL: 'stable',
   UPDATE_SERVER_URL: 'https://updates.test',
-  coerceStoredUpdateChannel: () => 'stable',
+  coerceStoredUpdateChannel: (channel?: string) => (channel === 'canary' ? 'canary' : 'stable'),
 }));
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
@@ -37,8 +43,10 @@ vi.mock('@/utils/logger', () => ({
 const makeApp = () => ({
   browserManager: { broadcastToAllWindows: vi.fn(), browsers: new Map() },
   rendererUrlManager: { setActiveRendererDir: vi.fn() },
-  storeManager: { get: vi.fn() },
+  storeManager: { get: vi.fn(() => 'stable') },
 });
+
+const channelDir = (channel = 'stable') => path.join(userDataDir, 'renderer-ota', channel);
 
 const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererManifest => ({
   ...unsigned,
@@ -70,11 +78,14 @@ const buildFeed = (version: string, files: Record<string, string>) => {
   return { cas, manifest };
 };
 
-const stubFetch = (feed: { cas: Map<string, Buffer>; manifest: RendererManifest } | null) => {
+const stubFetch = (
+  feed: { cas: Map<string, Buffer>; manifest: RendererManifest } | null,
+  channel = 'stable',
+) => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (url === `${SERVER}/renderer/stable/${MAIN_HASH}/latest.json`) {
+      if (url === `${SERVER}/renderer/${channel}/${MAIN_HASH}/latest.json`) {
         if (!feed) return new Response('nope', { status: 404 });
         return Response.json(feed.manifest);
       }
@@ -95,6 +106,7 @@ const loadManager = async (app: ReturnType<typeof makeApp>) => {
 };
 
 beforeEach(() => {
+  updaterConfigMock.buildChannel = 'stable';
   userDataDir = mkdtempSync(path.join(tmpdir(), 'ota-user-'));
   builtinDir = mkdtempSync(path.join(tmpdir(), 'ota-builtin-'));
   mkdirSync(path.join(builtinDir, 'apps', 'desktop'), { recursive: true });
@@ -125,7 +137,7 @@ describe('RendererUpdateManager full path', () => {
 
     await manager.checkForUpdates();
 
-    const otaDir = path.join(userDataDir, 'renderer-ota');
+    const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBe('r1');
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('rendererUpdateReady', {
       appVersion: '1.0.0',
@@ -180,7 +192,7 @@ describe('RendererUpdateManager full path', () => {
 
     await manager.checkForUpdates();
 
-    expect(readPointer(path.join(userDataDir, 'renderer-ota'), MAIN_HASH).staged).toBeNull();
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
     expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
   });
 
@@ -199,13 +211,13 @@ describe('RendererUpdateManager full path', () => {
 
     await manager.checkForUpdates();
 
-    const otaDir = path.join(userDataDir, 'renderer-ota');
+    const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
     expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
   });
 
   it('rewrites the pointer on disk when mainHash changed (new full release)', async () => {
-    const otaDir = path.join(userDataDir, 'renderer-ota');
+    const otaDir = channelDir();
     mkdirSync(otaDir, { recursive: true });
     writeFileSync(
       path.join(otaDir, 'pointer.json'),
@@ -247,13 +259,13 @@ describe('RendererUpdateManager full path', () => {
     manager = await loadManager(app2);
     manager.initialize();
 
-    const pointer = readPointer(path.join(userDataDir, 'renderer-ota'), MAIN_HASH);
+    const pointer = readPointer(channelDir(), MAIN_HASH);
     expect(pointer.current).toBeNull();
     expect(pointer.blacklist).toContain('r1');
     expect(app2.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
 
     await manager.checkForUpdates();
-    expect(readPointer(path.join(userDataDir, 'renderer-ota'), MAIN_HASH).staged).toBeNull();
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBeNull();
   });
 
   it('rejects a staged tree whose entry html references a missing chunk', async () => {
@@ -270,7 +282,7 @@ describe('RendererUpdateManager full path', () => {
 
     await manager.checkForUpdates();
 
-    const otaDir = path.join(userDataDir, 'renderer-ota');
+    const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
     expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
   });
@@ -291,7 +303,7 @@ describe('RendererUpdateManager full path', () => {
 
     await manager.checkForUpdates();
 
-    const otaDir = path.join(userDataDir, 'renderer-ota');
+    const otaDir = channelDir();
     expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
     expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
   });
@@ -317,7 +329,7 @@ describe('RendererUpdateManager full path', () => {
       vi.useRealTimers();
     }
 
-    const pointer = readPointer(path.join(userDataDir, 'renderer-ota'), MAIN_HASH);
+    const pointer = readPointer(channelDir(), MAIN_HASH);
     expect(pointer.current).toBeNull();
     expect(pointer.blacklist).toContain('r1');
   });
@@ -335,7 +347,7 @@ describe('RendererUpdateManager full path', () => {
     );
     await manager.checkForUpdates();
 
-    const otaDir = path.join(userDataDir, 'renderer-ota');
+    const otaDir = channelDir();
     vi.useFakeTimers();
     try {
       manager.applyStagedNow();
@@ -351,5 +363,45 @@ describe('RendererUpdateManager full path', () => {
     const pointer = readPointer(otaDir, MAIN_HASH);
     expect(pointer.current).toBeNull();
     expect(pointer.blacklist).toContain('r1');
+  });
+
+  it('keeps patch versions independent when the update channel changes', async () => {
+    const app = makeApp();
+    const manager = await loadManager(app);
+    manager.initialize();
+
+    const feed = buildFeed('r1', {
+      'apps/desktop/index.html': entryHtml('v1'),
+      'assets/entry-e2e.js': 'console.log("v1")',
+    });
+    stubFetch(feed);
+    await manager.checkForUpdates();
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
+
+    manager.switchChannel('canary');
+    expect(readPointer(channelDir('canary'), MAIN_HASH).staged).toBeNull();
+    expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
+
+    stubFetch(feed, 'canary');
+    await manager.checkForUpdates();
+    expect(readPointer(channelDir('canary'), MAIN_HASH).staged).toBe('r1');
+    expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
+  });
+
+  it('uses a dedicated beta feed for beta binaries', async () => {
+    updaterConfigMock.buildChannel = 'beta';
+    const app = makeApp();
+    app.storeManager.get.mockReturnValue('canary');
+    const manager = await loadManager(app);
+    manager.initialize();
+
+    const feed = buildFeed('r1', {
+      'apps/desktop/index.html': entryHtml('beta'),
+      'assets/entry-e2e.js': 'console.log("beta")',
+    });
+    stubFetch(feed, 'beta');
+    await manager.checkForUpdates();
+
+    expect(readPointer(channelDir('beta'), MAIN_HASH).staged).toBe('r1');
   });
 });

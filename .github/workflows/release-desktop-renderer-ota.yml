@@ -20,6 +20,7 @@ on:
         options:
           - canary
           - stable
+          - beta
         default: canary
 
 concurrency:
@@ -77,6 +78,7 @@ jobs:
         if: steps.base.outputs.found == 'true'
         env:
           BASE_MAIN_HASH: ${{ steps.base.outputs.main_hash }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
         run: |
           MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
           echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
