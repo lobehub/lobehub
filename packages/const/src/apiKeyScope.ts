@@ -253,6 +253,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),
   share: rw('chat:read', 'chat:write'),
+  // Visitor-side execution on a shared agent bills the share owner — an
+  // interactive browser flow only, never something an API key should drive.
+  shareChat: 'blocked',
   spend: 'blocked',
   storageOverage: 'blocked',
   subscription: 'blocked',
