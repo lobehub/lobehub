@@ -1,5 +1,6 @@
 import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
@@ -39,6 +40,7 @@ import type {
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
@@ -152,15 +154,26 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    // Seed a personal name so a new agent has an identity before the Agent
+    // Seed a default name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
+    //
+    // A heterogeneous agent never draws a personal name: it is the user's
+    // external tool, not one of our own agents, so its default reads as whose
+    // tool it is — "{owner}'s {product}" (e.g. "Max 的 Claude Code").
+    const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
       ...params.config,
-      name: params.config?.name || randomAgentName(locale),
+      name:
+        params.config?.name ||
+        (heteroProvider
+          ? heteroAgentDefaultName(
+              params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+            )
+          : randomAgentName(locale)),
     };
 
     const result = await agentService.createAgent({ ...params, config });

@@ -51,11 +51,17 @@ export function agentDisplayName(
  * renders its title as the primary label, so repeating it would be noise. This
  * is deliberately uniform across every kind of agent, including runtime-backed
  * (heterogeneous) ones: they show their own role rather than their runtime.
+ *
+ * A role the primary label already spells out is suppressed for the same
+ * reason: a heterogeneous agent defaults to "Max 的 Kimi Code", and tagging it
+ * "Kimi Code" again says nothing. Rename it to something that no longer echoes
+ * the role and the tag comes back.
  */
 export const agentSecondaryDisplayName = (
   agent: AgentNameFields | null | undefined,
 ): string | undefined => {
   const role = firstNonBlank(agent?.name) ? firstNonBlank(agent?.title) : undefined;
+  if (!role) return undefined;
 
-  return role === agentDisplayName(agent) ? undefined : role;
+  return agentDisplayName(agent)?.includes(role) ? undefined : role;
 };

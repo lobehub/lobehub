@@ -46,6 +46,19 @@ describe('agentSecondaryDisplayName', () => {
     expect(agentSecondaryDisplayName({ name: '  ', title: 'Pi' })).toBeUndefined();
   });
 
+  it('suppresses a role the primary name already spells out', () => {
+    expect(
+      agentSecondaryDisplayName({ name: 'Max 的 Kimi Code', title: 'Kimi Code' }),
+    ).toBeUndefined();
+    expect(
+      agentSecondaryDisplayName({ name: "MaxLiu's Claude Code", title: 'Claude Code' }),
+    ).toBeUndefined();
+  });
+
+  it('restores the role tag once the name no longer echoes it', () => {
+    expect(agentSecondaryDisplayName({ name: '小K', title: 'Kimi Code' })).toBe('Kimi Code');
+  });
+
   it('treats a blank role as absent', () => {
     expect(agentSecondaryDisplayName({ name: 'Alice', title: '   ' })).toBeUndefined();
     expect(agentSecondaryDisplayName({ name: 'Alice' })).toBeUndefined();

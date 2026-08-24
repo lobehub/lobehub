@@ -670,6 +670,7 @@
   "heteroAgent.codexQuota.tooltip": "View Codex quota",
   "heteroAgent.codexQuota.totalEarned_one": "{{count}} earned in total",
   "heteroAgent.codexQuota.totalEarned_other": "{{count}} earned in total",
+  "heteroAgent.defaultName": "{{owner}}'s {{product}}",
   "heteroAgent.executionTarget.auto": "Auto",
   "heteroAgent.executionTarget.autoDesc": "Use an online device automatically, picking one when several are available",
   "heteroAgent.executionTarget.downloadDesktop": "Get Desktop App",
