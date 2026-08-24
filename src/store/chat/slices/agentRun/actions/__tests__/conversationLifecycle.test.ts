@@ -3563,6 +3563,87 @@ describe('ConversationLifecycle actions', () => {
           }),
           expect.any(AbortController),
         );
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newTopic: expect.objectContaining({ model: 'default', provider: 'codex' }),
+          }),
+          expect.any(AbortController),
+        );
+      });
+
+      it('overrides the heterogeneous runtime with the active topic model', async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: {
+                args: ['--model', 'global-model', '--mode', 'plan'],
+                model: 'global-model',
+                type: 'cursor',
+              },
+            },
+          },
+        });
+        const context = {
+          agentId: TEST_IDS.SESSION_ID,
+          threadId: null,
+          topicId: TEST_IDS.TOPIC_ID,
+        };
+        const topicKey = topicMapKey({ agentId: TEST_IDS.SESSION_ID });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: TEST_IDS.SESSION_ID,
+            activeTopicId: TEST_IDS.TOPIC_ID,
+            topicDataMap: {
+              [topicKey]: {
+                currentPage: 0,
+                hasMore: false,
+                items: [
+                  {
+                    createdAt: Date.now(),
+                    id: TEST_IDS.TOPIC_ID,
+                    model: 'topic-model',
+                    provider: 'cursor',
+                    title: 'Topic A',
+                    updatedAt: Date.now(),
+                  },
+                ],
+                pageSize: 20,
+                total: 1,
+              },
+            },
+          });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            heterogeneousProvider: {
+              args: ['--mode', 'plan'],
+              model: 'topic-model',
+              type: 'cursor',
+            },
+          }),
+        );
       });
 
       it('routes a legacy bare Qoder model to the desktop heterogeneous runtime without gateway mode', async () => {
