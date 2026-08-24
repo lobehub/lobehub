@@ -22,6 +22,8 @@ const styles = createStaticStyles(({ css }) => ({
 interface ReadOnlyConversationAreaProps {
   agentId: string;
   agentShareId: string;
+  /** The visitor's currently opened share topic; absent on the new-topic surface. */
+  topicId?: string | null;
 }
 
 /**
@@ -33,10 +35,10 @@ interface ReadOnlyConversationAreaProps {
  * standalone Share bundle or mounting owner-scoped side effects.
  */
 const ReadOnlyConversationArea = memo<ReadOnlyConversationAreaProps>(
-  ({ agentId, agentShareId }) => {
+  ({ agentId, agentShareId, topicId }) => {
     const context = useMemo(
-      () => ({ agentId, agentShareId, scope: 'main' as const }),
-      [agentId, agentShareId],
+      () => ({ agentId, agentShareId, scope: 'main' as const, topicId: topicId ?? undefined }),
+      [agentId, agentShareId, topicId],
     );
     const chatKey = useMemo(() => messageMapKey(context), [context]);
     const replaceMessages = useChatStore((state) => state.replaceMessages);

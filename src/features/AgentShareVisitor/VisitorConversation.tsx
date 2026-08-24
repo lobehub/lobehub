@@ -1,24 +1,25 @@
 'use client';
 
 import type { SharedAgentData } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
 import { memo, useLayoutEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
 import ReadOnlyConversationArea from './ReadOnlyConversationArea';
+import { useVisitorTopics } from './useVisitorTopics';
+import VisitorComposer from './VisitorComposer';
 
 /**
- * The visitor-facing conversation column: mounts the lean read-only message
- * surface after hand-seeding the stores, mirroring the popup quick-chat pattern.
+ * The visitor-facing conversation column: mounts the lean message surface
+ * after hand-seeding the stores (popup quick-chat pattern) plus the share
+ * composer wired to the gateway transport via `agentShareId`.
  */
 const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
-  const { t } = useTranslation('agent');
   const { agentId, agentMeta, shareId } = data;
   const [seeded, setSeeded] = useState(false);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const { mutate: refreshVisitorTopics } = useVisitorTopics(shareId);
 
   useLayoutEffect(() => {
     // Visitors cannot call the owner-scoped agent-config API, so seed a
@@ -52,12 +53,15 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
 
   return (
     <>
-      <ReadOnlyConversationArea agentId={agentId} agentShareId={shareId} />
-      <Flexbox align={'center'} paddingBlock={4}>
-        <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
-          {t('share.visitor.sendDisabled')}
-        </span>
-      </Flexbox>
+      <ReadOnlyConversationArea agentId={agentId} agentShareId={shareId} topicId={activeTopicId} />
+      <VisitorComposer
+        agentId={agentId}
+        // The gateway transport already switched the store to the new topic
+        // (`switchTopic`); refreshing the list makes it show up in the panel.
+        shareId={shareId}
+        topicId={activeTopicId}
+        onTopicCreated={() => void refreshVisitorTopics()}
+      />
     </>
   );
 });

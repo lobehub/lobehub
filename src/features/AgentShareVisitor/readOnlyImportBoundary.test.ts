@@ -16,7 +16,16 @@ describe('shared-agent visitor import boundary', () => {
       'utf8',
     );
 
+    const composerSource = readSource('VisitorComposer.tsx');
+
     expect(visitorSource).not.toContain('AgentConversation/ConversationArea');
+    // The visitor composer is a lean text-only surface: pulling the owner
+    // composer graph (uploads, mentions, device targets) would both violate
+    // the share permission model and blow up the share micro-app bundle.
+    expect(composerSource).not.toContain('MainChatInput');
+    expect(composerSource).not.toContain('HeterogeneousChatInput');
+    expect(composerSource).not.toContain('ComposerDraftReceiver');
+    expect(composerSource).not.toContain('@/store/file');
     expect(pageSource).not.toContain('useSharedAgent');
     expect(pageSource).toContain('memo<{ data: SharedAgentData }>');
     expect(readOnlySource).not.toContain('AgentConversation/ConversationArea');
