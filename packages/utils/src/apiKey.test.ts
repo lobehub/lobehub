@@ -1,9 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
 
 describe('apiKey', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('generateApiKey', () => {
+    it('should use crypto.getRandomValues as its entropy source', () => {
+      const getRandomValuesSpy = vi.spyOn(crypto, 'getRandomValues');
+
+      generateApiKey();
+
+      expect(getRandomValuesSpy).toHaveBeenCalledOnce();
+      expect(getRandomValuesSpy.mock.calls[0][0]).toBeInstanceOf(Uint32Array);
+      expect(getRandomValuesSpy.mock.calls[0][0]).toHaveLength(16);
+    });
+
     it('should generate API key with correct format', () => {
       const apiKey = generateApiKey();
       expect(apiKey).toMatch(/^sk-lh-[\da-z]{16}$/);

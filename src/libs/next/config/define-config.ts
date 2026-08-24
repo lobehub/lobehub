@@ -18,7 +18,9 @@ export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
 
-  const shouldUseCSP = process.env.ENABLED_CSP === '1';
+  // Docker deployments apply these headers in proxy middleware so ENABLED_CSP
+  // can be changed when a published image starts, rather than only at build time.
+  const shouldUseCSP = !buildWithDocker && process.env.ENABLED_CSP !== '0';
 
   const isTest =
     process.env.NODE_ENV === 'test' || process.env.TEST === '1' || process.env.E2E === '1';

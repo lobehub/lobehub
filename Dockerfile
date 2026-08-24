@@ -44,7 +44,7 @@ ENV APP_URL="http://app.com" \
     DATABASE_DRIVER="node" \
     DATABASE_URL="postgres://postgres:password@localhost:5432/postgres" \
     KEY_VAULTS_SECRET="use-for-build" \
-    AUTH_SECRET="use-for-build"
+    AUTH_SECRET="use-for-build-use-for-build-only"
 
 # Sentry
 ENV NEXT_PUBLIC_SENTRY_DSN="${NEXT_PUBLIC_SENTRY_DSN}" \
@@ -137,7 +137,8 @@ FROM scratch
 # Copy all the files from app, set the correct permission for prerender cache
 COPY --from=app / /
 
-ENV NODE_ENV="production" \
+ENV DOCKER="true" \
+    NODE_ENV="production" \
     NODE_OPTIONS="--dns-result-order=ipv4first --use-openssl-ca" \
     NODE_EXTRA_CA_CERTS="" \
     NODE_TLS_REJECT_UNAUTHORIZED="" \

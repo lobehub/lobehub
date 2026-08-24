@@ -13,6 +13,7 @@ import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { applyRuntimeFrameProtections } from '../runtimeSecurityHeaders';
 import { isShareSpaRoute } from '../shareRoutes';
 import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
@@ -268,7 +269,7 @@ export function defineConfig() {
     logBetterAuth('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
 
     // Skip session lookup for public routes to reduce latency
-    if (!isProtected) return response;
+    if (!isProtected) return applyRuntimeFrameProtections(response);
 
     // Get full session with user data (Next.js 15.2.0+ feature)
     const session = await auth.api.getSession({
@@ -302,12 +303,12 @@ export function defineConfig() {
           signInUrl.searchParams.set('utm_source', utmSource);
           logBetterAuth('Preserving utm_source to sign-in: %s', utmSource);
         }
-        return Response.redirect(signInUrl);
+        return applyRuntimeFrameProtections(NextResponse.redirect(signInUrl));
       }
       logBetterAuth('Request a free route but not login, allow visit without auth header');
     }
 
-    return response;
+    return applyRuntimeFrameProtections(response);
   };
 
   logDefault('Middleware configuration: %O', { enableOIDC: authEnv.ENABLE_OIDC });

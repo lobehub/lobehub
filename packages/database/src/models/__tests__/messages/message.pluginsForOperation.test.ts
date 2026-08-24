@@ -77,11 +77,9 @@ const captureEmittedSql = async (
     logQuery: (sql: string, params: unknown[]) => captured.push({ params, sql }),
   };
   const client = (serverDB as unknown as { $client: { waitReady?: unknown } }).$client;
-  const db = (
-    'waitReady' in (client ?? {})
-      ? pgliteDrizzle({ client: client as any, logger, schema })
-      : nodeDrizzle(client as any, { logger, schema })
-  ) as unknown as LobeChatDatabase;
+  const db = ('waitReady' in (client ?? {})
+    ? pgliteDrizzle({ client: client as any, logger, schema })
+    : nodeDrizzle(client as any, { logger, schema })) as unknown as LobeChatDatabase;
   await run(db);
   return captured;
 };
@@ -268,8 +266,18 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
           userId,
         })),
       );
-      await seedToolCall({ createdAt: T1, id: 'in-window', threadId: 'thread1', topicId: 'topic1' });
-      await seedToolCall({ createdAt: T2, id: 'in-window-2', threadId: 'thread1', topicId: 'topic1' });
+      await seedToolCall({
+        createdAt: T1,
+        id: 'in-window',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      });
+      await seedToolCall({
+        createdAt: T2,
+        id: 'in-window-2',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      });
       await seedToolCall({
         createdAt: new Date('2027-01-01T00:00:00.000Z'),
         id: 'hetero',

@@ -95,7 +95,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     /* Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root. */
     --explorer-tree-icon-fg: ${cssVar.colorTextDescription};
-
   `,
 }));
 
