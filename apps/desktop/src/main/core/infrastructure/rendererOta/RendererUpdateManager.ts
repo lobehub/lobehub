@@ -1,13 +1,5 @@
-import {
-  existsSync,
-  linkSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { copyFile, link, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { app as electronApp } from 'electron';
@@ -224,18 +216,18 @@ export class RendererUpdateManager {
     const stagingDir = path.join(stagingRoot, manifest.version);
     mkdirSync(stagingDir, { recursive: true });
 
-    const { missing, reusable } = diffManifest(manifest, this.hashLocalTree());
+    const { missing, reusable } = diffManifest(manifest, await this.hashLocalTree());
     logger.info(
       `Renderer ${manifest.version}: ${reusable.length} files reused, ${missing.length} to download`,
     );
 
     for (const { file, localPath } of reusable) {
       const target = path.join(stagingDir, file.path);
-      mkdirSync(path.dirname(target), { recursive: true });
+      await mkdir(path.dirname(target), { recursive: true });
       try {
-        linkSync(localPath, target);
+        await link(localPath, target);
       } catch {
-        writeFileSync(target, readFileSync(localPath));
+        await copyFile(localPath, target);
       }
     }
 
@@ -244,23 +236,25 @@ export class RendererUpdateManager {
       if (!res.ok) throw new Error(`Asset fetch failed (${res.status}): ${file.path}`);
       const content = Buffer.from(await res.arrayBuffer());
       const target = path.join(stagingDir, file.path);
-      mkdirSync(path.dirname(target), { recursive: true });
-      writeFileSync(target, content);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, content);
     }
 
     for (const file of manifest.files) {
-      const content = readFileSync(path.join(stagingDir, file.path));
+      const content = await readFile(path.join(stagingDir, file.path));
       if (sha256File(content) !== file.sha256) {
         throw new Error(`Hash mismatch after staging: ${file.path}`);
       }
     }
 
-    const entryHtml = readFileSync(path.join(stagingDir, 'apps', 'desktop', 'index.html'), 'utf8');
-    const missingAssets = findMissingEntryAssets(entryHtml, (relPath) =>
-      existsSync(path.join(stagingDir, relPath)),
-    );
-    if (missingAssets.length > 0) {
-      throw new Error(`Entry integrity check failed: ${missingAssets.join(', ')}`);
+    for (const entry of ['index.html', 'popup.html', 'overlay.html']) {
+      const entryHtml = await readFile(path.join(stagingDir, 'apps', 'desktop', entry), 'utf8');
+      const missingAssets = findMissingEntryAssets(entryHtml, (relPath) =>
+        existsSync(path.join(stagingDir, relPath)),
+      );
+      if (missingAssets.length > 0) {
+        throw new Error(`Entry integrity check failed (${entry}): ${missingAssets.join(', ')}`);
+      }
     }
 
     const finalDir = path.join(this.otaDir, 'versions', manifest.version);
@@ -269,26 +263,26 @@ export class RendererUpdateManager {
     rmSync(stagingRoot, { force: true, recursive: true });
   }
 
-  private hashLocalTree(): Map<string, string> {
+  private async hashLocalTree(): Promise<Map<string, string>> {
     const root = this.pointer.current
       ? path.join(this.otaDir, 'versions', this.pointer.current)
       : rendererDir;
     const hashes = new Map<string, string>();
 
-    const walk = (dir: string) => {
+    const walk = async (dir: string) => {
       let entries;
       try {
-        entries = readdirSync(dir, { withFileTypes: true });
+        entries = await readdir(dir, { withFileTypes: true });
       } catch {
         return;
       }
       for (const entry of entries) {
         const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else hashes.set(full, sha256File(readFileSync(full)));
+        if (entry.isDirectory()) await walk(full);
+        else hashes.set(full, sha256File(await readFile(full)));
       }
     };
-    walk(root);
+    await walk(root);
     return hashes;
   }
 

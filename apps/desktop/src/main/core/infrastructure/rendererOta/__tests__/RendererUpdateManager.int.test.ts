@@ -49,8 +49,13 @@ const entryHtml = (marker: string) =>
   `<html><head><script type="module" src="/assets/entry-e2e.js"></script></head><body>${marker}</body></html>`;
 
 const buildFeed = (version: string, files: Record<string, string>) => {
+  const withEntries = {
+    'apps/desktop/overlay.html': entryHtml(`${version}-overlay`),
+    'apps/desktop/popup.html': entryHtml(`${version}-popup`),
+    ...files,
+  };
   const cas = new Map<string, Buffer>();
-  const manifestFiles = Object.entries(files).map(([filePath, text]) => {
+  const manifestFiles = Object.entries(withEntries).map(([filePath, text]) => {
     const content = Buffer.from(text);
     const sha256 = sha256File(content);
     cas.set(sha256, content);
@@ -129,7 +134,7 @@ describe('RendererUpdateManager full path', () => {
 
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     const casFetches = fetchedUrls.filter((u: string) => u.includes('/renderer/files/'));
-    expect(casFetches).toHaveLength(2);
+    expect(casFetches).toHaveLength(4);
 
     expect(manager.applyStagedNow()).toBe(true);
     expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(
@@ -260,6 +265,27 @@ describe('RendererUpdateManager full path', () => {
       buildFeed('r1', {
         'apps/desktop/index.html':
           '<html><script type="module" src="/assets/gone.js"></script></html>',
+      }),
+    );
+
+    await manager.checkForUpdates();
+
+    const otaDir = path.join(userDataDir, 'renderer-ota');
+    expect(readPointer(otaDir, MAIN_HASH).staged).toBeNull();
+    expect(existsSync(path.join(otaDir, 'staging'))).toBe(false);
+  });
+
+  it('rejects a staged tree whose popup entry references a missing chunk', async () => {
+    const app = makeApp();
+    const manager = await loadManager(app);
+    manager.initialize();
+
+    stubFetch(
+      buildFeed('r1', {
+        'apps/desktop/index.html': entryHtml('v1'),
+        'apps/desktop/popup.html':
+          '<html><script type="module" src="/assets/gone.js"></script></html>',
+        'assets/entry-e2e.js': 'console.log("v1")',
       }),
     );
 

@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 const desktopRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(desktopRoot));
 
-const STANDALONE_FILES = [
+// Only committed files: this hash must be reproducible from a fresh checkout
+// (CI gate/marker jobs) — never include generated files like pnpm-lock.yaml,
+// which only exists after install-isolated and would silently be skipped.
+export const STANDALONE_FILES = [
   'vite.main.config.ts',
   'vite.preload.config.ts',
   'vite.shared.ts',
@@ -15,7 +18,6 @@ const STANDALONE_FILES = [
   'module-deps.config.mjs',
   'electron-builder.mjs',
   'package.json',
-  'pnpm-lock.yaml',
 ];
 
 const IGNORED_DIRS = new Set(['__tests__', '__mocks__', 'node_modules', 'dist']);
@@ -76,6 +78,7 @@ export function computeMainHash() {
   const seedFiles = [
     ...walk(path.join(desktopRoot, 'src', 'main')),
     ...walk(path.join(desktopRoot, 'src', 'preload')),
+    ...walk(path.join(desktopRoot, 'src', 'common')),
   ];
 
   const files = [...seedFiles, ...STANDALONE_FILES.map((f) => path.join(desktopRoot, f))];
