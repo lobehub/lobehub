@@ -317,7 +317,7 @@ describe('AgentDocumentInjector', () => {
           sourceType: 'web',
           title: 'Gold news',
         },
-      ];
+      ] satisfies AgentContextDocument[];
       const provider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),
         documents,
