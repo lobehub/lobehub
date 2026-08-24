@@ -1319,6 +1319,85 @@ describe('GatewayService', () => {
       expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
     });
 
+    describe('reconcileHost (scoped restart recovery)', () => {
+      it('rebuilds the node host without touching the default gateway at all', async () => {
+        // The whole point of scoping: a node restart must not ensure-connect
+        // dormant connections on the default host to see if they are alive.
+        // On Cloudflare that wake is billable, and not paying for it is what
+        // this migration is for.
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+        // Node came back empty — this is what a container restart looks like.
+        mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+
+        await service.reconcileHost('node');
+
+        expect(mockNodeGatewayClient.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ connectionId: 'wechat-provider', platform: 'wechat' }),
+          { ensure: true },
+        );
+        // Not one request to the default host, of any kind.
+        expect(mockGatewayClient.getStats).not.toHaveBeenCalled();
+        expect(mockGatewayClient.getRegisteredIds).not.toHaveBeenCalled();
+        expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+        expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      });
+
+      it('loads only the platforms the scoped host owns', async () => {
+        mockFindEnabledByPlatform.mockResolvedValue([]);
+
+        await service.reconcileHost('node');
+
+        // Loading a platform means decrypting its credentials and running a
+        // paid-feature check per provider — never do that for platforms this
+        // round cannot act on.
+        const platformsLoaded = mockFindEnabledByPlatform.mock.calls.map(
+          (call: unknown[]) => call[1] as string,
+        );
+        expect(platformsLoaded).toEqual(['wechat']);
+      });
+
+      it('does not reconcile a messenger platform owned by another host', async () => {
+        mockNodeGateway.platforms = [];
+        mockFindAllLinksByPlatform.mockResolvedValue([
+          {
+            applicationId: 'bot-1@im.bot',
+            credentials: { botToken: 'tok' },
+            tenantId: 'alice',
+            userId: 'user-1',
+          },
+        ]);
+
+        await service.reconcileHost('node');
+
+        // wechat now resolves to the default host, which is out of scope.
+        expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+        expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+      });
+
+      it('stays out of the way when gateway mode is off', async () => {
+        mockGatewayClient.isEnabled = false;
+        mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = undefined;
+
+        await service.reconcileHost('node');
+
+        expect(mockNodeGatewayClient.getStats).not.toHaveBeenCalled();
+        expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+      });
+    });
+
     it('routes per-user messenger registration to the node host', async () => {
       mockResolveMessengerInstallation.mockResolvedValue({
         applicationId: 'bot@im.wechat',

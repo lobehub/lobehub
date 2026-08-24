@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { botCallback } from './handlers/botCallback';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
+import { gatewayAnnounce } from './handlers/gatewayAnnounce';
 import { gatewayCallback } from './handlers/gatewayCallback';
 import { gatewayCron } from './handlers/gatewayCron';
 import { gatewayStart } from './handlers/gatewayStart';
@@ -66,6 +67,11 @@ app.post(
 // POST /api/agent/gateway/callback — message gateway state-change callbacks
 // (auth is inline so the disabled-feature 204 short-circuits before auth)
 app.post('/gateway/callback', gatewayCallback);
+
+// POST /api/agent/gateway/announce — a gateway reporting it restarted empty,
+// so its own connections get rebuilt now instead of on the next cron round.
+// (auth is inline, same reason as the callback above)
+app.post('/gateway/announce', gatewayAnnounce);
 
 // POST /api/agent/webhooks/bot-callback — agent step/completion webhooks (QStash)
 app.post('/webhooks/bot-callback', qstashAuth(), botCallback);

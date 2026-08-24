@@ -182,6 +182,28 @@ export class GatewayService {
     return isAnyMessageGatewayEnabled();
   }
 
+  /**
+   * Rebuild one host's connections, leaving every other host untouched.
+   *
+   * For a gateway that just lost its connections — a container restart wipes
+   * an in-process registry, unlike a Durable Object, which resurrects itself
+   * from its own storage. The periodic reconcile would fix it too, but only
+   * on its next round, so a gateway that announces its own restart gets its
+   * fleet back in seconds instead of hours.
+   *
+   * Scoped on purpose: a full round would ensure-connect dormant connections
+   * on the OTHER hosts to check whether they are still alive, and on the
+   * default host waking a dormant connection is billable. Restart recovery
+   * must not cost anything on a host that never restarted.
+   */
+  async reconcileHost(host: MessageGatewayHost): Promise<void> {
+    if (!this.useMessageGateway) {
+      log('reconcileHost(%s): gateway mode off, ignoring', host);
+      return;
+    }
+    await this.syncGatewayConnections([host]);
+  }
+
   async ensureRunning(): Promise<void> {
     if (this.useMessageGateway) {
       await this.syncGatewayConnections();
@@ -230,22 +252,38 @@ export class GatewayService {
    *
    * Called from the gateway cron; also recovers connections after restarts.
    */
-  private async syncGatewayConnections(): Promise<void> {
+  private async syncGatewayConnections(scope?: MessageGatewayHost[]): Promise<void> {
     const startedAt = Date.now();
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-
-    const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
-      serverDB,
-      gateKeeper,
-    );
 
     // Each configured host gets its own desired slice and its own actual
     // snapshot, then runs the full diff independently. Cross-host moves fall
     // out of the partition: a platform routed away from a host leaves its ids
     // absent from that host's desired slice → the stale pass disconnects them
     // there while the new host's connect pass builds them up.
-    const hosts = getConfiguredMessageGatewayHosts();
+    //
+    // `scope` narrows the round to specific hosts. The periodic reconcile
+    // passes nothing and visits every configured host — that is the only mode
+    // in which a cross-host move can complete, since it needs both the source
+    // drain and the destination connect. A scoped round is for the case where
+    // one host is known to have lost its connections (a restart) and the
+    // others must not be touched: visiting them would wake dormant
+    // connections that were deliberately asleep, which on the default host is
+    // billable and is exactly what this migration exists to stop paying for.
+    const hosts = getConfiguredMessageGatewayHosts().filter(
+      (host) => !scope || scope.includes(host),
+    );
+    if (hosts.length === 0) {
+      log('Gateway sync: no configured host matches scope %o, nothing to do', scope);
+      return;
+    }
+
+    const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
+      serverDB,
+      gateKeeper,
+      hosts,
+    );
     const snapshots = new Map<MessageGatewayHost, ActualConnectionsSnapshot | null>();
     for (const host of hosts) {
       snapshots.set(host, await this.fetchActualConnections(getMessageGatewayClientForHost(host)));
@@ -593,6 +631,10 @@ export class GatewayService {
       if (definition.connectionMode !== 'polling') continue;
       const platform = definition.id;
       const host = resolveMessageGatewayHost(platform);
+      // Out of scope this round — `snapshots` only holds the hosts being
+      // visited, so a platform owned elsewhere has nothing to reconcile
+      // against and must not be touched.
+      if (!snapshots.has(host)) continue;
       const client = getMessageGatewayClientForHost(host);
       if (!client.isEnabled) continue;
 
@@ -845,6 +887,7 @@ export class GatewayService {
   private async buildDesiredConnections(
     serverDB: Awaited<ReturnType<typeof getServerDB>>,
     gateKeeper: KeyVaultsGateKeeper,
+    hosts: MessageGatewayHost[],
   ): Promise<{
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
@@ -855,7 +898,15 @@ export class GatewayService {
     let desiredComplete = true;
     const gated = new Map<string, string>();
 
-    for (const definition of platformRegistry.listPlatforms()) {
+    // Only platforms owned by a host in scope. Loading the rest would decrypt
+    // credentials and run a paid-feature check per provider for connections
+    // this round will not look at — pure waste on a scoped round, which by
+    // construction is the common one (every gateway restart triggers it).
+    const platforms = platformRegistry
+      .listPlatforms()
+      .filter((definition) => hosts.includes(resolveMessageGatewayHost(definition.id)));
+
+    for (const definition of platforms) {
       const platform = definition.id;
       try {
         // includeUndecryptable: rows whose credentials can't be decrypted stay
