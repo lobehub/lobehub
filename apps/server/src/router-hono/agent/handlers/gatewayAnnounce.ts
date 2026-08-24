@@ -113,15 +113,26 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
   // admin-surface blip into a retry instead of an outage lasting until the
   // periodic reconcile. Scoping keeps this cheap enough to await.
   try {
-    await new GatewayService().reconcileHost(host);
+    const outcome = await new GatewayService().reconcileHost(host);
+
+    // The sync survives partial failure by design — an unreachable admin
+    // surface, a platform that will not load, a connection that will not
+    // build are all absorbed rather than thrown. Awaiting it therefore only
+    // catches setup errors, so the outcome is what actually distinguishes
+    // "your fleet is back" from "this round achieved nothing".
+    if (!outcome.ok) {
+      log('announce: %s host rebuild incomplete (%s)', host, outcome.reason);
+      return c.json({ error: outcome.reason, reconciled: false }, 503);
+    }
+
     if (redis) {
-      // Only a success starts the cooldown.
+      // Only a clean rebuild starts the cooldown.
       await redis
         .set(cooldownKey(host), Date.now().toString(), 'EX', ANNOUNCE_COOLDOWN_SECONDS)
         .catch(() => undefined);
     }
-    log('announce: %s host rebuilt', host);
-    return c.json({ host, reconciled: true });
+    log('announce: %s host rebuilt (connected=%d)', host, outcome.connected);
+    return c.json({ connected: outcome.connected, host, reconciled: true });
   } catch (err) {
     log('announce: %s host rebuild failed: %O', host, err);
     // 503 so the gateway's existing backoff retries; no cooldown was set, so

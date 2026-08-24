@@ -48,7 +48,7 @@ describe('gatewayAnnounce', () => {
     mockEnv.MESSAGE_GATEWAY_ENABLED = '1';
     mockEnv.MESSAGE_GATEWAY_SERVICE_TOKEN = 'shared-token';
     mockRedis.client = null;
-    mockReconcileHost.mockResolvedValue(undefined);
+    mockReconcileHost.mockResolvedValue({ connected: 3, failed: 0, ok: true });
   });
 
   it('rebuilds only the announcing host', async () => {
@@ -77,6 +77,23 @@ describe('gatewayAnnounce', () => {
     expect(r.payload.reconciled).toBe(false);
   });
 
+  it('treats a reconcile that achieved nothing as retryable, not as success', async () => {
+    // GatewayService absorbs an unreachable admin surface into a null
+    // snapshot and resolves normally, so "did not throw" is not the same as
+    // "worked" — the outcome is what tells them apart.
+    mockReconcileHost.mockResolvedValue({
+      connected: 0,
+      failed: 0,
+      ok: false,
+      reason: 'admin snapshot unavailable',
+    });
+
+    const r = await call({ host: 'node' });
+
+    expect(r.status).toBe(503);
+    expect(r.payload.reconciled).toBe(false);
+  });
+
   describe('with redis', () => {
     beforeEach(() => {
       mockRedis.client = {
@@ -98,8 +115,16 @@ describe('gatewayAnnounce', () => {
       expect(mockReconcileHost).not.toHaveBeenCalled();
     });
 
-    it('starts no cooldown when the rebuild failed', async () => {
-      mockReconcileHost.mockRejectedValue(new Error('boom'));
+    it('starts no cooldown when the rebuild achieved nothing', async () => {
+      // Not a thrown error — the shape a swallowed service failure actually
+      // takes. A cooldown here would turn one bad round into a window where
+      // the gateway is refused its retry.
+      mockReconcileHost.mockResolvedValue({
+        connected: 0,
+        failed: 2,
+        ok: false,
+        reason: '2 connection(s) failed',
+      });
 
       await call({ host: 'node' });
 

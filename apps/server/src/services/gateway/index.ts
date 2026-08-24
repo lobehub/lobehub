@@ -125,6 +125,24 @@ interface ActualConnectionsSnapshot {
   connections: Map<string, string | null>;
 }
 
+/**
+ * Whether a scoped round actually did its job.
+ *
+ * The sync is built to survive partial failure: an unreachable admin surface
+ * becomes a null snapshot, a platform that will not load only clears
+ * `desiredComplete`, a connection that will not build is counted and skipped.
+ * That is right for a periodic reconcile, which simply tries again later —
+ * but a caller waiting to be told its fleet is back needs to know the
+ * difference between "nothing to do" and "nothing worked".
+ */
+export interface HostReconcileOutcome {
+  connected: number;
+  failed: number;
+  /** False when anything stopped this round from being authoritative. */
+  ok: boolean;
+  reason?: string;
+}
+
 /** What one host's drain phase removed, carried into its connect-phase log line. */
 interface HostDrainCounts {
   gatedDisconnected: number;
@@ -196,12 +214,18 @@ export class GatewayService {
    * default host waking a dormant connection is billable. Restart recovery
    * must not cost anything on a host that never restarted.
    */
-  async reconcileHost(host: MessageGatewayHost): Promise<void> {
+  async reconcileHost(host: MessageGatewayHost): Promise<HostReconcileOutcome> {
     if (!this.useMessageGateway) {
       log('reconcileHost(%s): gateway mode off, ignoring', host);
-      return;
+      return { connected: 0, failed: 0, ok: true, reason: 'gateway mode off' };
     }
-    await this.syncGatewayConnections([host]);
+
+    const outcomes = await this.syncGatewayConnections([host]);
+    // A host that produced no outcome was filtered out of the round — it is
+    // not configured, so there is nothing to rebuild and nothing went wrong.
+    return (
+      outcomes.get(host) ?? { connected: 0, failed: 0, ok: true, reason: 'host not configured' }
+    );
   }
 
   async ensureRunning(): Promise<void> {
@@ -252,7 +276,10 @@ export class GatewayService {
    *
    * Called from the gateway cron; also recovers connections after restarts.
    */
-  private async syncGatewayConnections(scope?: MessageGatewayHost[]): Promise<void> {
+  private async syncGatewayConnections(
+    scope?: MessageGatewayHost[],
+  ): Promise<Map<MessageGatewayHost, HostReconcileOutcome>> {
+    const outcomes = new Map<MessageGatewayHost, HostReconcileOutcome>();
     const startedAt = Date.now();
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -276,7 +303,7 @@ export class GatewayService {
     );
     if (hosts.length === 0) {
       log('Gateway sync: no configured host matches scope %o, nothing to do', scope);
-      return;
+      return outcomes;
     }
 
     const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
@@ -340,14 +367,30 @@ export class GatewayService {
     }
 
     for (const host of hosts) {
-      await this.connectHostConnections({
+      const snapshot = snapshots.get(host) ?? null;
+      const { connected, failed } = await this.connectHostConnections({
         counts: drainCounts.get(host) ?? { gatedDisconnected: 0, gatedSize: 0, stale: 0 },
         currentlyElsewhere,
         desired,
         drainedThisRound,
         host,
-        snapshot: snapshots.get(host) ?? null,
+        snapshot,
       });
+
+      // Everything that makes this round non-authoritative. The periodic
+      // reconcile shrugs these off and retries later; a caller waiting on a
+      // rebuild must not be told the fleet is back when it is not.
+      const reason = !snapshot
+        ? 'admin snapshot unavailable'
+        : !snapshot.complete
+          ? 'registry snapshot incomplete'
+          : !desiredComplete
+            ? 'desired set incomplete'
+            : failed > 0
+              ? `${failed} connection(s) failed`
+              : undefined;
+
+      outcomes.set(host, { connected, failed, ok: !reason, reason });
     }
 
     await this.syncMessengerPollingConnections(
@@ -364,6 +407,8 @@ export class GatewayService {
       desired.size,
       gated.size,
     );
+
+    return outcomes;
   }
 
   /** Slice of the desired set whose platforms route to `host`. */
@@ -448,7 +493,7 @@ export class GatewayService {
     drainedThisRound: Set<string>;
     host: MessageGatewayHost;
     snapshot: ActualConnectionsSnapshot | null;
-  }): Promise<void> {
+  }): Promise<{ connected: number; failed: number }> {
     const { counts, currentlyElsewhere, drainedThisRound, host, snapshot: actual } = params;
     const client = getMessageGatewayClientForHost(host);
     const desired = this.hostDesiredSlice(params.desired, host);
@@ -600,6 +645,8 @@ export class GatewayService {
       registeredOnlyWakes,
       registeredOnlyDeferred,
     );
+
+    return { connected, failed };
   }
 
   /**

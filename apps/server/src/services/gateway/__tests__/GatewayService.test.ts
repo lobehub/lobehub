@@ -1355,6 +1355,65 @@ describe('GatewayService', () => {
         expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
       });
 
+      it('reports failure when the host admin surface is unreachable', async () => {
+        // The sync absorbs this into a null snapshot and resolves normally —
+        // which is right for the periodic reconcile and wrong for a caller
+        // waiting to hear its fleet is back.
+        mockNodeGatewayClient.getStats.mockRejectedValue(new Error('stats down'));
+        mockNodeGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registry down'));
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/snapshot/i);
+      });
+
+      it('reports failure when the registry snapshot is only partial', async () => {
+        // Stats answered but registered-ids did not: absence from the map no
+        // longer proves absence, so missing connections are deferred rather
+        // than rebuilt. Claiming success here would strand them.
+        mockNodeGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registry down'));
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+      });
+
+      it('reports failure when a connection could not be rebuilt', async () => {
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+        mockNodeGatewayClient.connect.mockRejectedValue(new Error('gateway refused'));
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.failed).toBe(1);
+      });
+
+      it('reports success for a host that legitimately owns nothing', async () => {
+        // The pre-cutover shape: node configured, no platform routed to it.
+        // Nothing to rebuild is not a failure, and must not make the gateway
+        // retry forever.
+        mockNodeGateway.platforms = [];
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(true);
+        expect(outcome.connected).toBe(0);
+      });
+
       it('loads only the platforms the scoped host owns', async () => {
         mockFindEnabledByPlatform.mockResolvedValue([]);
 
