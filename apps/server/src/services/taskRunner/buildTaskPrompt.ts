@@ -31,7 +31,9 @@ const resolveGoalLoopContext = async (
   deps: BuildTaskPromptDeps,
 ): Promise<TaskRunPromptGoalLoop | undefined> => {
   const { db, userId, workspaceId } = deps;
-  const goal = await new GoalModel(db, userId, workspaceId).findBySubject('task', task.id);
+  const goalModel = new GoalModel(db, userId, workspaceId);
+  const goal =
+    (await goalModel.findBySubject('task', task.id)) ?? (await goalModel.findByWorkTask(task.id));
   if (!goal || !task.totalTopics) return undefined;
 
   const budget = resolveGoalRoundBudget(goal);

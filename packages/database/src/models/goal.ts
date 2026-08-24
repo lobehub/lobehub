@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
+import { goalNodes } from '../schemas/goalGraph';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
@@ -67,6 +68,17 @@ export class GoalModel {
         this.ownership(),
       ),
     });
+  };
+
+  /** The Goal Graph that owns a Work Task, or undefined when the task is not graph-managed. */
+  findByWorkTask = async (taskId: string): Promise<GoalItem | undefined> => {
+    const [row] = await this.db
+      .select({ goal: goals })
+      .from(goalNodes)
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.kind, 'work'), this.ownership()))
+      .limit(1);
+    return row?.goal;
   };
 
   /**

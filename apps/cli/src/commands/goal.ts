@@ -73,11 +73,26 @@ export function registerGoalCommand(program: Command) {
     .option('--project <id>', 'Project ID')
     .option('--max-rounds <n>', 'Maximum goal rounds')
     .option('--max-cost <usd>', 'Maximum total cost in USD')
+    .option('--max-attempts-per-work <n>', 'Attempts per Work before opening a decision gate')
+    .option('--max-steps-per-run <n>', 'Optional agent step cap per Work run (for example 500)')
     .option('--json [fields]', 'Output JSON')
     .action(async (title: string, options) => {
       const client = await getTrpcClient();
       const result = await client.goal.create.mutate({
         agentId: options.agent,
+        config:
+          options.maxAttemptsPerWork || options.maxStepsPerRun
+            ? {
+                recovery: {
+                  maxAttemptsPerWork: options.maxAttemptsPerWork
+                    ? Number.parseInt(options.maxAttemptsPerWork, 10)
+                    : undefined,
+                  maxStepsPerRun: options.maxStepsPerRun
+                    ? Number.parseInt(options.maxStepsPerRun, 10)
+                    : undefined,
+                },
+              }
+            : undefined,
         maxRounds: options.maxRounds ? Number.parseInt(options.maxRounds, 10) : undefined,
         maxTotalCost: options.maxCost ? Number.parseFloat(options.maxCost) : undefined,
         projectId: options.project,

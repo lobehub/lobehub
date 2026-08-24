@@ -1537,6 +1537,7 @@ table goals {
   project_id text
   title text [not null]
   requirement text
+  config jsonb
   max_rounds integer
   max_total_cost "numeric(20, 6)"
   status text [not null, default: 'planning']
@@ -1569,6 +1570,8 @@ table goal_edges {
     (source_node_id, target_node_id, kind) [name: 'goal_edges_source_target_kind_unique', unique]
     goal_id [name: 'goal_edges_goal_id_idx']
     target_node_id [name: 'goal_edges_target_node_id_idx']
+
+
 
   }
 }
@@ -1656,6 +1659,7 @@ table goal_nodes {
     (goal_id, kind) [name: 'goal_nodes_goal_id_kind_idx']
     (goal_id, id) [name: 'goal_nodes_goal_id_id_unique', unique]
     task_id [name: 'goal_nodes_task_id_unique', unique]
+
 
   }
 }
