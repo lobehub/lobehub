@@ -747,6 +747,7 @@ export class AgentRuntimeService {
       initialContext,
       agentConfig,
       agentGroup,
+      agentShare,
       modelRuntimeConfig,
       userId,
       autoStart = true,
@@ -888,6 +889,7 @@ export class AgentRuntimeService {
           activeDeviceScope,
           agentConfig,
           agentGroup,
+          agentShare,
           botContext,
           botPlatformContext,
           deviceAccessPolicy,
@@ -940,6 +942,9 @@ export class AgentRuntimeService {
         agentConfig,
         mirrorToOperationId,
         modelRuntimeConfig,
+        // Share-visitor runs execute as the creator (userId) but stream only to
+        // the visitor — the gateway registers the WS channel under this id.
+        streamOwnerUserId: agentShare?.visitorUserId,
         userId,
         workspaceId: this.workspaceId,
       });
@@ -3550,6 +3555,7 @@ export class AgentRuntimeService {
       // an early hint would end the visible loading seconds before that card
       // can exist. Deferring to the terminal `visible_output_end` lets loading
       // cover the export and the card land with `agent_runtime_end`.
+      agentShare: metadata?.agentShare,
       allowEarlyFinalAnswerVisibleOutputEnd:
         agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
       botContext: metadata?.botContext,

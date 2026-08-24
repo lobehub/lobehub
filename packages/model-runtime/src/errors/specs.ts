@@ -12,7 +12,9 @@ import type { ErrorAttribution, ErrorCategory, ErrorSeverity } from './taxonomy'
 export type CloudErrorCode =
   | typeof ChatErrorType.FreePlanLimit
   | typeof ChatErrorType.InsufficientBudgetForModel
-  | typeof ChatErrorType.LobeHubModelDeprecated;
+  | typeof ChatErrorType.LobeHubModelDeprecated
+  | typeof ChatErrorType.ShareTopicLimitExceeded
+  | typeof ChatErrorType.ShareTurnLimitExceeded;
 
 /** Every code the spec table can classify. */
 export type SpecErrorCode = CloudErrorCode | ILobeAgentRuntimeErrorType;
@@ -190,6 +192,28 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'LobeHub Cloud balance is positive but below the model’s estimated cost.',
+  },
+  [ChatErrorType.ShareTurnLimitExceeded]: {
+    code: ChatErrorType.ShareTurnLimitExceeded,
+    numericId: 2903,
+    category: 'quota',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 429,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Shared-agent topic reached its per-topic turn cap; start a new topic.',
+  },
+  [ChatErrorType.ShareTopicLimitExceeded]: {
+    code: ChatErrorType.ShareTopicLimitExceeded,
+    numericId: 2904,
+    category: 'quota',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 429,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Visitor reached the per-visitor topic cap on this shared agent.',
   },
 
   // ─── 3xxx Capacity ────────────────────────────────────────────────────

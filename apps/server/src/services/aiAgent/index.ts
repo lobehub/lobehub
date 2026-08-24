@@ -215,6 +215,11 @@ import { ingestAttachment } from './ingestAttachment';
 import { pruneRegeneratedBranch } from './pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from './resolveDeviceWorkingDirectory';
 import { resolveServerSearchDecision } from './searchDecision';
+import {
+  type AgentShareGate,
+  applyShareGateToAgentConfig,
+  filterPluginsByShareGate,
+} from './shareGate';
 import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
@@ -552,6 +557,13 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * downstream (connectors, installed plugins) keep it to the caller's own tools.
    */
   selectedToolIds?: string[];
+  /**
+   * Shared-agent visitor gate (agent share C4). Set ONLY by the shareChat
+   * router after the share access check — never client-passable. Restricts
+   * tools/memory/files at operation-build time, denies device access, and
+   * routes LLM billing to the creator's agentShare budget.
+   */
+  shareGate?: AgentShareGate;
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
@@ -1591,6 +1603,7 @@ export class AiAgentService {
       approvalResolutionRequestId: providedApprovalResolutionRequestId,
       approvalSourceOperationId: providedApprovalSourceOperationId,
       selectedToolIds,
+      shareGate,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
@@ -1665,6 +1678,11 @@ export class AiAgentService {
 
     // 1. Get agent configuration with default config merged (supports both id and slug)
     const agentConfig = await this.resolveAgentConfigOrThrow(identifier);
+
+    // Share-visitor runs must never see files/knowledge the share config does
+    // not expose. Applied to the resolved config before anything downstream
+    // (knowledge flags, tools engine, context snapshot) reads it.
+    if (shareGate) applyShareGateToAgentConfig(agentConfig, shareGate);
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
@@ -2508,6 +2526,10 @@ export class AiAgentService {
           // Snapshot the effective model as the topic's pinned model (config).
           model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
           provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
+          // Share-visitor runs: the topic row belongs to the creator
+          // (this.userId), but stamping the visitor's id keeps it out of the
+          // creator's listings and lets shareChat scope reads per visitor.
+          senderId: shareGate?.visitorUserId,
           title:
             title !== undefined
               ? title
@@ -2558,6 +2580,7 @@ export class AiAgentService {
     // chat) and stops the device list from leaking into the LLM context.
     const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
       botContext,
+      shareVisitor: !!shareGate,
     });
     log(
       'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
@@ -3276,6 +3299,7 @@ export class AiAgentService {
             assistantMessageId: assistantMessageRecord.id,
             heteroType,
             mirrorToOperationId: params.topicStartOwnerOperationId,
+            streamOwnerUserId: shareGate?.visitorUserId,
             topicId,
             userId: this.userId,
           });
@@ -3485,7 +3509,9 @@ export class AiAgentService {
       let gatewayToken: string | undefined;
       if (!this.withholdGatewayToken) {
         try {
-          gatewayToken = await signUserJWT(this.userId);
+          // Share-visitor runs sign for the visitor — see the non-hetero return
+          // below for why a creator-signed token must never reach the visitor.
+          gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? this.userId);
         } catch {
           // non-critical
         }
@@ -3534,6 +3560,13 @@ export class AiAgentService {
       enableExpertise = preference?.lab?.enableSelfLearning === true;
     } catch (error) {
       console.error('Failed to resolve expertise injection Lab preference:', error);
+    }
+    // Share visitors only get the creator's memory (persona + learned
+    // expertise) when the share explicitly allows it — both surfaces would
+    // otherwise leak the creator's personal context into visitor turns.
+    if (shareGate && !shareGate.shareConfig.allowReadMemory) {
+      globalMemoryEnabled = false;
+      enableExpertise = false;
     }
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
@@ -3593,6 +3626,15 @@ export class AiAgentService {
               ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
             ]),
           ];
+
+    // Share whitelist filters the full candidate set (pinned + mentioned +
+    // internal additions) before manifest discovery, and — because
+    // `skillEngine.generate(agentPlugins)` consumes the same list — before the
+    // skill set too. The operationToolSet snapshot then carries the restricted
+    // surface into every later step.
+    if (shareGate) {
+      agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
+    }
 
     // Model metadata is needed both for tool support checks and agent-management context.
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
@@ -5260,6 +5302,9 @@ export class AiAgentService {
         activeDeviceScope,
         agentConfig,
         agentGroup: operationAgentGroup,
+        agentShare: shareGate
+          ? { agentId: shareGate.agentId, visitorUserId: shareGate.visitorUserId }
+          : undefined,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
         executionPlan,
         searchDecision,
@@ -5412,11 +5457,15 @@ export class AiAgentService {
         });
       }
 
-      // Generate a short-lived JWT for Gateway WebSocket authentication
+      // Generate a short-lived JWT for Gateway WebSocket authentication.
+      // Share-visitor runs sign for the VISITOR: a signUserJWT passes full
+      // oidcAuth, so a creator-signed token in the visitor's browser would be
+      // creator account access. The gateway channel is registered under the
+      // visitor's id (streamOwnerUserId), so their own sub matches.
       let gatewayToken: string | undefined;
       if (!this.withholdGatewayToken) {
         try {
-          gatewayToken = await signUserJWT(this.userId);
+          gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? this.userId);
         } catch {
           log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
         }

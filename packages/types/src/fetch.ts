@@ -10,6 +10,9 @@ export const ChatErrorType = {
   WorkspaceFrozenByAdmin: 'WorkspaceFrozenByAdmin', // Workspace manually frozen by admin (reason is operator-written, safe to surface)
   WorkspaceFrozenByRiskControl: 'WorkspaceFrozenByRiskControl', // Workspace auto-frozen by risk control (reason is engineer debug text, hide from user)
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
+  ShareTurnLimitExceeded: 'ShareTurnLimitExceeded', // Shared-agent topic hit shareConfig.maxTurnsPerTopic — visitor can start a new topic
+  ShareTopicLimitExceeded: 'ShareTopicLimitExceeded', // Visitor hit shareConfig.maxTopicsPerVisitor on this shared agent
+
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
 
   InvalidUserKey: 'InvalidUserKey', // is not valid User key

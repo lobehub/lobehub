@@ -124,12 +124,13 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     try {
       await this.httpPostAwait('/api/operations/init', {
         operationId,
-        userId: initialState?.userId || 'unknown',
+        // Shared-agent runs execute with creator-owned resources, while the
+        // visitor is the only identity allowed to subscribe to this stream.
+        userId: initialState?.streamOwnerUserId || initialState?.userId || 'unknown',
       });
     } catch (error) {
       log('Gateway /api/operations/init failed: %O', error);
     }
-
     void this.pushEvent(operationId, {
       data: initialState,
       operationId,

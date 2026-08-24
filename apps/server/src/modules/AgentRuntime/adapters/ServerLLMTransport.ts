@@ -234,6 +234,9 @@ export class ServerLLMTransport implements LLMTransport {
       this.ctx.userId!,
       provider,
       this.ctx.workspaceId,
+      // Share-visitor runs bill the creator's agentShare budget instead of the
+      // executing user's personal budget (agent share C4).
+      this.ctx.agentShare ? { agentShare: { agentId: this.ctx.agentShare.agentId } } : undefined,
     );
   }
 

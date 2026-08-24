@@ -112,6 +112,12 @@ export interface CreateTopicParams {
   /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
   model?: string | null;
   provider?: string | null;
+  /**
+   * Visitor identity for agent-share originated topics (see `topics.senderId`).
+   * Always resolved server-side from the visitor's authenticated session —
+   * never trusted from client input. NULL for regular conversations.
+   */
+  senderId?: string | null;
   sessionId?: string | null;
   /**
    * Initial status. Defaults to the column default (`active`). A topic created
@@ -310,6 +316,15 @@ export class TopicModel {
 
   private messageOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  /**
+   * Agent-share visitor topics carry the creator's `userId` (billing/data
+   * attribution) plus a non-null `senderId`, so plain ownership queries would
+   * surface them inside the creator's own workspace. Every workspace-facing
+   * listing/aggregation must AND this in; share-scoped access goes through the
+   * dedicated `*BySender` methods instead.
+   */
+  private notShareVisitor = () => isNull(topics.senderId);
   // **************** Query *************** //
 
   query = async ({
@@ -419,6 +434,7 @@ export class TopicModel {
     if (groupId) {
       const whereCondition = and(
         this.ownership(),
+        this.notShareVisitor(),
         eq(topics.groupId, groupId),
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -498,6 +514,7 @@ export class TopicModel {
 
       const agentWhere = and(
         this.ownership(),
+        this.notShareVisitor(),
         agentCondition,
         editingTargetCondition,
         includeTriggerCondition,
@@ -569,6 +586,7 @@ export class TopicModel {
     // Fallback to containerId-based query (backward compatibility)
     const whereCondition = and(
       this.ownership(),
+      this.notShareVisitor(),
       this.matchContainer(containerId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -713,6 +731,7 @@ export class TopicModel {
   } = {}): Promise<TopicListItem[]> => {
     const where = and(
       this.ownership(),
+      this.notShareVisitor(),
       statuses && statuses.length > 0
         ? inArray(topics.status, statuses as ChatTopicStatus[])
         : undefined,
@@ -851,7 +870,14 @@ export class TopicModel {
       this.db
         .select()
         .from(topics)
-        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
+        .where(
+          and(
+            this.ownership(),
+            this.notShareVisitor(),
+            scopeCondition,
+            sql`${topics.title} @@@ ${bm25Query}`,
+          ),
+        )
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
@@ -863,6 +889,7 @@ export class TopicModel {
             this.messageOwnership(),
             sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
+            this.notShareVisitor(),
             scopeCondition,
           ),
         )
@@ -918,6 +945,7 @@ export class TopicModel {
       .where(
         genWhere([
           this.ownership(),
+          this.notShareVisitor(),
           agentCondition,
           params?.containerId ? this.matchContainer(params.containerId) : undefined,
           params?.range
@@ -944,7 +972,7 @@ export class TopicModel {
         title: topics.title,
       })
       .from(topics)
-      .where(and(this.ownership()))
+      .where(and(this.ownership(), this.notShareVisitor()))
       .leftJoin(messages, eq(topics.id, messages.topicId))
       .groupBy(topics.id)
       .orderBy(desc(sql`count`))
@@ -985,6 +1013,7 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
+          this.notShareVisitor(),
           or(
             // Group topics: has groupId
             not(isNull(topics.groupId)),
@@ -1003,6 +1032,42 @@ export class TopicModel {
       type: item.groupId ? ('group' as const) : ('agent' as const),
       updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
     }));
+  };
+
+  // **************** Agent Share (visitor-scoped) *************** //
+
+  /**
+   * Share-visitor topic list for one visitor on one shared agent. The model is
+   * constructed with the creator's userId (visitor topics carry it), so the
+   * caller — the shareChat router — must have already authorized the visitor
+   * via the share access check; `senderId` is the only per-visitor boundary.
+   */
+  queryBySender = async (
+    { agentId, senderId }: { agentId: string; senderId: string },
+    { pageSize = 50 }: { pageSize?: number } = {},
+  ): Promise<TopicItem[]> => {
+    return this.db
+      .select()
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
+      .orderBy(desc(topics.updatedAt))
+      .limit(pageSize);
+  };
+
+  /** Per-visitor topic count on one shared agent — drives `maxTopicsPerVisitor`. */
+  countBySender = async ({
+    agentId,
+    senderId,
+  }: {
+    agentId: string;
+    senderId: string;
+  }): Promise<number> => {
+    const result = await this.db
+      .select({ count: count(topics.id) })
+      .from(topics)
+      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
+
+    return result[0].count;
   };
 
   // **************** Create *************** //
