@@ -66,4 +66,77 @@ describe('agent document headless editor', () => {
     // can render a review UI when the user next opens the document.
     expect(hasNodeType(snapshot.editorData, 'diff')).toBe(true);
   });
+
+  it('should fall back to Markdown when valid editor data hydrates to an empty document', async () => {
+    const empty = await createMarkdownEditorSnapshot('');
+
+    const snapshot = await exportEditorDataSnapshot({
+      editorData: empty.editorData,
+      fallbackContent: 'Fallback content',
+      litexml: true,
+    });
+
+    expect(snapshot.content).toBe('Fallback content\n');
+    expect(snapshot.litexml).toContain('Fallback content');
+  });
+
+  it('should insert a LiteXML fragment with multiple top-level nodes', async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+    const textId = getSpanId(initial.litexml!, 'Original');
+
+    const snapshot = await applyLiteXMLOperations({
+      editorData: initial.editorData,
+      fallbackContent: initial.content,
+      operations: [
+        {
+          action: 'insert',
+          afterId: textId,
+          litexml: '<h2>Evidence</h2><p>Verified</p>',
+        },
+      ],
+    });
+
+    expect(snapshot.content).toContain('## Evidence');
+    expect(snapshot.content).toContain('Verified');
+  });
+
+  it('should reject a node edit that unexpectedly clears a non-empty document', async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+    const textId = getSpanId(initial.litexml!, 'Original');
+
+    await expect(
+      applyLiteXMLOperations({
+        editorData: initial.editorData,
+        fallbackContent: initial.content,
+        operations: [{ action: 'remove', id: textId }],
+      }),
+    ).rejects.toThrow('unexpectedly produced empty content');
+  });
+
+  it('should reject a node edit that silently makes no change', async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+
+    await expect(
+      applyLiteXMLOperations({
+        editorData: initial.editorData,
+        fallbackContent: initial.content,
+        operations: [
+          {
+            action: 'insert',
+            afterId: 'missing-node',
+            litexml: '<p>New content</p>',
+          },
+        ],
+      }),
+    ).rejects.toThrow('did not change the document');
+  });
 });
