@@ -353,7 +353,7 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       const { detectHeterogeneousCliCommand } = await importModule();
       const status = await detectHeterogeneousCliCommand('trae', 'traecli-renamed');
 
-      expect(status).toEqual({ available: false });
+      expect(status.available).toBe(false);
       expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
     });
 
@@ -405,6 +405,39 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
           version: '1.18.3',
         });
         expect((execFileMock.mock.calls[3]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+          loginPath,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it('recovers the login PATH after an inherited command fails validation', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/local/bin:/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const loginPath = '/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin';
+
+      try {
+        callExecFile('/usr/local/bin/opencode\n'); // inherited PATH finds a stale launcher
+        callExecFileError(new Error('stale launcher')); // inherited launcher validation
+        callExecFile('/opt/homebrew/bin:/usr/bin:/bin'); // login shell PATH
+        callExecFile('/usr/local/bin/opencode\n'); // retry under the merged PATH
+        callExecFileError(new Error('stale launcher')); // recovered lookup still resolves stale copy
+        callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+          resolvedPathEnv: loginPath,
+          version: '1.18.3',
+        });
+        expect((execFileMock.mock.calls[5]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
           loginPath,
         );
       } finally {

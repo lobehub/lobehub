@@ -72,6 +72,11 @@ interface ResolvedCommandCandidates {
   resolvedPathEnv?: string;
 }
 
+interface RecoveredProbeEnvironment {
+  env: NodeJS.ProcessEnv;
+  resolvedPathEnv: string;
+}
+
 const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
 
 const extractVersion = (versionBanner: string): string | undefined =>
@@ -239,6 +244,26 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
 };
 
+const recoverProbeEnvironment = async (
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<RecoveredProbeEnvironment | undefined> => {
+  const recoveredPath = isWindows()
+    ? await getWindowsRegistryPath()
+    : await getCurrentLoginShellPath();
+  const currentPath = probeEnv?.PATH ?? process.env.PATH;
+  const resolvedPathEnv = mergePathValues(recoveredPath, currentPath);
+
+  if (!resolvedPathEnv || resolvedPathEnv === currentPath) return;
+
+  return {
+    env: {
+      ...(probeEnv ?? process.env),
+      PATH: resolvedPathEnv,
+    },
+    resolvedPathEnv,
+  };
+};
+
 const getCommandPathLines = async (
   whichCommand: 'where' | 'which',
   command: string,
@@ -294,19 +319,11 @@ const resolveCommandCandidates = async (
     // PATH recovery, per platform: macOS/Linux re-read the login shell's PATH,
     // Windows re-reads the registry environment (the inherited block is a
     // creation-time snapshot that never picks up a later install).
-    const recoveredPath = isWindows()
-      ? await getWindowsRegistryPath()
-      : await getCurrentLoginShellPath();
-    const lookupPath = mergePathValues(recoveredPath, probeEnv?.PATH ?? process.env.PATH);
-
-    if (lookupPath && lookupPath !== (probeEnv?.PATH ?? process.env.PATH)) {
-      const fallbackEnv = {
-        ...(probeEnv ?? process.env),
-        PATH: lookupPath,
-      };
-      lines = await getCommandPathLines(whichCommand, trimmedCommand, fallbackEnv);
-      lookupEnv = fallbackEnv;
-      resolvedPathEnv = lookupPath;
+    const recovered = await recoverProbeEnvironment(probeEnv);
+    if (recovered) {
+      lines = await getCommandPathLines(whichCommand, trimmedCommand, recovered.env);
+      lookupEnv = recovered.env;
+      resolvedPathEnv = recovered.resolvedPathEnv;
     }
   }
 
@@ -537,6 +554,17 @@ export const detectValidatedCommand = async (
   for (const candidate of unresolvedShims) {
     const status = await validateCandidate(candidate, true);
     if (status !== UNRESOLVED_SHIM && status.available) return status;
+  }
+
+  // A stale or unrelated executable on the inherited PATH prevents lookup-time
+  // recovery because `which`/`where` succeeds. Validation failure must trigger
+  // the same recovered-PATH phase before an ordered resolver moves on to its
+  // absolute fallbacks. Retrying here also lets a login-shell command ahead of
+  // the stale inherited candidate win. The recursive call cannot repeat: a
+  // recovered environment always carries `resolvedPathEnv`.
+  if (!resolvedPathEnv && !isPathLikeCommand(trimmedCommand)) {
+    const recovered = await recoverProbeEnvironment(probeEnv);
+    if (recovered) return detectValidatedCommand(trimmedCommand, options, recovered.env);
   }
 
   return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
