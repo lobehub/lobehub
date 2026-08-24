@@ -10,7 +10,7 @@ import type {
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
 } from '@lobechat/types';
-import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -197,6 +197,45 @@ export class GoalGraphModel {
         eventType: 'created',
       });
       return node;
+    });
+
+  /** Serialize synthesized-node creation by semantic identity within one Goal. */
+  createNodeOnce = async (goalId: string, input: CreateNodeInput) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`goal-node:${goalId}:${input.kind}:${input.title}`}))`,
+      );
+      const [existing] = await tx
+        .select()
+        .from(goalNodes)
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, input.kind),
+            eq(goalNodes.title, input.title),
+          ),
+        )
+        .limit(1);
+      if (existing) return { created: false, node: existing };
+
+      const [node] = await tx
+        .insert(goalNodes)
+        .values({
+          ...input,
+          confidence: input.confidence?.toString(),
+          createdByUserId: input.createdByAgentId ? undefined : this.userId,
+          goalId,
+        })
+        .returning();
+      await this.appendEvent(tx, goalId, {
+        actorId: input.createdByAgentId,
+        actorType: input.createdByAgentId ? 'agent' : 'user',
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'created',
+      });
+      return { created: true, node };
     });
 
   createEdge = async (

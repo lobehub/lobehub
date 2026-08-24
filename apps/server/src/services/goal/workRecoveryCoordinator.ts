@@ -4,24 +4,13 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
-import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
+
+import { resolveWorkAttemptBudget, resolveWorkMaxSteps } from './recoveryPolicy';
 
 const log = debug('lobe-server:goal-work-recovery');
-const DEFAULT_MAX_ATTEMPTS_PER_WORK = 3;
 
 export type WorkRecoveryOutcome =
   'continued' | 'exhausted-cost' | 'exhausted-rounds' | 'spawn-failed';
-
-export const resolveWorkAttemptBudget = (goal: GoalItem, taskCarried: boolean): number => {
-  const configured = goal.config?.recovery?.maxAttemptsPerWork;
-  if (typeof configured === 'number') return Math.max(1, configured);
-  return taskCarried ? resolveGoalRoundBudget(goal) : DEFAULT_MAX_ATTEMPTS_PER_WORK;
-};
-
-export const resolveWorkMaxSteps = (goal: GoalItem): number | undefined => {
-  const configured = goal.config?.recovery?.maxStepsPerRun;
-  return typeof configured === 'number' && configured > 0 ? configured : undefined;
-};
 
 /** Shared retry budget and spawn boundary for task-carried goals and Goal Graph Work Tasks. */
 export class WorkRecoveryCoordinator {

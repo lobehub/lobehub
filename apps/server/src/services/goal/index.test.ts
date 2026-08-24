@@ -200,6 +200,32 @@ describe('GoalService', () => {
     );
   });
 
+  it('creates only one Goal-level Acceptance Work when terminal ticks race', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Return three verified supplier quotes.',
+      title: 'Find supplier quotes',
+      work: ['Research suppliers'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+
+    await Promise.all([service.tick(graph.goal.id), service.tick(graph.goal.id)]);
+    const current = await service.graph(graph.goal.id);
+    const acceptanceWorks = current.nodes.filter(
+      (node) => node.title === 'Complete full Goal acceptance',
+    );
+
+    expect(acceptanceWorks).toHaveLength(1);
+    expect(
+      current.edges.filter(
+        (edge) => edge.kind === 'decomposes' && edge.targetNodeId === acceptanceWorks[0].id,
+      ),
+    ).toHaveLength(1);
+  });
+
   it('evolves a failed work task into a durable decision gate', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);
@@ -278,6 +304,30 @@ describe('GoalService', () => {
 
     expect(waiting.outcome).toBe('waiting_human');
     expect((await service.graph(graph.goal.id)).decisions).toHaveLength(1);
+  });
+
+  it('fails the Goal when terminal acceptance is retired after recovery is exhausted', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { maxAttemptsPerWork: 1 } },
+      requirement: 'Return three verified supplier quotes.',
+      title: 'Bounded terminal acceptance',
+      work: ['Complete full Goal acceptance'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    await service.tick(graph.goal.id);
+    const gated = await service.graph(graph.goal.id);
+
+    expect(gated.decisions[0].options).toContainEqual({ id: 'fail', label: 'Fail goal' });
+    await service.decide(graph.goal.id, gated.decisions[0].id, 'fail', 'No valid third quote');
+
+    expect(await service.tick(graph.goal.id)).toMatchObject({ outcome: 'failed' });
+    expect((await service.graph(graph.goal.id)).goal.status).toBe('failed');
   });
 
   it('respects a manually paused responsible task without rerunning it', async () => {

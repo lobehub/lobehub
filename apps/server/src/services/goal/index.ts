@@ -22,7 +22,8 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
-import { resolveWorkMaxSteps, WorkRecoveryCoordinator } from './workRecoveryCoordinator';
+import { resolveWorkMaxSteps } from './recoveryPolicy';
+import { WorkRecoveryCoordinator } from './workRecoveryCoordinator';
 
 const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
@@ -185,11 +186,17 @@ export class GoalService {
       if (optionId === 'retry' && source.taskId) {
         await this.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
         await this.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
-      } else if (optionId === 'retire') {
+      } else if (
+        optionId === 'retire' ||
+        (optionId === 'fail' && source.title === GOAL_ACCEPTANCE_WORK_TITLE)
+      ) {
         await this.graphModel.updateNodeStatus(goalId, source.id, 'retired', resolution);
       }
     }
-    await this.goalModel.updateStatus(goalId, 'running');
+    const terminalAcceptanceFailed =
+      source?.title === GOAL_ACCEPTANCE_WORK_TITLE &&
+      (optionId === 'retire' || optionId === 'fail');
+    await this.goalModel.updateStatus(goalId, terminalAcceptanceFailed ? 'failed' : 'running');
     return resolved;
   };
 
@@ -242,7 +249,7 @@ export class GoalService {
           (node) => node.title === GOAL_ACCEPTANCE_WORK_TITLE,
         );
         if (graph.goal.requirement && !goalAcceptanceWork) {
-          const acceptanceWork = await this.graphModel.createNode(goalId, {
+          const result = await this.graphModel.createNodeOnce(goalId, {
             description: [
               `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
               'Use the existing Goal findings as prior evidence. Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved.',
@@ -252,21 +259,25 @@ export class GoalService {
             priority: -1,
             title: GOAL_ACCEPTANCE_WORK_TITLE,
           });
-          if (!acceptanceWork) {
+          if (!result) {
             return {
               goalId,
               message: 'Could not create the Goal-level acceptance Work',
               outcome: 'no_progress',
             };
           }
-          const problem = graph.nodes.find((node) => node.kind === 'problem');
-          if (problem) {
-            await this.graphModel.createEdge(goalId, problem.id, acceptanceWork.id, 'decomposes');
+          if (result.created) {
+            const problem = graph.nodes.find((node) => node.kind === 'problem');
+            if (problem) {
+              await this.graphModel.createEdge(goalId, problem.id, result.node.id, 'decomposes');
+            }
           }
           return {
             goalId,
-            message: 'Created Goal-level acceptance Work for the remaining contract',
-            nodeId: acceptanceWork.id,
+            message: result.created
+              ? 'Created Goal-level acceptance Work for the remaining contract'
+              : 'Goal-level acceptance Work was created by another coordinator',
+            nodeId: result.node.id,
             outcome: 'advanced',
           };
         }
@@ -637,13 +648,23 @@ export class GoalService {
       });
       if (node) {
         await this.graphModel.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
+        const terminalAcceptance =
+          graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
+          GOAL_ACCEPTANCE_WORK_TITLE;
         await this.graphModel.createDecision(graph.goal.id, node.id, {
           authority: 'user',
-          options: [
-            { id: 'retry', label: 'Retry work' },
-            { id: 'retire', label: 'Retire work' },
-          ],
-          question: `${reason}. Retry or retire this work node?`,
+          options: terminalAcceptance
+            ? [
+                { id: 'retry', label: 'Retry goal acceptance' },
+                { id: 'fail', label: 'Fail goal' },
+              ]
+            : [
+                { id: 'retry', label: 'Retry work' },
+                { id: 'retire', label: 'Retire work' },
+              ],
+          question: terminalAcceptance
+            ? `${reason}. Retry Goal acceptance or fail this Goal?`
+            : `${reason}. Retry or retire this work node?`,
           recommendedOptionId: 'retry',
           requestedUserId: this.userId,
         });
