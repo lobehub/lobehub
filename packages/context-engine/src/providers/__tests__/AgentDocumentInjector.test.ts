@@ -230,7 +230,7 @@ describe('AgentDocumentInjector', () => {
     // in the index changed the prompt prefix every minute and broke provider-side
     // prompt caching. The index must stay byte-identical as wall-clock time passes.
     it('should render a time-stable index so the prompt cache prefix survives', async () => {
-      const documents = [
+      const documents: AgentContextDocument[] = [
         {
           content: 'note',
           filename: 'note.md',
@@ -337,7 +337,10 @@ describe('AgentDocumentInjector', () => {
       `);
       expect(result.messages[0].content).not.toContain('Gold price');
       expect(result.messages[0].content).not.toContain('Gold news');
-      expect(result.messages[0].content.split("listDocuments(sourceType='web')")).toHaveLength(2);
+      const injectedContent = result.messages[0].content;
+      expect(typeof injectedContent).toBe('string');
+      if (typeof injectedContent !== 'string') throw new TypeError('Expected string content');
+      expect(injectedContent.split("listDocuments(sourceType='web')")).toHaveLength(2);
 
       const oneWebDocumentProvider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),
