@@ -3,6 +3,11 @@ import type { GoalItem } from '@lobechat/types';
 import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
 
 const DEFAULT_MAX_ATTEMPTS_PER_WORK = 3;
+const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
+// Agent runtime refreshes the durable operation lease alongside its 30-second
+// step-lock heartbeat. A shorter timeout can reclaim a healthy operation before
+// its first heartbeat when an LLM or tool call takes more than a few seconds.
+export const MIN_OPERATION_LEASE_TIMEOUT_MS = 60 * 1000;
 
 export const resolveWorkAttemptBudget = (goal: GoalItem, taskCarried: boolean): number => {
   const configured = goal.config?.recovery?.maxAttemptsPerWork;
@@ -13,4 +18,11 @@ export const resolveWorkAttemptBudget = (goal: GoalItem, taskCarried: boolean): 
 export const resolveWorkMaxSteps = (goal: GoalItem): number | undefined => {
   const configured = goal.config?.recovery?.maxStepsPerRun;
   return typeof configured === 'number' && configured > 0 ? configured : undefined;
+};
+
+export const resolveOperationLeaseTimeout = (goal: GoalItem): number => {
+  const configured = goal.config?.recovery?.operationLeaseTimeoutMs;
+  return typeof configured === 'number' && configured > 0
+    ? Math.max(configured, MIN_OPERATION_LEASE_TIMEOUT_MS)
+    : DEFAULT_OPERATION_LEASE_TIMEOUT_MS;
 };

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import {
   acceptances,
   agents,
@@ -28,6 +30,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   // PGlite does not consistently order the nested user -> goal -> graph
   // cascades, so clear graph leaves explicitly before their owned roots.
   await serverDB.delete(goalNodeDecisions);
@@ -284,6 +287,61 @@ describe('GoalService', () => {
       trigger: 'goal',
     });
     expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+  });
+
+  it('reclaims a stale running Work operation and starts the next attempt', async () => {
+    const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({
+      agentId: 'agent-recovery',
+      assistantMessageId: 'message-assistant',
+      autoStarted: true,
+      createdAt: new Date().toISOString(),
+      message: 'started',
+      operationId: 'op-recovery',
+      status: 'running',
+      success: true,
+      taskId: 'placeholder',
+      taskIdentifier: 'T-recovery',
+      timestamp: new Date().toISOString(),
+      topicId: 'topic-recovery',
+      userMessageId: 'message-user',
+    });
+    vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
+      { operationId: 'op-stale', topicId: 'topic-stale' } as never,
+    ]);
+    const timeoutSpy = vi
+      .spyOn(TaskTopicModel.prototype, 'updateStatus')
+      .mockResolvedValue(undefined);
+    const settleSpy = vi
+      .spyOn(AgentOperationModel.prototype, 'settleStaleRunning')
+      .mockResolvedValue(true);
+
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: {
+        recovery: { maxAttemptsPerWork: 3, operationLeaseTimeoutMs: 60_000 },
+      },
+      title: 'Recover interrupted work',
+      work: ['Run a durable experiment'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'running');
+
+    const recovered = await service.tick(graph.goal.id);
+
+    expect(settleSpy).toHaveBeenCalledWith('op-stale', expect.any(Date));
+    expect(timeoutSpy).toHaveBeenCalledWith(created.taskId, 'topic-stale', 'timeout');
+    expect(runSpy).toHaveBeenCalledWith({
+      maxSteps: undefined,
+      taskId: created.taskId,
+      trigger: 'goal',
+    });
+    expect(recovered).toMatchObject({
+      message: expect.stringContaining('Recovered abandoned task'),
+      outcome: 'waiting_external',
+      taskId: created.taskId,
+    });
   });
 
   it('opens the decision gate only after the Work attempt budget is exhausted', async () => {

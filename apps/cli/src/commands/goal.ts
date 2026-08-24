@@ -75,13 +75,17 @@ export function registerGoalCommand(program: Command) {
     .option('--max-cost <usd>', 'Maximum total cost in USD')
     .option('--max-attempts-per-work <n>', 'Attempts per Work before opening a decision gate')
     .option('--max-steps-per-run <n>', 'Optional agent step cap per Work run (for example 500)')
+    .option(
+      '--operation-lease-timeout-ms <n>',
+      'Reclaim a Work operation after this idle time (minimum: 60000)',
+    )
     .option('--json [fields]', 'Output JSON')
     .action(async (title: string, options) => {
       const client = await getTrpcClient();
       const result = await client.goal.create.mutate({
         agentId: options.agent,
         config:
-          options.maxAttemptsPerWork || options.maxStepsPerRun
+          options.maxAttemptsPerWork || options.maxStepsPerRun || options.operationLeaseTimeoutMs
             ? {
                 recovery: {
                   maxAttemptsPerWork: options.maxAttemptsPerWork
@@ -89,6 +93,9 @@ export function registerGoalCommand(program: Command) {
                     : undefined,
                   maxStepsPerRun: options.maxStepsPerRun
                     ? Number.parseInt(options.maxStepsPerRun, 10)
+                    : undefined,
+                  operationLeaseTimeoutMs: options.operationLeaseTimeoutMs
+                    ? Number.parseInt(options.operationLeaseTimeoutMs, 10)
                     : undefined,
                 },
               }

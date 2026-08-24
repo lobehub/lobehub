@@ -10,6 +10,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { ProjectModel } from '@/database/models/project';
@@ -22,7 +23,7 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
-import { resolveWorkMaxSteps } from './recoveryPolicy';
+import { resolveOperationLeaseTimeout, resolveWorkMaxSteps } from './recoveryPolicy';
 import { WorkRecoveryCoordinator } from './workRecoveryCoordinator';
 
 const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
@@ -464,6 +465,10 @@ export class GoalService {
       };
     }
     if (task.status === 'running' || task.status === 'scheduled') {
+      if (task.status === 'running') {
+        const recovered = await this.recoverAbandonedWork(graph, frontier.id, task);
+        if (recovered) return recovered;
+      }
       return {
         goalId,
         message: `Task ${task.identifier} is ${task.status}`,
@@ -524,6 +529,58 @@ export class GoalService {
     if (work?.currentVersionId) {
       await this.graphModel.attachWorkVersion(goalId, nodeId, work.currentVersionId, 'produced');
     }
+  };
+
+  private recoverAbandonedWork = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+  ): Promise<GoalTickResult | undefined> => {
+    const [runningTopic] = await this.taskTopicModel.findRunningByTaskIds([task.id]);
+    if (!runningTopic?.operationId) return undefined;
+
+    const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
+    const reclaimed = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).settleStaleRunning(runningTopic.operationId, staleBefore);
+    if (!reclaimed) return undefined;
+
+    await this.taskTopicModel.updateStatus(task.id, runningTopic.topicId, 'timeout');
+    await this.taskModel.updateStatus(task.id, 'paused', {
+      error: 'Goal Work operation lease expired.',
+    });
+
+    const recovery = await new WorkRecoveryCoordinator(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).recover({ goal: graph.goal, task, taskCarried: false });
+    if (recovery === 'continued') {
+      await this.graphModel.updateNodeStatus(
+        graph.goal.id,
+        nodeId,
+        'active',
+        'Recovered an abandoned Work operation and started the next attempt',
+      );
+      await this.goalModel.updateStatus(graph.goal.id, 'running');
+      return {
+        goalId: graph.goal.id,
+        message: `Recovered abandoned task ${task.identifier}`,
+        nodeId,
+        outcome: 'waiting_external',
+        taskId: task.id,
+      };
+    }
+
+    const reason =
+      recovery === 'exhausted-cost'
+        ? 'Goal cost budget was exhausted after an operation was abandoned'
+        : recovery === 'exhausted-rounds'
+          ? 'Work attempt budget was exhausted after an operation was abandoned'
+          : 'Automatic recovery could not restart an abandoned operation';
+    return this.openFailureDecision(graph, nodeId, task.id, reason);
   };
 
   private buildWorkInstruction = (

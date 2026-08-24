@@ -101,6 +101,7 @@ export const goalRouter = router({
               .object({
                 maxAttemptsPerWork: z.number().int().positive().optional(),
                 maxStepsPerRun: z.number().int().positive().nullable().optional(),
+                operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
               })
               .optional(),
           })

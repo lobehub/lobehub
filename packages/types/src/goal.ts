@@ -27,6 +27,8 @@ export interface GoalRecoveryPolicy {
   maxAttemptsPerWork?: number;
   /** Per-operation agent step limit. Null/undefined leaves the runtime uncapped. */
   maxStepsPerRun?: number | null;
+  /** Time without a durable runtime lease refresh before a running Work is reclaimed. */
+  operationLeaseTimeoutMs?: number;
 }
 
 export interface GoalConfig {

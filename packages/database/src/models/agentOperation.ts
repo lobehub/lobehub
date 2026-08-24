@@ -219,6 +219,45 @@ export class AgentOperationModel {
     return Boolean(row);
   }
 
+  /** Refresh the durable liveness lease while an operation owns an execution step. */
+  async touchRunning(operationId: string): Promise<void> {
+    await this.db
+      .update(agentOperations)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      );
+  }
+
+  /**
+   * Atomically retire an operation whose liveness lease has expired. A concurrent
+   * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
+   */
+  async settleStaleRunning(operationId: string, staleBefore: Date): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'interrupted',
+        status: 'interrupted',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
   /**
    * Sum the terminal usage of every child operation forked from `parentOperationId`
    * (`callSubAgent` children, isolated group members).
