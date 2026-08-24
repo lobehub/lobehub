@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
@@ -18,6 +20,12 @@ import { and, eq, isNull } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import {
+  getHeteroInterventionReview,
+  onHeteroInterventionResolutionPublished,
+  resolveHeteroIntervention,
+  rollbackHeteroInterventionResolution,
+} from '@/business/server/agent-run/heteroInterventionReview';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -690,11 +698,95 @@ const SubmitHeteroInterventionSchema = z.object({
   cancelReason: z.enum(['timeout', 'user_cancelled', 'session_ended']).optional(),
   cancelled: z.boolean().optional(),
   operationId: z.string().min(1),
+  /** Optional only for backward compatibility with pre-contract Web clients. */
+  resolutionRequestId: z.string().uuid().optional(),
   result: z.unknown().optional(),
   /** Producer step index; harmless placeholder — correlation is by toolCallId. */
   stepIndex: z.number().int().nonnegative().default(0),
   toolCallId: z.string().min(1),
 });
+
+const HeteroInterventionReviewTokenSchema = z.object({
+  /** 32 random bytes encoded as base64url without padding. */
+  reviewToken: z.string().regex(/^[\w-]{43}$/),
+});
+
+const ResolveHeteroInterventionReviewSchema = z.object({
+  action: z.enum(['submit', 'skip']),
+  resolutionRequestId: z.string().uuid(),
+  result: z.unknown().optional(),
+  reviewToken: z.string().regex(/^[\w-]{43}$/),
+});
+
+const publishClaimedHeteroIntervention = async (params: {
+  claim: Extract<
+    Awaited<ReturnType<typeof resolveHeteroIntervention>>,
+    { handled: true; state: 'claimed' }
+  >;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { claim, userId, workspaceId } = params;
+  const resolvedWorkspaceId = claim.workspaceId ?? workspaceId ?? undefined;
+  const streamEventManager = createStreamEventManager();
+
+  try {
+    await streamEventManager.publishStreamEvent(claim.operationId, {
+      data: {
+        ...claim.response,
+        producerAck: false,
+        resolutionRequestId: claim.resolutionRequestId,
+      },
+      stepIndex: claim.stepIndex ?? 0,
+      type: 'agent_intervention_response',
+    });
+  } catch (error) {
+    await rollbackHeteroInterventionResolution({
+      claimId: claim.claimId,
+      operationId: claim.operationId,
+      resolutionRequestId: claim.resolutionRequestId,
+      toolCallId: claim.response.toolCallId,
+      userId,
+      workspaceId: resolvedWorkspaceId,
+    }).catch((rollbackError) => {
+      log(
+        'conditional intervention rollback failed claim=%s op=%s: %O',
+        claim.claimId,
+        claim.operationId,
+        rollbackError,
+      );
+    });
+    throw error;
+  }
+
+  // Notification surfaces may switch to `resolving` only after XADD has
+  // succeeded. This best-effort side effect must not roll back a response the
+  // producer can already consume from the stream.
+  await onHeteroInterventionResolutionPublished({
+    claimId: claim.claimId,
+    operationId: claim.operationId,
+    resolutionRequestId: claim.resolutionRequestId,
+    status: 'resolving',
+    toolCallId: claim.response.toolCallId,
+    userId,
+    workspaceId: resolvedWorkspaceId,
+  }).catch((notificationError) => {
+    log(
+      'intervention published hook failed claim=%s op=%s: %O',
+      claim.claimId,
+      claim.operationId,
+      notificationError,
+    );
+  });
+
+  return {
+    // XADD only acknowledges transport acceptance. The producer's echoed
+    // response is the authoritative terminal transition persisted by the
+    // intervention reducer; until then the durable row remains resolving.
+    status: 'resolving' as const,
+    success: true as const,
+  };
+};
 
 const aiAgentBaseProcedure = wsCompatProcedure.use(serverDatabase);
 
@@ -2148,6 +2240,47 @@ export const aiAgentRouter = router({
     }),
 
   /**
+   * Authenticated cold-start review lookup. The opaque token is the only
+   * client-supplied locator; Cloud resolves operation/tool ownership inside
+   * the business slot. OSS reports `unavailable` without exposing internals.
+   */
+  getHeteroInterventionReview: aiAgentBaseProcedure
+    .input(HeteroInterventionReviewTokenSchema)
+    .query(({ input, ctx }) =>
+      getHeteroInterventionReview({
+        reviewToken: input.reviewToken,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
+    ),
+
+  /** Token-only atomic resolution path used by Mobile review/deep links. */
+  resolveHeteroIntervention: aiAgentWriteProcedure
+    .input(ResolveHeteroInterventionReviewSchema)
+    .mutation(async ({ input, ctx }) => {
+      const resolution = await resolveHeteroIntervention({
+        action: input.action,
+        cancelReason: input.action === 'skip' ? 'user_cancelled' : undefined,
+        result: input.action === 'submit' ? input.result : undefined,
+        resolutionRequestId: input.resolutionRequestId,
+        target: { reviewToken: input.reviewToken },
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
+      if (!resolution.handled) return { status: 'unavailable' as const, success: false as const };
+      if (resolution.state === 'already_resolved') {
+        return { status: resolution.status, success: true as const };
+      }
+
+      return publishClaimedHeteroIntervention({
+        claim: resolution,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  /**
    * Browser leg of remote Human-in-the-loop (user auth). Publishes the user's
    * answer to an `agent_intervention_request` back onto the op's Redis stream
    * as an `agent_intervention_response`. Two consumers converge on it by
@@ -2158,7 +2291,14 @@ export const aiAgentRouter = router({
   submitHeteroIntervention: aiAgentWriteProcedure
     .input(SubmitHeteroInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, toolCallId, stepIndex, result, cancelled, cancelReason } = input;
+      const {
+        operationId,
+        toolCallId,
+        stepIndex,
+        result,
+        cancelled,
+        resolutionRequestId = randomUUID(),
+      } = input;
 
       log(
         'submitHeteroIntervention: op=%s toolCallId=%s cancelled=%s',
@@ -2174,19 +2314,47 @@ export const aiAgentRouter = router({
         workspaceId: ctx.workspaceId,
       });
 
+      // Cloud overrides this as an atomic first-winner claim shared by Web and
+      // Mobile. OSS returns `handled:false` and preserves the legacy stream
+      // publish below. A claimed response is authoritative: client-supplied
+      // operation/tool fields cannot override what Cloud resolved durably.
+      const businessResolution = await resolveHeteroIntervention({
+        action: cancelled ? 'skip' : 'submit',
+        cancelReason: cancelled ? 'user_cancelled' : undefined,
+        result: cancelled ? undefined : result,
+        resolutionRequestId,
+        target: { operationId, toolCallId },
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (businessResolution.handled) {
+        if (businessResolution.state === 'already_resolved') {
+          return { status: businessResolution.status, success: true as const };
+        }
+        return publishClaimedHeteroIntervention({
+          claim: businessResolution,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
       const streamEventManager = createStreamEventManager();
       await streamEventManager.publishStreamEvent(operationId, {
         data: {
-          cancelReason: cancelled ? (cancelReason ?? 'user_cancelled') : undefined,
+          // Client-driven cancellation cannot impersonate producer timeout or
+          // session teardown; those terminal reasons originate from bridge ACKs.
+          cancelReason: cancelled ? 'user_cancelled' : undefined,
           cancelled,
+          producerAck: false,
           result: cancelled ? undefined : result,
+          resolutionRequestId,
           toolCallId,
         },
         stepIndex,
         type: 'agent_intervention_response',
       });
 
-      return { success: true as const };
+      return { status: 'resolving' as const, success: true as const };
     }),
 
   processHumanIntervention: aiAgentWriteProcedure

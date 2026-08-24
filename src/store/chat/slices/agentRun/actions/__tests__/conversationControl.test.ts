@@ -2486,10 +2486,14 @@ describe('ConversationControl actions', () => {
         .spyOn(result.current, 'optimisticUpdateMessagePlugin')
         .mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
       const submitInterventionSpy = vi
         .spyOn(heterogeneousAgentService, 'submitIntervention')
         .mockResolvedValue(undefined as any);
+      const remoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+      remoteSubmit.mockClear();
 
       await act(async () => {
         await expect(
@@ -2497,12 +2501,14 @@ describe('ConversationControl actions', () => {
         ).resolves.toBeUndefined();
       });
 
-      // Optimistic write uses the empty global-state fallback context.
+      // Remote publish is only transport acceptance: keep the form pending,
+      // mark it resolving, and use the empty global-state fallback context.
       expect(pluginSpy).toHaveBeenCalledWith(
         'tool-msg-1',
-        expect.objectContaining({ intervention: expect.objectContaining({ status: 'rejected' }) }),
+        { intervention: { resolving: true, status: 'pending' } },
         {},
       );
+      expect(updateTopicStatusSpy).not.toHaveBeenCalled();
 
       // Remote tRPC submit fires with the (stale) resolved operationId + cancel;
       // the desktop IPC path is not taken for a GC'd (non-local) op.
@@ -2514,6 +2520,39 @@ describe('ConversationControl actions', () => {
         }),
       );
       expect(submitInterventionSpy).not.toHaveBeenCalled();
+
+      const firstCancelRequestId = remoteSubmit.mock.calls[0][0].resolutionRequestId;
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-1', 'cancel');
+      });
+      expect(remoteSubmit.mock.calls[1][0].resolutionRequestId).toBe(firstCancelRequestId);
+
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-1', 'skip');
+      });
+      expect(remoteSubmit.mock.calls[2][0].resolutionRequestId).not.toBe(firstCancelRequestId);
+
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', { b: 2, a: 1 });
+        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', { a: 1, b: 2 });
+        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', { a: 2, b: 2 });
+      });
+      const firstPayloadRequestId = remoteSubmit.mock.calls[3][0].resolutionRequestId;
+      expect(remoteSubmit.mock.calls[4][0].resolutionRequestId).toBe(firstPayloadRequestId);
+      expect(remoteSubmit.mock.calls[5][0].resolutionRequestId).not.toBe(firstPayloadRequestId);
+
+      const publishError = new Error('publish failed');
+      remoteSubmit.mockRejectedValueOnce(publishError);
+      await act(async () => {
+        await expect(result.current.submitHeteroIntervention('tool-msg-1', 'cancel')).rejects.toBe(
+          publishError,
+        );
+      });
+      expect(pluginSpy).toHaveBeenLastCalledWith(
+        'tool-msg-1',
+        { intervention: { status: 'pending' } },
+        {},
+      );
     });
 
     it('flips topic status on the passed context, NOT the active topic, when submitting from a background conversation', async () => {

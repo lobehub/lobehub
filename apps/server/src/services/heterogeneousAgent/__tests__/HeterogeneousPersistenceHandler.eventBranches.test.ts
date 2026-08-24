@@ -7,6 +7,11 @@ import {
   HeterogeneousPersistenceHandler,
 } from '../HeterogeneousPersistenceHandler';
 
+const { notifyAgentIntervention } = vi.hoisted(() => ({ notifyAgentIntervention: vi.fn() }));
+vi.mock('@/business/server/agent-run/notifyAgentIntervention', () => ({
+  notifyAgentIntervention,
+}));
+
 /**
  * Branch-coverage tests against every event type / sub-type the renderer
  * (`heterogeneousAgentExecutor.ts:1314–1632`) dispatches on. Each describe
@@ -160,6 +165,16 @@ const createHarness = (
       },
     ),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
+    updateMessagePlugin: vi.fn(async (id: string, patch: Record<string, unknown>) => {
+      const existing = messages.get(id);
+      if (existing) messages.set(id, { ...existing, plugin: { ...existing.plugin, ...patch } });
+    }),
+    updatePluginState: vi.fn(async (id: string, patch: Record<string, unknown>) => {
+      const existing = messages.get(id);
+      if (existing) {
+        messages.set(id, { ...existing, pluginState: { ...existing.pluginState, ...patch } });
+      }
+    }),
   };
 
   const threadModel = {
@@ -195,6 +210,7 @@ const createHarness = (
     messageModel: messageModel as any,
     threadModel: threadModel as any,
     topicModel: topicModel as any,
+    userId: 'user-test',
   });
 
   return {
@@ -227,7 +243,10 @@ const ingest = async (h: ReturnType<typeof createHarness>, events: AgentStreamEv
   h.handler.ingest({ events, operationId: h.operationId, topicId: h.topicId });
 
 describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
-  beforeEach(() => __resetOperationStatesForTesting());
+  beforeEach(() => {
+    __resetOperationStatesForTesting();
+    notifyAgentIntervention.mockReset();
+  });
   afterEach(() => __resetOperationStatesForTesting());
 
   // ─── step_complete ────────────────────────────────────────────────────────
@@ -921,6 +940,89 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       // Terminal assistant has the authoritative summary
       expect(threadAssts.at(-1)?.content).toBe('final summary');
       // Run state cleaned up after finalize
+    });
+  });
+
+  describe('agent_intervention producer ACK', () => {
+    it('notifies pending once, ignores the publish leg, and notifies terminal only on ACK', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const requestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+      const request = buildEvent('agent_intervention_request', 0, {
+        apiName: 'askUserQuestion',
+        arguments: JSON.stringify({
+          privateRawArgument: 'must be stripped',
+          questions: [
+            {
+              header: 'Permission',
+              multiSelect: false,
+              options: [
+                { id: 'allow', label: 'Allow', raw: 'strip me' },
+                { id: 'deny', label: 'Deny' },
+              ],
+              question: 'Run command?',
+            },
+          ],
+        }),
+        deadline: 1_900_000_000_000,
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'cursor',
+        toolCallId: 'permission-1',
+      });
+
+      await ingest(h, [request]);
+      await ingest(h, [{ ...request, timestamp: request.timestamp + 1 }]);
+
+      expect(notifyAgentIntervention).toHaveBeenCalledTimes(1);
+      const pending = notifyAgentIntervention.mock.calls[0][0];
+      expect(pending).toMatchObject({
+        agentId: 'agent-test',
+        interactionKind: 'permission',
+        operationId: 'op-test',
+        provider: 'cursor',
+        status: 'pending',
+        toolCallId: 'permission-1',
+      });
+      expect(JSON.parse(pending.request.arguments)).toEqual({
+        questions: [
+          {
+            header: 'Permission',
+            multiSelect: false,
+            options: [
+              { id: 'allow', label: 'Allow' },
+              { id: 'deny', label: 'Deny' },
+            ],
+            question: 'Run command?',
+          },
+        ],
+      });
+
+      await ingest(h, [
+        buildEvent('agent_intervention_response', 1, {
+          producerAck: false,
+          resolutionRequestId: requestId,
+          result: { 'Run command?': 'allow' },
+          toolCallId: 'permission-1',
+        }),
+      ]);
+      expect(notifyAgentIntervention).toHaveBeenCalledTimes(1);
+
+      await ingest(h, [
+        buildEvent('agent_intervention_response', 2, {
+          producerAck: true,
+          resolutionRequestId: requestId,
+          result: { 'Run command?': 'allow' },
+          toolCallId: 'permission-1',
+        }),
+      ]);
+
+      expect(notifyAgentIntervention).toHaveBeenCalledTimes(2);
+      expect(notifyAgentIntervention.mock.calls[1][0]).toMatchObject({
+        operationId: 'op-test',
+        resolutionRequestId: requestId,
+        status: 'resolved',
+        toolCallId: 'permission-1',
+      });
     });
   });
 });

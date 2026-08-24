@@ -10,6 +10,8 @@ export default {
     'Your scheduled task "{{jobName}}" was paused after {{count}} consecutive failures. Review the error and resume it when ready.',
   'agent_cron_job_failed_paused_title': 'Scheduled task paused',
   'agent_cron_job_failed_title': 'Scheduled task failed',
+  'agent_intervention_required': '{{agent}} needs your input: {{summary}}',
+  'agent_intervention_required_title': '{{agent}} needs your review',
   'agent_run_completed': '{{preview}}',
   'agent_run_completed_title': 'Agent task completed',
   'agent_transfer_reassigned':

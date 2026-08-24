@@ -1,10 +1,19 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiAgentRouter } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
+
+const business = vi.hoisted(() => ({
+  getHeteroInterventionReview: vi.fn(),
+  onHeteroInterventionResolutionPublished: vi.fn(),
+  resolveHeteroIntervention: vi.fn(),
+  rollbackHeteroInterventionResolution: vi.fn(),
+}));
+vi.mock('@/business/server/agent-run/heteroInterventionReview', () => business);
 
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
@@ -17,10 +26,13 @@ vi.mock('@/database/core/db-adaptor', () => ({
 // tiny store-backed stub of the factory is enough to exercise the round-trip
 // without a live Redis. An unknown `lastEventId` reads from the start (mirrors
 // Redis `XREAD 0`); `'$'` means from-now.
-const { store } = vi.hoisted(() => ({ store: { events: [] as any[], seq: 0 } }));
+const { store } = vi.hoisted(() => ({
+  store: { events: [] as any[], failPublish: false, seq: 0 },
+}));
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
   createStreamEventManager: () => ({
     async publishStreamEvent(operationId: string, event: any) {
+      if (store.failPublish) throw new Error('stream publish failed');
       const id = String(++store.seq);
       store.events.push({ ...event, id, operationId });
       return id;
@@ -59,7 +71,12 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     testDB = serverDB;
     userId = await createTestUser(serverDB);
     store.events.length = 0;
+    store.failPublish = false;
     store.seq = 0;
+    business.getHeteroInterventionReview.mockResolvedValue({ status: 'unavailable' });
+    business.onHeteroInterventionResolutionPublished.mockResolvedValue(undefined);
+    business.resolveHeteroIntervention.mockResolvedValue({ handled: false });
+    business.rollbackHeteroInterventionResolution.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -111,11 +128,15 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
   it('submit → wait round-trips a structured answer, filtered to the response', async () => {
     const operationId = 'op-roundtrip';
     await insertOperation(operationId, userId);
-    await userCaller().submitHeteroIntervention({
-      operationId,
-      result: { 'Which env?': 'prod' },
-      toolCallId: 't1',
-    });
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+    await expect(
+      userCaller().submitHeteroIntervention({
+        operationId,
+        resolutionRequestId,
+        result: { 'Which env?': 'prod' },
+        toolCallId: 't1',
+      }),
+    ).resolves.toEqual({ status: 'resolving', success: true });
 
     const res = await heteroCaller(operationId).waitInterventionResponse({
       lastEventId: '0',
@@ -126,9 +147,149 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     expect(res.events[0].type).toBe('agent_intervention_response');
     expect(res.events[0].data).toMatchObject({
       result: { 'Which env?': 'prod' },
+      producerAck: false,
+      resolutionRequestId,
       toolCallId: 't1',
     });
     expect(res.events[0].data.cancelled).toBeUndefined();
+  });
+
+  it('looks up cold-start review by a strict 32-byte base64url token', async () => {
+    const reviewToken = 'a'.repeat(43);
+    business.getHeteroInterventionReview.mockResolvedValueOnce({
+      review: {
+        apiName: 'askUserQuestion',
+        deadline: 1_900_000_000_000,
+        interactionKind: 'permission',
+        provider: 'cursor',
+        renderArguments: '{"questions":[]}',
+        summary: 'Cursor permission',
+      },
+      status: 'pending',
+    });
+
+    await expect(userCaller().getHeteroInterventionReview({ reviewToken })).resolves.toMatchObject({
+      review: { interactionKind: 'permission', provider: 'cursor' },
+      status: 'pending',
+    });
+    expect(business.getHeteroInterventionReview).toHaveBeenCalledWith({
+      reviewToken,
+      userId,
+      workspaceId: undefined,
+    });
+    await expect(
+      userCaller().getHeteroInterventionReview({ reviewToken: 'too-short' }),
+    ).rejects.toThrow();
+  });
+
+  it('calls the resolving hook only after a claimed response is published', async () => {
+    const operationId = 'op-claimed';
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000003';
+    await insertOperation(operationId, userId);
+    business.resolveHeteroIntervention.mockResolvedValueOnce({
+      claimId: 'claim-1',
+      handled: true,
+      operationId,
+      resolutionRequestId,
+      response: { result: { approved: true }, toolCallId: 't-claimed' },
+      state: 'claimed',
+      workspaceId: 'workspace-claimed',
+    });
+
+    await expect(
+      userCaller().submitHeteroIntervention({
+        operationId,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 't-claimed',
+      }),
+    ).resolves.toEqual({ status: 'resolving', success: true });
+
+    expect(store.events[0].data).toMatchObject({
+      producerAck: false,
+      resolutionRequestId,
+      toolCallId: 't-claimed',
+    });
+    expect(business.onHeteroInterventionResolutionPublished).toHaveBeenCalledWith({
+      claimId: 'claim-1',
+      operationId,
+      resolutionRequestId,
+      status: 'resolving',
+      toolCallId: 't-claimed',
+      userId,
+      workspaceId: 'workspace-claimed',
+    });
+    expect(business.rollbackHeteroInterventionResolution).not.toHaveBeenCalled();
+  });
+
+  it('round-trips XADD → long-poll → bridge producer ACK with the same request id', async () => {
+    const operationId = 'op-bridge-ack';
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000005';
+    await insertOperation(operationId, userId);
+    const bridge = new AskUserBridge(operationId, { provider: 'cursor' });
+    const events = bridge.events()[Symbol.asyncIterator]();
+    const pending = bridge.pending({
+      arguments: { questions: [] },
+      interactionKind: 'permission',
+      toolCallId: 't-bridge',
+    });
+    expect((await events.next()).value?.type).toBe('agent_intervention_request');
+
+    await userCaller().submitHeteroIntervention({
+      operationId,
+      resolutionRequestId,
+      result: { approved: true },
+      toolCallId: 't-bridge',
+    });
+    const polled = await heteroCaller(operationId).waitInterventionResponse({
+      lastEventId: '0-0',
+      operationId,
+    });
+    bridge.resolve('t-bridge', polled.events[0].data as any);
+    await expect(pending).resolves.toEqual({ result: { approved: true } });
+
+    const producerEcho = (await events.next()).value as any;
+    expect(producerEcho.data).toMatchObject({
+      producerAck: true,
+      resolutionRequestId,
+      toolCallId: 't-bridge',
+    });
+    bridge.cancelAll();
+  });
+
+  it('conditionally rolls back a claimed response when publish fails', async () => {
+    const operationId = 'op-publish-fail';
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000004';
+    await insertOperation(operationId, userId);
+    business.resolveHeteroIntervention.mockResolvedValueOnce({
+      claimId: 'claim-fail',
+      handled: true,
+      operationId,
+      resolutionRequestId,
+      response: { result: { approved: true }, toolCallId: 't-fail' },
+      state: 'claimed',
+      workspaceId: 'workspace-fail',
+    });
+    store.failPublish = true;
+
+    await expect(
+      userCaller().submitHeteroIntervention({
+        operationId,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 't-fail',
+      }),
+    ).rejects.toThrow('stream publish failed');
+
+    expect(business.rollbackHeteroInterventionResolution).toHaveBeenCalledWith({
+      claimId: 'claim-fail',
+      operationId,
+      resolutionRequestId,
+      toolCallId: 't-fail',
+      userId,
+      workspaceId: 'workspace-fail',
+    });
+    expect(business.onHeteroInterventionResolutionPublished).not.toHaveBeenCalled();
   });
 
   it('cancel clears the result and defaults the reason', async () => {
