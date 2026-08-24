@@ -1,18 +1,23 @@
 import { createHash, verify as cryptoVerify } from 'node:crypto';
 
-export interface RendererManifestFile {
-  path: string;
-  sha256: string;
-  size: number;
-}
+import { z } from 'zod';
 
-export interface RendererManifest {
-  appVersion: string;
-  files: RendererManifestFile[];
-  mainHash: string;
-  signature: string;
-  version: string;
-}
+export const rendererManifestFileSchema = z.object({
+  path: z.string().refine((p) => !p.includes('..') && !p.startsWith('/')),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  size: z.number(),
+});
+
+export const rendererManifestSchema = z.object({
+  appVersion: z.string(),
+  files: z.array(rendererManifestFileSchema),
+  mainHash: z.string(),
+  signature: z.string(),
+  version: z.string().regex(/^r\d+$/),
+});
+
+export type RendererManifestFile = z.infer<typeof rendererManifestFileSchema>;
+export type RendererManifest = z.infer<typeof rendererManifestSchema>;
 
 export const canonicalJson = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -43,26 +48,8 @@ export const verifyManifestSignature = (
   }
 };
 
-export const isValidManifestShape = (value: unknown): value is RendererManifest => {
-  const m = value as RendererManifest;
-  return (
-    !!m &&
-    typeof m.version === 'string' &&
-    /^r\d+$/.test(m.version) &&
-    typeof m.mainHash === 'string' &&
-    typeof m.appVersion === 'string' &&
-    typeof m.signature === 'string' &&
-    Array.isArray(m.files) &&
-    m.files.every(
-      (f) =>
-        typeof f?.path === 'string' &&
-        !f.path.includes('..') &&
-        !f.path.startsWith('/') &&
-        /^[0-9a-f]{64}$/.test(f?.sha256 ?? '') &&
-        typeof f?.size === 'number',
-    )
-  );
-};
+export const isValidManifestShape = (value: unknown): value is RendererManifest =>
+  rendererManifestSchema.safeParse(value).success;
 
 export const patchNumber = (version: string): number => Number(version.slice(1));
 

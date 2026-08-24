@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { defineConfig, type UserConfig } from 'vite';
+import zodCompiler from 'zod-compiler/vite';
 
 import { viteOsPlatformResolve } from '../../plugins/vite/osPlatformResolve';
 import { externalRuntimeModules } from './external-runtime-deps.config.mjs';
@@ -116,7 +117,7 @@ export default defineConfig(async (env) => {
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
-    plugins: [viteOsPlatformResolve()],
+    plugins: [viteOsPlatformResolve(), zodCompiler()],
     publicDir: false,
     resolve: {
       alias: mainProcessAlias,
