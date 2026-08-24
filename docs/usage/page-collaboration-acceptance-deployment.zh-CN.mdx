@@ -1,0 +1,112 @@
+# Page 协同验收环境增量部署
+
+本文记录 Page 协同验收环境的可回滚增量发布流程。它适用于只更新前端 SPA 和 `@lobehub/editor` 编译产物、Yjs 服务协议不变的 editor PR 验收；不包含生产发布，也不保存服务器地址、账号或密钥。
+
+## 发布前约束
+
+先固定三个输入：LobeHub commit、editor PR commit 和验收环境的协同 WebSocket 地址。协同功能是 opt-in，构建时必须显式设置：
+
+```bash
+export PAGE_ACCEPTANCE_HOST='<验收主机>'
+export PAGE_COLLABORATION_WS="ws://${PAGE_ACCEPTANCE_HOST}:<对外端口>/collaboration"
+export LOBEHUB_COMMIT='<lobehub commit>'
+export EDITOR_COMMIT='<editor PR commit>'
+```
+
+如果 editor PR 只有部分 preview exports，不能直接把 preview 包覆盖到完整集成包。应在干净的 `EDITOR_COMMIT` worktree 中构建，再把需要的编译文件覆盖到已有完整 editor 集成目录；未提交的 artifact/properties exports 等用户改动必须留在原 worktree，不能提交或覆盖。
+
+发布前确认：
+
+- editor 只存在一个运行时副本，Lexical、React 和 Yjs 不能因 preview 包重复打包；检查 SPA 产物和容器内模块路径。
+- 验收 embed fixture 只通过显式验收开关挂载，生产 `public` 不携带 fixture。
+- `NEXT_PUBLIC_PAGE_COLLABORATION_URL` 已在构建时设置为可从浏览器访问的 WS 地址；未设置时不要猜测端口。
+- Yjs 服务仍使用当前安全绑定（默认 `127.0.0.1`，由反向代理对外提供服务），除非本次变更明确包含服务端协议变更。
+
+## 构建
+
+使用临时 worktree，避免污染开发目录：
+
+```bash
+git worktree add /tmp/lobe-editor-build "$EDITOR_COMMIT"
+cd /tmp/lobe-editor-build
+bun run build
+```
+
+LobeHub 只构建 SPA，不运行完整 Next 构建：
+
+```bash
+cd /path/to/lobehub
+NODE_ENV=production \
+NEXT_PUBLIC_PAGE_COLLABORATION_URL="$PAGE_COLLABORATION_WS" \
+pnpm run build:spa:raw
+pnpm run build:spa:copy
+```
+
+在 `dist/desktop/index.html` 和 `public/_spa` 中检查协同 URL、editor chunk 以及 nested-diff preflight 相关标记。记录构建耗时、commit 和生成的 HTML template chunk；浏览器最终加载的是模板中的资源清单，不是本地磁盘上任意一份旧 HTML。
+
+## 生成增量包
+
+不要上传完整的 SPA 目录。以旧 release 为基准比较相对路径，只打包新增或内容发生变化的 hash 文件，以及 HTML template/server chunk 等非 hash 文件：
+
+```bash
+PREV='/path/to/previous/public/_spa'
+NEXT='/path/to/new/public/_spa'
+comm -13 \
+  <(cd "$PREV" && find . -type f -print | sort) \
+  <(cd "$NEXT" && find . -type f -print | sort) \
+  > /tmp/spa-added.txt
+
+# 对同名文件再比较 sha256，只把内容变化的文件加入清单。
+# 使用临时目录解包，逐文件 mv 到新 release，避免修改旧 release 的硬链接。
+```
+
+editor 模块也只覆盖本次 PR 产生的编译文件。先用硬链接复制完整旧模块，再在新目录内替换文件：
+
+```bash
+cp -al "$OLD_EDITOR_MODULE" "$NEW_EDITOR_MODULE"
+# 将新 editor build 中确认过的文件解包到临时目录，再 mv 到 NEW_EDITOR_MODULE
+```
+
+`cp -al` 只用于建立新 release 的基线；任何替换都必须在临时解包目录完成后移动到新 release，不能在旧 release 的硬链接上原地写入。
+
+## 远端原子切换
+
+release 目录名应包含日期和 commit，例如 `YYYYMMDD-page-editor-<short-commit>`。切换顺序如下：
+
+1. 在远端以 `cp -al` 从当前 release 建立新目录，保留旧目录作为回滚点。
+2. 上传增量包到临时目录，校验文件清单和 SHA-256，再逐文件移动到新目录。
+3. 为新 editor 模块建立独立目录；不要修改正在运行的旧模块目录。
+4. 写入新的 systemd drop-in，文件名使用比旧配置更高的字典序（例如 `zz-page-editor-<commit>.conf`），指向新 release、新 editor 模块和本次模板 chunk。
+5. `systemctl daemon-reload` 后重启 app；Yjs 服务只有在本次确实变更时才重启。确认 `podman inspect` 的 mount source 全部指向新目录，再继续验收。
+
+systemd drop-in 的字典序很重要：旧配置必须保留，但不能排在新配置之后继续覆盖新值。切换后检查 `systemctl cat` 和容器 mount，不能只看 unit 为 active。
+
+## 验收清单
+
+以下检查使用 `curl --noproxy '*'` 或清理全部代理变量，避免把验收结果误判为本机代理响应：
+
+```bash
+curl -fsS "http://${PAGE_ACCEPTANCE_HOST}:<端口>/collaboration/health"
+curl -fsS "http://${PAGE_ACCEPTANCE_HOST}:<端口>/collaboration/rooms"
+curl -sS -D- -o /dev/null "http://${PAGE_ACCEPTANCE_HOST}:<端口>/page/<精确文档 ID>"
+```
+
+至少确认：
+
+- app、Yjs、反向代理均为 `active`，健康检查为 `200`，`OPTIONS` 为 `204` 且无响应体。
+- 精确文档路由没有 `502`；没有登录态时允许是预期的 `302 /signin`。
+- 新入口 asset 返回 `200`，旧 release 中仍被已打开页面引用的 hash asset 也返回 `200`。
+- 使用真实 WebSocket client 连接 `/collaboration/<room>`，能完成握手并收到初始同步；检查 Yjs 日志没有异常 close、跨房间广播或重复 bootstrap。
+- 浏览器硬刷新精确 Page 路由，检查 editor 只有一份 Lexical/React/Yjs runtime，并执行一次 AI modify，确认普通段落和表格节点不会重复。
+- 记录 `podman stats --no-stream`、磁盘余量、release 路径、editor 模块路径和最近 app/Yjs 日志。
+
+## 回滚
+
+回滚只切换 systemd 配置和挂载，不删除数据：
+
+1. 停止 app 或将新 drop-in 改名为 `.disabled`，恢复上一个已验证的 drop-in（保留文件内容）。
+2. `systemctl daemon-reload`、重启 app，确认容器 mount 回到旧 release 和旧 editor 模块。
+3. 重跑 health、rooms、精确文档、旧 hash asset 和 WebSocket 检查。
+4. 保留新 release 供离线比较；确认无误后再按服务器保留策略清理，清理前先检查硬链接和磁盘空间。
+
+不要使用 `rm -rf` 指向 release 根目录、当前 worktree 或模块根目录；不要在回滚时覆盖旧 release。数据库文档和 Yjs 持久化数据不随前端 release 回滚，异常文档应使用已确认的历史快照单独恢复。
