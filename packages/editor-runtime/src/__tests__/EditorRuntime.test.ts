@@ -30,7 +30,7 @@ describe('EditorRuntime', () => {
       const applyExternalEditorData = vi.fn().mockReturnValue(true);
       vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
       const setDocument = vi.spyOn(editor, 'setDocument');
-      const editorData = editor.getDocument('json') as Record<string, unknown>;
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
 
       expect(runtime.applyServerSnapshot({ editorData })).toBe(true);
       expect(applyExternalEditorData).toHaveBeenCalledWith(editorData);
@@ -41,7 +41,7 @@ describe('EditorRuntime', () => {
       const applyExternalEditorData = vi.fn().mockReturnValue(false);
       vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
       const setDocument = vi.spyOn(editor, 'setDocument');
-      const editorData = editor.getDocument('json') as Record<string, unknown>;
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
 
       expect(runtime.applyServerSnapshot({ editorData })).toBe(false);
       expect(setDocument).not.toHaveBeenCalled();
@@ -50,7 +50,7 @@ describe('EditorRuntime', () => {
     it('does not fall back to setDocument when collaboration is registered but unsupported', () => {
       vi.spyOn(editor, 'requireService').mockReturnValue({} as any);
       const setDocument = vi.spyOn(editor, 'setDocument');
-      const editorData = editor.getDocument('json') as Record<string, unknown>;
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
 
       expect(runtime.applyServerSnapshot({ editorData })).toBe(false);
       expect(setDocument).not.toHaveBeenCalled();
