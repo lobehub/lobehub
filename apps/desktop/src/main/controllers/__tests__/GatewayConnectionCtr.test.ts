@@ -184,6 +184,7 @@ vi.mock('node:crypto', () => ({
 }));
 
 const execFileSyncMock = vi.hoisted(() => vi.fn());
+const execaMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
 const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
 
@@ -209,7 +210,7 @@ vi.mock('@/services/imessageBridgeSrv', () => ({
 }));
 
 vi.mock('execa', () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+  execa: execaMock,
 }));
 
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }));
@@ -300,6 +301,7 @@ describe('GatewayConnectionCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    execaMock.mockResolvedValue({ stderr: '', stdout: '' });
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
     mockStoreGet.mockImplementation((key: string) => {
@@ -1676,6 +1678,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('getAgentProfile returns empty object', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({ available: false });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-profile');
       await vi.advanceTimersByTimeAsync(0);
@@ -1685,6 +1689,91 @@ describe('GatewayConnectionCtr', () => {
         result: {
           content: JSON.stringify({}),
           state: {},
+          success: true,
+        },
+      });
+      expect(execaMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the resolved OpenClaw executable and PATH to load its profile', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/Users/x/.openclaw/bin/openclaw',
+        resolvedPathEnv: '/Users/x/.openclaw/bin:/usr/bin',
+      });
+      execaMock.mockResolvedValueOnce({
+        stderr: '',
+        stdout: JSON.stringify([
+          {
+            id: 'main',
+            identityEmoji: '🦞',
+            identityName: 'Clawd',
+            isDefault: true,
+          },
+        ]),
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-openclaw');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('openclaw');
+      expect(execaMock).toHaveBeenCalledWith(
+        '/Users/x/.openclaw/bin/openclaw',
+        ['agents', 'list', '--json'],
+        {
+          env: expect.objectContaining({ PATH: '/Users/x/.openclaw/bin:/usr/bin' }),
+          timeout: 5000,
+        },
+      );
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-openclaw',
+        result: {
+          content: JSON.stringify({ avatar: '🦞', title: 'Clawd' }),
+          state: { avatar: '🦞', description: undefined, title: 'Clawd' },
+          success: true,
+        },
+      });
+    });
+
+    it('uses the resolved Hermes executable and PATH to load its profile', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/Users/x/.local/bin/hermes',
+        resolvedPathEnv: '/Users/x/.local/bin:/usr/bin',
+      });
+      execaMock
+        .mockResolvedValueOnce({ stderr: '', stdout: '◆research\n' })
+        .mockResolvedValueOnce({ stderr: '', stdout: 'Path: /profiles/research\n' });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'hermes' }, 'req-hermes');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('hermes');
+      expect(execaMock).toHaveBeenNthCalledWith(
+        1,
+        '/Users/x/.local/bin/hermes',
+        ['profile', 'list'],
+        {
+          env: expect.objectContaining({ PATH: '/Users/x/.local/bin:/usr/bin' }),
+          timeout: 5000,
+        },
+      );
+      expect(execaMock).toHaveBeenNthCalledWith(
+        2,
+        '/Users/x/.local/bin/hermes',
+        ['profile', 'show', 'research'],
+        {
+          env: expect.objectContaining({ PATH: '/Users/x/.local/bin:/usr/bin' }),
+          timeout: 5000,
+        },
+      );
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-hermes',
+        result: {
+          content: JSON.stringify({ avatar: '⚡', title: 'research' }),
+          state: { avatar: '⚡', description: undefined, title: 'research' },
           success: true,
         },
       });

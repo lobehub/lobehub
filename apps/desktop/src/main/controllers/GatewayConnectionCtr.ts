@@ -542,24 +542,31 @@ export default class GatewayConnectionCtr extends ControllerModule {
     title?: string;
   }> {
     const { platform, agentId } = args;
+    if (platform !== 'openclaw' && platform !== 'hermes') return {};
+
+    const commandStatus = await resolveRemotePlatformCommand(platform);
+    if (!commandStatus.available || !commandStatus.path) return {};
+
+    const env = commandStatus.resolvedPathEnv
+      ? { ...process.env, PATH: commandStatus.resolvedPathEnv }
+      : undefined;
 
     if (platform === 'openclaw') {
-      return this.getOpenClawProfile(agentId);
+      return this.getOpenClawProfile(commandStatus.path, agentId, env);
     }
 
-    if (platform === 'hermes') {
-      return this.getHermesProfile();
-    }
-
-    return {};
+    return this.getHermesProfile(commandStatus.path, env);
   }
 
-  private getHermesProfile(): { avatar?: string; description?: string; title?: string } {
+  private async getHermesProfile(
+    command: string,
+    env?: NodeJS.ProcessEnv,
+  ): Promise<{ avatar?: string; description?: string; title?: string }> {
     // Find the active profile (marked with ◆ in `hermes profile list`).
     let profileName: string | undefined;
     try {
-      const listOutput = execFileSync('hermes', ['profile', 'list'], {
-        encoding: 'utf8',
+      const { stdout: listOutput } = await execa(command, ['profile', 'list'], {
+        env,
         timeout: 5000,
       });
       profileName = listOutput.match(/◆(\S+)/)?.[1];
@@ -571,8 +578,8 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Get the profile's filesystem path.
     let profilePath: string | undefined;
     try {
-      const showOutput = execFileSync('hermes', ['profile', 'show', profileName], {
-        encoding: 'utf8',
+      const { stdout: showOutput } = await execa(command, ['profile', 'show', profileName], {
+        env,
         timeout: 5000,
       });
       const raw = showOutput.match(/^Path:\s+(.+)/m)?.[1]?.trim();
@@ -612,17 +619,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
     }
   }
 
-  private getOpenClawProfile(agentId?: string): {
-    avatar?: string;
-    description?: string;
-    title?: string;
-  } {
+  private async getOpenClawProfile(
+    command: string,
+    agentId?: string,
+    env?: NodeJS.ProcessEnv,
+  ): Promise<{ avatar?: string; description?: string; title?: string }> {
     let output: string;
     try {
-      output = execFileSync('openclaw', ['agents', 'list', '--json'], {
-        encoding: 'utf8',
+      const result = await execa(command, ['agents', 'list', '--json'], {
+        env,
         timeout: 5000,
       });
+      output = result.stdout;
     } catch {
       return {};
     }
