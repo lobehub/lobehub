@@ -99,6 +99,45 @@ describe('createSSEDataExtractor', () => {
     expect(results).toEqual([{ message: 'hello' }]);
   });
 
+  // Helper to feed several byte-level chunks (as they arrive from the
+  // network) through the same transformer instance.
+  const processChunks = async (transformer: TransformStream, chunks: Uint8Array[]) => {
+    const results: any[] = [];
+    const readable = new ReadableStream({
+      start(controller) {
+        for (const c of chunks) controller.enqueue(c);
+        controller.close();
+      },
+    });
+    const writable = new WritableStream({
+      write(chunk) {
+        results.push(chunk);
+      },
+    });
+    await readable.pipeThrough(transformer).pipeTo(writable);
+    return results;
+  };
+
+  it('should handle a multibyte utf8 char split across chunks', async () => {
+    const transformer = createSSEDataExtractor();
+    const full = stringToUint8Array('data: {"message": "\u{1F60A}"}\n');
+    // Split inside the 4-byte emoji so each chunk holds a partial sequence.
+    const splitAt = full.indexOf(0xf0) + 2;
+    const results = await processChunks(transformer, [full.slice(0, splitAt), full.slice(splitAt)]);
+
+    expect(results).toEqual([{ message: '\u{1F60A}' }]);
+  });
+
+  it('should handle a data line split across chunks', async () => {
+    const transformer = createSSEDataExtractor();
+    const results = await processChunks(transformer, [
+      stringToUint8Array('data: {"message": "hel'),
+      stringToUint8Array('lo"}\n'),
+    ]);
+
+    expect(results).toEqual([{ message: 'hello' }]);
+  });
+
   it('should process large chunks of data correctly', async () => {
     const transformer = createSSEDataExtractor();
     const messages = Array.from({ length: 100 })
