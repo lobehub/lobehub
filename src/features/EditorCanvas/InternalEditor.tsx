@@ -12,6 +12,7 @@ import {
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { COLLABORATION_TAG, SKIP_COLLAB_TAG } from 'lexical';
 import type { CSSProperties, RefObject } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -282,23 +283,32 @@ const InternalEditor = memo<InternalEditorProps>(
       // Initialize snapshot before registering listener
       previousDocumentSnapshotRef.current = editor.getDocument('json');
 
-      const unregister = lexicalEditor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-        // Skip selection-only / caret-movement updates — no content was mutated.
-        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+      const unregister = lexicalEditor.registerUpdateListener(
+        ({ dirtyElements, dirtyLeaves, tags }) => {
+          // Skip selection-only / caret-movement updates — no content was mutated.
+          if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
 
-        const currentDocumentSnapshot = editor.getDocument('json');
+          const currentDocumentSnapshot = editor.getDocument('json');
 
-        if (!isEqual(currentDocumentSnapshot, previousDocumentSnapshotRef.current)) {
-          previousDocumentSnapshotRef.current = currentDocumentSnapshot;
+          if (!isEqual(currentDocumentSnapshot, previousDocumentSnapshotRef.current)) {
+            previousDocumentSnapshotRef.current = currentDocumentSnapshot;
 
-          // During document hydration (e.g. route switch), we only advance snapshot
-          // and skip external change callback to avoid false dirty checks.
-          if (contentChangeLockRef?.current) return;
-          if (disabled) return;
+            // Yjs applies remote updates with COLLABORATION_TAG. External server
+            // snapshots use SKIP_COLLAB_TAG while they are reconciled into the
+            // shared document. Neither update is a local user edit and must not
+            // enter the autosave path, otherwise every client can echo the same
+            // full tree back into the room.
+            if (tags.has(COLLABORATION_TAG) || tags.has(SKIP_COLLAB_TAG)) return;
 
-          onContentChangeRef.current?.();
-        }
-      });
+            // During document hydration (e.g. route switch), we only advance snapshot
+            // and skip external change callback to avoid false dirty checks.
+            if (contentChangeLockRef?.current) return;
+            if (disabled) return;
+
+            onContentChangeRef.current?.();
+          }
+        },
+      );
 
       return () => {
         unregister();
