@@ -1,3 +1,6 @@
+import { homedir, platform } from 'node:os';
+import path from 'node:path';
+
 import type { RemoteHeterogeneousAgentType } from '../config';
 import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import type { CliCommandStatus } from '../spawn/resolveCliCommand';
@@ -12,6 +15,22 @@ import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './
  * (`@lobechat/heterogeneous-agents/scanHost`), never from a browser bundle.
  */
 
+const BARE_VERSION_PATTERN = /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/;
+
+const getRemotePlatformCommandCandidates = (type: RemoteHeterogeneousAgentType): string[] => {
+  if (platform() !== 'darwin' && platform() !== 'linux') return [type];
+
+  if (type === 'openclaw') {
+    return [
+      type,
+      path.join(homedir(), '.openclaw', 'bin', 'openclaw'),
+      path.join(homedir(), '.local', 'bin', 'openclaw'),
+    ];
+  }
+
+  return [type, path.join(homedir(), '.local', 'bin', 'hermes')];
+};
+
 /**
  * Resolve and validate a notify-based platform executable using the same
  * login-shell PATH and Windows npm-shim handling as the CLI agent resolver.
@@ -20,7 +39,26 @@ import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './
  */
 export const resolveRemotePlatformCommand = async (
   type: RemoteHeterogeneousAgentType,
-): Promise<CliCommandStatus> => detectValidatedCommand(type, { validateKeywords: [type] });
+): Promise<CliCommandStatus> => {
+  const validation =
+    type === 'openclaw'
+      ? {
+          validateHelpKeywords: ['Usage: openclaw'],
+          validateKeywords: ['openclaw'],
+          validatePattern: BARE_VERSION_PATTERN,
+        }
+      : { validateKeywords: ['hermes'] };
+
+  for (const command of getRemotePlatformCommandCandidates(type)) {
+    const status = await detectValidatedCommand(command, validation);
+    if (status.available) return status;
+  }
+
+  return {
+    available: false,
+    error: `${type} was not found or failed validation`,
+  };
+};
 
 export const probeRemotePlatform = async (
   type: RemoteHeterogeneousAgentType,
@@ -28,7 +66,7 @@ export const probeRemotePlatform = async (
   const status = await resolveRemotePlatformCommand(type);
   return status.available
     ? { available: true, version: status.version }
-    : { available: false, reason: `${type} not found or failed to run` };
+    : { available: false, reason: status.error };
 };
 
 export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgentScanMap> => {

@@ -513,6 +513,40 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         process.env.SHELL = originalShell;
       }
     });
+
+    it('re-reads the login-shell PATH on a later scan', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+
+      try {
+        const { detectValidatedCommand } = await importModule();
+        const options = { validateKeywords: ['new-agent'] };
+
+        callExecFileError(new Error('not found')); // which new-agent
+        callExecFile('/usr/bin:/bin'); // login shell before installation
+        expect((await detectValidatedCommand('new-agent', options)).available).toBe(false);
+
+        callExecFileError(new Error('not found')); // inherited PATH is still stale
+        callExecFile('/Users/x/.local/bin:/usr/bin:/bin'); // shell PATH after installation
+        callExecFile('/Users/x/.local/bin/new-agent\n');
+        callExecFile('new-agent 1.2.3');
+
+        await expect(detectValidatedCommand('new-agent', options)).resolves.toMatchObject({
+          available: true,
+          path: '/Users/x/.local/bin/new-agent',
+          resolvedPathEnv: '/Users/x/.local/bin:/usr/bin:/bin',
+          version: '1.2.3',
+        });
+        expect(execFileMock.mock.calls.filter(([command]) => command === '/bin/zsh')).toHaveLength(
+          2,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
   });
 
   describe('detectValidatedCommand — Windows npm shims', () => {

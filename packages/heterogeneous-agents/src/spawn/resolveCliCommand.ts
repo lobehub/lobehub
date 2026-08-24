@@ -32,6 +32,7 @@ export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
  */
 export interface CliCommandStatus {
   available: boolean;
+  error?: string;
   path?: string;
   /**
    * PATH used to resolve/validate the command, surfaced only when it differs
@@ -138,8 +139,15 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
   }
 };
 
-const getCachedLoginShellPath = async (): Promise<string | undefined> => {
-  shellPathPromise ??= getLoginShellPath();
+/**
+ * Share one login-shell lookup between concurrent probes, but discard it once
+ * settled. A later Rescan must observe PATH edits made by an installer while
+ * the desktop app is already running.
+ */
+const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
+  shellPathPromise ??= getLoginShellPath().finally(() => {
+    shellPathPromise = undefined;
+  });
   return shellPathPromise;
 };
 
@@ -280,7 +288,7 @@ const resolveCommandCandidates = async (
     // creation-time snapshot that never picks up a later install).
     const recoveredPath = isWindows()
       ? await getWindowsRegistryPath()
-      : await getCachedLoginShellPath();
+      : await getCurrentLoginShellPath();
     const lookupPath = mergePathValues(recoveredPath, probeEnv?.PATH ?? process.env.PATH);
 
     if (lookupPath && lookupPath !== (probeEnv?.PATH ?? process.env.PATH)) {
