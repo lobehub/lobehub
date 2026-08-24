@@ -1,3 +1,6 @@
+/** APNs gateway selected by the signing profile that produced a native token. */
+export type ApnsEnvironment = 'production' | 'sandbox';
+
 /**
  * The person who triggered a user-driven notification (member joined,
  * invitation, comment activity). Snapshotted at send time so inbox surfaces

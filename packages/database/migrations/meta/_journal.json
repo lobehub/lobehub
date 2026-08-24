@@ -1050,6 +1050,13 @@
       "when": 1787542746291,
       "tag": "0149_goals_recovery_and_document_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1787557386120,
+      "tag": "0150_heterogeneous_agent_interventions_live_activity",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -1664,6 +1664,42 @@ table goal_nodes {
   }
 }
 
+table heterogeneous_agent_interventions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  operation_id text [not null]
+  tool_call_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  interaction_kind text [not null]
+  review_token_hash text [not null]
+  review_context jsonb [not null]
+  sanitized_request jsonb [not null]
+  deadline "timestamp with time zone" [not null]
+  status text [not null, default: 'pending']
+  resolution_request_id uuid
+  resolution_payload jsonb
+  resolution_actor_id text
+  resolving_at "timestamp with time zone"
+  resolved_at "timestamp with time zone"
+  producer_ack_at "timestamp with time zone"
+  version integer [not null, default: 1]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (operation_id, tool_call_id) [name: 'heterogeneous_agent_interventions_operation_tool_call_unique', unique]
+    review_token_hash [name: 'heterogeneous_agent_interventions_review_token_hash_unique', unique]
+    resolution_request_id [name: 'heterogeneous_agent_interventions_resolution_request_unique', unique]
+    (user_id, workspace_id, status, deadline) [name: 'heterogeneous_agent_interventions_owner_status_deadline_idx']
+    (status, deadline) [name: 'heterogeneous_agent_interventions_status_deadline_idx']
+
+
+
+
+  }
+}
+
 table llm_generation_tracing {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   scenario text [not null]
@@ -2360,14 +2396,37 @@ table projects {
   }
 }
 
+table push_live_activities {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  device_id text [not null]
+  activity_key text [not null]
+  operation_id text [not null]
+  activity_id text [not null]
+  push_token text [not null]
+  apns_environment text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  last_seen_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, device_id, activity_key) [name: 'idx_push_live_activities_user_device_activity', unique]
+    (user_id, activity_key) [name: 'idx_push_live_activities_user_activity']
+    (user_id, operation_id) [name: 'idx_push_live_activities_user_operation']
+    last_seen_at [name: 'idx_push_live_activities_last_seen']
+
+  }
+}
+
 table push_tokens {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   expo_token text [not null]
   device_id text [not null]
   platform text [not null]
+  apns_environment text
   app_version text
   locale text
+  live_activity_push_to_start_token text
   created_at "timestamp with time zone" [not null, default: `now()`]
   last_seen_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -2375,6 +2434,7 @@ table push_tokens {
     (user_id, device_id) [name: 'idx_push_tokens_user_device', unique]
     user_id [name: 'idx_push_tokens_user']
     last_seen_at [name: 'idx_push_tokens_last_seen']
+
   }
 }
 

@@ -23,6 +23,7 @@ export * from './file';
 export * from './generation';
 export * from './goal';
 export * from './goalGraph';
+export * from './heterogeneousAgentIntervention';
 export * from './llmGenerationTracing';
 export * from './message';
 export * from './messengerAccountLink';

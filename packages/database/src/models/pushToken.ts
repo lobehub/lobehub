@@ -1,7 +1,13 @@
+import type { ApnsEnvironment } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { NewPushToken, PushTokenItem } from '../schemas/pushToken';
-import { pushTokens } from '../schemas/pushToken';
+import type {
+  NewPushLiveActivity,
+  NewPushToken,
+  PushLiveActivityItem,
+  PushTokenItem,
+} from '../schemas/pushToken';
+import { pushLiveActivities, pushTokens } from '../schemas/pushToken';
 import type { LobeChatDatabase } from '../type';
 
 export class PushTokenModel {
@@ -23,14 +29,41 @@ export class PushTokenModel {
       .values({ ...data, userId: this.userId })
       .onConflictDoUpdate({
         set: {
+          apnsEnvironment: data.apnsEnvironment,
           appVersion: data.appVersion,
           expoToken: data.expoToken,
           lastSeenAt: new Date(),
+          liveActivityPushToStartToken: data.liveActivityPushToStartToken,
           locale: data.locale,
           platform: data.platform,
         },
         target: [pushTokens.userId, pushTokens.deviceId],
       })
+      .returning();
+
+    return result;
+  }
+
+  /**
+   * Attach or rotate ActivityKit's app-wide push-to-start registration for an
+   * already registered device. The ordinary push-token route creates the row
+   * first; returning undefined keeps a stale or foreign device fail-closed.
+   */
+  async updateLiveActivityRegistration(
+    deviceId: string,
+    data: {
+      apnsEnvironment: ApnsEnvironment;
+      liveActivityPushToStartToken: string;
+    },
+  ): Promise<PushTokenItem | undefined> {
+    const [result] = await this.db
+      .update(pushTokens)
+      .set({
+        apnsEnvironment: data.apnsEnvironment,
+        lastSeenAt: new Date(),
+        liveActivityPushToStartToken: data.liveActivityPushToStartToken,
+      })
+      .where(and(eq(pushTokens.userId, this.userId), eq(pushTokens.deviceId, deviceId)))
       .returning();
 
     return result;
@@ -46,6 +79,71 @@ export class PushTokenModel {
   /** All tokens for this user — used by PushChannel to fan out a notification. */
   async listByUserId(): Promise<PushTokenItem[]> {
     return this.db.select().from(pushTokens).where(eq(pushTokens.userId, this.userId));
+  }
+}
+
+/** Owner-scoped ActivityKit update-token registry, correlated by opaque activity key. */
+export class PushLiveActivityModel {
+  private readonly userId: string;
+  private readonly db: LobeChatDatabase;
+
+  constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
+    this.userId = userId;
+  }
+
+  /**
+   * One device has one token for one durable activity key. Re-registration
+   * refreshes the native ids/tokens without conflating another callback from
+   * the same heterogeneous operation.
+   */
+  async upsert(data: Omit<NewPushLiveActivity, 'userId'>): Promise<PushLiveActivityItem> {
+    const [result] = await this.db
+      .insert(pushLiveActivities)
+      .values({ ...data, userId: this.userId })
+      .onConflictDoUpdate({
+        set: {
+          activityId: data.activityId,
+          apnsEnvironment: data.apnsEnvironment,
+          lastSeenAt: new Date(),
+          operationId: data.operationId,
+          pushToken: data.pushToken,
+        },
+        target: [
+          pushLiveActivities.userId,
+          pushLiveActivities.deviceId,
+          pushLiveActivities.activityKey,
+        ],
+      })
+      .returning();
+
+    return result;
+  }
+
+  /** All device tokens for exactly one durable intervention/activity. */
+  async listByActivityKey(activityKey: string): Promise<PushLiveActivityItem[]> {
+    return this.db
+      .select()
+      .from(pushLiveActivities)
+      .where(
+        and(
+          eq(pushLiveActivities.userId, this.userId),
+          eq(pushLiveActivities.activityKey, activityKey),
+        ),
+      );
+  }
+
+  /** Remove one device registration, or every device registration for the activity. */
+  async unregister(activityKey: string, deviceId?: string) {
+    return this.db
+      .delete(pushLiveActivities)
+      .where(
+        and(
+          eq(pushLiveActivities.userId, this.userId),
+          eq(pushLiveActivities.activityKey, activityKey),
+          deviceId ? eq(pushLiveActivities.deviceId, deviceId) : undefined,
+        ),
+      );
   }
 }
 
