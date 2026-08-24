@@ -1,4 +1,4 @@
-import { BRANDING_NAME } from '@lobechat/business-const/branding';
+import { BRANDING_NAME } from '@lobechat/business-const';
 
 import type { ModelProviderCard } from '../types';
 
