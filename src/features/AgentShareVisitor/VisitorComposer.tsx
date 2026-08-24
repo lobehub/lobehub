@@ -32,8 +32,9 @@ const resolveErrorKey = (error: unknown): string => {
 
 /**
  * Lean visitor composer for shared agents. Intentionally NOT the owner
- * MainChatInput graph: no uploads (v1 rejects them server-side anyway), no
- * mentions, no device targets — just text in, gateway-streamed answer out.
+ * composer graph (see readOnlyImportBoundary.test.ts): no uploads (v1 rejects
+ * them server-side anyway), no mentions, no device targets — just text in,
+ * gateway-streamed answer out.
  */
 const VisitorComposer = memo<VisitorComposerProps>(
   ({ agentId, onTopicCreated, shareId, topicId }) => {
