@@ -1,4 +1,16 @@
-import { API_KEY_PREFIX } from '@lobechat/business-const';
+import * as businessConst from '@lobechat/business-const';
+
+/**
+ * A distribution's `@lobechat/business-const` override replaces the whole
+ * module rather than extending it, so one written before this slot existed
+ * simply omits `API_KEY_PREFIX` — that reads as `undefined` here, not as "use
+ * upstream's default". Falling back explicitly keeps behaviour identical to
+ * before this slot existed instead of crashing every issued key on whatever
+ * override the deployment is running.
+ */
+const configuredApiKeyPrefix = (businessConst as Record<string, unknown>).API_KEY_PREFIX;
+export const API_KEY_PREFIX =
+  typeof configuredApiKeyPrefix === 'string' ? configuredApiKeyPrefix : 'sk-lh-';
 
 // Global counter for additional uniqueness
 let apiKeyCounter = 0;

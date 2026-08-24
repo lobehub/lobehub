@@ -1,6 +1,5 @@
 // @vitest-environment node
-import { API_KEY_PREFIX } from '@lobechat/business-const';
-import { validateApiKeyFormat } from '@lobechat/utils/apiKey';
+import { API_KEY_PREFIX, validateApiKeyFormat } from '@lobechat/utils/apiKey';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 

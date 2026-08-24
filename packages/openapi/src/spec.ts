@@ -1,4 +1,4 @@
-import { API_KEY_PREFIX } from '@lobechat/business-const';
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
