@@ -15,7 +15,12 @@ class AgentShareService {
   }
 
   async getSharedAgent(shareId: string) {
-    return lambdaClient.share.getSharedAgent.query({ shareId });
+    // The visitor page renders its own login prompt on UNAUTHORIZED; opt out of
+    // the global 401 handler so it does not hard-redirect visitors to /signin.
+    return lambdaClient.share.getSharedAgent.query(
+      { shareId },
+      { context: { showNotification: false } },
+    );
   }
 
   async updateShareConfig(agentId: string, config: AgentShareConfigPatchInput) {
