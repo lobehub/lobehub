@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { NextResponse } from 'next/server';
+import type { Context } from 'hono';
 
 import { AgentEvalRunModel } from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
@@ -19,11 +19,11 @@ const log = debug('lobe-server:workflows:on-trajectory-complete');
  * agent operation finishes (success or error). Checks whether all test cases
  * for the run are done and, if so, triggers the finalize-run workflow.
  *
- * This is a plain Next.js route handler (NOT an Upstash workflow / serve()).
+ * This is a plain webhook receiver (NOT an Upstash workflow / serve()).
  */
-export async function POST(req: Request) {
+export const onTrajectoryComplete = async (c: Context) => {
   try {
-    const body = (await req.json()) as OnTrajectoryCompletePayload;
+    const body = (await c.req.json()) as OnTrajectoryCompletePayload;
     const {
       runId,
       testCaseId,
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     } = body;
 
     if (!runId || !testCaseId || !userId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return c.json({ error: 'Missing required fields' }, 400);
     }
 
     log(
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     const run = await runModel.findById(runId);
     if (run?.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s', runId, testCaseId);
-      return NextResponse.json({ cancelled: true });
+      return c.json({ cancelled: true });
     }
 
     const service = new AgentEvalRunService(db, userId, wsId);
@@ -98,12 +98,9 @@ export async function POST(req: Request) {
       await AgentEvalRunWorkflow.triggerFinalizeRun({ runId, userId });
     }
 
-    return NextResponse.json({ success: true });
+    return c.json({ success: true });
   } catch (error) {
     console.error('[on-trajectory-complete] Error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
-      { status: 500 },
-    );
+    return c.json({ error: error instanceof Error ? error.message : 'Internal error' }, 500);
   }
-}
+};

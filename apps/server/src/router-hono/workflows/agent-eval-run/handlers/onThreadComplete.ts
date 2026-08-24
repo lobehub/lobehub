@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { NextResponse } from 'next/server';
+import type { Context } from 'hono';
 
 import { AgentEvalRunModel } from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
@@ -20,11 +20,11 @@ const log = debug('lobe-server:workflows:on-thread-complete');
  * writes result to thread.metadata, then checks if all K threads for the
  * topic are done. If so, aggregates into RunTopic and checks run completion.
  *
- * This is a plain Next.js route handler (NOT an Upstash workflow / serve()).
+ * This is a plain webhook receiver (NOT an Upstash workflow / serve()).
  */
-export async function POST(req: Request) {
+export const onThreadComplete = async (c: Context) => {
   try {
-    const body = (await req.json()) as OnThreadCompletePayload;
+    const body = (await c.req.json()) as OnThreadCompletePayload;
     const {
       runId,
       testCaseId,
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     } = body;
 
     if (!runId || !testCaseId || !threadId || !topicId || !userId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return c.json({ error: 'Missing required fields' }, 400);
     }
 
     log(
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const run = await runModel.findById(runId);
     if (run?.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s threadId=%s', runId, testCaseId, threadId);
-      return NextResponse.json({ cancelled: true });
+      return c.json({ cancelled: true });
     }
 
     const service = new AgentEvalRunService(db, userId, wsId);
@@ -103,12 +103,9 @@ export async function POST(req: Request) {
       await AgentEvalRunWorkflow.triggerFinalizeRun({ runId, userId });
     }
 
-    return NextResponse.json({ allRunDone, allThreadsDone, success: true });
+    return c.json({ allRunDone, allThreadsDone, success: true });
   } catch (error) {
     console.error('[on-thread-complete] Error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
-      { status: 500 },
-    );
+    return c.json({ error: error instanceof Error ? error.message : 'Internal error' }, 500);
   }
-}
+};
