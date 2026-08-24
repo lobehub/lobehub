@@ -62,25 +62,29 @@ export interface MessageGatewayStats {
 // ─── Client ───
 
 /**
- * HTTP client for the message-gateway Cloudflare Worker.
+ * HTTP client for one message-gateway deployment.
  *
- * The gateway is a pure connection proxy — it only manages persistent
+ * A gateway is a pure connection proxy — it only manages persistent
  * connections (WebSocket/long-polling) and forwards inbound events to
  * LobeHub's webhook. Outbound messaging is NOT routed through the gateway;
  * LobeHub calls platform REST APIs directly.
+ *
+ * Deliberately one class for every host: the deployments speak the same HTTP
+ * protocol, and the reconcile sync diffs them uniformly. Per-host behaviour
+ * differences belong in the routing layer below, not in a subclass — see
+ * `resolveMessageGatewayHost`. If a method ever becomes host-specific, split
+ * this into a shared-protocol base plus a per-host subclass at that point.
+ *
+ * The endpoint is always passed in; `getMessageGatewayClientForHost` is the
+ * single place that reads it out of the environment.
  */
 export class MessageGatewayClient {
   private baseUrl: string;
   private serviceToken: string;
 
-  constructor(baseUrl?: string, serviceToken?: string) {
-    if (baseUrl !== undefined) {
-      this.baseUrl = baseUrl;
-      this.serviceToken = serviceToken || '';
-    } else {
-      this.baseUrl = gatewayEnv.MESSAGE_GATEWAY_URL || '';
-      this.serviceToken = gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN || '';
-    }
+  constructor(baseUrl: string, serviceToken: string) {
+    this.baseUrl = baseUrl;
+    this.serviceToken = serviceToken;
   }
 
   get isConfigured(): boolean {
@@ -284,15 +288,12 @@ const clients = new Map<MessageGatewayHost, MessageGatewayClient>();
 export function getMessageGatewayClientForHost(host: MessageGatewayHost): MessageGatewayClient {
   let client = clients.get(host);
   if (!client) {
-    client =
-      host === 'node'
-        ? new MessageGatewayClient(
-            gatewayEnv.MESSAGE_GATEWAY_NODE_URL || '',
-            // Both gateways share one service token — inbound webhook/callback
-            // validation only accepts this value anyway.
-            gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN || '',
-          )
-        : new MessageGatewayClient();
+    client = new MessageGatewayClient(
+      messageGatewayHostUrl(host) || '',
+      // Both gateways share one service token — inbound webhook/callback
+      // validation only accepts this value anyway.
+      gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN || '',
+    );
     clients.set(host, client);
   }
   return client;
@@ -307,16 +308,19 @@ export function getMessageGatewayClient(platform?: string): MessageGatewayClient
   return getMessageGatewayClientForHost(resolveMessageGatewayHost(platform));
 }
 
+/** Base URL configured for `host`, if any. The only env→host URL mapping. */
+function messageGatewayHostUrl(host: MessageGatewayHost): string | undefined {
+  return host === 'node' ? gatewayEnv.MESSAGE_GATEWAY_NODE_URL : gatewayEnv.MESSAGE_GATEWAY_URL;
+}
+
 /**
  * Whether `host` has both a URL and a token. Reads env directly rather than
- * asking a client: clients capture their URL at construction and are cached
- * per host, so they answer for the environment as it was the first time
+ * asking a client: clients are cached per host and hold the endpoint they were
+ * built with, so they answer for the environment as it was the first time
  * anyone asked.
  */
 export function isMessageGatewayHostConfigured(host: MessageGatewayHost): boolean {
-  const baseUrl =
-    host === 'node' ? gatewayEnv.MESSAGE_GATEWAY_NODE_URL : gatewayEnv.MESSAGE_GATEWAY_URL;
-  return !!baseUrl && !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN;
+  return !!messageGatewayHostUrl(host) && !!gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN;
 }
 
 /**
