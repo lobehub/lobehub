@@ -15,6 +15,7 @@ import {
   EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
+import { deserializeParts } from '@lobechat/utils';
 import { and, asc, count, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -42,7 +43,19 @@ const MAX_CONTEXT_CHARS = 96_000;
 const MIN_TOOL_CHARS = 200;
 /** …nor more than this, so one dump cannot crowd out the rest of the conversation. */
 const MAX_TOOL_CHARS = 800;
-const TOOL_ELISION = '\n…\n';
+const TOOL_ELISION = '…';
+/** What ran, in the first lines of the output. */
+const TOOL_HEAD_SHARE = 0.3;
+/** How it ended, in the last lines. */
+const TOOL_TAIL_SHARE = 0.3;
+/**
+ * The lines a lesson is usually drawn from.
+ *
+ * Head and tail alone are not enough: of the long tool results in the recorded corpus that carry
+ * a failure marker at all, 65% carry it only in the middle — the stretch a head-and-tail clamp
+ * discards. A `kubeadm join` that fails does so a hundred lines into its own progress output.
+ */
+const TOOL_SALIENT_LINE = /error|fail|fatal|exception|refused|denied|expired|timeout|panic|warn/i;
 const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
   domains: z.array(
@@ -106,18 +119,70 @@ interface TopicTurn {
 }
 
 /**
- * A tool result reduced to its head and tail.
+ * The text a tool result actually shows, free of its storage envelope.
  *
- * What a step proves sits at its edges: the command and its first lines at the top, the error or
- * the summary at the bottom. The middle of a 36k listing is the part no lesson was ever drawn
- * from, so it is the part that pays for the rest of the conversation.
+ * Results are persisted as serialized content parts, so slicing the stored string spends the
+ * budget on `[{"type":"input_text","text":"` and hands the model `\n` as two characters instead
+ * of a line break. Non-text parts are named rather than inlined: an image part carries a data URL
+ * that would swallow the whole budget and prove nothing.
+ */
+const isTextPart = (part: { text?: unknown }): part is { text: string } =>
+  typeof part.text === 'string';
+
+const readToolText = (content: string) => {
+  // Typed loosely on purpose: results written by heterogeneous adapters carry Responses-style
+  // `input_text` parts, a shape the declared content-part union does not describe.
+  const parts = deserializeParts(content) as null | { text?: unknown; type?: string }[];
+  // `deserializeParts` accepts any JSON array whose first element has a `type`, which a tool
+  // result that simply returned typed records also satisfies. Unwrapping one of those would
+  // reduce real data to its type names, so anything that is not wholly parts passes through.
+  if (!parts?.every((part) => isTextPart(part) || part.type === 'image')) return content;
+  return parts.map((part) => (isTextPart(part) ? part.text : `[${part.type}]`)).join('\n');
+};
+
+/**
+ * A tool result reduced to the lines that carry its outcome.
+ *
+ * Three stretches earn their place: the first lines say what ran, the last say how it ended, and
+ * the lines that name a failure say why — those turn out to sit in the middle far more often than
+ * at either edge, so a clamp that keeps only the edges drops the evidence it was meant to keep.
+ * Cuts land on line boundaries, because half a stack frame reads as noise.
  */
 const clampToolResult = (content: string, cap: number) => {
-  if (content.length <= cap) return content;
-  const keep = cap - TOOL_ELISION.length;
-  if (keep < 2) return content.slice(0, Math.max(cap, 0));
-  const head = Math.ceil(keep / 2);
-  return content.slice(0, head) + TOOL_ELISION + content.slice(head - keep);
+  const text = readToolText(content);
+  if (text.length <= cap) return text;
+
+  const lines = text.split('\n');
+  const keep = new Set<number>();
+  let used = 0;
+  const take = (index: number, limit: number) => {
+    if (keep.has(index)) return true;
+    const cost = lines[index].length + 1;
+    if (used + cost > limit) return false;
+    keep.add(index);
+    used += cost;
+    return true;
+  };
+
+  for (let index = 0; index < lines.length; index += 1)
+    if (!take(index, cap * TOOL_HEAD_SHARE)) break;
+  for (let index = lines.length - 1; index >= 0; index -= 1)
+    if (!take(index, cap * (TOOL_HEAD_SHARE + TOOL_TAIL_SHARE))) break;
+  for (const [index, line] of lines.entries())
+    if (TOOL_SALIENT_LINE.test(line) && !take(index, cap)) break;
+
+  // A single unbroken line — minified JSON, one long log record — has no boundaries to cut on.
+  if (keep.size === 0) return text.slice(0, cap);
+
+  const rendered: string[] = [];
+  let previous = -1;
+  for (const index of [...keep].sort((left, right) => left - right)) {
+    if (index !== previous + 1) rendered.push(TOOL_ELISION);
+    rendered.push(lines[index]);
+    previous = index;
+  }
+  if (previous !== lines.length - 1) rendered.push(TOOL_ELISION);
+  return rendered.join('\n');
 };
 
 /**

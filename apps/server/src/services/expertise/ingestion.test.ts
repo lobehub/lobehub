@@ -372,6 +372,68 @@ describe('selectTopicContext', () => {
     expect(serialized.length).toBeLessThan(content.length / 10);
   });
 
+  it('unwraps the stored content-part envelope instead of slicing its JSON', () => {
+    const content = JSON.stringify([
+      { text: 'Script completed\nWall time 0.2 seconds\nOutput:\n', type: 'input_text' },
+      { text: 'NAME         STATUS\nliet-gpu-1   Ready', type: 'input_text' },
+    ]);
+    const { serialized } = selectTopicContext([user('list nodes'), { content, role: 'tool' }]);
+
+    expect(serialized).toContain('liet-gpu-1   Ready');
+    expect(serialized).not.toContain('input_text');
+    expect(serialized).not.toContain(String.raw`\n`);
+  });
+
+  it('names a non-text part rather than inlining the payload it carries', () => {
+    const content = JSON.stringify([
+      { text: 'screenshot taken', type: 'text' },
+      { image: `data:image/png;base64,${'A'.repeat(50_000)}`, type: 'image' },
+    ]);
+    const { serialized } = selectTopicContext([user('look'), { content, role: 'tool' }]);
+
+    expect(serialized).toContain('screenshot taken');
+    expect(serialized).toContain('[image]');
+    expect(serialized).not.toContain('AAAAAAAA');
+  });
+
+  it('leaves typed records alone rather than reducing them to their type names', () => {
+    // A tool that returned JSON records satisfies the envelope check but is not an envelope.
+    const content = JSON.stringify([
+      { id: 1, name: 'node01', type: 'node' },
+      { id: 2, name: 'liet-gpu-1', type: 'node' },
+    ]);
+    const { serialized } = selectTopicContext([user('list'), { content, role: 'tool' }]);
+
+    expect(serialized).toContain('liet-gpu-1');
+    expect(serialized).not.toBe('[user] list\n\n[tool] [node]\n[node]');
+  });
+
+  it('keeps a failure line buried in the middle of a long result', () => {
+    // 65% of the recorded failure markers sit here — neither in the head nor in the tail.
+    const content = [
+      '$ kubeadm join 10.24.0.2:6443',
+      ...Array.from({ length: 400 }, (_, index) => `[preflight] step ${index}`),
+      'error: x509: certificate has expired',
+      ...Array.from({ length: 400 }, (_, index) => `[preflight] step ${400 + index}`),
+      'exit status 1',
+    ].join('\n');
+    const { serialized } = selectTopicContext([user('join'), { content, role: 'tool' }]);
+
+    expect(serialized).toContain('$ kubeadm join 10.24.0.2:6443');
+    expect(serialized).toContain('error: x509: certificate has expired');
+    expect(serialized).toContain('exit status 1');
+  });
+
+  it('cuts on line boundaries so no line arrives half-read', () => {
+    const content = Array.from({ length: 500 }, (_, index) => `line ${index} of output`).join('\n');
+    const { serialized } = selectTopicContext([user('run'), { content, role: 'tool' }]);
+
+    const body = serialized.split('[tool] ')[1];
+    for (const line of body.split('\n')) {
+      expect(line === '…' || /^line \d+ of output$/.test(line)).toBe(true);
+    }
+  });
+
   it('drops whole turns oldest-first, keeping the one that states what the user came for', () => {
     const rows = Array.from({ length: 8 }, (_, index) => [
       user(`question ${index}`),
