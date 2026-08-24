@@ -78,6 +78,21 @@ describe('agent document headless editor', () => {
 
     expect(snapshot.content).toBe('Fallback content\n');
     expect(snapshot.litexml).toContain('Fallback content');
+    expect(snapshot.recoveredFromMarkdown).toBe(true);
+
+    const textId = getSpanId(snapshot.litexml!, 'Fallback content');
+    const modified = await applyLiteXMLOperations({
+      editorData: snapshot.editorData,
+      fallbackContent: snapshot.content,
+      operations: [
+        {
+          action: 'modify',
+          litexml: `<span id="${textId}">Updated after recovery</span>`,
+        },
+      ],
+    });
+
+    expect(modified.content).toBe('Updated after recovery\n');
   });
 
   it('should insert a LiteXML fragment with multiple top-level nodes', async () => {

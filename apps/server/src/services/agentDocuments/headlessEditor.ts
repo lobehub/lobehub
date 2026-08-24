@@ -91,6 +91,11 @@ export interface AgentDocumentEditorSnapshot {
   content: string;
   editorData: AgentDocumentEditorData;
   litexml?: string;
+  recoveredFromMarkdown?: true;
+}
+
+export interface AgentDocumentEditSnapshot extends AgentDocumentEditorSnapshot {
+  previousEditorData: AgentDocumentEditorData;
 }
 
 interface LoadEditorStateParams {
@@ -143,7 +148,9 @@ const createEditorWithState = (
       );
 
       const hydratedContent = editor.export().markdown;
-      if (fallbackContent.trim().length === 0 || hydratedContent.trim().length > 0) return editor;
+      if (fallbackContent.trim().length === 0 || hydratedContent.trim().length > 0) {
+        return { editor, recoveredFromMarkdown: false };
+      }
     } catch (error) {
       console.error('[AgentDocumentsService] Failed to hydrate editorData:', error);
     }
@@ -156,7 +163,7 @@ const createEditorWithState = (
   }
 
   hydrateMarkdownOrEmptyState(editor, fallbackContent, { keepId: true });
-  return editor;
+  return { editor, recoveredFromMarkdown: isValidEditorData(editorData) };
 };
 
 export const createMarkdownEditorSnapshot = async (
@@ -177,10 +184,12 @@ export const exportEditorDataSnapshot = async (
   params: LoadEditorStateParams & { litexml?: boolean },
 ): Promise<AgentDocumentEditorSnapshot> => {
   const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const editor = createEditorWithState(createHeadlessEditor, params);
+  const { editor, recoveredFromMarkdown } = createEditorWithState(createHeadlessEditor, params);
 
   try {
-    return exportSnapshot(editor, params.litexml);
+    const snapshot = exportSnapshot(editor, params.litexml);
+
+    return recoveredFromMarkdown ? { ...snapshot, recoveredFromMarkdown: true } : snapshot;
   } finally {
     editor.destroy();
   }
@@ -192,9 +201,9 @@ export const applyLiteXMLOperations = async ({
   operations,
 }: LoadEditorStateParams & {
   operations: AgentDocumentLiteXMLOperation[];
-}): Promise<AgentDocumentEditorSnapshot> => {
+}): Promise<AgentDocumentEditSnapshot> => {
   const { createHeadlessEditor } = await import('@lobehub/editor/headless');
-  const editor = createEditorWithState(createHeadlessEditor, { editorData, fallbackContent });
+  const { editor } = createEditorWithState(createHeadlessEditor, { editorData, fallbackContent });
 
   try {
     const beforeSnapshot = exportSnapshot(editor, true);
@@ -213,7 +222,7 @@ export const applyLiteXMLOperations = async ({
       throw new Error('Agent document node edit did not change the document');
     }
 
-    return snapshot;
+    return { ...snapshot, previousEditorData: beforeSnapshot.editorData };
   } finally {
     editor.destroy();
   }

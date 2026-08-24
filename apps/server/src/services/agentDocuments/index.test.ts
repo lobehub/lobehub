@@ -74,8 +74,8 @@ vi.mock('@lobehub/editor/headless', () => ({
         litexml: options?.litexml ? litexml : undefined,
         markdown,
       })),
-      hydrateEditorData: vi.fn(() => {
-        markdown = 'projected';
+      hydrateEditorData: vi.fn((editorData: { root?: { recoverFromMarkdown?: boolean } }) => {
+        markdown = editorData.root?.recoverFromMarkdown ? '' : 'projected';
       }),
       hydrateMarkdown: vi.fn((content: string) => {
         markdown = content;
@@ -569,6 +569,55 @@ describe('AgentDocumentsService', () => {
   });
 
   describe('getDocumentSnapshotById', () => {
+    it('should persist repaired editor data so returned node IDs survive the next modify', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      const staleEditorData = {
+        root: {
+          children: [{ children: [], type: 'paragraph' }],
+          recoverFromMarkdown: true,
+          type: 'root',
+        },
+      };
+      const repairedEditorData = { root: { children: [] } };
+      const staleDocument = {
+        agentId: 'agent-1',
+        content: 'fallback content',
+        documentId: 'documents-1',
+        editorData: staleEditorData,
+        id: agentDocumentId,
+        title: 'Doc',
+      };
+      const repairedDocument = { ...staleDocument, editorData: repairedEditorData };
+      const modifiedDocument = {
+        ...repairedDocument,
+        content: 'xml updated',
+      };
+      mockModel.findById
+        .mockResolvedValueOnce(staleDocument)
+        .mockResolvedValueOnce(repairedDocument)
+        .mockResolvedValueOnce(modifiedDocument);
+
+      const service = new AgentDocumentsService(db, userId);
+      const readResult = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+      const modifyResult = await service.modifyDocumentNodesById(
+        agentDocumentId,
+        [{ action: 'modify', litexml: '<p id="node-1">xml updated</p>' }],
+        'agent-1',
+      );
+
+      expect(mockModel.update).toHaveBeenNthCalledWith(1, agentDocumentId, {
+        content: 'fallback content',
+        editorData: repairedEditorData,
+      });
+      expect(readResult?.editorData).toEqual(repairedEditorData);
+      expect(mockDocumentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
+        'documents-1',
+        'llm_call',
+        repairedEditorData,
+      );
+      expect(modifyResult?.content).toBe('xml updated');
+    });
+
     it('should fall back to markdown content when editor data is empty', async () => {
       const agentDocumentId = '11111111-1111-4111-8111-111111111111';
       mockModel.findById.mockResolvedValue({
@@ -808,6 +857,7 @@ lossless tool result
       expect(mockDocumentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
         'documents-1',
         'llm_call',
+        { root: { children: [] } },
       );
       expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
         content: 'xml updated',
