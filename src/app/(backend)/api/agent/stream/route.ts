@@ -1,18 +1,55 @@
 import { createSSEHeaders, createSSEWriter } from '@lobechat/utils/server';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { checkAuth, type RequestHandler } from '@/app/(backend)/middleware/auth';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { AgentStreamAuthorizationService } from '@/server/services/agentRuntime';
 
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
+
+const AGENT_STREAM_ALLOWED_HEADERS = [
+  'Cache-Control',
+  'Last-Event-ID',
+  'Oidc-Auth',
+  'X-API-Key',
+  'X-Workspace-Id',
+].join(', ');
+
+const createAgentStreamHeaders = (includeSSEHeaders = true) => {
+  const headers = new Headers(includeSSEHeaders ? createSSEHeaders() : undefined);
+
+  // Wildcard origin is intentional for header-authenticated CLI/integration
+  // clients. Browser session cookies remain same-origin and are not exposed
+  // cross-origin with credentials.
+  headers.set('Access-Control-Allow-Headers', AGENT_STREAM_ALLOWED_HEADERS);
+  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  headers.set('Access-Control-Allow-Origin', '*');
+
+  return headers;
+};
+
+const withAgentStreamCorsHeaders = (response: Response) => {
+  const headers = new Headers(response.headers);
+  const corsHeaders = createAgentStreamHeaders(false);
+  corsHeaders.forEach((value, key) => headers.set(key, value));
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};
 
 /**
  * Server-Sent Events (SSE) endpoint
  * Provides real-time Agent execution event stream for clients
  */
-export async function GET(request: NextRequest) {
+const handler: RequestHandler = async (
+  request,
+  { apiKeyScopes, serverDB, userId, workspaceId },
+) => {
   // Initialize stream event manager (uses InMemory singleton in local dev, Redis in production)
   const streamManager = createStreamEventManager();
 
@@ -28,6 +65,19 @@ export async function GET(request: NextRequest) {
       },
       { status: 400 },
     );
+  }
+
+  const authorization = await new AgentStreamAuthorizationService(
+    serverDB,
+    streamManager,
+  ).authorize({ apiKeyScopes, operationId, userId, workspaceId });
+  if (!authorization.authorized) {
+    const error =
+      authorization.reason === 'missing_api_key_scope'
+        ? "Forbidden: API key is missing required scope 'chat:read'"
+        : 'Forbidden: operation does not belong to this authentication scope';
+
+    return NextResponse.json({ error }, { status: 403 });
   }
 
   log(`Starting SSE connection for operation ${operationId} from eventId ${lastEventId}`);
@@ -208,6 +258,14 @@ export async function GET(request: NextRequest) {
 
   // Set SSE response headers
   return new Response(stream, {
-    headers: createSSEHeaders(),
+    headers: createAgentStreamHeaders(),
   });
-}
+};
+
+const authenticatedHandler = checkAuth(handler, { allowApiKey: true });
+
+export const GET: typeof authenticatedHandler = async (request, options) =>
+  withAgentStreamCorsHeaders(await authenticatedHandler(request, options));
+
+export const OPTIONS = () =>
+  new Response(null, { headers: createAgentStreamHeaders(false), status: 204 });

@@ -53,6 +53,11 @@ export interface ChildUsageRollup {
   totalTokens: number;
 }
 
+export interface AgentOperationOwnerScope {
+  userId: string;
+  workspaceId: string | null;
+}
+
 export interface RecordOperationCompletionParams {
   completedAt?: Date;
   completionReason?:
@@ -95,6 +100,27 @@ export class AgentOperationModel {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+  }
+
+  /**
+   * Read only the durable ownership fields needed by an external stream
+   * authorization gate. The caller must compare both values before exposing
+   * operation data; this deliberately returns no operation payload.
+   */
+  static async findOwnerScope(
+    db: LobeChatDatabase,
+    operationId: string,
+  ): Promise<AgentOperationOwnerScope | null> {
+    const [row] = await db
+      .select({
+        userId: agentOperations.userId,
+        workspaceId: agentOperations.workspaceId,
+      })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, operationId))
+      .limit(1);
+
+    return row ?? null;
   }
 
   private ownership = () =>

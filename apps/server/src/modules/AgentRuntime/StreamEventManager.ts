@@ -4,7 +4,7 @@ import debug from 'debug';
 import { type Redis } from 'ioredis';
 
 import { getAgentRuntimeRedisClient } from './redis';
-import { type PublishAgentRuntimeEndParams } from './types';
+import { type OperationAuthScope, type PublishAgentRuntimeEndParams } from './types';
 
 const log = debug('lobe-server:agent-runtime:stream-event-manager');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -138,6 +138,7 @@ export interface StreamChunkData {
 
 export class StreamEventManager {
   private redis: Redis;
+  private readonly AUTH_SCOPE_PREFIX = 'agent_runtime_stream_auth';
   private readonly STREAM_PREFIX = 'agent_runtime_stream';
   private readonly STREAM_RETENTION = 2 * 3600; // 2 hours
 
@@ -214,8 +215,15 @@ export class StreamEventManager {
       );
       const xaddEnd = Date.now();
 
-      // Set expiration time
-      await this.redis.expire(streamKey, this.STREAM_RETENTION);
+      // Keep live authorization metadata fresh at operation boundaries without
+      // adding another Redis command for every streamed token chunk.
+      const expirations = [this.redis.expire(streamKey, this.STREAM_RETENTION)];
+      if (event.type !== 'stream_chunk') {
+        expirations.push(
+          this.redis.expire(`${this.AUTH_SCOPE_PREFIX}:${operationId}`, this.STREAM_RETENTION),
+        );
+      }
+      await Promise.all(expirations);
 
       log(
         'Published event %s for operation %s:%d',
@@ -259,11 +267,29 @@ export class StreamEventManager {
    * Publish Agent runtime initialization event
    */
   async publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string> {
-    return this.publishStreamEvent(operationId, {
+    const eventId = await this.publishStreamEvent(operationId, {
       data: initialState,
       stepIndex: 0,
       type: 'agent_runtime_init',
     });
+
+    const userId = initialState?.userId;
+    if (typeof userId !== 'string' || !userId) return eventId;
+
+    const authScope: OperationAuthScope = {
+      userId,
+      workspaceId:
+        typeof initialState?.workspaceId === 'string' && initialState.workspaceId
+          ? initialState.workspaceId
+          : null,
+    };
+    await this.redis.setex(
+      `${this.AUTH_SCOPE_PREFIX}:${operationId}`,
+      this.STREAM_RETENTION,
+      JSON.stringify(authScope),
+    );
+
+    return eventId;
   }
 
   /**
@@ -482,14 +508,31 @@ export class StreamEventManager {
     }
   }
 
+  async getOperationAuthScope(operationId: string): Promise<OperationAuthScope | null> {
+    try {
+      const serialized = await this.redis.get(`${this.AUTH_SCOPE_PREFIX}:${operationId}`);
+      if (!serialized) return null;
+
+      const scope = JSON.parse(serialized) as Partial<OperationAuthScope>;
+      if (typeof scope.userId !== 'string' || !scope.userId) return null;
+      if (scope.workspaceId !== null && typeof scope.workspaceId !== 'string') return null;
+
+      return { userId: scope.userId, workspaceId: scope.workspaceId };
+    } catch (error) {
+      console.error('[StreamEventManager] Failed to get operation auth scope:', error);
+      return null;
+    }
+  }
+
   /**
    * Clean up stream data for operation
    */
   async cleanupOperation(operationId: string): Promise<void> {
     const streamKey = `${this.STREAM_PREFIX}:${operationId}`;
+    const authScopeKey = `${this.AUTH_SCOPE_PREFIX}:${operationId}`;
 
     try {
-      await this.redis.del(streamKey);
+      await this.redis.del(streamKey, authScopeKey);
       log('Cleaned up operation %s', operationId);
     } catch (error) {
       console.error('[StreamEventManager] Failed to cleanup operation:', error);

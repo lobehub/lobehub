@@ -2708,6 +2708,7 @@ export class AiAgentService {
             mirrorToOperationId: params.topicStartOwnerOperationId,
             topicId,
             userId: this.userId,
+            workspaceId: this.workspaceId,
           })
           .catch((err) => log('execAgent: failed to init stream for remote hetero: %O', err));
 
@@ -2809,6 +2810,7 @@ export class AiAgentService {
             mirrorToOperationId: params.topicStartOwnerOperationId,
             topicId,
             userId: this.userId,
+            workspaceId: this.workspaceId,
           });
         } catch (err) {
           log('execAgent: failed to init stream for local hetero: %O', err);
