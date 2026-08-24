@@ -57,9 +57,30 @@ const ChatHydration = memo(() => {
     const unsubscribeTopic = useChatStore.subscribe(
       (s) => s.activeTopicId,
       (state) => {
-        const { gid } = paramsRef.current;
+        const { gid, topicId } = paramsRef.current;
 
         if (!gid) return;
+
+        // If the store matches the URL topic, it's already in sync — nothing to do.
+        // This also prevents feedback loops between the route-sync layout effect
+        // and this subscriber.
+        if (state === topicId) return;
+
+        // Guard against the GroupIdSync switchTopic(null) race: when the store's
+        // activeTopicId is cleared during the same render cycle that the URL still
+        // carries /group/<gid>/<topicId>, restore the store from the URL instead of
+        // navigating back to the group root (which caused the "bounce" in #18243).
+        // Mirrors the agent-side useChatRouteSync / ActiveConversationBridge
+        // restoreTopicAfterScopedReset pattern. Intentional clears (e.g. topic
+        // deletion, where the URL topic is also gone) still navigate normally.
+        if (state === undefined && topicId) {
+          useChatStore.setState(
+            { activeTopicId: topicId },
+            false,
+            'ChatHydration/restoreTopicAfterScopedReset',
+          );
+          return;
+        }
 
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');
