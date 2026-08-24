@@ -996,7 +996,12 @@ export default class HeterogeneousAgentCtr {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    const bridge = new AskUserBridge(operationId);
+    // Cursor reuses the Claude Code AskUserQuestion renderer, but provider is
+    // explicit so consumers never mistake renderer compatibility for origin.
+    const bridge = new AskUserBridge(operationId, {
+      identifier: 'claude-code',
+      provider: 'cursor',
+    });
     const pumpDone = (async () => {
       for await (const event of bridge.events()) {
         this.broadcast('heteroAgentEvent', { event, sessionId });
@@ -1060,10 +1065,14 @@ export default class HeterogeneousAgentCtr {
    */
   private async setupInterventionForOp(
     operationId: string,
+    provider: 'claude-code' | 'qoder',
     browserBinding?: BrowserRunBinding,
   ): Promise<{ bridge: AskUserBridge; cleanup: () => Promise<void>; tmpConfigPath: string }> {
     const server = await this.ensureBuiltinMcpServerStarted();
-    const bridge = server.registerOperation(operationId);
+    const bridge = server.registerOperation(
+      operationId,
+      new AskUserBridge(operationId, { identifier: provider, provider }),
+    );
     if (browserBinding?.agentId || browserBinding?.topicId) {
       this.opIdToBrowserBinding.set(operationId, browserBinding);
     }
@@ -1421,7 +1430,7 @@ export default class HeterogeneousAgentCtr {
     // into `--mcp-config`. Other agents skip this entirely.
     const intervention =
       session.agentType === 'claude-code' || session.agentType === 'qoder'
-        ? await this.setupInterventionForOp(params.operationId, {
+        ? await this.setupInterventionForOp(params.operationId, session.agentType, {
             agentId: params.agentId,
             topicId: params.topicId,
           }).catch((err) => {

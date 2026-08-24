@@ -5,6 +5,13 @@ import { pushTokenRouter } from '@/server/routers/lambda/pushToken';
 const mockUpsert = vi.fn();
 const mockUnregister = vi.fn();
 const mockDeleteByExpoTokenAndDevice = vi.fn();
+const mockRegisterPushToStart = vi.fn();
+const mockRegisterLiveActivity = vi.fn();
+
+vi.mock('@/business/server/notification/liveActivity', () => ({
+  registerAgentInterventionLiveActivity: (...args: unknown[]) => mockRegisterLiveActivity(...args),
+  registerLiveActivityPushToStartToken: (...args: unknown[]) => mockRegisterPushToStart(...args),
+}));
 
 vi.mock('@/database/models/pushToken', () => ({
   PushTokenModel: vi.fn(() => ({
@@ -70,6 +77,33 @@ describe('pushTokenRouter', () => {
       });
     });
 
+    it('persists the iOS push-to-start token through the business slot', async () => {
+      mockUpsert.mockResolvedValueOnce({ id: 'row-1' });
+      mockRegisterPushToStart.mockResolvedValueOnce(undefined);
+      const caller = createCaller();
+
+      await caller.register({
+        apnsEnvironment: 'production',
+        deviceId: 'iphone',
+        expoToken: 'ExponentPushToken[abc]',
+        liveActivityPushToStartToken: 'push-to-start-token',
+        platform: 'ios',
+      });
+
+      expect(mockUpsert).toHaveBeenCalledWith({
+        deviceId: 'iphone',
+        expoToken: 'ExponentPushToken[abc]',
+        platform: 'ios',
+      });
+      expect(mockRegisterPushToStart).toHaveBeenCalledWith({
+        apnsEnvironment: 'production',
+        deviceId: 'iphone',
+        liveActivityPushToStartToken: 'push-to-start-token',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
+    });
+
     it('should reject empty deviceId', async () => {
       const caller = createCaller();
       await expect(
@@ -89,6 +123,62 @@ describe('pushTokenRouter', () => {
       await expect(
         // @ts-expect-error testing runtime validation
         caller.register({ deviceId: 'd', expoToken: 't', platform: 'windows' }),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('registerLiveActivity', () => {
+    it('registers by durable activityKey and returns interventionStatus', async () => {
+      mockRegisterLiveActivity.mockResolvedValueOnce({ interventionStatus: 'resolved' });
+      const caller = createCaller();
+
+      const result = await caller.registerLiveActivity({
+        activityId: 'native-activity-1',
+        activityKey: 'op-1:tool-1',
+        apnsEnvironment: 'sandbox',
+        deviceId: 'iphone',
+        operationId: 'op-1',
+        pushToken: 'activity-update-token',
+      });
+
+      expect(mockRegisterLiveActivity).toHaveBeenCalledWith({
+        activityId: 'native-activity-1',
+        activityKey: 'op-1:tool-1',
+        apnsEnvironment: 'sandbox',
+        deviceId: 'iphone',
+        operationId: 'op-1',
+        pushToken: 'activity-update-token',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
+      expect(result).toEqual({ interventionStatus: 'resolved' });
+    });
+
+    it('rejects a legacy activityId-only registration without a durable activityKey', async () => {
+      const caller = createCaller();
+      await expect(
+        // @ts-expect-error validates that activityKey is mandatory
+        caller.registerLiveActivity({
+          activityId: 'local-activity-id',
+          apnsEnvironment: 'production',
+          deviceId: 'iphone',
+          operationId: 'op-1',
+          pushToken: 'token',
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('rejects an activityKey-only registration without the native activityId', async () => {
+      const caller = createCaller();
+      await expect(
+        // @ts-expect-error validates that activityId is mandatory
+        caller.registerLiveActivity({
+          activityKey: 'op-1:tool-1',
+          apnsEnvironment: 'production',
+          deviceId: 'iphone',
+          operationId: 'op-1',
+          pushToken: 'token',
+        }),
       ).rejects.toThrow();
     });
   });
@@ -175,9 +265,7 @@ describe('pushTokenRouter', () => {
 
     it('should reject empty expoToken when provided', async () => {
       const caller = createCaller();
-      await expect(
-        caller.unregister({ deviceId: 'device-1', expoToken: '' }),
-      ).rejects.toThrow();
+      await expect(caller.unregister({ deviceId: 'device-1', expoToken: '' })).rejects.toThrow();
     });
   });
 });

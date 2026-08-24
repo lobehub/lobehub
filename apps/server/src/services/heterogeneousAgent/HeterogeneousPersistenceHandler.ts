@@ -1,7 +1,14 @@
-import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import {
+  type AgentInterventionInteractionKind,
+  type AgentInterventionProvider,
+  type AgentInterventionRequestData,
+  type AgentStreamEvent,
+  sanitizeAgentInterventionRequestForReview,
+} from '@lobechat/agent-gateway-client';
 import { LOADING_FLAT } from '@lobechat/const';
 import type {
   MainAgentIntent,
+  MainAgentInterventionTransition,
   MainAgentReduceCtx,
   MainAgentRunState,
   MainAgentTurnToolState,
@@ -19,6 +26,7 @@ import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types'
 import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';
 
+import { notifyAgentIntervention } from '@/business/server/agent-run/notifyAgentIntervention';
 import type { MessageModel } from '@/database/models/message';
 import type { ThreadModel } from '@/database/models/thread';
 import type { TopicModel } from '@/database/models/topic';
@@ -121,6 +129,8 @@ interface OperationState {
   lastAppliedToolStateSeqByCallId: Map<string, number>;
   lastStepIndex: number;
   main: MainAgentRunState;
+  /** `(operationId, toolCallId, transition)` notification dedupe ledger. */
+  notifiedInterventionTransitions: Set<string>;
   operationId: string;
   processedKeys: Set<string>;
   /**
@@ -167,7 +177,48 @@ export interface HeterogeneousPersistenceHandlerDeps {
   messageModel: MessageModel;
   threadModel: ThreadModel;
   topicModel: TopicModel;
+  userId?: string;
+  workspaceId?: string;
 }
+
+interface StoredHeterogeneousIntervention {
+  deadline?: number;
+  interactionKind?: AgentInterventionInteractionKind;
+  notificationTransition?: MainAgentInterventionTransition;
+  provider?: AgentInterventionProvider;
+  resolutionRequestId?: string;
+  summary?: string;
+  transition?: MainAgentInterventionTransition;
+}
+
+const HETEROGENEOUS_INTERVENTION_STATE_KEY = 'heterogeneousIntervention';
+
+const interventionSummary = (request?: AgentInterventionRequestData): string => {
+  const provider = request?.provider ?? 'heterogeneous-agent';
+  const kind = request?.interactionKind ?? 'question';
+  const apiName = request?.apiName || 'interaction';
+  return `${provider} ${kind}: ${apiName}`.slice(0, 160);
+};
+
+const INTERVENTION_TRANSITIONS = new Set<MainAgentInterventionTransition>([
+  'cancelled',
+  'pending',
+  'resolved',
+  'session_ended',
+  'timed_out',
+]);
+
+const INTERVENTION_KINDS = new Set<AgentInterventionInteractionKind>([
+  'permission',
+  'plan',
+  'question',
+]);
+
+const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
+  'claude-code',
+  'cursor',
+  'qoder',
+]);
 
 /**
  * Server-side persistence for `lh hetero exec` event streams. Mirrors the
@@ -489,6 +540,7 @@ export class HeterogeneousPersistenceHandler {
       lastAppliedToolStateSeqByCallId: new Map(),
       main: createMainAgentRunState(currentAssistantMessageId),
       operationId,
+      notifiedInterventionTransitions: new Set(),
       processedKeys: new Set(),
       publishedKeys: new Set(),
       toolMsgIdByCallId: new Map(),
@@ -572,6 +624,68 @@ export class HeterogeneousPersistenceHandler {
     const toolPlugins = await this.deps.messageModel.listMessagePluginsByTopic(state.topicId);
     for (const plugin of toolPlugins) {
       if (plugin.toolCallId) state.toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
+      if (plugin.toolCallId && plugin.state && typeof plugin.state === 'object') {
+        const stored = (plugin.state as Record<string, unknown>)[
+          HETEROGENEOUS_INTERVENTION_STATE_KEY
+        ];
+        if (stored && typeof stored === 'object') {
+          const metadata = stored as Record<string, unknown>;
+          const transition = INTERVENTION_TRANSITIONS.has(
+            metadata.transition as MainAgentInterventionTransition,
+          )
+            ? (metadata.transition as MainAgentInterventionTransition)
+            : undefined;
+          const interactionKind = INTERVENTION_KINDS.has(
+            metadata.interactionKind as AgentInterventionInteractionKind,
+          )
+            ? (metadata.interactionKind as AgentInterventionInteractionKind)
+            : undefined;
+          const provider = INTERVENTION_PROVIDERS.has(
+            metadata.provider as AgentInterventionProvider,
+          )
+            ? (metadata.provider as AgentInterventionProvider)
+            : undefined;
+
+          if (transition) {
+            const request =
+              typeof plugin.apiName === 'string' &&
+              typeof plugin.arguments === 'string' &&
+              typeof plugin.identifier === 'string' &&
+              typeof metadata.deadline === 'number'
+                ? {
+                    apiName: plugin.apiName,
+                    arguments: plugin.arguments,
+                    deadline: metadata.deadline,
+                    identifier: plugin.identifier,
+                    interactionKind,
+                    provider,
+                    toolCallId: plugin.toolCallId,
+                  }
+                : undefined;
+            state.main.interventionsByCallId.set(plugin.toolCallId, {
+              intervention:
+                plugin.intervention ??
+                (transition === 'pending'
+                  ? { status: 'pending' }
+                  : transition === 'resolved'
+                    ? { status: 'approved' }
+                    : { rejectedReason: transition, status: 'rejected' }),
+              request,
+              resolutionRequestId:
+                typeof metadata.resolutionRequestId === 'string'
+                  ? metadata.resolutionRequestId
+                  : undefined,
+              transition,
+            });
+
+            if (metadata.notificationTransition === transition) {
+              state.notifiedInterventionTransitions.add(
+                `${state.operationId}:${plugin.toolCallId}:${transition}`,
+              );
+            }
+          }
+        }
+      }
       if (
         plugin.toolCallId &&
         plugin.metadata?.heterogeneousToolStateOperationId === state.operationId &&
@@ -1032,6 +1146,11 @@ export class HeterogeneousPersistenceHandler {
         return;
       }
 
+      case 'setToolIntervention': {
+        await this.applyToolIntervention(state, intent);
+        return;
+      }
+
       case 'recordUsage': {
         const update: Record<string, any> = {};
         if (intent.usage !== undefined) {
@@ -1122,6 +1241,71 @@ export class HeterogeneousPersistenceHandler {
       intent.toolCallId,
       result.snapshotSeq ?? intent.snapshotSeq,
     );
+  }
+
+  private async applyToolIntervention(
+    state: OperationState,
+    intent: Extract<MainAgentIntent, { kind: 'setToolIntervention' }>,
+  ): Promise<void> {
+    const toolMsgId = state.toolMsgIdByCallId.get(intent.toolCallId);
+    if (!toolMsgId) {
+      throw new Error(
+        `intervention for unknown toolCallId=${intent.toolCallId} op=${state.operationId}`,
+      );
+    }
+
+    const summary = interventionSummary(intent.request);
+    const reviewRequest =
+      intent.transition === 'pending'
+        ? sanitizeAgentInterventionRequestForReview(intent.request)
+        : undefined;
+    const durableState: StoredHeterogeneousIntervention = {
+      deadline: intent.request?.deadline,
+      interactionKind: intent.request?.interactionKind,
+      provider: intent.request?.provider,
+      resolutionRequestId: intent.resolutionRequestId,
+      summary,
+      transition: intent.transition,
+    };
+
+    // Persist before any business side effect. The existing JSON plugin-state
+    // column carries only correlation metadata; no schema/migration is needed.
+    await this.deps.messageModel.updateMessagePlugin(toolMsgId, {
+      intervention: intent.intervention,
+    });
+    await this.deps.messageModel.updatePluginState(toolMsgId, {
+      [HETEROGENEOUS_INTERVENTION_STATE_KEY]: durableState,
+    });
+
+    const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
+    if (!this.deps.userId || state.notifiedInterventionTransitions.has(transitionKey)) return;
+
+    await notifyAgentIntervention({
+      agentId: state.agentId,
+      deadline: intent.request?.deadline,
+      interactionKind: intent.request?.interactionKind ?? 'question',
+      operationId: state.operationId,
+      provider: intent.request?.provider ?? 'unknown',
+      request: reviewRequest,
+      resolutionRequestId: intent.resolutionRequestId,
+      status: intent.transition,
+      summary,
+      toolCallId: intent.toolCallId,
+      topicId: state.topicId,
+      userId: this.deps.userId,
+      workspaceId: this.deps.workspaceId,
+    });
+    state.notifiedInterventionTransitions.add(transitionKey);
+
+    // Cold-replica dedupe marker. Cloud's override must still use the same
+    // `(operationId, toolCallId, transition)` idempotency key because a process
+    // can die after the external side effect but before this best-effort stamp.
+    await this.deps.messageModel.updatePluginState(toolMsgId, {
+      [HETEROGENEOUS_INTERVENTION_STATE_KEY]: {
+        ...durableState,
+        notificationTransition: intent.transition,
+      },
+    });
   }
 
   private buildToolBatchUpdate(
