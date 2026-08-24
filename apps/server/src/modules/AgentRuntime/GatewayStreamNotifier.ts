@@ -110,9 +110,13 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       log('mirror registered: %s → %s', operationId, mirrorTo);
     }
 
+    // The gateway DO requires the subscriber JWT's `sub` to equal the userId
+    // registered here. `streamOwnerUserId` (shared-agent visitor runs) takes
+    // precedence: the op executes as the creator, but only the visitor may
+    // subscribe to its stream.
     this.httpPost('/api/operations/init', {
       operationId,
-      userId: initialState?.userId || 'unknown',
+      userId: initialState?.streamOwnerUserId || initialState?.userId || 'unknown',
     });
 
     void this.pushEvent(operationId, {

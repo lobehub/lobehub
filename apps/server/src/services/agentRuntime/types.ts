@@ -357,6 +357,12 @@ export interface OperationCreationParams {
    * `agt_*` IDs) — no per-step DB lookup, mirroring `botContext`.
    */
   agentGroup?: AgentGroupConfig;
+  /**
+   * Shared-agent visitor marker (agent share C4). Persisted to
+   * `state.metadata.agentShare` so every step's LLM call routes billing to the
+   * creator's agentShare budget instead of the executing user's own.
+   */
+  agentShare?: { agentId: string; visitorUserId: string };
   appContext: {
     agentId?: string;
     /**

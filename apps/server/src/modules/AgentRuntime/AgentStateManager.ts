@@ -39,6 +39,13 @@ export interface AgentOperationMetadata {
   mirrorToOperationId?: string;
   modelRuntimeConfig?: any;
   status: AgentState['status'];
+  /**
+   * Gateway WS channel owner when it differs from the executing user. For
+   * shared-agent visitor runs the operation EXECUTES as the creator
+   * (`userId`), but only the visitor may subscribe to its stream — the
+   * gateway registers the channel under this id and rejects other subs.
+   */
+  streamOwnerUserId?: string;
   totalCost: number;
   totalSteps: number;
   userId?: string;
@@ -256,6 +263,7 @@ export class AgentStateManager {
           : undefined,
         mirrorToOperationId: metadata.mirrorToOperationId || undefined,
         status: metadata.status as AgentState['status'],
+        streamOwnerUserId: metadata.streamOwnerUserId || undefined,
         totalCost: parseFloat(metadata.totalCost) || 0,
         totalSteps: parseInt(metadata.totalSteps) || 0,
         userId: metadata.userId,
@@ -276,6 +284,7 @@ export class AgentStateManager {
       agentConfig?: any;
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
@@ -290,6 +299,7 @@ export class AgentStateManager {
         mirrorToOperationId: data.mirrorToOperationId,
         modelRuntimeConfig: data.modelRuntimeConfig,
         status: 'idle',
+        streamOwnerUserId: data.streamOwnerUserId,
         totalCost: 0,
         totalSteps: 0,
         userId: data.userId,
@@ -306,6 +316,7 @@ export class AgentStateManager {
       };
 
       if (metadata.userId) redisData.userId = metadata.userId;
+      if (metadata.streamOwnerUserId) redisData.streamOwnerUserId = metadata.streamOwnerUserId;
       if (metadata.workspaceId) redisData.workspaceId = metadata.workspaceId;
       if (metadata.mirrorToOperationId)
         redisData.mirrorToOperationId = metadata.mirrorToOperationId;

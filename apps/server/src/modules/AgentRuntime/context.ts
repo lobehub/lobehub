@@ -28,6 +28,12 @@ export interface RuntimeExecutorContext {
   abortSignal?: AbortSignal;
   agentConfig?: any;
   /**
+   * Shared-agent visitor marker (agent share C4), read back from
+   * `state.metadata.agentShare`. Forwarded into the business model-runtime
+   * context so LLM billing targets the creator's agentShare budget.
+   */
+  agentShare?: { agentId: string; visitorUserId: string };
+  /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result
    * as a final answer; injected multi-step agents such as GraphAgent can emit
