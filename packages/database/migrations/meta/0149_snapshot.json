@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "327ddb3d-8c49-4386-811b-520a2f3ad151",
+  "id": "f28b3c97-c7da-48f1-845c-bf90fa9d5df1",
   "policies": {},
   "prevId": "6540d175-6352-49c3-8312-08e911909394",
   "roles": {},
@@ -29420,6 +29420,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "file_id": {
           "name": "file_id",
           "type": "text",
@@ -29470,6 +29476,21 @@
           "columns": [
             {
               "expression": "check_result_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "verify_evidence_document_id_idx": {
+          "name": "verify_evidence_document_id_idx",
+          "columns": [
+            {
+              "expression": "document_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -29534,6 +29555,15 @@
           "columnsFrom": ["check_result_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "verify_evidence_document_id_documents_id_fk": {
+          "name": "verify_evidence_document_id_documents_id_fk",
+          "tableFrom": "verify_evidence",
+          "tableTo": "documents",
+          "columnsFrom": ["document_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "verify_evidence_file_id_files_id_fk": {

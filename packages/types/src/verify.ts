@@ -798,10 +798,8 @@ export interface RequiredEvidenceSpec {
  * provenance only — no verdict logic. Verifying an evidence is itself a new
  * check (related through `verify_check_results`), so this table stays flat.
  *
- * The payload lives in exactly one of two places: `content` for small inline
- * text (dom snapshot / console log / transcript), or `fileId` for a stored
- * artifact (screenshot / gif / video, or large text). The `files` table already
- * owns mime / size / hash / url, so none of that metadata is duplicated here.
+ * The payload lives in exactly one of three places: `content` for small inline
+ * text, `documentId` for a LobeHub document, or `fileId` for a stored artifact.
  */
 export interface VerifyEvidence {
   capturedAt?: Date | null;
@@ -814,6 +812,8 @@ export interface VerifyEvidence {
   createdAt: Date;
   /** Human-readable caption, e.g. "首页首屏完整渲染". */
   description?: string | null;
+  /** LobeHub document evidence — FK to `documents`. */
+  documentId?: string | null;
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
   id: string;

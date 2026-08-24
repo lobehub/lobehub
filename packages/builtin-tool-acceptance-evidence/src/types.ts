@@ -9,6 +9,7 @@ export interface SubmitAcceptanceEvidenceParams {
   evidence: Array<{
     content?: string;
     description?: string;
+    documentId?: string;
     fileId?: string;
     type: AcceptanceEvidenceType;
   }>;

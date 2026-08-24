@@ -3492,6 +3492,7 @@ table verify_evidence {
   check_result_id uuid [not null]
   type text [not null]
   content text
+  document_id text
   file_id text
   metadata jsonb
   captured_by text
@@ -3502,6 +3503,7 @@ table verify_evidence {
 
   indexes {
     check_result_id [name: 'verify_evidence_check_result_id_idx']
+    document_id [name: 'verify_evidence_document_id_idx']
     file_id [name: 'verify_evidence_file_id_idx']
     user_id [name: 'verify_evidence_user_id_idx']
     workspace_id [name: 'verify_evidence_workspace_id_idx']

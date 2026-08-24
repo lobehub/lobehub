@@ -23,6 +23,11 @@ export const AcceptanceEvidenceManifest: BuiltinToolManifest = {
               properties: {
                 content: { description: 'Inline evidence content.', type: 'string' },
                 description: { description: 'What this evidence demonstrates.', type: 'string' },
+                documentId: {
+                  description:
+                    'An existing LobeHub document id from documents.id. Do not use an agent_documents.id binding id.',
+                  type: 'string',
+                },
                 fileId: { description: 'An existing LobeHub artifact file id.', type: 'string' },
                 type: {
                   enum: ['markdown', 'screenshot', 'text', 'video'],
