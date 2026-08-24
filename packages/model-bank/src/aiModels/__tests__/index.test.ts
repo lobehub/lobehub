@@ -226,6 +226,24 @@ describe('Google rolling model aliases', () => {
     expect(flashLiteLatest?.pricing).toEqual(flashLite?.pricing);
     expect(flashLiteLatest?.settings?.disabledParams).toEqual(['temperature', 'top_p']);
   });
+
+  // Every `-latest` alias must be priced as the model its description points to.
+  // Asserting it generically means repointing an alias without repricing it fails here.
+  it.each([['gemini-pro-latest'], ['gemini-flash-latest'], ['gemini-flash-lite-latest']])(
+    'prices %s the same as the model it points to',
+    (aliasId) => {
+      const googleModels = LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'google');
+      const alias = googleModels.find((model) => model.id === aliasId);
+
+      expect(alias).toBeDefined();
+
+      const targetId = alias?.description?.replace('Points to ', '');
+      const target = googleModels.find((model) => model.id === targetId);
+
+      expect(target).toBeDefined();
+      expect(alias?.pricing).toEqual(target?.pricing);
+    },
+  );
 });
 
 describe('Google Gemini 3.1 Flash Image models', () => {
