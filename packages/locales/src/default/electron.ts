@@ -149,6 +149,8 @@ export default {
   'updater.newVersionAvailable': 'New version available',
   'updater.newVersionAvailableDesc':
     'A new version {{version}} has been found, would you like to download it now?',
+  'updater.refreshToApply': 'Refresh now',
+  'updater.rendererUpdateReady': 'A new version is ready — refresh to apply',
   'updater.restartAndInstall': 'Install updates and restart',
   'updater.updateError': 'Update error',
   'updater.updateReady': 'A new version is available',

@@ -254,6 +254,7 @@ jobs:
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -274,6 +275,7 @@ jobs:
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -290,6 +292,7 @@ jobs:
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'

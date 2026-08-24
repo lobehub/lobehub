@@ -153,3 +153,31 @@ runs:
         echo ""
         echo "📋 Files in s3://$S3_BUCKET/$CHANNEL/$VERSION/:"
         aws s3 ls "s3://$S3_BUCKET/$CHANNEL/$VERSION/" $ENDPOINT_ARG || true
+
+    - name: Publish renderer OTA base marker
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        AWS_REGION: ${{ inputs.s3-region }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_ENDPOINT: ${{ inputs.s3-endpoint }}
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        if [ -z "$S3_BUCKET" ]; then
+          echo "S3 bucket not configured, skipping renderer OTA marker"
+          exit 0
+        fi
+
+        ENDPOINT_ARG=""
+        if [ -n "$S3_ENDPOINT" ]; then
+          ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
+        fi
+
+        # Marks the main lineage this full release shipped with. The renderer
+        # OTA workflow only publishes patches while HEAD still hashes to this
+        # value, so patches can never target a different main.
+        MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
+        echo "renderer OTA base mainHash: $MAIN_HASH"
+        echo -n "$MAIN_HASH" > /tmp/mainhash.txt
+        aws s3 cp /tmp/mainhash.txt "s3://$S3_BUCKET/renderer/$CHANNEL/mainhash.txt" $ENDPOINT_ARG

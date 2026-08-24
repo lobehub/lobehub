@@ -757,3 +757,19 @@ numerically (alpha at the corners vs the subject, encoded format signature, dime
 and where the property is compositional, show the artifact over a contrasting surface.
 When the model cannot deliver the property, produce it in code after generation rather
 than re-wording the prompt.
+
+### L-S15 — Trusting a lockfile-false workspace's node\_modules to track current specs
+
+**Wrong approach:** debug a "missing export" build failure in a workspace with
+`lockfile: false` by bumping package.json specs or running `pnpm up`, assuming the
+next install re-resolves.
+
+**Why it fails:** pnpm keeps a hidden `node_modules/.pnpm/lock.yaml` that freezes
+prior resolutions even with `lockfile: false`; `pnpm install` and `pnpm up` can
+report success while every symlink stays on the stale version. CI never hits this
+because it installs from scratch.
+
+**Correct approach:** when installed versions contradict fresh-resolution
+expectations, delete the hidden `node_modules/.pnpm/lock.yaml` (or the whole
+node\_modules) in the affected workspace root and reinstall, then re-verify the
+actual resolved version via the importing package's symlink.
