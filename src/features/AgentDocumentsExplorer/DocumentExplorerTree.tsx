@@ -79,8 +79,8 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const renameRafRef = useRef<number>();
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const renameRafRef = useRef<number>(undefined);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     return () => {
