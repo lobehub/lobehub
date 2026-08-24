@@ -527,60 +527,52 @@ const detectValidatedCommandInEnvironment = async (
   return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
 };
 
-/**
- * Validate an ordered command chain in one exact environment. PATH state does
- * not leak between candidates; every candidate in a pass sees the same PATH.
- */
-const detectValidatedCommandCandidatesInEnvironment = async (
-  commands: string[],
-  options: ValidateOptions,
-  probeEnv?: NodeJS.ProcessEnv,
-): Promise<CliCommandStatus> => {
-  let lastStatus: CliCommandStatus = probeEnv?.PATH
-    ? { available: false, resolvedPathEnv: probeEnv.PATH }
-    : { available: false };
-
-  for (const command of commands) {
-    const status = await detectValidatedCommandInEnvironment(command, options, probeEnv);
-    if (status.available) return status;
-    lastStatus = status;
-  }
-
-  return lastStatus;
+const isProbeableCommand = (command: string): boolean => {
+  const trimmedCommand = command.trim();
+  return trimmedCommand.length > 0 && !(isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand));
 };
 
 /**
- * Validate the complete ordered candidate chain in at most two environments:
- * first the caller's inherited PATH, then one freshly recovered login-shell or
- * Windows-registry PATH. Both lookup misses and validation failures therefore
- * take the same recovery edge, and absolute fallback launchers receive the
- * interpreter PATH that made the second pass succeed.
+ * Validate an ordered command chain with candidate precedence above environment
+ * precedence: candidate 1 inherited → candidate 1 recovered → candidate 2
+ * inherited → candidate 2 recovered. PATH recovery is attempted at most once
+ * and reused, so lookup misses and validation failures share the same edge
+ * without letting a well-known fallback outrank the user's login-PATH command.
  */
 export const detectValidatedCommandCandidates = async (
   commands: string[],
   options: ValidateOptions,
   probeEnv?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
-  const inheritedStatus = await detectValidatedCommandCandidatesInEnvironment(
-    commands,
-    options,
-    probeEnv,
-  );
-  if (inheritedStatus.available) return inheritedStatus;
+  let lastStatus: CliCommandStatus = { available: false };
+  let recoveryAttempted = false;
+  let recovered: RecoveredProbeEnvironment | undefined;
 
-  // Skip recovery only when there is nothing safe to execute. Absolute
-  // launchers still get the second pass because an `env` shebang may depend on
-  // an interpreter exposed only by the recovered PATH.
-  const hasProbeableCommand = commands.some((command) => {
-    const trimmedCommand = command.trim();
-    return trimmedCommand.length > 0 && !(isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand));
-  });
-  if (!hasProbeableCommand) return inheritedStatus;
+  for (const command of commands) {
+    const inheritedStatus = await detectValidatedCommandInEnvironment(command, options, probeEnv);
+    if (inheritedStatus.available) return inheritedStatus;
+    lastStatus = inheritedStatus;
 
-  const recovered = await recoverProbeEnvironment(probeEnv);
-  if (!recovered) return inheritedStatus;
+    // Invalid Windows shell expressions must not trigger even the registry
+    // helper processes used for PATH recovery.
+    if (!isProbeableCommand(command)) continue;
 
-  return detectValidatedCommandCandidatesInEnvironment(commands, options, recovered.env);
+    if (!recoveryAttempted) {
+      recoveryAttempted = true;
+      recovered = await recoverProbeEnvironment(probeEnv);
+    }
+    if (!recovered) continue;
+
+    const recoveredStatus = await detectValidatedCommandInEnvironment(
+      command,
+      options,
+      recovered.env,
+    );
+    if (recoveredStatus.available) return recoveredStatus;
+    lastStatus = recoveredStatus;
+  }
+
+  return lastStatus;
 };
 
 export const detectValidatedCommand = async (
