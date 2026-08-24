@@ -10,8 +10,8 @@ const spawnMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const fsState = vi.hoisted(() => ({ content: undefined as string | undefined }));
 const notifyMutateMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const resolveCliSpawnPlanMock = vi.hoisted(() => vi.fn());
-const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
+const prepareSpawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
@@ -19,11 +19,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
-  resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
-}));
-
-vi.mock('@lobechat/heterogeneous-agents/spawn', () => ({
-  resolveCliSpawnPlan: resolveCliSpawnPlanMock,
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
 }));
 
 vi.mock('node:fs', () => ({
@@ -67,15 +63,23 @@ vi.mock('../../utils/logger', () => ({
 }));
 
 beforeEach(() => {
-  resolveRemotePlatformCommandMock.mockImplementation(async (type: 'hermes' | 'openclaw') => ({
-    available: true,
-    path: `/resolved/bin/${type}`,
-    resolvedPathEnv: '/resolved/bin:/runtime/bin:/usr/bin',
-  }));
-  resolveCliSpawnPlanMock.mockImplementation(async (command: string, args: string[]) => ({
-    args,
-    command,
-  }));
+  resolveRemotePlatformRuntimeMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv) => ({
+      available: true,
+      execute: vi.fn(),
+      prepareSpawn: (args: string[]) => prepareSpawnMock(type, args, baseEnv),
+    }),
+  );
+  prepareSpawnMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+      args,
+      command: `/resolved/bin/${type}`,
+      env: {
+        ...baseEnv,
+        PATH: '/resolved/bin:/runtime/bin:/usr/bin',
+      },
+    }),
+  );
 });
 
 // ─── Helpers ───
@@ -360,11 +364,14 @@ describe('runHeteroTask (openclaw)', () => {
       topicId: 'topic-resolved',
     });
 
-    expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('openclaw');
-    expect(resolveCliSpawnPlanMock).toHaveBeenCalledWith(
-      '/resolved/bin/openclaw',
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'openclaw',
       expect.any(Array),
-      expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
     );
     expect(spawnMock).toHaveBeenCalledWith(
       '/resolved/bin/openclaw',
@@ -595,11 +602,14 @@ describe('runHeteroTask (hermes)', () => {
       topicId: 'topic-resolved',
     });
 
-    expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('hermes');
-    expect(resolveCliSpawnPlanMock).toHaveBeenCalledWith(
-      '/resolved/bin/hermes',
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'hermes',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'hermes',
       ['chat', '--query', 'hello', '--quiet', '--accept-hooks'],
-      expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
     );
     expect(spawnMock).toHaveBeenCalledWith(
       '/resolved/bin/hermes',

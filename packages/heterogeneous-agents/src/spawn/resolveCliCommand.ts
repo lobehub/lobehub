@@ -62,16 +62,6 @@ interface ResolvedCommand {
   resolvedPathEnv?: string;
 }
 
-interface ResolvedCommandCandidates {
-  candidates: ResolvedCommand[];
-  /**
-   * PATH recovered while looking up a bare command. Keep it even when lookup
-   * found no executable so a subsequent absolute fallback can still run an
-   * env-based launcher with the interpreter PATH that a login shell exposes.
-   */
-  resolvedPathEnv?: string;
-}
-
 interface RecoveredProbeEnvironment {
   env: NodeJS.ProcessEnv;
   resolvedPathEnv: string;
@@ -221,7 +211,7 @@ const readMergedWindowsRegistryPath = async (): Promise<string | undefined> => {
  * answer for the process lifetime would re-create the staleness it fixes: a
  * CLI installed after the first failed scan would stay "not installed" until
  * the app restarted. `reg query` is a couple of short-lived processes, and it
- * only runs when `where` already came up empty.
+ * only runs after the complete inherited-environment pass fails.
  */
 const getWindowsRegistryPath = async (): Promise<string | undefined> => {
   registryPathPromise ??= readMergedWindowsRegistryPath().finally(() => {
@@ -298,55 +288,32 @@ const getCommandPathLines = async (
 const resolveCommandCandidates = async (
   command: string,
   probeEnv?: NodeJS.ProcessEnv,
-): Promise<ResolvedCommandCandidates> => {
+): Promise<ResolvedCommand[]> => {
   const trimmedCommand = command.trim();
-  if (!trimmedCommand) return { candidates: [] };
+  if (!trimmedCommand) return [];
+
+  const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
 
   if (isPathLikeCommand(trimmedCommand)) {
-    const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
-    return {
-      candidates: [{ env: probeEnv, path: trimmedCommand, resolvedPathEnv }],
-      resolvedPathEnv,
-    };
+    return [{ env: probeEnv, path: trimmedCommand, resolvedPathEnv }];
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
-  let lines = await getCommandPathLines(whichCommand, trimmedCommand, probeEnv);
-  let lookupEnv = probeEnv;
-  let resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
-
-  if (!lines) {
-    // PATH recovery, per platform: macOS/Linux re-read the login shell's PATH,
-    // Windows re-reads the registry environment (the inherited block is a
-    // creation-time snapshot that never picks up a later install).
-    const recovered = await recoverProbeEnvironment(probeEnv);
-    if (recovered) {
-      lines = await getCommandPathLines(whichCommand, trimmedCommand, recovered.env);
-      lookupEnv = recovered.env;
-      resolvedPathEnv = recovered.resolvedPathEnv;
-    }
-  }
-
-  if (!lines) return { candidates: [], resolvedPathEnv };
+  const lines = await getCommandPathLines(whichCommand, trimmedCommand, probeEnv);
+  if (!lines) return [];
 
   // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships a
   // Unix shell wrapper alongside `codex.cmd` and `codex.ps1`). Keep only the
   // ones we can execute, still in PATH order.
   if (isWindows()) {
-    return {
-      candidates: pickWindowsRunnables(lines).map((runnablePath) => ({
-        env: lookupEnv,
-        path: runnablePath,
-        resolvedPathEnv,
-      })),
+    return pickWindowsRunnables(lines).map((runnablePath) => ({
+      env: probeEnv,
+      path: runnablePath,
       resolvedPathEnv,
-    };
+    }));
   }
 
-  return {
-    candidates: [{ env: lookupEnv, path: lines[0], resolvedPathEnv }],
-    resolvedPathEnv,
-  };
+  return [{ env: probeEnv, path: lines[0], resolvedPathEnv }];
 };
 
 const quoteWindowsShellToken = (token: string): string =>
@@ -429,7 +396,7 @@ const execProbe = async (
  * matching `--version` output against a keyword or output pattern (avoids
  * collisions with an unrelated executable of the same name).
  */
-export const detectValidatedCommand = async (
+const detectValidatedCommandInEnvironment = async (
   command: string,
   options: ValidateOptions,
   probeEnv?: NodeJS.ProcessEnv,
@@ -450,7 +417,8 @@ export const detectValidatedCommand = async (
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
   // alone won't apply PATHEXT and can't run .cmd files directly.
-  const { candidates, resolvedPathEnv } = await resolveCommandCandidates(trimmedCommand, probeEnv);
+  const candidates = await resolveCommandCandidates(trimmedCommand, probeEnv);
+  const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
   if (candidates.length === 0) {
     return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
   }
@@ -556,49 +524,70 @@ export const detectValidatedCommand = async (
     if (status !== UNRESOLVED_SHIM && status.available) return status;
   }
 
-  // A stale or unrelated executable on the inherited PATH prevents lookup-time
-  // recovery because `which`/`where` succeeds. Validation failure must trigger
-  // the same recovered-PATH phase before an ordered resolver moves on to its
-  // absolute fallbacks. Retrying here also lets a login-shell command ahead of
-  // the stale inherited candidate win. The recursive call cannot repeat: a
-  // recovered environment always carries `resolvedPathEnv`.
-  if (!resolvedPathEnv && !isPathLikeCommand(trimmedCommand)) {
-    const recovered = await recoverProbeEnvironment(probeEnv);
-    if (recovered) return detectValidatedCommand(trimmedCommand, options, recovered.env);
-  }
-
   return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
 };
 
 /**
- * Validate an ordered command chain while preserving PATH recovery between
- * candidates. This is the shared contract for a bare command followed by
- * well-known absolute install paths: an absolute launcher may live outside
- * PATH while its `#!/usr/bin/env` interpreter only exists on the login PATH.
+ * Validate an ordered command chain in one exact environment. PATH state does
+ * not leak between candidates; every candidate in a pass sees the same PATH.
+ */
+const detectValidatedCommandCandidatesInEnvironment = async (
+  commands: string[],
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => {
+  let lastStatus: CliCommandStatus = probeEnv?.PATH
+    ? { available: false, resolvedPathEnv: probeEnv.PATH }
+    : { available: false };
+
+  for (const command of commands) {
+    const status = await detectValidatedCommandInEnvironment(command, options, probeEnv);
+    if (status.available) return status;
+    lastStatus = status;
+  }
+
+  return lastStatus;
+};
+
+/**
+ * Validate the complete ordered candidate chain in at most two environments:
+ * first the caller's inherited PATH, then one freshly recovered login-shell or
+ * Windows-registry PATH. Both lookup misses and validation failures therefore
+ * take the same recovery edge, and absolute fallback launchers receive the
+ * interpreter PATH that made the second pass succeed.
  */
 export const detectValidatedCommandCandidates = async (
   commands: string[],
   options: ValidateOptions,
   probeEnv?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
-  let effectiveProbeEnv = probeEnv;
-  let lastStatus: CliCommandStatus = { available: false };
+  const inheritedStatus = await detectValidatedCommandCandidatesInEnvironment(
+    commands,
+    options,
+    probeEnv,
+  );
+  if (inheritedStatus.available) return inheritedStatus;
 
-  for (const command of commands) {
-    const status = await detectValidatedCommand(command, options, effectiveProbeEnv);
-    if (status.available) return status;
+  // Skip recovery only when there is nothing safe to execute. Absolute
+  // launchers still get the second pass because an `env` shebang may depend on
+  // an interpreter exposed only by the recovered PATH.
+  const hasProbeableCommand = commands.some((command) => {
+    const trimmedCommand = command.trim();
+    return trimmedCommand.length > 0 && !(isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand));
+  });
+  if (!hasProbeableCommand) return inheritedStatus;
 
-    lastStatus = status;
-    if (status.resolvedPathEnv && status.resolvedPathEnv !== effectiveProbeEnv?.PATH) {
-      effectiveProbeEnv = {
-        ...(effectiveProbeEnv ?? process.env),
-        PATH: status.resolvedPathEnv,
-      };
-    }
-  }
+  const recovered = await recoverProbeEnvironment(probeEnv);
+  if (!recovered) return inheritedStatus;
 
-  return lastStatus;
+  return detectValidatedCommandCandidatesInEnvironment(commands, options, recovered.env);
 };
+
+export const detectValidatedCommand = async (
+  command: string,
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'amp': {

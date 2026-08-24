@@ -388,23 +388,60 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       process.env.PATH = '/usr/bin:/bin';
       process.env.SHELL = '/bin/zsh';
       const loginPath = '/opt/homebrew/bin:/usr/bin:/bin';
+      const fallbackPath = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
 
       try {
         callExecFileError(new Error('not found')); // which opencode (inherited PATH)
+        callExecFileError(new Error('node not found')); // fallback under inherited PATH
         callExecFile(loginPath); // login shell PATH contains node, not opencode
         callExecFileError(new Error('not found')); // which opencode (login PATH)
         callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
 
-        const { detectHeterogeneousCliCommand } = await importModule();
-        const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['opencode', fallbackPath], {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
 
         expect(status).toMatchObject({
           available: true,
-          path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+          path: fallbackPath,
           resolvedPathEnv: loginPath,
           version: '1.18.3',
         });
-        expect((execFileMock.mock.calls[3]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+        expect((execFileMock.mock.calls[4]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+          loginPath,
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
+
+    it('retries an explicit env-based launcher with the recovered login PATH', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      const commandPath = '/Users/x/.local/bin/opencode';
+      const loginPath = '/opt/homebrew/bin:/usr/bin:/bin';
+
+      try {
+        callExecFileError(new Error('node not found')); // inherited PATH
+        callExecFile(loginPath); // login shell exposes node
+        callExecFile('1.18.3'); // exact same launcher under recovered PATH
+
+        const { detectValidatedCommand } = await importModule();
+        const status = await detectValidatedCommand(commandPath, {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
+
+        expect(status).toMatchObject({
+          available: true,
+          path: commandPath,
+          resolvedPathEnv: loginPath,
+          version: '1.18.3',
+        });
+        expect((execFileMock.mock.calls[2]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
           loginPath,
         );
       } finally {
@@ -419,25 +456,29 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       process.env.PATH = '/usr/local/bin:/usr/bin:/bin';
       process.env.SHELL = '/bin/zsh';
       const loginPath = '/opt/homebrew/bin:/usr/bin:/bin:/usr/local/bin';
+      const fallbackPath = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
 
       try {
         callExecFile('/usr/local/bin/opencode\n'); // inherited PATH finds a stale launcher
         callExecFileError(new Error('stale launcher')); // inherited launcher validation
+        callExecFileError(new Error('node not found')); // fallback under inherited PATH
         callExecFile('/opt/homebrew/bin:/usr/bin:/bin'); // login shell PATH
         callExecFile('/usr/local/bin/opencode\n'); // retry under the merged PATH
         callExecFileError(new Error('stale launcher')); // recovered lookup still resolves stale copy
         callExecFile('1.18.3'); // ~/.opencode/bin/opencode --version
 
-        const { detectHeterogeneousCliCommand } = await importModule();
-        const status = await detectHeterogeneousCliCommand('opencode', 'opencode');
+        const { detectValidatedCommandCandidates } = await importModule();
+        const status = await detectValidatedCommandCandidates(['opencode', fallbackPath], {
+          validatePattern: /^v?\d+\.\d+\.\d+$/,
+        });
 
         expect(status).toMatchObject({
           available: true,
-          path: path.join(os.homedir(), '.opencode', 'bin', 'opencode'),
+          path: fallbackPath,
           resolvedPathEnv: loginPath,
           version: '1.18.3',
         });
-        expect((execFileMock.mock.calls[5]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
+        expect((execFileMock.mock.calls[6]![2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
           loginPath,
         );
       } finally {
@@ -564,8 +605,8 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         callExecFile('/Users/x/.local/share/mise/shims/codex\n'); // which codex (login PATH)
         callExecFile('codex-cli 0.142.5');
 
-        const { detectHeterogeneousCliCommand } = await importModule();
-        const status = await detectHeterogeneousCliCommand('codex', 'codex');
+        const { detectValidatedCommand } = await importModule();
+        const status = await detectValidatedCommand('codex', { validateKeywords: ['codex'] });
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/x/.local/share/mise/shims/codex');
@@ -837,8 +878,6 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       try {
         existingFiles({ [bundledCli]: true });
         callExecFileError(new Error('not found')); // where codex
-        callExecFileError(new Error('no registry')); // reg query HKLM
-        callExecFileError(new Error('no registry')); // reg query HKCU
         callExecFile('codex-cli 0.147.0'); // the bundled CLI
 
         const { detectHeterogeneousCliCommand } = await importModule();
@@ -864,8 +903,6 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       try {
         existingFiles({ [traeCli]: true });
         callExecFileError(new Error('not found')); // where traecli
-        callExecFileError(new Error('no registry')); // reg query HKLM
-        callExecFileError(new Error('no registry')); // reg query HKCU
         callExecFile('traecli 0.201.2 (public edition)');
         callExecFile(TRAE_ACP_HELP);
 
@@ -895,8 +932,6 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       try {
         existingFiles({ [traeCli]: true });
         callExecFileError(new Error('not found')); // where traecli
-        callExecFileError(new Error('no registry')); // reg query HKLM
-        callExecFileError(new Error('no registry')); // reg query HKCU
         callExecFileError(new Error('not found')); // current Programs/TraeCLI/bin/traex.exe
         callExecFile('trae-cli version 0.120.52');
         callExecFile(TRAE_ACP_HELP);
@@ -1069,6 +1104,10 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
 
       try {
         callExecFileError(new Error('not found'));
+        callExecFileError(new Error('not found')); // /Applications/ChatGPT.app
+        callExecFileError(new Error('not found')); // ~/Applications/ChatGPT.app
+        callExecFileError(new Error('not found')); // /Applications/Codex.app
+        callExecFileError(new Error('not found')); // ~/Applications/Codex.app
         callExecFile('/opt/homebrew/bin:/usr/bin:/bin');
         callExecFile('/opt/homebrew/bin/codex\n');
         callExecFile('codex-cli 0.142.5');

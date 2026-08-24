@@ -1,12 +1,7 @@
-import { execFile } from 'node:child_process';
-
-import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
-import { resolveCliSpawnPlan } from '@lobechat/heterogeneous-agents/spawn';
+import { resolveRemotePlatformRuntime } from '@lobechat/heterogeneous-agents/scanHost';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAgentProfile } from '../getAgentProfile';
-
-vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
 
 vi.mock('node:fs', () => ({
   default: {
@@ -16,41 +11,27 @@ vi.mock('node:fs', () => ({
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
-  resolveRemotePlatformCommand: vi.fn(),
+  resolveRemotePlatformRuntime: vi.fn(),
 }));
 
-vi.mock('@lobechat/heterogeneous-agents/spawn', () => ({
-  resolveCliSpawnPlan: vi.fn(),
-}));
-
-const execFileMock = vi.mocked(execFile);
-const resolveCliSpawnPlanMock = vi.mocked(resolveCliSpawnPlan);
-const resolveRemotePlatformCommandMock = vi.mocked(resolveRemotePlatformCommand);
+const executeMock = vi.fn();
+const resolveRemotePlatformRuntimeMock = vi.mocked(resolveRemotePlatformRuntime);
 
 const queueExecResult = (stdout: string) => {
-  execFileMock.mockImplementationOnce(((
-    _command: string,
-    _args: string[],
-    _options: object,
-    callback: (error: null, result: { stderr: string; stdout: string }) => void,
-  ) => {
-    callback(null, { stderr: '', stdout });
-    return {};
-  }) as never);
+  executeMock.mockResolvedValueOnce({ stderr: '', stdout });
 };
 
 describe('getAgentProfile', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resolveCliSpawnPlanMock.mockImplementation(async (command, args) => ({ args, command }));
+    resolveRemotePlatformRuntimeMock.mockResolvedValue({
+      available: true,
+      execute: executeMock,
+      prepareSpawn: vi.fn(),
+    });
   });
 
-  it('uses the resolved OpenClaw executable and recovered PATH', async () => {
-    resolveRemotePlatformCommandMock.mockResolvedValue({
-      available: true,
-      path: '/Users/x/.openclaw/bin/openclaw',
-      resolvedPathEnv: '/opt/homebrew/bin:/usr/bin:/bin',
-    });
+  it('uses the shared OpenClaw execution runtime', async () => {
     queueExecResult(
       JSON.stringify([
         {
@@ -67,27 +48,11 @@ describe('getAgentProfile', () => {
       description: undefined,
       title: 'Claw',
     });
-    expect(resolveCliSpawnPlanMock).toHaveBeenCalledWith(
-      '/Users/x/.openclaw/bin/openclaw',
-      ['agents', 'list', '--json'],
-      expect.objectContaining({ PATH: '/opt/homebrew/bin:/usr/bin:/bin' }),
-    );
-    expect(execFileMock).toHaveBeenCalledWith(
-      '/Users/x/.openclaw/bin/openclaw',
-      ['agents', 'list', '--json'],
-      expect.objectContaining({
-        env: expect.objectContaining({ PATH: '/opt/homebrew/bin:/usr/bin:/bin' }),
-      }),
-      expect.any(Function),
-    );
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('openclaw');
+    expect(executeMock).toHaveBeenCalledWith(['agents', 'list', '--json'], { timeout: 5000 });
   });
 
-  it('uses one resolved Hermes executable and PATH for both profile probes', async () => {
-    resolveRemotePlatformCommandMock.mockResolvedValue({
-      available: true,
-      path: '/Users/x/.local/bin/hermes',
-      resolvedPathEnv: '/Users/x/.local/bin:/opt/homebrew/bin:/usr/bin',
-    });
+  it('uses one shared Hermes runtime for both profile probes', async () => {
     queueExecResult('  ◆default\n');
     queueExecResult('Path: ~/.hermes/profiles/default\n');
 
@@ -96,19 +61,20 @@ describe('getAgentProfile', () => {
       description: 'A careful systems engineer.',
       title: 'default',
     });
-    expect(resolveRemotePlatformCommandMock).toHaveBeenCalledTimes(1);
-    expect(execFileMock).toHaveBeenCalledTimes(2);
-    for (const call of execFileMock.mock.calls) {
-      expect((call[2] as { env: NodeJS.ProcessEnv }).env.PATH).toBe(
-        '/Users/x/.local/bin:/opt/homebrew/bin:/usr/bin',
-      );
-    }
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledTimes(1);
+    expect(executeMock).toHaveBeenNthCalledWith(1, ['profile', 'list'], { timeout: 5000 });
+    expect(executeMock).toHaveBeenNthCalledWith(2, ['profile', 'show', 'default'], {
+      timeout: 5000,
+    });
   });
 
   it('does not run a bare command when resolution fails', async () => {
-    resolveRemotePlatformCommandMock.mockResolvedValue({ available: false });
+    resolveRemotePlatformRuntimeMock.mockResolvedValue({
+      available: false,
+      error: 'openclaw was not found or failed validation',
+    });
 
     await expect(getAgentProfile({ platform: 'openclaw' })).resolves.toEqual({});
-    expect(execFileMock).not.toHaveBeenCalled();
+    expect(executeMock).not.toHaveBeenCalled();
   });
 });

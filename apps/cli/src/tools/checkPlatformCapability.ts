@@ -1,7 +1,7 @@
 import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
 
 export interface CheckPlatformCapabilityParams {
-  platform: 'hermes' | 'openclaw';
+  platform: string;
 }
 
 export interface CheckPlatformCapabilityResult {

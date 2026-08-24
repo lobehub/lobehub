@@ -40,4 +40,17 @@ describe('checkPlatformCapability', () => {
       reason: 'hermes was not found or failed validation',
     });
   });
+
+  it('rejects an unsupported runtime platform', async () => {
+    resolveRemotePlatformCommandMock.mockResolvedValue({
+      available: false,
+      error: 'Unknown platform: future-platform',
+    });
+
+    await expect(checkPlatformCapability({ platform: 'future-platform' })).resolves.toEqual({
+      available: false,
+      reason: 'Unknown platform: future-platform',
+    });
+    expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('future-platform');
+  });
 });
