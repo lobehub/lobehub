@@ -194,9 +194,10 @@ export class EditorRuntime {
   /**
    * Apply an editor-data snapshot through the Yjs binding when collaboration is
    * active. The editor package owns the binding because only it can reconcile
-   * Lexical node keys with the shared Y.Doc. `undefined` means that the loaded
-   * editor package does not expose the collaboration-aware path yet; callers
-   * may then use the legacy non-collaborative datasource path.
+   * Lexical node keys with the shared Y.Doc. `undefined` means that no Yjs
+   * service is registered, so callers may use the legacy non-collaborative
+   * datasource path. A registered but incompatible service returns `false` and
+   * is never sent through that fallback.
    */
   private applyCollaborationSnapshot(editorData: Record<string, unknown>): boolean | undefined {
     if (!this.editor) return undefined;
