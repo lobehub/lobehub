@@ -8,6 +8,9 @@ inputs:
   version:
     description: 'Release version (e.g., 2.1.29-canary.1)'
     required: true
+  cloud-ref:
+    description: 'Cloud repository commit used by the packaged binaries'
+    required: true
   aws-access-key-id:
     description: 'AWS access key ID'
     required: true
@@ -163,7 +166,11 @@ runs:
         S3_BUCKET: ${{ inputs.s3-bucket }}
         S3_ENDPOINT: ${{ inputs.s3-endpoint }}
         CHANNEL: ${{ inputs.channel }}
+        CLOUD_REF: ${{ inputs.cloud-ref }}
+        VERSION: ${{ inputs.version }}
       run: |
+        set -euo pipefail
+
         if [ -z "$S3_BUCKET" ]; then
           echo "S3 bucket not configured, skipping renderer OTA marker"
           exit 0
@@ -174,10 +181,18 @@ runs:
           ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
         fi
 
-        # Marks the main lineage this full release shipped with. The renderer
-        # OTA workflow only publishes patches while HEAD still hashes to this
-        # value, so patches can never target a different main.
-        MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
+        MAIN_HASH=$(cat release/renderer-mainhash.txt)
+        if [[ ! "$MAIN_HASH" =~ ^[0-9a-f]{64}$ ]] || [[ ! "$CLOUD_REF" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "Invalid renderer OTA base metadata"
+          exit 1
+        fi
+
         echo "renderer OTA base mainHash: $MAIN_HASH"
-        echo -n "$MAIN_HASH" > /tmp/mainhash.txt
-        aws s3 cp /tmp/mainhash.txt "s3://$S3_BUCKET/renderer/$CHANNEL/mainhash.txt" $ENDPOINT_ARG
+        jq -n \
+          --arg cloudRef "$CLOUD_REF" \
+          --arg mainHash "$MAIN_HASH" \
+          --arg version "$VERSION" \
+          '{ cloudRef: $cloudRef, mainHash: $mainHash, version: $version }' \
+          > /tmp/renderer-ota-base.json
+        aws s3 cp /tmp/renderer-ota-base.json "s3://$S3_BUCKET/renderer/$CHANNEL/base.json" \
+          --cache-control no-store $ENDPOINT_ARG

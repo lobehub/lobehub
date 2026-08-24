@@ -79,6 +79,7 @@ export function computeMainHash() {
     ...walk(path.join(desktopRoot, 'src', 'main')),
     ...walk(path.join(desktopRoot, 'src', 'preload')),
     ...walk(path.join(desktopRoot, 'src', 'common')),
+    ...walk(path.join(desktopRoot, 'resources', 'locales')),
   ];
 
   const files = [...seedFiles, ...STANDALONE_FILES.map((f) => path.join(desktopRoot, f))];
@@ -101,6 +102,11 @@ export function computeMainHash() {
     hash.update(path.relative(repoRoot, file).replaceAll('\\', '/'));
     hash.update('\0');
     hash.update(content);
+    hash.update('\0');
+  }
+  if (process.env.CLOUD_REF) {
+    hash.update('cloud-ref\0');
+    hash.update(process.env.CLOUD_REF);
     hash.update('\0');
   }
   return hash.digest('hex');

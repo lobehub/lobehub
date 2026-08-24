@@ -32,4 +32,33 @@ describe('mainHash', () => {
       rmSync(probe, { force: true });
     }
   });
+
+  it('changes when a main-process locale resource changes', () => {
+    const probe = path.join(
+      desktopRoot,
+      'resources',
+      'locales',
+      `__mainhash-probe-${randomUUID()}.json`,
+    );
+    const before = computeMainHash();
+    writeFileSync(probe, '{}\n');
+    try {
+      expect(computeMainHash()).not.toBe(before);
+    } finally {
+      rmSync(probe, { force: true });
+    }
+  });
+
+  it('changes when the Cloud build revision changes', () => {
+    const originalCloudRef = process.env.CLOUD_REF;
+    try {
+      process.env.CLOUD_REF = 'a'.repeat(40);
+      const before = computeMainHash();
+      process.env.CLOUD_REF = 'b'.repeat(40);
+      expect(computeMainHash()).not.toBe(before);
+    } finally {
+      if (originalCloudRef === undefined) delete process.env.CLOUD_REF;
+      else process.env.CLOUD_REF = originalCloudRef;
+    }
+  });
 });

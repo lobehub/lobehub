@@ -3,7 +3,7 @@ name: Release Desktop Renderer OTA
 # ============================================
 # Renderer 热更 patch 发布
 # ============================================
-# 前提: renderer/<channel>/mainhash.txt 由全量发版流程写入 (desktop-publish-s3)。
+# 前提: renderer/<channel>/base.json 由全量发版流程写入 (desktop-publish-s3)。
 # 门禁: HEAD 的 mainHash 必须等于该 marker —— main 变了只能走全量发版,
 #       此工作流会直接跳过。
 # 产物: renderer/<channel>/<mainHash>/latest.json (签名 manifest)
@@ -38,20 +38,52 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Gate on mainHash
-        id: gate
+      - name: Load shipped base
+        id: base
         env:
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           CHANNEL: ${{ inputs.channel }}
         run: |
+          set -euo pipefail
+          BASE=$(curl -sf "$UPDATE_SERVER_URL/renderer/$CHANNEL/base.json" || true)
+          if [ -z "$BASE" ]; then
+            echo "::warning::no renderer OTA base metadata found; run a full release first"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MAIN_HASH=$(jq -er '.mainHash | select(type == "string" and test("^[0-9a-f]{64}$"))' <<< "$BASE")
+          CLOUD_REF=$(jq -er '.cloudRef | select(type == "string" and test("^[0-9a-f]{40}$"))' <<< "$BASE")
+          APP_VERSION=$(jq -er '.version | select(type == "string" and test("^[0-9A-Za-z.+-]+$"))' <<< "$BASE")
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "cloud_ref=$CLOUD_REF" >> "$GITHUB_OUTPUT"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Setup build environment
+        if: steps.base.outputs.found == 'true'
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          cloud-ref: ${{ steps.base.outputs.cloud_ref }}
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set package version
+        if: steps.base.outputs.found == 'true'
+        run: npm run workflow:set-desktop-version ${{ steps.base.outputs.app_version }} ${{ inputs.channel }}
+
+      - name: Gate on mainHash
+        id: gate
+        if: steps.base.outputs.found == 'true'
+        env:
+          BASE_MAIN_HASH: ${{ steps.base.outputs.main_hash }}
+        run: |
           MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
           echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
           echo "HEAD mainHash: $MAIN_HASH"
+          echo "Shipped base mainHash: $BASE_MAIN_HASH"
 
-          BASE=$(curl -sf "$UPDATE_SERVER_URL/renderer/$CHANNEL/mainhash.txt" || echo "")
-          echo "Shipped base mainHash: ${BASE:-<none>}"
-
-          if [ "$MAIN_HASH" != "$BASE" ]; then
+          if [ "$MAIN_HASH" != "$BASE_MAIN_HASH" ]; then
             echo "::warning::main changed since last full release — renderer patch is not allowed, run a full release instead"
             echo "allowed=false" >> "$GITHUB_OUTPUT"
           else
@@ -74,13 +106,6 @@ jobs:
           echo "Current patch: $CURRENT -> next: $NEXT"
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
 
-      - name: Setup build environment
-        if: steps.gate.outputs.allowed == 'true'
-        uses: ./.github/actions/desktop-build-setup
-        with:
-          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
-          node-version: ${{ env.NODE_VERSION }}
-
       - name: Build renderer
         if: steps.gate.outputs.allowed == 'true'
         run: npm run build:renderer --prefix=./apps/desktop
@@ -90,6 +115,8 @@ jobs:
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID || secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
       - name: Build and sign manifest
         if: steps.gate.outputs.allowed == 'true'

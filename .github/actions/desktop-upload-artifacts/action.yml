@@ -13,6 +13,10 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Export renderer OTA base hash
+      shell: bash
+      run: node apps/desktop/scripts/mainHash.mjs > apps/desktop/release/renderer-mainhash.txt
+
     - name: Rename macOS *-mac.yml for multi-architecture support
       if: runner.os == 'macOS'
       shell: bash
@@ -52,4 +56,5 @@ runs:
           apps/desktop/release/*.snap*
           apps/desktop/release/*.rpm*
           apps/desktop/release/*.tar.gz*
+          apps/desktop/release/renderer-mainhash.txt
         retention-days: ${{ inputs.retention-days }}
