@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getWechatTextSendCount } from '@lobechat/chat-adapter-wechat';
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import debug from 'debug';
 
 import type { WechatOutboundAttachment } from './sendAttachments';
@@ -195,6 +196,12 @@ export interface WechatPendingPush {
   attachments?: WechatOutboundAttachment[];
   content?: string;
   enqueuedAt: number;
+  /**
+   * The sender's choice for images over the platform budget, carried through
+   * the queue: a push that waits for the window to reopen must replay with the
+   * same decision the sender made, not with the default.
+   */
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
 }
 
 /** Number of `sendmessage` calls a payload will consume. */

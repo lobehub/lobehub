@@ -154,13 +154,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const recentRuns = useMemo(() => getRecentGoalRuns(task?.activities), [task?.activities]);
   const runMetrics = useMemo(() => getGoalRunMetrics(task?.activities), [task?.activities]);
   const { text: rootUpdatedAt, title: rootUpdatedAtTitle } = useActivityTime(task?.updatedAt);
+  const goalStatus = task?.goal?.status ?? 'planning';
   const presentation = getGoalPresentation({
-    acceptanceStatus: bundle?.acceptance.status,
     checks: bundle?.checks,
-    goalStatus: task?.goal?.status,
-    maxRounds: task?.goal?.maxRounds,
+    goalStatus,
+    maxRounds: task?.goal?.maxRounds ?? null,
     rounds: task?.topicCount ?? 0,
-    taskStatus: task?.status ?? 'backlog',
   });
   const title = task?.name?.trim() || task?.instruction.trim() || goalId;
 
@@ -341,7 +340,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   </Flexbox>
                   <Flexbox gap={4}>
                     <Flexbox horizontal align={'center'} className={styles.treeRow} gap={8}>
-                      <GoalStatusGlyph size={14} statusKey={presentation.statusKey} />
+                      <GoalStatusGlyph size={14} status={goalStatus} />
                       <Text fontSize={12} type={'secondary'}>
                         {task.identifier}
                       </Text>

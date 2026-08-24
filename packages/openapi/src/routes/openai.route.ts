@@ -1,4 +1,7 @@
-import { isServerDefaultHeterogeneousModel } from '@lobechat/types';
+import {
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
+} from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -32,6 +35,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
     throw new HTTPException(400, { message: 'server-default Responses requests must stream' });
   }
   const workspaceId = context.get('workspaceId');
+  const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
 
   // Same reasoning as the Anthropic relay: an escaping runtime rejection reaches
   // the client as a bodyless 500. See `describeRelayFailure`.
@@ -53,7 +57,7 @@ app.post('/v1/responses', requireHeteroModelInvocation, async (c) => {
   if (!body) {
     return c.json({ error: { message: 'Upstream returned no stream', type: 'api_error' } }, 502);
   }
-  return new Response(encodeResponsesStream(body), {
+  return new Response(encodeResponsesStream(body, requestModel), {
     headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'text/event-stream' },
   });
 });

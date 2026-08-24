@@ -17,9 +17,9 @@ vi.mock('antd/es/locale/zh_CN.js', () => {
   return { default: { locale: 'zh-cn' } };
 });
 
-describe('getAntdLocale.desktop', () => {
+describe('getAntdLocale.vite', () => {
   it('evaluates only the requested antd locale', async () => {
-    const { getAntdLocale } = await import('./locale.desktop');
+    const { getAntdLocale } = await import('./locale.vite');
 
     expect(moduleEvaluation.english).not.toHaveBeenCalled();
     expect(moduleEvaluation.simplifiedChinese).not.toHaveBeenCalled();

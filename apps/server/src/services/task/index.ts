@@ -35,6 +35,7 @@ import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { createTaskSchedulerModule } from '../taskScheduler';
+import { resolveTaskAcceptance } from '../verify/taskAcceptance';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -652,7 +653,7 @@ export class TaskService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace, goal] =
+    const [allDescendants, dependencies, directTopics, comments, workspace, goal, acceptance] =
       await Promise.all([
         this.taskModel.findAllDescendants(task.id),
         this.taskModel.getDependencies(task.id),
@@ -664,6 +665,9 @@ export class TaskService {
         new GoalModel(this.db, this.userId, this.workspaceId)
           .findBySubject('task', task.id)
           .catch(() => undefined),
+        resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(
+          () => undefined,
+        ),
       ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
@@ -997,7 +1001,9 @@ export class TaskService {
       startedAt: task.startedAt ? new Date(task.startedAt).toISOString() : undefined,
       status: task.status,
       userId: task.assigneeUserId,
-      verify: this.taskModel.getVerifyConfig(task),
+      verify: acceptance
+        ? { ...acceptance.config, requirement: acceptance.requirement }
+        : this.taskModel.getVerifyConfig(task),
       visibility: task.visibility,
       subtasks,
       activities: activities.length > 0 ? activities : undefined,

@@ -17,7 +17,6 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ProjectModel } from '@/database/models/project';
-import { TaskModel } from '@/database/models/task';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
@@ -233,14 +232,6 @@ export const acceptanceRouter = router({
         await ctx.acceptanceService.acceptanceModel.update(aggregate.id, {
           requirement: input.requirement,
         });
-        // A Task acceptance is instantiated from tasks.config.verify. Mirror
-        // edits back to that source so the next run cannot restore an older goal.
-        if (input.subjectType === 'task') {
-          const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-          const task = await taskModel.resolve(input.subjectId);
-          if (!task) throw new Error('Task not found in the current workspace');
-          await taskModel.updateVerifyConfig(task.id, { requirement: input.requirement });
-        }
         return { id: aggregate.id, requirement: input.requirement };
       } catch (error) {
         throw new TRPCError({

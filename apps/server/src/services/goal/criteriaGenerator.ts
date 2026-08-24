@@ -44,6 +44,8 @@ const generatedCriteriaSchema = z.object({
       verifierType: z.enum(VERIFY_VERIFIER_TYPES),
     }),
   ),
+  instruction: z.string().min(1),
+  title: z.string().min(1).max(80),
 });
 
 export interface GoalCriterionDraft {
@@ -54,6 +56,12 @@ export interface GoalCriterionDraft {
   requiredEvidence?: RequiredEvidenceSpec[];
   title: string;
   verifierType?: VerifyCheckItem['verifierType'];
+}
+
+export interface GoalPlanDraft {
+  criteria: GoalCriterionDraft[];
+  instruction: string;
+  title: string;
 }
 
 export class GoalCriteriaGeneratorService {
@@ -68,6 +76,16 @@ export class GoalCriteriaGeneratorService {
     goal: string;
     maxCriteria?: number;
   }): Promise<GoalCriterionDraft[]> {
+    const plan = await this.generatePlan(params);
+
+    return plan?.criteria ?? [];
+  }
+
+  async generatePlan(params: {
+    context?: string;
+    goal: string;
+    maxCriteria?: number;
+  }): Promise<GoalPlanDraft | undefined> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_CRITERIA;
     const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
@@ -91,11 +109,13 @@ export class GoalCriteriaGeneratorService {
     const parsed = generatedCriteriaSchema.safeParse(raw);
     if (!parsed.success) {
       log('goal criteria draft did not match schema: %O', parsed.error.flatten());
-      return [];
+      return undefined;
     }
 
-    return parsed.data.criteria
+    const criteria = parsed.data.criteria
       .slice(0, maxCriteria)
       .filter((criterion) => !isProgrammaticTestCheck(criterion.title, criterion.description));
+
+    return { ...parsed.data, criteria };
   }
 }

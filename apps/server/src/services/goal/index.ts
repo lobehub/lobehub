@@ -20,6 +20,7 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+import { AcceptanceService } from '../verify/acceptanceService';
 
 const WORK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
@@ -44,6 +45,7 @@ export interface CreateGoalNodeInput {
 
 /** Application service shared by CLI today and Graph UI/schedulers later. */
 export class GoalService {
+  private readonly acceptanceService: AcceptanceService;
   private readonly goalModel: GoalModel;
   private readonly graphModel: GoalGraphModel;
   private readonly taskModel: TaskModel;
@@ -56,6 +58,7 @@ export class GoalService {
     private readonly userId: string,
     private readonly workspaceId?: string,
   ) {
+    this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
@@ -264,9 +267,10 @@ export class GoalService {
         };
       }
 
+      let acceptanceId: string | undefined;
       let task: TaskItem | undefined;
       try {
-        const description = frontier.description ?? graph.goal.requirement;
+        const description = frontier.description ?? frontier.title;
         task = await this.taskService.createTask({
           assigneeAgentId: graph.goal.agentId ?? undefined,
           config: { checkpoint: { topic: { after: false } } },
@@ -275,8 +279,18 @@ export class GoalService {
           name: frontier.title,
           projectId: graph.goal.projectId ?? undefined,
         });
+        const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
+          config: { enabled: true },
+          requirement: this.buildWorkAcceptanceRequirement(
+            graph,
+            frontier.title,
+            frontier.description,
+          ),
+        });
+        acceptanceId = acceptance.id;
         const bound = await this.graphModel.bindTask(goalId, frontier.id, task.id);
         if (!bound) {
+          await this.acceptanceService.acceptanceModel.delete(acceptance.id);
           await this.taskModel.delete(task.id);
           return {
             goalId,
@@ -286,6 +300,9 @@ export class GoalService {
           };
         }
       } catch (error) {
+        if (acceptanceId) {
+          await this.acceptanceService.acceptanceModel.delete(acceptanceId).catch(() => {});
+        }
         if (task) {
           await this.taskModel.delete(task.id).catch((cleanupError) => {
             console.error('[GoalService.tick] failed to delete unbound task:', cleanupError);
@@ -425,11 +442,32 @@ export class GoalService {
     description: string | null,
   ) =>
     [
-      `Long-horizon goal: ${graph.goal.title}`,
-      graph.goal.requirement ? `Acceptance requirement: ${graph.goal.requirement}` : undefined,
-      `Current work objective: ${title}`,
+      `Overall goal context (background only): ${graph.goal.title}`,
+      graph.goal.requirement
+        ? `Overall goal acceptance context (background only): ${graph.goal.requirement}`
+        : undefined,
+      `Current Work contract (authoritative execution scope): ${title}`,
       description,
-      'Complete this work objective. Create implementation-level subtasks when useful. Return concrete evidence, key findings, and the recommended next action.',
+      'Execute only the Current Work contract. Do not implement, validate, or pre-empt any sibling or downstream Work node, even when the overall goal context describes it.',
+      'The complete requirements for this Work are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Work; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
+      'Create implementation-level subtasks when useful. Finish the operation once the Current Work deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
+      'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+  private buildWorkAcceptanceRequirement = (
+    graph: GoalGraphSnapshot,
+    title: string,
+    description: string | null,
+  ) =>
+    [
+      `Verify only this Work: ${title}.`,
+      description ? `Required Work outcome: ${description}` : undefined,
+      graph.goal.requirement
+        ? `Use this overall Goal requirement only to interpret requirements relevant to the current Work: ${graph.goal.requirement}`
+        : undefined,
+      'Pass only when the current Work deliverable is complete and supported by concrete evidence. Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',
     ]
       .filter(Boolean)
       .join('\n\n');

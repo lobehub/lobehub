@@ -59,6 +59,7 @@ export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
 export const verifyRunStatuses = [
   'unverified',
   'planned',
+  'collecting_evidence',
   'verifying',
   'passed',
   'failed',
@@ -323,6 +324,7 @@ export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
+  'agent',
   'agent-browser',
   'cdp',
   'cli',

@@ -32,6 +32,26 @@ export interface WechatOutboundAttachment {
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
+/**
+ * Why one attachment never reached the user. Carried back to the delivery
+ * boundary instead of printed here: `detail` holds the iLink `errmsg`, which is
+ * the part that actually diagnoses a refused upload, and the boundary is the
+ * only place that knows the push it belongs to.
+ */
+export interface WechatAttachmentFailure {
+  /** Platform error text, when the failure came from an iLink call. */
+  detail?: string;
+  name?: string;
+  reason: 'over-budget-no-link' | 'source-unavailable' | 'upload-failed';
+  type: WechatOutboundAttachment['type'];
+}
+
+export interface WechatAttachmentSendResult {
+  /** Describes the same attachments as `undelivered`. */
+  failures: WechatAttachmentFailure[];
+  undelivered: WechatOutboundAttachment[];
+}
+
 const mapAttachmentTypeToUploadMediaType = (
   type: WechatOutboundAttachment['type'],
 ): WechatUploadMediaType => {
@@ -100,25 +120,31 @@ const buildMediaItemFromUpload = (
  *
  * Returns the attachments that did NOT reach the user, so a caller with a
  * replay queue can requeue exactly those instead of assuming the whole leg
- * landed. Attachments degraded to a download link count as delivered once
- * the link message sends; if that send throws, the whole call throws and the
- * return value is moot.
+ * landed, alongside WHY each one failed. Attachments degraded to a download
+ * link count as delivered once the link message sends; if that send throws,
+ * the whole call throws and the return value is moot.
  */
 export const sendWechatAttachments = async (
   api: WechatApiClient,
   toUserId: string,
   attachments: WechatOutboundAttachment[],
   contextToken: string,
-): Promise<WechatOutboundAttachment[]> => {
+): Promise<WechatAttachmentSendResult> => {
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
   const fallbackLines: string[] = [];
   const undelivered: WechatOutboundAttachment[] = [];
+  const failures: WechatAttachmentFailure[] = [];
 
   for (const attachment of attachments) {
     try {
       let buffer = await loadAttachmentBuffer(attachment);
       if (!buffer) {
-        log('sendWechatAttachments: skipping attachment without resolvable bytes');
+        log('sendWechatAttachments: no resolvable bytes for "%s"', attachment.name ?? '(unnamed)');
+        failures.push({
+          name: attachment.name,
+          reason: 'source-unavailable',
+          type: attachment.type,
+        });
         undelivered.push(attachment);
         continue;
       }
@@ -148,6 +174,11 @@ export const sendWechatAttachments = async (
           fallbackLines.push(buildAttachmentFallbackLine(attachment, attachment.fetchUrl));
         } else {
           log('sendWechatAttachments: skipping over-budget attachment without fetchUrl');
+          failures.push({
+            name: attachment.name,
+            reason: 'over-budget-no-link',
+            type: attachment.type,
+          });
           undelivered.push(attachment);
         }
         continue;
@@ -169,12 +200,22 @@ export const sendWechatAttachments = async (
       );
       await api.sendItem(toUserId, item, contextToken);
     } catch (error) {
+      // iLink refusing an upload is the other half of "it sent a link instead
+      // of the picture". The message is the diagnostic part — it carries the
+      // iLink `errmsg` — so it rides the reason back to the delivery boundary
+      // rather than being printed once per attachment here.
       log(
         'sendWechatAttachments: failed to send %s attachment "%s": %O',
         attachment.type,
         attachment.name ?? '(unnamed)',
         error,
       );
+      failures.push({
+        detail: error instanceof Error ? error.message : String(error),
+        name: attachment.name,
+        reason: 'upload-failed',
+        type: attachment.type,
+      });
       undelivered.push(attachment);
     }
   }
@@ -185,5 +226,5 @@ export const sendWechatAttachments = async (
     await api.sendMessage(toUserId, message, contextToken);
   }
 
-  return undelivered;
+  return { failures, undelivered };
 };

@@ -2,7 +2,7 @@ import { t } from 'i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-export type TaskGroupBy = 'assignee' | 'none' | 'priority' | 'status';
+export type TaskGroupBy = 'assignee' | 'automationMode' | 'none' | 'priority' | 'status';
 export type TaskOrderBy = 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
 export type TaskOrderDirection = 'asc' | 'desc';
 
@@ -26,6 +26,7 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
 
 export interface TaskGroupMeta {
   assigneeId?: string;
+  automationMode?: 'heartbeat' | 'schedule';
   groupBy: TaskGroupBy;
   key: string;
   label: string;
@@ -47,7 +48,13 @@ export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
   subGroupBy: 'none',
 };
 
-const TASK_GROUP_BY_SET = new Set<TaskGroupBy>(['assignee', 'none', 'priority', 'status']);
+const TASK_GROUP_BY_SET = new Set<TaskGroupBy>([
+  'assignee',
+  'automationMode',
+  'none',
+  'priority',
+  'status',
+]);
 const TASK_ORDER_BY_SET = new Set<TaskOrderBy>([
   'assignee',
   'createdAt',
@@ -226,6 +233,16 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
     case 'assignee': {
       return getTaskAssigneeMeta(task);
     }
+    case 'automationMode': {
+      // Automated tasks created before automationMode was introduced are schedules.
+      const automationMode = task.automationMode === 'heartbeat' ? 'heartbeat' : 'schedule';
+      return {
+        automationMode,
+        groupBy: 'automationMode',
+        key: `automationMode:${automationMode}`,
+        label: t(`taskList.groupBy.${automationMode}`, { ns: 'chat' }),
+      };
+    }
     case 'priority': {
       const priority = getPriorityValue(task);
       const labelKeyMap: Record<number, string> = {
@@ -272,6 +289,9 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
 
 const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
   switch (groupBy) {
+    case 'automationMode': {
+      return group.automationMode === 'schedule' ? 0 : 1;
+    }
     case 'priority': {
       if (group.priority === undefined) return Number.MAX_SAFE_INTEGER;
       return PRIORITY_RANK_MAP[group.priority] ?? Number.MAX_SAFE_INTEGER;
@@ -302,6 +322,31 @@ export const sortGroupEntries = (
       ? groupA.label.localeCompare(groupB.label)
       : groupB.label.localeCompare(groupA.label);
   });
+};
+
+export const groupTaskItems = (
+  items: TaskListItem[],
+  groupBy: TaskGroupBy,
+  orderDirection?: TaskOrderDirection,
+): Array<[TaskGroupMeta, TaskListItem[]]> => {
+  const groups = new Map<string, { items: TaskListItem[]; meta: TaskGroupMeta }>();
+
+  for (const task of items) {
+    const meta = getTaskGroupMeta(task, groupBy);
+    const bucket = groups.get(meta.key);
+
+    if (bucket) {
+      bucket.items.push(task);
+    } else {
+      groups.set(meta.key, { items: [task], meta });
+    }
+  }
+
+  return sortGroupEntries(
+    [...groups.values()].map((group) => [group.meta, group.items]),
+    groupBy,
+    orderDirection,
+  );
 };
 
 /** Depth cap — guards a malformed parent chain from recursing without end. */

@@ -542,12 +542,12 @@ export type ServerDefaultHeterogeneousModels = Record<
  *
  * Claude Code reaches the relay through the Anthropic Messages ingress, which
  * translates the wire protocol in both directions rather than proxying it
- * (`normalizeAnthropicRequest` / `encodeAnthropicStream`). The CLI never names
- * the upstream model — it always sends the `lobehub-default` alias and the real
- * model comes from the operation token — so the upstream only has to be able to
- * call tools. Any tool-capable chat model in the relay catalog qualifies; the
- * `parseClaudeModelId` arm keeps Claude ids eligible in deployments whose
- * catalog omits `abilities`.
+ * (`normalizeAnthropicRequest` / `encodeAnthropicStream`). Both CLIs address
+ * the relay as `lobehub/${catalogId}`; the operation token is still the source
+ * of truth and the request must match that selection. The upstream only has to
+ * be able to call tools. Any tool-capable chat model in the relay catalog
+ * qualifies; the `parseClaudeModelId` arm keeps Claude ids eligible in
+ * deployments whose catalog omits `abilities`.
  *
  * Codex accepts native Responses models plus an explicit set of tool-capable
  * relay models configured through its custom model-catalog path. Keep that set

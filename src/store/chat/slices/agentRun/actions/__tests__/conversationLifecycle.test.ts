@@ -432,6 +432,170 @@ describe('ConversationLifecycle actions', () => {
         expect(setDocument).not.toHaveBeenCalled();
       });
 
+      it('should restore the pre-send editor snapshot when a gateway send fails', async () => {
+        // Regression: the composer is cleared the instant Enter is pressed, and
+        // only the client-runtime branch put the text back. The gateway branch
+        // just logged, failed the op and deleted the optimistic pair — so a
+        // server-side start refusal (e.g. `Topic <id> remained busy while
+        // starting operation ...`, thrown by the reservation gate before the
+        // user message is ever persisted) made the message vanish with no trace
+        // and no way to recover what was typed.
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Swallowed by gateway', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi
+          .fn()
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            isGatewayModeEnabled: () => true,
+            executeGatewayAgent: executeGatewayAgentSpy,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Swallowed by gateway',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the gateway branch actually ran and failed — otherwise a silent
+        // early bail would satisfy the restore assertions below by accident.
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
+      });
+
+      it('should not restore the composer when gateway setup fails after message acceptance', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const executeGatewayAgentSpy = vi.fn().mockImplementation(async (params) => {
+          params.onMessageAccepted();
+          throw new Error('gateway client initialization failed');
+        });
+
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent: executeGatewayAgentSpy,
+            isGatewayModeEnabled: () => true,
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            message: 'Already persisted',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalledOnce();
+        expect(setDocument).not.toHaveBeenCalled();
+        expect(setJSONState).not.toHaveBeenCalled();
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeUndefined();
+      });
+
+      it('should restore the pre-send editor snapshot when a hetero send fails', async () => {
+        // Same silent-discard shape as the gateway branch above: persistence
+        // throws, the temp rows are cleaned up, and the typed text is gone.
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Swallowed by hetero', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockRejectedValue(
+            new TRPCClientError('Topic tpc_test remained busy while starting operation'),
+          );
+
+        act(() => {
+          useChatStore.setState({
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue({ root: { children: [], type: 'root' } }),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Swallowed by hetero',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        // Prove the hetero persistence branch actually ran and failed.
+        expect(sendMessageInServerSpy).toHaveBeenCalled();
+        expect(sendMessageOperation?.status).toBe('failed');
+
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
+      });
+
       it('should move and adopt a first-turn voice row without sending local-only history', async () => {
         const { result } = renderHook(() => useChatStore());
         const context = createTestContext();

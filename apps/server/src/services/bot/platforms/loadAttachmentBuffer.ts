@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import { fetchPublicUrl } from './publicUrlFetch';
+import { fetchPublicUrl, redactUrlForLog } from './publicUrlFetch';
 
 const log = debug('bot-platform:load-attachment');
 
@@ -134,7 +134,7 @@ export const fetchCappedBuffer = async (
     const { response } = fetched;
     try {
       if (!response.ok) {
-        log('fetchCappedBuffer: HTTP %d for %s', response.status, url);
+        log('fetchCappedBuffer: HTTP %d for %s', response.status, redactUrlForLog(url));
         return undefined;
       }
 
@@ -147,7 +147,7 @@ export const fetchCappedBuffer = async (
           'fetchCappedBuffer: content-length %d exceeds the %d byte cap for %s',
           declared,
           limit,
-          url,
+          redactUrlForLog(url),
         );
         return undefined;
       }
@@ -159,7 +159,8 @@ export const fetchCappedBuffer = async (
         limit,
         Number.isFinite(declared) ? declared : undefined,
       );
-      if (!buffer) log('fetchCappedBuffer: %s exceeded the %d byte cap', url, limit);
+      if (!buffer)
+        log('fetchCappedBuffer: %s exceeded the %d byte cap', redactUrlForLog(url), limit);
       return buffer;
     } finally {
       // Only safe once the body has been read: disposing earlier would abort
@@ -167,7 +168,7 @@ export const fetchCappedBuffer = async (
       await fetched.dispose();
     }
   } catch (error) {
-    log('fetchCappedBuffer: fetch failed for %s: %O', url, error);
+    log('fetchCappedBuffer: fetch failed for %s: %O', redactUrlForLog(url), error);
     return undefined;
   }
 };

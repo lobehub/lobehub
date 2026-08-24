@@ -212,10 +212,11 @@ describe('compressContext executor', () => {
         topicId: 'topic-123',
       }),
     );
-    expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+    expect(result.newState.messages).toEqual([
       { content: 'summary', id: 'group-123', role: 'compressedGroup' },
       preservedMessage,
     ]);
+    expect((result.nextContext?.payload as any).compressedMessages).toBeUndefined();
     expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
     expect(result.events).toContainEqual({
       groupId: 'group-123',
@@ -331,7 +332,7 @@ describe('compressContext executor', () => {
         sourceGroupIds: ['source-group-1', 'source-group-2'],
       }),
     );
-    expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+    expect(result.newState.messages).toEqual([
       { content: 'combined summary', id: 'group-123', role: 'compressedGroup' },
     ]);
     expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
@@ -434,10 +435,8 @@ describe('compressContext executor', () => {
       }),
     );
     expect(compressionFinalizeGroup).not.toHaveBeenCalled();
-    expect(result.nextContext?.payload as any).toMatchObject({
-      compressedMessages: expect.arrayContaining([sourceGroup]),
-      skipped: true,
-    });
+    expect(result.newState.messages).toEqual(expect.arrayContaining([sourceGroup]));
+    expect(result.nextContext?.payload as any).toMatchObject({ skipped: true });
   });
 
   it('rolls back instead of finalizing when the compression signal is aborted', async () => {

@@ -24,7 +24,6 @@ import {
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
-import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
@@ -818,6 +817,39 @@ export class ConversationLifecycleActionImpl {
       const ids = options?.preserveOptimisticUser ? [tempAssistantId] : [tempId, tempAssistantId];
       this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
     };
+    /**
+     * Put the typed message back in the composer when a send fails before the
+     * user message was persisted. The composer is cleared the instant Enter is
+     * pressed, so without this the text is gone for good — the run never
+     * happened, and there is no persisted row to recover it from.
+     *
+     * Shared by all three runtime branches. Gateway and hetero previously only
+     * logged and deleted the optimistic pair, so a server-side start refusal
+     * (e.g. the topic-start reservation reporting the topic busy) was
+     * indistinguishable from the message being silently swallowed.
+     */
+    const restoreComposerAfterFailedSend = (error: unknown) => {
+      if (preserveComposer || hasNotifiedMessageAccepted) return;
+
+      // Cancellation is a deliberate user action with its own restore path
+      // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
+      // composer here would fight it.
+      const isAbort =
+        error instanceof Error &&
+        (error.message.includes('aborted') || error.name === 'AbortError');
+      if (isAbort) return;
+
+      this.#get().updateOperationMetadata(operationId, {
+        inputSendErrorMsg: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      const op = this.#get().operations[operationId];
+      if (op?.metadata.inputEditorTempState) {
+        targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
+      } else {
+        targetInputEditor?.setDocument('markdown', message);
+      }
+    };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;
 
@@ -1320,6 +1352,7 @@ export class ConversationLifecycleActionImpl {
             message: e instanceof Error ? e.message : 'Unknown error',
             type: 'HeterogeneousAgentError',
           });
+          restoreComposerAfterFailedSend(e);
         }
         cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
         detachUnacceptedCallerAbort();
@@ -1698,6 +1731,7 @@ export class ConversationLifecycleActionImpl {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'GatewayError',
         });
+        restoreComposerAfterFailedSend(e);
         cleanupTempMessages({
           preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
         });
@@ -1935,19 +1969,7 @@ export class ConversationLifecycleActionImpl {
         });
       }
 
-      if (!preserveComposer && e instanceof TRPCClientError) {
-        const isAbort = e.message.includes('aborted') || e.name === 'AbortError';
-        // Check if error is due to cancellation
-        if (!isAbort) {
-          this.#get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
-          const op = this.#get().operations[operationId];
-          if (op?.metadata.inputEditorTempState) {
-            targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
-          } else {
-            targetInputEditor?.setDocument('markdown', message);
-          }
-        }
-      }
+      restoreComposerAfterFailedSend(e);
     } finally {
       // Roll the optimistic pair back only when the send did not land (cancel or
       // failure). On success there is nothing to clean up: the rows were created

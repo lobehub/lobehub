@@ -10,7 +10,7 @@ vi.mock('@/envs/file', () => ({
   fileEnv: { S3_ENDPOINT: 'http://minio.internal:9000', S3_PUBLIC_DOMAIN: undefined },
 }));
 
-const { fetchPublicUrl } = await import('./publicUrlFetch');
+const { fetchPublicUrl, redactUrlForLog } = await import('./publicUrlFetch');
 
 const ok = () => ({ headers: new Headers(), ok: true, status: 200 }) as any;
 
@@ -356,5 +356,35 @@ describe('fetchPublicUrl', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     expect(await fetchPublicUrl('https://cdn.example.com/loop', 1000)).toBeUndefined();
+  });
+});
+
+describe('redactUrlForLog', () => {
+  // Every log line in this chain goes through here. A presigned storage URL
+  // carries `X-Amz-Credential` / `X-Amz-Signature` in its query string, logs
+  // outlive the signature, and this module's loader is reachable from
+  // `botMessage`, whose schema takes a caller-supplied URL.
+  it('drops the query string but keeps the object identity', () => {
+    expect(
+      redactUrlForLog(
+        'https://bucket.example.com/asset/1/photo.png?X-Amz-Credential=AKIAEXAMPLE&X-Amz-Signature=deadbeefcafe',
+      ),
+    ).toBe('https://bucket.example.com/asset/1/photo.png');
+  });
+
+  it('drops credentials embedded in the authority', () => {
+    expect(redactUrlForLog('https://user:secret@example.com/a/b')).toBe('https://example.com/a/b');
+  });
+
+  it('drops the fragment as well', () => {
+    expect(redactUrlForLog('https://example.com/a#token=abc')).toBe('https://example.com/a');
+  });
+
+  it('never echoes a value it cannot parse', () => {
+    expect(redactUrlForLog('not a url?secret=abc')).toBe('(unparseable url)');
+  });
+
+  it('accepts an already-parsed URL', () => {
+    expect(redactUrlForLog(new URL('https://example.com/x?y=1'))).toBe('https://example.com/x');
   });
 });

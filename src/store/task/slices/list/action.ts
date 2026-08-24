@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { isTaskListKey, taskKeys } from '@/libs/swr/keys';
+import { isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -78,7 +78,12 @@ export class TaskListSliceActionImpl {
   refreshTaskGroupList = async (): Promise<void> => {
     const { listAgentId, listVisibility } = this.#get();
     await mutate(
-      taskKeys.groupList(listAgentId, listVisibility, projectIdFromListKey(listAgentId)),
+      taskKeys.groupList(
+        listAgentId,
+        listVisibility,
+        projectIdFromListKey(listAgentId),
+        this.#get().groupListQueryAutomated,
+      ),
     );
   };
 
@@ -94,10 +99,17 @@ export class TaskListSliceActionImpl {
       // boundaries (touching reorders `updatedAt`, scheduling flips the
       // automation filter), so they are invalidated by root, not enumerated.
       mutate(isTaskListKey),
-      mutate(taskKeys.groupList(listAgentId, listVisibility, projectId)),
+      mutate(
+        taskKeys.groupList(
+          listAgentId,
+          listVisibility,
+          projectId,
+          this.#get().groupListQueryAutomated,
+        ),
+      ),
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
-      mutate(taskKeys.scheduledList(ALL_AGENTS_LIST_KEY)),
+      mutate(isScheduledTaskListKey),
     ]);
   };
 
@@ -124,19 +136,24 @@ export class TaskListSliceActionImpl {
     options: {
       agentId?: string;
       allAgents?: boolean;
+      automated?: boolean;
       enabled?: boolean;
       projectId?: string;
     } = {},
   ) => {
-    const { agentId, allAgents = false, enabled = true, projectId } = options;
+    const { agentId, allAgents = false, automated, enabled = true, projectId } = options;
     const effectiveKey = projectId
       ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
       : allAgents
         ? ALL_AGENTS_LIST_KEY
         : agentId;
-    if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
+    if (
+      effectiveKey &&
+      (this.#get().listAgentId !== effectiveKey ||
+        this.#get().groupListQueryAutomated !== automated)
+    ) {
       this.#set(
-        { ...scopeChangeResetState, listAgentId: effectiveKey },
+        { ...scopeChangeResetState, groupListQueryAutomated: automated, listAgentId: effectiveKey },
         false,
         'useFetchTaskGroupList/syncAgentId',
       );
@@ -144,10 +161,13 @@ export class TaskListSliceActionImpl {
     const listVisibility = this.#get().listVisibility;
 
     return useClientDataSWR(
-      enabled && effectiveKey ? taskKeys.groupList(effectiveKey, listVisibility, projectId) : null,
+      enabled && effectiveKey
+        ? taskKeys.groupList(effectiveKey, listVisibility, projectId, automated)
+        : null,
       async () => {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
+          automated,
           groups: DEFAULT_KANBAN_GROUPS,
           hasGoal: false,
           projectId,
@@ -168,33 +188,25 @@ export class TaskListSliceActionImpl {
   };
 
   /**
-   * The automated-task roll-up behind Home's "Scheduled" section. Always
-   * cross-agent and unnarrowed by visibility: Home is an overview, not a
-   * continuation of the Task page's filter chip — so it needs neither the
-   * agent scope nor the visibility argument the main list carries, and its
-   * own state fields keep it from colliding with `tasks`.
+   * The automated-task roll-up behind Home's "Scheduled" section. Each caller
+   * consumes its own SWR result because Home and the paginated Tasks page can
+   * coexist in Electron with different limits and offsets.
    */
-  useFetchScheduledTaskList = (options: { enabled?: boolean; limit?: number } = {}) => {
-    const { enabled = true, limit } = options;
-
+  useFetchScheduledTaskList = (
+    options: { enabled?: boolean; limit?: number; offset?: number } = {},
+  ) => {
+    const { enabled = true, limit, offset } = options;
     return useClientDataSWR(
-      enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY) : null,
+      enabled ? taskKeys.scheduledList(ALL_AGENTS_LIST_KEY, 'all', limit, offset) : null,
       async () =>
-        this.fetchTaskList({ automated: true, hasGoal: false, limit, orderBy: 'updatedAt' }),
-      {
-        onSuccess: (data: { data: TaskListItem[]; total: number }) => {
-          this.#set(
-            {
-              isScheduledTaskListInit: true,
-              scheduledTasks: data.data,
-              scheduledTasksTotal: data.total,
-            },
-            false,
-            'useFetchScheduledTaskList/onSuccess',
-          );
-        },
-        revalidateOnFocus: false,
-      },
+        this.fetchTaskList({
+          automated: true,
+          hasGoal: false,
+          limit,
+          offset,
+          orderBy: 'updatedAt',
+        }),
+      { revalidateOnFocus: false },
     );
   };
 

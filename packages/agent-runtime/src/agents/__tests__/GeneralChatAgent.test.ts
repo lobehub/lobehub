@@ -929,6 +929,109 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual(expectCompressionInstruction(state.messages));
     });
 
+    it('should not immediately recompress a recently compressed context near the initial threshold', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig: {
+          enabled: true,
+          maxWindowToken: 64_000,
+          thresholdRatio: 0.5,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [
+          {
+            content: 'The work is complete; generate analysis.json next.',
+            role: 'compressedGroup',
+          },
+          {
+            content: '',
+            metadata: { usage: { totalOutputTokens: 26_000 } },
+            role: 'assistant',
+          },
+          { content: 'Directory contents', role: 'tool', tool_call_id: 'call-1' },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tool_result', { parentMessageId: 'tool-msg-1' }),
+        state,
+      );
+
+      expect((result as any).type).toBe('call_llm');
+    });
+
+    it('should recompress an existing summary before consuming reserved prompt headroom', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig: {
+          enabled: true,
+          maxWindowToken: 64_000,
+          thresholdRatio: 0.5,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [
+          { content: 'Existing summary', role: 'compressedGroup' },
+          {
+            content: '',
+            metadata: { usage: { totalOutputTokens: 34_000 } },
+            role: 'assistant',
+          },
+          { content: 'Large tool result', role: 'tool', tool_call_id: 'call-1' },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tool_result', { parentMessageId: 'tool-msg-1' }),
+        state,
+      );
+
+      expect(result).toEqual({
+        payload: {
+          currentTokenCount: expect.any(Number),
+          existingSummary: 'Existing summary',
+          messages: state.messages,
+        },
+        type: 'compress_context',
+      });
+    });
+
+    it('should honor an explicit recompression threshold below the initial threshold', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        compressionConfig: {
+          enabled: true,
+          maxWindowToken: 64_000,
+          recompressionThresholdRatio: 0.6,
+          thresholdRatio: 0.8,
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const state = createMockState({
+        messages: [
+          { content: 'Existing summary', role: 'compressedGroup' },
+          {
+            content: '',
+            metadata: { usage: { totalOutputTokens: 32_000 } },
+            role: 'assistant',
+          },
+        ] as any,
+      });
+
+      const result = await agent.runner(
+        createMockContext('tool_result', { parentMessageId: 'tool-msg-1' }),
+        state,
+      );
+
+      expect((result as any).type).toBe('compress_context');
+    });
+
     // follow-up: when state.forceFinish is set, RuntimeExecutors strips
     // every tool before the LLM call (buildStepToolDelta returns deactivatedToolIds
     // ['*']). The compression budget must mirror that stripping — otherwise the

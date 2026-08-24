@@ -44,9 +44,10 @@ export interface CheckpointConfig {
 }
 
 /**
- * Task-level delivery-acceptance (verify) gate config, persisted under
- * `tasks.config.verify`. This is the authoritative source for a task run's
- * verify gate — it is *not* unioned with any agent-level mount
+ * Legacy Task-level delivery-acceptance gate config persisted under
+ * `tasks.config.verify`. New flows persist this policy on the Task's Acceptance;
+ * this shape remains for API compatibility and lazy migration. It is *not*
+ * unioned with any agent-level mount
  * (`agencyConfig.verifyRubricId`) — the task config is authoritative and never
  * field-level merged with the agent-level rubric.
  *
@@ -512,7 +513,7 @@ export interface TaskDetailData {
   topicCount?: number;
   updatedAt?: string;
   userId?: string | null;
-  /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
+  /** Task Acceptance policy, exposed in the legacy TaskVerifyConfig API shape. */
   verify?: TaskVerifyConfig | null;
   /** Visibility within a workspace. 'public' is workspace-shared (default);
    *  'private' is only visible to the creator. Ignored in personal mode. */

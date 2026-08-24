@@ -1,13 +1,21 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '@/server/services/bot/platforms/publicUrlFetch';
+
 import type { InstallationCredentials } from './installations/types';
 
 // Attachments in these fixtures carry no `size`, so the budget pass probes the
 // URL for one. These tests are about delivery mechanics, not budgeting — answer
 // the probe with a small, in-budget length. The probe's own behaviour is
 // covered in attachmentBudget.test.ts.
-vi.mock('@/server/services/bot/platforms/publicUrlFetch', () => ({
+vi.mock('@/server/services/bot/platforms/publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>(
+    '@/server/services/bot/platforms/publicUrlFetch',
+  )),
   fetchPublicUrl: async () => ({
     dispose: async () => undefined,
     response: { headers: new Headers({ 'content-length': '1024' }), ok: true, status: 200 },

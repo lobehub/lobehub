@@ -1,3 +1,7 @@
+import {
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
+} from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
@@ -19,18 +23,19 @@ const app = new Hono();
 app.post('/v1/messages', requireHeteroModelInvocation, async (c) => {
   const request = await c.req.json().catch(() => null);
   if (!isRecord(request)) throw new HTTPException(400, { message: 'Invalid JSON request' });
-  if (request.model !== SERVER_DEFAULT_MODEL_ALIAS) {
-    throw new HTTPException(400, { message: `model must be ${SERVER_DEFAULT_MODEL_ALIAS}` });
-  }
-  if (request.stream !== true) {
-    throw new HTTPException(400, { message: 'server-default Anthropic requests must stream' });
-  }
   const context = c as Context;
   const claims = context.get('heteroOperationClaims') as HeteroOperationJwtClaims;
   if (!claims.provider_id || !claims.model) {
     throw new HTTPException(403, { message: 'Operation token has no server model selection' });
   }
+  if (!isServerDefaultHeterogeneousModel(request.model, claims.model)) {
+    throw new HTTPException(400, { message: 'model must match the server operation selection' });
+  }
+  if (request.stream !== true) {
+    throw new HTTPException(400, { message: 'server-default Anthropic requests must stream' });
+  }
   const workspaceId = context.get('workspaceId');
+  const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
 
   // Anything the model runtime throws has to be turned into an Anthropic error
   // envelope here. Letting it escape hands the client a bodyless 500 — see
@@ -56,7 +61,7 @@ app.post('/v1/messages', requireHeteroModelInvocation, async (c) => {
       502,
     );
   }
-  return new Response(encodeAnthropicStream(body), {
+  return new Response(encodeAnthropicStream(body, requestModel), {
     headers: { 'Cache-Control': 'no-cache', 'Content-Type': 'text/event-stream' },
   });
 });

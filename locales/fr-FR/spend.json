@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (Jetons par seconde) : Production de jetons par seconde",
+  "duration.TPS": "tok/s (Jetons par seconde) : Production de jetons par seconde",
   "duration.TTFT": "TTFT (Temps jusqu’au premier jeton) : Latence du premier jeton",
   "duration.completion": "Temps de génération de la sortie",
   "duration.latency": "Durée",

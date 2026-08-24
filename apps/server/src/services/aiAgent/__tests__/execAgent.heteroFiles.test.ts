@@ -1027,12 +1027,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         'parent-operation',
         expect.objectContaining({ operationId: expect.stringContaining('op_') }),
       );
-      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith(
-        'topic-1',
-        expect.any(String),
-        'parent-operation',
-        undefined,
-      );
+      expect(topicMock.tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', expect.any(String), {
+        allowRunningOperationId: 'parent-operation',
+        ignoreRunningOperation: undefined,
+        replacesOperationId: undefined,
+      });
       expect(mockCreateOperationMetadata).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ mirrorToOperationId: 'parent-operation' }),

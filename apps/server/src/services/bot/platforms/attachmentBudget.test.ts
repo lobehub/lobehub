@@ -1,10 +1,16 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from './publicUrlFetch';
+
 // These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
 // for real, which has nothing to do with what they assert. Its own behaviour is
 // covered in publicUrlFetch.test.ts.
-vi.mock('./publicUrlFetch', () => ({
+vi.mock('./publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('./publicUrlFetch')),
   fetchPublicUrl: async (url: string, timeoutMs: number) => ({
     dispose: async () => undefined,
     response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
@@ -33,6 +39,7 @@ const {
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
+  summarizeDegradations,
 } = await import('./attachmentBudget');
 
 const MB = 1024 * 1024;
@@ -258,6 +265,101 @@ describe('prepareAttachmentsForBudget', () => {
     expect(result.fallbackLines[0]).toContain('https://example.com/f/huge.png');
   });
 
+  it('sends the original as a link when the sender picked the link strategy', async () => {
+    // The point of the choice is that the original survives: a `link` push must
+    // not download or re-encode the image at all, or the recipient would get a
+    // JPEG-shaped link to something that no longer matches the file.
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+      { oversizeImageStrategy: 'link' },
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sharpMocks.toBuffer).not.toHaveBeenCalled();
+    expect(result.attachments).toEqual([]);
+    expect(result.fallbackLines[0]).toContain('big.png');
+    expect(result.fallbackLines[0]).toContain('https://example.com/f/big.png');
+  });
+
+  it('still compresses when no strategy is given', async () => {
+    // The option is additive: every caller that predates it keeps compressing.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(Buffer.alloc(3 * MB, 1), { status: 200 })),
+    );
+    sharpMocks.toBuffer.mockResolvedValueOnce(Buffer.alloc(1 * MB, 2));
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+    );
+
+    expect(result.fallbackLines).toEqual([]);
+    expect(result.attachments[0]).toMatchObject({ mimeType: 'image/jpeg' });
+  });
+
+  it('reports which step failed when an image degrades to a link', async () => {
+    // Regression: every failure in this chain collapsed into the same silent
+    // `undefined`, so a caller could degrade every image in a push with no way
+    // to say which step gave up — the sender could only report "it sent a
+    // link". The reason rides the result; nothing in this module prints.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+    );
+
+    expect(result.fallbackLines).toHaveLength(1);
+    expect(result.degradations).toEqual([
+      { name: 'big.png', reason: 'source-unavailable', size: 3 * MB, type: 'image' },
+    ]);
+  });
+
+  it("labels the sender's own link choice as a choice, not a failure", async () => {
+    const result = await prepareAttachmentsForBudget(
+      [
+        {
+          fetchUrl: 'https://example.com/f/big.png',
+          name: 'big.png',
+          size: 3 * MB,
+          type: 'image' as const,
+        },
+      ],
+      budget,
+      { oversizeImageStrategy: 'link' },
+    );
+
+    expect(result.degradations).toEqual([
+      { name: 'big.png', reason: 'strategy-link', size: 3 * MB, type: 'image' },
+    ]);
+  });
+
   it('caps the displayed filename so one fallback line stays short', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -362,5 +464,56 @@ describe('splitFallbackMessages', () => {
     const line = 'x'.repeat(50);
 
     expect(splitFallbackMessages([line], 10)).toEqual([line]);
+  });
+});
+
+describe('summarizeDegradations', () => {
+  it('flattens a filename that would forge extra log lines', () => {
+    // A filename is attacker-controlled and lands in persistent logs; a newline
+    // in it fabricates a whole additional entry that a reader cannot tell from
+    // a real one.
+    const summary = summarizeDegradations([
+      {
+        name: 'invoice.png\n[messenger:wechat] 0 attachment(s) could not be sent as files',
+        reason: 'source-unavailable',
+        type: 'image',
+      },
+    ]);
+
+    expect(summary.split('\n')).toHaveLength(1);
+    expect(summary).toContain('invoice.png');
+  });
+
+  it('strips control characters', () => {
+    const summary = summarizeDegradations([
+      { name: 'a b c\td', reason: 'upload-failed', type: 'file' },
+    ]);
+
+    expect(summary).toBe('a b c d: upload-failed');
+  });
+
+  it('caps an absurd filename so it cannot crowd out the rest of the line', () => {
+    const summary = summarizeDegradations([
+      { name: 'n'.repeat(500), reason: 'compression-failed', type: 'image' },
+    ]);
+
+    expect(summary.length).toBeLessThan(120);
+    expect(summary).toContain('compression-failed');
+  });
+
+  it('sanitizes caller-supplied reason detail too', () => {
+    // `failures.detail` carries platform error text, no more trusted than the
+    // filename it sits next to.
+    const summary = summarizeDegradations([
+      { name: 'a.png', reason: 'upload-failed (bad\nmedia)', type: 'image' },
+    ]);
+
+    expect(summary.split('\n')).toHaveLength(1);
+  });
+
+  it('names the type when the attachment has no filename', () => {
+    expect(summarizeDegradations([{ reason: 'not-compressible', type: 'video' }])).toBe(
+      '(unnamed video): not-compressible',
+    );
   });
 });

@@ -9,6 +9,18 @@ import { log } from '../utils/logger';
 const nodeIcon = { decision: '◆', finding: '●', problem: '◇', work: '▣' } as const;
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
 
+interface GoalRunTickResult extends GoalTickResult {
+  pollCount?: number;
+  waitedMs?: number;
+}
+
+const isSameWaitingState = (previous: GoalRunTickResult | undefined, current: GoalTickResult) =>
+  previous?.outcome === 'waiting_external' &&
+  current.outcome === 'waiting_external' &&
+  previous.message === current.message &&
+  previous.nodeId === current.nodeId &&
+  previous.taskId === current.taskId;
+
 function printGraph(graph: GoalGraphSnapshot) {
   console.log(`\n${pc.bold(graph.goal.title)} ${pc.dim(graph.goal.id)} [${graph.goal.status}]`);
   if (graph.goal.requirement) console.log(`${pc.dim('Requirement:')} ${graph.goal.requirement}`);
@@ -111,13 +123,23 @@ export function registerGoalCommand(program: Command) {
     .option('--json', 'Output tick results as JSON')
     .action(async (id: string, options: { json?: boolean; maxTicks: string; pollMs: string }) => {
       const client = await getTrpcClient();
-      const results: GoalTickResult[] = [];
+      const results: GoalRunTickResult[] = [];
       const maxTicks = Number.parseInt(options.maxTicks, 10);
       const pollMs = Number.parseInt(options.pollMs, 10);
       for (let index = 0; index < maxTicks; index++) {
         const { data } = await client.goal.tick.mutate({ id });
-        results.push(data);
-        if (!options.json) printTick(data);
+        const previous = results.at(-1);
+        if (isSameWaitingState(previous, data)) {
+          previous.pollCount = (previous.pollCount ?? 1) + 1;
+          previous.waitedMs = (previous.waitedMs ?? pollMs) + pollMs;
+        } else {
+          results.push(
+            data.outcome === 'waiting_external'
+              ? { ...data, pollCount: 1, waitedMs: pollMs }
+              : data,
+          );
+          if (!options.json) printTick(data);
+        }
         if (terminalOutcomes.has(data.outcome)) break;
         if (data.outcome === 'waiting_external') {
           await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -125,7 +147,7 @@ export function registerGoalCommand(program: Command) {
       }
       if (options.json) outputJson(results);
       const last = results.at(-1);
-      if (last && !terminalOutcomes.has(last.outcome) && results.length === maxTicks) {
+      if (last && !terminalOutcomes.has(last.outcome)) {
         log.warn(`Stopped after ${maxTicks} ticks; rerun to continue.`);
       }
     });

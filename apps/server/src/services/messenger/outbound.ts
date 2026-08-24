@@ -1,9 +1,11 @@
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import debug from 'debug';
 
 import {
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
+  summarizeDegradations,
 } from '@/server/services/bot/platforms/attachmentBudget';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import {
@@ -42,10 +44,12 @@ export const sendOutboundDirectMessage = async (params: {
   attachments?: BotMessageAttachment[];
   content?: string;
   credentials: InstallationCredentials;
+  /** The sender's choice for images over the platform budget. */
+  oversizeImageStrategy?: MessengerOversizeImageStrategy;
   /** Platform-side id of the recipient: Telegram chat id, Discord/Slack user id. */
   platformUserId: string;
 }): Promise<void> => {
-  const { attachments, content, credentials, platformUserId } = params;
+  const { attachments, content, credentials, oversizeImageStrategy, platformUserId } = params;
   const { botToken, platform } = credentials;
   const text = content?.trim();
 
@@ -64,8 +68,8 @@ export const sendOutboundDirectMessage = async (params: {
       : undefined;
   const prepared =
     attachments?.length && budget
-      ? await prepareAttachmentsForBudget(attachments, budget)
-      : { attachments: attachments ?? [], fallbackLines: [] };
+      ? await prepareAttachmentsForBudget(attachments, budget, { oversizeImageStrategy })
+      : { attachments: attachments ?? [], degradations: [], fallbackLines: [] };
 
   // Every prepared attachment lands in exactly one of these two legs, so the
   // guard above already covers "nothing to send". The link leg is batched to
@@ -83,6 +87,16 @@ export const sendOutboundDirectMessage = async (params: {
     files?.length ?? 0,
     prepared.fallbackLines.length,
   );
+
+  // One line per DM, at the boundary — same rule as the WeChat path. A sender's
+  // own `link` choice is not a degradation worth recording, and the wording
+  // claims only what is settled here: these could not go out as files. The link
+  // leg is sent below and can still fail.
+  const unintended = prepared.degradations.filter((d) => d.reason !== 'strategy-link');
+  if (unintended.length > 0)
+    console.warn(
+      `[messenger:outbound] ${platform}: ${unintended.length} attachment(s) could not be sent as files — ${summarizeDegradations(unintended)}`,
+    );
 
   switch (platform) {
     case 'telegram': {

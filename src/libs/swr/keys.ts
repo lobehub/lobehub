@@ -273,6 +273,9 @@ export const recentKeys = {
 export const isTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:list';
 
+export const isScheduledTaskListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'task:scheduledList';
+
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
@@ -281,10 +284,14 @@ export const taskKeys = {
       agentKey: string | undefined,
       visibility: 'all' | 'private' | 'workspace' = 'all',
       projectId?: string,
-    ) =>
-      projectId
-        ? ['task:groupList', agentKey, visibility, projectId]
-        : ['task:groupList', agentKey, visibility],
+      automated?: boolean,
+    ) => [
+      'task:groupList',
+      agentKey,
+      visibility,
+      ...(projectId ? [projectId] : []),
+      ...(automated === undefined ? [] : [{ automated }]),
+    ],
   ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
@@ -333,10 +340,16 @@ export const taskKeys = {
    */
   scheduledList: def(
     'task:scheduledList',
-    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      limit?: number,
+      offset?: number,
+    ) => [
       'task:scheduledList',
       agentKey,
       visibility,
+      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
     ],
   ),
   /**

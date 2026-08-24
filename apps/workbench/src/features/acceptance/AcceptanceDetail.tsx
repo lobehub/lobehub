@@ -43,6 +43,11 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline: auto;
     padding-block: 20px;
     padding-inline: 24px;
+
+    @media (width <= 768px) {
+      padding-block: 16px;
+      padding-inline: 12px;
+    }
   `,
 }));
 

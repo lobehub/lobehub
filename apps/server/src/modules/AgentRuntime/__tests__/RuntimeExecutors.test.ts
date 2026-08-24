@@ -1567,11 +1567,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(mockFinalizeCompression).toHaveBeenCalledTimes(1);
       expect(mockChat).toHaveBeenCalledTimes(1);
       expect(result.nextContext?.phase).toBe('compression_result');
-      expect((result.nextContext?.payload as any).compressedMessages[0]).toEqual({
+      expect(result.newState.messages[0]).toEqual({
         content: 'summary',
         id: 'group-123',
         role: 'compressedGroup',
       });
+      expect((result.nextContext?.payload as any).compressedMessages).toBeUndefined();
       expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
       expect(result.events).toContainEqual({
         groupId: 'group-123',
@@ -1630,8 +1631,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const result = await executors.compress_context!(instruction, state);
 
       expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
+      expect(result.newState.messages).toEqual(state.messages);
       expect(result.nextContext?.payload as any).toMatchObject({
-        compressedMessages: state.messages,
         groupId: '',
         parentMessageId: undefined,
         skipped: true,
@@ -1656,8 +1657,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
       expect(mockFinalizeCompression).not.toHaveBeenCalled();
+      expect(result.newState.messages).toEqual([{ content: 'history', role: 'user' }]);
       expect(result.nextContext?.payload as any).toMatchObject({
-        compressedMessages: [{ content: 'history', role: 'user' }],
         parentMessageId: 'assistant-existing',
         skipped: true,
       });
@@ -1723,7 +1724,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         ['msg-history', 'assistant-existing'],
         expect.any(Object),
       );
-      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      expect(result.newState.messages).toEqual([
         { content: 'summary', id: 'group-123', role: 'compressedGroup' },
         { content: 'continue with this exact instruction', role: 'user' },
       ]);
@@ -1759,7 +1760,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.compress_context!(instruction, state);
 
-      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      expect(result.newState.messages).toEqual([
         { content: 'history', id: 'msg-history', role: 'user' },
       ]);
     });
@@ -1804,7 +1805,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       const result = await executors.compress_context!(instruction, state);
 
-      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+      expect(result.newState.messages).toEqual([
         { content: 'summary', id: 'group-123', role: 'compressedGroup' },
         preservedMessage,
       ]);

@@ -1,12 +1,17 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '../publicUrlFetch';
 import { sendFeishuAttachments } from './sendAttachments';
 
 // These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
 // for real, which has nothing to do with what they assert. Its own behaviour is
 // covered in publicUrlFetch.test.ts.
-vi.mock('../publicUrlFetch', () => ({
+vi.mock('../publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
   fetchPublicUrl: async (url: string, timeoutMs: number) => ({
     dispose: async () => undefined,
     response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),

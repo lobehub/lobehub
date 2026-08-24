@@ -27,6 +27,7 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
+    settleRunningOperation: vi.fn().mockResolvedValue(undefined),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -167,6 +168,7 @@ function createTestAction() {
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
+    vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
@@ -1345,14 +1347,10 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // A late close of a finished op must NOT retire a NEWER operation that a
-    // racing retry/send already wrote — that would break reconnect-after-reload
-    // for the live run AND flip its topic out of the running state. None of the
-    // three writes (local marker, server marker, topic status) may fire when the
-    // topic has moved on. Reachable whenever a follow-up starts before the
-    // previous session closes: the terminal queue drain does it 100ms after the
-    // terminal, and a send right after `visible_output_end` does it sooner still.
-    it('does not retire the topic when its marker already belongs to a newer operation', async () => {
+    // A late close may observe a stale local marker even after another tab has
+    // started a newer operation. Send the completing operation id to the server
+    // so its row-locked compare-and-set can reject the stale clear.
+    it('settles by operation id without retiring a newer local operation', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
       const updateTopicStatus = vi.fn();
@@ -1426,13 +1424,17 @@ describe('GatewayActionImpl', () => {
       // Ignore any dispatches / writes from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
       updateTopicStatus.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
       expect(internalDispatchTopic).not.toHaveBeenCalled();
-      expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
       expect(updateTopicStatus).not.toHaveBeenCalled();
     });
 

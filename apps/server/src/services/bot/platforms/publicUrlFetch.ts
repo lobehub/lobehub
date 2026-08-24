@@ -60,6 +60,26 @@ const isTrustedOrigin = (url: URL, trusted: TrustedOrigin[]): boolean =>
       (origin.hostname === url.hostname || url.hostname.endsWith(`.${origin.hostname}`)),
   );
 
+/**
+ * A URL reduced to what is safe to write into a log line: origin + path.
+ *
+ * The query string is where the secrets are. A presigned storage URL carries
+ * `X-Amz-Credential` and `X-Amz-Signature` there, and this chain logs URLs that
+ * can come from a caller — `botMessage` accepts a `fetchUrl`. Logs outlive the
+ * signature they would leak, so the whole search component is dropped rather
+ * than filtered key by key, and a value that will not even parse is never
+ * echoed back.
+ */
+export const redactUrlForLog = (raw: string | URL): string => {
+  try {
+    const url = raw instanceof URL ? raw : new URL(raw);
+    // `origin` already excludes any `user:pass@` credentials.
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return '(unparseable url)';
+  }
+};
+
 const inV4Range = (ip: string, prefix: string, bits: number): boolean => {
   const toInt = (value: string) =>
     value.split('.').reduce((acc, part) => (acc << 8) + Number(part), 0) >>> 0;
@@ -179,7 +199,7 @@ const resolveSafeUrl = async (
   try {
     url = new URL(raw);
   } catch {
-    log('resolveSafeUrl: not a URL: %s', raw);
+    log('resolveSafeUrl: not a URL: %s', redactUrlForLog(raw));
     return undefined;
   }
 
@@ -360,7 +380,7 @@ export const fetchPublicUrl = async (
       target = new URL(location, safe.url).toString();
     }
 
-    log('fetchPublicUrl: too many redirects for %s', rawUrl);
+    log('fetchPublicUrl: too many redirects for %s', redactUrlForLog(rawUrl));
     await dispose();
     return undefined;
   } catch (error) {

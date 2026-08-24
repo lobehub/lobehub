@@ -2,8 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { AcceptanceModel } from '@/database/models/acceptance';
 import { TaskModel } from '@/database/models/task';
 import {
+  acceptances,
+  agents,
   goalEdges,
   goalEvents,
   goalNodeDecisions,
@@ -31,7 +34,9 @@ afterEach(async () => {
   await serverDB.delete(goalEvents);
   await serverDB.delete(goalNodes);
   await serverDB.delete(goals);
+  await serverDB.delete(acceptances);
   await serverDB.delete(tasks);
+  await serverDB.delete(agents);
   await serverDB.delete(users);
 });
 
@@ -50,7 +55,7 @@ describe('GoalService', () => {
     expect(current.workVersions).toHaveLength(1);
   });
 
-  it('keeps long goal requirements in the task instruction without overflowing its description', async () => {
+  it('keeps the overall requirement as background while making the current work authoritative', async () => {
     const service = new GoalService(serverDB, userId);
     const requirement = `Generate verified training data. ${'Detailed acceptance evidence. '.repeat(20)}`;
     const graph = await service.create({
@@ -63,8 +68,44 @@ describe('GoalService', () => {
     const task = await new TaskModel(serverDB, userId).findById(created.taskId!);
 
     expect(created.outcome).toBe('advanced');
-    expect(task?.description).toHaveLength(255);
+    expect(task?.description).toBe('Generate training data');
     expect(task?.instruction).toContain(requirement);
+    expect(task?.instruction).toContain(
+      'Current Work contract (authoritative execution scope): Generate training data',
+    );
+    expect(task?.instruction).toContain('Do not implement, validate, or pre-empt any sibling');
+    expect(task?.instruction).toContain(
+      'Do not invoke Acceptance skills or Acceptance CLI commands',
+    );
+  });
+
+  it('gates every responsible task with a work-scoped Acceptance requirement', async () => {
+    const service = new GoalService(serverDB, userId);
+    const agentId = 'goal-work-verifier-agent';
+    await serverDB.insert(agents).values({ id: agentId, title: 'Goal worker', userId });
+    const graph = await service.create({
+      agentId,
+      requirement: 'Generate data, then train and evaluate a model.',
+      title: 'Two-stage experiment',
+      work: ['Generate isolated data'],
+    });
+
+    const created = await service.tick(graph.goal.id);
+    const taskModel = new TaskModel(serverDB, userId);
+    const task = await taskModel.findById(created.taskId!);
+    const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+      'task',
+      created.taskId!,
+    );
+
+    expect(taskModel.shouldPauseOnTopicComplete(task!)).toBe(false);
+    expect(task?.config).not.toHaveProperty('verify');
+    expect(acceptance).toMatchObject({ config: { enabled: true } });
+    expect(acceptance?.config).not.toHaveProperty('verifierAgentId');
+    expect(acceptance?.requirement).toContain('Verify only this Work: Generate isolated data.');
+    expect(acceptance?.requirement).toContain(
+      'Ignore sibling and downstream Work deliverables; they are verified by their own Tasks.',
+    );
   });
 
   it('advances create task -> finding -> achieved without treating task creation as completion', async () => {

@@ -2,11 +2,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchCappedBuffer, loadAttachmentBuffer } from './loadAttachmentBuffer';
+import type * as PublicUrlFetch from './publicUrlFetch';
 
 // These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
 // for real, which has nothing to do with what they assert. Its own behaviour is
 // covered in publicUrlFetch.test.ts.
-vi.mock('./publicUrlFetch', () => ({
+vi.mock('./publicUrlFetch', async () => ({
+  // Real redaction — a stub here would let a leaking log line pass the test
+  // that exists to catch exactly that.
+  ...(await vi.importActual<typeof PublicUrlFetch>('./publicUrlFetch')),
   fetchPublicUrl: async (url: string, timeoutMs: number) => ({
     dispose: async () => undefined,
     response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),

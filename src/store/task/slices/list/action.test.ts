@@ -5,6 +5,7 @@ import { useTaskStore } from '../../store';
 // Mock task service
 vi.mock('@/services/task', () => ({
   taskService: {
+    groupList: vi.fn(),
     list: vi.fn(),
   },
 }));
@@ -22,6 +23,7 @@ beforeEach(() => {
     listAgentId: undefined,
     listQueryAutomated: undefined,
     listQueryVisibility: 'all',
+    listVisibility: 'all',
     tasks: [],
     tasksTotal: 0,
   });
@@ -222,6 +224,58 @@ describe('TaskListSliceAction', () => {
       expect(state.tasks).toEqual([]);
       expect(state.tasksTotal).toBe(0);
       expect(state.isTaskListInit).toBe(false);
+    });
+  });
+
+  describe('useFetchTaskGroupList', () => {
+    it('passes the ordinary-task automation filter through the kanban query', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchTaskGroupList({ allAgents: true, automated: false });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:groupList', '__all__', 'all', { automated: false }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
+      await fetcher();
+      expect(taskService.groupList).toHaveBeenCalledWith(
+        expect.objectContaining({ automated: false }),
+      );
+    });
+  });
+
+  describe('useFetchScheduledTaskList', () => {
+    it('keys and requests the selected scheduled-task page', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 });
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:scheduledList', '__all__', 'all', { limit: 50, offset: 50 }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
+      await fetcher();
+      expect(taskService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ automated: true, limit: 50, offset: 50 }),
+      );
+    });
+
+    it('keeps concurrent consumers isolated by their SWR keys', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 });
+      useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 });
+
+      expect(vi.mocked(useClientDataSWR).mock.calls.map(([key]) => key)).toEqual([
+        ['task:scheduledList', '__all__', 'all', { limit: 5, offset: undefined }],
+        ['task:scheduledList', '__all__', 'all', { limit: 50, offset: 50 }],
+      ]);
     });
   });
 

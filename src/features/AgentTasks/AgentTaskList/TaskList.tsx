@@ -1,13 +1,14 @@
 import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { ClipboardCheckIcon, UserRound } from 'lucide-react';
+import { CalendarClock, ClipboardCheckIcon, HeartPulse, UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
@@ -24,9 +25,8 @@ import {
   buildTaskRows,
   collapseSubTasks,
   compareTaskItems,
-  getTaskGroupMeta,
+  groupTaskItems,
   HIDDEN_WHEN_COMPLETED_STATUSES,
-  sortGroupEntries,
 } from './listViewOptions';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import TaskRowIndent from './TaskRowIndent';
@@ -39,10 +39,13 @@ interface TaskListProps {
    * on a scope/visibility switch and never disagrees with the empty signal.
    */
   data?: unknown;
+  emptyDescription?: string;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
   error?: unknown;
   /** First-load / retry in flight (SWR `isLoading`). */
   isLoading?: boolean;
+  /** Optional list source for alternate task collections such as scheduled tasks. */
+  items?: TaskListItem[];
   onRetry?: () => void;
   onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
@@ -81,7 +84,13 @@ const PRIORITY_ICON_MAP = {
   4: PriorityLowIcon,
 } as const;
 
-const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>(['assignee', 'none', 'priority', 'status']);
+const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
+  'assignee',
+  'automationMode',
+  'none',
+  'priority',
+  'status',
+]);
 
 const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: TaskGroupBy) => {
   if (!value) return fallback;
@@ -108,6 +117,16 @@ const renderGroupPrefix = (group: TaskGroupMeta) => {
     return (
       <PriorityIcon
         color={priority === 1 ? cssVar.orange : cssVar.colorTextDescription}
+        size={16}
+      />
+    );
+  }
+
+  if (group.groupBy === 'automationMode') {
+    return (
+      <Icon
+        color={cssVar.colorTextDescription}
+        icon={group.automationMode === 'heartbeat' ? HeartPulse : CalendarClock}
         size={16}
       />
     );
@@ -142,9 +161,11 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
 );
 
 const TaskList = memo<TaskListProps>((props) => {
-  const { data, error, isLoading, onRetry, onShowHiddenCompleted, options, routeScope } = props;
+  const { data, error, isLoading, items, onRetry, onShowHiddenCompleted, options, routeScope } =
+    props;
   const { t } = useTranslation('chat');
-  const tasks = useTaskStore(taskListSelectors.taskList);
+  const storeTasks = useTaskStore(taskListSelectors.taskList);
+  const tasks = items ?? storeTasks;
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
@@ -179,24 +200,7 @@ const TaskList = memo<TaskListProps>((props) => {
     const subGroupOrderDirection =
       options.orderBy === effectiveSubGroupBy ? options.orderDirection : undefined;
 
-    const primaryGroupMap = new Map<string, { items: typeof visibleTasks; meta: TaskGroupMeta }>();
-    for (const task of sortedTasks) {
-      const primaryGroup = getTaskGroupMeta(task, groupBy);
-      if (!primaryGroup?.key) continue;
-      const bucket = primaryGroupMap.get(primaryGroup.key);
-
-      if (bucket) {
-        bucket.items.push(task);
-      } else {
-        primaryGroupMap.set(primaryGroup.key, { items: [task], meta: primaryGroup });
-      }
-    }
-
-    const primaryGroups = sortGroupEntries(
-      [...primaryGroupMap.values()].map((group) => [group.meta, group.items]),
-      groupBy,
-      primaryGroupOrderDirection,
-    );
+    const primaryGroups = groupTaskItems(sortedTasks, groupBy, primaryGroupOrderDirection);
 
     return primaryGroups.map(([meta, groupedTasks]) => {
       if (effectiveSubGroupBy === 'none') {
@@ -208,32 +212,17 @@ const TaskList = memo<TaskListProps>((props) => {
         };
       }
 
-      const subGroupMap = new Map<string, { items: typeof visibleTasks; meta: TaskGroupMeta }>();
-      for (const task of groupedTasks) {
-        const subGroup = getTaskGroupMeta(task, effectiveSubGroupBy);
-        if (!subGroup?.key) continue;
-        const bucket = subGroupMap.get(subGroup.key);
-
-        if (bucket) {
-          bucket.items.push(task);
-        } else {
-          subGroupMap.set(subGroup.key, { items: [task], meta: subGroup });
-        }
-      }
-
       return {
         count: groupedTasks.length,
         meta,
         rows: toRows(groupedTasks),
-        subGroups: sortGroupEntries(
-          [...subGroupMap.values()].map((group) => [group.meta, group.items]),
-          effectiveSubGroupBy,
-          subGroupOrderDirection,
-        ).map(([subMeta, subItems]) => ({
-          count: subItems.length,
-          meta: subMeta,
-          rows: toRows(subItems),
-        })),
+        subGroups: groupTaskItems(groupedTasks, effectiveSubGroupBy, subGroupOrderDirection).map(
+          ([subMeta, subItems]) => ({
+            count: subItems.length,
+            meta: subMeta,
+            rows: toRows(subItems),
+          }),
+        ),
       };
     });
   }, [effectiveSubGroupBy, groupBy, nested, options, taskById, visibleTasks]);
@@ -251,7 +240,10 @@ const TaskList = memo<TaskListProps>((props) => {
 
   const emptyState = (
     <Center height={'80vh'} width={'100%'}>
-      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+      <Empty
+        description={props.emptyDescription ?? t('taskList.empty')}
+        icon={ClipboardCheckIcon}
+      />
     </Center>
   );
 
