@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { expertiseHits, expertiseLessons, expertiseRuns } from '@/database/schemas';
 
 import type { SelfIterationCompletionPayload } from '../agentSignal/services/selfIteration/completion';
-import { ExpertiseIngestionService, normalizeLessonTitle } from './ingestion';
+import { ExpertiseIngestionService, normalizeLessonTitle, selectTopicContext } from './ingestion';
 
 const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
   resolveExpertiseModelConfig: vi.fn(),
@@ -320,5 +320,78 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(fake.inserted.get(expertiseHits)).toHaveLength(2);
     const runUpdate = fake.updates.find((update) => 'newCount' in update);
     expect(runUpdate).toMatchObject({ instanceCount: 1, newCount: 1 });
+  });
+});
+
+describe('selectTopicContext', () => {
+  const user = (content: string) => ({ content, role: 'user' });
+  const assistant = (content: string) => ({ content, role: 'assistant' });
+  const tool = (length: number, fill = 'x') => ({ content: fill.repeat(length), role: 'tool' });
+
+  it('drops the empty assistant rows a streaming turn leaves behind', () => {
+    const { serialized } = selectTopicContext([
+      user('Join the GPU node'),
+      { content: '', role: 'assistant' },
+      { content: null, role: 'assistant' },
+      { content: '   ', role: 'assistant' },
+      assistant('Checking the control-plane endpoint'),
+    ]);
+
+    expect(serialized).toBe(
+      '[user] Join the GPU node\n\n[assistant] Checking the control-plane endpoint',
+    );
+  });
+
+  it('keeps every user turn of a tool-dominated topic instead of its trailing bytes', () => {
+    // The shape that produced the bug: reasoning is a rounding error next to the tool output,
+    // so budgeting the raw stream buys tool dumps and loses all but the last question.
+    const rows = Array.from({ length: 30 }, (_, index) => [
+      user(`question ${index}`),
+      assistant(`answer ${index}`),
+      tool(36_000),
+    ]).flat();
+
+    const { droppedTurns, serialized } = selectTopicContext(rows, 96_000);
+
+    expect(droppedTurns).toBe(0);
+    for (let index = 0; index < 30; index += 1) {
+      expect(serialized).toContain(`[user] question ${index}`);
+      expect(serialized).toContain(`[assistant] answer ${index}`);
+    }
+    expect(serialized.length).toBeLessThanOrEqual(96_000);
+  });
+
+  it('compresses a long tool result to its head and tail rather than dropping it', () => {
+    // The command that ran and the error it ended on are what a lesson is drawn from.
+    const content = `$ kubeadm join${'listing\n'.repeat(2000)}error: certificate has expired`;
+    const { serialized } = selectTopicContext([user('run it'), { content, role: 'tool' }], 2000);
+
+    expect(serialized).toContain('$ kubeadm join');
+    expect(serialized).toContain('error: certificate has expired');
+    expect(serialized).toContain('…');
+    expect(serialized.length).toBeLessThan(content.length / 10);
+  });
+
+  it('drops whole turns oldest-first, keeping the one that states what the user came for', () => {
+    const rows = Array.from({ length: 8 }, (_, index) => [
+      user(`question ${index}`),
+      assistant('a'.repeat(400)),
+    ]).flat();
+
+    const { droppedTurns, serialized } = selectTopicContext(rows, 1500);
+
+    expect(droppedTurns).toBeGreaterThan(0);
+    // The opening turn survives: it is what a domain filter reads to judge scope.
+    expect(serialized).toContain('[user] question 0');
+    expect(serialized).toContain('[user] question 7');
+    expect(serialized).not.toContain('[user] question 1');
+    expect(serialized.length).toBeLessThanOrEqual(1500);
+  });
+
+  it('sees a human in the loop even when the user only speaks at the start', () => {
+    // A tail window over a long agent-driven topic reports no human at all.
+    const rows = [user('kick it off'), ...Array.from({ length: 40 }, () => assistant('working'))];
+
+    expect(selectTopicContext(rows).hadHumanInLoop).toBe(true);
   });
 });

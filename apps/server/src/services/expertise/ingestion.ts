@@ -15,7 +15,7 @@ import {
   EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
@@ -26,8 +26,23 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { resolveExpertiseModelConfig } from './modelConfig';
 
-const MAX_CONTEXT_MESSAGES = 24;
-const MAX_CONTEXT_CHARS = 24_000;
+/**
+ * The row ceiling for one topic read. High enough that no real conversation reaches it, low
+ * enough that a runaway topic cannot pull an unbounded result set into memory; what actually
+ * bounds the prompt is `MAX_CONTEXT_CHARS`, applied after the noise is stripped.
+ */
+const MAX_CONTEXT_MESSAGES = 2000;
+/**
+ * Tool results are 84–99.9% of a topic's bytes — a `kubectl get` dump alone can be 36k. Budgeting
+ * the raw stream therefore budgets tool output, and the reasoning that earns a lesson gets
+ * whatever is left. Stripping first is what makes a 96k budget cover a 745k topic.
+ */
+const MAX_CONTEXT_CHARS = 96_000;
+/** A tool result never gets less than this, so no step is reduced to an unreadable stub. */
+const MIN_TOOL_CHARS = 200;
+/** …nor more than this, so one dump cannot crowd out the rest of the conversation. */
+const MAX_TOOL_CHARS = 800;
+const TOOL_ELISION = '\n…\n';
 const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
   domains: z.array(
@@ -78,6 +93,124 @@ const matchLesson = <T>(
     if (byCode) return byCode;
   }
   return lessons.byTitle.get(normalizeLessonTitle(observation.title));
+};
+
+interface TopicMessage {
+  content: null | string;
+  role: string;
+}
+
+/** One user message and everything the agent did before the user spoke again. */
+interface TopicTurn {
+  rows: TopicMessage[];
+}
+
+/**
+ * A tool result reduced to its head and tail.
+ *
+ * What a step proves sits at its edges: the command and its first lines at the top, the error or
+ * the summary at the bottom. The middle of a 36k listing is the part no lesson was ever drawn
+ * from, so it is the part that pays for the rest of the conversation.
+ */
+const clampToolResult = (content: string, cap: number) => {
+  if (content.length <= cap) return content;
+  const keep = cap - TOOL_ELISION.length;
+  if (keep < 2) return content.slice(0, Math.max(cap, 0));
+  const head = Math.ceil(keep / 2);
+  return content.slice(0, head) + TOOL_ELISION + content.slice(head - keep);
+};
+
+/**
+ * Turns, not messages, are the unit a conversation degrades by.
+ *
+ * A tool result read without the request that produced it, or an agent conclusion read without
+ * the question it answers, is evidence of nothing. When the budget forces something out, whole
+ * turns leave together.
+ */
+const splitTurns = (rows: readonly TopicMessage[]): TopicTurn[] => {
+  const turns: TopicTurn[] = [];
+  for (const row of rows) {
+    if (row.role === 'user' || turns.length === 0) turns.push({ rows: [] });
+    turns.at(-1)!.rows.push(row);
+  }
+  return turns;
+};
+
+const renderTurns = (turns: readonly TopicTurn[], toolCap: number) =>
+  turns
+    .flatMap((turn) => turn.rows)
+    .map(
+      (row) =>
+        `[${row.role}] ${row.role === 'tool' ? clampToolResult(row.content!, toolCap) : row.content}`,
+    )
+    .join('\n\n');
+
+/**
+ * The prompt-ready form of a topic, and what had to be left out of it.
+ *
+ * Selection is by role rather than by recency. Reading the tail of the raw stream — which is what
+ * a `limit` plus a trailing slice amounts to — spends the whole budget on the last few tool dumps
+ * and can miss every user turn in the conversation. Here the reasoning is kept whole and tool
+ * output is compressed to fit around it, so a 745k-character topic arrives as one prompt with all
+ * 32 of its questions intact.
+ */
+export const selectTopicContext = (
+  rows: readonly TopicMessage[],
+  budget: number = MAX_CONTEXT_CHARS,
+) => {
+  const kept = rows.filter((row) => row.content?.trim());
+  const hadHumanInLoop = kept.some((row) => row.role === 'user');
+  const turns = splitTurns(kept);
+
+  const fitted = (candidate: TopicTurn[]) => {
+    const rendered = renderTurns(candidate, MAX_TOOL_CHARS);
+    if (rendered.length <= budget) return rendered;
+
+    const flat = candidate.flatMap((turn) => turn.rows);
+    const tools = flat.filter((row) => row.role === 'tool');
+    if (tools.length === 0) return undefined;
+    // The share of the budget tool output may take is whatever the reasoning does not need.
+    const spare =
+      budget - flat.reduce((sum, row) => sum + (row.role === 'tool' ? 0 : row.content!.length), 0);
+    const cap = Math.min(
+      MAX_TOOL_CHARS,
+      Math.max(MIN_TOOL_CHARS, Math.floor(spare / tools.length)),
+    );
+    const compressed = renderTurns(candidate, cap);
+    return compressed.length <= budget ? compressed : undefined;
+  };
+
+  const whole = fitted(turns);
+  if (whole !== undefined) return { droppedTurns: 0, hadHumanInLoop, serialized: whole };
+
+  // Even fully compressed the conversation overflows, so turns have to go. The opening turn stays
+  // whatever else does: it carries what the user came for, which is the signal a domain filter
+  // reads to decide whether this conversation is in scope at all.
+  //
+  // Dropping a turn only ever shrinks the result, so the fewest that fit is a binary search rather
+  // than a walk; a topic near the row ceiling would otherwise re-render itself a thousand times.
+  const [opening, ...rest] = turns;
+  let low = 1;
+  let high = rest.length;
+  let best: string | undefined;
+  let bestDropped = rest.length;
+  while (low <= high) {
+    const dropped = Math.floor((low + high) / 2);
+    const serialized = fitted([opening, ...rest.slice(dropped)]);
+    if (serialized === undefined) {
+      low = dropped + 1;
+    } else {
+      best = serialized;
+      bestDropped = dropped;
+      high = dropped - 1;
+    }
+  }
+  if (best !== undefined) return { droppedTurns: bestDropped, hadHumanInLoop, serialized: best };
+  return {
+    droppedTurns: rest.length,
+    hadHumanInLoop,
+    serialized: renderTurns([opening], MIN_TOOL_CHARS).slice(0, budget),
+  };
 };
 
 interface ExpertiseCompletionInput {
@@ -256,6 +389,8 @@ export class ExpertiseIngestionService {
           serializedContext: input.serializedContext,
         }
       : await this.readTopicContext(input.topicId);
+    // `readTopicContext` already fits its own budget; this only bounds a context handed in by a
+    // caller, which arrives pre-serialized and cannot be re-selected.
     const context = topicContext.serializedContext.slice(-MAX_CONTEXT_CHARS);
     if (!context.trim()) return { ingested: 0, reason: 'empty-context' } as const;
 
@@ -320,7 +455,7 @@ export class ExpertiseIngestionService {
     const rows = await this.db.query.messages.findMany({
       columns: { content: true, createdAt: true, role: true },
       limit: MAX_CONTEXT_MESSAGES,
-      orderBy: [desc(messages.createdAt)],
+      orderBy: [asc(messages.createdAt)],
       where: and(
         this.workspaceId
           ? eq(messages.workspaceId, this.workspaceId)
@@ -329,13 +464,8 @@ export class ExpertiseIngestionService {
         isNull(messages.threadId),
       ),
     });
-    return {
-      hadHumanInLoop: rows.some((row) => row.role === 'user'),
-      serializedContext: rows
-        .reverse()
-        .map((row) => `[${row.role}] ${row.content ?? ''}`)
-        .join('\n\n'),
-    };
+    const { hadHumanInLoop, serialized } = selectTopicContext(rows);
+    return { hadHumanInLoop, serializedContext: serialized };
   };
 
   private persistDomainRun = async (
