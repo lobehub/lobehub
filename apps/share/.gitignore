@@ -1,3 +1,4 @@
+.dev.vars
 .react-router/
 !app/lib/
 .wrangler/

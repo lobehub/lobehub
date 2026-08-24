@@ -19,7 +19,13 @@ interface SharedTopicBodyProps {
 const SharedTopicBody = memo<SharedTopicBodyProps>(({ shareId }) => {
   const { data } = useSWR(
     shareKeys.topic(shareId),
-    () => lambdaClient.share.getSharedTopic.query({ shareId }),
+    () =>
+      // Deduped with SharedTopicView's SWR key; keep the same opt-out from the
+      // global 401 redirect so unauthorized visitors stay on the share page.
+      lambdaClient.share.getSharedTopic.query(
+        { shareId },
+        { context: { showNotification: false } },
+      ),
     { revalidateOnFocus: false },
   );
 

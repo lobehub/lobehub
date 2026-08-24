@@ -25,7 +25,13 @@ const SharedTopicView = memo(() => {
 
   const { data, error, isLoading } = useSWR(
     id ? shareKeys.topic(id) : null,
-    () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
+    () =>
+      // The share page renders its own login prompt on UNAUTHORIZED; opt out of
+      // the global 401 handler so it does not hard-redirect visitors to /signin.
+      lambdaClient.share.getSharedTopic.query(
+        { shareId: id! },
+        { context: { showNotification: false } },
+      ),
     { revalidateOnFocus: false },
   );
 
