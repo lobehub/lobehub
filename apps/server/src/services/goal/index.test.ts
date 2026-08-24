@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -8,6 +9,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import {
   acceptances,
+  agentOperations,
   agents,
   goalEdges,
   goalEvents,
@@ -39,6 +41,7 @@ afterEach(async () => {
   await serverDB.delete(goalNodes);
   await serverDB.delete(goals);
   await serverDB.delete(acceptances);
+  await serverDB.delete(agentOperations);
   await serverDB.delete(tasks);
   await serverDB.delete(agents);
   await serverDB.delete(users);
@@ -341,6 +344,74 @@ describe('GoalService', () => {
       message: expect.stringContaining('Recovered abandoned task'),
       outcome: 'waiting_external',
       taskId: created.taskId,
+    });
+  });
+
+  it('rolls back the operation reclaim when recovery bookkeeping fails', async () => {
+    vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
+      { operationId: 'op-atomic-recovery', topicId: 'topic-stale' } as never,
+    ]);
+    vi.spyOn(TaskTopicModel.prototype, 'updateStatus').mockRejectedValueOnce(
+      new Error('topic update failed'),
+    );
+
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const operationModel = new AgentOperationModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
+      title: 'Atomic abandoned recovery',
+      work: ['Run a durable experiment'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'running');
+    await operationModel.recordStart({ operationId: 'op-atomic-recovery' });
+    await serverDB
+      .update(agentOperations)
+      .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+      .where(eq(agentOperations.id, 'op-atomic-recovery'));
+
+    await expect(service.tick(graph.goal.id)).rejects.toThrow('topic update failed');
+
+    expect((await operationModel.findById('op-atomic-recovery'))?.status).toBe('running');
+    expect((await taskModel.findById(created.taskId!))?.status).toBe('running');
+  });
+
+  it('resumes automatic recovery after the atomic bookkeeping transaction committed', async () => {
+    const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({
+      agentId: 'agent-recovery',
+      assistantMessageId: 'message-assistant',
+      autoStarted: true,
+      createdAt: new Date().toISOString(),
+      message: 'started',
+      operationId: 'op-recovery-next',
+      status: 'running',
+      success: true,
+      taskId: 'placeholder',
+      taskIdentifier: 'T-recovery',
+      timestamp: new Date().toISOString(),
+      topicId: 'topic-recovery-next',
+      userMessageId: 'message-user',
+    });
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { maxAttemptsPerWork: 3 } },
+      title: 'Resume abandoned recovery',
+      work: ['Run a durable experiment'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Goal Work operation lease expired.',
+    });
+
+    const recovered = await service.tick(graph.goal.id);
+
+    expect(runSpy).toHaveBeenCalledOnce();
+    expect(recovered).toMatchObject({
+      message: expect.stringContaining('Recovered abandoned task'),
+      outcome: 'waiting_external',
     });
   });
 

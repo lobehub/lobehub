@@ -470,10 +470,17 @@ export class AgentRuntimeService {
         this.coordinator.refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId),
         this.agentOperationModel.touchRunning(operationId),
       ])
-        .then(([refreshed]) => {
+        .then(([refreshed, leaseRefreshed]) => {
           if (!refreshed) {
             log(
               '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+          if (!leaseRefreshed) {
+            log(
+              '[%s][%d] Durable operation lease was lost; terminal persistence will be rejected',
               operationId,
               stepIndex,
             );

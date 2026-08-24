@@ -163,7 +163,7 @@ export class AgentOperationModel {
   async recordCompletion(
     operationId: string,
     params: RecordOperationCompletionParams,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updates: Partial<NewAgentOperation> = {
       completionReason: params.completionReason,
       status: params.status,
@@ -190,10 +190,26 @@ export class AgentOperationModel {
     if (params.interruption !== undefined) updates.interruption = params.interruption;
     if (params.traceS3Key !== undefined) updates.traceS3Key = params.traceS3Key;
 
-    await this.db
+    const [row] = await this.db
       .update(agentOperations)
       .set(updates)
-      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          or(
+            inArray(agentOperations.status, [
+              'running',
+              'waiting_for_human',
+              'waiting_for_async_tool',
+            ]),
+            eq(agentOperations.status, params.status),
+          ),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
   }
 
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
@@ -220,8 +236,8 @@ export class AgentOperationModel {
   }
 
   /** Refresh the durable liveness lease while an operation owns an execution step. */
-  async touchRunning(operationId: string): Promise<void> {
-    await this.db
+  async touchRunning(operationId: string): Promise<boolean> {
+    const [row] = await this.db
       .update(agentOperations)
       .set({ updatedAt: new Date() })
       .where(
@@ -230,7 +246,10 @@ export class AgentOperationModel {
           eq(agentOperations.status, 'running'),
           this.ownership(),
         ),
-      );
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
   }
 
   /**

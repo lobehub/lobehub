@@ -415,6 +415,9 @@ export class GoalService {
       task.status === 'canceled' ||
       (task.status === 'paused' && task.error)
     ) {
+      if (task.status === 'paused' && task.error === 'Goal Work operation lease expired.') {
+        return this.resumeAbandonedWorkRecovery(graph, frontier.id, task);
+      }
       if (task.status === 'paused' && task.error === 'Delivery did not pass verification.') {
         const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
         const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
@@ -540,18 +543,34 @@ export class GoalService {
     if (!runningTopic?.operationId) return undefined;
 
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
-    const reclaimed = await new AgentOperationModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).settleStaleRunning(runningTopic.operationId, staleBefore);
+    const reclaimed = await this.db.transaction(async (tx) => {
+      const settled = await new AgentOperationModel(
+        tx,
+        this.userId,
+        this.workspaceId,
+      ).settleStaleRunning(runningTopic.operationId!, staleBefore);
+      if (!settled) return false;
+
+      await new TaskTopicModel(tx, this.userId, this.workspaceId).updateStatus(
+        task.id,
+        runningTopic.topicId,
+        'timeout',
+      );
+      await new TaskModel(tx, this.userId, this.workspaceId).updateStatus(task.id, 'paused', {
+        error: 'Goal Work operation lease expired.',
+      });
+      return true;
+    });
     if (!reclaimed) return undefined;
 
-    await this.taskTopicModel.updateStatus(task.id, runningTopic.topicId, 'timeout');
-    await this.taskModel.updateStatus(task.id, 'paused', {
-      error: 'Goal Work operation lease expired.',
-    });
+    return this.resumeAbandonedWorkRecovery(graph, nodeId, task);
+  };
 
+  private resumeAbandonedWorkRecovery = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+  ): Promise<GoalTickResult> => {
     const recovery = await new WorkRecoveryCoordinator(
       this.db,
       this.userId,

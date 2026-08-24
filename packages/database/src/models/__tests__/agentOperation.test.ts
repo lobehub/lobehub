@@ -241,6 +241,28 @@ describe('AgentOperationModel', () => {
         status: 'interrupted',
       });
     });
+
+    it('does not let a late completion overwrite a reclaimed operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-reclaimed-completion-race';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(true);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'done',
+          status: 'done',
+        }),
+      ).toBe(false);
+      expect(await model.findById(operationId)).toMatchObject({
+        completionReason: 'interrupted',
+        status: 'interrupted',
+      });
+    });
   });
 
   describe('sumChildUsage', () => {
