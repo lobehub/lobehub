@@ -43,6 +43,17 @@ const MAX_CONTEXT_CHARS = 96_000;
 const MIN_TOOL_CHARS = 200;
 /** …nor more than this, so one dump cannot crowd out the rest of the conversation. */
 const MAX_TOOL_CHARS = 800;
+/** A step that failed is the one a lesson is usually about, so it is read at more length. */
+const MAX_FAILED_TOOL_CHARS = 3200;
+/**
+ * How much of the tool budget a failed result claims against a successful one.
+ *
+ * Weighted rather than exempt. Failures are the larger class to begin with — 13.3k against 4.7k
+ * on average in the recorded corpus — so "keep failures whole" is the expensive reading of a
+ * sound instinct: one recorded topic carries 284k of failure output, three times the entire
+ * budget, which would leave nothing for the questions that failure was an answer to.
+ */
+const TOOL_FAILURE_WEIGHT = 4;
 const TOOL_ELISION = '…';
 /** What ran, in the first lines of the output. */
 const TOOL_HEAD_SHARE = 0.3;
@@ -56,6 +67,16 @@ const TOOL_TAIL_SHARE = 0.3;
  * discards. A `kubeadm join` that fails does so a hundred lines into its own progress output.
  */
 const TOOL_SALIENT_LINE = /error|fail|fatal|exception|refused|denied|expired|timeout|panic|warn/i;
+/**
+ * Whether a result reports that its step failed.
+ *
+ * Deliberately stricter than the line-level test above: that one asks which line inside a result
+ * explains it and can afford to over-collect, while this one decides how much room the whole
+ * result gets. Read loosely, 63% of results in the corpus look like failures; read this way, 4.6%
+ * do — which is the share that behaves like one.
+ */
+const TOOL_FAILED =
+  /(?:^|\n)\s*(?:error|fatal|panic|traceback)|exit status [1-9]|command not found|no such file|permission denied|connection refused/i;
 const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
   domains: z.array(
@@ -113,9 +134,22 @@ interface TopicMessage {
   role: string;
 }
 
+/** A row with its envelope already read and its outcome already judged, so neither is redone. */
+interface PreparedRow {
+  failed: boolean;
+  role: string;
+  text: string;
+}
+
 /** One user message and everything the agent did before the user spoke again. */
 interface TopicTurn {
-  rows: TopicMessage[];
+  rows: PreparedRow[];
+}
+
+/** The room a tool result gets, by whether the step it reports succeeded. */
+interface ToolCaps {
+  failed: number;
+  ok: number;
 }
 
 /**
@@ -148,8 +182,7 @@ const readToolText = (content: string) => {
  * at either edge, so a clamp that keeps only the edges drops the evidence it was meant to keep.
  * Cuts land on line boundaries, because half a stack frame reads as noise.
  */
-const clampToolResult = (content: string, cap: number) => {
-  const text = readToolText(content);
+const clampToolResult = (text: string, cap: number) => {
   if (text.length <= cap) return text;
 
   const lines = text.split('\n');
@@ -192,7 +225,7 @@ const clampToolResult = (content: string, cap: number) => {
  * the question it answers, is evidence of nothing. When the budget forces something out, whole
  * turns leave together.
  */
-const splitTurns = (rows: readonly TopicMessage[]): TopicTurn[] => {
+const splitTurns = (rows: readonly PreparedRow[]): TopicTurn[] => {
   const turns: TopicTurn[] = [];
   for (const row of rows) {
     if (row.role === 'user' || turns.length === 0) turns.push({ rows: [] });
@@ -201,12 +234,13 @@ const splitTurns = (rows: readonly TopicMessage[]): TopicTurn[] => {
   return turns;
 };
 
-const renderTurns = (turns: readonly TopicTurn[], toolCap: number) =>
+const renderTurns = (turns: readonly TopicTurn[], caps: ToolCaps) =>
   turns
     .flatMap((turn) => turn.rows)
-    .map(
-      (row) =>
-        `[${row.role}] ${row.role === 'tool' ? clampToolResult(row.content!, toolCap) : row.content}`,
+    .map((row) =>
+      row.role === 'tool'
+        ? `[${row.role}] ${clampToolResult(row.text, row.failed ? caps.failed : caps.ok)}`
+        : `[${row.role}] ${row.text}`,
     )
     .join('\n\n');
 
@@ -223,25 +257,35 @@ export const selectTopicContext = (
   rows: readonly TopicMessage[],
   budget: number = MAX_CONTEXT_CHARS,
 ) => {
-  const kept = rows.filter((row) => row.content?.trim());
+  const kept = rows
+    .filter((row) => row.content?.trim())
+    .map((row) => {
+      const text = row.role === 'tool' ? readToolText(row.content!) : row.content!;
+      return { failed: row.role === 'tool' && TOOL_FAILED.test(text), role: row.role, text };
+    });
   const hadHumanInLoop = kept.some((row) => row.role === 'user');
   const turns = splitTurns(kept);
 
   const fitted = (candidate: TopicTurn[]) => {
-    const rendered = renderTurns(candidate, MAX_TOOL_CHARS);
+    const ceiling = { failed: MAX_FAILED_TOOL_CHARS, ok: MAX_TOOL_CHARS };
+    const rendered = renderTurns(candidate, ceiling);
     if (rendered.length <= budget) return rendered;
 
     const flat = candidate.flatMap((turn) => turn.rows);
     const tools = flat.filter((row) => row.role === 'tool');
     if (tools.length === 0) return undefined;
-    // The share of the budget tool output may take is whatever the reasoning does not need.
+    // The share of the budget tool output may take is whatever the reasoning does not need, split
+    // so that a failed step is read at length while the successes around it shrink to make room.
     const spare =
-      budget - flat.reduce((sum, row) => sum + (row.role === 'tool' ? 0 : row.content!.length), 0);
-    const cap = Math.min(
-      MAX_TOOL_CHARS,
-      Math.max(MIN_TOOL_CHARS, Math.floor(spare / tools.length)),
-    );
-    const compressed = renderTurns(candidate, cap);
+      budget - flat.reduce((sum, row) => sum + (row.role === 'tool' ? 0 : row.text.length), 0);
+    const failures = tools.filter((row) => row.failed).length;
+    const shares = tools.length + (TOOL_FAILURE_WEIGHT - 1) * failures;
+    const unit = Math.floor(spare / Math.max(shares, 1));
+    const caps = {
+      failed: Math.min(MAX_FAILED_TOOL_CHARS, Math.max(MIN_TOOL_CHARS, unit * TOOL_FAILURE_WEIGHT)),
+      ok: Math.min(MAX_TOOL_CHARS, Math.max(MIN_TOOL_CHARS, unit)),
+    };
+    const compressed = renderTurns(candidate, caps);
     return compressed.length <= budget ? compressed : undefined;
   };
 
@@ -274,7 +318,10 @@ export const selectTopicContext = (
   return {
     droppedTurns: rest.length,
     hadHumanInLoop,
-    serialized: renderTurns([opening], MIN_TOOL_CHARS).slice(0, budget),
+    serialized: renderTurns([opening], {
+      failed: MIN_TOOL_CHARS * TOOL_FAILURE_WEIGHT,
+      ok: MIN_TOOL_CHARS,
+    }).slice(0, budget),
   };
 };
 

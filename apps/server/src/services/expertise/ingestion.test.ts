@@ -369,7 +369,35 @@ describe('selectTopicContext', () => {
     expect(serialized).toContain('$ kubeadm join');
     expect(serialized).toContain('error: certificate has expired');
     expect(serialized).toContain('…');
-    expect(serialized.length).toBeLessThan(content.length / 10);
+    expect(serialized.length).toBeLessThanOrEqual(2000);
+    expect(serialized.length).toBeLessThan(content.length / 5);
+  });
+
+  it('reads a failed step at more length than a successful one beside it', () => {
+    const body = (marker: string) =>
+      [marker, ...Array.from({ length: 3000 }, (_, index) => `line ${index}`)].join('\n');
+    const { serialized } = selectTopicContext([
+      user('run both'),
+      { content: body('error: connection refused'), role: 'tool' },
+      { content: body('ok: everything is fine'), role: 'tool' },
+    ]);
+
+    const [failed, succeeded] = serialized.split('[tool] ').slice(1);
+    expect(failed.length).toBeGreaterThan(succeeded.length * 2);
+  });
+
+  it('bounds a topic made entirely of failures rather than letting them run whole', () => {
+    // "Keep failures whole" is unaffordable: one recorded topic carries 284k of failure output.
+    const failure = ['error: connection refused', 'x'.repeat(40_000)].join('\n');
+    const rows = Array.from({ length: 10 }, () => [
+      user('retry'),
+      { content: failure, role: 'tool' },
+    ]).flat();
+
+    const { serialized } = selectTopicContext(rows, 96_000);
+
+    expect(serialized.length).toBeLessThanOrEqual(96_000);
+    expect((serialized.match(/\[user\] retry/g) ?? []).length).toBe(10);
   });
 
   it('unwraps the stored content-part envelope instead of slicing its JSON', () => {
@@ -448,6 +476,13 @@ describe('selectTopicContext', () => {
     expect(serialized).toContain('[user] question 7');
     expect(serialized).not.toContain('[user] question 1');
     expect(serialized.length).toBeLessThanOrEqual(1500);
+  });
+
+  it('still returns something when the opening turn alone overruns the budget', () => {
+    const { droppedTurns, serialized } = selectTopicContext([user('x'.repeat(5000))], 1000);
+
+    expect(serialized.length).toBe(1000);
+    expect(droppedTurns).toBe(0);
   });
 
   it('sees a human in the loop even when the user only speaks at the start', () => {
