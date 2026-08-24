@@ -483,7 +483,7 @@ export class LobeBuiltinMcpServer {
             : undefined;
 
         const answer = await op.bridge.pending(
-          { arguments: args, toolCallId },
+          { arguments: args, interactionKind: 'question', toolCallId },
           {
             onProgress,
             progressIntervalMs: this.progressIntervalMs,

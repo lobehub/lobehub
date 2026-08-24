@@ -36,11 +36,26 @@ import { type RunScope } from '../lifecycle/types';
  */
 
 type Setter = StoreSetter<ChatStore>;
+
+const canonicalizeResolutionPayload = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalizeResolutionPayload);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalizeResolutionPayload(child)]),
+    );
+  }
+  return value;
+};
+
 export const conversationControl = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ConversationControlActionImpl(set, get, _api);
 
 export class ConversationControlActionImpl {
   readonly #get: () => ChatStore;
+  /** Stable per-intervention idempotency key reused by transport retries. */
+  readonly #heteroResolutionRequestIds = new Map<string, string>();
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -1134,14 +1149,13 @@ export class ConversationControlActionImpl {
    *   keeps going on its own; no synthetic user message, no new op.
    *
    * The framework's intervention surface still drives the UI: we just
-   * stamp `pluginIntervention.status` and the eventual `tool_result`
-   * content via the same optimistic primitives, so the InterventionBar /
-   * inline tool body update synchronously and the answered Render takes
-   * over once `pluginIntervention.status === 'approved' | 'rejected'`.
+   * stamp the local terminal state immediately. Remote submits remain
+   * `pending + resolving` until the blocked producer echoes its ACK, so the
+   * form stays visible and disabled across remounts without claiming success.
    *
    * `actionType`:
-   *   - `'submit'` → mark approved, ship `payload` as the answer
-   *   - `'skip' | 'cancel'` → mark rejected, ship `cancelled: true` so the
+   *   - `'submit'` → ship `payload` as the answer
+   *   - `'skip' | 'cancel'` → ship `cancelled: true` so the
    *     bridge resolves with `cancelReason` and CC sees an isError result
    *     (it'll fall back to plain-text questioning)
    */
@@ -1200,8 +1214,23 @@ export class ConversationControlActionImpl {
       );
     }
     const optimisticContext: OptimisticUpdateContext = operationAlive ? { operationId } : {};
+    const isLocalDesktopHetero = operation?.type === 'execHeterogeneousAgent';
+    const originalIntervention = toolMessage.pluginIntervention;
+    const originalContent = toolMessage.content;
 
-    if (actionType === 'submit') {
+    if (!isLocalDesktopHetero) {
+      // Publishing the user intent is not completion. Keep the interaction
+      // pending but mark its in-flight phase so a remount/retry cannot present
+      // an optimistic terminal state before the producer has consumed it.
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: { resolving: true, status: 'pending' } },
+        optimisticContext,
+      );
+      if (actionType === 'submit') {
+        await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      }
+    } else if (actionType === 'submit') {
       await this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
         { intervention: { status: 'approved' } },
@@ -1257,7 +1286,6 @@ export class ConversationControlActionImpl {
     // the question, so they are never GC'd out from under this check; that makes
     // "not an alive execHeterogeneousAgent op" a safe signal for "remote".
     // Both paths are idempotent on an unknown / already-settled toolCallId.
-    const isLocalDesktopHetero = operation?.type === 'execHeterogeneousAgent';
     try {
       if (isLocalDesktopHetero) {
         // Dynamic import keeps `@/services/electron/*` out of non-Electron bundles.
@@ -1269,21 +1297,48 @@ export class ConversationControlActionImpl {
             : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
         );
       } else {
+        const resolutionIntent = JSON.stringify(
+          canonicalizeResolutionPayload({ actionType, payload: payload ?? {} }),
+        );
+        const resolutionKey = `${operationId}:${toolCallId}:${resolutionIntent}`;
+        const resolutionRequestId =
+          this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
+        this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, result: payload ?? {}, toolCallId }
-            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+            ? { operationId, resolutionRequestId, result: payload ?? {}, toolCallId }
+            : {
+                cancelReason: 'user_cancelled',
+                cancelled: true,
+                operationId,
+                resolutionRequestId,
+                toolCallId,
+              },
         );
       }
     } catch (err) {
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: originalIntervention ?? { status: 'pending' } },
+        optimisticContext,
+      );
+      if (isLocalDesktopHetero) {
+        await this.#get().optimisticUpdateMessageContent(
+          toolMessageId,
+          originalContent,
+          undefined,
+          optimisticContext,
+        );
+      }
+      throw err;
     }
 
     // Sidebar topic row was swapped to the `waitingForHuman` hand icon when
     // the intervention was raised; once the user submits/skips/cancels the
     // CC stream resumes so flip it back to `running`. The natural completion
     // (`runtime_end` → `writeTopicStatus('active')`) takes over from there.
-    if (effectiveContext.topicId) {
+    if (isLocalDesktopHetero && effectiveContext.topicId) {
       void this.#get().updateTopicStatus?.({
         agentId: effectiveContext.agentId,
         groupId: effectiveContext.groupId,
@@ -1297,7 +1352,7 @@ export class ConversationControlActionImpl {
    * In-memory draft store for an intervention form. Backs the renderer's
    * "remember what I'd partially answered" behaviour without paying for a
    * DB round-trip on every keystroke — drafts only matter while the
-   * intervention is pending (5 min cap), and the canonical pluginState
+   * intervention is pending (10 min cap), and the canonical pluginState
    * mirror is enough to survive HMR / panel re-mounts.
    *
    * `askUserDraft` is irrelevant after submit (the form unmounts), so we

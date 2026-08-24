@@ -163,6 +163,8 @@ export class HeterogeneousAgentService {
         messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId, workspaceId),
         topicModel: this.topicModel,
+        userId,
+        workspaceId,
       });
   }
 

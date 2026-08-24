@@ -93,7 +93,9 @@ const Intervention = memo<InterventionProps>(
 
     const isCustomInteraction = isCustomInteractionIdentifier(identifier, apiName);
 
-    const topicId = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s)?.topicId);
+    const message = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s));
+    const topicId = message?.topicId;
+    const interventionResolving = message?.pluginIntervention?.resolving === true;
     const submitToolInteraction = useConversationStore((s) => s.submitToolInteraction);
     const skipToolInteraction = useConversationStore((s) => s.skipToolInteraction);
     const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
@@ -190,6 +192,7 @@ const Intervention = memo<InterventionProps>(
               actionsPortalTarget={actionsPortalTarget}
               apiName={apiName}
               args={parsedArgs}
+              disabled={interventionResolving}
               identifier={identifier}
               interactionMode="custom"
               messageId={id}

@@ -20,6 +20,8 @@ export interface UseAskUserFormParams {
    * `false`, no timer runs) — used by surfaces with no bridge timeout.
    */
   countdownMs?: number;
+  /** Preserve the form but disable every action while a remote submit awaits producer ACK. */
+  disabled?: boolean;
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
   /** Raw persisted draft blob read from the host's store (coerced internally). */
   persistedDraft: unknown;
@@ -76,6 +78,7 @@ export interface AskUserFormApi {
 export const useAskUserForm = ({
   args,
   countdownMs,
+  disabled = false,
   onInteractionAction,
   persistedDraft,
   writeDraft,
@@ -114,6 +117,9 @@ export const useAskUserForm = ({
     return () => clearInterval(id);
   }, [countdownEnabled]);
   const expired = countdownEnabled ? now >= deadline : false;
+  const hasProviderOwnedOptionIds = questions.some((question) =>
+    question.options.some((option) => !!option.id),
+  );
 
   /**
    * Submit `payload` exactly as given. Used by the Submit button (with the
@@ -122,7 +128,7 @@ export const useAskUserForm = ({
    */
   const submitWith = useCallback(
     async (payload: Record<string, string | string[]>) => {
-      if (!onInteractionAction || submitting) return;
+      if (!onInteractionAction || submitting || disabled) return;
       setSubmitting(true);
       try {
         await onInteractionAction({ payload, type: 'submit' });
@@ -131,11 +137,12 @@ export const useAskUserForm = ({
         setSubmitting(false);
       }
     },
-    [onInteractionAction, submitting],
+    [disabled, onInteractionAction, submitting],
   );
 
   const handleToggle = useCallback(
     (q: AskUserQuestionItem, label: string, options?: { submitOnComplete?: boolean }) => {
+      if (disabled) return;
       let nextPicks: Record<string, string | string[]>;
       if (q.multiSelect) {
         const current = (picks[q.question] as string[] | undefined) ?? [];
@@ -200,6 +207,7 @@ export const useAskUserForm = ({
     [
       picks,
       custom,
+      disabled,
       escapeActive,
       escapeText,
       questions,
@@ -356,7 +364,7 @@ export const useAskUserForm = ({
   ]);
 
   const handleSkip = useCallback(async () => {
-    if (!onInteractionAction || submitting) return;
+    if (!onInteractionAction || submitting || disabled) return;
     setSubmitting(true);
     try {
       await onInteractionAction({ type: 'skip' });
@@ -364,22 +372,26 @@ export const useAskUserForm = ({
       console.error('[AskUserQuestion] skip failed:', err);
       setSubmitting(false);
     }
-  }, [onInteractionAction, submitting]);
+  }, [disabled, onInteractionAction, submitting]);
 
   const allAnswered = useMemo(
     () => questions.every((q) => isQuestionAnswered(q, picks, custom)),
     [picks, custom, questions],
   );
 
-  // Timeout fallback: when the countdown hits zero and the user hasn't
-  // submitted, fill option 1 of each unanswered question and submit. Beats
+  // Timeout fallback for legacy question forms: when the countdown hits zero
+  // and the user hasn't submitted, fill option 1 of each unanswered question and submit. Beats
   // letting the bridge time out into a `cancelled` isError — the model gets a
   // structured answer it can act on. Single-shot via the `submitting` guard.
   //
   // Escape-mode special case: if the user is in escape mode with non-empty text
   // when the clock hits zero, submit that text as-is rather than discarding it.
   useEffect(() => {
-    if (!expired || submitting || questions.length === 0) return;
+    if (!expired || submitting || disabled || questions.length === 0) return;
+    // A stable id means this is a provider-owned choice (permission/plan or a
+    // newer exact-id question). Never infer consent by selecting option one:
+    // let the producer timeout/cancel fail closed.
+    if (hasProviderOwnedOptionIds) return;
     if (escapeActive && escapeAvailable && escapeText.trim().length > 0) {
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
       return;
@@ -402,6 +414,7 @@ export const useAskUserForm = ({
   }, [
     expired,
     submitting,
+    disabled,
     questions,
     escapeActive,
     escapeAvailable,
@@ -410,10 +423,12 @@ export const useAskUserForm = ({
     custom,
     supplementText,
     submitWith,
+    hasProviderOwnedOptionIds,
   ]);
 
   const activeQuestion = questions[Number(activeTab)] ?? questions[0];
   const isSubmitDisabled =
+    disabled ||
     questions.length === 0 ||
     (inEscape
       ? !escapeText.trim() || submitting || expired
@@ -442,7 +457,7 @@ export const useAskUserForm = ({
     setEscapeMode,
     setQuestionMode,
     setSupplementMode,
-    submitting,
+    submitting: submitting || disabled,
     supplementActive: inSupplement,
     supplementText,
   };

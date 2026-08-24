@@ -1026,4 +1026,63 @@ describe('createGatewayEventHandler', () => {
 
     expect(lifecycle.afterRunComplete).not.toHaveBeenCalled();
   });
+
+  it('keeps a modern intervention resolving until the producer ACK arrives', async () => {
+    const getMessages = vi
+      .spyOn(messageService, 'getMessages')
+      .mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+    const resolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+
+    handler(
+      makeEvent('agent_intervention_request', {
+        apiName: 'askUserQuestion',
+        arguments: '{"questions":[]}',
+        deadline: Date.now() + 60_000,
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'cursor',
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
+    );
+
+    vi.mocked(store.updateTopicStatus!).mockClear();
+    getMessages.mockClear();
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: false,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(store.updateTopicStatus).not.toHaveBeenCalled();
+    expect(getMessages).not.toHaveBeenCalled();
+
+    handler(
+      makeEvent('agent_intervention_response', {
+        producerAck: true,
+        resolutionRequestId,
+        result: { approved: true },
+        toolCallId: 'permission-1',
+      }),
+    );
+    await flush();
+    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'running', topicId: 'topic-1' }),
+    );
+  });
 });
