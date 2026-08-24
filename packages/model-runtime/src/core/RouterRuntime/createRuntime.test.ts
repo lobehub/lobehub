@@ -906,7 +906,7 @@ describe('createRouterRuntime', () => {
       expect(mockChatAlwaysFail).toHaveBeenCalledTimes(2);
     });
 
-    it('should fallback when a provider account balance error is mislabeled as an invalid request', async () => {
+    it('should fallback when a provider reports insufficient account quota', async () => {
       const attemptedKeys: string[] = [];
 
       class AccountBalanceRuntime implements LobeRuntimeAI {
@@ -926,7 +926,7 @@ describe('createRouterRuntime', () => {
                 message: 'Insufficient Balance',
                 type: 'unknown_error',
               },
-              errorType: AgentRuntimeErrorType.ProviderBizError,
+              errorType: AgentRuntimeErrorType.InsufficientQuota,
               status: 402,
             };
           }

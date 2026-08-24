@@ -17,16 +17,11 @@ const RETRYABLE_ERROR_CODES = new Set([
   'invalidapikey',
   'invalidproviderapikey',
   'insufficient_quota',
+  AgentRuntimeErrorType.InsufficientQuota.toLowerCase(),
   'model_not_found',
   'quota_exceeded',
   'rate_limit_exceeded',
 ]);
-/**
- * Some providers label account-level billing failures as `invalid_request_error`.
- * These specific messages describe a channel problem, so they must take precedence
- * over the generic request-error code and allow RouterRuntime to try another option.
- */
-const RETRYABLE_ACCOUNT_MESSAGE_PATTERNS = ['insufficient balance'];
 const NON_RETRYABLE_ERROR_CODES = new Set([
   'context_length_exceeded',
   'invalid_request_error',
@@ -177,13 +172,10 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
 
   if (isErrorCausedByContentFilter(error)) return true;
 
-  const combined = normalizedStrings.join('\n');
-  if (RETRYABLE_ACCOUNT_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) {
-    return false;
-  }
   if (normalizedStrings.some((value) => RETRYABLE_ERROR_CODES.has(value))) return false;
   if (normalizedStrings.some((value) => NON_RETRYABLE_ERROR_CODES.has(value))) return true;
 
+  const combined = normalizedStrings.join('\n');
   if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
   if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return true;
 

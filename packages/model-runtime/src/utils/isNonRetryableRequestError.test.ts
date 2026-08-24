@@ -160,7 +160,7 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(false);
   });
 
-  it('returns false for provider account balance errors mislabeled as invalid requests', () => {
+  it('returns false for standardized provider account balance errors', () => {
     expect(
       isNonRetryableRequestError({
         error: {
@@ -168,7 +168,7 @@ describe('isNonRetryableRequestError', () => {
           message: 'Insufficient Balance',
           type: 'unknown_error',
         },
-        errorType: AgentRuntimeErrorType.ProviderBizError,
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
         status: 402,
       }),
     ).toBe(false);
