@@ -2242,11 +2242,14 @@ export const aiAgentRouter = router({
   /**
    * Authenticated cold-start review lookup. The opaque token is the only
    * client-supplied locator; Cloud resolves operation/tool ownership inside
-   * the business slot. OSS reports `unavailable` without exposing internals.
+   * the business slot. Keep this read-only operation on the mutation transport
+   * so the review token is carried in the POST body instead of a query URL that
+   * infrastructure access logs commonly retain. OSS reports `unavailable`
+   * without exposing internals.
    */
   getHeteroInterventionReview: aiAgentBaseProcedure
     .input(HeteroInterventionReviewTokenSchema)
-    .query(({ input, ctx }) =>
+    .mutation(({ input, ctx }) =>
       getHeteroInterventionReview({
         reviewToken: input.reviewToken,
         userId: ctx.userId,
