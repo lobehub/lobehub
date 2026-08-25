@@ -543,14 +543,16 @@ const regenerateGroupMemberMessageFromSource = async (
     const contextMessages = dbMessages.filter((message) => !excludedIds.has(message.id));
     const userMessageId = findUserMessageId(targetMessage, dbMessages);
     const retryPrompt = dbMessages.find((message) => message.id === userMessageId)?.content ?? '';
-    const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(executionAgentId);
+    const { agencyConfig, isWorkspaceAgent, workspaceScoped } =
+      getEffectiveAgencyConfig(executionAgentId);
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(executionAgentId),
-      isWorkspaceAgent: workspaceScoped,
+      isWorkspaceAgent,
+      workspaceScoped,
     });
 
     if (runtimeType === 'gateway') {

@@ -1016,6 +1016,47 @@ describe('parse', () => {
       expect(findCouncilBlock(result)?.council).toHaveLength(3);
     });
 
+    it('keeps all council columns when switching back from a regenerated user branch', () => {
+      const skillCall = {
+        apiName: 'runSkill',
+        arguments: '{}',
+        id: 'call-skill-1',
+        identifier: 'lobe-agent-skills',
+        type: 'builtin',
+      };
+      const messages = inputs.agentCouncil.withSupervisorReply.map((message) =>
+        message.id === 'msg-agent-backend-1' ? { ...message, tools: [skillCall as any] } : message,
+      );
+      messages.push({
+        content: 'Regenerated branch',
+        createdAt: 1_704_067_220_000,
+        id: 'msg-regenerated-supervisor',
+        parentId: 'msg-user-1',
+        role: 'assistant',
+        updatedAt: 1_704_067_220_000,
+      } as any);
+      messages.push({
+        content: 'Skill result',
+        createdAt: 1_704_067_205_000,
+        id: 'msg-skill-result-1',
+        parentId: 'msg-agent-backend-1',
+        role: 'tool',
+        tool_call_id: 'call-skill-1',
+        updatedAt: 1_704_067_205_000,
+      } as any);
+
+      const result = parse(
+        messages.map((message) =>
+          message.id === 'msg-user-1'
+            ? { ...message, metadata: { activeBranchIndex: 0 } }
+            : message,
+        ),
+      );
+
+      expect(findCouncilBlock(result)?.council).toHaveLength(3);
+      expect(result.flatList.some((message) => message.role === 'tool')).toBe(false);
+    });
+
     // Regression: the supervisor's post-council reply must surface no matter which council
     // member it parents to. Broadcast agents finish near-simultaneously (tied createdAt), so
     // the writer's createdAt-last member can differ from the array order; previously the reader

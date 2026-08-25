@@ -392,11 +392,16 @@ export class FlatListBuilder {
               processedIds,
             );
 
+            const council = this.collectCouncilMembers(allToolMessages, allMessages, processedIds);
+
             // Create assistantGroup virtual message with branch metadata
             const groupMessage = this.createAssistantGroupMessage(
               assistantChain[0],
               assistantChain,
               allToolMessages,
+              undefined,
+              undefined,
+              council?.members,
             );
             // Add branch info to the assistantGroup message
             const groupMessageWithBranches = this.createMessageWithBranches(
@@ -409,6 +414,12 @@ export class FlatListBuilder {
             // Mark all as processed
             assistantChain.forEach((m) => processedIds.add(m.id));
             allToolMessages.forEach((m) => processedIds.add(m.id));
+
+            if (council) {
+              for (const memberId of council.memberIds) {
+                this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
+              }
+            }
 
             this.continueAfterAssistantGroup(
               assistantChain,
@@ -646,14 +657,10 @@ export class FlatListBuilder {
 
     const supervisorId = councilTool.parentId;
     let memberIds = supervisorId
-      ? this.councilMemberChildIds(this.childrenMap.get(supervisorId) ?? []).filter(
-          (id) => !processedIds.has(id),
-        )
+      ? this.councilMemberChildIds(this.childrenMap.get(supervisorId) ?? [])
       : [];
     if (memberIds.length <= 1) {
-      memberIds = this.councilMemberChildIds(this.childrenMap.get(councilTool.id) ?? []).filter(
-        (id) => !processedIds.has(id),
-      );
+      memberIds = this.councilMemberChildIds(this.childrenMap.get(councilTool.id) ?? []);
     }
     if (memberIds.length <= 1) return undefined;
 
