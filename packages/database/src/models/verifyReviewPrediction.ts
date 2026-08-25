@@ -1,5 +1,5 @@
 import type { ReviewAdjudication, ReviewProposalEdit } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import type { NewVerifyReviewPrediction } from '../schemas/verify';
 import { verifyCheckResults, verifyReviewPredictions } from '../schemas/verify';
@@ -127,6 +127,37 @@ export class VerifyReviewPredictionModel {
         this.ownership(),
       ),
     });
+
+  /**
+   * Clear the unanswered opinions of one model + prompt version on a set of
+   * results, so a fresh batch starts from "no attempt recorded".
+   *
+   * The predictor upserts on completion, which means a re-request leaves the
+   * PREVIOUS attempt sitting under each check until its replacement lands —
+   * and a client waiting for "every check has a recorded attempt" then sees
+   * that condition met before a single new call has finished. Nothing is lost
+   * that the upsert would not have overwritten anyway; adjudicated rows are
+   * kept because they are recorded labels and the predictor skips them.
+   */
+  resetUnadjudicated = async (
+    checkResultIds: string[],
+    identity: { model: string; promptVersion: string; provider: string },
+  ) => {
+    if (checkResultIds.length === 0) return;
+
+    await this.db
+      .delete(verifyReviewPredictions)
+      .where(
+        and(
+          inArray(verifyReviewPredictions.checkResultId, checkResultIds),
+          eq(verifyReviewPredictions.provider, identity.provider),
+          eq(verifyReviewPredictions.model, identity.model),
+          eq(verifyReviewPredictions.promptVersion, identity.promptVersion),
+          isNull(verifyReviewPredictions.adjudication),
+          this.ownership(),
+        ),
+      );
+  };
 
   findById = async (id: string) =>
     this.db.query.verifyReviewPredictions.findFirst({

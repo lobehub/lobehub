@@ -79,6 +79,23 @@ export const shouldSurfaceProposal = <
   prediction.action === 'reject' && !hasUserReview && !prediction.adjudication;
 
 /**
+ * Whether a stored row is the opinion of the reviewer currently in service.
+ *
+ * Rows from an earlier pin (a different model, or an older prompt version)
+ * stay in the table for the comparison set, but they are not what the page
+ * shows or what a fresh request is waiting on: reading the newest row across
+ * models let a stale verdict satisfy "the batch finished" the moment the
+ * current model's row was cleared for re-judging.
+ */
+export const isCurrentReviewPrediction = (
+  prediction: { model: string; promptVersion: string; provider: string },
+  modelConfig: { model: string; provider: string },
+): boolean =>
+  prediction.provider === modelConfig.provider &&
+  prediction.model === modelConfig.model &&
+  prediction.promptVersion === REVIEW_PREDICT_PROMPT_VERSION;
+
+/**
  * Produces an automated second opinion on a check the verifier already judged.
  *
  * Deliberately a SHADOW lane: the verdict lands in `verify_review_predictions`
@@ -108,6 +125,20 @@ export class VerifyReviewPredictorService {
     this.documentModel = new DocumentModel(db, userId, workspaceId);
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
+  }
+
+  /**
+   * Forget the unanswered attempts a new batch is about to replace, so that a
+   * missing row means "not judged yet" for every check in the batch. Called
+   * BEFORE the batch is dispatched — the reset is what lets a poller tell a
+   * finished batch from the previous run's leftovers.
+   */
+  async resetPending(checkResultIds: string[], modelConfig: { model: string; provider: string }) {
+    await this.predictionModel.resetUnadjudicated(checkResultIds, {
+      model: modelConfig.model,
+      promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
+      provider: modelConfig.provider,
+    });
   }
 
   /**

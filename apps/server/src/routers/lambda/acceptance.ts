@@ -30,6 +30,7 @@ import {
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
+  isCurrentReviewPrediction,
   mapWithConcurrency,
   REVIEW_PREDICT_CONCURRENCY,
   REVIEW_PREDICT_MODEL_CONFIG,
@@ -425,6 +426,9 @@ export const acceptanceRouter = router({
       // Newest-first from the model, so the first write per check item wins and
       // later (older) rows are ignored.
       for (const prediction of predictions) {
+        // Rows from an earlier pin (another model / prompt version) stay in
+        // the table for the comparison set but are not this page's reviewer.
+        if (!isCurrentReviewPrediction(prediction, REVIEW_PREDICT_MODEL_CONFIG)) continue;
         if (!predictionByResult.has(prediction.checkResultId)) {
           predictionByResult.set(prediction.checkResultId, prediction);
         }
@@ -748,6 +752,15 @@ export const acceptanceRouter = router({
       // Only checks the reviewer has not already ruled on. Re-judging a settled
       // check spends budget to argue with a decision that is already made.
       const pending = checks.filter((check) => check.result && !check.result.userDecision);
+
+      // Forget the previous batch's unanswered rows BEFORE responding: the
+      // client waits for every queued check to carry a recorded attempt, and
+      // with the old rows still in place that condition holds on the first
+      // poll — before a single new judgement has landed.
+      await predictor.resetPending(
+        pending.map((check) => check.result!.id),
+        modelConfig,
+      );
 
       // Dispatched AFTER the response, with a ceiling on how many model calls
       // are open at once.
