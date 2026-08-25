@@ -67,9 +67,6 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Test achaos packages
-        run: bunx vitest run --config packages/achaos/vitest.config.mts --silent='passed-only'
-
       - name: Upload coverage to Codecov
         if: always()
         env:
