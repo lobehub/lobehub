@@ -31,6 +31,7 @@ import { taskDetailPath } from '../shared/taskDetailPath';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
   buildKanbanColumns,
+  canDropTaskIntoKanbanColumn,
   getKanbanAssigneeUpdate,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
@@ -127,10 +128,10 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
 
       const targetColumnKey = over.id as string;
       const column = columns.find((item) => item.key === targetColumnKey);
-      if (!column?.droppable) return;
 
       const task = active.data.current?.task as TaskListItem | undefined;
       if (!task) return;
+      if (!column || !canDropTaskIntoKanbanColumn(task, groupBy, column)) return;
 
       const patch = getKanbanTaskPatch(groupBy, column);
       if (!patch) return;
@@ -265,10 +266,14 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       <Flexbox horizontal className={styles.board}>
         {visibleColumns.map((col) => {
           const group = currentTaskGroups.find((item) => item.key === col.key);
+          const droppable =
+            canEditTask &&
+            col.droppable &&
+            (!activeTask || canDropTaskIntoKanbanColumn(activeTask, groupBy, col));
           return (
             <KanbanColumn
               columnKey={col.key}
-              droppable={canEditTask && col.droppable}
+              droppable={droppable}
               groupBy={groupBy}
               groupMeta={col.groupMeta}
               key={col.key}

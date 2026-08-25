@@ -95,6 +95,21 @@ export const getKanbanTaskPatch = (
   }
 };
 
+export const canDropTaskIntoKanbanColumn = (
+  task: TaskListItem,
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): boolean => {
+  if (!column.droppable) return false;
+  if (groupBy !== 'assignee' || column.groupMeta?.groupBy !== 'assignee') return true;
+
+  const targetAssigneeUserId = column.groupMeta.assigneeUserId;
+  if (!targetAssigneeUserId) return true;
+  if (task.automationMode) return false;
+
+  return task.visibility !== 'private' || task.createdByUserId === targetAssigneeUserId;
+};
+
 export const moveTaskBetweenKanbanGroups = (
   taskGroups: TaskGroupItem[],
   task: TaskListItem,

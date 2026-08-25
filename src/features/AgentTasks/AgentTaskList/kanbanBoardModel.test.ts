@@ -4,6 +4,7 @@ import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initi
 
 import {
   buildKanbanColumns,
+  canDropTaskIntoKanbanColumn,
   getKanbanAssigneeUpdate,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
@@ -14,14 +15,19 @@ const task = (
   id: string,
   assigneeAgentId?: string | null,
   assigneeUserId?: string | null,
+  overrides: Partial<TaskListItem> = {},
 ): TaskListItem =>
   ({
     assigneeAgentId,
     assigneeUserId,
+    automationMode: null,
+    createdByUserId: 'creator-1',
     id,
     identifier: `T-${id}`,
     priority: 0,
     status: 'backlog',
+    visibility: 'public',
+    ...overrides,
   }) as TaskListItem;
 
 const group = (
@@ -110,6 +116,38 @@ describe('kanbanBoardModel', () => {
         assigneeUserId: 'user-1',
       }),
     ).toBeUndefined();
+  });
+
+  it('rejects member-column drops for automated tasks', () => {
+    const columns = buildKanbanColumns(
+      [
+        group('assignee:agent-1', [], 'agent-1'),
+        group('assignee:user:user-1', [], undefined, 'user-1'),
+      ],
+      'assignee',
+    );
+    const agentColumn = columns.find((column) => column.key === 'assignee:agent-1')!;
+    const memberColumn = columns.find((column) => column.key === 'assignee:user:user-1')!;
+    const automatedTask = task('automated', null, null, { automationMode: 'schedule' });
+
+    expect(canDropTaskIntoKanbanColumn(automatedTask, 'assignee', memberColumn)).toBe(false);
+    expect(canDropTaskIntoKanbanColumn(automatedTask, 'assignee', agentColumn)).toBe(true);
+  });
+
+  it('only allows private tasks to be dropped into their creator member column', () => {
+    const columns = buildKanbanColumns(
+      [
+        group('assignee:user:creator-1', [], undefined, 'creator-1'),
+        group('assignee:user:user-2', [], undefined, 'user-2'),
+      ],
+      'assignee',
+    );
+    const creatorColumn = columns.find((column) => column.key === 'assignee:user:creator-1')!;
+    const otherMemberColumn = columns.find((column) => column.key === 'assignee:user:user-2')!;
+    const privateTask = task('private', null, null, { visibility: 'private' });
+
+    expect(canDropTaskIntoKanbanColumn(privateTask, 'assignee', creatorColumn)).toBe(true);
+    expect(canDropTaskIntoKanbanColumn(privateTask, 'assignee', otherMemberColumn)).toBe(false);
   });
 
   it('preserves paginated group totals during an optimistic move', () => {
