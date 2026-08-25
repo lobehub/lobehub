@@ -846,10 +846,14 @@ export class AiAgentService {
       log('finalizeHeteroDispatchError: publishAgentRuntimeEnd failed (non-fatal): %O', err);
     }
 
-    // 3. The operation never started — drop the running marker so reconnect /
+    // 3. The operation never started — settle the topic so reconnect /
     //    heteroIngest validation and the next turn don't see a stale operation.
+    //    Settle, not take: dropping the marker alone would strand `status` on
+    //    'running' with nothing left for any later settle to match — see
+    //    `ServerOperationStore.clearRunningMark`. 'active' rather than 'unread'
+    //    because a dispatch that never started produced nothing to read.
     try {
-      await this.topicModel.takeRunningOperation(topicId, operationId);
+      await this.topicModel.settleRunningOperation(topicId, operationId, 'active');
     } catch (err) {
       log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
     }
