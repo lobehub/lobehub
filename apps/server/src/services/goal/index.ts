@@ -540,7 +540,9 @@ export class GoalService {
     task: TaskItem,
   ): Promise<GoalTickResult | undefined> => {
     const [runningTopic] = await this.taskTopicModel.findRunningByTaskIds([task.id]);
-    if (!runningTopic?.operationId) return undefined;
+    const operationId = runningTopic?.operationId;
+    const topicId = runningTopic?.topicId;
+    if (!operationId || !topicId) return undefined;
 
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
     const reclaimed = await this.db.transaction(async (tx) => {
@@ -548,12 +550,12 @@ export class GoalService {
         tx,
         this.userId,
         this.workspaceId,
-      ).settleStaleRunning(runningTopic.operationId!, staleBefore);
+      ).settleStaleRunning(operationId, staleBefore);
       if (!settled) return false;
 
       await new TaskTopicModel(tx, this.userId, this.workspaceId).updateStatus(
         task.id,
-        runningTopic.topicId,
+        topicId,
         'timeout',
       );
       await new TaskModel(tx, this.userId, this.workspaceId).updateStatus(task.id, 'paused', {

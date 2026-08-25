@@ -347,6 +347,32 @@ describe('GoalService', () => {
     });
   });
 
+  it('does not reclaim a running Work operation without a persisted topic id', async () => {
+    vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
+      { operationId: 'op-without-topic', topicId: null } as never,
+    ]);
+    const settleSpy = vi.spyOn(AgentOperationModel.prototype, 'settleStaleRunning');
+
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { operationLeaseTimeoutMs: 60_000 } },
+      title: 'Wait for topic persistence',
+      work: ['Run a durable experiment'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'running');
+
+    const waiting = await service.tick(graph.goal.id);
+
+    expect(settleSpy).not.toHaveBeenCalled();
+    expect(waiting).toMatchObject({
+      message: expect.stringContaining('is running'),
+      outcome: 'waiting_external',
+      taskId: created.taskId,
+    });
+  });
+
   it('rolls back the operation reclaim when recovery bookkeeping fails', async () => {
     vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
       { operationId: 'op-atomic-recovery', topicId: 'topic-stale' } as never,
