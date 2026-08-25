@@ -183,6 +183,12 @@ export type RecentItemKind = 'file' | 'page';
 interface KnowledgeQueryParams extends QueryFileListParams {
   /** Restrict the result set to rows created by a specific workspace member. */
   creatorUserId?: string;
+  /**
+   * Server-derived list of restricted knowledge bases the caller may not
+   * browse (resource-permission `use` level). Content linked to these KBs is
+   * dropped from cross-KB listings; never populated from client input.
+   */
+  excludeKnowledgeBaseIds?: string[];
 }
 
 /**
@@ -273,6 +279,21 @@ export class KnowledgeRepo {
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);
 
   /**
+   * Narrow a workspace-scoped list to one Resources mode. Personal rows are
+   * already owner-scoped and deliberately ignore the mode filter.
+   */
+  private visibilityFilter = (
+    visibility: QueryFileListParams['visibility'],
+    column: AnyPgColumn,
+  ): SQL | undefined => {
+    if (!this.workspaceId || !visibility) return undefined;
+
+    return visibility === 'private'
+      ? eq(column, 'private')
+      : (or(eq(column, 'public'), isNull(column)) as SQL);
+  };
+
+  /**
    * Filters shared by both arms. `visibility` narrows the ownership-scoped pool;
    * rows predating the column count as public.
    */
@@ -292,10 +313,7 @@ export class KnowledgeRepo {
         ? isNull(cols.parentId)
         : eq(cols.parentId, parentId),
     q ? or(...cols.names.map((name) => ilike(name, `%${q}%`))) : undefined,
-    visibility === 'private' ? eq(cols.visibility, 'private') : undefined,
-    visibility === 'public'
-      ? or(eq(cols.visibility, 'public'), isNull(cols.visibility))
-      : undefined,
+    this.visibilityFilter(visibility, cols.visibility),
   ];
 
   private fileArm = (
@@ -337,6 +355,7 @@ export class KnowledgeRepo {
     q,
     sortType,
     sorter,
+    excludeKnowledgeBaseIds,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
@@ -378,6 +397,9 @@ export class KnowledgeRepo {
         this.fileSourceFilter(sourceFilter),
         // Exclude files in knowledge base if needed
         !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
+        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+          : undefined,
       ],
       knowledgeBaseId,
       sourceFilter,
@@ -397,6 +419,9 @@ export class KnowledgeRepo {
       // already come back through the file arm.
       knowledgeBaseId ? isNull(d.fileId) : undefined,
       knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+      !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+        ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+        : undefined,
     ]);
 
     const rows = await unionAll(fileArm, documentArm)
@@ -416,9 +441,14 @@ export class KnowledgeRepo {
    * `LIMIT` truncate away every row of the wanted kind — a burst of uploads
    * left the resource home with an empty "recent pages" section.
    */
-  async queryRecent(limit: number = 12, kind?: RecentItemKind): Promise<KnowledgeItem[]> {
+  async queryRecent(
+    limit: number = 12,
+    kind?: RecentItemKind,
+    visibility?: QueryFileListParams['visibility'],
+  ): Promise<KnowledgeItem[]> {
     const fileArm = this.fileArm([
       this.notInAnyKnowledgeBase(),
+      this.visibilityFilter(visibility, f.visibility),
       // Derived pages live in the documents table; their backing file row is not
       // a file the user uploaded, so it never belongs to the file list.
       kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
@@ -426,6 +456,7 @@ export class KnowledgeRepo {
 
     const documentArm = this.documentArm([
       isNull(d.knowledgeBaseId),
+      this.visibilityFilter(visibility, d.visibility),
       // Folders are containers, not pages.
       kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
     ]);
@@ -508,6 +539,24 @@ export class KnowledgeRepo {
 
   private notInAnyKnowledgeBase = () =>
     notExists(this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, f.id)));
+
+  /**
+   * Drop files linked to any of the given knowledge bases. A file that also
+   * belongs to an open KB is still dropped — hiding slightly more beats
+   * leaking a restricted KB's content through a shared membership.
+   */
+  private notInKnowledgeBases = (knowledgeBaseIds: string[]) =>
+    notExists(
+      this.db
+        .select()
+        .from(knowledgeBaseFiles)
+        .where(
+          and(
+            eq(knowledgeBaseFiles.fileId, f.id),
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+          ),
+        ),
+    );
 
   private fileCategoryFilter = (category?: string): SQL | undefined => {
     if (!category || category === FilesTabs.All) return undefined;

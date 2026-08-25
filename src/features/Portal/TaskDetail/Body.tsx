@@ -4,8 +4,12 @@ import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
-import { TaskDetailSections, TopicChatDrawer, useActiveTaskDetail } from '@/features/AgentTasks';
+import {
+  TaskDetailSections,
+  TaskDetailSkeleton,
+  TopicChatDrawer,
+  useActiveTaskDetail,
+} from '@/features/AgentTasks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -43,11 +47,7 @@ const Body = memo(() => {
       paddingInline={16}
       style={{ minHeight: 0, overflowY: 'auto' }}
     >
-      {isInitialLoading ? (
-        <SurfaceSkeleton header={false} variant={'editor'} />
-      ) : (
-        <TaskDetailSections />
-      )}
+      {isInitialLoading ? <TaskDetailSkeleton /> : <TaskDetailSections />}
       <TopicChatDrawer />
     </Flexbox>
   );

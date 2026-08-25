@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { ConnectorDataError } from '@lobechat/connector-data';
+import {
+  ConnectorDataError,
+  getConnectorErrorMessage,
+  isConnectorErrorRetryable,
+} from '@lobechat/connector-data';
+import { TRACING_SCENARIOS } from '@lobechat/const';
 import {
   getUnderstandingSourceFingerprint,
   OnboardingUnderstandingRepository,
@@ -11,15 +16,21 @@ import {
   UnderstandingResourceNotFoundError,
   UnderstandingSessionNotFoundError,
 } from '@lobechat/database';
-import { observeOnboardingUnderstandingOperation } from '@lobechat/observability-otel/modules/onboarding-understanding';
+import {
+  observeOnboardingUnderstandingOperation,
+  observeOnboardingUnderstandingProviderCollection,
+} from '@lobechat/observability-otel/modules/onboarding-understanding';
 import {
   chainUnderstandingDetailedPersona,
   chainUnderstandingPersona,
   UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
+  UNDERSTANDING_ANALYSIS_PROMPT_VERSION,
   UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
+  UNDERSTANDING_DETAILED_PERSONA_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type {
   CollectionDiagnostics,
+  CollectionError,
   ConfirmOnboardingUnderstandingInput,
   OnboardingUnderstandingMessageMetadata,
   OnboardingUnderstandingPollingResult,
@@ -30,6 +41,7 @@ import type {
   UnderstandingPersonaProposal,
 } from '@lobechat/types';
 import {
+  MAX_COLLECTION_COUNT,
   MAX_COLLECTION_ERRORS,
   OnboardingUnderstandingMessageMetadataSchema,
   projectOnboardingUnderstandingSessionStatus,
@@ -48,18 +60,54 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { ConnectorDataService } from '@/server/services/connectorData';
 
 import { understandingProviderMap } from './providers';
-import {
-  boundCanonicalDiagnostics,
-  canonicalCollectionError,
-  MAX_AGENT_INPUT_LENGTH,
-  MAX_SOURCE_BRIEF_LENGTH,
-  sanitizeProviderDiagnostics,
-} from './sanitizer';
 import type { StoredUnderstandingProviderContext } from './sourceStore';
-import { UnderstandingSourceStore } from './sourceStore';
+import { MAX_SOURCE_BRIEF_LENGTH, UnderstandingSourceStore } from './sourceStore';
 import type { UnderstandingProvider } from './types';
 
 const BASELINE_MAX_LENGTH = 8_000;
+const MAX_AGENT_INPUT_LENGTH = 128_000;
+
+const boundedCount = (value: number) =>
+  Number.isFinite(value) ? Math.min(MAX_COLLECTION_COUNT, Math.max(0, Math.floor(value))) : 0;
+
+/**
+ * Bounds provider diagnostic counts without changing their error content.
+ *
+ * Use when:
+ * - Moving provider collection diagnostics across the service boundary
+ *
+ * Expects:
+ * - Providers return serializable CollectionError values
+ *
+ * Returns:
+ * - Bounded counts and error cardinality with original diagnostics preserved
+ */
+const boundProviderDiagnostics = (value: CollectionDiagnostics): CollectionDiagnostics => ({
+  errors: value.errors.slice(0, MAX_COLLECTION_ERRORS),
+  evidenceCount: boundedCount(value.evidenceCount),
+  failedCount: boundedCount(value.failedCount),
+  succeededCount: boundedCount(value.succeededCount),
+});
+
+/**
+ * Creates one structured collection error while retaining its original message.
+ *
+ * Use when:
+ * - Converting a structured internal or Connector Data error for persistence
+ *
+ * Expects:
+ * - Provider, operation, and code are supplied by trusted internal code
+ *
+ * Returns:
+ * - A collection error containing the supplied message without replacement
+ */
+const createCollectionError = (
+  provider: string,
+  operation: string,
+  code: string,
+  retryable: boolean,
+  message = `${provider} ${operation} failed`,
+): CollectionError => ({ code, message, operation, provider, retryable });
 
 interface ProviderOperationInput {
   providerId: string;
@@ -178,7 +226,7 @@ const sumDiagnostics = (
   const terminalSources = Object.values(session.sources).filter(
     ({ status }) => status === 'completed' || status === 'failed',
   );
-  return boundCanonicalDiagnostics({
+  return boundProviderDiagnostics({
     errors: terminalSources.flatMap(({ errors }) => errors).slice(-MAX_COLLECTION_ERRORS),
     evidenceCount: contexts.reduce(
       (total, { diagnostics }) => total + diagnostics.evidenceCount,
@@ -230,6 +278,27 @@ const storedProposal = (metadata: unknown) => {
     metadata.onboardingUnderstanding,
   );
   return parsed.success ? parsed.data : undefined;
+};
+
+/**
+ * Normalizes a thrown provider value into the persisted diagnostic shape without replacing its
+ * original message.
+ *
+ * Before:
+ * - `Error("GraphQL FORBIDDEN at viewer.repository")`
+ *
+ * After:
+ * - `{ provider: "github", operation: "collection", message: "GraphQL FORBIDDEN at viewer.repository" }`
+ */
+const createProviderCollectionError = (providerId: string, error: unknown) => {
+  const connectorError = error instanceof ConnectorDataError ? error : undefined;
+  return createCollectionError(
+    providerId,
+    connectorError?.operation ?? 'collection',
+    connectorError?.code ?? 'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
+    isConnectorErrorRetryable(error),
+    getConnectorErrorMessage(error) ?? String(error),
+  );
 };
 
 export class UnderstandingService {
@@ -615,28 +684,52 @@ export class UnderstandingService {
           return stale();
         }
 
-        let collected;
+        let collection;
         try {
-          collected = await observeOnboardingUnderstandingOperation(
-            { ...operationAttributes, operation: 'provider.collect' },
-            () =>
-              provider.collect({
+          collection = await observeOnboardingUnderstandingProviderCollection(
+            operationAttributes,
+            async () => {
+              const collected = await provider.collect({
                 connectorData: this.dependencies.connectorData,
                 userId: this.dependencies.userId,
-              }),
+              });
+              const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
+              const diagnostics = boundProviderDiagnostics(collected.diagnostics);
+              const usable =
+                Boolean(context) &&
+                collected.sourceCount > 0 &&
+                diagnostics.evidenceCount > 0 &&
+                diagnostics.succeededCount > 0;
+              const outcome = !usable
+                ? ('failed' as const)
+                : diagnostics.failedCount > 0 || diagnostics.errors.length > 0
+                  ? ('partial' as const)
+                  : ('completed' as const);
+
+              return {
+                diagnostics: diagnostics.errors,
+                evidenceCount: diagnostics.evidenceCount,
+                failedCount: diagnostics.failedCount,
+                outcome,
+                result: { context, diagnostics, sourceCount: collected.sourceCount, usable },
+                sourceCount: collected.sourceCount,
+                succeededCount: diagnostics.succeededCount,
+              };
+            },
+            (error) => createProviderCollectionError(input.providerId, error),
           );
         } catch (error) {
-          if (!(error instanceof ConnectorDataError) || error.retryable) throw error;
-          return this.recordProviderFailure(input, 0);
+          const diagnostic = createProviderCollectionError(input.providerId, error);
+          if (diagnostic.retryable) throw error;
+          return this.recordProviderFailure(input, 0, {
+            errors: [diagnostic],
+            evidenceCount: 0,
+            failedCount: 1,
+            succeededCount: 0,
+          });
         }
 
-        const context = collected.context.trim().slice(0, MAX_SOURCE_BRIEF_LENGTH);
-        const diagnostics = sanitizeProviderDiagnostics(input.providerId, collected.diagnostics);
-        const usable =
-          Boolean(context) &&
-          collected.sourceCount > 0 &&
-          diagnostics.evidenceCount > 0 &&
-          diagnostics.succeededCount > 0;
+        const { context, diagnostics, sourceCount, usable } = collection;
         if (!usable)
           return this.recordProviderFailure(input, diagnostics.succeededCount, diagnostics);
 
@@ -646,7 +739,7 @@ export class UnderstandingService {
           providerId: input.providerId,
           revision: input.revision,
           sessionId: input.sessionId,
-          sourceCount: collected.sourceCount,
+          sourceCount,
           userId: this.dependencies.userId,
         };
         await observeOnboardingUnderstandingOperation(
@@ -672,7 +765,7 @@ export class UnderstandingService {
           failedCount: diagnostics.failedCount,
           providerId: input.providerId,
           revision: input.revision,
-          sourceCount: collected.sourceCount,
+          sourceCount,
           sourceFingerprint,
           status: 'completed' as const,
           succeededCount: diagnostics.succeededCount,
@@ -684,7 +777,7 @@ export class UnderstandingService {
     try {
       return await this.dependencies.repository.failProvider({
         errors: [
-          canonicalCollectionError(
+          createCollectionError(
             input.providerId,
             'collection',
             'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
@@ -860,7 +953,7 @@ export class UnderstandingService {
       const current = await this.activeSession(topicId, sessionId);
       if (current.writing && current.writing.sourceFingerprint !== sourceFingerprint) return;
       const session = await this.dependencies.repository.failWriting({
-        error: canonicalCollectionError(
+        error: createCollectionError(
           'understanding',
           'writing',
           'UNDERSTANDING_WRITING_FAILED',
@@ -967,31 +1060,27 @@ export class UnderstandingService {
               () =>
                 this.dependencies.generator.generateObject(
                   {
-                    messages: [
-                      {
-                        content: chainUnderstandingDetailedPersona({
-                          analysis: proposal.analysis,
-                          responseLanguage,
-                        }),
-                        role: 'system',
-                      },
-                      {
-                        content: [
-                          'Write the complete persona from the original collected provider contexts.',
-                          buildEphemeralDocument(
-                            contexts as StoredUnderstandingProviderContext[],
-                            baseline,
-                          ),
-                        ].join('\n\n'),
-                        role: 'user',
-                      },
-                    ],
+                    ...chainUnderstandingDetailedPersona({
+                      analysis: proposal.analysis,
+                      context: buildEphemeralDocument(
+                        contexts as StoredUnderstandingProviderContext[],
+                        baseline,
+                      ),
+                      responseLanguage,
+                    }),
                     model: writerAgent.model,
                     provider: writerAgent.provider,
                     schema: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA,
                     thinking: { type: 'disabled' },
                   },
-                  { metadata: { trigger: RequestTrigger.Onboarding } },
+                  {
+                    metadata: { trigger: RequestTrigger.Onboarding },
+                    tracing: {
+                      promptVersion: UNDERSTANDING_DETAILED_PERSONA_PROMPT_VERSION,
+                      scenario: TRACING_SCENARIOS.UnderstandingDetailedPersona,
+                      schemaName: UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA.name,
+                    },
+                  },
                 ),
             ),
           );
@@ -1031,7 +1120,7 @@ export class UnderstandingService {
         return;
       }
       return this.dependencies.repository.failDetailedWriting({
-        error: canonicalCollectionError(
+        error: createCollectionError(
           'understanding',
           'detailed-writing',
           'UNDERSTANDING_DETAILED_WRITING_FAILED',
@@ -1073,7 +1162,7 @@ export class UnderstandingService {
     const errors = diagnostics?.errors.length
       ? diagnostics.errors
       : [
-          canonicalCollectionError(
+          createCollectionError(
             input.providerId,
             'collection',
             'UNDERSTANDING_PROVIDER_COLLECTION_FAILED',
@@ -1148,30 +1237,26 @@ export class UnderstandingService {
             () =>
               this.dependencies.generator.generateObject(
                 {
-                  messages: [
-                    {
-                      content: chainUnderstandingPersona({
-                        diagnostics,
-                        feedback,
-                        providers,
-                        responseLanguage,
-                      }),
-                      role: 'system',
-                    },
-                    {
-                      content: [
-                        'Write onboarding persona from collected provider contexts.',
-                        buildEphemeralDocument(contexts, baseline),
-                      ].join('\n\n'),
-                      role: 'user',
-                    },
-                  ],
+                  ...chainUnderstandingPersona({
+                    context: buildEphemeralDocument(contexts, baseline),
+                    diagnostics,
+                    feedback,
+                    providers,
+                    responseLanguage,
+                  }),
                   model: writerAgent.model,
                   provider: writerAgent.provider,
                   schema: UNDERSTANDING_ANALYSIS_JSON_SCHEMA,
                   thinking: { type: 'disabled' },
                 },
-                { metadata: { trigger: RequestTrigger.Onboarding } },
+                {
+                  metadata: { trigger: RequestTrigger.Onboarding },
+                  tracing: {
+                    promptVersion: UNDERSTANDING_ANALYSIS_PROMPT_VERSION,
+                    scenario: TRACING_SCENARIOS.UnderstandingAnalysis,
+                    schemaName: UNDERSTANDING_ANALYSIS_JSON_SCHEMA.name,
+                  },
+                },
               ),
           ),
         );

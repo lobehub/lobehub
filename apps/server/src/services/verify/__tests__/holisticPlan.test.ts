@@ -1,4 +1,3 @@
-import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +10,7 @@ const {
   createRubricMock,
   ensureForOperationMock,
   findByIdsMock,
+  generateObjectMock,
   getCriteriaMock,
   setCriteriaMock,
   setPlanMock,
@@ -20,6 +20,7 @@ const {
   createRubricMock: vi.fn(async () => ({ id: 'rub-created' })),
   ensureForOperationMock: vi.fn(async () => ({ id: 'run-1' })),
   findByIdsMock: vi.fn(async () => [] as any[]),
+  generateObjectMock: vi.fn(),
   getCriteriaMock: vi.fn(async () => [] as any[]),
   setCriteriaMock: vi.fn(),
   setPlanMock: vi.fn(async (_runId: string, _items: any[]) => {}),
@@ -46,7 +47,9 @@ vi.mock('@/database/models/verifyCriterion', () => ({
   })),
 }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn(() => ({})) }));
-vi.mock('@/server/services/aiGeneration', () => ({ AiGenerationService: vi.fn(() => ({})) }));
+vi.mock('@/server/services/aiGeneration', () => ({
+  AiGenerationService: vi.fn(() => ({ generateObject: generateObjectMock })),
+}));
 
 const db = {} as any;
 const lastPlan = (): VerifyCheckItem[] => setPlanMock.mock.calls.at(-1)![1] as VerifyCheckItem[];
@@ -145,32 +148,22 @@ describe('generateDraftPlan — holistic fallback', () => {
       requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
     });
   });
+});
 
-  it('persists agent-authored verifierConfig instead of replacing it with an empty object', async () => {
-    const config = {
-      requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
-    };
-    const result = await new VerifyPlanGeneratorService(db, 'user-1').createPlanFromCriteria({
-      criteria: [{ title: 'Visual proof', verifierConfig: config, verifierType: 'llm' }],
-      operationId: 'op-1',
-      title: 'Acceptance',
+describe('generateCriteria tracing', () => {
+  it('keeps generic task criteria generation on the verify-plan scenario', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({
+      goal: 'Ship the feature',
+      modelConfig: { model: 'test-model', provider: 'test-provider' },
     });
 
-    expect(createCriterionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ verifierConfig: config }),
+    expect(generateObjectMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        tracing: expect.objectContaining({ scenario: 'verify_plan_gen' }),
+      }),
     );
-    expect(result.items[0].verifierConfig).toEqual(config);
-  });
-
-  it('exposes the required evidence inventory in the agent tool contract', () => {
-    const criterion = LobeDeliveryCheckerManifest.api[0].parameters.properties.criteria.items;
-
-    expect(criterion.required).toContain('requiredEvidence');
-    expect(criterion.properties.requiredEvidence.items.required).toEqual([
-      'type',
-      'modality',
-      'scope',
-      'hint',
-    ]);
   });
 });

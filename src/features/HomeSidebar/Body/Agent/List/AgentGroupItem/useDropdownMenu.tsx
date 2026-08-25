@@ -6,13 +6,14 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
+import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
-import { isForbiddenError, isOwnerOnlyForbiddenError } from '@/utils/forbiddenError';
+import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -55,6 +56,11 @@ export const useGroupDropdownMenu = ({
     backgroundColor,
     description,
     memberAvatars,
+    title,
+  });
+  const transferToMemberItem = useAgentGroupTransferToMemberMenuItem(id, {
+    avatar,
+    backgroundColor,
     title,
   });
 
@@ -112,8 +118,12 @@ export const useGroupDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
-        ...(canConfigure && transferMenuItems?.length
-          ? [{ type: 'divider' as const }, ...transferMenuItems]
+        ...(canConfigure && (transferMenuItems?.length || transferToMemberItem)
+          ? [
+              { type: 'divider' as const },
+              ...(transferMenuItems ?? []),
+              ...(transferToMemberItem ? [transferToMemberItem] : []),
+            ]
           : []),
         ...(canConfigure && canManage
           ? [
@@ -135,13 +145,7 @@ export const useGroupDropdownMenu = ({
                         await removeAgentGroup(id);
                         toast.success(t('confirmRemoveGroupSuccess'));
                       } catch (error) {
-                        toast.error(
-                          isOwnerOnlyForbiddenError(error)
-                            ? t('deleteSharedOwnerOnly', { ns: 'common' })
-                            : isForbiddenError(error)
-                              ? t('manageOnlyCreator', { ns: 'common' })
-                              : t('operationFailed', { ns: 'common' }),
-                        );
+                        toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                       }
                     },
                     title: t('delete', { ns: 'common' }),
@@ -168,6 +172,7 @@ export const useGroupDropdownMenu = ({
       openAgentInNewWindow,
       removeAgentGroup,
       transferMenuItems,
+      transferToMemberItem,
     ],
   );
 };

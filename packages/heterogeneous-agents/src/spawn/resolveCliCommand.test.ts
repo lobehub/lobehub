@@ -50,6 +50,13 @@ const existingFiles = (files: Record<string, string | true>) => {
 };
 
 const noErr = null;
+const TRAE_ACP_HELP = `Start the ACP server
+
+Usage:
+  trae-cli acp serve [flags]
+
+Flags:
+  -y, --yolo   Enable YOLO mode`;
 const callExecFile = (stdout: string, stderr = '') => {
   execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
     // promisify-wrapped: the callback is always the last positional arg.
@@ -146,6 +153,22 @@ describe('resolveCliCommand', () => {
       expect(status.version).toBe('0.147.0-alpha.6.6');
       expect(status.resolvedPathEnv).toBeUndefined();
       expect(execMock).not.toHaveBeenCalled();
+    });
+
+    it('validates Grok Build with its ACP agent-mode capability probe', async () => {
+      callExecFile('grok 1.0.3 (ea094a8) [stable]');
+      callExecFile('Usage: grok agent [OPTIONS] <stdio|leader>');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('grok-build', '/Users/x/.grok/bin/grok');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.grok/bin/grok',
+        version: '1.0.3',
+      });
+      expect(execFileMock.mock.calls[0]![1]).toEqual(['--version']);
+      expect(execFileMock.mock.calls[1]![1]).toEqual(['agent', '--help']);
     });
 
     it('resolves and validates OpenCode using its bare semver output', async () => {
@@ -266,6 +289,72 @@ describe('resolveCliCommand', () => {
         if (originalShell === undefined) delete process.env.SHELL;
         else process.env.SHELL = originalShell;
       }
+    });
+
+    it('accepts the official TRAE banner when the CLI exposes the ACP runtime', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile(`trae-cli version 0.120.52
+build date: 2026-08-12T01:31:30Z
+build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
+      callExecFile(TRAE_ACP_HELP);
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '0.120.52',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
+    });
+
+    it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('1.4.0');
+      callExecFile(TRAE_ACP_HELP);
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('trae', 'traecli')).resolves.toMatchObject({
+        available: true,
+        path: '/usr/local/bin/traecli',
+        version: '1.4.0',
+      });
+    });
+
+    it('accepts the official canonical trae-cli executable when it exposes ACP', async () => {
+      callExecFile('trae-cli version 0.120.52');
+      callExecFile(TRAE_ACP_HELP);
+      const probeEnv = { ...process.env, PATH: '/custom/node/bin:/usr/bin' };
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand(
+        'trae',
+        '/usr/local/bin/trae-cli',
+        probeEnv,
+      );
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/trae-cli',
+        resolvedPathEnv: '/custom/node/bin:/usr/bin',
+        version: '0.120.52',
+      });
+      expect(execFileMock.mock.calls[0]![2]).toMatchObject({ env: probeEnv });
+      expect(execFileMock.mock.calls[1]![2]).toMatchObject({ env: probeEnv });
+    });
+
+    it('rejects the unrelated trae-cli trajectory runner by its missing ACP capability', async () => {
+      callExecFile('/usr/local/bin/traecli\n');
+      callExecFile('trae-cli 0.1.0');
+      callExecFileError(new Error('unknown command "acp"'));
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('trae', 'traecli-renamed');
+
+      expect(status).toEqual({ available: false });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
     });
 
     it('finds OpenCode in its well-known user-local install path', async () => {
@@ -666,6 +755,69 @@ describe('resolveCliCommand', () => {
       }
     });
 
+    it('finds the current TRAE public CLI executable when PATH is missing it', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      const localAppData = 'C:\\Users\\x\\AppData\\Local';
+      const traeCli = `${localAppData}\\Programs\\TraeCLI\\bin\\traex.exe`;
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [traeCli]: true });
+        callExecFileError(new Error('not found')); // where traecli
+        callExecFileError(new Error('no registry')); // reg query HKLM
+        callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFile('traecli 0.201.2 (public edition)');
+        callExecFile(TRAE_ACP_HELP);
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: traeCli,
+          version: '0.201.2',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocalAppData;
+      }
+    });
+
+    it('still finds TRAE in its legacy Windows install directory', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA;
+      const originalPath = process.env.PATH;
+      const localAppData = 'C:\\Users\\x\\AppData\\Local';
+      const traeCli = `${localAppData}\\trae-cli\\bin\\traecli.exe`;
+      process.env.LOCALAPPDATA = localAppData;
+      process.env.PATH = 'C:\\Windows';
+
+      try {
+        existingFiles({ [traeCli]: true });
+        callExecFileError(new Error('not found')); // where traecli
+        callExecFileError(new Error('no registry')); // reg query HKLM
+        callExecFileError(new Error('no registry')); // reg query HKCU
+        callExecFileError(new Error('not found')); // current Programs/TraeCLI/bin/traex.exe
+        callExecFile('trae-cli version 0.120.52');
+        callExecFile(TRAE_ACP_HELP);
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('trae', 'traecli');
+
+        expect(status).toMatchObject({
+          available: true,
+          path: traeCli,
+          version: '0.120.52',
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+        else process.env.LOCALAPPDATA = originalLocalAppData;
+      }
+    });
+
     it('capability-probes a Kimi .cmd shim without constructing a shell command', async () => {
       const commandPath = 'C:\\Users\\x\\AppData\\Roaming\\npm\\kimi.cmd';
       const scriptPath = 'C:\\Users\\x\\AppData\\Roaming\\npm\\node_modules\\kimi-code\\cli.js';
@@ -780,6 +932,11 @@ describe('resolveCliCommand', () => {
       expect(DEFAULT_HETERO_COMMAND.cursor).toBe('agent');
     });
 
+    it('defines grok as the default Grok Build command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND['grok-build']).toBe('grok');
+    });
+
     it('defines pi as the default Pi command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
@@ -788,6 +945,11 @@ describe('resolveCliCommand', () => {
     it('defines qodercli as the default Qoder command', async () => {
       const { DEFAULT_HETERO_COMMAND } = await importModule();
       expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
+    });
+
+    it('defines traecli as the default TRAE command', async () => {
+      const { DEFAULT_HETERO_COMMAND } = await importModule();
+      expect(DEFAULT_HETERO_COMMAND.trae).toBe('traecli');
     });
 
     it('resolves the default bare command to the validated absolute path', async () => {

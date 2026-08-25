@@ -340,6 +340,8 @@
   "payDiffPrice": "Оплатить разницу",
   "payDiffPriceApprox": "Приблизительно",
   "payDiffPriceTip": "Фактическая сумма указывается на странице оплаты",
+  "payment.downgradeFailed.desc": "Не удалось запланировать понижение тарифа. Пожалуйста, попробуйте позже или свяжитесь с нами по электронной почте, если проблема сохранится.",
+  "payment.downgradeFailed.title": "Ошибка понижения тарифа",
   "payment.error.actions.billing": "Управление оплатой",
   "payment.error.actions.home": "На главную",
   "payment.error.desc": "Подписка с ID: {{id}} не найдена. Если у вас есть вопросы, свяжитесь с нами по электронной почте",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "План заблокирован",
   "plans.btn.payment": "Купить",
   "plans.btn.paymentDesc": "Поддержка карт / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Поддержка банковских карт",
   "plans.btn.soon": "Скоро",
   "plans.cancelDowngrade": "Отменить запланированное понижение",
   "plans.cancelDowngradeSuccess": "Запланированное понижение было отменено",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Обзор использования",
   "usage.remaining": "Осталось",
   "usage.storage.embeddings.used": "Векторное хранилище",
-  "usage.storage.file.used": "Использование файлов",
-  "zarinpal.infoModal.desc": "В соответствии с требованиями, пожалуйста, заполните личные данные перед оформлением заказа:",
-  "zarinpal.infoModal.phone.label": "Номер телефона",
-  "zarinpal.infoModal.phone.placeholder": "Введите номер телефона",
-  "zarinpal.infoModal.phone.rule": "Введите корректный номер телефона",
-  "zarinpal.infoModal.submit": "Купить",
-  "zarinpal.infoModal.title": "Заполните обязательную информацию"
+  "usage.storage.file.used": "Использование файлов"
 }

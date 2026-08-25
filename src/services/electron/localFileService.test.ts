@@ -162,4 +162,34 @@ describe('localFileService', () => {
     ).rejects.toThrow('Unsupported local file preview type');
     expect(textMock).not.toHaveBeenCalled();
   });
+
+  it('reads local file bytes from the preview URL', async () => {
+    const { localFileService } = await import('./localFileService');
+
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/font.woff2',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            arrayBuffer: vi.fn(async () => new Uint8Array([10, 20, 30]).buffer),
+            headers: { get: vi.fn(() => 'font/woff2') },
+            ok: true,
+          }) as unknown as Response,
+      ),
+    );
+
+    const result = await localFileService.readLocalFileBytes({
+      path: '/repo/font.woff2',
+      workingDirectory: '/repo',
+    });
+
+    expect(result).toEqual({
+      bytes: new Uint8Array([10, 20, 30]),
+      contentType: 'font/woff2',
+    });
+  });
 });

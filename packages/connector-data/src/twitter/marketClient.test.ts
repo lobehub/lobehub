@@ -54,8 +54,8 @@ describe('createTwitterMarketConnectorClient', () => {
     );
   });
 
-  /** @example An embedded HTTP 402 records a safe credits-depleted diagnostic. */
-  it('logs the safe reason for embedded Market tool failures', async () => {
+  /** @example An embedded HTTP 402 retains its original provider message. */
+  it('logs the original message for embedded Market tool failures', async () => {
     // ROOT CAUSE:
     //
     // Market reports a successful transport envelope while embedding the X provider failure in
@@ -65,17 +65,16 @@ describe('createTwitterMarketConnectorClient', () => {
     // Before: `{ success: true, data: { isError: true, statusCode: 402, error: '...' } }`
     //         became an untraceable `twitter_searchRecentPosts_failed`.
     //
-    // We now log a bounded `credits_depleted` reason and status without retaining the raw message.
-    const client = createClient(
-      vi.fn(async () => ({
-        data: {
-          error: 'Twitter API Error: credits depleted (HTTP 402); token=secret',
-          isError: true,
-          statusCode: 402,
-        },
-        success: true,
-      })),
-    );
+    // We now retain the original embedded provider message in the thrown diagnostic and log entry.
+    const response = {
+      data: {
+        error: 'Twitter API Error: credits depleted (HTTP 402); token=secret',
+        isError: true,
+        statusCode: 402,
+      },
+      success: true,
+    };
+    const client = createClient(vi.fn(async () => response));
 
     const error = await client
       .searchRecentPosts({ query: 'from:ada -is:retweet' })
@@ -84,15 +83,17 @@ describe('createTwitterMarketConnectorClient', () => {
     expect(error).toBeInstanceOf(ConnectorDataError);
     expect(error).toMatchObject({
       code: 'twitter_searchRecentPosts_failed',
+      message: 'Twitter API Error: credits depleted (HTTP 402); token=secret',
       operation: 'searchRecentPosts',
       retryable: false,
     });
+    /** @example expect(error.cause).toBe(response); */
+    expect(error.cause).toBe(response);
     expect(mocks.log).toHaveBeenCalledWith('Market X tool call failed: %O', {
+      message: 'Twitter API Error: credits depleted (HTTP 402); token=secret',
       operation: 'searchRecentPosts',
-      reason: 'credits_depleted',
       statusCode: 402,
       toolName: 'search_tweets',
     });
-    expect(JSON.stringify(mocks.log.mock.calls)).not.toContain('token=secret');
   });
 });

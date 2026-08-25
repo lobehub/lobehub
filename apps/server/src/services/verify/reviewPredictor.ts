@@ -1,5 +1,10 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyReviewPrediction,
+  REVIEW_PREDICT_PROMPT_VERSION,
+  REVIEW_PREDICTION_JSON_SCHEMA,
+} from '@lobechat/prompts';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import debug from 'debug';
 
@@ -13,9 +18,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { buildReviewPredictPrompt, REVIEW_PREDICT_PROMPT_VERSION } from './prompts';
 import type { RawReviewPrediction } from './schema';
-import { REVIEW_PREDICTION_JSON_SCHEMA, ReviewPredictionSchema } from './schema';
+import { ReviewPredictionSchema } from './schema';
 
 const log = debug('lobe-server:verify-review-predictor');
 
@@ -151,7 +155,7 @@ export class VerifyReviewPredictorService {
       ? ((await this.documentModel.findById(params.instructionDocumentId))?.content ?? undefined)
       : undefined;
 
-    const { system, user } = buildReviewPredictPrompt({
+    const chain = chainVerifyReviewPrediction({
       instruction,
       requirement: params.requirement ?? undefined,
       surface: params.surface ?? undefined,
@@ -159,7 +163,7 @@ export class VerifyReviewPredictorService {
       toulmin: (result.toulmin ?? undefined) as
         { evidence?: string; reasoning?: string } | undefined,
       verdict: result.verdict ?? undefined,
-      visuals: visuals.map((visual) => visual.description ?? ''),
+      visuals,
     });
 
     const startedAt = Date.now();
@@ -168,19 +172,7 @@ export class VerifyReviewPredictorService {
       const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
       raw = await ai.generateObject(
         {
-          messages: [
-            { content: system, role: 'system' as const },
-            {
-              content: [
-                { text: user, type: 'text' as const },
-                ...visuals.map((visual) => ({
-                  image_url: { detail: 'high' as const, url: visual.accessUrl },
-                  type: 'image_url' as const,
-                })),
-              ],
-              role: 'user' as const,
-            },
-          ],
+          ...chain,
           model: modelConfig.model,
           provider: modelConfig.provider,
           schema: REVIEW_PREDICTION_JSON_SCHEMA,

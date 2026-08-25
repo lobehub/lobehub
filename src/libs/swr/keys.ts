@@ -124,6 +124,7 @@ export const topicKeys = {
     containerKey,
     opts,
   ]),
+  detail: def('topic:detail', (topicId: string) => ['topic:detail', topicId]),
   list: def('topic:list', (containerKey: string, opts: Record<string, unknown>) => [
     'topic:list',
     containerKey,
@@ -262,6 +263,19 @@ export const recentKeys = {
 };
 
 // ---- task ---------------------------------------------------------------
+/**
+ * SWR `mutate` matcher for every cached `task:list` variant — any agent scope,
+ * visibility chip, ordering, or automation filter. A task edit can move a row
+ * across each of those boundaries at once (reassigning, sharing, touching its
+ * `updatedAt`, attaching a schedule), so refresh invalidates by key root
+ * instead of enumerating variants.
+ */
+export const isTaskListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'task:list';
+
+export const isScheduledTaskListKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'task:scheduledList';
+
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
@@ -269,11 +283,22 @@ export const taskKeys = {
     (
       agentKey: string | undefined,
       visibility: 'all' | 'private' | 'workspace' = 'all',
+      groupBy: 'assignee' | 'priority' | 'status' = 'status',
+      excludeStatuses?: string,
       projectId?: string,
-    ) =>
-      projectId
-        ? ['task:groupList', agentKey, visibility, projectId]
-        : ['task:groupList', agentKey, visibility],
+      automated?: boolean,
+    ) => {
+      const hasBoardFilter = groupBy !== 'status' || excludeStatuses !== undefined;
+      const key = hasBoardFilter
+        ? projectId
+          ? ['task:groupList', agentKey, visibility, groupBy, excludeStatuses, projectId]
+          : ['task:groupList', agentKey, visibility, groupBy, excludeStatuses]
+        : projectId
+          ? ['task:groupList', agentKey, visibility, projectId]
+          : ['task:groupList', agentKey, visibility];
+
+      return automated === undefined ? key : [...key, { automated }];
+    },
   ),
   /**
    * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
@@ -290,10 +315,30 @@ export const taskKeys = {
       // page orders by creation, and they read the same store field.
       orderBy: 'createdAt' | 'updatedAt' = 'createdAt',
       projectId?: string,
-    ) =>
-      projectId
+      // Same reasoning as `orderBy`: Home's recent block excludes live
+      // automation and finished statuses server-side while the Tasks page
+      // fetches everything, and a shared entry would serve one surface the
+      // other's filter. Folded into one trailing slot (appended only when a
+      // filter is actually set) so unfiltered keys keep their shape.
+      filters?: { automated?: boolean; statuses?: readonly string[] },
+    ) => {
+      const key = projectId
         ? ['task:list', agentKey, visibility, orderBy, projectId]
-        : ['task:list', agentKey, visibility, orderBy],
+        : ['task:list', agentKey, visibility, orderBy];
+      const automated = filters?.automated;
+      // Order-insensitive: the same status set must hash to the same key.
+      const statuses = filters?.statuses?.length
+        ? [...filters.statuses].sort().join(',')
+        : undefined;
+      if (automated === undefined && statuses === undefined) return key;
+      return [
+        ...key,
+        {
+          ...(automated === undefined ? {} : { automated }),
+          ...(statuses === undefined ? {} : { statuses }),
+        },
+      ];
+    },
   ),
   /**
    * Home's automated-task roll-up: the tasks that fire on a schedule or a
@@ -302,10 +347,16 @@ export const taskKeys = {
    */
   scheduledList: def(
     'task:scheduledList',
-    (agentKey: string | undefined, visibility: 'all' | 'private' | 'workspace' = 'all') => [
+    (
+      agentKey: string | undefined,
+      visibility: 'all' | 'private' | 'workspace' = 'all',
+      limit?: number,
+      offset?: number,
+    ) => [
       'task:scheduledList',
       agentKey,
       visibility,
+      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
     ],
   ),
   /**
@@ -326,17 +377,18 @@ export const workKeys = {
   versions: def('work:versions', (workId: string) => ['work:versions', workId]),
   // Cross-topic Work gallery on the resource page: keyed by owner scope + the
   // gallery filter key (type OR provider tab, e.g. `all` / `task` / `linear`) +
-  // keyset cursor (one entry per infinite-scroll page). The filter key (not the
-  // Work type) is the discriminator so the per-provider linear/github tabs,
-  // which share the `external` Work type, get distinct cache entries.
+  // keyset cursor (one entry per infinite-scroll page) + the Resources
+  // Private/Workspace visibility. The filter key (not the Work type) is the
+  // discriminator so the per-provider linear/github tabs, which share the
+  // `external` Work type, get distinct cache entries.
   workspace: def(
     'work:workspace',
-    (workspaceId: string | null | undefined, filterKey: string, cursor?: string | null) => [
-      'work:workspace',
-      workspaceId ?? null,
-      filterKey,
-      cursor ?? null,
-    ],
+    (
+      workspaceId: string | null | undefined,
+      filterKey: string,
+      cursor?: string | null,
+      visibility?: 'private' | 'public' | null,
+    ) => ['work:workspace', workspaceId ?? null, filterKey, cursor ?? null, visibility ?? null],
   ),
 };
 
@@ -372,6 +424,9 @@ export const agentConfigKeys = {
   available: def('agent:available', () => ['agent:available']),
   config: def('agent:config', (agentId: string) => ['agent:config', agentId]),
   search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
+  serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
+    'agent:serverDefaultHeterogeneousCapability',
+  ]),
 };
 
 // ---- aiModel ------------------------------------------------------------
@@ -892,6 +947,16 @@ export const messengerKeys = {
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
+export const expertiseKeys = {
+  domain: def('expertise:domain', (domainId: string) => ['expertise:domain', domainId]),
+  historyCount: def('expertise:historyCount', (agentId: string) => [
+    'expertise:historyCount',
+    agentId,
+  ]),
+  lesson: def('expertise:lesson', (lessonId: string) => ['expertise:lesson', lessonId]),
+  overview: def('expertise:overview', (agentId: string) => ['expertise:overview', agentId]),
+};
+
 export const verifyKeys = {
   acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
     'verify:acceptanceBundle',
@@ -914,7 +979,11 @@ export const verifyKeys = {
       [...subjectIds].sort().join(','),
     ],
   ),
-  acceptances: def('verify:acceptances', () => ['verify:acceptances']),
+  /** `limit` is part of the key: the merge picker asks for a wider window than the panel. */
+  acceptances: def('verify:acceptances', (limit?: number) => [
+    'verify:acceptances',
+    String(limit ?? ''),
+  ]),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
@@ -946,16 +1015,20 @@ export const verifyKeys = {
 
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
+  navigationCounts: def('inbox:navigationCounts', (workspaceId: string | null) => [
+    'inbox:navigationCounts',
+    workspaceId,
+  ]),
   notifications: def(
     'inbox:notifications',
     // Keyed by context: the server scopes the inbox to the active workspace
     // (null = personal), so cached pages must never be reused across contexts.
-    (workspaceId: string | null, cursor: string | undefined, unreadOnly: boolean | undefined) => [
-      'inbox:notifications',
-      workspaceId,
-      cursor,
-      unreadOnly,
-    ],
+    (
+      workspaceId: string | null,
+      cursor: string | undefined,
+      category: string | undefined,
+      isRead: boolean | undefined,
+    ) => ['inbox:notifications', workspaceId, cursor, category, isRead],
   ),
   unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
     'inbox:unreadCount',
@@ -1129,7 +1202,30 @@ export const resourceKeys = {
     params,
     workspaceId,
   ]),
-  search: def('resource:search', (params: unknown) => ['resource:search', params]),
+  // Every Resources cache entry is workspace-scoped: the same visibility means
+  // different rows in each workspace, so leaving `workspaceId` out of the key
+  // makes a workspace switch serve the previous workspace's rows from cache.
+  recentFiles: def(
+    'resource:recentFiles',
+    (workspaceId: string | null, visibility?: 'private' | 'public') => [
+      'resource:recentFiles',
+      workspaceId,
+      visibility ?? null,
+    ],
+  ),
+  recentPages: def(
+    'resource:recentPages',
+    (workspaceId: string | null, visibility?: 'private' | 'public') => [
+      'resource:recentPages',
+      workspaceId,
+      visibility ?? null,
+    ],
+  ),
+  search: def('resource:search', (params: unknown, workspaceId: string | null) => [
+    'resource:search',
+    params,
+    workspaceId,
+  ]),
 };
 export const providerKeys = {
   clientConfig: def('provider:clientConfig', (id: string) => ['provider:clientConfig', id]),
@@ -1201,6 +1297,7 @@ export const swrKeys = {
   document: documentSWRKeys,
   electron: electronKeys,
   eval: evalKeys,
+  expertise: expertiseKeys,
   favorite: favoriteKeys,
   file: fileKeys,
   fork: forkKeys,

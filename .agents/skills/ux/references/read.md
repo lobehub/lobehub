@@ -283,6 +283,16 @@ resolved-empty. Once the user manually picks a tab, that choice wins and sticks 
 them off it. Pairs with §1.1: the empty state is the fallback _within_ a view; this rule
 is about not landing on that empty view when a better one exists.
 
+A data-aware shortcut must not erase the stable **hub** behind it. Auto-opening the only
+record can save one click, but if every visit to the collection URL redirects into that record,
+the user loses collection-level actions (create the second item, compare, search, manage) and a
+breadcrumb back becomes a loop. Keep the hub reachable, or preserve every collection-level
+action in the detail surface.
+
+> ❌ **Self-evolving expertise** redirects `/self-learning` to the sole expertise on every
+> visit, while Create exists only on the empty hub. After the first expertise is created, the
+> user cannot return to the hub or create a second one (`SelfLearning/index.tsx`).
+
 > ✅ Opening a document page by clicking a **skill** lands the right panel on the **Skills** tab; a plain document lands on **Documents**.
 > ✅ An agent with only skills (no documents) opens the panel on **Skills** instead of an empty **Documents** tab.
 
@@ -292,6 +302,7 @@ is about not landing on that empty view when a better one exists.
 - [ ] Falls back to a populated view when the default would be empty. _(Certainty)_
 - [ ] Default decided from resolved state, not mid-load. _(Certainty)_
 - [ ] A manual pick is tracked separately and sticks. _(Natural)_
+- [ ] A data-aware shortcut never makes the collection hub or its collection-level actions unreachable. _(Meaningful・Growth)_
 
 ## 1.7 Live / polling streams・Certainty・Natural
 

@@ -1,10 +1,13 @@
-import type { BriefAction, TaskContext, TaskGoalConfig, TaskItem } from '@lobechat/types';
+import type { BriefAction, GoalItem, TaskContext, TaskItem } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { MessageModel } from '@/database/models/message';
 import type { LobeChatDatabase } from '@/database/type';
-import { TaskRunnerService } from '@/server/services/taskRunner';
+import {
+  WorkRecoveryCoordinator,
+  type WorkRecoveryOutcome,
+} from '@/server/services/goal/workRecoveryCoordinator';
 
 import { resolveGoalRoundBudget } from './goalBudget';
 
@@ -12,7 +15,7 @@ const log = debug('lobe-server:verify-goal-loop');
 
 export { DEFAULT_GOAL_MAX_ROUNDS, resolveGoalRoundBudget } from './goalBudget';
 
-export type GoalLoopOutcome = 'continued' | 'exhausted-cost' | 'exhausted-rounds' | 'spawn-failed';
+export type GoalLoopOutcome = WorkRecoveryOutcome;
 
 /**
  * The goal outer loop: after a goal task's verify run settles as failed, spawn
@@ -25,48 +28,33 @@ export type GoalLoopOutcome = 'continued' | 'exhausted-cost' | 'exhausted-rounds
  */
 export const maybeContinueGoalLoop = async (params: {
   db: LobeChatDatabase;
-  goal: TaskGoalConfig;
+  goal: GoalItem;
   task: TaskItem;
   userId: string;
   workspaceId?: string;
 }): Promise<GoalLoopOutcome> => {
   const { db, goal, task, userId, workspaceId } = params;
 
-  const roundsRun = task.totalTopics || 0;
-  const roundBudget = resolveGoalRoundBudget(goal);
-  if (roundsRun >= roundBudget) {
-    log('task %s exhausted round budget (%d/%s)', task.identifier, roundsRun, roundBudget);
-    return 'exhausted-rounds';
+  const outcome = await new WorkRecoveryCoordinator(db, userId, workspaceId).recover({
+    goal,
+    task,
+    taskCarried: true,
+  });
+  if (outcome === 'continued') {
+    // The spawned round makes the goal `running` right away, instead of
+    // waiting for the runner's async start notification to flip it — the
+    // UI should never show a paused/review goal that is already looping.
+    await new GoalModel(db, userId, workspaceId).updateStatus(goal.id, 'running');
+    log('task %s → goal round %d spawned', task.identifier, (task.totalTopics || 0) + 1);
   }
-
-  if (typeof goal.maxTotalCost === 'number') {
-    const spent = await new AgentOperationModel(db, userId, workspaceId).sumCostByTask(task.id);
-    if (spent >= goal.maxTotalCost) {
-      log('task %s exhausted cost budget ($%d >= $%d)', task.identifier, spent, goal.maxTotalCost);
-      return 'exhausted-cost';
-    }
-  }
-
-  try {
-    await new TaskRunnerService(db, userId, workspaceId).runTask({
-      taskId: task.id,
-      trigger: 'goal',
-    });
-    log('task %s → goal round %d spawned', task.identifier, roundsRun + 1);
-    return 'continued';
-  } catch (error) {
-    // CONFLICT (a topic is still running) or any spawn failure — the caller
-    // falls back to pause + brief so the loop can never crash the settle path.
-    log('task %s goal round spawn failed (non-fatal): %O', task.identifier, error);
-    return 'spawn-failed';
-  }
+  return outcome;
 };
 
 /** User-facing copy for the pause brief when a budget ran out. */
 export const goalExhaustedBriefCopy = (
   task: TaskItem,
   outcome: Extract<GoalLoopOutcome, 'exhausted-cost' | 'exhausted-rounds'>,
-  goal: TaskGoalConfig,
+  goal: GoalItem,
 ): { summary: string; title: string } =>
   outcome === 'exhausted-cost'
     ? {

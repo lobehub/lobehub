@@ -2,7 +2,7 @@
 
 import { type UserImageConfig } from '@lobechat/types';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
+import { Form, Icon, Skeleton } from '@lobehub/ui';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,18 +33,17 @@ const ImageSettings = memo(() => {
       children: [
         {
           children: (
-            <Tooltip title={reason}>
-              <FormSliderWithInput
-                disabled={isUpdating || !canManageServiceModel}
-                max={MAX_DEFAULT_IMAGE_NUM}
-                min={MIN_DEFAULT_IMAGE_NUM}
-                step={1}
-              />
-            </Tooltip>
+            <FormSliderWithInput
+              disabled={isUpdating || !canManageServiceModel}
+              max={MAX_DEFAULT_IMAGE_NUM}
+              min={MIN_DEFAULT_IMAGE_NUM}
+              step={1}
+            />
           ),
           desc: t('settingImage.defaultCount.desc'),
           label: t('settingImage.defaultCount.label'),
           name: 'defaultImageNum',
+          tooltip: reason,
         },
       ],
       extra: isUpdating ? (

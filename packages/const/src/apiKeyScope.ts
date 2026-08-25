@@ -200,6 +200,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   connector: 'blocked',
   device: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
+  expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
   file: rw('file:read', 'file:write'),
@@ -207,6 +208,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   generation: { any: 'model:invoke' },
   generationBatch: { any: 'model:invoke' },
   generationTopic: { any: 'model:invoke' },
+  goal: rw('agent:read', 'agent:write'),
   group: rw('agent:read', 'agent:write'),
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),
@@ -236,6 +238,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   recent: rw('chat:read', null),
   referral: 'blocked',
   resourcePermission: 'blocked',
+  // Member-to-member ownership handover: accepting/declining is an interactive
+  // human decision, not something a restricted key should automate.
+  resourceTransferRequest: 'blocked',
   search: rw('chat:read', null),
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),
@@ -282,7 +287,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * retrieval/indexing infrastructure owned by their domain scope, their
  * per-call cost is marginal, and file-upload pipelines trigger the same
  * embedding work outside this guard anyway. Whether embeddings deserve their
- * own scope (e.g. `model:embed`) is tracked in LOBE-12910.
+ * own scope (e.g. `model:embed`) is still an open product decision.
  */
 const AGENT_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
 

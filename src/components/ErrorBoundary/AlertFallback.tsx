@@ -1,6 +1,7 @@
 'use client';
 
-import { Alert, Highlighter } from '@lobehub/ui';
+import { Highlighter } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 interface AlertFallbackProps {

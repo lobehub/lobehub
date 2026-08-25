@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Checkbox, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
@@ -68,18 +69,21 @@ const SearchResultsOverlay = memo(() => {
     mutate,
   } = useClientDataSWR(
     isActive
-      ? resourceKeys.search({
-          category: libraryId ? undefined : category,
-          libraryId,
-          q: searchQuery,
-          // Search narrows the list the user is looking at, so it has to honour
-          // the source they picked. Omitting it left the chip visibly selected
-          // while results came back from every non-hidden source — and made
-          // `Acceptance` search unusable, since that source is hidden unless
-          // explicitly asked for.
-          sourceFilter,
-          visibility,
-        })
+      ? resourceKeys.search(
+          {
+            category: libraryId ? undefined : category,
+            libraryId,
+            q: searchQuery,
+            // Search narrows the list the user is looking at, so it has to honour
+            // the source they picked. Omitting it left the chip visibly selected
+            // while results came back from every non-hidden source — and made
+            // `Acceptance` search unusable, since that source is hidden unless
+            // explicitly asked for.
+            sourceFilter,
+            visibility,
+          },
+          activeWorkspaceId ?? null,
+        )
       : null,
     async ([, params]: [
       string,

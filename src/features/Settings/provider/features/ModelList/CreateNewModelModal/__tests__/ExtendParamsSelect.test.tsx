@@ -37,6 +37,7 @@ describe('ExtendParamsSelect', () => {
       gpt5_2ReasoningEffort: 'reasoningEffort',
       gpt5_6ReasoningEffort: 'reasoningEffort',
       glm5_2ReasoningEffort: 'reasoningEffort',
+      glm5_3ReasoningEffort: 'reasoningEffort',
       thinkingLevel2: 'thinkingLevel',
     };
 
@@ -50,6 +51,10 @@ describe('ExtendParamsSelect', () => {
 
     it('should map GLM-5.2 variant to reasoningEffort', () => {
       expect(TITLE_KEY_ALIASES['glm5_2ReasoningEffort']).toBe('reasoningEffort');
+    });
+
+    it('should map GLM-5.3 variant to reasoningEffort', () => {
+      expect(TITLE_KEY_ALIASES['glm5_3ReasoningEffort']).toBe('reasoningEffort');
     });
 
     it('should map thinkingLevel2 to thinkingLevel', () => {
@@ -71,6 +76,7 @@ describe('ExtendParamsSelect', () => {
       gpt5_2ReasoningEffort: 'reasoningEffort',
       gpt5_6ReasoningEffort: 'reasoningEffort',
       glm5_2ReasoningEffort: 'reasoningEffort',
+      glm5_3ReasoningEffort: 'reasoningEffort',
       thinkingLevel2: 'thinkingLevel',
     };
 
@@ -81,6 +87,7 @@ describe('ExtendParamsSelect', () => {
     it('should return the alias key when available', () => {
       expect(getTitleKey('gpt5ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('glm5_2ReasoningEffort')).toBe('reasoningEffort');
+      expect(getTitleKey('glm5_3ReasoningEffort')).toBe('reasoningEffort');
       expect(getTitleKey('thinkingLevel2')).toBe('thinkingLevel');
     });
 

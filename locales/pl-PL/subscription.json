@@ -340,6 +340,8 @@
   "payDiffPrice": "Dopłać różnicę",
   "payDiffPriceApprox": "Około",
   "payDiffPriceTip": "Rzeczywista kwota zgodna ze stroną płatności",
+  "payment.downgradeFailed.desc": "Nie udało się zaplanować obniżenia planu. Spróbuj ponownie później lub skontaktuj się z nami mailowo, jeśli problem będzie się powtarzał.",
+  "payment.downgradeFailed.title": "Niepowodzenie obniżenia planu",
   "payment.error.actions.billing": "Zarządzanie rozliczeniami",
   "payment.error.actions.home": "Powrót do strony głównej",
   "payment.error.desc": "Nie znaleziono ID subskrypcji: {{id}}. W razie pytań skontaktuj się z nami mailowo",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Plan zablokowany",
   "plans.btn.payment": "Kup",
   "plans.btn.paymentDesc": "Obsługuje karty kredytowe / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Obsługuje karty kredytowe",
   "plans.btn.soon": "Wkrótce dostępne",
   "plans.cancelDowngrade": "Anuluj zaplanowane obniżenie",
   "plans.cancelDowngradeSuccess": "Zaplanowane obniżenie zostało anulowane",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Podsumowanie Użytkowania",
   "usage.remaining": "Pozostało",
   "usage.storage.embeddings.used": "Przechowywanie Wektorów",
-  "usage.storage.file.used": "Wykorzystanie Plików",
-  "zarinpal.infoModal.desc": "Zgodnie z wymogami polityki, przed złożeniem zamówienia uzupełnij poniższe dane osobowe:",
-  "zarinpal.infoModal.phone.label": "Numer Telefonu",
-  "zarinpal.infoModal.phone.placeholder": "Wprowadź numer telefonu",
-  "zarinpal.infoModal.phone.rule": "Wprowadź prawidłowy numer telefonu",
-  "zarinpal.infoModal.submit": "Zakup",
-  "zarinpal.infoModal.title": "Uzupełnij Wymagane Informacje"
+  "usage.storage.file.used": "Wykorzystanie Plików"
 }

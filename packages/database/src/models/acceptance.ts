@@ -75,6 +75,39 @@ export class AcceptanceModel {
   };
 
   /**
+   * Resolve an execution policy for a subject. Unlike report-facing reads,
+   * workspace policy lookup is shared by every workspace member: a private
+   * Acceptance controls the shared Task even when another member executes it.
+   * Personal scope remains owner-isolated.
+   */
+  findPolicyBySubject = async (subjectType: AcceptanceSubjectType, subjectId: string) => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+
+    return this.db.query.acceptances.findFirst({
+      where: and(
+        eq(acceptances.subjectType, subjectType),
+        eq(acceptances.subjectId, subjectId),
+        policyScope,
+      ),
+    });
+  };
+
+  /** Internal execution-policy lookup by id, independent of report visibility. */
+  findPolicyById = async (id: string) => {
+    if (!isUuid(id)) return undefined;
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.query.acceptances.findFirst({
+      where: and(eq(acceptances.id, id), policyScope),
+    });
+  };
+
+  /**
    * The status of many subjects' acceptances in one read — for list surfaces
    * that must know each row's state without a request per row. Exact where the
    * recency-capped `query()` is not: it answers about the subjects asked for,
@@ -107,7 +140,7 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'requirement'>>,
+    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -116,22 +149,25 @@ export class AcceptanceModel {
       // non-empty statement a later round supplies, instead of staying blank
       // forever ("尚未记录该对象的验收目标").
       const nextRequirement = !existing.requirement ? defaults?.requirement : undefined;
+      const nextProjectId = !existing.projectId ? defaults?.projectId : undefined;
       const nextTitle =
         !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
           ? defaults.metadata.title
           : undefined;
-      if (nextRequirement || nextTitle) {
+      if (nextProjectId || nextRequirement || nextTitle) {
         const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
         await this.db
           .update(acceptances)
           .set({
             metadata,
+            projectId: nextProjectId ?? existing.projectId,
             requirement: nextRequirement ?? existing.requirement,
           })
           .where(eq(acceptances.id, existing.id));
         return {
           ...existing,
           metadata,
+          projectId: nextProjectId ?? existing.projectId,
           requirement: nextRequirement ?? existing.requirement,
         };
       }
@@ -165,7 +201,10 @@ export class AcceptanceModel {
   update = async (
     id: string,
     value: Partial<
-      Pick<NewAcceptance, 'config' | 'metadata' | 'requirement' | 'visibility' | 'visualRender'>
+      Pick<
+        NewAcceptance,
+        'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility' | 'visualRender'
+      >
     >,
   ): Promise<AcceptanceItem | undefined> => {
     const [row] = await this.db
@@ -174,6 +213,38 @@ export class AcceptanceModel {
       .where(and(eq(acceptances.id, id), this.ownership()))
       .returning();
     return row;
+  };
+
+  /** Internal policy write counterpart to `findPolicyBySubject`. */
+  updatePolicy = async (
+    id: string,
+    value: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    const [row] = await this.db
+      .update(acceptances)
+      .set(value)
+      .where(and(eq(acceptances.id, id), policyScope))
+      .returning();
+    return row;
+  };
+
+  /** Internal lifecycle transition counterpart to `updateStatus`. */
+  updatePolicyStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    await this.db
+      .update(acceptances)
+      .set({
+        completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(status) ? new Date() : null,
+        status,
+      })
+      .where(and(eq(acceptances.id, id), policyScope));
   };
 
   /**

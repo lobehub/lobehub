@@ -15,7 +15,6 @@ import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 // Direct module import, not the feature barrel: home must not pull the whole
 // acceptance workspace into its chunk for one hook.
-import { useAcceptanceStatuses } from '@/features/Verify/hooks';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -28,7 +27,7 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 
 import GoalsRailCard from './GoalsRailCard';
 import { filterHiddenWidgetSections } from './hiddenWidgets';
-import { buildHomeGoalEntries, indexAcceptanceStatuses } from './homeGoals';
+import { buildHomeGoalEntries } from './homeGoals';
 import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
@@ -103,9 +102,11 @@ interface InboxSection {
  */
 interface HomeInboxProps {
   hideNeedsYou?: boolean;
+  /** Running activity belongs in the main column above recent topics. */
+  hideRunning?: boolean;
   hideUnread?: boolean;
   /**
-   * Main column only: the rail is collapsed, so the sections it owns (running,
+   * Main column only: the rail is collapsed, so the sections it owns (goals,
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
@@ -118,6 +119,7 @@ interface HomeInboxProps {
 const HomeInbox = memo<HomeInboxProps>((props) => {
   const {
     hideNeedsYou,
+    hideRunning,
     hideUnread,
     inlineRail,
     onScopeChange,
@@ -171,22 +173,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
   const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
   const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
-  const goalIds = useMemo(() => goals.map(({ id }) => id), [goals]);
-  // One read for every goal's acceptance, instead of two per row — and asked
-  // about these goals specifically, since the recency-capped acceptance feed
-  // would drop an older accepted goal and resurrect it as "pending acceptance".
-  const acceptanceStatuses = useAcceptanceStatuses('task', goalIds, showGoals);
-  // Which pile a goal lands in depends on that read, so wait for it rather than
-  // flash an already-accepted goal into "pending acceptance" for a beat. A
-  // failed read still shows the card, on task status alone.
-  const goalsResolved =
-    goalIds.length === 0 || Boolean(acceptanceStatuses.data || acceptanceStatuses.error);
+  // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
+  // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
-    () =>
-      showGoals && goalsResolved
-        ? buildHomeGoalEntries(goals, indexAcceptanceStatuses(acceptanceStatuses.data))
-        : [],
-    [acceptanceStatuses.data, goals, goalsResolved, showGoals],
+    () => (showGoals ? buildHomeGoalEntries(goals) : []),
+    [goals, showGoals],
   );
 
   const goalsCollapsed = useGlobalStore(systemStatusSelectors.homeGoalsCollapsed);
@@ -399,8 +390,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     }
   }
 
-  // No title: the card already says "3 tasks running" on its own head.
-  if (showRailSections && runningTopics.length > 0)
+  // No title: the card already says "3 tasks running" on its own head. Keep
+  // this in the main flow immediately before Recent topics; the rail is for
+  // glanceable reports, not live work the user may want to open.
+  if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
       node: (

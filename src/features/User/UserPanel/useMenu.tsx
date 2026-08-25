@@ -110,7 +110,7 @@ export const useMenu = () => {
       icon: <Icon icon={Download} />,
       key: 'get-app',
       label: (
-        <WorkspaceLink escape to="/downloads">
+        <WorkspaceLink escape to="/apps">
           {t('getApp')}
         </WorkspaceLink>
       ),
@@ -137,7 +137,7 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
-    ...(!isDesktop ? getApp : []),
+    ...getApp,
   ]
     .filter(Boolean)
     // Remove consecutive dividers to prevent double divider lines

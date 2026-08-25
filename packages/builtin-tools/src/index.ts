@@ -1,3 +1,4 @@
+import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
@@ -19,7 +20,6 @@ import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
@@ -164,6 +164,13 @@ export const runtimeManagedToolIds = [
 ];
 
 const builtinToolRegistry: LobeBuiltinTool[] = [
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: AcceptanceEvidenceManifest.identifier,
+    manifest: AcceptanceEvidenceManifest,
+    type: 'builtin',
+  },
   {
     discoverable: false,
     hidden: true,
@@ -391,11 +398,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     manifest: LobeAgentManifest,
     // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.
     resolveManifest: resolveLobeAgentManifest,
-    type: 'builtin',
-  },
-  {
-    identifier: LobeDeliveryCheckerManifest.identifier,
-    manifest: LobeDeliveryCheckerManifest,
     type: 'builtin',
   },
 ];

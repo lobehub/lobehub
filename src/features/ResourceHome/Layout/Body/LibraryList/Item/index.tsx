@@ -1,10 +1,10 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Loader2Icon, LockIcon } from 'lucide-react';
+import { Loader2Icon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 
-import RepoIcon from '@/components/LibIcon';
+import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -20,14 +20,27 @@ interface KnowledgeBaseItemProps {
   className?: string;
   description?: string | null;
   id: string;
+  memberRestricted?: boolean;
   name: string;
+  permissionManageable?: boolean;
   style?: CSSProperties;
   userId?: string;
   visibility?: 'private' | 'public';
 }
 
 const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
-  ({ id, name, description, active, style, className, userId, visibility }) => {
+  ({
+    id,
+    name,
+    description,
+    active,
+    style,
+    className,
+    userId,
+    visibility,
+    memberRestricted,
+    permissionManageable,
+  }) => {
     const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -64,22 +77,33 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
       [canEdit, toggleEditing],
     );
 
-    // Icon: loader while pending, lock for private KBs, repo icon otherwise.
-    // Lock signals "only you can see this" — mirrors the private-agent / private-task visual.
+    // Restricted (No-access) KBs are invisible to plain members, so this row
+    // only renders for managers — the lock tells them at a glance which shared
+    // KBs members cannot open. The flag rides on the list query, so it costs
+    // no per-row permission request.
+    const isMemberRestricted = visibility === 'public' && !!memberRestricted;
+
+    // Keep the same private / restricted / workspace icon language as the
+    // active-library header and its switcher.
     const icon = useMemo(() => {
       if (isLoading) {
         return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
       }
-      if (visibility === 'private') {
-        return <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={18} />;
-      }
-      return <RepoIcon size={18} />;
-    }, [isLoading, visibility]);
+
+      return (
+        <LibraryStatusIcon
+          memberRestricted={isMemberRestricted}
+          size={18}
+          visibility={visibility}
+        />
+      );
+    }, [isLoading, visibility, isMemberRestricted]);
 
     const dropdownMenu = useDropdownMenu({
       description,
       id,
       name,
+      permissionManageable,
       toggleEditing,
       userId,
       visibility,

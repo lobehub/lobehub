@@ -36,7 +36,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Form: ({
     items,
@@ -68,6 +67,7 @@ vi.mock('@lobehub/ui', () => ({
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
+  Alert: ({ title }: { title: ReactNode }) => <div role={'note'}>{title}</div>,
   Switch: () => <button />,
 }));
 
@@ -166,11 +166,14 @@ describe('Labs settings page', () => {
     const alphaTags = screen.getAllByText('stage.alpha.label');
     const betaTags = screen.getAllByText('stage.beta.label');
     // Every toggle carries exactly one stage tag.
-    expect(alphaTags.length + betaTags.length).toBe(13);
+    expect(alphaTags.length + betaTags.length).toBe(15);
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
     renderPage();
+
+    const agentProviderBinding = screen.getByText('features.agentProviderBinding.title');
+    expect(within(agentProviderBinding).getByText('stage.alpha.label')).toBeDefined();
 
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();

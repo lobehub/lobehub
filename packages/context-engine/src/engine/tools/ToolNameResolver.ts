@@ -189,15 +189,6 @@ export class ToolNameResolver {
           }
         }
 
-        const payload: ChatToolPayload = {
-          apiName,
-          arguments: toolCall.function.arguments,
-          id: toolCall.id,
-          identifier,
-          thoughtSignature: toolCall.thoughtSignature,
-          type: (type ?? manifests[identifier]?.type ?? 'builtin') as any,
-        };
-
         // Step 2: Resolve hashed apiName if needed
         if (apiName.startsWith(PLUGIN_SCHEMA_API_MD5_PREFIX) && manifests[identifier]) {
           const md5 = apiName.replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
@@ -207,9 +198,33 @@ export class ToolNameResolver {
             (api: LobeChatPluginApi) => this.genHash(api.name) === md5,
           );
           if (api) {
-            payload.apiName = api.name;
+            apiName = api.name;
           }
         }
+
+        const manifest = manifests[identifier];
+        const matchedApi = manifest?.api.find((api: LobeChatPluginApi) => api.name === apiName);
+
+        // Explicitly namespaced calls need the same current-turn allowlist check
+        // as the bare-name recovery path. Topic history can contain tools from a
+        // previous operation; accepting a syntactically valid old identifier here
+        // would let it escape an evidence-only or otherwise restricted turn.
+        if (offeredSet) {
+          const directlyOffered = offeredSet.has(toolCall.function.name);
+          if (!directlyOffered) {
+            if (!manifest || !matchedApi) return null;
+            if (!offeredSet.has(this.generate(identifier, apiName, manifest.type))) return null;
+          }
+        }
+
+        const payload: ChatToolPayload = {
+          apiName,
+          arguments: toolCall.function.arguments,
+          id: toolCall.id,
+          identifier,
+          thoughtSignature: toolCall.thoughtSignature,
+          type: (type ?? manifest?.type ?? 'builtin') as any,
+        };
 
         return payload;
       })

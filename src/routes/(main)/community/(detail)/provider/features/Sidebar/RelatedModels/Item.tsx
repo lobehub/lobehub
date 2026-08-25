@@ -48,7 +48,7 @@ const RelatedItem = memo<DiscoverProviderDetailModelItem>(({ description, id, di
             rows: 2,
           }}
         >
-          {t(`${id}.description`, { defaultValue: description })}
+          {description && t(`${id}.description`, { defaultValue: description })}
         </Text>
       </Flexbox>
     </Block>

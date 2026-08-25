@@ -9,9 +9,11 @@ import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { MessageModel } from '@/database/models/message';
 import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -19,6 +21,7 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
 
   return opts.next({
     ctx: {
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       workModel: new WorkModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -126,6 +129,7 @@ export const workRouter = router({
         originAgentId: z.string().nullable().optional(),
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
         type: z.enum(['task', 'document', 'external', 'file']).nullable().optional(),
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .query(async ({ ctx, input }) => ctx.workModel.listByWorkspace(input)),
@@ -181,4 +185,30 @@ export const workRouter = router({
   handleSkillToolResult: skillWorkProcedureWrite
     .input(registerSkillToolResultSchema)
     .mutation(async ({ ctx, input }) => ctx.workModel.handleSkillToolResult(input)),
+
+  // Completion-time shell Work scan for desktop-LOCAL hetero runs (Claude
+  // Code / Codex with execution target `local`). Those runs create no
+  // `agent_operations` row and never call `heteroFinish`, so the server-side
+  // completion scan (`registerWorksForOperation`) structurally cannot fire —
+  // the client executor reports the run's persisted tool message ids here
+  // instead. Everything is re-read ownership- and topic-scoped from the DB, so
+  // the caller can only ever scan rows it already owns. Same write gate as the
+  // other external-provider registrations.
+  registerShellWorksForRun: skillWorkProcedureWrite
+    .input(
+      z.object({
+        anchorMessageId: z.string().min(1),
+        messageIds: z.array(z.string()).min(1).max(500),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      registerShellWorksForLocalRun({
+        anchorMessageId: input.anchorMessageId,
+        messageIds: input.messageIds,
+        messageModel: ctx.messageModel,
+        topicId: input.topicId,
+        workModel: ctx.workModel,
+      }),
+    ),
 });

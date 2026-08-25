@@ -1,4 +1,10 @@
 export {
+  type AcceptanceMergeSummary,
+  collectCheckIds,
+  mergeAcceptanceRounds,
+  planCheckIdRemap,
+} from './acceptanceMerge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,
@@ -28,7 +34,11 @@ export {
   syncGoalToolState,
 } from './goalLoop';
 export { runVerifyOnCompletion } from './lifecycle';
-export { isHeterogeneousVerifyProvider, resolveVerifyModelConfig } from './modelConfig';
+export {
+  isHeterogeneousVerifyProvider,
+  resolveVerifyModelConfig,
+  REVIEW_PREDICT_MODEL_CONFIG,
+} from './modelConfig';
 export { type GeneratePlanParams, VerifyPlanGeneratorService } from './planGenerator';
 export { instantiateVerifyPlanOnStart } from './planInstantiation';
 export {

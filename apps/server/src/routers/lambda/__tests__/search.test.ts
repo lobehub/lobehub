@@ -90,7 +90,11 @@ describe('searchRouter', () => {
     const result = await caller.query({ query: 'local message', type: 'message' });
 
     expect(result).toEqual([]);
-    expect(search).toHaveBeenCalledWith({ query: 'local message', type: 'message' });
+    expect(search).toHaveBeenCalledWith({
+      excludeKnowledgeBaseIds: [],
+      query: 'local message',
+      type: 'message',
+    });
     expect(UserModel.findById).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
   });

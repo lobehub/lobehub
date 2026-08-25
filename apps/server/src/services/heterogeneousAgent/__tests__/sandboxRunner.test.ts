@@ -61,4 +61,21 @@ describe('spawnHeteroSandbox', () => {
     expect(command).toContain("'hi'\\''there'");
     expect(command).not.toContain('"$(touch /tmp/pwned)"');
   });
+
+  it('injects LOBEHUB_WORKSPACE_ID when the topic belongs to a workspace', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'ws-lobehub',
+    });
+
+    const command = mockCallTool.mock.calls[0][1].command;
+    expect(command).toContain("LOBEHUB_WORKSPACE_ID='ws-lobehub'");
+  });
 });

@@ -12,6 +12,7 @@ import type {
 import { getHeterogeneousTypeLabel } from '../labels';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
+import { listTraeAcpModels } from '../spawn/traeAcpSession';
 
 const execFilePromise = promisify(execFile);
 const MODEL_CATALOG_MAX_BUFFER = 256 * 1024;
@@ -20,6 +21,7 @@ const CODEBUDDY_MODEL_OPTION = '--model <model>';
 const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
 const CURSOR_MODEL_ANNOTATIONS = [' (current)', ' (default)'] as const;
 const CURSOR_MODEL_ID_PATTERN = /^[A-Z0-9][\w./:@+-]*$/i;
+const GROK_MODEL_ID_PATTERN = /^[A-Z0-9][\w./:@+-]*$/i;
 const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 const QODER_CUSTOM_MODEL_ROW_PATTERN = /^(.+?) \(([^()\s]+)\)$/;
@@ -74,6 +76,38 @@ export const parseCursorModelCatalog = (stdout: string): HeterogeneousAgentModel
 
     seen.add(id);
     models.push({ id, label, modelId: id, providerId: 'cursor' });
+  }
+
+  return models;
+};
+
+/** Parse the model rows emitted by `grok models`. */
+export const parseGrokBuildModelCatalog = (stdout: string): HeterogeneousAgentModel[] => {
+  const seen = new Set<string>();
+  const models: HeterogeneousAgentModel[] = [];
+
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const line = rawLine
+      .trim()
+      .replace(/^[*>•✓-]\s*/, '')
+      .replace(/ \((?:current|default)\)$/, '');
+    const separatorIndex = line.search(/\s{2}/);
+    const id = (separatorIndex < 0 ? line : line.slice(0, separatorIndex)).trim();
+    if (!GROK_MODEL_ID_PATTERN.test(id)) continue;
+
+    if (id.toLowerCase() === 'model' || id.toLowerCase() === 'models' || seen.has(id)) continue;
+
+    const label = (separatorIndex < 0 ? '' : line.slice(separatorIndex).trim())
+      .replaceAll(' (current)', '')
+      .replaceAll(' (default)', '')
+      .trim();
+    seen.add(id);
+    models.push({
+      id,
+      ...(label ? { label } : {}),
+      modelId: id,
+      providerId: 'grok-build',
+    });
   }
 
   return models;
@@ -190,13 +224,6 @@ export const listHeterogeneousAgentModels = async (
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
   const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
-  const args =
-    params.type === 'codebuddy'
-      ? ['--help']
-      : params.type === 'opencode'
-        ? ['models']
-        : ['--list-models'];
-  const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
   const callerEnv = params.env ?? process.env;
   const mergedPath = [
     ...new Set(
@@ -211,6 +238,24 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
+    if (params.type === 'trae') {
+      const models = await listTraeAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: params.cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
+    const args =
+      params.type === 'codebuddy'
+        ? ['--help']
+        : params.type === 'grok-build' || params.type === 'opencode'
+          ? ['models']
+          : ['--list-models'];
+    const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
       encoding: 'utf8',
@@ -242,11 +287,13 @@ export const listHeterogeneousAgentModels = async (
       models:
         params.type === 'cursor'
           ? parseCursorModelCatalog(String(stdout))
-          : params.type === 'pi'
-            ? parsePiModelCatalog(String(stdout))
-            : params.type === 'qoder'
-              ? parseQoderModelCatalog(String(stdout))
-              : parseOpenCodeModelCatalog(String(stdout)),
+          : params.type === 'grok-build'
+            ? parseGrokBuildModelCatalog(String(stdout))
+            : params.type === 'pi'
+              ? parsePiModelCatalog(String(stdout))
+              : params.type === 'qoder'
+                ? parseQoderModelCatalog(String(stdout))
+                : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

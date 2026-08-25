@@ -2,12 +2,16 @@ import '@xterm/xterm/css/xterm.css';
 
 import type { TerminalDataPayload, TerminalExitPayload } from '@lobechat/electron-client-ipc';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { ITheme } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
 import debug from 'debug';
 
 import { electronTerminalService } from '@/services/electron/terminal';
+
+import { resolveTerminalKeyAction } from './keybindings';
+import { openTerminalLink } from './links';
 
 const log = debug('lobe-desktop:chat-terminal');
 
@@ -20,6 +24,7 @@ interface TermInstance {
 }
 
 type ExitListener = (sessionId: string, exitCode: number) => void;
+type PaneNavListener = (sessionId: string, direction: -1 | 1) => void;
 
 /**
  * Module-level registry of live xterm instances, keyed by PTY session id.
@@ -31,6 +36,7 @@ type ExitListener = (sessionId: string, exitCode: number) => void;
 class XtermManager {
   private instances = new Map<string, TermInstance>();
   private exitListeners = new Set<ExitListener>();
+  private paneNavListeners = new Set<PaneNavListener>();
   private ipcBound = false;
   private webglUnavailable = false;
 
@@ -55,6 +61,12 @@ class XtermManager {
     return () => this.exitListeners.delete(listener);
   }
 
+  /** ⌘⌥←/→ — the store owns which pane sits next to which, so it resolves the move. */
+  onPaneNavigate(listener: PaneNavListener) {
+    this.paneNavListeners.add(listener);
+    return () => this.paneNavListeners.delete(listener);
+  }
+
   ensure(sessionId: string): TermInstance {
     this.bindIpc();
     const existing = this.instances.get(sessionId);
@@ -68,11 +80,44 @@ class XtermManager {
       allowProposedApi: true,
       cursorBlink: true,
       fontSize: 12,
+      // Handles OSC 8 hyperlinks; WebLinksAddon below covers bare URLs in output.
+      linkHandler: { activate: (_event, uri) => openTerminalLink(uri) },
       macOptionIsMeta: true,
       scrollback: 10_000,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    term.loadAddon(new WebLinksAddon((_event, uri) => openTerminalLink(uri)));
+    term.attachCustomKeyEventHandler((event) => {
+      const action = resolveTerminalKeyAction(event);
+      if (!action) return true;
+      // Chromium maps ⌘← to history-back, so an unclaimed key would navigate
+      // the SPA out from under the panel.
+      event.preventDefault();
+      switch (action.type) {
+        case 'focusSiblingPane': {
+          for (const listener of this.paneNavListeners) listener(sessionId, action.direction);
+          break;
+        }
+        case 'scrollPages': {
+          term.scrollPages(action.pages);
+          break;
+        }
+        case 'scrollToBottom': {
+          term.scrollToBottom();
+          break;
+        }
+        case 'scrollToTop': {
+          term.scrollToTop();
+          break;
+        }
+        case 'send': {
+          term.input(action.bytes);
+          break;
+        }
+      }
+      return false;
+    });
     term.onData((data) => {
       void electronTerminalService.writeSession({ data, id: sessionId });
     });

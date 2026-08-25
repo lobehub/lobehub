@@ -1542,46 +1542,11 @@ paths:
             schema:
               type: object
               properties:
-                avatar:
-                  anyOf:
-                    - type: string
-                    - type: "null"
-                chatConfig:
+                agencyConfig:
                   anyOf:
                     - type: object
                       properties:
-                        disableContextCaching:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        displayMode:
-                          anyOf:
-                            - type: string
-                              enum:
-                                - chat
-                                - docs
-                            - type: "null"
-                        enableCompressHistory:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
                         enableGraphMode:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableHistoryCount:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableMaxTokens:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableReasoning:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableReasoningEffort:
                           anyOf:
                             - type: boolean
                             - type: "null"
@@ -1722,6 +1687,46 @@ paths:
                                 - nodes
                                 - terminal
                                 - edges
+                            - type: "null"
+                    - type: "null"
+                avatar:
+                  anyOf:
+                    - type: string
+                    - type: "null"
+                chatConfig:
+                  anyOf:
+                    - type: object
+                      properties:
+                        disableContextCaching:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        displayMode:
+                          anyOf:
+                            - type: string
+                              enum:
+                                - chat
+                                - docs
+                            - type: "null"
+                        enableCompressHistory:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableHistoryCount:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableMaxTokens:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableReasoning:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableReasoningEffort:
+                          anyOf:
+                            - type: boolean
                             - type: "null"
                         historyCount:
                           anyOf:
@@ -1941,46 +1946,11 @@ paths:
             schema:
               type: object
               properties:
-                avatar:
-                  anyOf:
-                    - type: string
-                    - type: "null"
-                chatConfig:
+                agencyConfig:
                   anyOf:
                     - type: object
                       properties:
-                        disableContextCaching:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        displayMode:
-                          anyOf:
-                            - type: string
-                              enum:
-                                - chat
-                                - docs
-                            - type: "null"
-                        enableCompressHistory:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
                         enableGraphMode:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableHistoryCount:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableMaxTokens:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableReasoning:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        enableReasoningEffort:
                           anyOf:
                             - type: boolean
                             - type: "null"
@@ -2121,6 +2091,46 @@ paths:
                                 - nodes
                                 - terminal
                                 - edges
+                            - type: "null"
+                    - type: "null"
+                avatar:
+                  anyOf:
+                    - type: string
+                    - type: "null"
+                chatConfig:
+                  anyOf:
+                    - type: object
+                      properties:
+                        disableContextCaching:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        displayMode:
+                          anyOf:
+                            - type: string
+                              enum:
+                                - chat
+                                - docs
+                            - type: "null"
+                        enableCompressHistory:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableHistoryCount:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableMaxTokens:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableReasoning:
+                          anyOf:
+                            - type: boolean
+                            - type: "null"
+                        enableReasoningEffort:
+                          anyOf:
+                            - type: boolean
                             - type: "null"
                         historyCount:
                           anyOf:

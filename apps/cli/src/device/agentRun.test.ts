@@ -1,12 +1,26 @@
 import { EventEmitter } from 'node:events';
+import { statSync } from 'node:fs';
+import os from 'node:os';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnHeteroAgentRun } from './agentRun';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+// `resolveHeteroSpawnCwd` stats the candidate directories; treat every path as
+// an existing directory unless a test says otherwise.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, statSync: vi.fn() };
+});
+
+const asDirectory = { isDirectory: () => true } as ReturnType<typeof statSync>;
+const mockMissingDir = (missing: string) =>
+  vi
+    .mocked(statSync)
+    .mockImplementation((candidate) => (candidate === missing ? undefined : asDirectory) as never);
 
 const makeFakeChild = () => {
   const child = new EventEmitter() as EventEmitter & {
@@ -27,6 +41,10 @@ const baseParams = {
 };
 
 describe('spawnHeteroAgentRun', () => {
+  beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue(asDirectory);
+  });
+
   afterEach(() => {
     spawnMock.mockReset();
   });
@@ -73,6 +91,7 @@ describe('spawnHeteroAgentRun', () => {
         LOBEHUB_SERVER: 'https://app.lobehub.com',
       }),
     });
+    expect(opts.env).not.toHaveProperty('LOBEHUB_WORKSPACE_ID');
 
     // stdin is only written after the child actually spawns.
     expect(child.stdin.write).not.toHaveBeenCalled();
@@ -83,15 +102,54 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects (no stuck run) when the child errors before spawning, e.g. bad cwd', async () => {
+  it('starts the wrapper from home so its inner preflight can report a missing cwd', async () => {
+    const missingCwd = '/missing';
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+    mockMissingDir(missingCwd);
+
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: missingCwd });
+
+    const [, args, options] = spawnMock.mock.calls[0];
+    const cwdArgIndex = args.indexOf('--cwd');
+    expect(options.cwd).toBe(os.homedir());
+    expect(args[cwdArgIndex + 1]).toBe(missingCwd);
+    child.emit('spawn');
+
+    await expect(ackPromise).resolves.toEqual({ status: 'accepted' });
+    expect(child.stdin.write).toHaveBeenCalledWith(JSON.stringify('hi'));
+  });
+
+  it('rejects when the wrapper process still fails to spawn from the fallback cwd', async () => {
+    const missingCwd = '/missing';
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+    mockMissingDir(missingCwd);
+
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: missingCwd });
+    child.emit('error', new Error('spawn EACCES'));
+
+    await expect(ackPromise).resolves.toEqual({ reason: 'spawn EACCES', status: 'rejected' });
+    expect(child.stdin.write).not.toHaveBeenCalled();
+  });
+
+  it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
 
-    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: '/missing' });
-    child.emit('error', new Error('spawn ENOENT'));
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      workspaceId: 'ws-lobehub',
+    });
+    child.emit('spawn');
+    await ackPromise;
 
-    await expect(ackPromise).resolves.toEqual({ reason: 'spawn ENOENT', status: 'rejected' });
-    expect(child.stdin.write).not.toHaveBeenCalled();
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env).toEqual(
+      expect.objectContaining({
+        LOBEHUB_WORKSPACE_ID: 'ws-lobehub',
+      }),
+    );
   });
 
   it('appends --resume when resuming a session', () => {
@@ -135,6 +193,34 @@ describe('spawnHeteroAgentRun', () => {
         { text: 'workspace rules', type: 'text' },
         { text: 'do it', type: 'text' },
       ]),
+    );
+  });
+
+  it('sends recovery history only in the resume fallback prompt', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      prompt: 'continue',
+      resumeFallbackSystemContext: 'workspace rules\n\nprevious conversation',
+      resumeSessionId: 'session-1',
+      systemContext: 'workspace rules',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(child.stdin.write).toHaveBeenCalledWith(
+      JSON.stringify({
+        content: [
+          { text: 'workspace rules', type: 'text' },
+          { text: 'continue', type: 'text' },
+        ],
+        resumeFallback: [
+          { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+          { text: 'continue', type: 'text' },
+        ],
+      }),
     );
   });
 

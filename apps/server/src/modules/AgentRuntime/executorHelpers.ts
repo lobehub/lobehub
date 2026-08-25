@@ -37,6 +37,21 @@ export const TOOL_MAX_RETRIES = 2;
 
 export const GEN_AI_FUNCTION_TOOL_TYPE: ToolType = 'function';
 
+/**
+ * Models occasionally select a member by its displayed name even though group
+ * management actions require its persisted agent id. Accept an exact display
+ * name only when it resolves unambiguously within this operation's snapshot.
+ */
+export const resolveGroupMemberId = (
+  requestedAgentId: string,
+  agentMap: Record<string, { name: string }> | undefined,
+): string => {
+  if (!agentMap || requestedAgentId in agentMap) return requestedAgentId;
+
+  const matches = Object.entries(agentMap).filter(([, member]) => member.name === requestedAgentId);
+  return matches.length === 1 ? matches[0][0] : requestedAgentId;
+};
+
 export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
   {
@@ -333,7 +348,13 @@ export const buildServerAgentMemberRunner = (
 
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
-      const expectedMembers = members.length;
+      const agentMap = (state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> }
+        | undefined)?.agentMap;
+      const resolvedMembers = members.map((member) => ({
+        ...member,
+        agentId: resolveGroupMemberId(member.agentId, agentMap),
+      }));
+      const expectedMembers = resolvedMembers.length;
       if (expectedMembers === 0) return { started: false, startedCount: 0 };
 
       // In-group multi-member actions (broadcast) render as an AgentCouncil: each
@@ -392,7 +413,7 @@ export const buildServerAgentMemberRunner = (
       // 3. Fork members.
       let startedCount = 0;
       await Promise.all(
-        members.map(async (member, i) => {
+        resolvedMembers.map(async (member, i) => {
           const anchorMessageId = anchorIds[i];
           try {
             const result = await execGroupMember({

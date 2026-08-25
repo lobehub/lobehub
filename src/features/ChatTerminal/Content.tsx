@@ -11,7 +11,13 @@ import {
   TabsTab,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { CopyXIcon, PlusIcon, SquareTerminalIcon, XIcon } from 'lucide-react';
+import {
+  CopyXIcon,
+  PlusIcon,
+  SquareSplitHorizontalIcon,
+  SquareTerminalIcon,
+  XIcon,
+} from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,9 +28,9 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
+import SplitView from './SplitView';
 import type { TerminalTab } from './store';
 import { useChatTerminalStore } from './store';
-import TerminalView from './TerminalView';
 
 const EMPTY_TABS: TerminalTab[] = [];
 
@@ -106,6 +112,10 @@ const Content = memo(() => {
   const closeTab = useChatTerminalStore((s) => s.closeTab);
   const closeOtherTabs = useChatTerminalStore((s) => s.closeOtherTabs);
   const setActiveTab = useChatTerminalStore((s) => s.setActiveTab);
+  const splitPane = useChatTerminalStore((s) => s.splitPane);
+  const closePane = useChatTerminalStore((s) => s.closePane);
+  const setActivePane = useChatTerminalStore((s) => s.setActivePane);
+  const setPaneFlex = useChatTerminalStore((s) => s.setPaneFlex);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs.at(-1);
 
@@ -184,6 +194,13 @@ const Content = memo(() => {
         />
         <Flexbox flex={1} />
         <ActionIcon
+          disabled={!activeTab || creating}
+          icon={SquareSplitHorizontalIcon}
+          size={'small'}
+          title={t('terminalPanel.split')}
+          onClick={() => activeTab && splitPane(topicKey, activeTab.id, cwd)}
+        />
+        <ActionIcon
           icon={XIcon}
           size={'small'}
           title={t('terminalPanel.close')}
@@ -192,7 +209,13 @@ const Content = memo(() => {
       </Flexbox>
       <div className={styles.view}>
         {activeTab ? (
-          <TerminalView sessionId={activeTab.id} />
+          <SplitView
+            activePaneId={activeTab.activePaneId}
+            panes={activeTab.panes}
+            onActivatePane={(paneId) => setActivePane(topicKey, activeTab.id, paneId)}
+            onClosePane={(paneId) => closePane(topicKey, paneId)}
+            onResize={(flex) => setPaneFlex(topicKey, activeTab.id, flex)}
+          />
         ) : createError ? (
           <Flexbox align={'center'} flex={1} gap={8} height={'100%'} justify={'center'}>
             <Text type={'secondary'}>{t('terminalPanel.createFailed')}</Text>

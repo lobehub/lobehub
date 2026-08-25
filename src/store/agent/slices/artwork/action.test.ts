@@ -87,6 +87,56 @@ describe('AgentArtworkAction', () => {
     expect(useAgentStore.getState().agentArtworkGenerationMap?.['agent-a']).toBeUndefined();
   });
 
+  it('returns companion artwork without replacing persisted agent metadata', async () => {
+    vi.mocked(getAiInfraStoreState).mockReturnValue({
+      enabledImageModelList: [
+        {
+          children: [
+            {
+              abilities: {},
+              id: 'gemini-3.1-flash-lite-image:image',
+              parameters: {
+                aspectRatio: { default: 'auto', enum: ['auto', '1:1', '3:4'] },
+                prompt: { default: '' },
+              },
+            },
+          ],
+          id: 'google',
+          name: 'Google',
+          source: 'builtin',
+        },
+      ],
+    } as unknown as ReturnType<typeof getAiInfraStoreState>);
+    vi.mocked(generationTopicService.createTopic).mockResolvedValue('topic-1');
+    vi.mocked(imageService.createImage).mockResolvedValue({
+      data: { generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }] },
+      success: true,
+    } as never);
+    vi.mocked(generationService.getGenerationStatus).mockResolvedValue({
+      generation: { asset: { url: 'https://example.com/full-body.webp' } },
+      status: AsyncTaskStatus.Success,
+    } as never);
+    const updateAgentMetaById = vi.fn().mockResolvedValue(undefined);
+    useAgentStore.setState({ updateAgentMetaById });
+
+    const url = await useAgentStore.getState().generateAgentArtwork({
+      ...input,
+      composition: 'fullBody',
+      persist: false,
+    });
+
+    expect(url).toBe('https://example.com/full-body.webp');
+    expect(imageService.createImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          aspectRatio: '3:4',
+          prompt: expect.stringContaining('distinctive portrait character image'),
+        }),
+      }),
+    );
+    expect(updateAgentMetaById).not.toHaveBeenCalled();
+  });
+
   it('passes the existing avatar as a reference image when generating a background', async () => {
     vi.mocked(getAiInfraStoreState).mockReturnValue({
       enabledImageModelList: [

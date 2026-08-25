@@ -118,7 +118,9 @@ describe('BriefCardActions', () => {
         briefType="decision"
         actions={[
           {
-            key: 'review',
+            // A key with no `brief.action.*` locale entry, so the
+            // server-provided label renders as-is (locale copy wins otherwise).
+            key: 'reviewAcceptance',
             label: 'Review acceptance',
             type: 'link',
             url: '/acceptance/acceptance-1',
@@ -127,7 +129,7 @@ describe('BriefCardActions', () => {
       />,
     );
 
-    const link = screen.getByRole('button', { name: 'Review delivery' });
+    const link = screen.getByRole('button', { name: 'Review acceptance' });
     expect(link).not.toHaveAttribute(RENDERER_HANDLED_LINK_ATTR);
     expect(fireEvent.click(link)).toBe(true);
   });
@@ -137,6 +139,22 @@ describe('BriefCardActions', () => {
       <BriefCardActions actions={sampleActions} briefId="brief-1" briefType="decision" />,
     );
     expect(screen.getByText('Approve')).toBeInTheDocument();
+  });
+
+  it('adds an ignore action to a link-only decision so it can leave Needs you', async () => {
+    mockResolveBrief.mockResolvedValueOnce(undefined);
+    renderWithRouter(
+      <BriefCardActions
+        actions={[{ key: 'review', label: 'Review delivery', type: 'link', url: '/acceptance/1' }]}
+        briefId="brief-goal"
+        briefType="decision"
+      />,
+    );
+
+    expect(screen.getByText('Review delivery')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('brief.action.ignore'));
+
+    await waitFor(() => expect(mockResolveBrief).toHaveBeenCalledWith('brief-goal', 'ignore'));
   });
 
   it('should render comment action button', () => {
