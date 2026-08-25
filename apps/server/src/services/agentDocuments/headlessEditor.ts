@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/consistent-type-imports */
 import type { HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
+import { createHeadlessEditor } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
@@ -125,7 +125,7 @@ const withHeadlessEditorLock = async <T>(run: () => Promise<T> | T): Promise<T> 
 };
 
 const exportSnapshot = (
-  editor: ReturnType<(typeof import('@lobehub/editor/headless'))['createHeadlessEditor']>,
+  editor: ReturnType<typeof createHeadlessEditor>,
   litexml = false,
 ): AgentDocumentEditorSnapshot => {
   const snapshot = editor.export({ litexml });
@@ -138,7 +138,7 @@ const exportSnapshot = (
 };
 
 const hydrateMarkdownOrEmptyState = (
-  editor: ReturnType<(typeof import('@lobehub/editor/headless'))['createHeadlessEditor']>,
+  editor: ReturnType<typeof createHeadlessEditor>,
   content: string,
   options?: { keepId?: boolean },
 ) => {
@@ -154,10 +154,10 @@ const hydrateMarkdownOrEmptyState = (
 };
 
 const createEditorWithState = (
-  createHeadlessEditor: (typeof import('@lobehub/editor/headless'))['createHeadlessEditor'],
+  createEditor: typeof createHeadlessEditor,
   { editorData, fallbackContent = '' }: LoadEditorStateParams,
 ) => {
-  let editor = createHeadlessEditor();
+  let editor = createEditor();
 
   if (isValidEditorData(editorData)) {
     try {
@@ -180,7 +180,7 @@ const createEditorWithState = (
     // editor at an empty root. Recreate the editor before hydrating Markdown so
     // no partially parsed Lexical state can leak into the fallback snapshot.
     editor.destroy();
-    editor = createHeadlessEditor();
+    editor = createEditor();
   }
 
   hydrateMarkdownOrEmptyState(editor, fallbackContent, { keepId: true });
@@ -190,8 +190,7 @@ const createEditorWithState = (
 export const createMarkdownEditorSnapshot = async (
   content: string,
 ): Promise<AgentDocumentEditorSnapshot> =>
-  withHeadlessEditorLock(async () => {
-    const { createHeadlessEditor } = await import('@lobehub/editor/headless');
+  withHeadlessEditorLock(() => {
     const editor = createHeadlessEditor();
 
     try {
@@ -205,8 +204,7 @@ export const createMarkdownEditorSnapshot = async (
 export const exportEditorDataSnapshot = async (
   params: LoadEditorStateParams & { litexml?: boolean },
 ): Promise<AgentDocumentEditorSnapshot> =>
-  withHeadlessEditorLock(async () => {
-    const { createHeadlessEditor } = await import('@lobehub/editor/headless');
+  withHeadlessEditorLock(() => {
     const { editor, recoveredFromMarkdown } = createEditorWithState(createHeadlessEditor, params);
 
     try {
@@ -226,7 +224,6 @@ export const applyLiteXMLOperations = async ({
   operations: AgentDocumentLiteXMLOperation[];
 }): Promise<AgentDocumentEditSnapshot> =>
   withHeadlessEditorLock(async () => {
-    const { createHeadlessEditor } = await import('@lobehub/editor/headless');
     const { editor } = createEditorWithState(createHeadlessEditor, { editorData, fallbackContent });
 
     try {
