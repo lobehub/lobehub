@@ -217,6 +217,41 @@ before schema parsing.
 return a standard JSON chat completion for `stream: false`; set `STUB_TEXT` to the
 schema-valid JSON required by the check.
 
+#### Driving the Acceptance AI-review predictor locally: pinned Gemini, image fetch-back, and stub JSON
+
+**Situation:** verifying the ✨ "ask AI to review" round on `/acceptance/<id>` (the
+`review_predict` generation, its toast, the proposal cards) without a real vision key.
+
+**Doesn't work:** three separate things, each of which reads as "the predictor never
+ran" — the button spins, no card, no error.
+
+- Pointing any provider at `llm-stub.mjs`. The predictor does not follow the verifier's
+  model: it is pinned to `DEFAULT_REVIEW_PREDICT_{MODEL,PROVIDER}` in
+  `packages/business/const/src/llm.ts` (Gemini native protocol, which the OpenAI-shaped
+  stub cannot serve), so the provider you configured is simply never called.
+- Running the dev server without `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`. The OpenAI context
+  builder fetches every `image_url` back and inlines it as base64; the local s3rver
+  presigned URL is `127.0.0.1`, so the fetch is refused and the attempt lands as an
+  `errored` row with no model call (the "SSRF protection blocked request" entry above).
+- Expecting a `pending` state in `verify_review_predictions`. There is none: a check is
+  "awaiting" only while it has NO row for the current (provider, model, promptVersion);
+  `predictReviews` deletes the previous unadjudicated rows before dispatch, so reading
+  the table mid-batch shows gaps, not placeholders.
+
+**Works:** (1) temporarily pin the constants to `gpt-4o` / `openai` with an
+`[AGENT-TEST]` marker (snapshot the file first, restore byte-identically at teardown —
+the model-bank vision test guards the real value), then
+`aiInfra().updateAiProviderConfig('openai', { keyVaults: { apiKey: 'sk-stub', baseURL:
+'http://localhost:41100/v1' } })`; (2) start the dev server with
+`SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`; (3) set `STUB_TEXT` to a `ReviewPredictionSchema`
+JSON (`{"action":"reject","regions":[{"imageIndex":0,...}]}`) — the runtime sends
+`response_format: json_schema` with `stream: false`, which the stub answers as a plain
+completion whose `content` is parsed as the object. A text-only evidence check is
+`skipped` without a call; `STUB_FAIL=500` yields `errored` — note the SDK retries a
+5xx three times, so any delay you put in front of the stub is paid ×3 on that path.
+Assert the round from three places together: the toast copy (a MutationObserver on
+`document.body`), the rows' `status`/`action`/`created_at`, and the card count.
+
 #### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
