@@ -1418,5 +1418,40 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
       expect(mockExecuteToolCall).not.toHaveBeenCalled();
     });
+
+    // Regression guard for LOBE-13477: a callAgent/callSubAgent-spawned hetero
+    // child (isolation-thread, no topicStartOwnerOperationId) must still get
+    // its userId/workspaceId written to the state-manager metadata store —
+    // subAgentCallback reads it to authorize resuming the parked parent
+    // operation. Without it, the completion webhook 401s, the parent is
+    // never resumed, and it stays parked until the inactivity watchdog
+    // abandons it ~10 minutes later.
+    it('persists userId/workspaceId metadata for a callAgent-spawned hetero child', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      const call = mockCreateOperationMetadata.mock.calls.find(
+        ([, data]) => data.userId === 'test-user-id',
+      );
+      expect(call).toBeDefined();
+      // No topic-owner mirror target on this path — mirrorToOperationId must
+      // stay unset rather than being derived from parentOperationId.
+      expect(call?.[1]).not.toHaveProperty('mirrorToOperationId');
+    });
+
+    it('does not clobber the topic running-operation marker for an isolation-thread child', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      expect(findRunningOpSeed()).toBeUndefined();
+    });
   });
 });

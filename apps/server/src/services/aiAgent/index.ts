@@ -2591,20 +2591,35 @@ export class AiAgentService {
             userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
-      } else {
+      } else if (!appContext?.isolationThread) {
+        // Isolation-thread children (callAgent / callSubAgent) run on the
+        // SPAWNER's topic and finish long before it does — see the parity
+        // comment on the standard (non-hetero) branch below. Claiming the
+        // topic-level marker here would clobber the parent's own marker and
+        // then null it out again once this child settles, even though the
+        // parent operation is still running.
         await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
       }
 
-      const persistMirrorTarget = async () => {
-        if (!params.topicStartOwnerOperationId) return;
+      // Always persist operation metadata (userId/workspaceId) to the state
+      // manager, not just for topic-owner-mirrored runs. `subAgentCallback`
+      // (the QStash-delivered completion bridge for callAgent/callSubAgent
+      // children) resolves `userId` from this same store to authorize
+      // resuming the parent — without it, a hetero child spawned via
+      // callAgent has no metadata row, the callback 401s, and the parent
+      // operation is never resumed (stays parked until the inactivity
+      // watchdog abandons it).
+      const persistOperationMetadata = async () => {
         try {
           await createAgentStateManager().createOperationMetadata(operationId, {
-            mirrorToOperationId: params.topicStartOwnerOperationId,
+            ...(params.topicStartOwnerOperationId && {
+              mirrorToOperationId: params.topicStartOwnerOperationId,
+            }),
             userId: this.userId,
             workspaceId: this.workspaceId,
           });
         } catch (err) {
-          log('execAgent: failed to persist hetero mirror target: %O', err);
+          log('execAgent: failed to persist hetero operation metadata: %O', err);
         }
       };
 
@@ -2698,7 +2713,7 @@ export class AiAgentService {
 
         // Open the stream channel so the gateway WS subscription can receive
         // notify_update events published by agentNotify.notify.
-        await persistMirrorTarget();
+        await persistOperationMetadata();
         const streamManager = createStreamEventManager();
         await streamManager
           .publishAgentRuntimeInit(operationId, {
@@ -2801,7 +2816,7 @@ export class AiAgentService {
         // the init only powers reconnect, not the run. `createStreamEventManager`
         // probes Redis synchronously, so guard construction too, not just publish.
         try {
-          await persistMirrorTarget();
+          await persistOperationMetadata();
           await createStreamEventManager().publishAgentRuntimeInit(operationId, {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
