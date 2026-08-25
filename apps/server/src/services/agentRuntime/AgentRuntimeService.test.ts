@@ -690,10 +690,10 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
     });
 
-    it('acks a delayed delivery after the durable operation was interrupted', async () => {
+    it('acks a delayed delivery after the durable operation was abandoned', async () => {
       vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
         id: mockParams.operationId,
-        status: 'interrupted',
+        status: 'abandoned',
       });
 
       const result = await service.executeStep(mockParams);

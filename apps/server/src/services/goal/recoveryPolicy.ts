@@ -4,10 +4,10 @@ import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
 
 const DEFAULT_MAX_ATTEMPTS_PER_WORK = 3;
 const DEFAULT_OPERATION_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
-// Agent runtime refreshes the durable operation lease alongside its 30-second
-// step-lock heartbeat. A shorter timeout can reclaim a healthy operation before
-// its first heartbeat when an LLM or tool call takes more than a few seconds.
-export const MIN_OPERATION_LEASE_TIMEOUT_MS = 60 * 1000;
+// Agent runtime refreshes the durable operation lease every third 30-second
+// step-lock heartbeat. Keep the timeout above two durable heartbeat intervals
+// so a transient missed write cannot reclaim a healthy operation.
+export const MIN_OPERATION_LEASE_TIMEOUT_MS = 3 * 60 * 1000;
 
 export const resolveWorkAttemptBudget = (goal: GoalItem, taskCarried: boolean): number => {
   const configured = goal.config?.recovery?.maxAttemptsPerWork;

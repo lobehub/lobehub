@@ -237,8 +237,8 @@ describe('AgentOperationModel', () => {
         .where(eq(agentOperations.id, operationId));
       expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(true);
       expect(await model.findById(operationId)).toMatchObject({
-        completionReason: 'interrupted',
-        status: 'interrupted',
+        completionReason: 'lease_expired',
+        status: 'abandoned',
       });
     });
 
@@ -259,8 +259,8 @@ describe('AgentOperationModel', () => {
         }),
       ).toBe(false);
       expect(await model.findById(operationId)).toMatchObject({
-        completionReason: 'interrupted',
-        status: 'interrupted',
+        completionReason: 'lease_expired',
+        status: 'abandoned',
       });
     });
   });

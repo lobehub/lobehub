@@ -142,6 +142,7 @@ const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
 /** Cap on the exponential backoff multiplier after consecutive poll failures. */
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
+const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 
 const toToolForwardingFailure = (error?: unknown): ToolRunResult => ({
@@ -465,10 +466,16 @@ export class AgentRuntimeService {
     stepIndex: number,
     ownerId: string,
   ): () => void {
+    let heartbeatTick = 0;
     const timer = setInterval(() => {
+      heartbeatTick += 1;
+      const refreshDurableLease = heartbeatTick % DURABLE_LEASE_HEARTBEAT_EVERY_TICKS === 0;
+
       Promise.all([
         this.coordinator.refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId),
-        this.agentOperationModel.touchRunning(operationId),
+        refreshDurableLease
+          ? this.agentOperationModel.touchRunning(operationId)
+          : Promise.resolve(true),
       ])
         .then(([refreshed, leaseRefreshed]) => {
           if (!refreshed) {
@@ -882,7 +889,10 @@ export class AgentRuntimeService {
     // replacement and submit a second Acceptance run.
     try {
       const durableOperation = await this.agentOperationModel.findById(operationId);
-      if (durableOperation && ['done', 'error', 'interrupted'].includes(durableOperation.status)) {
+      if (
+        durableOperation &&
+        ['done', 'error', 'interrupted', 'abandoned'].includes(durableOperation.status)
+      ) {
         log(
           '[%s][%d] Skipping delivery for terminal durable operation (%s)',
           operationId,
@@ -891,7 +901,10 @@ export class AgentRuntimeService {
         );
         return {
           nextStepScheduled: false,
-          state: { status: durableOperation.status },
+          state: {
+            status:
+              durableOperation.status === 'abandoned' ? 'interrupted' : durableOperation.status,
+          },
           stepResult: null,
           success: true,
         };

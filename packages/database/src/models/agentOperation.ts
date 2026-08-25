@@ -1,4 +1,8 @@
-import type { VerifyRunStatus } from '@lobechat/types';
+import type {
+  AgentOperationCompletionReason,
+  AgentOperationStatus,
+  VerifyRunStatus,
+} from '@lobechat/types';
 import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
@@ -55,14 +59,7 @@ export interface ChildUsageRollup {
 
 export interface RecordOperationCompletionParams {
   completedAt?: Date;
-  completionReason?:
-    | 'done'
-    | 'error'
-    | 'interrupted'
-    | 'max_steps'
-    | 'cost_limit'
-    | 'waiting_for_human'
-    | 'waiting_for_async_tool';
+  completionReason?: AgentOperationCompletionReason;
   cost?: Record<string, unknown> | null;
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
@@ -74,8 +71,7 @@ export interface RecordOperationCompletionParams {
   processingTimeMs?: number | null;
   /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
   provider?: string | null;
-  status:
-    'running' | 'waiting_for_human' | 'waiting_for_async_tool' | 'done' | 'error' | 'interrupted';
+  status: Exclude<AgentOperationStatus, 'idle'>;
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -261,8 +257,8 @@ export class AgentOperationModel {
       .update(agentOperations)
       .set({
         completedAt: new Date(),
-        completionReason: 'interrupted',
-        status: 'interrupted',
+        completionReason: 'lease_expired',
+        status: 'abandoned',
       })
       .where(
         and(
