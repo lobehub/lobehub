@@ -13,7 +13,7 @@ import { createBeforeToolCallChaosHandler, createRuntimeChaosHooks } from './too
 const contextFor = (
   effect: ChaosExperiment['effect'],
   selector: Record<string, unknown>,
-  options?: { maxInjections?: number; signal?: AbortSignal },
+  options?: { maxInjections?: number; runId?: string; signal?: AbortSignal },
 ): ChaosRunContext => ({
   environment: 'test',
   experiment: {
@@ -30,7 +30,7 @@ const contextFor = (
     trigger: { when: 'before' },
   },
   random: createSeededRandom('seed'),
-  runId: 'run-runtime',
+  runId: options?.runId ?? 'run-runtime',
   signal: options?.signal ?? new AbortController().signal,
 });
 
@@ -234,6 +234,38 @@ describe('runtime chaos adapter', () => {
       deliver,
     );
     expect(deliver).toHaveBeenCalledTimes(2);
+  });
+
+  it('applies only one winner when completion faults overlap', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const duplicateReceipt = await adapter.inject(
+      contextFor(
+        { count: 2, type: 'duplicate' },
+        { operationId: 'op-conflict', phase: 'completion' },
+        { runId: 'run-duplicate' },
+      ),
+    );
+    const dropReceipt = await adapter.inject(
+      contextFor(
+        { type: 'drop' },
+        { operationId: 'op-conflict', phase: 'completion' },
+        { runId: 'run-drop' },
+      ),
+    );
+    const deliver = vi.fn(async () => {});
+    await deliverCompletionWithChaos(
+      controller,
+      { operationId: 'op-conflict', payload: {} },
+      deliver,
+    );
+    expect(deliver).toHaveBeenCalledTimes(2);
+    await expect(
+      adapter.verifyInjection!(duplicateReceipt, contextFor({ type: 'drop' }, {})),
+    ).resolves.toBe(true);
+    await expect(
+      adapter.verifyInjection!(dropReceipt, contextFor({ type: 'drop' }, {})),
+    ).resolves.toBe(false);
   });
 
   it('cancels a delayed completion when the runtime fault is disarmed', async () => {

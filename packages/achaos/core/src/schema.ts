@@ -16,7 +16,7 @@ export const chaosEffectSchema = z.discriminatedUnion('type', [
   z.object({ content: z.string(), type: z.literal('replace_result') }).strict(),
   z
     .object({
-      signal: z.enum(['SIGINT', 'SIGKILL', 'SIGTERM']).optional(),
+      signal: z.literal('SIGKILL').optional(),
       type: z.literal('kill_process'),
     })
     .strict(),

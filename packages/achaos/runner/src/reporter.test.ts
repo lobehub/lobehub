@@ -53,4 +53,28 @@ describe('formatChaosResult', () => {
       sequence: '1n',
     });
   });
+
+  it('preserves repeated non-cyclic objects', () => {
+    const shared = { id: 'evidence' };
+    const result = {
+      durationMs: 1,
+      experimentId: 'test',
+      finishedAt: '2026-01-01T00:00:00.001Z',
+      injection: {
+        adapter: 'custom',
+        details: { first: shared, second: shared },
+        injectionId: 'injection',
+      },
+      oracleResults: [],
+      runId: 'run',
+      seed: 'seed',
+      startedAt: '2026-01-01T00:00:00.000Z',
+      status: 'passed',
+      timeline: [],
+    } as ChaosRunResult;
+    expect(JSON.parse(formatChaosResult(result)).injection.details).toEqual({
+      first: { id: 'evidence' },
+      second: { id: 'evidence' },
+    });
+  });
 });

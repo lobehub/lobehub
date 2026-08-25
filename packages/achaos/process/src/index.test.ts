@@ -34,7 +34,22 @@ describe('createProcessChaosAdapter', () => {
       },
       runId: 'run-process',
     } as unknown as ChaosRunContext;
-    await expect(adapter.inject(context)).rejects.toThrow('non-terminating signal SIGSTOP');
+    await expect(adapter.inject(context)).rejects.toThrow('requires uncatchable SIGKILL');
+    expect(kill).not.toHaveBeenCalled();
+  });
+
+  it('rejects catchable terminating signals', async () => {
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const adapter = createProcessChaosAdapter({ allowedPids: new Set([123]) });
+    const context = {
+      experiment: {
+        effect: { signal: 'SIGTERM', type: 'kill_process' },
+        safety: { destructive: true },
+        target: { selector: { pid: 123 } },
+      },
+      runId: 'run-process',
+    } as unknown as ChaosRunContext;
+    await expect(adapter.inject(context)).rejects.toThrow('requires uncatchable SIGKILL');
     expect(kill).not.toHaveBeenCalled();
   });
 });

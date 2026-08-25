@@ -12,7 +12,7 @@ export type ChaosEffect =
   | { type: 'drop' }
   | { errorType: string; message?: string; type: 'throw' }
   | { content: string; type: 'replace_result' }
-  | { signal?: 'SIGINT' | 'SIGKILL' | 'SIGTERM'; type: 'kill_process' };
+  | { signal?: 'SIGKILL'; type: 'kill_process' };
 
 export interface ChaosTarget {
   adapter: string;

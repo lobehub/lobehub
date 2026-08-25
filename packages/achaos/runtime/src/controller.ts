@@ -116,6 +116,7 @@ export class RuntimeChaosController {
         },
         signal: fault.abort.signal,
       });
+      break;
     }
     return activations;
   }

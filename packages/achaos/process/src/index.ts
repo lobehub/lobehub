@@ -4,8 +4,6 @@ export interface ProcessChaosAdapterOptions {
   allowedPids: ReadonlySet<number>;
 }
 
-const TERMINATING_SIGNALS = new Set<NodeJS.Signals>(['SIGINT', 'SIGKILL', 'SIGTERM']);
-
 /** Destructive adapter with explicit PID ownership; it refuses arbitrary process targets. */
 export const createProcessChaosAdapter = ({
   allowedPids,
@@ -21,8 +19,8 @@ export const createProcessChaosAdapter = ({
     if (effect.type !== 'kill_process')
       throw new Error('Process adapter only supports kill_process');
     const signal = effect.signal ?? 'SIGKILL';
-    if (!TERMINATING_SIGNALS.has(signal))
-      throw new Error(`Process adapter does not permit non-terminating signal ${signal}`);
+    if (signal !== 'SIGKILL')
+      throw new Error(`Process adapter requires uncatchable SIGKILL, received ${signal}`);
     process.kill(pid, signal);
     return {
       adapter: 'process',
