@@ -458,6 +458,12 @@ describe('TaskModel', () => {
 
       await model.create({ assigneeAgentId: firstAgentId, instruction: 'First assigned task' });
       await model.create({ assigneeAgentId: secondAgentId, instruction: 'Second assigned task' });
+      await model.create({ assigneeUserId: userId2, instruction: 'Member assigned task' });
+      await model.create({
+        assigneeAgentId: firstAgentId,
+        assigneeUserId: userId2,
+        instruction: 'Legacy dual-assigned task',
+      });
       await model.create({ instruction: 'Unassigned task' });
       const completed = await model.create({
         assigneeAgentId: firstAgentId,
@@ -470,11 +476,21 @@ describe('TaskModel', () => {
         groupBy: 'assignee',
       });
 
-      expect(result).toHaveLength(3);
-      expect(result.find((group) => group.key === `assignee:${firstAgentId}`)?.total).toBe(1);
+      expect(result).toHaveLength(4);
+      const firstAgent = result.find((group) => group.key === `assignee:${firstAgentId}`);
+      expect(firstAgent?.total).toBe(2);
+      expect(firstAgent?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'First assigned task',
+        'Legacy dual-assigned task',
+      ]);
       expect(result.find((group) => group.key === `assignee:${secondAgentId}`)?.total).toBe(1);
+      const member = result.find((group) => group.key === `assignee:user:${userId2}`);
+      expect(member?.assigneeUserId).toBe(userId2);
+      expect(member?.total).toBe(1);
+      expect(member?.tasks.map((task) => task.instruction)).toEqual(['Member assigned task']);
       const unassigned = result.find((group) => group.key === 'assignee:unassigned');
       expect(unassigned?.assigneeAgentId).toBeNull();
+      expect(unassigned?.assigneeUserId).toBeNull();
       expect(unassigned?.tasks.map((task) => task.instruction)).toEqual(['Unassigned task']);
 
       const agentScopedResult = await model.groupList({

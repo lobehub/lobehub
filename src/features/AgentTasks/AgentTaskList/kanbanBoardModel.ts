@@ -20,6 +20,11 @@ export interface KanbanColumnDefinition {
   targetStatus: 'backlog' | 'canceled' | 'completed' | null;
 }
 
+export interface KanbanAssigneeUpdate {
+  assigneeAgentId: string | null;
+  assigneeUserId: string | null;
+}
+
 export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
   { droppable: true, key: 'backlog', targetStatus: 'backlog' },
   { droppable: false, key: 'running', targetStatus: null },
@@ -40,7 +45,7 @@ export const buildKanbanColumns = (
   const groupEntries = taskGroups.map((group) => {
     const meta =
       groupBy === 'assignee'
-        ? getTaskAssigneeGroupMeta(group.assigneeAgentId)
+        ? getTaskAssigneeGroupMeta(group.assigneeAgentId, group.assigneeUserId)
         : getTaskPriorityGroupMeta(group.priority);
     return [meta, group.tasks as TaskListItem[]] as [TaskGroupMeta, TaskListItem[]];
   });
@@ -51,6 +56,25 @@ export const buildKanbanColumns = (
     key: groupMeta.key,
     targetStatus: null,
   }));
+};
+
+export const getKanbanAssigneeUpdate = (
+  task: TaskListItem,
+  patch: Partial<TaskListItem>,
+): KanbanAssigneeUpdate | undefined => {
+  const update = {
+    assigneeAgentId: patch.assigneeAgentId ?? null,
+    assigneeUserId: patch.assigneeUserId ?? null,
+  };
+
+  if (
+    (task.assigneeAgentId ?? null) === update.assigneeAgentId &&
+    (task.assigneeUserId ?? null) === update.assigneeUserId
+  ) {
+    return;
+  }
+
+  return update;
 };
 
 export const getKanbanTaskPatch = (

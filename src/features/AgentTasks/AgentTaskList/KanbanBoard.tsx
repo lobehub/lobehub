@@ -31,6 +31,7 @@ import { taskDetailPath } from '../shared/taskDetailPath';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
   buildKanbanColumns,
+  getKanbanAssigneeUpdate,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
@@ -133,13 +134,10 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
 
       const patch = getKanbanTaskPatch(groupBy, column);
       if (!patch) return;
+      const assigneeUpdate =
+        groupBy === 'assignee' ? getKanbanAssigneeUpdate(task, patch) : undefined;
       if (groupBy === 'status' && task.status === patch.status) return;
-      if (
-        groupBy === 'assignee' &&
-        (task.assigneeAgentId ?? null) === (patch.assigneeAgentId ?? null)
-      ) {
-        return;
-      }
+      if (groupBy === 'assignee' && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
       const prevGroups = useTaskStore.getState().taskGroups;
@@ -149,8 +147,8 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       try {
         if (groupBy === 'status' && column.targetStatus) {
           await updateTaskStatus(task.identifier, column.targetStatus);
-        } else if (groupBy === 'assignee') {
-          await updateTask(task.identifier, { assigneeAgentId: patch.assigneeAgentId ?? null });
+        } else if (groupBy === 'assignee' && assigneeUpdate) {
+          await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });
         }
