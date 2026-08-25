@@ -22,4 +22,21 @@ describe('chaosExperimentSchema', () => {
     });
     expect(result.cleanup).toBe('always');
   });
+
+  it('rejects misspelled safety-policy keys', () => {
+    expect(() =>
+      chaosExperimentSchema.parse({
+        description: 'Unsafe typo',
+        effect: { type: 'drop' },
+        id: 'unsafe-typo',
+        layer: 'L2-agent-runtime',
+        oracles: [{ name: 'healthy' }],
+        safety: { allowedEnvironments: ['test'], maxInjection: 1 },
+        seed: 'seed',
+        target: { adapter: 'runtime', selector: {} },
+        timeoutMs: 1000,
+        trigger: { when: 'immediate' },
+      }),
+    ).toThrow(/maxInjection/);
+  });
 });

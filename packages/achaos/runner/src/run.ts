@@ -5,7 +5,9 @@ import type {
   ChaosExercise,
   ChaosExperiment,
   ChaosInjectionReceipt,
+  ChaosOracle,
   ChaosOracleResult,
+  ChaosOracleSpec,
   ChaosRunContext,
   ChaosRunResult,
   ChaosTimelineEvent,
@@ -234,6 +236,28 @@ export const runChaosExperiment = async ({
       timeline,
     };
   }
+  let registeredOracles: Array<{ oracle: ChaosOracle; spec: ChaosOracleSpec }>;
+  try {
+    registeredOracles = experiment.oracles.map((spec) => ({
+      oracle: registry.resolveOracle(spec.name),
+      spec,
+    }));
+  } catch (oracleError) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'oracle_not_registered' });
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      error: { ...serializeError(oracleError), name: 'ChaosConfigError' },
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'aborted',
+      timeline,
+    };
+  }
   const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
   let injectionPromise: ReturnType<typeof adapter.inject> | undefined;
@@ -264,9 +288,9 @@ export const runChaosExperiment = async ({
       activationError.name = 'ChaosInjectionNotActivatedError';
       throw activationError;
     }
-    for (const spec of experiment.oracles) {
+    for (const { oracle, spec } of registeredOracles) {
       const result = await withTimeout(
-        registry.resolveOracle(spec.name).evaluate(context, spec),
+        oracle.evaluate(context, spec),
         spec.timeoutMs ?? experiment.timeoutMs,
         controller,
       );
