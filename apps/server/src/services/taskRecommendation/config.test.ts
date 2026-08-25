@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { TaskRecommendationConfigurator } from './config';
 
-/** @example The default target distributes recommendations without a provider-count table. */
+/** @example The default allocation keeps every provider to two high-value task slots. */
 describe('TaskRecommendationConfigurator', () => {
-  /** @example 1→6, 2→5, 3→3, and 4→2 recommendations per provider. */
-  it('clamps a rounded fair share to configured bounds', () => {
+  /** @example Every non-empty provider set receives exactly two recommendation slots. */
+  it('caps every provider at the fixed two-task budget', () => {
     const configurator = new TaskRecommendationConfigurator();
     expect([1, 2, 3, 4, 8].map((count) => configurator.recommendationsPerProvider(count))).toEqual([
-      6, 5, 3, 2, 2,
+      2, 2, 2, 2, 2,
     ]);
   });
 
@@ -17,13 +17,10 @@ describe('TaskRecommendationConfigurator', () => {
     expect(new TaskRecommendationConfigurator().recommendationsPerProvider(0)).toBe(0);
   });
 
-  /** @example Runtime collection limits remain paired with prompt-package provider guides. */
-  it('combines operational provider settings with prompt guides', () => {
-    const { providers, writing } = new TaskRecommendationConfigurator();
+  /** @example Shared writing policy stays independent from provider-owned collectors and guides. */
+  it('exposes the shared recommendation writing policy', () => {
+    const { writing } = new TaskRecommendationConfigurator();
 
-    expect(providers.github).toMatchObject({ maxContextLength: 24_000, maxSignals: 24 });
-    expect(providers.github.examples.length).toBeGreaterThan(0);
-    expect(providers.gmail.queries).toHaveLength(3);
     expect(writing.maxSourcesPerRecommendation).toBe(4);
   });
 });

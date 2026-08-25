@@ -19,6 +19,32 @@ export const resolveScopeToggleSection = ({
   return null;
 };
 
+interface InboxScopeTogglePlacementInput {
+  hiddenWidgets: string[];
+  hideNeedsYou?: boolean;
+  hideUnread?: boolean;
+  needsYouCount: number;
+  preferUnread?: boolean;
+  runningCount: number;
+  unreadCount: number;
+}
+
+export const resolveInboxScopeToggleSection = ({
+  hiddenWidgets,
+  hideNeedsYou,
+  hideUnread,
+  needsYouCount,
+  preferUnread,
+  runningCount,
+  unreadCount,
+}: InboxScopeTogglePlacementInput): 'needsYou' | 'running' | 'unread' | null =>
+  resolveScopeToggleSection({
+    hasNeedsYou: !hideNeedsYou && needsYouCount > 0 && !hiddenWidgets.includes('needsYou'),
+    hasRunning: runningCount > 0 && !hiddenWidgets.includes('running'),
+    hasUnread: !hideUnread && unreadCount > 0 && !hiddenWidgets.includes('unread'),
+    preferUnread,
+  });
+
 export const filterTopicsForInboxScope = <T extends { userId?: string }>(
   topics: readonly T[],
   myId: string | undefined,

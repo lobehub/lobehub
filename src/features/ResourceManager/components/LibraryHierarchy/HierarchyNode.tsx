@@ -12,14 +12,14 @@ import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { showContextMenu } from '@/libs/contextMenu';
 import {
   getTransparentDragImage,
   useDragActive,
   useSetCurrentDrag,
-} from '@/routes/(main)/resource/features/DndContextWrapper';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+} from '@/features/ResourceManager/DndContextWrapper';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { showContextMenu } from '@/libs/contextMenu';
 import type { TreeItem } from '@/store/tree';
 import { useTreeStore } from '@/store/tree';
 
@@ -109,11 +109,13 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }, [item.name]);
 
     const { menuItems } = useFileItemDropdown({
+      fileId: item.fileId,
       fileType: item.fileType,
       filename: item.name,
       id: item.id,
       libraryId,
       onRenameStart: item.isFolder ? handleRenameStart : undefined,
+      size: item.size,
       sourceType: item.sourceType,
       url: item.url,
       userId: item.userId,

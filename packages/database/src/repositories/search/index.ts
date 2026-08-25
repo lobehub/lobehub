@@ -1,4 +1,17 @@
-import { and, desc, eq, inArray, isNull, ne, type SQL, sql, type SQLWrapper } from 'drizzle-orm';
+import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+  type SQLWrapper,
+} from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
@@ -184,6 +197,12 @@ export type SearchResult =
 export interface SearchOptions {
   agentId?: string;
   contextType?: 'agent' | 'resource' | 'page';
+  /**
+   * Knowledge-base ids to drop from KB results — restricted (member
+   * No-access) KBs must not be discoverable through unified search either.
+   * Caller-relative, so the router computes it per request.
+   */
+  excludeKnowledgeBaseIds?: string[];
   limitPerType?: number;
   offset?: number;
   query: string;
@@ -233,10 +252,9 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
  * score ordering is real (see `liftsAgentFilter`): trading the exact inline
  * predicate for a score-ordered pool is unsound when the scores backing that
  * order are NULL. Indexing the column instead is tracked with the other
- * missing fast fields in LOBE-12381.
+ * missing fast fields.
  *
- * @see https://linear.app/lobehub/issue/LOBE-12379
- * @see https://linear.app/lobehub/issue/LOBE-12575
+ * Indexing the column is tracked with the other missing fast fields.
  */
 const WORKSPACE_FILTER_CANDIDATE_MULTIPLIER = 5;
 
@@ -269,7 +287,7 @@ const WORKSPACE_FILTER_MIN_CANDIDATES = 500;
 
 /**
  * Flip to `true` once every BM25 index used by this repo carries `workspace_id`
- * as a fast keyword field (LOBE-12381). pg_search then pushes `workspace_id IS
+ * as a fast keyword field. pg_search then pushes `workspace_id IS
  * NULL` down as `must_not: exists(workspace_id)` and `workspace_id = ?` as a
  * `term`, so the ownership predicate can stay inline and personal search becomes
  * exact again (no candidate over-fetch, no dropped rows) while workspace-mode
@@ -311,7 +329,7 @@ export class SearchRepo {
    * approximation. Workspace mode has no such pushdown-able owner column — its
    * rows are a tiny slice of a global TopN — so lifting the filter there would
    * silently return nothing. It keeps the exact inline predicate and stays on
-   * the slow plan until LOBE-12381 lands.
+   * the slow plan until `workspace_id` becomes a fast keyword field in the BM25 index.
    */
   private get liftsWorkspaceFilter() {
     return !WORKSPACE_ID_IN_BM25_INDEX && !this.workspaceId;
@@ -324,7 +342,7 @@ export class SearchRepo {
    * pool, which is only sound while the scan's `ORDER BY paradedb.score()` is
    * real. Personal mode qualifies: its scan keeps only pushdown-able quals, so
    * scores are valid and the pool is genuinely the top-N matches. Workspace
-   * mode does not (until LOBE-12381 makes `workspace_id` a fast field): its
+   * mode does not (until `workspace_id` becomes a fast field in the BM25 index): its
    * inline `workspace_id` qual NULLs the whole score column on pg_search
    * 0.15.26, so a pool cut on that ordering would be an arbitrary slice that
    * silently drops agent rows. It keeps `agent_id` inline next to
@@ -375,6 +393,8 @@ export class SearchRepo {
     // Run searches in parallel for better performance
     const searchPromises: Promise<SearchResult[]>[] = [];
 
+    const excludeKbIds = options.excludeKnowledgeBaseIds ?? [];
+
     if ((!type || type === 'agent') && limits.agent > 0) {
       searchPromises.push(this.searchAgents(trimmedQuery, limits.agent));
     }
@@ -388,19 +408,25 @@ export class SearchRepo {
       searchPromises.push(this.searchMessages(trimmedQuery, limits.message, agentId));
     }
     if ((!type || type === 'file') && limits.file > 0) {
-      searchPromises.push(this.searchFiles(trimmedQuery, limits.file));
+      searchPromises.push(this.searchFiles(trimmedQuery, limits.file, excludeKbIds));
     }
     if ((!type || type === 'folder') && limits.folder > 0) {
-      searchPromises.push(this.searchFolders(trimmedQuery, limits.folder));
+      searchPromises.push(this.searchFolders(trimmedQuery, limits.folder, excludeKbIds));
     }
     if ((!type || type === 'page') && limits.page > 0) {
-      searchPromises.push(this.searchPages(trimmedQuery, limits.page));
+      searchPromises.push(this.searchPages(trimmedQuery, limits.page, excludeKbIds));
     }
     if ((!type || type === 'memory') && limits.memory > 0) {
       searchPromises.push(this.searchMemories(trimmedQuery, limits.memory));
     }
     if ((!type || type === 'knowledgeBase') && limits.knowledgeBase > 0) {
-      searchPromises.push(this.searchKnowledgeBases(trimmedQuery, limits.knowledgeBase));
+      searchPromises.push(
+        this.searchKnowledgeBases(
+          trimmedQuery,
+          limits.knowledgeBase,
+          options.excludeKnowledgeBaseIds,
+        ),
+      );
     }
 
     const results = await Promise.all(searchPromises);
@@ -548,6 +574,7 @@ export class SearchRepo {
         createdAt: agents.createdAt,
         description: agents.description,
         id: agents.id,
+        name: agents.name,
         score: sql<number>`paradedb.score(${agents.id})`.as('score'),
         slug: agents.slug,
         tags: agents.tags,
@@ -662,6 +689,7 @@ export class SearchRepo {
         agentBackgroundColor: agents.backgroundColor,
         agentId: hits.agentId,
         agentMatchedId: agents.id,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         content: hits.content,
@@ -764,6 +792,7 @@ export class SearchRepo {
     const rows = await this.db
       .select({
         agentId: hits.agentId,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         content: hits.content,
@@ -815,7 +844,11 @@ export class SearchRepo {
    * Note: ICU tokenizer treats hyphenated/dotted names (e.g. "react-component.jsx") as single tokens,
    * so partial searches like "component" won't match. Full words or prefixes work fine.
    */
-  private async searchFiles(query: string, limit: number): Promise<FileSearchResult[]> {
+  private async searchFiles(
+    query: string,
+    limit: number,
+    excludeKbIds?: string[],
+  ): Promise<FileSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
     const hits = this.db
@@ -835,6 +868,10 @@ export class SearchRepo {
         and(
           this.scanScopeWhere(files),
           ne(files.fileType, 'custom/document'),
+          // Acceptance evidence is hidden from the library, so it must stay out
+          // of search too — otherwise a query for "execution" returns hundreds
+          // of artifacts the user can't find anywhere else in the UI.
+          or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
           sql`${files.name} @@@ ${bm25Query}`,
         ),
       )
@@ -858,7 +895,23 @@ export class SearchRepo {
       .from(hits)
       .leftJoin(documents, eq(hits.id, documents.fileId))
       .leftJoin(knowledgeBaseFiles, eq(hits.id, knowledgeBaseFiles.fileId))
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          // A file linked to ANY restricted KB is fully hidden (over-hiding
+          // beats leaking through a shared membership) — subquery instead of
+          // the joined column so multi-KB rows cannot slip through.
+          excludeKbIds && excludeKbIds.length > 0
+            ? notInArray(
+                hits.id,
+                this.db
+                  .select({ fileId: knowledgeBaseFiles.fileId })
+                  .from(knowledgeBaseFiles)
+                  .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+              )
+            : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 
@@ -881,7 +934,11 @@ export class SearchRepo {
   /**
    * Search folders (documents with file_type=DOCUMENT_FOLDER_TYPE) (BM25)
    */
-  private async searchFolders(query: string, limit: number): Promise<FolderSearchResult[]> {
+  private async searchFolders(
+    query: string,
+    limit: number,
+    excludeKbIds?: string[],
+  ): Promise<FolderSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
     const hits = this.db
@@ -922,7 +979,14 @@ export class SearchRepo {
         updatedAt: hits.updatedAt,
       })
       .from(hits)
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          excludeKbIds && excludeKbIds.length > 0
+            ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
+            : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 
@@ -945,14 +1009,20 @@ export class SearchRepo {
   /**
    * Search pages (documents with file_type='custom/document') (BM25)
    */
-  private async searchPages(query: string, limit: number): Promise<PageSearchResult[]> {
+  private async searchPages(
+    query: string,
+    limit: number,
+    excludeKbIds?: string[],
+  ): Promise<PageSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
     const hits = this.db
       .select({
         createdAt: documents.createdAt,
+        fileId: documents.fileId,
         filename: documents.filename,
         id: documents.id,
+        knowledgeBaseId: documents.knowledgeBaseId,
         score: sql<number>`paradedb.score(${documents.id})`.as('score'),
         title: documents.title,
         updatedAt: documents.updatedAt,
@@ -980,7 +1050,28 @@ export class SearchRepo {
         updatedAt: hits.updatedAt,
       })
       .from(hits)
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          excludeKbIds && excludeKbIds.length > 0
+            ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
+            : undefined,
+          // Parsed-file pages leave `knowledgeBaseId` null — their KB
+          // membership lives on `fileId` → `knowledge_base_files`.
+          excludeKbIds && excludeKbIds.length > 0
+            ? or(
+                isNull(hits.fileId),
+                notInArray(
+                  hits.fileId,
+                  this.db
+                    .select({ fileId: knowledgeBaseFiles.fileId })
+                    .from(knowledgeBaseFiles)
+                    .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+                ),
+              )
+            : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 
@@ -1017,7 +1108,7 @@ export class SearchRepo {
    * the plain index-scan plan: `knowledge_base_id` is not in the BM25 index
    * either, so isolating the scan would not buy TopN. The KB filter does bound
    * the match set to one knowledge base (via its btree index), which keeps it
-   * workable until LOBE-12381 adds the missing fast fields.
+   * workable until `workspace_id` and `visibility` become fast fields in the BM25 index.
    */
   async searchKnowledgeBaseDocuments(
     query: string,
@@ -1211,6 +1302,7 @@ export class SearchRepo {
   private async searchKnowledgeBases(
     query: string,
     limit: number,
+    excludeIds?: string[],
   ): Promise<KnowledgeBaseSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
 
@@ -1247,7 +1339,14 @@ export class SearchRepo {
         updatedAt: hits.updatedAt,
       })
       .from(hits)
-      .where(this.liftedScopeWhere(hits.workspaceId))
+      .where(
+        and(
+          this.liftedScopeWhere(hits.workspaceId),
+          // Lifted above the BM25 scan (like the scope predicate) so the scan
+          // keeps its TopN shape; restricted rows only consume candidate slots.
+          excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
+        ),
+      )
       .orderBy(desc(hits.score))
       .limit(limit);
 

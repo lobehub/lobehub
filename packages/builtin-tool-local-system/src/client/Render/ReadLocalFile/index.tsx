@@ -1,23 +1,37 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ReadFileState } from '@lobechat/tool-runtime';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
+import type { ReadFileArgs } from './buildReadFileState';
+import { buildReadFileState } from './buildReadFileState';
+import { parseOpenCodeReadContent } from './parseReadContent';
 import ReadFileSkeleton from './ReadFileSkeleton';
 import ReadFileView from './ReadFileView';
 
-const ReadFileQuery = memo<BuiltinRenderProps<{ path: string }, ReadFileState>>(
-  ({ args, pluginState, messageId }) => {
+const ReadFileQuery = memo<BuiltinRenderProps<ReadFileArgs, Partial<ReadFileState>, string>>(
+  ({ args, content, identifier, messageId, pluginError, pluginState }) => {
     const { isLoading } = useToolRenderCapabilities();
     const loading = isLoading?.(messageId);
+    const parsedContent = useMemo(
+      () =>
+        identifier === 'opencode'
+          ? parseOpenCodeReadContent(content || '')
+          : { content: content || '' },
+      [content, identifier],
+    );
+    const readState = useMemo<ReadFileState | undefined>(
+      () => buildReadFileState({ args, identifier, parsedContent, pluginError, pluginState }),
+      [args, identifier, parsedContent, pluginError, pluginState],
+    );
 
     if (loading) {
       return <ReadFileSkeleton />;
     }
 
-    if (!args?.path || !pluginState) return null;
+    if (!readState) return null;
 
-    return <ReadFileView {...pluginState} path={args.path} />;
+    return <ReadFileView {...readState} />;
   },
 );
 

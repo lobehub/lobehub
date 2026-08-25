@@ -14,6 +14,7 @@ import { gitService } from '@/services/git';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
+import type { ComposerTarget } from '../../types';
 import type { DiffSelectedLineRange } from './selection';
 import { buildCodeContextSelection } from './selection';
 
@@ -305,6 +306,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
 FileItemHeader.displayName = 'ReviewFileItemHeader';
 
 interface FileItemBodyProps {
+  composerTarget: ComposerTarget;
   /** Whether the Collapse panel is expanded — gates the heavy PatchDiff render. */
   expanded: boolean;
   filePath: string;
@@ -320,6 +322,7 @@ interface FileItemBodyProps {
 
 const FileItemBody = memo<FileItemBodyProps>(
   ({
+    composerTarget,
     filePath,
     patch,
     isBinary,
@@ -338,10 +341,12 @@ const FileItemBody = memo<FileItemBodyProps>(
 
     const diffOptions = useMemo(
       () => ({
-        enableGutterUtility: true,
+        enableGutterUtility: composerTarget.writable,
         enableLineSelection: true,
         lineDiffType: textDiff ? ('word-alt' as const) : ('none' as const),
         onGutterUtilityClick: (range: DiffSelectedLineRange) => {
+          if (!composerTarget.writable) return;
+
           const selection = buildCodeContextSelection({
             filePath,
             language,
@@ -353,16 +358,29 @@ const FileItemBody = memo<FileItemBodyProps>(
           if (!selection) return;
 
           addChatContextSelection({
-            ...selection,
-            id: `code-selection-${nanoid(6)}`,
-            type: 'text',
+            contextKey: composerTarget.contextKey,
+            selection: {
+              ...selection,
+              id: `code-selection-${nanoid(6)}`,
+              type: 'text',
+            },
           });
           toast.success(t('workingPanel.review.addSelectionToContext.success'));
         },
         overflow: wordWrap ? ('wrap' as const) : ('scroll' as const),
         unsafeCSS: reviewDiffUnsafeCSS,
       }),
-      [addChatContextSelection, filePath, language, patch, t, textDiff, wordWrap, workingDirectory],
+      [
+        addChatContextSelection,
+        composerTarget,
+        filePath,
+        language,
+        patch,
+        t,
+        textDiff,
+        wordWrap,
+        workingDirectory,
+      ],
     );
 
     if (!expanded) return null;

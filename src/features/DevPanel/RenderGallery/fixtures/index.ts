@@ -25,6 +25,7 @@ import lobeNotebook from './lobe-notebook';
 import lobePageAgent from './lobe-page-agent';
 import lobeSkillStore from './lobe-skill-store';
 import lobeSkills from './lobe-skills';
+import lobeTask from './lobe-task';
 import lobeUserInteraction from './lobe-user-interaction';
 import lobeUserMemory from './lobe-user-memory';
 import lobeWebBrowsing from './lobe-web-browsing';
@@ -98,6 +99,7 @@ const toolsetModules: ToolsetFixtureModule[] = [
   lobePageAgent,
   lobeSkillStore,
   lobeSkills,
+  lobeTask,
   lobeUserInteraction,
   lobeUserMemory,
   lobeWebBrowsing,

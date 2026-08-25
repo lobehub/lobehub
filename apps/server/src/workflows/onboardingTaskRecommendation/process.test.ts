@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { serializeStepResult } from '@/server/workflows/testing/stepContext';
+
 import { processOnboardingTaskRecommendations } from './process';
 
 const payload = {
@@ -29,7 +31,7 @@ describe('processOnboardingTaskRecommendations', () => {
       requestPayload: payload,
       run: async <Result>(name: string, action: () => Promise<Result>) => {
         steps.push(name);
-        return action();
+        return serializeStepResult(await action());
       },
     };
 

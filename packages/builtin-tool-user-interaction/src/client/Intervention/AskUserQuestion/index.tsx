@@ -77,8 +77,11 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     escapeEnter: t('askUserQuestion.escape.enter'),
     escapePlaceholder: t('askUserQuestion.escape.placeholder'),
     multiSelectTag: t('askUserQuestion.multiSelectTag'),
+    recommendedTag: t('askUserQuestion.recommendedTag'),
     skip: t('askUserQuestion.skip'),
     submit: t('askUserQuestion.submit'),
+    supplementEnter: t('askUserQuestion.supplement.enter'),
+    supplementPlaceholder: t('askUserQuestion.supplement.placeholder'),
     timeExpired: '',
     timeRemaining: () => '',
   };

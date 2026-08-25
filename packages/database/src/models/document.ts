@@ -1,12 +1,18 @@
-import { and, count, desc, eq, inArray, isNull, ne, notInArray, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { DOCUMENT_FOLDER_TYPE, documents, files, works } from '../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, works } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
   current?: number;
+  /**
+   * Knowledge-base ids whose documents must be dropped from the listing —
+   * restricted (member No-access) libraries. Applied inside the query so
+   * pagination and totals stay correct.
+   */
+  excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
   sourceTypes?: string[];
@@ -114,6 +120,7 @@ export class DocumentModel {
   query = async ({
     current = 0,
     pageSize = 9999,
+    excludeKnowledgeBaseIds,
     fileTypes,
     sourceTypes,
   }: QueryDocumentParams = {}): Promise<{
@@ -125,6 +132,27 @@ export class DocumentModel {
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
+    }
+
+    if (excludeKnowledgeBaseIds?.length) {
+      conditions.push(
+        or(
+          isNull(documents.knowledgeBaseId),
+          notInArray(documents.knowledgeBaseId, excludeKnowledgeBaseIds),
+        )!,
+        // Parsed-file documents leave `knowledgeBaseId` null — their KB
+        // membership lives on `fileId` → `knowledge_base_files`.
+        or(
+          isNull(documents.fileId),
+          notInArray(
+            documents.fileId,
+            this.db
+              .select({ fileId: knowledgeBaseFiles.fileId })
+              .from(knowledgeBaseFiles)
+              .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKnowledgeBaseIds)),
+          ),
+        )!,
+      );
     }
 
     if (sourceTypes?.length) {
@@ -206,6 +234,12 @@ export class DocumentModel {
 
   findByFileId = async (fileId: string) => {
     return this.db.query.documents.findFirst({
+      // A file can legitimately own more than one document: `parseDocument`
+      // writes a page-editor copy next to the parse cache `parseFile` writes.
+      // Pick the oldest one explicitly instead of leaving the choice to the
+      // query plan, so repeated lookups keep returning the same content.
+      // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
+      orderBy: [asc(documents.createdAt), asc(documents.id)],
       where: and(this.ownership(), eq(documents.fileId, fileId)),
     });
   };

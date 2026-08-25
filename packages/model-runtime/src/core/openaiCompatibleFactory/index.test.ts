@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import type { ChatStreamCallbacks, ChatStreamPayload } from '../../types/chat';
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import {
   createSignatureChannelId,
@@ -130,6 +131,227 @@ describe('LobeOpenAICompatibleFactory', () => {
   });
 
   describe('chat', () => {
+    it('should retain the exact OpenAI Chat Completions request and raw chunks', async () => {
+      const rawEvents: OpenAI.Chat.Completions.ChatCompletionChunk[] = [
+        {
+          choices: [
+            {
+              delta: { content: '', role: 'assistant' },
+              finish_reason: null,
+              index: 0,
+              logprobs: null,
+            },
+          ],
+          created: 1_785_670_000,
+          id: 'chatcmpl_empty',
+          model: 'glm-5.2',
+          object: 'chat.completion.chunk',
+        },
+        {
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+              index: 0,
+              logprobs: null,
+            },
+          ],
+          created: 1_785_670_001,
+          id: 'chatcmpl_empty',
+          model: 'glm-5.2',
+          object: 'chat.completion.chunk',
+          usage: { completion_tokens: 1, prompt_tokens: 100, total_tokens: 101 },
+        },
+      ];
+      const rawResponseBody = rawEvents
+        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+        .join('');
+      const rawStream = {
+        async *[Symbol.asyncIterator]() {
+          for (const event of rawEvents) yield event;
+        },
+      };
+      const create = vi.fn(() => ({
+        withResponse: vi.fn().mockResolvedValue({
+          data: rawStream,
+          request_id: 'req_openai_empty',
+          response: new Response(rawResponseBody, {
+            headers: {
+              'cf-ray': 'ray-openai',
+              'content-type': 'text/event-stream',
+              'x-request-id': 'req-header-openai',
+            },
+            status: 200,
+          }),
+        }),
+      }));
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: 'https://api.test.com/v1',
+        customClient: {
+          createClient: () => ({ chat: { completions: { create } } }) as unknown as OpenAI,
+        },
+        provider: 'test-provider',
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+      const diagnostics: ModelRuntimeDiagnostics = {};
+
+      const response = await runtime.chat(
+        {
+          messages: [{ content: 'Question', role: 'user' }],
+          model: 'glm-5.2',
+          stream: true,
+        },
+        { diagnostics, user: 'user-1' },
+      );
+      await response.text();
+
+      expect(diagnostics.providerRequest).toEqual(
+        expect.objectContaining({
+          apiMode: 'chat_completions',
+          endpoint: 'https://api.***.com/v1',
+          payload: expect.objectContaining({
+            messages: [{ content: 'Question', role: 'user' }],
+            model: 'glm-5.2',
+            stream: true,
+            user: 'user-1',
+          }),
+          sentAt: expect.any(Number),
+        }),
+      );
+      expect(diagnostics.providerResponse).toEqual(
+        expect.objectContaining({
+          apiMode: 'chat_completions',
+          completedAt: expect.any(Number),
+          eventCount: 2,
+          headers: {
+            'cf-ray': 'ray-openai',
+            'content-type': 'text/event-stream',
+            'x-request-id': 'req-header-openai',
+          },
+          messageId: 'chatcmpl_empty',
+          model: 'glm-5.2',
+          rawEvents,
+          rawResponse: {
+            body: rawResponseBody,
+            byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+            status: 'captured',
+          },
+          requestId: 'req_openai_empty',
+          status: 200,
+          stopReason: 'stop',
+          terminalEventReceived: true,
+          textChars: 0,
+          usage: { completion_tokens: 1, prompt_tokens: 100, total_tokens: 101 },
+        }),
+      );
+    });
+
+    it('should retain the exact OpenAI Responses request and raw events', async () => {
+      const rawEvents = [
+        {
+          response: {
+            id: 'resp_empty',
+            model: 'gpt-5.4-mini',
+            status: 'in_progress',
+            usage: null,
+          },
+          sequence_number: 0,
+          type: 'response.created',
+        },
+        {
+          response: {
+            id: 'resp_empty',
+            model: 'gpt-5.4-mini',
+            output: [],
+            status: 'completed',
+            usage: { input_tokens: 100, output_tokens: 1, total_tokens: 101 },
+          },
+          sequence_number: 1,
+          type: 'response.completed',
+        },
+      ] as unknown as OpenAI.Responses.ResponseStreamEvent[];
+      const rawResponseBody = rawEvents
+        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+        .join('');
+      const rawStream = {
+        async *[Symbol.asyncIterator]() {
+          for (const event of rawEvents) yield event;
+        },
+      };
+      const create = vi.fn(() => ({
+        withResponse: vi.fn().mockResolvedValue({
+          data: rawStream,
+          request_id: 'req_responses_empty',
+          response: new Response(rawResponseBody, {
+            headers: {
+              'content-type': 'text/event-stream',
+              'openai-request-id': 'req-responses-header',
+            },
+            status: 200,
+          }),
+        }),
+      }));
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: 'https://api.test.com/v1',
+        chatCompletion: { useResponse: true },
+        customClient: {
+          createClient: () => ({ responses: { create } }) as unknown as OpenAI,
+        },
+        provider: 'test-provider',
+      });
+      const runtime = new Runtime({ apiKey: 'test' });
+      const diagnostics: ModelRuntimeDiagnostics = {};
+
+      const response = await runtime.chat(
+        {
+          messages: [{ content: 'Question', role: 'user' }],
+          model: 'gpt-5.4-mini',
+          stream: true,
+        },
+        { diagnostics, user: 'user-1' },
+      );
+      await response.text();
+
+      expect(diagnostics.providerRequest).toEqual(
+        expect.objectContaining({
+          apiMode: 'responses',
+          endpoint: 'https://api.***.com/v1',
+          payload: expect.objectContaining({
+            input: expect.any(Array),
+            model: 'gpt-5.4-mini',
+            safety_identifier: 'user-1',
+            store: false,
+            stream: true,
+          }),
+          sentAt: expect.any(Number),
+        }),
+      );
+      expect(diagnostics.providerResponse).toEqual(
+        expect.objectContaining({
+          apiMode: 'responses',
+          completedAt: expect.any(Number),
+          eventCount: 2,
+          headers: {
+            'content-type': 'text/event-stream',
+            'openai-request-id': 'req-responses-header',
+          },
+          messageId: 'resp_empty',
+          model: 'gpt-5.4-mini',
+          rawEvents,
+          rawResponse: {
+            body: rawResponseBody,
+            byteLength: new TextEncoder().encode(rawResponseBody).byteLength,
+            status: 'captured',
+          },
+          requestId: 'req_responses_empty',
+          status: 200,
+          stopReason: 'completed',
+          terminalEventReceived: true,
+          usage: { input_tokens: 100, output_tokens: 1, total_tokens: 101 },
+        }),
+      );
+    });
+
     it('should return a Response on successful API call', async () => {
       // Arrange
       const mockStream = new ReadableStream();
@@ -1123,6 +1345,34 @@ describe('LobeOpenAICompatibleFactory', () => {
         }
       });
 
+      it('should classify media download failures as InvalidRequestFormat', async () => {
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            error: {
+              message: 'failed to download or process media content',
+              type: 'invalid_request_error',
+            },
+            status: 400,
+          },
+          'failed to download or process media content',
+          new Headers(),
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe this image', role: 'user' }],
+            model: 'mimo-v2.5',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.InvalidRequestFormat,
+          provider,
+        });
+      });
+
       it('should throw AgentRuntimeError with invalidErrorType if no apiKey is provided', async () => {
         try {
           new LobeMockProvider({});
@@ -1486,9 +1736,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         },
       });
 
-      vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue({
-        tee: () => [mockStream, mockStream],
-      } as any);
+      vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(mockStream as any);
 
       const payload: ChatStreamPayload = {
         messages: [{ content: 'Test', role: 'user' }],

@@ -10,7 +10,7 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
-import ContentLoading from '@/components/Loading/ContentLoading';
+import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopBrowserGatewayBridge from '@/features/DesktopBrowserGatewayBridge';
@@ -26,11 +26,11 @@ import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
+import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
-import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopHome from '../home';
@@ -83,7 +83,7 @@ const Layout: FC = () => {
               <DesktopHomeLayout>
                 <DesktopHome />
               </DesktopHomeLayout>
-              <Suspense fallback={<ContentLoading />}>
+              <Suspense fallback={<RouteSegmentSkeleton />}>
                 <Outlet />
               </Suspense>
             </DesktopLayoutContainer>

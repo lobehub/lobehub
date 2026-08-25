@@ -48,7 +48,6 @@ export const topics = pgTable(
       enum: [
         'active',
         'running',
-        'paused',
         'waitingForHuman',
         'scheduled',
         'failed',

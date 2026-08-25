@@ -15,9 +15,12 @@ const effectiveAccessMock = vi.hoisted(() => vi.fn());
 // is what decides whether a collaborative builtin bypasses the default.
 const explicitAccessMock = vi.hoisted(() => vi.fn());
 
+const grantedLevelMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/database/models/resourcePermission', () => ({
   ResourcePermissionModel: class {
     getAccessLevel = explicitAccessMock;
+    getCollaboratorLevel = grantedLevelMock;
     getEffectiveAccessLevel = effectiveAccessMock;
   },
 }));
@@ -53,6 +56,7 @@ describe('canPerformResourceAction', () => {
     vi.clearAllMocks();
     resolveGrantsMock.mockResolvedValue(['ai_model:invoke:all']);
     explicitAccessMock.mockResolvedValue(null);
+    grantedLevelMock.mockResolvedValue(null);
   });
 
   it('lets a Workspace admin bypass view-only Member Permissions', async () => {
@@ -402,7 +406,7 @@ describe('canPerformResourceAction', () => {
       ).resolves.toBe(false);
     });
 
-    it('still lets every member use an internal builtin (resource default is use)', async () => {
+    it('still lets every member use an internal builtin at use-level access', async () => {
       permissionMatchesMock.mockResolvedValue({ hasAllScope: false, hasOwnerScope: true });
       effectiveAccessMock.mockResolvedValue('use');
 
@@ -610,7 +614,7 @@ describe('canPerformResourceAction', () => {
       ).resolves.toBe(true);
     });
 
-    // The bypass covers the *implicit* `use` default only. An owner who explicitly
+    // The bypass covers the *implicit* resource default only. An owner who explicitly
     // narrows General access means it — otherwise that control would persist a value
     // it never enforces.
     it('enforces an explicitly configured access level on a collaborative builtin', async () => {
@@ -646,6 +650,216 @@ describe('canPerformResourceAction', () => {
           workspaceId: 'ws-1',
         }),
       ).resolves.toBe(false);
+    });
+  });
+
+  // Knowledge bases invert the usual ordering: browsing the internal file list
+  // ('view') is the privileged act and requires the `edit` grade, while `use`
+  // keeps the KB mountable for retrieval.
+  describe('knowledge bases', () => {
+    const kbMeta = {
+      userId: 'creator',
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    };
+
+    // Members hold `knowledge_base:read:all` (the capability ceiling for
+    // 'view') but only `:owner` on update, so the resource-admin bypass check
+    // must not fire for them.
+    const memberMatches = ({ action }: { action: string }) =>
+      Promise.resolve(
+        action === 'KNOWLEDGE_BASE_UPDATE'
+          ? { hasAllScope: false, hasOwnerScope: true }
+          : { hasAllScope: true, hasOwnerScope: false },
+      );
+
+    it('lets a member browse a KB at the default edit level', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('edit');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('lets a member edit a KB at the default edit level', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('edit');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'edit',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('blocks a member from editing a use-level KB', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'edit',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('blocks a member from browsing a use-level KB while keeping it usable', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+
+      await expect(
+        canPerformResourceAction({
+          action: 'use',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('lets a KNOWLEDGE_BASE_UPDATE:all curator browse a use-level KB', async () => {
+      permissionMatchesMock.mockResolvedValue({ hasAllScope: true, hasOwnerScope: false });
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'workspace-admin',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+      expect(effectiveAccessMock).not.toHaveBeenCalled();
+    });
+
+    it('lets a collaborator with an edit grant browse a use-level KB', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('use');
+      grantedLevelMock.mockResolvedValue('edit');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'collaborator',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+      expect(grantedLevelMock).toHaveBeenCalledWith('knowledgeBase', 'kb-1', 'collaborator');
+    });
+
+    it('skips the collaborator lookup when the workspace level already passes', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('edit');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'member',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+      expect(grantedLevelMock).not.toHaveBeenCalled();
+    });
+
+    it('a grant below the required grade does not open browsing', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('use');
+      grantedLevelMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'collaborator',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('a collaborator grant never pierces a private KB', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      grantedLevelMock.mockResolvedValue('edit');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: { ...kbMeta, visibility: 'private' },
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'collaborator',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(false);
+      expect(grantedLevelMock).not.toHaveBeenCalled();
+    });
+
+    it('lets the creator browse their own use-level KB', async () => {
+      permissionMatchesMock.mockImplementation(memberMatches as any);
+      effectiveAccessMock.mockResolvedValue('use');
+
+      await expect(
+        canPerformResourceAction({
+          action: 'view',
+          db,
+          meta: kbMeta,
+          resourceId: 'kb-1',
+          resourceType: 'knowledgeBase',
+          userId: 'creator',
+          workspaceId: 'ws-1',
+        }),
+      ).resolves.toBe(true);
+      expect(effectiveAccessMock).not.toHaveBeenCalled();
     });
   });
 });

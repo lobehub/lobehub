@@ -14,13 +14,28 @@ const log = debug('context-engine:processor:TaskMessageProcessor');
 /**
  * Default template for combining instruction and result
  */
-const DEFAULT_TEMPLATE = `[Task Result from {{agentName}}]
+export const DEFAULT_TEMPLATE = `[Task Result from {{agentName}}]
 
 **Task Instruction:**
 {{instruction}}
 
 **Task Result:**
 {{content}}`;
+
+/**
+ * Fill a task template with its placeholders. Shared by
+ * {@link TaskMessageProcessor} (which emits the formatted text to the
+ * provider) and the token accounting (which estimates the emitted text), so
+ * the counted payload always mirrors the sent payload.
+ */
+export const formatTaskMessage = (
+  template: string,
+  values: { agentName: string; content: string; instruction: string },
+): string =>
+  template
+    .replaceAll('{{agentName}}', values.agentName)
+    .replaceAll('{{instruction}}', values.instruction)
+    .replaceAll('{{content}}', values.content);
 
 export interface TaskMessageConfig {
   /**
@@ -78,7 +93,7 @@ export class TaskMessageProcessor extends BaseProcessor {
       }
 
       // Apply template
-      const formattedContent = this.applyTemplate(template, {
+      const formattedContent = formatTaskMessage(template, {
         agentName: String(agentName),
         content: String(content),
         instruction: String(instruction),
@@ -101,18 +116,5 @@ export class TaskMessageProcessor extends BaseProcessor {
     log(`Task message processing completed, processed ${processedCount} messages`);
 
     return this.markAsExecuted(clonedContext);
-  }
-
-  /**
-   * Apply template with placeholders
-   */
-  private applyTemplate(
-    template: string,
-    values: { agentName: string; content: string; instruction: string },
-  ): string {
-    return template
-      .replaceAll('{{agentName}}', values.agentName)
-      .replaceAll('{{instruction}}', values.instruction)
-      .replaceAll('{{content}}', values.content);
   }
 }

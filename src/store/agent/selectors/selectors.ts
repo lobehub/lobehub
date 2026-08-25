@@ -9,7 +9,9 @@ import {
   isDesktop,
 } from '@lobechat/const';
 import {
+  agentDisplayName,
   type AgentMode,
+  type AgentProfile,
   type KnowledgeItem,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
@@ -37,6 +39,13 @@ const currentAgentData = (s: AgentStoreState) =>
   s.activeAgentId ? s.agentMap[s.activeAgentId] : undefined;
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
+
+/**
+ * The label to show for the active agent: personal name first, role as the
+ * fallback. Use this for rendering; `currentAgentTitle` stays the raw role for
+ * anything that edits or reasons about it.
+ */
+const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(currentAgentData(s));
 
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
@@ -71,6 +80,7 @@ const currentAgentMeta = (s: AgentStoreState): MetaData => {
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
+    name: data?.name || undefined,
     tags: data?.tags,
     title: data?.title || undefined,
   };
@@ -91,10 +101,36 @@ const getAgentMetaById =
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
+      name: data.name || undefined,
       tags: data.tags,
       title: data.title || undefined,
     };
   };
+
+/**
+ * Full-body artwork of the agent's character, or `undefined` when it has none.
+ * Kept out of {@link getAgentMetaById} because `MetaData` is shared with
+ * sessions and groups, which have no character sheet.
+ */
+/**
+ * The avatar actually stored on the agent — unlike {@link getAgentMetaById},
+ * which substitutes a default so every surface has something to render. Use
+ * this to decide whether there is anything to remove.
+ */
+const getAgentStoredAvatarById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.avatar || undefined;
+
+const getAgentProfileById =
+  (agentId: string) =>
+  (s: AgentStoreState): AgentProfile | undefined =>
+    s.agentMap[agentId]?.profile ?? undefined;
+
+const getAgentFullBodyArtworkById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.profile?.fullBodyArtwork || undefined;
 
 // ==========   Config   ============== //
 
@@ -361,6 +397,7 @@ export const agentSelectors = {
   currentAgentTTS,
   currentAgentTTSVoice,
   currentAgentTags,
+  currentAgentDisplayName,
   currentAgentTitle,
   currentAgentVisibility,
   currentAgentWorkingDirectory,
@@ -369,7 +406,10 @@ export const agentSelectors = {
   displayableAgentPlugins,
   getAgentConfigById,
   getAgentDocumentsById,
+  getAgentFullBodyArtworkById,
   getAgentMetaById,
+  getAgentProfileById,
+  getAgentStoredAvatarById,
   getAgentSlugById,
   hasEnabledKnowledge,
   hasEnabledKnowledgeBases,

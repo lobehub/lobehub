@@ -18,6 +18,7 @@ vi.hoisted(() => {
 });
 
 const mocks = vi.hoisted(() => ({
+  canCreateContent: true,
   canManageWorkspace: true,
   canViewBilling: true,
 }));
@@ -28,9 +29,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+const permissionFlags: Record<string, () => boolean> = {
+  create_content: () => mocks.canCreateContent,
+  view_billing: () => mocks.canViewBilling,
+};
+
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: string) => ({
-    allowed: action === 'view_billing' ? mocks.canViewBilling : mocks.canManageWorkspace,
+    allowed: permissionFlags[action]?.() ?? mocks.canManageWorkspace,
     reason: '',
   }),
 }));
@@ -44,6 +50,7 @@ const getItemKeys = () => {
 };
 
 beforeEach(() => {
+  mocks.canCreateContent = true;
   mocks.canManageWorkspace = true;
   mocks.canViewBilling = true;
 });
@@ -82,20 +89,20 @@ describe('workspace settings useCategory', () => {
     );
   });
 
-  it('places API Key in the Admin-or-higher group', () => {
+  it('places API Key in the Developer group', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory());
     const adminGroup = result.current.find(
       (group) => group.key === WorkspaceSettingsGroupKey.Admin,
     );
-    const agentGroup = result.current.find(
-      (group) => group.key === WorkspaceSettingsGroupKey.Agent,
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
     );
 
-    expect(adminGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
-    expect(agentGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
+    expect(developerGroup?.items.map((item) => item.key)).toContain(WorkspaceSettingsTabs.APIKey);
+    expect(adminGroup?.items.map((item) => item.key)).not.toContain(WorkspaceSettingsTabs.APIKey);
   });
 
-  it('does not expose API Key settings below Admin', () => {
+  it('exposes API Key settings to members', () => {
     mocks.canManageWorkspace = false;
 
     const itemKeys = getItemKeys();
@@ -104,7 +111,43 @@ describe('workspace settings useCategory', () => {
     expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Admin)).toBe(
       false,
     );
-    expect(itemKeys).not.toContain(WorkspaceSettingsTabs.APIKey);
+    expect(itemKeys).toContain(WorkspaceSettingsTabs.APIKey);
+  });
+
+  // Viewers hold no `API_KEY_*` grant, so the tab would open onto a list
+  // request that immediately 403s.
+  it('hides API Key from viewers, and drops the empty Developer group', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+
+    expect(result.current.flatMap((group) => group.items.map((item) => item.key))).not.toContain(
+      WorkspaceSettingsTabs.APIKey,
+    );
+    expect(result.current.some((group) => group.key === WorkspaceSettingsGroupKey.Developer)).toBe(
+      false,
+    );
+  });
+
+  it('keeps the Developer group for viewers when OAuth Apps is enabled', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        lab: { ...initialUserStoreState.preference.lab, enableOAuthApps: true },
+      },
+    });
+
+    const { result } = renderHook(() => useWorkspaceSettingCategory());
+    const developerGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Developer,
+    );
+
+    expect(developerGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.OAuthApps,
+    ]);
   });
 
   // Admin-or-higher reads the billing numbers; the pages keep the

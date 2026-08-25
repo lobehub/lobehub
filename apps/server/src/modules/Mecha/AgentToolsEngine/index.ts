@@ -29,6 +29,7 @@ import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-en
 import { ToolsEngine } from '@lobechat/context-engine';
 import {
   type BuiltinToolManifest,
+  getActivePluginIds,
   type RuntimeEnvMode,
   type RuntimePlatform,
 } from '@lobechat/types';
@@ -254,8 +255,13 @@ export const createServerAgentToolsEngine = (
 
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = useApplicationBuiltinSearchTool ?? searchMode !== 'off';
-  const imageGenerationEnabled =
+  // Chat mode no longer auto-injects image generation. Opt in by pinning the
+  // tool; native imageOutput models never receive the fallback.
+  const pinnedPluginIds = getActivePluginIds(agentConfig.plugins);
+  const imageGenerationCapable =
     context.isModelSupportToolUse(model, provider) && !modelAbilities?.imageOutput;
+  const imageGenerationEnabled =
+    imageGenerationCapable && pinnedPluginIds.includes(ImageGenerationManifest.identifier);
   // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`
   // (undefined = agent). `custom` = toolset is exactly the agent's plugins.
   const toolMode = resolveToolMode(agentConfig.chatConfig ?? undefined);
@@ -275,14 +281,12 @@ export const createServerAgentToolsEngine = (
     isChatMode,
   );
 
-  // Chat mode: strict outer whitelist. Drop user plugins, alwaysOn tools, and
-  // every other runtime-managed rule. Each entry below still passes through
-  // its own runtime gate (KB needs enabled bases, memory needs global toggle,
-  // web-browsing needs search on). `allowExplicitActivation` is off so the
-  // activator can't smuggle anything else in.
+  // Chat mode: strict outer whitelist. Drop alwaysOn tools and every other
+  // runtime-managed rule. Each entry still passes through its own gate (KB /
+  // memory / search). Image generation is opt-in via a pinned plugin — no
+  // automatic injection. `allowExplicitActivation` is off so the activator
+  // can't smuggle anything else in.
   const chatModeRules = {
-    // Example: Claude can call tools but lacks native imageOutput, so expose the
-    // image-generation fallback; image-output models should use their native path.
     [ImageGenerationManifest.identifier]: imageGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
     [MemoryManifest.identifier]: globalMemoryEnabled,

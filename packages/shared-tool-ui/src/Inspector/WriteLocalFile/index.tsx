@@ -12,6 +12,8 @@ import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
 interface WriteFileArgs {
   content?: string;
+  file_path?: string;
+  filePath?: string;
   path?: string;
 }
 
@@ -20,7 +22,14 @@ export const createWriteLocalFileInspector = (translationKey: string) => {
     ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
       const { t } = useTranslation('plugin');
 
-      const filePath = args?.path || partialArgs?.path || '';
+      const filePath =
+        args?.path ||
+        args?.filePath ||
+        args?.file_path ||
+        partialArgs?.path ||
+        partialArgs?.filePath ||
+        partialArgs?.file_path ||
+        '';
       const lineCount = args?.content?.split('\n').length;
 
       if (isArgumentsStreaming) {

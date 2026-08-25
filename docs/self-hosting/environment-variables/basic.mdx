@@ -210,37 +210,55 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - Allow access to internal API gateway: `10.0.0.50`
 - Allow access to internal documentation server: `172.16.0.10`
 
-### `NEXT_PUBLIC_ASSET_PREFIX`
+### `ASSET_BASE_URL`
 
 - Type: Optional
-- Description: The path access prefix for static resources can be set to the URL for CDN access. For more details, please refer to: [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix)
+- Description: Base URL for build output (Next.js static assets and the SPA bundles). Set it to a CDN or object-storage origin to serve build assets from somewhere other than the app itself. It maps to Next.js [assetPrefix](https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix). Leave it unset to serve everything from the app origin.
 - Default: -
 - Example: `https://cdn.example.com`
 
-## Visual Understanding
+<Callout type={'warning'}>
+  When this points at a different origin than the app, that host **must** respond with an
+  `Access-Control-Allow-Origin` header covering your app's origin. Once an asset base URL is
+  configured, LobeHub emits `crossorigin` on the generated `<script>` and `<link>` tags — a host
+  without the header makes the browser refuse to execute those assets, leaving a blank page. It also
+  means script errors from those files reach error monitoring with a real stack instead of an opaque
+  `Script error.` frame.
+</Callout>
 
-### `VISUAL_UNDERSTANDING_PROVIDER`
+### `NEXT_PUBLIC_ASSET_PREFIX`
+
+- Type: Optional, **deprecated** — use `ASSET_BASE_URL` instead
+- Description: Previous name for `ASSET_BASE_URL`. Still used as a fallback when `ASSET_BASE_URL` is unset, and carries the same cross-origin requirement described above.
+- Default: -
+- Example: `https://cdn.example.com`
+
+## Multimodal Understanding
+
+### `MULTIMODAL_UNDERSTANDING_PROVIDER`
 
 - Type: Optional
-- Description: Provider ID of the fallback visual understanding model. Configure this together with `VISUAL_UNDERSTANDING_MODEL` to let models without native image or video understanding inspect uploaded visual media through the built-in visual understanding tool.
+- Description: Provider ID of the fallback multimodal understanding model. Configure this together with `MULTIMODAL_UNDERSTANDING_MODEL` to let models without native audio, image, or video understanding inspect uploaded media through the built-in multimodal understanding tool.
 - Default: -
 - Example: `openai`, `google`, or `ollama`
 
-### `VISUAL_UNDERSTANDING_MODEL`
+### `MULTIMODAL_UNDERSTANDING_MODEL`
 
 - Type: Optional
-- Description: Model ID used by the fallback visual understanding tool. This model should support the visual media types you want to analyze. The feature is enabled only when both `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` are configured.
+- Description: Model ID used by the fallback multimodal understanding tool. This model should support the media types you want to analyze. The feature is enabled only when both `MULTIMODAL_UNDERSTANDING_PROVIDER` and `MULTIMODAL_UNDERSTANDING_MODEL` are configured.
 - Default: -
-- Example: `gpt-4o`, `gemini-2.5-flash`, or your local visual model ID
+- Example: `gemini-2.5-flash` or your local multimodal model ID
 
 Configuration example:
 
 ```bash
-VISUAL_UNDERSTANDING_PROVIDER=google
-VISUAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+MULTIMODAL_UNDERSTANDING_PROVIDER=google
+MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
 ```
 
-When this feature is enabled, users can upload images or videos while using a model that does not have native visual capabilities, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
+For migration compatibility, `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` remain supported as legacy aliases. When both old and new variables are set, `MULTIMODAL_UNDERSTANDING_*` takes precedence.
+
+When this feature is enabled, users can upload audio, images, or videos while using a model that does not have the corresponding native multimodal capability, as long as the active model supports tool use. File upload still requires the normal file storage configuration for your deployment.
 
 ## AI Image
 

@@ -3,15 +3,16 @@ import { Flexbox, TooltipGroup } from '@lobehub/ui';
 import React, { memo, Suspense, useCallback } from 'react';
 
 import DragUploadZone, { type DroppedLocalPath, useUploadFiles } from '@/components/DragUploadZone';
-import Loading from '@/components/Loading/BrandTextLoading';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import { insertLocalPathTags } from '@/features/ChatInput/InputEditor/insertLocalFileTags';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import {
-  agentChatConfigSelectors,
-  agentSelectors,
+  agentByIdSelectors,
   builtinAgentSelectors,
+  chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
@@ -25,11 +26,13 @@ const wrapperStyle: React.CSSProperties = {
 };
 
 const ChatConversation = memo(() => {
-  const agentId = useAgentStore((s) => s.activeAgentId || '');
-  const model = useAgentStore(agentSelectors.currentAgentModel);
-  const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const isLocalSystemEnabled = useAgentStore(agentChatConfigSelectors.isLocalSystemEnabled);
+  const { agentId, topicId } = useAgentContext();
+  const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
+  const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
+  const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  const isLocalSystemEnabled = useAgentStore(
+    chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
+  );
 
   // Drag-drop upload bypasses the (view-only-disabled) input editor, so the
   // drop zone itself follows the same per-resource General-access rules as the
@@ -43,7 +46,7 @@ const ChatConversation = memo(() => {
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
   const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
-  const workingDirectory = useEffectiveWorkingDirectory(agentId);
+  const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
 
   const enableLocalPathReference =
     isDesktop && !!workingDirectory && (isHeterogeneous || isLocalSystemEnabled);
@@ -63,7 +66,7 @@ const ChatConversation = memo(() => {
   );
 
   return (
-    <Suspense fallback={<Loading debugId="Agent > ChatConversation" />}>
+    <Suspense fallback={<ConversationSegmentSkeleton />}>
       {canUseResource ? (
         <DragUploadZone
           enableLocalPathReference={enableLocalPathReference}

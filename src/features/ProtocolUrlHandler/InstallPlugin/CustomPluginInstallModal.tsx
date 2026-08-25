@@ -1,7 +1,7 @@
 'use client';
 
-import { Alert, Block, Flexbox, Text } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { Alert, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

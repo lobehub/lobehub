@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -83,12 +84,16 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
 
   const [expanded, setExpanded] = useState(false);
-  const [read, setRead] = useState(Boolean(brief.readAt));
+  const [localRead, setLocalRead] = useState(false);
+  // Derived, not snapshotted: the day digest keeps resolved briefs in the list,
+  // and a bulk mark-all-read updates them through an SWR revalidation — a
+  // useState seeded from the first render would never pick that up.
+  const read = localRead || Boolean(brief.readAt) || Boolean(brief.resolvedAt);
 
   const toggle = useCallback(() => {
     setExpanded((prev) => {
       if (!prev && !read) {
-        setRead(true);
+        setLocalRead(true);
         void markBriefRead(brief.id);
       }
       return !prev;
@@ -108,7 +113,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
               // Fade the whole row once read: the leading glyph dims with the title
               // so a scanned item recedes as one, not just a lighter headline.
               style={{ flex: 'none', opacity: read ? 0.5 : 1 }}
-              title={brief.agent.title ?? undefined}
+              title={agentDisplayName(brief.agent)}
             />
           ) : (
             <BriefIcon muted={read} type={brief.type} />

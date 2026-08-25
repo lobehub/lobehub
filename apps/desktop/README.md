@@ -84,15 +84,15 @@ pnpm package:local # Local testing package
 The renderer is served from the custom `app://renderer` origin, and Chromium
 refuses to match extension content scripts against custom schemes — so the
 React DevTools **browser extension can never attach** here, no matter how it is
-installed. Use the standalone bridge instead, in two terminals:
+installed. Use the standalone bridge instead:
 
 ```bash
-pnpm react-devtools     # standalone UI, listens on ws://localhost:8097
-pnpm dev:react-devtools # dev run that injects the bridge script into the renderer
+pnpm react-devtools # standalone UI, listens on ws://localhost:8097
+pnpm dev            # dev mode injects the bridge script automatically
 ```
 
-The bridge script is only injected while `DESKTOP_REACT_DEVTOOLS=1` is set, and
-never in production builds.
+The bridge script is only injected during dev (`vite serve`), and never in
+production builds.
 
 ## 🎯 Release Channels
 

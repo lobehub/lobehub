@@ -12,7 +12,37 @@
  * `@lobechat/agent-gateway-client` (which is a browser-side WebSocket client
  * that producers have no business pulling in).
  */
+export {
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  CodexAppServerClient,
+  type CodexAppServerClientOptions,
+  CodexAppServerConnectionError,
+  CodexAppServerRpcError,
+  CodexThreadSession,
+  type CodexThreadSessionOptions,
+  getCodexAppServerUnsupportedArgs,
+  isCodexAppServerCompatibilityError,
+} from '../codex';
 export type { UsageData } from '../types';
+export {
+  ACP_PROTOCOL_VERSION,
+  AcpAgentSession,
+  type AcpAgentSessionConfig,
+  type AcpAgentSessionOptions,
+  type AcpPermissionOption,
+  parseAcpPermissionOptions,
+  selectAcpPermissionOption,
+} from './acpAgentSession';
+export {
+  type AcpRpcErrorData,
+  type AcpRpcMessage,
+  AcpRpcResponseError,
+  AcpServerRequestError,
+  AcpStdioClient,
+  type AcpStdioClientOptions,
+} from './acpStdioClient';
 export {
   AgentStreamPipeline,
   type AgentStreamPipelineOptions,
@@ -21,6 +51,7 @@ export {
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,
+  HETERO_WORKING_DIRECTORY_NOT_FOUND,
   isHeteroStatusGuideErrorData,
 } from './classifyProcessFailure';
 export {
@@ -44,10 +75,26 @@ export {
   resolveCodexInitialModel,
 } from './codexModel';
 export {
+  buildCursorAcpArgs,
+  buildCursorAcpPrompt,
+  CursorAcpSession,
+  type CursorAcpSessionOptions,
+  type CursorAcpTextPromptBlock,
+  isCursorAcpSessionNotFoundError,
+  normalizeCursorQuestion,
+} from './cursorAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,
 } from './fileStoreImageUploader';
+export {
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  type GrokAcpContentBlock,
+  GrokAcpSession,
+  type GrokAcpSessionOptions,
+} from './grokAcpSession';
 export {
   type AgentContentBlock,
   type AgentImageBlock,
@@ -79,15 +126,31 @@ export {
 } from './ensureResumeTranscript';
 export {
   AMP_BASE_ARGS,
+  buildQoderArgs,
   CLAUDE_CODE_BASE_ARGS,
+  CODEBUDDY_BASE_ARGS,
   CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
+  KIMI_CODE_BASE_ARGS,
   OPENCODE_BASE_ARGS,
+  PI_BASE_ARGS,
+  QODER_BASE_ARGS,
+  type QoderSpawnArgsOptions,
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,
+  spawnTraeAcpAgent,
 } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
+export {
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
+  type TraeAcpImagePromptBlock,
+  type TraeAcpPromptBlock,
+  TraeAcpSession,
+  type TraeAcpSessionOptions,
+  type TraeAcpTextPromptBlock,
+} from './traeAcpSession';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

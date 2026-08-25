@@ -200,6 +200,23 @@ describe('GET handler', () => {
       expect(responseBody.body.provider).toBe('githubcopilot');
     });
 
+    it('should return bad request for a persisted invalid provider baseURL', async () => {
+      const mockParams = Promise.resolve({ provider: 'custom-provider' });
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
+        error: { message: 'Invalid provider baseURL' },
+        errorType: ChatErrorType.BadRequest,
+      });
+
+      const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(responseBody.errorType).toBe(ChatErrorType.BadRequest);
+      expect(responseBody.body.message).toBe('Invalid provider baseURL');
+      expect(responseBody.body.provider).toBe('custom-provider');
+    });
+
     it('should include provider in error response', async () => {
       const mockParams = Promise.resolve({ provider: 'openai' });
 

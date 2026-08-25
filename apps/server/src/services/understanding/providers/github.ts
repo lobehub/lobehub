@@ -1,4 +1,4 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
+import { getConnectorErrorMessage, isConnectorErrorRetryable } from '@lobechat/connector-data';
 import type { GitHubUserContext } from '@lobechat/connector-data/github';
 import { toGitHubUserContextMarkdown } from '@lobechat/connector-data/github';
 
@@ -12,6 +12,7 @@ interface SupplementalOperation {
 }
 
 export const githubUnderstandingProvider: UnderstandingProvider = {
+  connectionSource: 'composio',
   id: 'github',
   collect: async ({ connectorData }) => {
     const client = await connectorData.getGitHubClient();
@@ -85,10 +86,10 @@ export const githubUnderstandingProvider: UnderstandingProvider = {
       return [
         {
           code: operations[index].code,
-          message: operations[index].message,
+          message: getConnectorErrorMessage(result.reason) ?? operations[index].message,
           operation: operations[index].key,
           provider: 'github',
-          retryable: result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+          retryable: isConnectorErrorRetryable(result.reason),
         },
       ];
     });

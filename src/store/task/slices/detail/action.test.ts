@@ -390,6 +390,16 @@ describe('TaskDetailSliceAction', () => {
       expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-new-parent']);
     });
 
+    it('should refresh the list after changing priority', async () => {
+      const refreshTaskList = vi.fn().mockResolvedValue(undefined);
+      useTaskStore.setState({ refreshTaskList } as any);
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-1', { priority: 2 });
+
+      expect(refreshTaskList).toHaveBeenCalled();
+    });
+
     it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
       const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({

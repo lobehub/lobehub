@@ -8,15 +8,20 @@ exports[`tab context menu ownership > goes native on macOS desktop (plain string
     "type": "normal",
   },
   {
+    "id": "1",
+    "label": "tab.openInSplitView",
+    "type": "normal",
+  },
+  {
     "type": "separator",
   },
   {
-    "id": "2",
+    "id": "3",
     "label": "tab.closeCurrentTab",
     "type": "normal",
   },
   {
-    "id": "3",
+    "id": "4",
     "label": "tab.closeOtherTabs",
     "type": "normal",
   },
@@ -24,12 +29,12 @@ exports[`tab context menu ownership > goes native on macOS desktop (plain string
     "type": "separator",
   },
   {
-    "id": "5",
+    "id": "6",
     "label": "tab.closeLeftTabs",
     "type": "normal",
   },
   {
-    "id": "6",
+    "id": "7",
     "label": "tab.closeRightTabs",
     "type": "normal",
   },

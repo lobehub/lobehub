@@ -1,8 +1,8 @@
 'use client';
 
+import SettingsContextProvider from '@/features/Settings/Layout/ContextProvider';
+import Page from '@/features/Settings/provider/(list)';
 import WorkspaceAdminOnly from '@/features/WorkspaceSetting/AdminOnly';
-import SettingsContextProvider from '@/routes/(main)/settings/_layout/ContextProvider';
-import Page from '@/routes/(main)/settings/provider/(list)';
 
 const WorkspaceProviderSetting = () => (
   <WorkspaceAdminOnly>

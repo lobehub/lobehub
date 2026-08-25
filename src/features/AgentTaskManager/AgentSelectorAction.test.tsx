@@ -113,11 +113,11 @@ vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => mocks.fetchAgentList(),
 }));
 
-vi.mock('@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar', () => ({
+vi.mock('@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar', () => ({
   default: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} data-testid="avatar" />,
 }));
 
-vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
+vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   AgentModalProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 

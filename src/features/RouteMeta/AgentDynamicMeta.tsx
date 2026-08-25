@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { useTranslation } from 'react-i18next';
 
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
@@ -19,9 +20,11 @@ const useTopicTitle = (
   useChatStore((state) => {
     if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
 
-    const topic = state.topicDataMap[topicMapKey({ agentId })]?.items?.find(
-      (item) => item.id === topicId,
-    );
+    // Archived (completed) topics are excluded from the list fetch — fall back
+    // to the by-id detail cache filled by `useFetchTopicDetail`.
+    const topic =
+      state.topicDataMap[topicMapKey({ agentId })]?.items?.find((item) => item.id === topicId) ??
+      state.topicDetailMap[topicId];
     return topic?.title || undefined;
   });
 
@@ -37,7 +40,7 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   });
   const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
   const hasMeta = Object.keys(meta).length > 0;
-  const agentTitle = hasMeta ? meta.title : undefined;
+  const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
 
   usePublishDynamicRouteMeta(
     {
@@ -71,7 +74,7 @@ const createAgentSectionDynamicMeta = (titleKey: string) => {
       return agentSelectors.getAgentMetaById(agentId)(state);
     });
     const hasMeta = Object.keys(meta).length > 0;
-    const agentTitle = hasMeta ? meta.title : undefined;
+    const agentTitle = hasMeta ? agentDisplayName(meta) : undefined;
 
     usePublishDynamicRouteMeta(
       {
@@ -91,6 +94,7 @@ export const TopicsDynamicMeta = createAgentSectionDynamicMeta('navigation.topic
 export const ProfileDynamicMeta = createAgentSectionDynamicMeta('navigation.profile');
 export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.channels');
 export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
+export const SelfLearningDynamicMeta = createAgentSectionDynamicMeta('navigation.selfLearning');
 export const PermissionDynamicMeta = createAgentSectionDynamicMeta('navigation.permission');
 
 export default AgentDynamicMeta;

@@ -9,12 +9,6 @@ import {
 
 const mocks = vi.hoisted(() => ({
   getServerFeatureFlagsStateFromRuntimeConfig: vi.fn(),
-  getUserPreference: vi.fn(),
-  UserModel: vi.fn(),
-}));
-
-vi.mock('@/database/models/user', () => ({
-  UserModel: mocks.UserModel,
 }));
 
 vi.mock('@/server/featureFlags', () => ({
@@ -24,14 +18,8 @@ vi.mock('@/server/featureFlags', () => ({
 describe('isAgentSignalEnabledForUser', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.UserModel.mockImplementation(() => ({
-      getUserPreference: mocks.getUserPreference,
-    }));
     mocks.getServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({
       enableAgentSelfIteration: true,
-    });
-    mocks.getUserPreference.mockResolvedValue({
-      lab: { enableAgentSelfIteration: false },
     });
   });
 
@@ -39,13 +27,11 @@ describe('isAgentSignalEnabledForUser', () => {
    * @example
    * expect(result).toBe(true).
    */
-  it('uses the feature flag as the user-level Agent Signal gate when lab preference is disabled', async () => {
+  it('uses the feature flag as the user-level Agent Signal gate', async () => {
     const result = await isAgentSignalEnabledForUser({} as never, 'user-1');
 
     expect(result).toBe(true);
     expect(mocks.getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-1');
-    expect(mocks.UserModel).not.toHaveBeenCalled();
-    expect(mocks.getUserPreference).not.toHaveBeenCalled();
   });
 });
 

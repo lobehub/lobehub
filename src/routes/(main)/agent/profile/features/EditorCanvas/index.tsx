@@ -452,7 +452,6 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
               // bubbled click, and Lexical's focus() moves the caret to the
               // document end when there is no selection — scrolling the page to
               // the bottom. Toggling the view mode must not move the caret.
-              // See LOBE-12593.
               onClick={(e) => e.stopPropagation()}
             >
               <ActionIcon

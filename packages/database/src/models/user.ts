@@ -17,6 +17,7 @@ import { today } from '@/utils/time';
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
 import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -343,6 +344,15 @@ export class UserModel {
   };
 
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
+    // A pending agent-TRANSFER backfill means message rows moved to (or from)
+    // this user still carry the other side's scope snapshot; cascading the
+    // delete now would destroy history the transfer already re-homed. Transfer
+    // is admin-initiated and drains in minutes — the delete can simply be
+    // retried afterwards. Pending `copy` jobs do not block: they duplicate
+    // rather than move, and both sides self-heal (see `isPendingTransfer`).
+    if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
     return db.delete(users).where(eq(users.id, id));
   };
 

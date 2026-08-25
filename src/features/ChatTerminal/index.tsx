@@ -5,6 +5,7 @@ import { DraggablePanel } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { lazy, memo, Suspense, useEffect, useState } from 'react';
 
+import { useToggleTerminalPanelHotkey } from '@/hooks/useHotkeys';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -32,6 +33,8 @@ const COLLAPSE_UNMOUNT_DELAY = 300;
  * with per-topic tab groups. Desktop-only.
  */
 const ChatTerminalPanel = memo(() => {
+  useToggleTerminalPanelHotkey();
+
   const [show, height, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.showTerminalPanel(s),
     systemStatusSelectors.terminalPanelHeight(s),

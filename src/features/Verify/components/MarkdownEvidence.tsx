@@ -1,20 +1,10 @@
 'use client';
 
-import {
-  Center,
-  Drawer,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Markdown,
-  MaskShadow,
-  Text,
-} from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { useSize } from 'ahooks';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronsDownUpIcon, ChevronsUpDownIcon, FileText } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { Center, Flexbox, Highlighter, Icon, Markdown, Text } from '@lobehub/ui';
+import { Drawer } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ChevronRight, FileText } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -36,18 +26,62 @@ export const filenameFromUrl = (url: string): string => {
   }
 };
 
-/** Same fold threshold as the task brief summary — the style this mirrors. */
-const COLLAPSED_MAX_HEIGHT = 180;
-
 const styles = createStaticStyles(({ css }) => ({
-  expandLink: css`
-    align-self: center;
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
+  foldBody: css`
+    padding-block: 4px 8px;
+    padding-inline: 22px 0;
+  `,
+  /* Reviewer-directed: no fill, no border — the row is just a line of text
+     with a chevron; the surrounding check card provides the container. */
+  foldCard: css`
+    overflow: hidden;
+    border-radius: ${cssVar.borderRadius};
+  `,
+  foldChevron: css`
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+    transition: transform 160ms ease;
+  `,
+  foldChevronOpen: css`
+    transform: rotate(90deg);
+  `,
+  foldHeader: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    width: 100%;
+    padding-block: 4px;
+    padding-inline: 0;
+    border: none;
+
+    text-align: start;
+
+    background: transparent;
+
+    /* No fill and no border by design — the hover feedback lives on the text. */
+    &:hover [data-fold-title] {
+      color: ${cssVar.colorText};
+    }
+  `,
+  foldTitle: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    line-height: 1.35;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    transition: color 120ms ease;
   `,
   docViewer: css`
     overflow: auto;
-    height: 100%;
+    flex: 1;
+
+    min-height: 0;
     padding-block: 12px;
     padding-inline: 16px;
   `,
@@ -105,49 +139,87 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/** Content small enough that folding it would cost more than it saves. */
+const INLINE_RENDER_MAX_CHARS = 160;
+
 /**
- * Inline prose evidence in the task-brief style: bare body markdown (no tinted
- * box), folded behind a mask + expand button once it outgrows the threshold.
+ * The collapsed row's label: the first meaningful line of the document, with
+ * markdown syntax stripped so it reads as a sentence, not source. Fence markers
+ * and blank lines are skipped — a document that opens with a code block should
+ * be labeled by its first code line, not by "```bash".
+ */
+export const evidenceTitleFromMarkdown = (content: string): string => {
+  for (const raw of content.split('\n')) {
+    let line = raw.trim();
+    if (!line || line.startsWith('```') || /^-{3,}$/.test(line)) continue;
+    line = line
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^(?:[-*+]|\d+[.)])\s+/, '')
+      .replace(/^>\s*/, '')
+      .replaceAll(/\*\*([^*]+)\*\*/g, '$1')
+      .replaceAll(/\*([^*]+)\*/g, '$1')
+      .replaceAll(/`([^`]+)`/g, '$1')
+      .replaceAll(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .trim();
+    if (line) return line.length > 160 ? `${line.slice(0, 160)}…` : line;
+  }
+  return '';
+};
+
+/**
+ * Inline prose evidence, folded to ONE titled row by default — the first line
+ * of the document is the label, the click is the disclosure. Expanding renders
+ * the full text in place, typographically subordinated (small header scale) so
+ * the evidence's own headings never compete with the page's hierarchy.
+ *
+ * Replaces the earlier first-180px preview fold: agent-authored evidence opens
+ * with headings and environment metadata, so a height-cropped preview spent a
+ * card of space showing the least informative part of the document — and read
+ * as noise. Need it → expand; don't → one quiet line.
  */
 export const CollapsibleMarkdownEvidence = memo<{ children: string }>(({ children }) => {
   const { t } = useTranslation('verify');
   const [expanded, setExpanded] = useState(false);
-  const [isOverflow, setIsOverflow] = useState(false);
-  const ref = useRef<any>(null);
-  const size = useSize(ref);
+  const title = useMemo(() => evidenceTitleFromMarkdown(children), [children]);
 
-  useEffect(() => {
-    if (!size) return;
-    setIsOverflow(size.height > COLLAPSED_MAX_HEIGHT);
-  }, [size]);
-
-  const content = (
-    <Markdown fontSize={13} ref={ref} style={{ overflow: 'unset' }} variant={'chat'}>
-      {children}
-    </Markdown>
-  );
+  // A couple of plain lines carry no structure worth hiding — folding them
+  // would trade one click for nothing.
+  const trimmed = children.trim();
+  if (!title || (!trimmed.includes('\n') && trimmed.length <= INLINE_RENDER_MAX_CHARS)) {
+    return (
+      <Markdown fontSize={13} variant={'chat'}>
+        {children}
+      </Markdown>
+    );
+  }
 
   return (
-    <Flexbox gap={4}>
-      {isOverflow && !expanded ? (
-        <MaskShadow size={32} style={{ maxHeight: COLLAPSED_MAX_HEIGHT }}>
-          {content}
-        </MaskShadow>
-      ) : (
-        content
-      )}
-
-      {isOverflow && (
-        <Button
-          className={styles.expandLink}
-          icon={expanded ? ChevronsDownUpIcon : ChevronsUpDownIcon}
-          iconPosition={'end'}
-          size={'small'}
-          type={'fill'}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? t('report.evidence.collapse') : t('report.evidence.expand')}
-        </Button>
+    <Flexbox className={styles.foldCard}>
+      <button
+        aria-expanded={expanded}
+        className={styles.foldHeader}
+        title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
+        type={'button'}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Icon
+          className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
+          icon={ChevronRight}
+          size={14}
+        />
+        <span className={styles.fileCardIcon}>
+          <Icon icon={FileText} size={13} />
+        </span>
+        <span data-fold-title className={styles.foldTitle}>
+          {title}
+        </span>
+      </button>
+      {expanded && (
+        <div className={styles.foldBody}>
+          <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
+            {children}
+          </Markdown>
+        </div>
       )}
     </Flexbox>
   );
@@ -235,15 +307,13 @@ export const EvidenceFileCard = memo<{
       </button>
       {open && (
         <Drawer
-          destroyOnHidden
           containerMaxWidth={'100%'}
           open={open}
           placement={'right'}
           title={name}
           width={'min(1120px, calc(100vw - 48px))'}
           styles={{
-            body: { height: '100%', padding: 0 },
-            bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden' },
+            bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 },
           }}
           onClose={() => setOpen(false)}
         >

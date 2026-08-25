@@ -47,10 +47,6 @@ describe('applyDesktopViteConfigExtension', () => {
 });
 
 describe('reactDevtoolsPlugin', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   const transformIndexHtml = () => {
     const plugin = reactDevtoolsPlugin() as Plugin & {
       transformIndexHtml: () => IndexHtmlTransformResult;
@@ -59,23 +55,13 @@ describe('reactDevtoolsPlugin', () => {
     return plugin.transformIndexHtml();
   };
 
-  it('injects nothing when DESKTOP_REACT_DEVTOOLS is unset', () => {
-    vi.stubEnv('DESKTOP_REACT_DEVTOOLS', '');
-
-    expect(transformIndexHtml()).toEqual([]);
-  });
-
-  it('injects the standalone bridge script when enabled', () => {
-    vi.stubEnv('DESKTOP_REACT_DEVTOOLS', '1');
-
+  it('injects the standalone bridge script in dev', () => {
     expect(transformIndexHtml()).toEqual([
       { attrs: { src: REACT_DEVTOOLS_BRIDGE_URL }, injectTo: 'head-prepend', tag: 'script' },
     ]);
   });
 
   it('stays out of production builds', () => {
-    vi.stubEnv('DESKTOP_REACT_DEVTOOLS', '1');
-
     expect((reactDevtoolsPlugin() as Plugin).apply).toBe('serve');
   });
 });

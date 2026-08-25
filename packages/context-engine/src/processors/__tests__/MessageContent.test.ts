@@ -970,8 +970,8 @@ describe('MessageContentProcessor', () => {
           role: 'user',
           content: 'Listen',
           audioList: [
-            { url: 'http://example.com/a.mp3', alt: 'a1', id: 'a1' },
-            { url: 'http://example.com/b.mp3', alt: 'a2', id: 'a2' },
+            { url: 'http://example.com/a.mp3', alt: 'a1', durationMs: 2500, id: 'a1' },
+            { url: 'http://example.com/b.mp3', alt: 'a2', durationMs: -1, id: 'a2' },
           ] as ChatAudioItem[],
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -986,8 +986,54 @@ describe('MessageContentProcessor', () => {
       expect(content[0].text).toBe('Listen');
       expect(content[1].type).toBe('audio_url');
       expect(content[1].audio_url.url).toBe('http://example.com/a.mp3');
+      expect(content[1].audio_url.durationMs).toBe(2500);
       expect(content[2].type).toBe('audio_url');
       expect(content[2].audio_url.url).toBe('http://example.com/b.mp3');
+      expect(content[2].audio_url).not.toHaveProperty('durationMs');
+    });
+
+    it('should preserve audio metadata when converting audios to audio_url parts', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-audio',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Listen',
+          audioList: [
+            {
+              alt: 'voice message',
+              codec: 'pcm_s16le',
+              durationMs: 3210,
+              id: 'voice-1',
+              mimeType: 'audio/wav',
+              url: 'http://example.com/voice.wav',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[1]).toEqual({
+        audio_url: {
+          codec: 'pcm_s16le',
+          durationMs: 3210,
+          mimeType: 'audio/wav',
+          url: 'http://example.com/voice.wav',
+        },
+        type: 'audio_url',
+      });
     });
 
     it('should include audios in file context when enabled even if audio not supported', async () => {

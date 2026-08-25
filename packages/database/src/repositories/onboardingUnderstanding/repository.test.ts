@@ -187,6 +187,41 @@ describe('OnboardingUnderstandingRepository', () => {
     repository = new OnboardingUnderstandingRepository(db, userId);
   });
 
+  /** @example A provider workflow failure after collection creates terminal writing state. */
+  it('records writing failure before a generation is prepared', async () => {
+    // ROOT CAUSE:
+    //
+    // A provider workflow can fail after all sources complete but before prepareWriting runs. The
+    // repository previously required an existing writing revision, so its failure callback became a
+    // no-op and the session projected as `processing` forever.
+    //
+    // We fixed this by allowing the current completed fingerprint to initialize failed writing state.
+    await repository.initialize(topicId, sessionId, ['github']);
+    await completeProvider('github', 3);
+
+    const failed = await repository.failWriting({
+      error: {
+        code: 'UNDERSTANDING_WRITING_FAILED',
+        message: 'understanding writing failed',
+        operation: 'writing',
+        provider: 'understanding',
+        retryable: true,
+      },
+      feedbackRevision: 0,
+      generationRevision: 0,
+      sessionId,
+      sourceFingerprint: 'github@1',
+      topicId,
+    });
+
+    expect(failed.writing).toMatchObject({
+      feedbackRevision: 0,
+      generationRevision: 0,
+      sourceFingerprint: 'github@1',
+      status: 'failed',
+    });
+  });
+
   /** @example A fresh onboarding run cannot inherit completed starter-task recommendations. */
   it('removes Understanding and task recommendations together on reset', async () => {
     const taskRecommendations: OnboardingTaskRecommendationSession = {
@@ -250,11 +285,11 @@ describe('OnboardingUnderstandingRepository', () => {
       topicId,
     });
 
-    expect(first.sources).toEqual({
+    expect(first.session.sources).toEqual({
       github: expect.objectContaining({ revision: 0, status: 'pending' }),
-      gmail: expect.objectContaining({ revision: 0, status: 'pending' }),
+      gmail: expect.objectContaining({ revision: 1, status: 'running' }),
     });
-    expect(second.feedback).toEqual({
+    expect(second.session.feedback).toEqual({
       revision: 2,
       turns: [
         expect.objectContaining({
@@ -276,6 +311,68 @@ describe('OnboardingUnderstandingRepository', () => {
         topicId,
       }),
     ).rejects.toThrow('feedback is no longer active');
+  });
+
+  /** @example A newly connected GitHub source runs while a Gmail permission failure stays failed. */
+  it('adds new providers without retrying non-retryable provider failures', async () => {
+    // ROOT CAUSE:
+    //
+    // The original session manifest was immutable during retry. Returning to connector setup and
+    // adding GitHub therefore retried only the existing Gmail failure, while GitHub never entered
+    // the session. Permission failures were also retried even though the OAuth grant had not changed.
+    //
+    // We fixed this with one locked mutation that adds new providers and restarts only failures whose
+    // persisted diagnostics explicitly allow retry.
+    await repository.initialize(topicId, sessionId, ['gmail']);
+    const { revision } = await repository.markProviderRunning(topicId, sessionId, 'gmail');
+    await repository.failProvider({
+      errors: [
+        {
+          code: 'GMAIL_READ_PERMISSION_REQUIRED',
+          message: 'Gmail read permission is required',
+          operation: 'permission',
+          provider: 'gmail',
+          retryable: false,
+        },
+      ],
+      failedCount: 1,
+      providerId: 'gmail',
+      revision,
+      sessionId,
+      succeededCount: 0,
+      topicId,
+    });
+
+    const reconciled = await repository.extend({
+      expectedFeedbackRevision: 0,
+      providerIds: ['gmail', 'github'],
+      sessionId,
+      topicId,
+    });
+
+    expect(reconciled.attempts).toEqual([{ id: 'github', revision: 1 }]);
+    expect(reconciled.session.sources).toMatchObject({
+      github: { errors: [], revision: 1, status: 'running' },
+      gmail: {
+        errors: [expect.objectContaining({ code: 'GMAIL_READ_PERMISSION_REQUIRED' })],
+        revision: 1,
+        status: 'failed',
+      },
+    });
+  });
+
+  /** @example Provider-only revision succeeds without carrying feedback concurrency state. */
+  it('does not require a feedback revision when only providers change', async () => {
+    await repository.initialize(topicId, sessionId, ['github']);
+
+    const revised = await repository.extend({
+      providerIds: ['github', 'gmail'],
+      sessionId,
+      topicId,
+    });
+
+    expect(revised.attempts).toEqual([{ id: 'gmail', revision: 1 }]);
+    expect(revised.session.sources.gmail).toMatchObject({ revision: 1, status: 'running' });
   });
 
   /**

@@ -1,6 +1,5 @@
 'use client';
 
-import { downloadFile } from '@lobechat/utils/client';
 import { FilePlugin, UploadPlugin, useLexicalComposerContext } from '@lobehub/editor';
 import { ActionIcon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
@@ -21,6 +20,7 @@ import { formatSize, formatSpeed, formatTime } from '@/utils/format';
 
 import type { EditorFileUploadTracker } from './editorFileUploadTracker';
 import { createEditorFileUploadTracker } from './editorFileUploadTracker';
+import { openFileDownload } from './fileDownload';
 import type { EditorAttachmentUpload } from './useImageUpload';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -241,7 +241,7 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node, uploadTracker }
     event.stopPropagation();
     event.preventDefault();
     if (!fileUrl) return;
-    void downloadFile(fileUrl, name);
+    openFileDownload(fileUrl);
   };
 
   return (

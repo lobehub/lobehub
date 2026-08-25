@@ -269,7 +269,7 @@ const ReportListItem = memo<{
   item: VerifyReportSummary;
   onReportsChanged: () => Promise<unknown> | unknown;
 }>(({ active, item, onReportsChanged }) => {
-  const { t } = useTranslation(['verify', 'common']);
+  const { t } = useTranslation('verify');
 
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
@@ -285,10 +285,10 @@ const ReportListItem = memo<{
   const total = item.report?.totalChecks ?? planCount;
   const passed = item.report?.passedChecks ?? 0;
   const failed = item.report?.failedChecks ?? 0;
-  const title = item.run.title || t('verify:reports.untitled');
+  const title = item.run.title || t('reports.untitled');
   const time =
     glyph === 'running'
-      ? t('verify:list.running')
+      ? t('list.running')
       : relativeTime(item.report?.generatedAt ?? item.run.createdAt);
 
   const refreshRelatedReports = async () => {
@@ -311,7 +311,7 @@ const ReportListItem = memo<{
 
     const nextTitle = draftTitle.trim();
     if (!nextTitle) {
-      toast.error(t('verify:workspace.renameEmpty'));
+      toast.error(t('workspace.renameEmpty'));
       setDraftTitle(item.run.title || '');
       setEditing(false);
       return;
@@ -327,11 +327,11 @@ const ReportListItem = memo<{
     try {
       await verifyService.updateRunTitle(item.run.id, nextTitle);
       await refreshRelatedReports();
-      toast.success(t('verify:workspace.renameSuccess'));
+      toast.success(t('workspace.renameSuccess'));
       setEditing(false);
     } catch (error) {
       console.error('[verify:renameReport]', error);
-      toast.error(t('verify:workspace.renameError'));
+      toast.error(t('workspace.renameError'));
     } finally {
       isSavingRef.current = false;
       setMutating(false);
@@ -340,10 +340,10 @@ const ReportListItem = memo<{
 
   const deleteReport = () => {
     confirmModal({
-      cancelText: t('common:cancel'),
-      content: t('verify:workspace.deleteConfirmDescription', { title }),
+      cancelText: t('actions.cancel'),
+      content: t('workspace.deleteConfirmDescription', { title }),
       okButtonProps: { danger: true },
-      okText: t('common:delete'),
+      okText: t('actions.delete'),
       onOk: async () => {
         setMutating(true);
         try {
@@ -353,15 +353,15 @@ const ReportListItem = memo<{
             onReportsChanged(),
             mutate(verifyKeys.reportBundle(item.run.id), null, { revalidate: false }),
           ]);
-          toast.success(t('verify:workspace.deleteSuccess'));
+          toast.success(t('workspace.deleteSuccess'));
         } catch (error) {
           console.error('[verify:deleteReport]', error);
-          toast.error(t('verify:workspace.deleteError'));
+          toast.error(t('workspace.deleteError'));
         } finally {
           setMutating(false);
         }
       },
-      title: t('verify:workspace.deleteConfirmTitle'),
+      title: t('workspace.deleteConfirmTitle'),
     });
   };
 
@@ -369,14 +369,14 @@ const ReportListItem = memo<{
     {
       icon: <Icon icon={Pencil} />,
       key: 'rename',
-      label: t('verify:workspace.actions.rename'),
+      label: t('workspace.actions.rename'),
       onClick: startRename,
     },
     {
       danger: true,
       icon: <Icon icon={Trash2} />,
       key: 'delete',
-      label: t('verify:workspace.actions.delete'),
+      label: t('workspace.actions.delete'),
       onClick: deleteReport,
     },
   ];
@@ -418,7 +418,7 @@ const ReportListItem = memo<{
             {failed > 0 ? (
               <>
                 {' · '}
-                <em>{t('verify:list.failedCount', { count: failed })}</em>
+                <em>{t('list.failedCount', { count: failed })}</em>
               </>
             ) : null}
           </span>
@@ -440,11 +440,7 @@ const ReportListItem = memo<{
           placement={'bottomRight'}
           popupProps={{ style: { minWidth: 140 } }}
         >
-          <ActionIcon
-            icon={MoreHorizontal}
-            size={'small'}
-            title={t('verify:workspace.actions.more')}
-          />
+          <ActionIcon icon={MoreHorizontal} size={'small'} title={t('workspace.actions.more')} />
         </DropdownMenu>
       }
       icon={

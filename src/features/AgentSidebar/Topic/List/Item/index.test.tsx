@@ -9,6 +9,7 @@ import TopicItem from './index';
 
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
 const prefetchMessagesMock = vi.hoisted(() => vi.fn());
+const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undefined }));
 const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
@@ -108,20 +109,22 @@ vi.mock('@/routes/(main)/agent/channel/const', () => ({
   getPlatformIcon: () => null,
 }));
 vi.mock('@/store/agent', () => ({
-  // `agentMap` is read by `agentSelectors.isCurrentAgentHeterogeneous` →
-  // `currentAgentConfig`, which would otherwise throw on `undefined.agentMap`.
+  // `agentMap` is read by `agentSelectors.currentAgentVisibility`.
   useAgentStore: (
     selector: (state: { activeAgentId: string; agentMap: Record<string, unknown> }) => unknown,
   ) => selector({ activeAgentId: 'agt_test', agentMap: {} }),
 }));
-vi.mock('@/store/chat', () => ({
-  useChatStore: (
+vi.mock('@/store/chat', () => {
+  const useChatStore = (
     selector: (state: {
+      activeThreadId?: string;
+      activeTopicId?: string;
       prefetchMessages: typeof prefetchMessagesMock;
-      topicLoadingIds: string[];
     }) => unknown,
-  ) => selector({ prefetchMessages: prefetchMessagesMock, topicLoadingIds: [] }),
-}));
+  ) => selector({ activeTopicId: activeTopicIdMock.value, prefetchMessages: prefetchMessagesMock });
+  useChatStore.getState = () => ({ prefetchMessages: prefetchMessagesMock });
+  return { useChatStore };
+});
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     getAgentRuntimeStartTimeByContext: () => () => runningStartTimeMock.value,
@@ -129,12 +132,15 @@ vi.mock('@/store/chat/selectors', () => ({
     isAgentRuntimeRunningByContext: () => () => agentRuntimeRunningMock.value,
     isAgentRuntimeVisiblyRunningByContext: () => () => false,
     isTopicUnreadCompleted: () => () => topicUnreadCompletedMock.value,
+    isTopicVisiblyRunning: () => () => false,
   },
 }));
-vi.mock('@/store/electron', () => ({
-  useElectronStore: (selector: (state: { addTab: () => void }) => unknown) =>
-    selector({ addTab: vi.fn() }),
-}));
+vi.mock('@/store/electron', () => {
+  const useElectronStore = (selector: (state: { addTab: () => void }) => unknown) =>
+    selector({ addTab: vi.fn() });
+  useElectronStore.getState = () => ({ addTab: vi.fn() });
+  return { useElectronStore };
+});
 vi.mock('../../hooks/useTopicNavigation', () => ({
   useTopicNavigation: () => useTopicNavigationMock(),
 }));
@@ -162,6 +168,7 @@ vi.mock('../../TopicListContent/ThreadList', () => ({
 describe('TopicItem active state', () => {
   afterEach(() => {
     prefetchMessagesMock.mockClear();
+    activeTopicIdMock.value = undefined;
     agentRuntimeRunningMock.value = false;
     runningStartTimeMock.value = undefined;
     topicUnreadCompletedMock.value = false;
@@ -178,13 +185,14 @@ describe('TopicItem active state', () => {
       urlTopicId: 'tpc_test',
     });
 
-    render(<TopicItem active={false} id="tpc_test" title="Topic" />);
+    render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
     expect(screen.getByTestId('topic-thread-list')).toHaveAttribute('data-topic-id', 'tpc_test');
   });
 
   it('does not highlight a stale topic while visiting non-topic agent sub-routes', () => {
+    activeTopicIdMock.value = 'tpc_test';
     useTopicNavigationMock.mockReturnValue({
       isInAgentSubRoute: true,
       isInTopicContextRoute: false,
@@ -192,7 +200,7 @@ describe('TopicItem active state', () => {
       routeTopicId: undefined,
     });
 
-    render(<TopicItem active id="tpc_test" title="Topic" />);
+    render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'false');
     expect(screen.queryByTestId('topic-thread-list')).not.toBeInTheDocument();
@@ -232,6 +240,7 @@ describe('TopicItem active state', () => {
   });
 
   it('preserves the masked running-tail icon state for the active topic', () => {
+    activeTopicIdMock.value = 'tpc_test';
     agentRuntimeRunningMock.value = true;
     useTopicNavigationMock.mockReturnValue({
       isInAgentSubRoute: false,
@@ -241,10 +250,23 @@ describe('TopicItem active state', () => {
       urlTopicId: 'tpc_test',
     });
 
-    render(<TopicItem active id="tpc_test" status="running" title="Topic" />);
+    render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
     expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
-    expect(screen.getByTestId('topic-item-icon')).toHaveAttribute('data-icon', 'Hash');
+    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
+  });
+
+  it('keeps idle topics iconless', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
   });
 
   it('prefetches messages when a topic is an unread completion', async () => {
@@ -354,7 +376,6 @@ describe('TopicItem active state', () => {
 
   it.each([
     ['scheduled', 'Clock'],
-    ['paused', 'CirclePause'],
     ['completed', 'CircleCheck'],
   ] as const)('keeps the %s status above linked pull request metadata', (status, icon) => {
     topicMetaCardMock.value = { pullRequest: { state: 'open' } };

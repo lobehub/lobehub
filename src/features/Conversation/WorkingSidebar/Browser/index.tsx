@@ -26,6 +26,7 @@ import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
+import type { ComposerTarget } from '../../types';
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import {
@@ -151,11 +152,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface BrowserPaneProps {
   /** The conversation the chat input belongs to — screenshots are attached there. */
   agentId?: string;
+  composerTarget: ComposerTarget;
   onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
   sessionId: string;
 }
 
-const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, sessionId }) => {
+const BrowserPane = memo<BrowserPaneProps>((props) => {
+  const { agentId, composerTarget, onMetadataChange, sessionId } = props;
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
@@ -254,6 +257,8 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
   };
 
   const pickElementContext = async () => {
+    if (!composerTarget.writable) return;
+
     setIsPicking(true);
     try {
       const result = await electronBrowserSidebarService.pickElement({
@@ -266,13 +271,14 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
       }
       if (result.cancelled || !result.element) return;
 
-      useFileStore.getState().addChatContextSelection(
-        createElementContext({
+      useFileStore.getState().addChatContextSelection({
+        contextKey: composerTarget.contextKey,
+        selection: createElementContext({
           element: result.element,
           elementTitle: t('workingPanel.browser.context.elementTitle'),
           id: `browser-element-${nanoid(6)}`,
         }),
-      );
+      });
       toast.success(t('workingPanel.browser.context.elementAdded'));
       focusChatInput();
     } catch (error) {
@@ -403,7 +409,7 @@ const BrowserPane = memo<BrowserPaneProps>(({ agentId, onMetadataChange, session
             />
           ) : (
             <ActionIcon
-              disabled={!state.attached || state.isLoading}
+              disabled={!state.attached || state.isLoading || !composerTarget.writable}
               icon={SquareDashedMousePointer}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}
               title={t('workingPanel.browser.context.pickElement')}

@@ -15,6 +15,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   getDisabledPluginIds,
+  type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
@@ -33,7 +34,7 @@ import {
   agentChatConfigSelectors,
   agentSelectors,
 } from '@/store/agent/selectors';
-import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -73,6 +74,7 @@ const providersWithDeploymentName = new Set<string>([
   ModelProvider.VolcengineCodingPlan,
 ]);
 export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   agentId?: string;
   groupId?: string;
   messages: UIChatMessage[];
@@ -137,6 +139,7 @@ class ChatService {
       messages,
       agentId,
       groupId,
+      additionalContexts,
       topicId,
       resolvedAgentConfig,
       ...params
@@ -300,6 +303,7 @@ class ChatService {
       enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
+      additionalContexts,
       // historyCount is number of history messages; add 1 for current user message
       historyCount: (chatConfig.historyCount ?? 20) + 1,
       // Page editor context from agent runtime
@@ -322,11 +326,32 @@ class ChatService {
 
     // ============  3. process extend params   ============ //
 
+    // Make sure the user's saved model-instance reasoning config is loaded
+    // before the synchronous resolution below — after a reload the
+    // ReasoningConfigLoader SWR fetch may still be in flight when the user
+    // sends the first message. No-op once cached; failures fall back to
+    // level defaults.
+    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
+
     const extendParams = resolveModelExtendParams({
       chatConfig,
       model: payload.model,
       provider: payload.provider!,
+      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
     });
+
+    // For models governed by the reasoning extend-params family the user-level
+    // model-instance config is the single source of truth, so drop the legacy
+    // per-agent Advanced `params.reasoning_effort` — otherwise a stale agent
+    // value would leak into the payload whenever no instance value overlays it.
+    if (
+      aiModelSelectors.isModelHasReasoningExtendParams(
+        payload.model,
+        payload.provider!,
+      )(getAiInfraStoreState())
+    ) {
+      delete (params as Record<string, unknown>).reasoning_effort;
+    }
 
     return {
       options: { ...options, agentId: targetAgentId, topicId },

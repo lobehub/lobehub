@@ -2,26 +2,48 @@ import { readFile } from 'node:fs/promises';
 
 import debug from 'debug';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
-import { getDocument, version } from 'pdfjs-dist/legacy/build/pdf.mjs';
-// @ts-ignore
-import * as _pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+import type * as Pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { TextContent } from 'pdfjs-dist/types/src/display/api';
 
 import type { DocumentPage, FileLoaderInterface } from '../../types';
+import { installDomMatrixPolyfill } from './domMatrix';
 import { promptTemplate } from './prompt';
 
 const log = debug('file-loaders:pdf');
+
+type PdfjsModule = typeof Pdfjs;
+
+let pdfjsPromise: Promise<PdfjsModule> | null = null;
+
+/**
+ * pdfjs-dist reads `globalThis.DOMMatrix` while its own module body evaluates, so
+ * the polyfill has to land first. A static import would hoist above any setup
+ * statement, hence the deferred import.
+ */
+const loadPdfjs = (): Promise<PdfjsModule> => {
+  pdfjsPromise ??= (async () => {
+    installDomMatrixPolyfill();
+
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    // @ts-ignore
+    await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+
+    return pdfjs;
+  })();
+
+  return pdfjsPromise;
+};
 
 /**
  * Loads PDF files page by page using the official pdfjs-dist library.
  */
 export class PdfLoader implements FileLoaderInterface {
   private pdfInstance: PDFDocumentProxy | null = null;
-  private pdfjsWorker = _pdfjsWorker;
 
   private async getPDFFile(filePath: string) {
     // GlobalWorkerOptions.workerSrc should have been set at the module level.
     // We are now relying on pdfjs-dist to use this path when it creates a worker.
+    const { getDocument } = await loadPdfjs();
 
     log('Reading PDF file:', filePath);
     const dataBuffer = await readFile(filePath);
@@ -141,6 +163,7 @@ export class PdfLoader implements FileLoaderInterface {
 
   async attachDocumentMetadata(filePath: string): Promise<any> {
     log('Attaching document metadata for PDF:', filePath);
+    const { version } = await loadPdfjs();
     const pdf: PDFDocumentProxy = await this.getPDFFile(filePath);
 
     log('Getting PDF metadata');

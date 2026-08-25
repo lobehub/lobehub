@@ -35,7 +35,7 @@ interface InputAreaProps {
 
 const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: InputAreaProps) => {
   const { t } = useTranslation('home');
-  const { loading, send, agentId } = useSend(mode);
+  const { agentId, contextSelectionKey, loading, send } = useSend(mode);
   // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
   // has a listener after toggleFile / toggleKnowledgeBase — otherwise the
   // Library submenu doesn't reflect server-side toggles. Pass `agentId`
@@ -79,6 +79,7 @@ const InputArea = ({ inputValue, mode, onInputValueChange, onModeChange }: Input
     <div className={styles.inputSlot}>
       <EditorSlot
         agentId={agentId}
+        contextSelectionKey={contextSelectionKey}
         initialValue={inputValue}
         isAgentConfigLoading={isAgentConfigLoading}
         loading={loading}

@@ -1,6 +1,8 @@
-import { Avatar as A } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
+
+import A from '@/components/Avatar';
 
 import { type ChatItemProps } from '../type';
 
@@ -16,16 +18,19 @@ export interface AvatarProps {
 
 const Avatar = memo<AvatarProps>(
   ({ loading, avatar, unoptimized, onClick, size = 28, style, alt }) => {
+    const displayName = agentDisplayName(avatar);
+
     return (
       <A
-        alt={alt || avatar.title}
+        alt={alt || displayName}
         animation={loading}
         avatar={avatar.avatar}
         background={avatar.backgroundColor}
+        name={displayName}
         shape={'square'}
         size={size}
         style={style}
-        title={avatar.title}
+        title={displayName}
         unoptimized={unoptimized}
         onClick={onClick}
       />

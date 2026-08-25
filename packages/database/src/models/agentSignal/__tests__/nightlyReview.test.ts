@@ -1,9 +1,18 @@
 // @vitest-environment node
 import { INBOX_SESSION_ID } from '@lobechat/const';
+import { sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messagePlugins, messages, topics, users, userSettings } from '../../../schemas';
+import {
+  agents,
+  messagePlugins,
+  messages,
+  topics,
+  users,
+  userSettings,
+  workspaces,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { AgentSignalNightlyReviewModel } from '../nightlyReview';
 
@@ -20,22 +29,19 @@ beforeEach(async () => {
 
 describe('AgentSignalNightlyReviewModel', () => {
   describe('listEligibleUsers', () => {
-    it('lists only users with AgentSignal self-iteration enabled', async () => {
+    it('lists all users regardless of the lab opt-in preference', async () => {
       await serverDB.insert(users).values([
         {
           createdAt: new Date('2026-05-01T00:00:00.000Z'),
           id: enabledUserId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
         {
           createdAt: new Date('2026-05-02T00:00:00.000Z'),
           id: enabledUserWithoutTimezoneId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
         {
           createdAt: new Date('2026-05-03T00:00:00.000Z'),
           id: disabledUserId,
-          preference: { lab: { enableAgentSelfIteration: false } },
         },
       ]);
       await serverDB.insert(userSettings).values({
@@ -58,6 +64,11 @@ describe('AgentSignalNightlyReviewModel', () => {
           id: enabledUserWithoutTimezoneId,
           timezone: 'UTC',
         },
+        {
+          createdAt: new Date('2026-05-03T00:00:00.000Z'),
+          id: disabledUserId,
+          timezone: 'UTC',
+        },
       ]);
     });
 
@@ -66,12 +77,10 @@ describe('AgentSignalNightlyReviewModel', () => {
         {
           createdAt: new Date('2026-05-01T00:00:00.000Z'),
           id: enabledUserId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
         {
           createdAt: new Date('2026-05-02T00:00:00.000Z'),
           id: enabledUserWithoutTimezoneId,
-          preference: { lab: { enableAgentSelfIteration: true } },
         },
       ]);
 
@@ -90,6 +99,181 @@ describe('AgentSignalNightlyReviewModel', () => {
           timezone: 'UTC',
         },
       ]);
+    });
+
+    /**
+     * @example
+     * expect(nextPage.map((user) => user.id)).toEqual(['nightly-review-microsecond-next']);
+     */
+    it('does not repeat a cursor row whose database timestamp has sub-millisecond precision', async () => {
+      // ROOT CAUSE:
+      //
+      // PostgreSQL timestamps can retain microseconds while JavaScript Date and workflow JSON retain
+      // only milliseconds. Comparing the truncated Date back to created_at made the cursor row appear
+      // newer than itself and caused an unbounded pagination loop.
+      //
+      // Before: created_at .000123 > replayed cursor .000, so the same user was returned again.
+      // After: the cursor id restores the exact (created_at, id) tuple inside PostgreSQL.
+      await serverDB.execute(sql`
+        INSERT INTO users (id, created_at, updated_at, last_active_at)
+        VALUES
+          ('nightly-review-microsecond-cursor', '2026-05-01T00:00:00.000123Z', NOW(), NOW()),
+          ('nightly-review-microsecond-next', '2026-05-02T00:00:00.000456Z', NOW(), NOW())
+      `);
+
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+      const firstPage = await model.listEligibleUsers({ limit: 1 });
+      const nextPage = await model.listEligibleUsers({
+        cursor: { createdAt: firstPage[0].createdAt, id: firstPage[0].id },
+        limit: 1,
+      });
+
+      expect(firstPage.map((user) => user.id)).toEqual(['nightly-review-microsecond-cursor']);
+      expect(nextPage.map((user) => user.id)).toEqual(['nightly-review-microsecond-next']);
+    });
+  });
+
+  describe('listEligibleUsers narrowing', () => {
+    /**
+     * ROOT CAUSE:
+     *
+     * `listEligibleUsers` had no predicate at all, so the hourly cron fanned one workflow run
+     * out per row of a 321k-row `users` table to reach the handful of users whose local clock
+     * was actually inside the 02:00-04:00 review window. At a 5/s flow-control ceiling one pass
+     * needed ~18h while the cron fired every hour, so the backlog — and every user's effective
+     * review time — drifted later every day.
+     *
+     * The activity floor is a strict superset of every per-user review window, so narrowing on
+     * it can only skip a dispatch the local-window check would have skipped anyway. The window
+     * itself stays in the service layer, which resolves timezones through `Intl`; pushing it
+     * into SQL would make the scan depend on the database's tzdata build agreeing with `Intl`,
+     * and it buys little at the busiest hour anyway.
+     */
+    const seedActivity = async () => {
+      await serverDB.insert(users).values([
+        { createdAt: new Date('2026-05-01T00:00:00.000Z'), id: enabledUserId },
+        { createdAt: new Date('2026-05-02T00:00:00.000Z'), id: otherUserId },
+      ]);
+      await serverDB.insert(userSettings).values([
+        { general: { timezone: 'Asia/Shanghai' }, id: enabledUserId },
+        { general: { timezone: 'America/New_York' }, id: otherUserId },
+      ]);
+      await serverDB.insert(agents).values([
+        { id: 'nightly-active-agent', slug: INBOX_SESSION_ID, userId: enabledUserId },
+        { id: 'nightly-stale-agent', slug: INBOX_SESSION_ID, userId: otherUserId },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'nightly-active-agent', id: 'nightly-active-topic', userId: enabledUserId },
+        { agentId: 'nightly-stale-agent', id: 'nightly-stale-topic', userId: otherUserId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          agentId: 'nightly-active-agent',
+          createdAt: new Date('2026-05-03T09:00:00.000Z'),
+          id: 'nightly-active-message',
+          role: 'user',
+          topicId: 'nightly-active-topic',
+          userId: enabledUserId,
+        },
+        {
+          agentId: 'nightly-stale-agent',
+          createdAt: new Date('2026-04-01T09:00:00.000Z'),
+          id: 'nightly-stale-message',
+          role: 'user',
+          topicId: 'nightly-stale-topic',
+          userId: otherUserId,
+        },
+      ]);
+    };
+
+    /**
+     * @example
+     * expect(result.map((item) => item.id)).toEqual([enabledUserId]);
+     */
+    it('drops users with no message activity since the floor', async () => {
+      await seedActivity();
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listEligibleUsers({
+        activeSince: new Date('2026-05-02T12:05:00.000Z'),
+      });
+
+      expect(result).toEqual([
+        {
+          createdAt: new Date('2026-05-01T00:00:00.000Z'),
+          id: enabledUserId,
+          timezone: 'Asia/Shanghai',
+        },
+      ]);
+    });
+
+    /**
+     * Workspace messages belong to a different review surface, so they must not keep a user in
+     * the personal nightly scan.
+     *
+     * @example
+     * expect(result).toEqual([]);
+     */
+    it('ignores workspace activity when deciding who is a candidate', async () => {
+      await serverDB.insert(users).values({
+        createdAt: new Date('2026-05-01T00:00:00.000Z'),
+        id: enabledUserId,
+      });
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'nightly-review-workspace',
+          primaryOwnerId: enabledUserId,
+          slug: 'nightly-review-workspace',
+        })
+        .returning();
+      await serverDB.insert(agents).values({
+        id: 'nightly-workspace-agent',
+        slug: INBOX_SESSION_ID,
+        userId: enabledUserId,
+        workspaceId: workspace!.id,
+      });
+      await serverDB.insert(topics).values({
+        agentId: 'nightly-workspace-agent',
+        id: 'nightly-workspace-topic',
+        userId: enabledUserId,
+        workspaceId: workspace!.id,
+      });
+      await serverDB.insert(messages).values({
+        agentId: 'nightly-workspace-agent',
+        createdAt: new Date('2026-05-03T09:00:00.000Z'),
+        id: 'nightly-workspace-message',
+        role: 'user',
+        topicId: 'nightly-workspace-topic',
+        userId: enabledUserId,
+        workspaceId: workspace!.id,
+      });
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listEligibleUsers({
+        activeSince: new Date('2026-05-02T12:05:00.000Z'),
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    /**
+     * A whitelist is an explicit target list for backfills; narrowing it would drop the very
+     * rows the caller named.
+     *
+     * @example
+     * expect(result.map((item) => item.id)).toEqual([otherUserId]);
+     */
+    it('ignores activity narrowing for whitelist runs', async () => {
+      await seedActivity();
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listEligibleUsers({
+        activeSince: new Date('2026-05-02T12:05:00.000Z'),
+        whitelist: [otherUserId],
+      });
+
+      expect(result.map((item) => item.id)).toEqual([otherUserId]);
     });
   });
 
@@ -359,6 +543,7 @@ describe('AgentSignalNightlyReviewModel', () => {
           firstActivityAt: new Date('2026-05-03T14:00:00.000Z'),
           lastActivityAt: new Date('2026-05-03T14:00:00.000Z'),
           messageCount: 1,
+          name: null,
           timezone: 'America/New_York',
           title: 'Legacy agent',
           topicCount: 1,
@@ -369,6 +554,7 @@ describe('AgentSignalNightlyReviewModel', () => {
           firstActivityAt: new Date('2026-05-03T12:00:00.000Z'),
           lastActivityAt: new Date('2026-05-03T13:00:00.000Z'),
           messageCount: 2,
+          name: null,
           timezone: 'America/New_York',
           title: 'Active agent',
           topicCount: 1,
@@ -393,6 +579,7 @@ describe('AgentSignalNightlyReviewModel', () => {
           firstActivityAt: new Date('2026-05-03T12:00:00.000Z'),
           lastActivityAt: new Date('2026-05-03T13:00:00.000Z'),
           messageCount: 2,
+          name: null,
           timezone: 'America/New_York',
           title: 'Active agent',
           topicCount: 1,

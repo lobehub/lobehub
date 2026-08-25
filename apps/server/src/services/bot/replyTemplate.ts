@@ -223,6 +223,10 @@ type SystemStrings = {
   cmdFeedbackSubmitted: string;
   cmdFeedbackSubmittedWithLink: (issueUrl: string) => string;
   cmdFeedbackUsage: string;
+  cmdModeSetAgent: string;
+  cmdModeSetChat: string;
+  cmdModeStatus: (mode?: 'agent' | 'chat') => string;
+  cmdModeUsage: string;
   cmdNewReset: string;
   cmdStopNotActive: string;
   cmdStopRequested: string;
@@ -285,6 +289,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `Thanks — your feedback has been sent to the LobeHub team. Tracked at: ${issueUrl}`,
     cmdFeedbackUsage:
       'Usage: `/feedback <your message>` — sends feedback directly to the LobeHub team (no AI reply).',
+    cmdModeSetAgent: 'Switched to Agent Mode — replies can use tools and run multi-step tasks.',
+    cmdModeSetChat: 'Switched to Chat Mode — replies are plain conversation without tools.',
+    cmdModeStatus: (mode) =>
+      mode
+        ? `Current mode: ${mode === 'agent' ? 'Agent Mode' : 'Chat Mode'}. Use \`/mode agent\` or \`/mode chat\` to switch.`
+        : "Current mode: default (follows the agent's configuration). Use `/mode agent` or `/mode chat` to switch.",
+    cmdModeUsage: 'Usage: `/mode agent` or `/mode chat`.',
     cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
@@ -367,6 +378,13 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       `已收到，感谢反馈，已转交 LobeHub 团队。跟踪链接：${issueUrl}`,
     cmdFeedbackUsage:
       '用法：`/feedback <你的反馈内容>` —— 反馈会直达 LobeHub 团队，不会触发 AI 回复。',
+    cmdModeSetAgent: '已切换到 Agent 模式 —— 回复可调用工具并执行多步任务。',
+    cmdModeSetChat: '已切换到 Chat 模式 —— 仅进行纯对话，不调用工具。',
+    cmdModeStatus: (mode) =>
+      mode
+        ? `当前模式：${mode === 'agent' ? 'Agent 模式' : 'Chat 模式'}。使用 \`/mode agent\` 或 \`/mode chat\` 切换。`
+        : '当前模式：默认（跟随 Agent 配置）。使用 `/mode agent` 或 `/mode chat` 切换。',
+    cmdModeUsage: '用法：`/mode agent` 或 `/mode chat`。',
     cmdNewReset: '对话已重置，下一条消息会开启新话题。',
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
@@ -606,6 +624,9 @@ export type CommandReplyKey =
   | 'cmdFeedbackError'
   | 'cmdFeedbackSubmitted'
   | 'cmdFeedbackUsage'
+  | 'cmdModeSetAgent'
+  | 'cmdModeSetChat'
+  | 'cmdModeUsage'
   | 'cmdNewReset'
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
@@ -618,6 +639,15 @@ export type CommandReplyKey =
  */
 export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): string {
   return getSystemStrings(lng)[key];
+}
+
+/**
+ * Render the `/mode` status reply (no-arg invocation). `mode` is the explicit
+ * per-conversation override when one was set via `/mode agent|chat`; undefined
+ * means the conversation follows the agent's configured default.
+ */
+export function renderModeStatus(mode?: 'agent' | 'chat', lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdModeStatus(mode);
 }
 
 /**

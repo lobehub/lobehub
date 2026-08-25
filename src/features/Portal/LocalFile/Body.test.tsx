@@ -88,6 +88,12 @@ vi.mock('./MarkdownImage', () => ({
   default: () => null,
 }));
 
+vi.mock('./PublishHtmlArtifactButton', () => ({
+  PublishHtmlArtifactLiveBar: () => null,
+  PublishHtmlArtifactProvider: ({ children }: { children: ReactNode }) => children,
+  PublishHtmlArtifactTrigger: () => null,
+}));
+
 const mockClearPortalStack = vi.hoisted(() => vi.fn());
 const mockChatState = vi.hoisted(() => ({
   current: {} as Record<PropertyKey, unknown>,

@@ -126,6 +126,7 @@ export class TopicShareModel {
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
         agentMarketIdentifier: agents.marketIdentifier,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         groupAvatar: chatGroups.avatar,
@@ -168,6 +169,7 @@ export class TopicShareModel {
           avatar: agents.avatar,
           backgroundColor: agents.backgroundColor,
           id: agents.id,
+          name: agents.name,
           slug: agents.slug,
           title: agents.title,
         })

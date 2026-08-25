@@ -386,3 +386,52 @@ describe('RbacModel — back-compat: no workspaceId', () => {
     expect(details[0]).toMatchObject({ permissionCode: code, roleName: 'detail_role' });
   });
 });
+
+describe('RbacModel — personal mode implicit baseline', () => {
+  it('grants the :owner content baseline to a user with NO rbac_user_roles rows', async () => {
+    const rbac = new RbacModel(serverDB, userId);
+
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.AGENT_READ}:owner`)).toBe(true);
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.TOPIC_CREATE}:owner`)).toBe(true);
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.AI_MODEL_INVOKE}:owner`)).toBe(true);
+    // the OpenAPI routes OR the two scopes — the owner half must settle it
+    expect(
+      await rbac.hasAnyPermission([
+        `${PERMISSION_ACTIONS.AGENT_READ}:all`,
+        `${PERMISSION_ACTIONS.AGENT_READ}:owner`,
+      ]),
+    ).toBe(true);
+  });
+
+  it('does NOT grant :all widenings or admin domains', async () => {
+    const rbac = new RbacModel(serverDB, userId);
+
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.AGENT_READ}:all`)).toBe(false);
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.RBAC_ROLE_READ}:all`)).toBe(false);
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.USER_CREATE}:all`)).toBe(false);
+    expect(await rbac.hasPermission(`${PERMISSION_ACTIONS.WORKSPACE_UPDATE}:all`)).toBe(false);
+  });
+
+  it('does NOT leak the personal baseline into workspace mode', async () => {
+    // viewer in workspace A: read-only there, regardless of personal defaults
+    await addMembership(userId, workspaceAId, 'viewer');
+    const rbac = new RbacModel(serverDB, userId);
+
+    expect(
+      await rbac.hasAnyPermission(
+        [`${PERMISSION_ACTIONS.AGENT_CREATE}:all`, `${PERMISSION_ACTIONS.AGENT_CREATE}:owner`],
+        { workspaceId: workspaceAId },
+      ),
+    ).toBe(false);
+  });
+
+  it('getUserPermissions unions the baseline with DB grants', async () => {
+    const dbCode = 'test:extra:all';
+    await grantGlobalRole(userId, 'extra_role', [dbCode]);
+    const rbac = new RbacModel(serverDB, userId);
+
+    const codes = await rbac.getUserPermissions();
+    expect(codes).toContain(`${PERMISSION_ACTIONS.AGENT_READ}:owner`);
+    expect(codes).toContain(dbCode);
+  });
+});

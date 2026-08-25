@@ -18,8 +18,8 @@ Electron desktop shell, and a CLI (`lh`). Repo layout that matters for testing:
 - `apps/cli/` — the `lh` CLI; runs from source (`bun src/index.ts`), no rebuild.
   **Standalone install** (see §6).
 - `packages/**`, `e2e`, `apps/server` — covered by the root pnpm workspace.
-- `src/` — the SPA and shared web app; `src/server/` holds agent-hono /
-  workflows-hono.
+- `src/` — the SPA and shared web app; `apps/server/src/router-hono/` holds the
+  Hono endpoint routers and standalone runtime.
 
 **The root pnpm workspace does NOT cover `apps/desktop` or `apps/cli`.**
 `pnpm-workspace.yaml` lists `packages/**`, `e2e`, `apps/server`, and only
@@ -108,8 +108,11 @@ stale standalone install: a recently added workspace package fails to resolve �
   `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres`,
   `DATABASE_DRIVER=node`, `AGENT_RUNTIME_MODE=queue`,
   `REDIS_URL=redis://localhost:6380`, `FEATURE_FLAGS=-agent_self_iteration`,
-  `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off, plus local `s3rver`
-  and local QStash vars. Treat the dev-server terminal output as final when the
+  `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off, a generated
+  `JWKS_KEY` (persisted at `.records/env/agent-testing-jwks.json`, required by every
+  async-task dispatch such as image generation), `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`
+  (the server fetches reference images from the local s3rver on 127.0.0.1), plus
+  local `s3rver` and local QStash vars. Treat the dev-server terminal output as final when the
   port is non-standard, then `export SERVER_URL=http://localhost:<port>`.
 
   In the cloud repo (this repo as the `lobehub/` submodule), worktree names map
@@ -278,7 +281,9 @@ Routes worth jumping to:
 | `/`                          | Home (has a chat input)           |
 | `/agent/<agentId>`           | Agent conversation (latest topic) |
 | `/agent/<agentId>/<topicId>` | Specific topic in a conversation  |
-| `/task` · `/task/<taskId>`   | Task list / task detail           |
+| `/tasks`                     | Task list                         |
+| `/task`                      | Task assistant                    |
+| `/task/<taskId>`             | Task detail                       |
 | `/page`                      | Documents (文稿)                  |
 | `/settings`                  | Settings                          |
 | `/community`                 | Discover / community              |

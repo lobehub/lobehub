@@ -57,6 +57,58 @@ doesn't leak a stale start onto a later one that reuses the slot.
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
 - [ ] A long-op elapsed / progress readout derives from a **persisted start timestamp keyed by job id** (survives remount, shows true duration) and clears the key when the job ends — never a local counter that resets to 0 on remount. _(Certainty・Natural)_
 
+### Whole-surface skeletons: match the layout's structure, not just its rows
+
+The rules above size one row against one row. A skeleton that stands in for a **whole
+surface** — a route-level `Suspense` fallback, a sidebar panel, a page shell — is judged by
+something else: its **structural anchors**. Header height, any fixed nav block sitting above
+the scroll area, where the body starts, where the first group title lands. Get every row
+right and the header wrong, and the real content still arrives \~100 px from where the
+skeleton drew it — the exact relayout the skeleton existed to prevent.
+
+**Measure the settled DOM; never derive the numbers from the source.** Reading the JSX and
+adding up paddings is the fast way to be confidently wrong, because the rendered height is
+decided by things the source doesn't show: a conditionally-hidden sibling, a component's own
+default size, a layout primitive's padding shorthand. Three such assumptions were wrong in
+one sidebar — a header read as 44 was really 36, a search box read as 32 was 36, an accordion
+title read as 28 was 26.9 — and each error propagated into every anchor below it. Open the
+real surface, read `getBoundingClientRect()` on each anchor, and build the skeleton from
+those values. (To hold a route's pending state on screen long enough to measure, see the
+agent-testing skill's probe pattern for parking a lazy chunk.)
+
+**Branch the skeleton wherever the real chrome branches.** Platform and feature conditions
+that remove an element change the container's height: on macOS desktop
+`ToggleLeftPanelButton` renders `null`, so the nav header's content box collapses from the
+28 px icon to the 22 px breadcrumb and the header goes 44 → 36. A hard-coded height is
+correct on exactly one platform. Reuse the same condition (import the flag, don't re-derive
+it) so both branches stay in step.
+
+**Many variants of one surface → a shape table, not one generic skeleton.** When a shell
+renders a different panel per route, a single "8 generic rows" placeholder is wrong nearly
+everywhere: some panels open with a fixed nav list, some have accordion groups, and some
+have **no body at all** — for those the generic skeleton invents a list that never appears.
+Model the surface as data (header variant, fixed nav rows, body gap, group title height,
+rows per group) and key it by route, so adding a panel is one row in the table.
+
+**Know which parts can be pixel-exact.** A statically enumerated menu (settings categories,
+a fixed nav list) has a known row count — align it exactly. A data-driven list (topics,
+documents, search results) cannot be predicted, so guarantee alignment only **up to the
+first group title** and treat the rows below as a plausible fill. That boundary is where
+users' eyes settle first anyway; pretending to know the row count buys nothing.
+
+> ✅ `NavSideBarSkeleton` + `NAV_SKELETON_SHAPES` (`src/features/NavPanel/components/SideBarSkeleton.tsx`)
+> — one component driven by a per-navKey shape measured against each settled sidebar; memory
+> and discover render header + nav list and **no body**, matching panels that genuinely have
+> none. ❌ The generic 8-row list it replaced: no header placeholder at all, so every settings
+> row landed \~102 px below where the skeleton had drawn it.
+
+**Checklist**
+
+- [ ] A whole-surface skeleton's **structural anchors** (header height, fixed nav block, body start, first group title) match the settled surface — verified by measuring, not by reading the JSX. _(Certainty)_
+- [ ] Any conditional chrome that changes height (platform flags, feature gates) is branched in the skeleton with the **same** condition, not hard-coded. _(Certainty)_
+- [ ] A shell that renders per-route panels drives its skeleton from a **per-route shape**, and a panel with no body gets a skeleton with no body. _(Certainty・Natural)_
+- [ ] Static menus align exactly; data-driven lists align **to the first group title** and stop claiming to know the row count. _(Certainty)_
+
 ## 4.2 Loading must be able to fail — timeout → error + retry・Certainty・Meaningful
 
 A loading state that can only ever resolve to _success_ is a bug. Any async fetch can hang,

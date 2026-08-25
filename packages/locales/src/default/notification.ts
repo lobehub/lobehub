@@ -1,19 +1,41 @@
 export default {
+  'agent_cron_job_completed': 'Your scheduled task "{{jobName}}" completed successfully.',
+  'agent_cron_job_completed_title': 'Scheduled task completed',
   'agent_cron_job_failed':
     'Your scheduled task "{{jobName}}" failed. Open the task to see the full error.',
   'agent_cron_job_failed_insufficient_budget':
     'Your scheduled task "{{jobName}}" couldn\'t run because your account is out of credits. Top up or upgrade your plan to resume future runs.',
   'agent_cron_job_failed_insufficient_budget_title': 'Scheduled task paused: insufficient credits',
+  'agent_cron_job_failed_paused':
+    'Your scheduled task "{{jobName}}" was paused after {{count}} consecutive failures. Review the error and resume it when ready.',
+  'agent_cron_job_failed_paused_title': 'Scheduled task paused',
   'agent_cron_job_failed_title': 'Scheduled task failed',
   'agent_run_completed': '{{preview}}',
   'agent_run_completed_title': 'Agent task completed',
+  'agent_transfer_reassigned':
+    'A workspace owner transferred your agent "{{agentTitle}}" to {{recipientLabel}}.',
+  'agent_transfer_reassigned_title': 'Agent reassigned',
+  'agent_transfer_requested':
+    '{{actorLabel}} wants to transfer the agent "{{agentTitle}}" to you. Accept or decline it from Notifications.',
+  'agent_transfer_requested_title': 'Agent transfer request',
+  'agent_transfer_result': 'The transfer of "{{agentTitle}}" was resolved.',
+  'agent_transfer_result_accepted':
+    '{{actorLabel}} accepted the transfer and now owns "{{agentTitle}}".',
+  'agent_transfer_result_accepted_title': 'Transfer accepted',
+  'agent_transfer_result_declined':
+    '{{actorLabel}} declined the transfer of "{{agentTitle}}". It stays with its current owner.',
+  'agent_transfer_result_declined_title': 'Transfer declined',
+  'agent_transfer_result_title': 'Transfer result',
   'billboard.learnMore': 'Learn more',
   'billboard.menuLabel': 'Announcements',
+  'category.agent': 'Agent',
   'category.billing': 'Billing',
   'category.generation': 'Generation',
+  'category.mention': 'Mentions',
+  'category.pending': 'Pending',
   'category.schedule': 'Scheduled tasks',
-  'category.system': 'System',
-  'category.workspace': 'Workspace',
+  'category.system': 'System notifications',
+  'category.workspace': 'Workspace updates',
   'credit_balance_low':
     'Your credit balance is running low — about {{balance}} in credits remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
   'credit_balance_low_action': 'Set up auto top-up',
@@ -25,15 +47,33 @@ export default {
     'You received this email because of your notification settings on LobeHub.',
   'email.footer.system': 'This is an important account notification from LobeHub.',
   'email.viewDetails': 'View Details',
+  'group_transfer_reassigned':
+    'A workspace owner transferred your group "{{agentTitle}}" to {{recipientLabel}}.',
+  'group_transfer_reassigned_title': 'Group reassigned',
+  'group_transfer_requested':
+    '{{actorLabel}} wants to transfer the group "{{agentTitle}}" to you. Accept or decline it from Notifications.',
+  'group_transfer_requested_title': 'Group transfer request',
+  'group_transfer_result_accepted':
+    '{{actorLabel}} accepted the transfer and now owns "{{agentTitle}}".',
+  'group_transfer_result_accepted_title': 'Transfer accepted',
+  'group_transfer_result_declined':
+    '{{actorLabel}} declined the transfer of "{{agentTitle}}". It stays with its current owner.',
+  'group_transfer_result_declined_title': 'Transfer declined',
   'image_generation_completed': 'Your image "{{prompt}}" is ready.',
   'image_generation_completed_title': 'Image generation completed',
+  'inbox.actionFailed': 'Could not update notifications. Please try again.',
+  'inbox.all': 'All notifications',
+  'inbox.allStatus': 'All',
   'inbox.archive': 'Archive',
   'inbox.archiveAll': 'Archive all',
   'inbox.empty': 'No notifications yet',
+  'inbox.emptyRead': 'No read notifications',
   'inbox.emptyUnread': 'No unread notifications',
   'inbox.filterUnread': 'Show unread only',
   'inbox.markAllRead': 'Mark all as read',
+  'inbox.read': 'Read',
   'inbox.title': 'Notifications',
+  'inbox.unread': 'Unread',
   'inbox.viewDetail': 'View details',
   'promotion_gift_granted': '{{credits}} bonus credits have been added to your account.',
   'promotion_gift_granted_card_binding':
@@ -50,14 +90,25 @@ export default {
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',
   'subscription_payment_failed_title': 'Subscription renewal payment failed',
+  'subscription_plan_changed': 'Your subscription plan changed from {{oldPlan}} to {{newPlan}}.',
+  'subscription_plan_changed_downgraded':
+    'Your subscription changed from {{oldPlan}} to {{newPlan}} as scheduled. The new plan limits are now in effect.',
+  'subscription_plan_changed_downgraded_title': 'Subscription plan changed',
+  'subscription_plan_changed_title': 'Subscription plan changed',
+  'subscription_plan_changed_upgraded':
+    'Your subscription was upgraded from {{oldPlan}} to {{newPlan}}. Your new benefits are available now.',
+  'subscription_plan_changed_upgraded_title': 'Subscription upgraded',
+  'subscription_renewed':
+    'Your {{plan}} subscription has renewed and your subscription credits were reset for the new billing cycle.',
+  'subscription_renewed_title': 'Subscription renewed',
   'topic_comment_activity': '{{actorLabel}} commented in a topic you participate in.',
   'topic_comment_activity_message': '{{actorLabel}} commented on your message.',
   'topic_comment_activity_message_title': 'New comment on your message',
-  'topic_comment_activity_mentioned': '{{actorLabel}} mentioned you in a comment.',
-  'topic_comment_activity_mentioned_title': 'You were mentioned in a comment',
   'topic_comment_activity_replied': '{{actorLabel}} replied to your comment.',
   'topic_comment_activity_replied_title': 'New reply to your comment',
   'topic_comment_activity_title': 'New topic comment',
+  'topic_comment_mentioned': '{{actorLabel}} mentioned you in a comment.',
+  'topic_comment_mentioned_title': 'You were mentioned in a comment',
   'topic_comment_removed_by_workspace_owner':
     'Your comment was removed by a Workspace Owner. Open the discussion to view its place in the thread.',
   'topic_comment_removed_by_workspace_owner_title': 'Comment removed',
@@ -65,6 +116,10 @@ export default {
   'topic_comment_restored_by_workspace_owner_title': 'Comment restored',
   'video_generation_completed': 'Your video "{{prompt}}" is ready.',
   'video_generation_completed_title': 'Video generation completed',
+  'workspace_credit_balance_low':
+    'Workspace "{{workspaceName}}" is running low on credits — about {{balance}} remaining in the shared pool. Top up or turn on auto top-up to keep your team working.',
+  'workspace_credit_balance_low_action': 'Top up credits',
+  'workspace_credit_balance_low_title': 'Workspace credits running low',
   'workspace_member_invited':
     '{{inviterLabel}} invited you to join workspace "{{workspaceName}}" as a {{role}}.',
   'workspace_member_invited_title': 'Invitation to join {{workspaceName}}',

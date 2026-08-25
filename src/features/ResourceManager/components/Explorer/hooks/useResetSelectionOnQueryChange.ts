@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import type { FilesTabs } from '@/types/files';
 
 interface ResetSelectionOnQueryChangeOptions {

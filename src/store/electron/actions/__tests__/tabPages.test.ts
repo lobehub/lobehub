@@ -176,6 +176,215 @@ describe('tabPages actions', () => {
     });
   });
 
+  describe('split view', () => {
+    const seed = () => {
+      const { result } = renderHook(() => useElectronStore());
+      const tabs = [buildTab('/left'), buildTab('/right'), buildTab('/third')];
+
+      act(() => {
+        useElectronStore.setState({ activeTabId: '/left', splitView: null, tabs });
+      });
+      return result;
+    };
+
+    it('opens another tab in the secondary pane and focuses it', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.openTabInSplitView('/right');
+      });
+
+      expect(result.current.activeTabId).toBe('/right');
+      expect(result.current.splitView).toEqual({
+        primaryTabId: '/left',
+        ratio: 0.5,
+        secondaryTabId: '/right',
+      });
+    });
+
+    it('duplicates the active tab so each pane owns an independent router', () => {
+      const result = seed();
+      let secondaryTabId: string | null = null;
+
+      act(() => {
+        secondaryTabId = result.current.openTabInSplitView('/left');
+      });
+
+      expect(secondaryTabId).not.toBe('/left');
+      expect(result.current.tabs).toHaveLength(4);
+      expect(result.current.tabs.at(-1)?.url).toBe('/left');
+      expect(result.current.splitView?.secondaryTabId).toBe(secondaryTabId);
+    });
+
+    it('replaces the focused pane when a third tab is activated', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+      act(() => result.current.focusTabPane('/left'));
+      act(() => result.current.activateTab('/third'));
+
+      expect(result.current.splitView).toMatchObject({
+        primaryTabId: '/third',
+        secondaryTabId: '/right',
+      });
+      expect(result.current.activeTabId).toBe('/third');
+    });
+
+    it('collapses split view when switching from the titlebar tab strip', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+
+      act(() => result.current.switchTab('/left'));
+
+      expect(result.current.activeTabId).toBe('/left');
+      expect(result.current.splitView).toBeNull();
+    });
+
+    it('collapses to the remaining pane when one visible tab closes', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+      act(() => result.current.removeTab('/right'));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe('/left');
+    });
+
+    it('removes the duplicated pane and refocuses the source when the split closes', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.closeSplitView());
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe('/left');
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(false);
+    });
+
+    it('redirects a titlebar switch on the duplicate back to its source tab', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.switchTab(duplicateId!));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe('/left');
+      expect(result.current.tabs).toHaveLength(3);
+    });
+
+    it('keeps the duplicate as the only remaining tab when its source closes', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.removeTab('/left'));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.activeTabId).toBe(duplicateId);
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(true);
+    });
+
+    it('drops the duplicate when another tab takes its pane', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+      // the duplicate pane holds focus, so activating a third tab replaces that pane
+      act(() => result.current.activateTab('/third'));
+
+      expect(result.current.splitView).toMatchObject({
+        primaryTabId: '/left',
+        secondaryTabId: '/third',
+      });
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(false);
+    });
+
+    it('drops the duplicate when a newly created tab takes its pane', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+      // the duplicate pane holds focus, so the new tab replaces that pane
+      let newTabId = '';
+      act(() => {
+        newTabId = result.current.addNewTab('/');
+      });
+
+      expect(result.current.splitView).toMatchObject({
+        primaryTabId: '/left',
+        secondaryTabId: newTabId,
+      });
+      expect(result.current.splitView?.duplicatedTabId).toBeUndefined();
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(false);
+      expect(result.current.activeTabId).toBe(newTabId);
+    });
+
+    it('keeps the copy when its real source closed after being displaced from the split', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+      // replace the source pane with a third tab, then close the real source tab
+      act(() => result.current.focusTabPane('/left'));
+      act(() => result.current.activateTab('/third'));
+      act(() => result.current.removeTab('/left'));
+
+      act(() => result.current.closeSplitView());
+
+      // the copy is the page's only remaining tab — it must survive the close
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(true);
+    });
+
+    it('removes the copy and refocuses its real source when the replaced pane closes', () => {
+      const result = seed();
+      let duplicateId: string | null = null;
+      act(() => {
+        duplicateId = result.current.openTabInSplitView('/left');
+      });
+      act(() => result.current.focusTabPane('/left'));
+      act(() => result.current.activateTab('/third'));
+
+      act(() => result.current.removeTab('/third'));
+
+      expect(result.current.splitView).toBeNull();
+      expect(result.current.tabs.some((t) => t.id === duplicateId)).toBe(false);
+      expect(result.current.activeTabId).toBe('/left');
+    });
+
+    it('refreshes the promoted source tab recency when the split closes', () => {
+      const result = seed();
+      act(() => {
+        result.current.openTabInSplitView('/left');
+      });
+
+      act(() => result.current.closeSplitView());
+
+      // seed tabs start at lastVisited=1; the promoted source must be re-touched
+      // or the limited live-router set can evict the tab that just became active
+      const source = result.current.tabs.find((t) => t.id === '/left');
+      expect(source!.lastVisited).toBeGreaterThan(1);
+    });
+
+    it('clamps the divider ratio to usable pane widths', () => {
+      const result = seed();
+      act(() => result.current.openTabInSplitView('/right'));
+      act(() => result.current.setSplitRatio(0.9));
+      expect(result.current.splitView?.ratio).toBe(0.75);
+      act(() => result.current.setSplitRatio(0.1));
+      expect(result.current.splitView?.ratio).toBe(0.25);
+    });
+  });
+
   describe('updateTab', () => {
     it('drops cached data when the tab navigates to a different page but keeps the id stable', () => {
       const { result } = renderHook(() => useElectronStore());

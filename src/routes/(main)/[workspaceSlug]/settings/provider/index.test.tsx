@@ -17,16 +17,16 @@ vi.mock('@/business/client/hooks/useIsWorkspaceLoading', () => ({
 
 vi.mock('@/const/version', () => ({ isCustomBranding: false }));
 
-vi.mock('@/routes/(main)/settings/provider/_layout/Desktop', () => ({
+vi.mock('@/features/Settings/provider/_layout/Desktop', () => ({
   default: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
 
-vi.mock('@/routes/(main)/settings/provider/_layout/Mobile', () => ({
+vi.mock('@/features/Settings/provider/_layout/Mobile', () => ({
   default: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
 
-vi.mock('@/routes/(main)/settings/provider/detail', async () => {
-  const { useSettingsContext } = await import('@/routes/(main)/settings/_layout/ContextProvider');
+vi.mock('@/features/Settings/provider/detail', async () => {
+  const { useSettingsContext } = await import('@/features/Settings/Layout/ContextProvider');
 
   const ProviderDetail = () => {
     const { showOpenAIApiKey, showOpenAIProxyUrl } = useSettingsContext();

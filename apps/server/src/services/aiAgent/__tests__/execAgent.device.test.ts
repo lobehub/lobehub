@@ -81,6 +81,8 @@ vi.mock('@/database/models/plugin', () => ({
 const topicMock = {
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findById: vi.fn().mockResolvedValue(undefined),
+  releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+  tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
   updateMetadata: vi.fn().mockResolvedValue(undefined),
 };
 vi.mock('@/database/models/topic', () => ({
@@ -533,6 +535,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         expect.objectContaining({
           metadata: expect.objectContaining({ boundDeviceId: 'device-001' }),
         }),
+        undefined,
       );
     });
 
@@ -554,6 +557,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBeUndefined();
       expect(topicMock.create).toHaveBeenCalledWith(
         expect.objectContaining({ metadata: undefined }),
+        undefined,
       );
     });
 
@@ -662,6 +666,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         expect.objectContaining({
           metadata: expect.objectContaining({ boundDeviceId: 'device-001' }),
         }),
+        undefined,
       );
     });
   });

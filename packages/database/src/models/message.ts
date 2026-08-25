@@ -30,8 +30,10 @@ import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
   logTimingSink as logTiming,
+  readAudioDurationMs,
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
+import { isPlainRecord } from '@lobechat/utils/object';
 import type { HeatmapsProps } from '@lobehub/charts';
 import dayjs from 'dayjs';
 import type { SQL } from 'drizzle-orm';
@@ -47,6 +49,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   not,
   or,
   sql,
@@ -76,6 +79,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -154,10 +158,35 @@ interface MessageRelatedFile {
   fileType: string | null;
   id: string;
   messageId: string;
+  metadata: unknown;
   name: string | null;
   size: number | null;
   url: string;
 }
+
+const materializeChatAudioItem = ({
+  fileType,
+  id,
+  metadata,
+  name,
+  url,
+}: MessageRelatedFile): ChatAudioItem => {
+  const value = isPlainRecord(metadata) ? metadata : {};
+  const durationMs = readAudioDurationMs(metadata);
+
+  return {
+    alt: name!,
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : {}),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    id,
+    ...(typeof value.mimeType === 'string'
+      ? { mimeType: value.mimeType }
+      : fileType
+        ? { mimeType: fileType }
+        : {}),
+    url,
+  };
+};
 
 interface MessageChunkRelation {
   fileId: string;
@@ -185,6 +214,14 @@ interface MessageThreadRelation {
   title: string | null;
 }
 
+interface ActiveBranchSnapshot {
+  activeBranchId?: string;
+  activeBranchIndex: number;
+  metadata: Record<PropertyKey, unknown>;
+  parentId: string;
+  wasOptimistic: boolean;
+}
+
 interface MessageFileRelations {
   documentsMap: Record<string, string>;
   relatedFileList: MessageRelatedFile[];
@@ -196,6 +233,19 @@ interface CreateUserAndAssistantMessagesParams {
 }
 
 interface CreateUserAndAssistantMessagesOptions {
+  /**
+   * Ids minted by the caller (the client) for the pair. Either side may be
+   * omitted, in which case this model mints that one — an older client that
+   * sends no ids keeps working unchanged.
+   *
+   * Honouring a caller-supplied id is what lets the UI render the pair under
+   * its final ids immediately, instead of showing placeholders and re-keying
+   * them once this insert returns.
+   */
+  ids?: {
+    assistantMessageId?: string;
+    userMessageId?: string;
+  };
   timing?: ModelTimingContext;
 }
 
@@ -367,6 +417,40 @@ export class MessageModel {
   // **************** Query *************** //
 
   /**
+   * The newest user message of each given topic, keyed by topic id. Used to
+   * pre-inject recent same-channel history for IM platforms that can't read
+   * chat history at runtime (e.g. WeChat). Only `role = 'user'` rows with
+   * non-empty text are considered.
+   */
+  queryLastUserMessageByTopics = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([messages.topicId], {
+        content: messages.content,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'user'),
+          isNotNull(messages.content),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(messages.topicId, desc(messages.createdAt));
+
+    const result = new Map<string, string>();
+    for (const row of rows) {
+      const content = (row.content ?? '').trim();
+      if (row.topicId && content) result.set(row.topicId, content);
+    }
+    return result;
+  };
+
+  /**
    * Query messages by params (high-level API)
    *
    * This is the main query method that handles common query patterns.
@@ -425,6 +509,9 @@ export class MessageModel {
         () => this.buildThreadQueryCondition(threadId),
         { hasThreadId: true },
       );
+      // A topic thread may contain replies from delegated agents. When the topic is known,
+      // scope the complete thread to it instead of filtering those replies by the parent agent.
+      const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
         current,
         includeFileWorks,
@@ -432,8 +519,8 @@ export class MessageModel {
         postProcessUrl: options.postProcessUrl,
         skipWorks,
         timing,
-        // Thread queries optionally add agent/session scope if provided
-        where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
+        topicId: topicId ?? undefined,
+        where: threadScopeCondition ? and(threadScopeCondition, threadCondition) : threadCondition,
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -642,9 +729,13 @@ export class MessageModel {
             targetId: messages.targetId,
 
             sender: {
+              // `id` MUST be the first selected field: drizzle decides whether a
+              // left-joined nested selection is null from its first column, so
+              // leading with a nullable column (avatar) collapsed every
+              // avatar-less sender to `sender: null`.
+              id: users.id,
               avatar: users.avatar,
               fullName: users.fullName,
-              id: users.id,
               username: users.username,
             },
 
@@ -870,8 +961,7 @@ export class MessageModel {
               works: worksByMessageId[item.id as string],
               audioList: audioList
                 .filter((relation) => relation.messageId === item.id)
-
-                .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+                .map<ChatAudioItem>(materializeChatAudioItem),
             } as unknown as UIChatMessage;
           },
         ),
@@ -975,6 +1065,7 @@ export class MessageModel {
             fileType: files.fileType,
             id: messagesFiles.fileId,
             messageId: messagesFiles.messageId,
+            metadata: files.metadata,
             name: files.name,
             size: files.size,
             url: files.url,
@@ -1275,6 +1366,15 @@ export class MessageModel {
         agentId: messages.agentId,
         targetId: messages.targetId,
 
+        sender: {
+          // `id` MUST be the first selected field — see queryWithWhere's sender
+          // selection for why (drizzle left-join nested-object nullification).
+          id: users.id,
+          avatar: users.avatar,
+          fullName: users.fullName,
+          username: users.username,
+        },
+
         tools: messages.tools,
         tool_call_id: messagePlugins.toolCallId,
 
@@ -1304,6 +1404,7 @@ export class MessageModel {
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+      .leftJoin(users, eq(users.id, messages.userId))
       .orderBy(asc(messages.createdAt));
 
     if (result.length === 0) return [];
@@ -1318,6 +1419,7 @@ export class MessageModel {
           fileType: files.fileType,
           id: messagesFiles.fileId,
           messageId: messagesFiles.messageId,
+          metadata: files.metadata,
           name: files.name,
           size: files.size,
           url: files.url,
@@ -1448,10 +1550,23 @@ export class MessageModel {
 
     // 6. Transform messages to UIChatMessage format
     return result.map(
-      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+      ({
+        model,
+        provider,
+        translate,
+        ttsId,
+        ttsFile,
+        ttsContentMd5,
+        ttsVoice,
+        sender,
+        ...item
+      }) => {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
         return {
           ...item,
+          // Same presence contract as queryWithWhere: collapse a null-id sender
+          // (deleted account) to `null` so clients can rely on `sender?.id`.
+          sender: sender?.id ? sender : null,
           chunksList: chunksList
             .filter((relation) => relation.messageId === item.id)
             .map((c) => ({
@@ -1508,7 +1623,7 @@ export class MessageModel {
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
           audioList: audioList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+            .map<ChatAudioItem>(materializeChatAudioItem),
         } as unknown as UIChatMessage;
       },
     );
@@ -2015,7 +2130,7 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(and(this.ownership(), isNotNull(messages.model)))
+      .where(and(this.ownership(), isNotNull(messages.model), notCopiedTranscript()))
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -2103,6 +2218,7 @@ export class MessageModel {
         genWhere([
           this.ownership(),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,
@@ -2360,10 +2476,10 @@ export class MessageModel {
 
   createUserAndAssistantMessages = async (
     { userMessage, assistantMessage }: CreateUserAndAssistantMessagesParams,
-    { timing }: CreateUserAndAssistantMessagesOptions = {},
+    { ids, timing }: CreateUserAndAssistantMessagesOptions = {},
   ): Promise<{ assistantMessage: DBMessageItem; userMessage: DBMessageItem }> => {
-    const userMessageId = this.genId();
-    const assistantMessageId = this.genId();
+    const userMessageId = ids?.userMessageId ?? this.genId();
+    const assistantMessageId = ids?.assistantMessageId ?? this.genId();
     const createdAt = Date.now();
     const defaultUserCreatedAt = createdAt;
     const defaultAssistantCreatedAt = createdAt + 1;
@@ -2728,32 +2844,77 @@ export class MessageModel {
       lte(messages.createdAt, completedAt),
     );
 
-    const heterogeneousMatch = sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`;
+    // The two branches are resolved SEPARATELY — never OR-ed into one WHERE (an
+    // `... AND (withinWindow OR heteroMatch)` is unindexable and seq-scans every
+    // plugin row the user owns). They are also SHAPED differently on purpose:
+    //
+    // - Time window: one index-friendly range scan joined to its plugin rows.
+    // - Heterogeneous match: resolved id-FIRST, not as a plugin JOIN. The
+    //   `metadata->>'heterogeneousToolStateOperationId'` predicate carries a 0.5%
+    //   default selectivity estimate, so joining it to `message_plugins` makes the
+    //   planner scan / nested-loop the user's ENTIRE plugin history (100k+ rows,
+    //   100s+ per call for heavy users — it returns ~0 rows but pays the full scan
+    //   every time, since most ops never stamp the key). Looking up the few
+    //   matching message ids in a JOIN-free query first, then fetching those rows
+    //   by primary key, leaves the planner no join to mis-order: the lookup is
+    //   single-table (index-served once the metadata expression is indexed; a
+    //   bounded scan otherwise) and the fetch is a pure PK access. Kept
+    //   topic-agnostic to preserve the prior behaviour exactly — a late CLI row
+    //   can land outside the op's window (and, rarely, its topic).
+    const projection = {
+      apiName: messagePlugins.apiName,
+      arguments: messagePlugins.arguments,
+      clientId: messagePlugins.clientId,
+      // The tool message's text body. Heterogeneous CLI adapters (claude-code
+      // Bash) persist the command's stdout here rather than in a structured
+      // `state` field, and the completion-time github Work scan reads the gh
+      // CLI's printed entity URL from it.
+      content: messages.content,
+      createdAt: messages.createdAt,
+      error: messagePlugins.error,
+      id: messagePlugins.id,
+      identifier: messagePlugins.identifier,
+      intervention: messagePlugins.intervention,
+      state: messagePlugins.state,
+      toolCallId: messagePlugins.toolCallId,
+      type: messagePlugins.type,
+      userId: messagePlugins.userId,
+    };
 
-    const rows = await this.db
-      .select({
-        apiName: messagePlugins.apiName,
-        arguments: messagePlugins.arguments,
-        clientId: messagePlugins.clientId,
-        // The tool message's text body. Heterogeneous CLI adapters (claude-code
-        // Bash) persist the command's stdout here rather than in a structured
-        // `state` field, and the completion-time github Work scan reads the gh
-        // CLI's printed entity URL from it.
-        content: messages.content,
-        createdAt: messages.createdAt,
-        error: messagePlugins.error,
-        id: messagePlugins.id,
-        identifier: messagePlugins.identifier,
-        intervention: messagePlugins.intervention,
-        state: messagePlugins.state,
-        toolCallId: messagePlugins.toolCallId,
-        type: messagePlugins.type,
-        userId: messagePlugins.userId,
-      })
-      .from(messagePlugins)
-      .innerJoin(messages, eq(messagePlugins.id, messages.id))
-      .where(and(this.ownership(), this.pluginsOwnership(), or(withinWindow, heterogeneousMatch)))
-      .orderBy(asc(messages.createdAt), asc(messages.id));
+    const scan = (condition: SQL | undefined) =>
+      this.db
+        .select(projection)
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messagePlugins.id, messages.id))
+        .where(and(this.ownership(), this.pluginsOwnership(), condition));
+
+    const fetchHeterogeneous = async () => {
+      const idRows = await this.db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            this.ownership(),
+            sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`,
+          ),
+        );
+      const ids = idRows.map((row) => row.id);
+      if (ids.length === 0) return [];
+      return scan(inArray(messagePlugins.id, ids));
+    };
+
+    const [windowRows, heterogeneousRows] = await Promise.all([
+      scan(withinWindow),
+      fetchHeterogeneous(),
+    ]);
+
+    const byId = new Map<string, (typeof windowRows)[number]>();
+    for (const row of windowRows) byId.set(row.id, row);
+    for (const row of heterogeneousRows) if (!byId.has(row.id)) byId.set(row.id, row);
+
+    const rows = [...byId.values()].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
 
     return rows.map((row) => ({
       apiName: row.apiName ?? undefined,
@@ -2770,6 +2931,112 @@ export class MessageModel {
       type: row.type ?? 'default',
       userId: row.userId,
     }));
+  };
+
+  /**
+   * Load specific tool-call rows by their message ids, ownership-scoped and
+   * pinned to one topic. Serves the LOCAL hetero run work scan
+   * (`work.registerShellWorksForRun`): a desktop-local CLI run has no
+   * `agent_operations` row, so the client reports the exact tool message ids it
+   * persisted instead of the server reconstructing an operation window. The
+   * topic pin means a caller can never scan rows outside the conversation it
+   * claims to complete.
+   */
+  listMessagePluginsByIds = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
+    if (params.ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        arguments: messagePlugins.arguments,
+        clientId: messagePlugins.clientId,
+        // The tool message's text body — claude-code Bash persists the
+        // command's stdout here (see listMessagePluginsForOperation).
+        content: messages.content,
+        createdAt: messages.createdAt,
+        error: messagePlugins.error,
+        id: messagePlugins.id,
+        identifier: messagePlugins.identifier,
+        intervention: messagePlugins.intervention,
+        state: messagePlugins.state,
+        toolCallId: messagePlugins.toolCallId,
+        type: messagePlugins.type,
+        userId: messagePlugins.userId,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          inArray(messagePlugins.id, params.ids),
+          eq(messages.topicId, params.topicId),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      );
+
+    const sorted = [...rows].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return sorted.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
+   * Resolve the tool result message id for a toolCallId — the stable identifier
+   * the model emitted for the call. Lets server-side services push async state
+   * onto a tool card when all they hold is the call id recorded at creation
+   * time (e.g. the goal loop updating the `createGoal` card via
+   * `task.context.origin.toolCallId`).
+   */
+  findToolMessageIdByToolCallId = async (
+    toolCallId: string,
+    /**
+     * Restrict the match to calls made by one assistant message.
+     *
+     * `tool_call_id` is provider-supplied and only unique in practice — the
+     * column carries a plain index, not a unique constraint. Callers that act
+     * on the row (rather than just reading it) should scope the match, or a
+     * reused id from another turn resolves to an unrelated historical result.
+     */
+    parentId?: string,
+  ): Promise<string | null> => {
+    const rows = parentId
+      ? await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .innerJoin(messages, eq(messages.id, messagePlugins.id))
+          .where(
+            and(
+              eq(messagePlugins.toolCallId, toolCallId),
+              eq(messages.parentId, parentId),
+              this.pluginsOwnership(),
+            ),
+          )
+          .limit(1)
+      : await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
+          .limit(1);
+
+    return rows[0]?.id ?? null;
   };
 
   /**
@@ -3011,6 +3278,41 @@ export class MessageModel {
     this.getLatestSpineMessageId({ topicId, threadId: null });
 
   /**
+   * Whether `descendantId` belongs to the branch rooted at `ancestorId`.
+   *
+   * Used when reconciling a client-selected conversation tail with the latest
+   * server row: a newer row may be a sibling from a historical callback fork,
+   * not an advancement of the branch the user is viewing.
+   */
+  isMessageDescendantOf = async ({
+    ancestorId,
+    descendantId,
+    topicId,
+  }: {
+    ancestorId: string;
+    descendantId: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE ancestors(id, parent_id) AS (
+        SELECT id, parent_id
+        FROM messages
+        WHERE id = ${descendantId}
+          AND topic_id = ${topicId}
+          AND ${this.ownership()}
+        UNION
+        SELECT parent.id, parent.parent_id
+        FROM messages parent
+        JOIN ancestors child ON parent.id = child.parent_id
+        WHERE parent.topic_id = ${topicId}
+      )
+      SELECT 1 AS hit FROM ancestors WHERE id = ${ancestorId} LIMIT 1
+    `);
+
+    return result.rows.length > 0;
+  };
+
+  /**
    * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of
    * the latest "spine" message (the most recent message that is NOT a tool and
    * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread
@@ -3175,6 +3477,105 @@ export class MessageModel {
 
   // **************** Delete *************** //
 
+  /**
+   * Preserve the selected branch by identity across a deletion. Branch metadata
+   * stores a positional index, while deleting or reparenting children can change
+   * that index space. If the selected branch itself is deleted, remove the stale
+   * index so conversation-flow can infer the remaining active branch instead of
+   * mistaking `index === branchCount` for an optimistic branch creation.
+   */
+  private captureActiveBranchSnapshots = async (
+    tx: Transaction,
+    parentIds: string[],
+  ): Promise<ActiveBranchSnapshot[]> => {
+    const uniqueParentIds = [...new Set(parentIds)];
+    if (uniqueParentIds.length === 0) return [];
+
+    const parentRows = await tx
+      .select({ id: messages.id, metadata: messages.metadata })
+      .from(messages)
+      .where(and(this.ownership(), inArray(messages.id, uniqueParentIds)));
+    const branchIdsByParent = await this.queryDirectBranchIds(tx, uniqueParentIds);
+    const snapshots: ActiveBranchSnapshot[] = [];
+
+    for (const parent of parentRows) {
+      if (!isPlainRecord(parent.metadata)) continue;
+
+      const activeBranchIndex = parent.metadata.activeBranchIndex;
+      if (typeof activeBranchIndex !== 'number' || activeBranchIndex < 0) continue;
+
+      const branchIds = branchIdsByParent.get(parent.id) ?? [];
+      snapshots.push({
+        activeBranchId: branchIds[activeBranchIndex],
+        activeBranchIndex,
+        metadata: parent.metadata,
+        parentId: parent.id,
+        wasOptimistic: activeBranchIndex === branchIds.length,
+      });
+    }
+
+    return snapshots;
+  };
+
+  private queryDirectBranchIds = async (tx: Transaction, parentIds: string[]) => {
+    const branchRows = await tx
+      .select({ id: messages.id, parentId: messages.parentId })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.parentId, parentIds),
+          not(eq(messages.role, 'tool')),
+        ),
+      )
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+    const branchIdsByParent = new Map<string, string[]>();
+
+    for (const branch of branchRows) {
+      if (!branch.parentId) continue;
+      const branchIds = branchIdsByParent.get(branch.parentId) ?? [];
+      branchIds.push(branch.id);
+      branchIdsByParent.set(branch.parentId, branchIds);
+    }
+
+    return branchIdsByParent;
+  };
+
+  private reconcileActiveBranchSnapshots = async (
+    tx: Transaction,
+    snapshots: ActiveBranchSnapshot[],
+  ) => {
+    if (snapshots.length === 0) return;
+
+    const branchIdsByParent = await this.queryDirectBranchIds(
+      tx,
+      snapshots.map((snapshot) => snapshot.parentId),
+    );
+
+    for (const snapshot of snapshots) {
+      const branchIds = branchIdsByParent.get(snapshot.parentId) ?? [];
+      const survivingBranchIndex = snapshot.activeBranchId
+        ? branchIds.indexOf(snapshot.activeBranchId)
+        : -1;
+      const activeBranchIndex = snapshot.wasOptimistic
+        ? branchIds.length
+        : survivingBranchIndex >= 0
+          ? survivingBranchIndex
+          : undefined;
+
+      if (activeBranchIndex === snapshot.activeBranchIndex) continue;
+
+      const metadata = { ...snapshot.metadata };
+      delete metadata.activeBranchIndex;
+      if (activeBranchIndex !== undefined) metadata.activeBranchIndex = activeBranchIndex;
+
+      await tx
+        .update(messages)
+        .set({ metadata })
+        .where(and(eq(messages.id, snapshot.parentId), this.ownership()));
+    }
+  };
+
   deleteMessage = async (id: string) => {
     return this.db.transaction(async (tx) => {
       // 1. Query the complete information of the message to be deleted
@@ -3186,6 +3587,11 @@ export class MessageModel {
 
       // If the message to be deleted is not found, return directly
       if (message.length === 0) return;
+
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        message[0].parentId ? [message[0].parentId] : [],
+      );
 
       // 2. Update child messages' parentId to the current message's parentId
       // This preserves the tree structure when deleting a node
@@ -3218,6 +3624,8 @@ export class MessageModel {
       await tx
         .delete(messages)
         .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       // 7. Keep the topic's usage rollup in sync (pure derived — a removed
       // assistant message must drop out of the topic totals).
@@ -3275,6 +3683,11 @@ export class MessageModel {
         findFinalAncestor(id);
       }
 
+      const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
+        tx,
+        [...new Set(finalAncestorMap.values())].filter((id): id is string => id !== null),
+      );
+
       // 4. Query child messages whose parentId points to messages being deleted
       const children = await tx
         .select({ id: messages.id, parentId: messages.parentId })
@@ -3294,6 +3707,8 @@ export class MessageModel {
 
       // 6. Delete the messages
       await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, ids)));
+
+      await this.reconcileActiveBranchSnapshots(tx, activeBranchSnapshots);
 
       // 7. Recompute the usage rollup for every affected topic (pure derived).
       const affectedTopicIds = [

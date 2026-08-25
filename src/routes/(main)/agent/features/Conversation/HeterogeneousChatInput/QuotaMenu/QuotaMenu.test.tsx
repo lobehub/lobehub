@@ -3,6 +3,7 @@
  */
 import type * as LobechatConstModule from '@lobechat/const';
 import type * as ElectronClientIpcModule from '@lobechat/electron-client-ipc';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,9 +20,12 @@ const mockService = vi.hoisted(() => ({
 
 const effectiveAgencyConfig = vi.hoisted(() => ({
   current: {
-    boundDeviceId: 'personal-device',
+    boundDeviceId: 'personal-device' as string | undefined,
     executionTarget: 'local' as const,
-    heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+    heterogeneousProvider: {
+      command: 'codex',
+      type: 'codex',
+    } as HeterogeneousProviderConfig,
   },
   workspaceScoped: false,
 }));
@@ -38,6 +42,14 @@ vi.mock('@lobechat/electron-client-ipc', async (importOriginal) => ({
 
 vi.mock('@/features/ChatInput/ControlBar/WorkspaceControls', () => ({
   default: () => <div data-testid="workspace-controls" />,
+}));
+
+vi.mock('@/features/ChatInput/ControlBar/HeteroDeviceSwitcher', () => ({
+  default: () => <div data-testid="hetero-device-switcher" />,
+}));
+
+vi.mock('@/features/AgentQuotaCalendar', () => ({
+  openQuotaCalendarModal: vi.fn(),
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
@@ -131,36 +143,84 @@ vi.mock('antd-style', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ disabled, onClick }: { disabled?: boolean; onClick?: () => void }) => (
-    <button data-testid="refresh" disabled={disabled} type="button" onClick={onClick} />
-  ),
-  Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
-    <div className={className}>{children}</div>
-  ),
-  Icon: () => <svg />,
-  // Render the popover content unconditionally so window rows are assertable
-  // without driving the open/close interaction.
-  Popover: ({
-    children,
-    content,
-    onOpenChange,
-  }: {
-    children?: ReactNode;
-    content?: ReactNode;
-    onOpenChange?: (open: boolean) => void;
-  }) => (
-    <div>
-      <div data-testid="popover-content">{content}</div>
-      <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
-        {children}
+vi.mock('@lobehub/ui', async () => {
+  const { useState } = await import('react');
+
+  return {
+    ActionIcon: ({
+      disabled,
+      onClick,
+      title,
+    }: {
+      disabled?: boolean;
+      onClick?: () => void;
+      title?: string;
+    }) => (
+      <button
+        aria-label={title}
+        data-testid={title ? 'calendar' : 'refresh'}
+        disabled={disabled}
+        type="button"
+        onClick={onClick}
+      />
+    ),
+    Collapse: ({
+      defaultActiveKey = [],
+      items,
+    }: {
+      defaultActiveKey?: string[];
+      items: { children?: ReactNode; key: string; label?: ReactNode }[];
+    }) => {
+      const [activeKeys, setActiveKeys] = useState(defaultActiveKey);
+
+      return (
+        <div>
+          {items.map((item) => {
+            const expanded = activeKeys.includes(item.key);
+
+            return (
+              <div key={item.key}>
+                <button
+                  aria-expanded={expanded}
+                  type="button"
+                  onClick={() => setActiveKeys(expanded ? [] : [item.key])}
+                >
+                  {item.label}
+                </button>
+                {expanded && item.children}
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
+    Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
+      <div className={className}>{children}</div>
+    ),
+    Icon: () => <svg />,
+    // Render the popover content unconditionally so window rows are assertable
+    // without driving the open/close interaction.
+    Popover: ({
+      children,
+      content,
+      onOpenChange,
+    }: {
+      children?: ReactNode;
+      content?: ReactNode;
+      onOpenChange?: (open: boolean) => void;
+    }) => (
+      <div>
+        <div data-testid="popover-content">{content}</div>
+        <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
+          {children}
+        </div>
       </div>
-    </div>
-  ),
-  Skeleton: { Button: () => <div data-testid="skeleton" /> },
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-}));
+    ),
+    Skeleton: { Button: () => <div data-testid="skeleton" /> },
+    Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+    Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  };
+});
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   Button: ({
@@ -282,6 +342,32 @@ describe('HeteroControlBar', () => {
 
     expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
     expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not show Codex quota in API mode', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', command: 'codex', type: 'codex' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
+    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
+  });
+
+  it('does not show Claude Code quota in API mode', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' })).toBeNull();
+    expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
   });
 });
 
@@ -915,7 +1001,12 @@ describe('CodexQuotaMenu', () => {
     expect(
       screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),
     ).toHaveLength(2);
-    expect(screen.getByText('heteroAgent.codexQuota.resetCredits:4')).toBeTruthy();
+    const resetCreditsSummary = screen.getByText('heteroAgent.codexQuota.resetCredits:4');
+    expect(resetCreditsSummary.closest('button')?.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('#1')).toBeNull();
+
+    fireEvent.click(resetCreditsSummary);
+
     expect(screen.getByText('#1')).toBeTruthy();
     expect(screen.getByText('#2')).toBeTruthy();
     expect(screen.getByText('#3')).toBeTruthy();
@@ -934,7 +1025,7 @@ describe('CodexQuotaMenu', () => {
     });
   });
 
-  it('renders every Codex rate-limit bucket and uses the tightest window in the trigger', async () => {
+  it('hides model-specific rate-limit buckets and excludes them from the trigger', async () => {
     mockService.getCodexQuota.mockResolvedValue(
       codexSnapshot({
         rateLimits: [
@@ -958,15 +1049,15 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.compactLeft:2')).toBeTruthy();
+    expect(await screen.findByText('heteroAgent.quota.compactLeft:80')).toBeTruthy();
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
-    expect(screen.getByText('Codex Other · heteroAgent.quota.session')).toBeTruthy();
-    expect(screen.getByText('Codex Other · heteroAgent.codexQuota.monthly')).toBeTruthy();
+    expect(screen.queryByText('Codex Other · heteroAgent.quota.session')).toBeNull();
+    expect(screen.queryByText('Codex Other · heteroAgent.codexQuota.monthly')).toBeNull();
     expect(screen.getByText('90%')).toBeTruthy();
     expect(screen.getByText('80%')).toBeTruthy();
-    expect(screen.getByText('2%')).toBeTruthy();
-    expect(screen.getByText('60%')).toBeTruthy();
+    expect(screen.queryByText('2%')).toBeNull();
+    expect(screen.queryByText('60%')).toBeNull();
   });
 
   it('renders the credits-unavailable footer when the RPC omits credits', async () => {
@@ -1011,6 +1102,8 @@ describe('CodexQuotaMenu', () => {
     );
 
     render(<CodexQuotaMenu />);
+
+    fireEvent.click(await screen.findByText('heteroAgent.codexQuota.resetCredits:3'));
 
     expect(await screen.findByText('Early reset')).toBeTruthy();
     expect(screen.getByText('Weekly rescue')).toBeTruthy();
@@ -1070,6 +1163,7 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu command="codex" env={{ CODEX_HOME: '/custom' }} />);
 
+    fireEvent.click(await screen.findByText('heteroAgent.codexQuota.resetCredits:2'));
     fireEvent.click(await screen.findByRole('button', { name: 'heteroAgent.codexQuota.resetNow' }));
     expect(confirmModalMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1121,6 +1215,7 @@ describe('CodexQuotaMenu', () => {
     render(<CodexQuotaMenu />);
 
     expect(await screen.findByText('4%')).toBeTruthy();
+    fireEvent.click(screen.getByText('heteroAgent.codexQuota.resetCredits:1'));
 
     fireEvent.click(screen.getByTestId('refresh'));
 

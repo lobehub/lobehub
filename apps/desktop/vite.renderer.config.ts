@@ -11,9 +11,11 @@ import {
   createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
+  sharedRendererDedupe,
   sharedRendererDefine,
   sharedRendererPlugins,
 } from '../../plugins/vite/sharedRendererConfig';
+import { spaPublicDirNames } from '../../scripts/copySpaBuildCore';
 import {
   applyDesktopViteConfigExtension,
   CLOUD_ROOT_DIR,
@@ -27,18 +29,19 @@ import {
 } from './vite.shared';
 
 const RENDERER_OUT_DIR = path.resolve(__dirname, 'dist/renderer');
-const WEB_SPA_BUILD_DIRECTORIES = ['_spa', '_spa-auth'];
 
 /**
  * The repository public directory can contain ignored web build outputs after
  * local SPA builds. Vite copies the whole directory by default, so remove only
  * those generated web outputs from the generated desktop renderer directory.
+ * The directory list is derived from the copy script's targets so a newly
+ * added SPA surface cannot silently ride into the desktop bundle again.
  */
 function excludeWebSpaBuildArtifactsPlugin(): PluginOption {
   return {
     async closeBundle() {
       await Promise.all(
-        WEB_SPA_BUILD_DIRECTORIES.map((directory) =>
+        spaPublicDirNames.map((directory) =>
           rm(path.join(RENDERER_OUT_DIR, directory), { force: true, recursive: true }),
         ),
       );
@@ -253,7 +256,7 @@ export default defineConfig(async (env) => {
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
-      dedupe: ['react', 'react-dom'],
+      dedupe: sharedRendererDedupe,
       tsconfigPaths: !isCloudDesktop,
     },
     root: ROOT_DIR,

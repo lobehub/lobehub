@@ -74,6 +74,11 @@ export interface SidebarAgentItem {
    * agents). Used by the agents list to render label tags and group by label.
    */
   labels?: SidebarAgentLabel[];
+  /**
+   * The agent's personal name. Absent for chat groups and for agents created
+   * before names existed — resolve the label with `agentDisplayName(item)`.
+   */
+  name?: string | null;
   pinned: boolean;
   sessionId?: string | null;
   /**

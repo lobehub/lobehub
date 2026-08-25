@@ -20,6 +20,9 @@ vi.mock('@lobechat/utils', () => ({
 }));
 vi.mock('../../utils/uriParser');
 
+const MP3_BASE64 = 'SUQzBAAAAAA=';
+const WAV_BASE64 = 'UklGRjAwMDBXQVZFZm10IA==';
+
 describe('convertMessageContent', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -33,6 +36,106 @@ describe('convertMessageContent', () => {
     const content = { type: 'text', text: 'Hello' } as OpenAI.ChatCompletionContentPart;
     const result = await convertMessageContent(content);
     expect(result).toEqual(content);
+  });
+
+  it.each([
+    ['WAV', 'audio/wav', 'wav', WAV_BASE64],
+    ['MP3', 'audio/mpeg', 'mp3', MP3_BASE64],
+  ] as const)(
+    'should convert a base64 %s data URI to input_audio',
+    async (_, mimeType, format, base64) => {
+      const content = {
+        audio_url: {
+          codec: format,
+          durationMs: 2500,
+          mimeType,
+          url: `data:${mimeType};base64,${base64}`,
+        },
+        type: 'audio_url',
+      } as const;
+      vi.mocked(parseDataUri).mockReturnValue({
+        base64,
+        mimeType,
+        type: 'base64',
+      });
+
+      await expect(convertMessageContent(content, { supportsAudioInput: true })).resolves.toEqual({
+        input_audio: { data: base64, format },
+        type: 'input_audio',
+      });
+      expect(imageUrlToBase64).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['WAV', 'audio/wav', 'wav', WAV_BASE64],
+    ['MP3', 'audio/mpeg', 'mp3', MP3_BASE64],
+  ] as const)(
+    'should safely download a %s URL and convert it to input_audio',
+    async (_, mimeType, format, base64) => {
+      const url = `https://files.example.com/voice.${format}`;
+      const content = { audio_url: { url }, type: 'audio_url' } as const;
+      vi.mocked(parseDataUri).mockReturnValue({ base64: null, mimeType: null, type: 'url' });
+      vi.mocked(imageUrlToBase64).mockResolvedValue({ base64, mimeType });
+
+      await expect(convertMessageContent(content, { supportsAudioInput: true })).resolves.toEqual({
+        input_audio: { data: base64, format },
+        type: 'input_audio',
+      });
+      expect(imageUrlToBase64).toHaveBeenCalledWith(url, { maxBytes: 20 * 1024 * 1024 });
+    },
+  );
+
+  it('should fail closed when the provider adapter does not enable audio input', async () => {
+    const content = {
+      audio_url: { url: 'data:audio/wav;base64,audioBase64' },
+      type: 'audio_url',
+    } as const;
+
+    await expect(convertMessageContent(content)).rejects.toThrow(
+      'Audio input is not supported by this provider runtime',
+    );
+    expect(parseDataUri).not.toHaveBeenCalled();
+    expect(imageUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['base64 data', { base64: 'audioBase64', mimeType: 'audio/ogg', type: 'base64' as const }],
+    ['download URL', { base64: null, mimeType: null, type: 'url' as const }],
+  ])('should reject an unsupported audio MIME type from %s', async (_, parsedUri) => {
+    const url =
+      parsedUri.type === 'url'
+        ? 'https://files.example.com/voice.ogg'
+        : 'data:audio/ogg;base64,audioBase64';
+    const content = { audio_url: { url }, type: 'audio_url' } as const;
+    vi.mocked(parseDataUri).mockReturnValue(parsedUri);
+    if (parsedUri.type === 'url') {
+      vi.mocked(imageUrlToBase64).mockResolvedValue({
+        base64: 'downloadedAudio',
+        mimeType: 'audio/ogg',
+      });
+    }
+
+    await expect(convertMessageContent(content, { supportsAudioInput: true })).rejects.toThrow(
+      /only supports (?:base64 )?WAV or MP3/i,
+    );
+  });
+
+  it('should reject bytes that only claim to be WAV in persisted metadata', async () => {
+    const url = 'https://files.example.com/spoofed.wav';
+    const content = {
+      audio_url: { mimeType: 'audio/wav', url },
+      type: 'audio_url',
+    } as const;
+    vi.mocked(parseDataUri).mockReturnValue({ base64: null, mimeType: null, type: 'url' });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'bm90IGF1ZGlv',
+      mimeType: 'application/octet-stream',
+    });
+
+    await expect(convertMessageContent(content, { supportsAudioInput: true })).rejects.toThrow(
+      'only supports WAV or MP3 files',
+    );
   });
 
   it('should convert image URL to base64 when necessary', async () => {
@@ -586,6 +689,24 @@ describe('convertOpenAIMessages', () => {
 });
 
 describe('convertOpenAIResponseInputs', () => {
+  it('should reject raw audio explicitly instead of dropping it from Responses input', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: [
+          {
+            audio_url: { mimeType: 'audio/wav', url: 'https://files.example.com/voice.wav' },
+            type: 'audio_url',
+          },
+        ],
+        role: 'user',
+      },
+    ];
+
+    await expect(convertOpenAIResponseInputs(messages)).rejects.toThrow(
+      'OpenAI raw audio input requires the Chat Completions API',
+    );
+  });
+
   it('应该正确转换普通文本消息', async () => {
     const messages: OpenAIChatMessage[] = [
       { role: 'user', content: 'Hello' },

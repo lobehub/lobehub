@@ -187,9 +187,9 @@ const assertCanAccessTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
   action: 'use' | 'view',
-): Promise<void> => {
+): Promise<ResolvedConversationTarget[]> => {
   const workspaceId = ctx.workspaceId ?? undefined;
-  if (!workspaceId) return;
+  if (!workspaceId) return [];
 
   const resolved = await resolveTopicTargets(ctx, topicIds);
   for (const { meta, resourceId, resourceType } of resolved) {
@@ -204,19 +204,29 @@ const assertCanAccessTopicTargets = async (
       workspaceId,
     });
   }
+
+  return resolved;
 };
 
-/** Resolve topic ids to their owning agent/group and assert `use` access. */
+/**
+ * Resolve topic ids to their owning agent/group and assert `use` access.
+ *
+ * Returns the conversation resources it actually checked. An EMPTY result is
+ * not an approval: a topic with no agent, group or resolvable session backs no
+ * resource, so there was nothing to gate on. Callers whose mutation reaches
+ * beyond the conversation — publishing a share link, say — must fail closed on
+ * that instead of reading the vacuous pass as authorization.
+ */
 export const assertCanUseTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
-): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'use');
+): Promise<ResolvedConversationTarget[]> => assertCanAccessTopicTargets(ctx, topicIds, 'use');
 
 /** Resolve topic ids to their owning agent/group and assert `view` access. */
 export const assertCanViewTopicTargets = async (
   ctx: ConversationGuardCtx,
   topicIds: string[],
-): Promise<void> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
+): Promise<ResolvedConversationTarget[]> => assertCanAccessTopicTargets(ctx, topicIds, 'view');
 
 /**
  * Resolve one set of topic resources, then evaluate every active recipient

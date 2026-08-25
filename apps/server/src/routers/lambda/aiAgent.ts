@@ -1,7 +1,11 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
+  entityIdPattern,
+  LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
@@ -10,21 +14,30 @@ import {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { agentOperations, topics } from '@/database/schemas';
+import { UserModel } from '@/database/models/user';
+import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
+import {
+  getServerDefaultHeterogeneousModels,
+  initModelRuntimeFromServerConfig,
+  resolveServerDefaultHeterogeneousModel,
+  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
+} from '@/server/modules/ModelRuntime';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
@@ -35,8 +48,55 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AiChatService } from '@/server/services/aiChat';
 import { getFileProxyUrl } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
+import {
+  HeteroOperationPrincipalError,
+  resolveActiveHeteroOperationPrincipal,
+} from '@/server/services/heterogeneousAgent/operationPrincipal';
 
 const log = debug('lobe-server:ai-agent-router');
+
+const resolveHeteroTopicWorkspace = async (params: {
+  db: LobeChatDatabase;
+  requestedWorkspaceId?: string | null;
+  topicId: string;
+  userId: string;
+}) => {
+  const { db, requestedWorkspaceId, topicId, userId } = params;
+  const [topic] = await db
+    .select({ userId: topics.userId, workspaceId: topics.workspaceId })
+    .from(topics)
+    .where(eq(topics.id, topicId))
+    .limit(1);
+
+  if (!topic || (requestedWorkspaceId != null && requestedWorkspaceId !== topic.workspaceId)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+  }
+
+  if (!topic.workspaceId) {
+    if (topic.userId !== userId) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+    }
+    return undefined;
+  }
+
+  const [membership] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, topic.workspaceId),
+        eq(workspaceMembers.userId, userId),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Topic is outside the caller scope' });
+  }
+
+  return topic.workspaceId;
+};
 
 /**
  * Workspace `use` guard for operation-keyed endpoints: resolve the operation
@@ -197,10 +257,13 @@ const ExecAgentSchema = z
     /** Application context for message storage */
     appContext: z
       .object({
+        conversationAgentId: z.string().optional(),
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().nullish(),
         /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
         editingAgentId: z.string().optional(),
+        /** The group being edited when scope is 'group_agent_builder' (not a group chat turn). */
+        editingGroupId: z.string().optional(),
         groupId: z.string().nullish(),
         initialTopicMetadata: z
           .object({
@@ -224,14 +287,32 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Client-minted ids for the rows this run creates, honoured verbatim —
+     * the gateway counterpart of `sendMessageInServer`'s `newTopic.id` /
+     * `newUserMessage.id` / `newAssistantMessage.id`. Validated per namespace:
+     * an unvalidated client primary key would let a caller submit look-alike
+     * ids, wrong namespaces, or strings that leak into logs and URLs.
+     */
+    clientIds: z
+      .object({
+        assistantMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+        topicId: z.string().regex(entityIdPattern('topics')).optional(),
+        userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
+      })
+      .optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
+    /** Current desktop device hint, honored only for an effective local target */
+    localDeviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds: z.array(z.string()).optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
+    /** Existing gateway operation this fresh turn atomically supersedes. */
+    replacesOperationId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -251,6 +332,31 @@ const ExecAgentSchema = z
         /** tool_call_id of the pending tool call being approved/rejected. */
         toolCallId: z.string(),
       })
+      .optional(),
+    /**
+     * Batch form of `resumeApproval` — one entry per pending tool the user
+     * resolved in a single action ("approve all" on a parallel tool batch).
+     * The op applies every decision, then runs all approved tools in ONE
+     * `call_tools_batch` and continues the LLM once with the full result set.
+     *
+     * Prefer this over firing N `resumeApproval` ops for a parallel batch: each
+     * of those continues the LLM while the not-yet-approved tools are still
+     * empty rows, which forks the parent chain and shows the model blank
+     * results. Mutually exclusive with `resumeApproval`.
+     */
+    resumeApprovals: z
+      .array(
+        z.object({
+          decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+          /** ID of the pending `role='tool'` message this decision targets. */
+          parentMessageId: z.string(),
+          /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+          rejectionReason: z.string().optional(),
+          /** tool_call_id of the pending tool call being approved/rejected. */
+          toolCallId: z.string(),
+        }),
+      )
+      .min(1)
       .optional(),
     /**
      * Resume a previous op paused on a `humanIntervention: 'always'` tool (e.g.
@@ -400,6 +506,8 @@ const ExecSubAgentTaskSchema = z.object({
 const CreateClientTaskThreadSchema = z.object({
   /** The Agent ID to execute the task */
   agentId: z.string(),
+  /** Optional assistant placeholder for transports that stream into an existing row. */
+  assistantMessage: z.object({ provider: z.string() }).optional(),
   /** The Group ID (optional, only for Group mode) */
   groupId: z.string().optional(),
   /** Initial user message content (task instruction) */
@@ -465,9 +573,9 @@ const InterruptTaskSchema = z
     /** Thread ID */
     threadId: z.string().optional(),
     /**
-     * Topic ID — required to cancel remote hetero tasks (openclaw / hermes).
+     * Topic ID — used to cancel device-backed heterogeneous agent tasks.
      * When provided and the topic's runningOperation has a deviceId, the server
-     * will dispatch a cancelHeteroTask tool call to kill the remote process.
+     * will dispatch a cancelHeteroTask tool call to kill the device process.
      */
     topicId: z.string().optional(),
   })
@@ -514,7 +622,7 @@ const AgentStreamEventSchema = z.object({
  * → topic reverse-lookup is unreliable per design decision).
  */
 const HeteroIngestSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: LocalHeterogeneousAgentTypeSchema,
   /** Initial assistant placeholder message id forwarded from the sandbox env var.
    * When present, `loadOrCreateState` uses it directly and skips the DB read of
    * topic.metadata.runningOperation, eliminating the replica-lag race condition. */
@@ -531,7 +639,12 @@ const HeteroIngestSchema = z.object({
  * (CC's per-cwd id), kept here so the server can resume next time.
  */
 const HeteroFinishSchema = z.object({
-  agentType: z.enum(['amp', 'claude-code', 'codex', 'opencode']),
+  agentType: LocalHeterogeneousAgentTypeSchema,
+  /** Initial assistant placeholder forwarded by the producer. Unlike the live
+   * ingest path, finish may arrive after gateway session completion has already
+   * cleared topic.metadata.runningOperation, so this is the durable fallback
+   * anchor for projecting a terminal error onto the assistant turn. */
+  assistantMessageId: z.string().min(1).optional(),
   error: z
     .object({
       /**
@@ -583,16 +696,34 @@ const SubmitHeteroInterventionSchema = z.object({
   toolCallId: z.string().min(1),
 });
 
-const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+const aiAgentBaseProcedure = wsCompatProcedure.use(serverDatabase);
+
+const aiAgentProcedure = aiAgentBaseProcedure.use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
+
+  // Read market accessToken from user_settings.market so server-side agent runtime
+  // can authenticate with the Market API for creds operations.
+  let marketAccessToken: string | undefined;
+  try {
+    const userModel = new UserModel(ctx.serverDB!, ctx.userId);
+    const settings = await userModel.getUserSettings();
+    marketAccessToken = (settings?.market as any)?.accessToken;
+  } catch {
+    // non-fatal — MarketService will fall back to trustedClientToken
+  }
 
   return opts.next({
     ctx: {
       agentRuntimeService: new AgentRuntimeService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       }),
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        marketAccessToken,
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
       heterogeneousAgentService: new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
@@ -604,17 +735,289 @@ const aiAgentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   });
 });
 
-// Dedicated procedure for hetero-agent ingest/finish endpoints.
-// Requires a `hetero-operation` JWT (4h expiry) — normal user tokens are rejected,
-// so only the sandbox/device that received the JWT from execAgent can call these.
-//
-// Note: workspaceId is not on `ctx` for this procedure (the JWT is server-to-server
-// and carries no workspace claim). Handlers must resolve wsId from the row keyed
-// by `topicId` and construct `HeterogeneousAgentService` per request.
+// Dedicated procedure for hetero-agent callbacks. Narrow operation tokens are
+// re-authorized against durable operation state; pre-deploy operation tokens and
+// normal user OIDC tokens go through the legacy ownership guards.
 const heteroAgentProcedure = heteroAuthedProcedure.use(serverDatabase);
 const aiAgentWriteProcedure = aiAgentProcedure.use(withScopedPermission('message:create'));
 
+const authorizeOperationCallback = async (
+  ctx: {
+    heteroAuthKind: string;
+    heteroOperation?: NonNullable<
+      Parameters<typeof resolveActiveHeteroOperationPrincipal>[0]['claims']
+    > | null;
+    serverDB: LobeChatDatabase;
+  },
+  operationId: string,
+  capability: 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read',
+) => {
+  if (ctx.heteroAuthKind !== 'operation') return;
+  if (!ctx.heteroOperation) throw new TRPCError({ code: 'UNAUTHORIZED' });
+  try {
+    await resolveActiveHeteroOperationPrincipal({
+      capability,
+      claims: ctx.heteroOperation,
+      db: ctx.serverDB,
+      operationId,
+    });
+  } catch (error) {
+    if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+    throw new TRPCError({
+      cause: error,
+      code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+      message: error.message,
+    });
+  }
+};
+
+const assertServerDefaultControlAuth = (oidcAuth: Record<string, unknown> | null | undefined) => {
+  if (!oidcAuth || oidcAuth.purpose) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'Server-default operations require Desktop OIDC authentication',
+    });
+  }
+};
+
+export const resolveServerDefaultHeterogeneousCapability = async () => {
+  const base = {
+    model: 'lobehub-default' as const,
+  };
+  if (process.env.ENABLE_SERVER_DEFAULT_HETEROGENEOUS_AGENT === '0') {
+    return { ...base, agents: [], enabled: false as const, reason: 'disabled' as const };
+  }
+
+  try {
+    const models = await getServerDefaultHeterogeneousModels();
+    const agents = SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES.filter(
+      (agentType) => models[agentType].length > 0,
+    );
+    if (agents.length === 0) {
+      return {
+        ...base,
+        agents,
+        enabled: false as const,
+        models,
+        reason: 'invalidConfiguration' as const,
+      };
+    }
+    return { ...base, agents, enabled: true as const, models };
+  } catch (error) {
+    log('Server-default heterogeneous capability is unavailable: %O', error);
+    return {
+      ...base,
+      agents: [],
+      enabled: false as const,
+      reason: 'invalidConfiguration' as const,
+    };
+  }
+};
+
+const resolveServerDefaultControlOperation = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  userId: string;
+}) => {
+  const [operation] = await params.db
+    .select({
+      metadata: agentOperations.metadata,
+      model: agentOperations.model,
+      provider: agentOperations.provider,
+      status: agentOperations.status,
+      workspaceId: agentOperations.workspaceId,
+    })
+    .from(agentOperations)
+    .where(
+      and(eq(agentOperations.id, params.operationId), eq(agentOperations.userId, params.userId)),
+    )
+    .limit(1);
+
+  if (!operation || operation.metadata?.serverDefaultHeterogeneous !== true) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Operation is outside the caller scope' });
+  }
+
+  if (operation.workspaceId) {
+    const [membership] = await params.db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, operation.workspaceId),
+          eq(workspaceMembers.userId, params.userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!membership) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Operation is outside the caller scope' });
+    }
+  }
+
+  return {
+    model: new AgentOperationModel(params.db, params.userId, operation.workspaceId ?? undefined),
+    operation,
+  };
+};
+
+const settleServerDefaultControlOperation = async (params: {
+  currentStatus: string;
+  model: AgentOperationModel;
+  operationId: string;
+  targetStatus: 'done' | 'error' | 'interrupted';
+}) => {
+  if (params.currentStatus === params.targetStatus) return;
+  if (params.currentStatus !== 'running') {
+    throw new TRPCError({ code: 'CONFLICT', message: 'Operation has already ended' });
+  }
+
+  if (await params.model.settleRunning(params.operationId, params.targetStatus)) return;
+
+  // Another terminal request won the CAS after the scope read. Treat an
+  // identical terminal result as idempotent and reject a conflicting result.
+  const current = await params.model.findById(params.operationId);
+  if (current?.status !== params.targetStatus) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'Operation has already ended' });
+  }
+};
+
 export const aiAgentRouter = router({
+  getServerDefaultHeterogeneousCapability: aiAgentBaseProcedure.query(() =>
+    resolveServerDefaultHeterogeneousCapability(),
+  ),
+
+  beginServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
+    .input(
+      z.object({
+        agentType: z.enum(SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES),
+        agentId: z.string().optional(),
+        model: z.string().min(1),
+        operationId: z.string().min(1),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      const workspaceId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId: input.topicId,
+        userId: ctx.userId,
+      });
+      if (workspaceId && input.agentId) {
+        await assertCanUseWorkspaceAgent({
+          agentId: input.agentId,
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId,
+        });
+      }
+      const capability = await resolveServerDefaultHeterogeneousCapability();
+      if (!capability.enabled) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message:
+            capability.reason === 'disabled'
+              ? 'Server-default agents are disabled'
+              : 'No server model is available',
+        });
+      }
+      const selection = await resolveServerDefaultHeterogeneousModel(
+        input.agentType,
+        input.model,
+      ).catch((error) => {
+        throw new TRPCError({
+          cause: error,
+          code: 'BAD_REQUEST',
+          message: 'The selected server model is not available for this heterogeneous agent',
+        });
+      });
+      await initModelRuntimeFromServerConfig({
+        actorUserId: ctx.userId,
+        workspaceId,
+      }).catch((error) => {
+        log('Selected server model runtime is unavailable: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'PRECONDITION_FAILED',
+          message: 'The selected server model runtime is unavailable',
+        });
+      });
+
+      const model = new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId);
+      await model.recordStart({
+        agentId: input.agentId,
+        metadata: { agentType: input.agentType, serverDefaultHeterogeneous: true },
+        model: selection.model,
+        operationId: input.operationId,
+        provider: selection.provider,
+        topicId: input.topicId,
+        trigger: RequestTrigger.Chat,
+      });
+      const operation = await model.findById(input.operationId);
+      if (
+        !operation ||
+        operation.userId !== ctx.userId ||
+        operation.workspaceId !== (workspaceId ?? null) ||
+        operation.status !== 'running' ||
+        operation.topicId !== input.topicId ||
+        operation.agentId !== (input.agentId ?? null) ||
+        operation.model !== selection.model ||
+        operation.provider !== selection.provider ||
+        operation.metadata?.agentType !== input.agentType
+      ) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Operation id is already in use' });
+      }
+
+      return {
+        model: 'lobehub-default' as const,
+        token: await signHeteroOperationJWT({
+          capabilities: ['model:invoke'],
+          model: selection.model,
+          operationId: input.operationId,
+          providerId: selection.provider,
+          userId: ctx.userId,
+          workspaceId,
+        }),
+      };
+    }),
+
+  finishServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
+    .input(z.object({ operationId: z.string().min(1), result: z.enum(['done', 'error']) }))
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      const { model, operation } = await resolveServerDefaultControlOperation({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+      });
+      await settleServerDefaultControlOperation({
+        currentStatus: operation.status,
+        model,
+        operationId: input.operationId,
+        targetStatus: input.result,
+      });
+      return { success: true as const };
+    }),
+
+  cancelServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
+    .input(z.object({ operationId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      const { model, operation } = await resolveServerDefaultControlOperation({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+      });
+      await settleServerDefaultControlOperation({
+        currentStatus: operation.status,
+        model,
+        operationId: input.operationId,
+        targetStatus: 'interrupted',
+      });
+      return { success: true as const };
+    }),
+
   /**
    * Create Thread for client-side task execution in Group mode
    *
@@ -736,7 +1139,8 @@ export const aiAgentRouter = router({
   createClientTaskThread: aiAgentWriteProcedure
     .input(CreateClientTaskThreadSchema)
     .mutation(async ({ input, ctx }) => {
-      const { agentId, groupId, instruction, parentMessageId, title, topicId } = input;
+      const { agentId, assistantMessage, groupId, instruction, parentMessageId, title, topicId } =
+        input;
 
       log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
 
@@ -791,6 +1195,19 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
+        const assistantMessageRecord = assistantMessage
+          ? await ctx.messageModel.create({
+              agentId,
+              content: LOADING_FLAT,
+              groupId,
+              parentId: userMessage.id,
+              provider: assistantMessage.provider,
+              role: 'assistant',
+              threadId: thread.id,
+              topicId,
+            })
+          : undefined;
+
         // 3. Query thread messages and main chat messages in parallel
         const messageQueryOptions = {
           postProcessUrl: createUiMessageFileUrlResolver(),
@@ -811,6 +1228,7 @@ export const aiAgentRouter = router({
 
         // 4. Return Thread, userMessageId, threadMessages and messages
         return {
+          assistantMessageId: assistantMessageRecord?.id,
           messages,
           startedAt,
           success: true,
@@ -841,11 +1259,13 @@ export const aiAgentRouter = router({
       appContext,
       autoStart = true,
       deviceId,
+      localDeviceId,
       existingMessageIds = [],
       fileIds,
       mentionedAgents,
       parentMessageId,
       resumeApproval,
+      resumeApprovals,
       resumeToolResult,
       selectedToolIds,
       trigger,
@@ -869,6 +1289,9 @@ export const aiAgentRouter = router({
           ...existingMessageIds,
           parentMessageId,
           resumeApproval?.parentMessageId,
+          // Every batch target is authorized too — a caller must not be able to
+          // slip a message it doesn't own into the list behind an owned anchor.
+          ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
           resumeToolResult?.parentMessageId,
         ],
         topicId: appContext?.topicId,
@@ -879,12 +1302,18 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        clientIds: input.clientIds,
+        // This procedure serves the composer (`aiAgentService.execAgentTask`).
+        // The client already queues follow-ups behind a live run and shows the
+        // user a tray; refusing here would only make the message disappear.
+        interactiveStart: true,
         // Propagate the originating request's client IP / user agent into the run
         // so downstream LLM-call metadata can carry them for auditing and spend
         // attribution. These are server-derived from the tRPC context and are
         // intentionally not part of the client-passable input schema.
         clientIp: ctx.clientIp ?? undefined,
         deviceId,
+        localDeviceId,
         existingMessageIds,
         fileIds,
         mentionedAgents,
@@ -894,6 +1323,7 @@ export const aiAgentRouter = router({
         // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
         resumeApproval,
+        resumeApprovals,
         resumeToolResult,
         selectedToolIds,
         slug,
@@ -906,6 +1336,17 @@ export const aiAgentRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
       }
 
       throw new TRPCError({
@@ -1491,6 +1932,39 @@ export const aiAgentRouter = router({
    * This endpoint interrupts a SubAgent task by threadId or operationId.
    * It updates both operation status and Thread status to cancelled state.
    */
+  /**
+   * Stop a run parked on tool approval: settle the pending tool rows and end
+   * the operation without executing anything or continuing the model.
+   *
+   * Distinct from `interruptTask`, which only flips runtime state and assumes
+   * a live loop will persist the outcome — a parked run has no loop, so its
+   * tool rows and DB row would both be left behind.
+   */
+  stopPendingApproval: aiAgentWriteProcedure
+    .input(
+      z.object({
+        /** Pending `role='tool'` message ids to settle — the active batch. */
+        toolMessageIds: z.array(z.string()).min(1),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Same ownership gate the approval resume uses: every target must belong
+      // to the caller before anything is written.
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: input.toolMessageIds,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      return ctx.aiAgentService.stopPendingApproval({
+        toolMessageIds: input.toolMessageIds,
+        topicId: input.topicId,
+      });
+    }),
+
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }) => {
@@ -1520,6 +1994,8 @@ export const aiAgentRouter = router({
   heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, events, operationId, topicId } = input;
 
+    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
+
     log(
       'heteroIngest: topic=%s op=%s type=%s count=%d',
       topicId,
@@ -1529,30 +2005,12 @@ export const aiAgentRouter = router({
     );
 
     try {
-      // Resolve workspaceId from the topic row so persistence writes land in
-      // the correct workspace scope. heteroAuthedProcedure carries no
-      // workspace claim, so we must look it up here per request. We bypass
-      // `TopicModel.findById` because it filters by workspace; here we need a
-      // workspace-agnostic lookup keyed only by topicId + userId.
-      const [topicRow] = await ctx.serverDB
-        .select({ workspaceId: topics.workspaceId })
-        .from(topics)
-        .where(and(eq(topics.id, topicId), eq(topics.userId, ctx.userId)))
-        .limit(1);
-
-      // Owner-token callers (a logged-in desktop reusing its own session) must
-      // prove they own the target topic — `topicRow` is already filtered by
-      // `userId`, so a missing row means the topic isn't theirs. The
-      // operation-token path is exempt: its `sub` may be a workspaceId that
-      // never matches `topics.userId`, and it's trusted as server-minted.
-      if (ctx.heteroAuthKind === 'user' && !topicRow) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Topic not found or not owned by the caller',
-        });
-      }
-
-      const wsId = topicRow?.workspaceId ?? undefined;
+      const wsId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId,
+        userId: ctx.userId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       });
@@ -1588,28 +2046,19 @@ export const aiAgentRouter = router({
    * CLI's own end-event was lost mid-flight.
    */
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
-    const { agentType, error, operationId, result, sessionId, topicId } = input;
+    const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
+
+    await authorizeOperationCallback(ctx, operationId, 'hetero:finish');
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
     try {
-      // Resolve workspaceId from the topic row (heteroAuthedProcedure has no
-      // workspace claim) so persistence writes land in the correct scope.
-      const [topicRow] = await ctx.serverDB
-        .select({ workspaceId: topics.workspaceId })
-        .from(topics)
-        .where(and(eq(topics.id, topicId), eq(topics.userId, ctx.userId)))
-        .limit(1);
-
-      // See heteroIngest: owner tokens must own the topic; operation tokens are exempt.
-      if (ctx.heteroAuthKind === 'user' && !topicRow) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Topic not found or not owned by the caller',
-        });
-      }
-
-      const wsId = topicRow?.workspaceId ?? undefined;
+      const wsId = await resolveHeteroTopicWorkspace({
+        db: ctx.serverDB,
+        requestedWorkspaceId: ctx.workspaceId,
+        topicId,
+        userId: ctx.userId,
+      });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
         workspaceId: wsId,
       });
@@ -1621,6 +2070,7 @@ export const aiAgentRouter = router({
       // here anymore; this is just the server-to-server ack endpoint.
       await heteroService.heteroFinish({
         agentType,
+        assistantMessageId,
         error,
         operationId,
         result,
@@ -1656,16 +2106,18 @@ export const aiAgentRouter = router({
     .query(async ({ input, ctx }) => {
       const { operationId, lastEventId, blockMs } = input;
 
+      await authorizeOperationCallback(ctx, operationId, 'hetero:intervention:read');
+
       // Ownership guard, mirroring heteroIngest / heteroFinish. The op stream is
       // read by `operationId` alone, so an owner-token caller (a logged-in
       // desktop reusing its own OIDC session) must prove it owns THIS operation
       // — otherwise any signed-in user could long-poll another run's
       // `agent_intervention_response` payloads by id. Bind the guard to the
       // operation row directly (tighter than the topic-level guard the write
-      // paths use, since the read has no topicId to key on). The operation-token
-      // path is exempt: it's server-minted and handed only to the sandbox /
-      // device running this op.
-      if (ctx.heteroAuthKind === 'user') {
+      // paths use, since the read has no topicId to key on). Strict operation-token
+      // callers already passed the durable principal check above; user tokens and
+      // pre-deploy operation tokens use the legacy ownership lookup.
+      if (ctx.heteroAuthKind !== 'operation') {
         const [operationRow] = await ctx.serverDB
           .select({ userId: agentOperations.userId })
           .from(agentOperations)

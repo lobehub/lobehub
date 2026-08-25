@@ -1,26 +1,45 @@
 import type { IconType } from '@lobehub/icons';
-import { Amp, ClaudeCode, Codex, getLobeIconCDN, OpenCode } from '@lobehub/icons';
+import {
+  Amp,
+  ClaudeCode,
+  CodeBuddy,
+  Codex,
+  Cursor,
+  getLobeIconCDN,
+  Grok,
+  Kimi,
+  OpenCode,
+  Pi,
+  Qoder,
+  Trae,
+} from '@lobehub/icons';
 
 import {
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
-  type HeterogeneousAgentConfig,
   isRemoteHeterogeneousType,
 } from '../config';
 
 export { isRemoteHeterogeneousType };
 
-export interface HeterogeneousAgentClientConfig extends HeterogeneousAgentConfig {
+export type HeterogeneousAgentClientConfig = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number] & {
   avatar: string;
   icon: IconType;
-}
+};
 
 const heterogeneousAgentIcons = {
   'amp': Amp,
   'claude-code': ClaudeCode,
+  'codebuddy': CodeBuddy,
   'codex': Codex,
+  'cursor': Cursor,
+  'grok-build': Grok,
+  'kimi-code': Kimi,
   'opencode': OpenCode,
-} as const satisfies Record<HeterogeneousAgentConfig['type'], IconType>;
+  'pi': Pi,
+  'qoder': Qoder,
+  'trae': Trae,
+} as const satisfies Record<HeterogeneousAgentClientConfig['type'], IconType>;
 
 const createAgentAvatar = (iconId: string) =>
   getLobeIconCDN(iconId, {

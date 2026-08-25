@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Falha ao montar o contexto da conversa para esta solicitação. Por favor, tente novamente; se o problema persistir, entre em contato com o suporte.",
   "DatabasePersistError": "Uma operação no banco de dados falhou ao salvar ou carregar esta conversa. Por favor, tente novamente; se o problema persistir, entre em contato com o suporte.",
   "ExceededContextWindow": "O conteúdo da solicitação atual excede o comprimento que o modelo pode processar. Por favor, reduza a quantidade de conteúdo e tente novamente.",
+  "HarnessJsonParseError": "Um payload interno não pôde ser lido, então esta operação foi interrompida. Repetir a mesma solicitação resultará na mesma falha — por favor, inicie uma nova mensagem; se o problema persistir, entre em contato com o suporte.",
   "InsufficientQuota": "Desculpe, a cota para esta chave foi atingida. Por favor, verifique se o saldo da sua conta é suficiente ou tente novamente após aumentar a cota da chave.",
   "InvalidBedrockCredentials": "Falha na autenticação do Bedrock. Por favor, verifique o AccessKeyId/SecretAccessKey e tente novamente.",
   "InvalidComfyUIArgs": "Configuração inválida do ComfyUI. Por favor, verifique as configurações e tente novamente.",

@@ -1,6 +1,7 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -154,143 +155,135 @@ const CollapsedUnreadDot = memo<{ count: number }>(({ count }) => {
 
 CollapsedUnreadDot.displayName = 'CollapsedProjectUnreadDot';
 
-const GroupItem = memo<GroupItemComponentProps>(
-  ({ group, activeTopicId, activeThreadId, expanded }) => {
-    const { t } = useTranslation('topic');
-    const { id, title, children } = group;
+const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
+  const { t } = useTranslation('topic');
+  const { id, title, children } = group;
 
-    const workingDirectory = useMemo(
-      () =>
-        id.startsWith(PROJECT_GROUP_PREFIX) ? id.slice(PROJECT_GROUP_PREFIX.length) : undefined,
-      [id],
-    );
+  const workingDirectory = useMemo(
+    () => (id.startsWith(PROJECT_GROUP_PREFIX) ? id.slice(PROJECT_GROUP_PREFIX.length) : undefined),
+    [id],
+  );
 
-    const agentId = useAgentStore((s) => s.activeAgentId);
-    const { aid: routeAgentId } = useActiveRouteParams<{ aid?: string }>();
-    const { pathname } = useActiveLocation();
-    const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
-    const targetAgentId = routeAgentId ?? agentRoute?.agentId ?? agentId;
-    const currentAgentId = targetAgentId ?? agentId;
-    const router = useQueryRoute();
-    const activeWorkspaceSlug = useActiveWorkspaceSlug();
-    const agencyConfig = useAgentStore(
-      agentByIdSelectors.getAgencyConfigById(currentAgentId ?? ''),
-    );
-    const isHeterogeneous = useAgentStore((s) =>
-      currentAgentId ? agentByIdSelectors.isAgentHeterogeneousById(currentAgentId)(s) : false,
-    );
-    const isWorkspaceAgent = useAgentStore((s) =>
-      currentAgentId ? agentByIdSelectors.isWorkspaceAgentById(currentAgentId)(s) : false,
-    );
-    const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const { aid: routeAgentId } = useActiveRouteParams<{ aid?: string }>();
+  const { pathname } = useActiveLocation();
+  const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
+  const targetAgentId = routeAgentId ?? agentRoute?.agentId ?? agentId;
+  const currentAgentId = targetAgentId ?? agentId;
+  const router = useQueryRoute();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(currentAgentId ?? ''));
+  const isHeterogeneous = useAgentStore((s) =>
+    currentAgentId ? agentByIdSelectors.isAgentHeterogeneousById(currentAgentId)(s) : false,
+  );
+  const isWorkspaceAgent = useAgentStore((s) =>
+    currentAgentId ? agentByIdSelectors.isWorkspaceAgentById(currentAgentId)(s) : false,
+  );
+  const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
 
-    const handleAddTopic = useCallback(async () => {
-      if (!workingDirectory || !currentAgentId || !targetAgentId) return;
-      // Write the agent's per-device default so the new topic inherits this
-      // directory at creation time — the same high-precedence slot the picker
-      // uses, not the legacy per-agent fallback that gets shadowed by it.
-      await commitAgentDefault(workingDirectory);
-      useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
-      router.push(
-        buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
-      );
-    }, [
-      workingDirectory,
-      currentAgentId,
-      targetAgentId,
-      commitAgentDefault,
-      router,
-      agentRoute,
-      activeWorkspaceSlug,
-    ]);
-
-    // Web can add a topic in a directory too when the agent targets a bound
-    // device — the write goes to `workingDirByDevice`, no Electron dependency.
-    const deviceRoutingAvailable = useIsGatewayModeEnabled(currentAgentId);
-    const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      deviceRoutingAvailable,
-      isHetero: isHeterogeneous,
-      workspaceScoped: isWorkspaceAgent,
-    });
-    const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
-    const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
-
-    const loadingTopicIds = useChatStore((s) => s.topicLoadingIds);
-    const statusCounts = useMemo(
-      () => getProjectTopicStatusCounts(children, new Set(loadingTopicIds)),
-      [children, loadingTopicIds],
+  const handleAddTopic = useCallback(async () => {
+    if (!workingDirectory || !currentAgentId || !targetAgentId) return;
+    // Write the agent's per-device default so the new topic inherits this
+    // directory at creation time — the same high-precedence slot the picker
+    // uses, not the legacy per-agent fallback that gets shadowed by it.
+    await commitAgentDefault(workingDirectory);
+    useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    router.push(
+      buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
     );
-    const childTopicIds = useMemo(() => children.map((topic) => topic.id), [children]);
-    const unreadCount = useChatStore(
-      operationSelectors.unreadCompletedCountForTopics(childTopicIds),
-    );
-    const hasCollapsedStatus = !expanded && hasProjectTopicStatusCounts(statusCounts);
-    const hasCollapsedUnread = !expanded && unreadCount > 0;
-    const hasCollapsedIndicators = hasCollapsedStatus || hasCollapsedUnread;
-    const ProjectFolderIcon = expanded ? FolderOpenIcon : FolderClosedIcon;
-    const action =
-      canAddTopic || hasCollapsedIndicators ? (
-        <Flexbox horizontal align={'center'} gap={4}>
-          {hasCollapsedStatus && <CollapsedStatusBadges counts={statusCounts} />}
-          {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
-          {canAddTopic && (
-            <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
-              <ActionIcon
-                icon={PlusIcon}
-                size={'small'}
-                title={t('actions.addNewTopicInProject', { directory: title })}
-                tooltipProps={{ placement: 'right' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleAddTopic();
-                }}
-              />
-            </span>
-          )}
-        </Flexbox>
-      ) : undefined;
+  }, [
+    workingDirectory,
+    currentAgentId,
+    targetAgentId,
+    commitAgentDefault,
+    router,
+    agentRoute,
+    activeWorkspaceSlug,
+  ]);
 
-    return (
-      <AccordionItem
-        action={action}
-        alwaysShowAction={hasCollapsedIndicators}
-        itemKey={id}
-        paddingBlock={4}
-        paddingInline={4}
-        title={
-          <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
-            <Center flex={'none'} height={24} width={28}>
-              <Icon
-                color={cssVar.colorTextTertiary}
-                icon={ProjectFolderIcon}
-                size={{ size: 15, strokeWidth: 1.5 }}
-              />
-            </Center>
-            <Text ellipsis fontSize={14} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
-              {title}
-            </Text>
-          </Flexbox>
-        }
-      >
-        <Flexbox gap={1} paddingBlock={1}>
-          {children.map((topic) => (
-            <TopicItem
-              active={activeTopicId === topic.id}
-              fav={topic.favorite}
-              id={topic.id}
-              key={topic.id}
-              metadata={topic.metadata}
-              status={topic.status}
-              threadId={activeThreadId}
-              title={topic.title}
-              userId={topic.userId}
+  // Web can add a topic in a directory too when the agent targets a bound
+  // device — the write goes to `workingDirByDevice`, no Electron dependency.
+  const deviceRoutingAvailable = useIsGatewayModeEnabled(currentAgentId);
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, {
+    clientExecutionAvailable: isDesktop,
+    deviceRoutingAvailable,
+    isHetero: isHeterogeneous,
+    workspaceScoped: isWorkspaceAgent,
+  });
+  const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
+
+  const statusCounts = useChatStore(
+    (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
+    isEqual,
+  );
+  const childTopicIds = useMemo(() => children.map((topic) => topic.id), [children]);
+  const unreadCount = useChatStore(operationSelectors.unreadCompletedCountForTopics(childTopicIds));
+  const hasCollapsedStatus = !expanded && hasProjectTopicStatusCounts(statusCounts);
+  const hasCollapsedUnread = !expanded && unreadCount > 0;
+  const hasCollapsedIndicators = hasCollapsedStatus || hasCollapsedUnread;
+  const ProjectFolderIcon = expanded ? FolderOpenIcon : FolderClosedIcon;
+  const action =
+    canAddTopic || hasCollapsedIndicators ? (
+      <Flexbox horizontal align={'center'} gap={4}>
+        {hasCollapsedStatus && <CollapsedStatusBadges counts={statusCounts} />}
+        {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
+        {canAddTopic && (
+          <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
+            <ActionIcon
+              icon={PlusIcon}
+              size={'small'}
+              title={t('actions.addNewTopicInProject', { directory: title })}
+              tooltipProps={{ placement: 'right' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleAddTopic();
+              }}
             />
-          ))}
+          </span>
+        )}
+      </Flexbox>
+    ) : undefined;
+
+  return (
+    <AccordionItem
+      action={action}
+      alwaysShowAction={hasCollapsedIndicators}
+      itemKey={id}
+      paddingBlock={4}
+      paddingInline={4}
+      title={
+        <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
+          <Center flex={'none'} height={24} width={28}>
+            <Icon
+              color={cssVar.colorTextTertiary}
+              icon={ProjectFolderIcon}
+              size={{ size: 15, strokeWidth: 1.5 }}
+            />
+          </Center>
+          <Text ellipsis fontSize={14} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
+            {title}
+          </Text>
         </Flexbox>
-      </AccordionItem>
-    );
-  },
-);
+      }
+    >
+      <Flexbox gap={1} paddingBlock={1}>
+        {children.map((topic) => (
+          <TopicItem
+            fav={topic.favorite}
+            id={topic.id}
+            key={topic.id}
+            metadata={topic.metadata}
+            status={topic.status}
+            title={topic.title}
+            userId={topic.userId}
+          />
+        ))}
+      </Flexbox>
+    </AccordionItem>
+  );
+}, isEqual);
+
+GroupItem.displayName = 'TopicByProjectGroupItem';
 
 export default GroupItem;

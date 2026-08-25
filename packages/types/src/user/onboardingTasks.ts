@@ -4,6 +4,8 @@ import { z } from 'zod';
 export interface OnboardingTaskSource {
   /** Email subject retained from trusted connector evidence when the source is Gmail. */
   subject?: string;
+  /** Human-readable source title retained from trusted connector evidence. */
+  title?: string;
   /** Connector kind used by the client to render provider-specific source metadata. */
   type: string;
   /** Exact connector URL retained from collected evidence. */
@@ -93,6 +95,7 @@ const recommendationSchema = z
         z
           .object({
             subject: z.string().trim().min(1).max(500).optional(),
+            title: z.string().trim().min(1).max(500).optional(),
             type: z.string().trim().min(1).max(128),
             url: z.string().trim().min(1).max(2048),
           })

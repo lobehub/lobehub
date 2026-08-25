@@ -5,6 +5,7 @@ on: [push, pull_request]
 permissions:
   actions: write
   contents: read
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -90,6 +91,64 @@ jobs:
         run: bun run build
         env:
           SKIP_LINT: '1'
+
+      # ===== Bundle size gate (web dist) =====
+      # Baseline: artifact uploaded by the latest successful canary push run of this workflow.
+      - name: Find latest canary baseline run
+        if: github.event_name == 'pull_request'
+        id: baseline_run
+        uses: actions/github-script@v8
+        with:
+          # github-script JSON-encodes return values by default; we need the raw run id string
+          result-encoding: string
+          script: |
+            const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
+            return await finder({ github, context, workflowId: 'e2e.yml', artifactName: 'bundle-size-baseline-web' });
+
+      - name: Download web dist size baseline
+        if: github.event_name == 'pull_request' && steps.baseline_run.outputs.result != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: bundle-size-baseline-web
+          path: .size-baseline/
+          run-id: ${{ steps.baseline_run.outputs.result }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Measure web dist size
+        run: node .github/scripts/bundle-size-gate.cjs measure --type web --out size-report/web.json
+
+      - name: Upload web dist size baseline (canary only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        uses: actions/upload-artifact@v6
+        with:
+          name: bundle-size-baseline-web
+          path: size-report/web.json
+          retention-days: 30
+
+      - name: Check web dist size against baseline
+        if: github.event_name == 'pull_request'
+        id: dist_size_check
+        run: node .github/scripts/bundle-size-gate.cjs check --current size-report/web.json --baseline .size-baseline/web.json --label "Web dist" --report size-report/report.md
+
+      - name: Comment bundle size report on PR
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('node:fs');
+            const report = fs.existsSync('size-report/report.md')
+              ? fs.readFileSync('size-report/report.md', 'utf8')
+              : 'Build did not reach the size gate step.';
+            const comment = require('${{ github.workspace }}/.github/scripts/size-gate-comment.cjs');
+            await comment({
+              github,
+              context,
+              title: 'Web dist',
+              report,
+              failed: ${{ steps.dist_size_check.outcome == 'failure' }},
+              identifier: 'web',
+            });
 
       - name: Start E2E server
         run: |

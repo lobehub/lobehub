@@ -85,6 +85,7 @@ export class HomeRepository {
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        name: agents.name,
         pinned: agents.pinned,
         sessionGroupId: sessions.groupId,
         sessionId: sessions.id,
@@ -279,6 +280,7 @@ export class HomeRepository {
       backgroundColor: string | null;
       description: string | null;
       id: string;
+      name: string | null;
       pinned: boolean | null;
       sessionGroupId: string | null;
       sessionId: string | null;
@@ -350,6 +352,7 @@ export class HomeRepository {
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
+          name: a.name,
           // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
           // member's legacy pin, and pins are shared again.
           pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
@@ -473,6 +476,7 @@ export class HomeRepository {
           backgroundColor: agents.backgroundColor,
           description: agents.description,
           id: agents.id,
+          name: agents.name,
           pinned: agents.pinned,
           sessionId: sessions.id,
           sessionPinned: sessions.pinned,
@@ -535,6 +539,7 @@ export class HomeRepository {
           backgroundColor: a.backgroundColor,
           description: a.description,
           id: a.id,
+          name: a.name,
           // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
           // member's legacy pin, and pins are shared again.
           pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),

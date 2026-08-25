@@ -21,8 +21,6 @@ import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import { useNavigateToAgentTopics } from '../hooks/useTopicNavigation';
 
 export interface GroupItemComponentProps {
-  activeThreadId?: string;
-  activeTopicId?: string;
   expanded: boolean;
   group: GroupedTopic;
 }
@@ -44,7 +42,6 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
     topicSelectors.isExpandingPageSize(s),
     s.activeAgentId,
   ]);
-  const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
   const groupSelector = useMemo(
     () =>
@@ -69,13 +66,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
         onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
       >
         {groupTopics.map((group) => (
-          <GroupItem
-            activeThreadId={activeThreadId}
-            activeTopicId={activeTopicId}
-            expanded={expandedKeys.includes(group.id)}
-            group={group}
-            key={group.id}
-          />
+          <GroupItem expanded={expandedKeys.includes(group.id)} group={group} key={group.id} />
         ))}
       </Accordion>
       {isExpandingPageSize && <SkeletonList rows={3} />}

@@ -1,28 +1,20 @@
 'use client';
 
-import type { AgentModelSelectionPolicy } from '@lobechat/types';
+import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
 import type { FormGroupItemType } from '@lobehub/ui';
-import { Alert, Empty, Form, Icon } from '@lobehub/ui';
+import { Empty, Form, Icon } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import {
-  Bot,
-  EyeIcon,
-  InfoIcon,
-  LockIcon,
-  MonitorSmartphone,
-  PencilIcon,
-  PlayIcon,
-  UsersIcon,
-} from 'lucide-react';
+import { Bot, InfoIcon, LockIcon, MonitorSmartphone, Share2, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { FORM_STYLE } from '@/const/layoutTokens';
-import type { ResourceAccessLevel } from '@/services/resourcePermission';
+import PolicySelect, { type PolicyOption } from '@/features/ResourcePermission/PolicySelect';
+import { getSelectionPolicyLabelKeys } from '@/features/ResourcePermission/selectionPolicyLabels';
+import { useAccessLevelOptions } from '@/features/ResourcePermission/useAccessLevelOptions';
 
-import PolicySelect, { type PolicyOption } from './PolicySelect';
-import { getSelectionPolicyLabelKeys } from './selectionPolicyLabels';
 import { useAgentPermission } from './useAgentPermission';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -48,6 +40,7 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     accessLevel,
     accessLoading,
     canEditConfig,
+    canEditPolicies,
     canFixExecutionTarget,
     canManageAccess,
     executionTargetPolicy,
@@ -58,6 +51,8 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     setAccessLevel,
     setExecutionTargetPolicy,
     setModelPolicy,
+    setTopicSharePolicy,
+    topicSharePolicy,
   } = useAgentPermission(agentId);
 
   const labelKeys = getSelectionPolicyLabelKeys(isPrivate);
@@ -82,42 +77,33 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
     [labelKeys, t],
   );
 
-  const accessOptions = useMemo((): PolicyOption<ResourceAccessLevel>[] => {
-    // A private agent has no members yet, so the level names carry the same
-    // "once shared" tense the switch policies already use; the descriptions
-    // explain what the level itself means and stay as they are.
-    const options: PolicyOption<ResourceAccessLevel>[] = [
+  const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
+
+  // The three policy rows below share one authority: the server accepts them
+  // only from the agent's creator or the workspace owner, and silently drops
+  // them from anyone else's otherwise-successful save. Disable rather than
+  // hide, so an Admin can see what exists and who to ask.
+  const policiesDisabled = !canEditConfig || !canEditPolicies;
+
+  // Deliberately not a `member`/`fixed` pair like the rows below: sharing is a
+  // capability, not a setting members switch, so the labels name who may do it.
+  const topicSharePolicyOptions = useMemo(
+    (): PolicyOption<AgentTopicSharePolicy>[] => [
       {
-        desc: t('permission.generalAccess.editableDesc'),
-        icon: PencilIcon,
-        label: t(
-          isPrivate ? 'permission.page.editableWhenShared' : 'permission.generalAccess.editable',
-        ),
-        value: 'edit',
+        desc: t('permission.page.topicSharePolicyMemberDesc'),
+        icon: UsersIcon,
+        label: t('settingAgent.topicSharePolicy.membersCanShare'),
+        value: 'member',
       },
       {
-        desc: t('permission.generalAccess.usableDesc'),
-        icon: PlayIcon,
-        label: t(
-          isPrivate ? 'permission.page.usableWhenShared' : 'permission.generalAccess.usable',
-        ),
-        value: 'use',
+        desc: t('permission.page.topicSharePolicyRestrictedDesc'),
+        icon: LockIcon,
+        label: t('settingAgent.topicSharePolicy.membersCannotShare'),
+        value: 'restricted',
       },
-    ];
-
-    // `view` is a document-only level, but a legacy row can still carry it —
-    // list it so the control shows the real current value instead of blank.
-    if (accessLevel === 'view') {
-      options.push({
-        desc: t('permission.generalAccess.viewableDesc'),
-        icon: EyeIcon,
-        label: t('permission.generalAccess.viewable'),
-        value: 'view',
-      });
-    }
-
-    return options;
-  }, [accessLevel, isPrivate, t]);
+    ],
+    [t],
+  );
 
   const executionPolicyOptions = useMemo(
     (): PolicyOption<AgentModelSelectionPolicy>[] => [
@@ -187,6 +173,29 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
               : t('permission.noManagePermission'),
             label: t('permission.page.accessLevelLabel'),
           },
+          // Sits under Access rather than in Editable settings: that card is
+          // about run knobs a member may change for themselves, while this is
+          // one more thing the workspace may or may not do with the agent —
+          // exactly what the access row above already promises to describe.
+          {
+            avatar: (
+              <span className={styles.rowIcon}>
+                <Icon icon={Share2} size={16} />
+              </span>
+            ),
+            children: (
+              <PolicySelect
+                disabled={policiesDisabled}
+                options={topicSharePolicyOptions}
+                value={topicSharePolicy}
+                onChange={setTopicSharePolicy}
+              />
+            ),
+            desc: canEditPolicies
+              ? t('permission.page.topicSharePolicyDesc')
+              : t('permission.noManagePermission'),
+            label: t('settingAgent.topicSharePolicy.title'),
+          },
         ],
         title: t('permission.page.memberGroup'),
       }
@@ -202,13 +211,15 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
         ),
         children: (
           <PolicySelect
-            disabled={!canEditConfig}
+            disabled={policiesDisabled}
             options={modelPolicyOptions}
             value={modelPolicy}
             onChange={setModelPolicy}
           />
         ),
-        desc: t('permission.page.modelPolicyDesc'),
+        desc: canEditPolicies
+          ? t('permission.page.modelPolicyDesc')
+          : t('permission.noManagePermission'),
         label: t('settingAgent.modelPolicy.title'),
       },
       {
@@ -219,13 +230,15 @@ const PermissionForm = memo<PermissionFormProps>(({ agentId }) => {
         ),
         children: (
           <PolicySelect
-            disabled={!canEditConfig}
+            disabled={policiesDisabled}
             options={executionPolicyOptions}
             value={executionTargetPolicy}
             onChange={setExecutionTargetPolicy}
           />
         ),
-        desc: t('permission.page.devicePolicyDesc'),
+        desc: canEditPolicies
+          ? t('permission.page.devicePolicyDesc')
+          : t('permission.noManagePermission'),
         label: t('settingAgent.devicePolicy.title'),
       },
     ],

@@ -1,9 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render } from '@testing-library/react';
+import type { TaskDetailActivity } from '@lobechat/types';
+import { fireEvent, render } from '@testing-library/react';
 import type { CSSProperties, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 
 import TopicChatDrawer from './index';
 
@@ -19,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     allowed: true,
     reason: 'requires member',
   },
+  navigate: vi.fn(),
   serverConfigState: {
     serverConfig: {
       enableBusinessFeatures: false,
@@ -39,7 +43,7 @@ const mocks = vi.hoisted(() => ({
             title: 'Topic 1',
             type: 'topic',
           },
-        ],
+        ] as TaskDetailActivity[],
         agentId: 'agt_assignee',
         identifier: 'T-1',
         instruction: 'Do the task',
@@ -81,7 +85,24 @@ vi.mock('@lobehub/ui', () => ({
     </button>
   ),
   copyToClipboard: vi.fn(),
-  DropdownMenu: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children?: ReactNode;
+    items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
+  }) => (
+    <>
+      {children}
+      {items?.map((item) =>
+        item.type === 'divider' ? null : (
+          <button key={item.key} onClick={item.onClick}>
+            {item.label}
+          </button>
+        ),
+      )}
+    </>
+  ),
   Flexbox: ({
     children,
     flex,
@@ -119,7 +140,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     open?: boolean;
     placement?: string;
     resizable?: boolean;
-    styles?: { body?: CSSProperties; title?: CSSProperties };
+    styles?: { body?: CSSProperties; panel?: CSSProperties; title?: CSSProperties };
     title?: ReactNode;
     width?: unknown;
   }) =>
@@ -128,10 +149,12 @@ vi.mock('@lobehub/ui/base-ui', () => ({
         data-height={serializeSize(height)}
         data-min-height={serializeSize(minHeight)}
         data-min-width={serializeSize(minWidth)}
+        data-panel-background={serializeSize(styles?.panel?.background)}
         data-placement={placement}
         data-resizable={String(resizable)}
         data-testid="topic-panel"
         data-width={serializeSize(width)}
+        style={styles?.panel}
       >
         <div data-testid="panel-title-slot" style={styles?.title}>
           {title}
@@ -180,6 +203,10 @@ vi.mock('@/features/ShareModal', () => ({
   }),
 }));
 
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
+}));
+
 vi.mock('@/hooks/useGatewayReconnect', () => ({
   useGatewayReconnect: vi.fn(),
 }));
@@ -218,8 +245,10 @@ vi.mock('@/store/chat/utils/messageMapKey', () => ({
   messageMapKey: () => 'topic-chat-key',
 }));
 
-vi.mock('../TopicStatusIcon', () => ({
-  default: () => <span data-testid="topic-status-icon" />,
+vi.mock('../../features/AssigneeAvatar', () => ({
+  default: ({ agentId, size }: { agentId?: string; size?: number }) => (
+    <span data-agent-id={agentId} data-size={size} data-testid="assignee-avatar" />
+  ),
 }));
 
 vi.mock('./FeedbackInput', () => ({
@@ -242,10 +271,41 @@ describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
+    mocks.navigate.mockClear();
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
+    mocks.taskState.taskDetailMap['T-1'].activities[0] = {
+      id: 'topic-1',
+      status: 'completed',
+      time: '2026-04-29T00:00:00.000Z',
+      title: 'Topic 1',
+      type: 'topic',
+    };
     mocks.permission.allowed = true;
     mocks.serverConfigState.serverConfig.enableBusinessFeatures = false;
+    vi.mocked(useGatewayReconnect).mockClear();
+  });
+
+  // The run drawer also mounts on the home inbox, where the chat store has no
+  // active agent — reconnecting against it would stream the run into a bucket
+  // this panel never reads, so the run's own agent has to be passed down.
+  it('reconnects a running topic against the drawer agent', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0] = {
+      id: 'topic-1',
+      runningOperation: { assistantMessageId: 'ast-1', operationId: 'op-1' },
+      status: 'running',
+      time: '2026-04-29T00:00:00.000Z',
+      title: 'Topic 1',
+      type: 'topic',
+    };
+
+    render(<TopicChatDrawer />);
+
+    expect(useGatewayReconnect).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({ operationId: 'op-1' }),
+      'agt_assignee',
+    );
   });
 
   it('hydrates the task assignee agent config for drawer messages', () => {
@@ -284,19 +344,61 @@ describe('TopicChatDrawer', () => {
     });
   });
 
+  it('shows the assignee avatar in the topic header', () => {
+    const { getByTestId } = render(<TopicChatDrawer />);
+
+    expect(getByTestId('assignee-avatar')).toHaveAttribute('data-agent-id', 'agt_assignee');
+    expect(getByTestId('assignee-avatar')).toHaveAttribute('data-size', '20');
+  });
+
+  it('uses the container background for the conversation panel', () => {
+    const { getByTestId } = render(<TopicChatDrawer />);
+
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-panel-background',
+      'var(--ant-color-bg-container)',
+    );
+  });
+
   it('renders the share button in the floating panel actions slot', () => {
     const { getAllByTestId, getByTestId } = render(<TopicChatDrawer />);
 
     const icons = getAllByTestId('header-action-icon');
     const moreIcon = icons.find((icon) => !icon.getAttribute('title'));
+    const expandIcon = icons.find(
+      (icon) => icon.getAttribute('title') === 'taskDetail.topicDrawer.expand',
+    );
     const shareIcon = icons.find((icon) => icon.getAttribute('title') === 'share');
 
     expect(moreIcon).toBeDefined();
+    expect(expandIcon).toBeDefined();
     expect(shareIcon).toBeDefined();
     expect(moreIcon!).toHaveAttribute('data-size', 'small');
     expect(shareIcon!).toHaveAttribute('data-size', JSON.stringify({ blockSize: 32, size: 16 }));
     expect(getByTestId('panel-actions-slot')).toContainElement(shareIcon!);
     expect(getByTestId('panel-close-icon')).toBeInTheDocument();
+  });
+
+  it('expands the conversation into a full-height reading panel', () => {
+    const { getByTestId, getByTitle } = render(<TopicChatDrawer />);
+
+    fireEvent.click(getByTitle('taskDetail.topicDrawer.expand'));
+
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-height', 'calc(100dvh - 16px)');
+    expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
+  });
+
+  it('opens the run in its Agent conversation', () => {
+    const { getByText } = render(<TopicChatDrawer />);
+
+    fireEvent.click(getByText('taskDetail.topicMenu.openAgentTopic'));
+
+    expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_assignee/topic-1');
   });
 
   it('uses a resizable bottom-right floating panel', () => {

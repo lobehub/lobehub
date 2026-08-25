@@ -133,8 +133,7 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat', () => {
-  const useChatStore = (selector: (state: { topicLoadingIds: string[] }) => unknown) =>
-    selector({ topicLoadingIds: [] });
+  const useChatStore = (selector: (state: object) => unknown) => selector({});
   useChatStore.getState = () => ({ switchTopic: switchTopicMock });
   return { useChatStore };
 });
@@ -142,6 +141,7 @@ vi.mock('@/store/chat', () => {
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     unreadCompletedCountForTopics: () => () => 0,
+    visiblyRunningTopicIds: () => new Set<string>(),
   },
 }));
 
@@ -165,7 +165,6 @@ describe('Project topic group item', () => {
     render(
       <GroupItem
         expanded
-        activeTopicId={undefined}
         group={{
           children: [],
           id: 'project:/Users/me/project',

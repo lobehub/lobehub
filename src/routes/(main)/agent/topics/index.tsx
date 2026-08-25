@@ -1,14 +1,14 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { Suspense } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
 import AgentTopicManager from '@/features/AgentTopicManager';
 
-const AgentTopicsPage = memo(() => (
-  <Suspense fallback={<Loading debugId="AgentTopicManager" />}>
+const AgentTopicsPage = () => (
+  <Suspense fallback={<TopicsSkeleton />}>
     <AgentTopicManager />
   </Suspense>
-));
+);
 
 export default AgentTopicsPage;

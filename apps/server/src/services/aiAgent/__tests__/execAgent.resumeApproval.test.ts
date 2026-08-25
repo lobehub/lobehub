@@ -12,7 +12,13 @@ const {
   mockMessageQuery,
   mockUpdateMessagePlugin,
   mockUpdateToolMessage,
+  mockFindLatestParkedOperationId,
+  mockRecordCompletion,
+  mockInterruptOperation,
 } = vi.hoisted(() => ({
+  mockFindLatestParkedOperationId: vi.fn(),
+  mockRecordCompletion: vi.fn(),
+  mockInterruptOperation: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockFindById: vi.fn(),
   mockFindMessagePlugin: vi.fn(),
@@ -66,6 +72,8 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
+    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
     findById: vi.fn().mockResolvedValue(null),
     updateMetadata: vi.fn(),
@@ -95,6 +103,14 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
     createOperation: mockCreateOperation,
+    interruptOperation: mockInterruptOperation,
+  })),
+}));
+
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn().mockImplementation(() => ({
+    findLatestParkedOperationId: mockFindLatestParkedOperationId,
+    recordCompletion: mockRecordCompletion,
   })),
 }));
 
@@ -149,6 +165,8 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
   // `messages` row — `findById` returns this. Note plugin metadata (apiName,
   // identifier, etc.) lives in a separate `message_plugins` table.
   const pendingToolMessage = {
+    // Non-null in the schema; the batch resume sorts approved rows by it.
+    createdAt: new Date('2026-08-02T00:00:00.000Z'),
     id: 'tool-msg-1',
     role: 'tool',
     sessionId: 'session-1',
@@ -333,5 +351,143 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
         }),
       ).rejects.toThrow(/no plugin row/);
     });
+
+    it('rejects a batch whose targets belong to different assistant turns', async () => {
+      // A batch resume runs every approved tool as ONE `call_tools_batch` under
+      // ONE assistant anchor and continues the model once. Mixing an abandoned
+      // approval from an earlier turn would execute an unrelated tool and fold
+      // its result into this turn. Anchoring on whichever entry came first is
+      // silent corruption, so refuse instead.
+      mockFindById.mockImplementation(async (id: string) =>
+        id === 'tool-msg-old'
+          ? { ...pendingToolMessage, id: 'tool-msg-old', parentId: 'assistant-old' }
+          : { ...pendingToolMessage, parentId: 'assistant-new' },
+      );
+
+      await expect(
+        service.execAgent({
+          ...baseParams,
+          resumeApprovals: [
+            { decision: 'approved', parentMessageId: 'tool-msg-1', toolCallId: 'call_xyz' },
+            { decision: 'approved', parentMessageId: 'tool-msg-old', toolCallId: 'call_xyz' },
+          ],
+        }),
+      ).rejects.toThrow(/must resolve one assistant turn/);
+
+      // Nothing may be persisted: validation runs before any write, so a
+      // refused batch cannot leave half its tools marked approved with no run
+      // to execute them.
+      expect(mockUpdateMessagePlugin).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+    });
+
+    it('accepts a batch whose targets share one assistant turn', async () => {
+      mockFindById.mockImplementation(async (id: string) => ({
+        ...pendingToolMessage,
+        id,
+        parentId: 'assistant-new',
+      }));
+
+      await service.execAgent({
+        ...baseParams,
+        resumeApprovals: [
+          { decision: 'approved', parentMessageId: 'tool-msg-1', toolCallId: 'call_xyz' },
+          { decision: 'approved', parentMessageId: 'tool-msg-2', toolCallId: 'call_xyz' },
+        ],
+      });
+
+      expect(mockUpdateMessagePlugin).toHaveBeenCalledWith('tool-msg-1', {
+        intervention: { status: 'approved' },
+      });
+      expect(mockUpdateMessagePlugin).toHaveBeenCalledWith('tool-msg-2', {
+        intervention: { status: 'approved' },
+      });
+      expect(mockCreateOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext: expect.objectContaining({
+            payload: expect.objectContaining({ parentMessageId: 'assistant-new' }),
+            phase: 'human_approved_tool',
+          }),
+        }),
+      );
+    });
+  });
+});
+
+describe('AiAgentService.stopPendingApproval', () => {
+  let service: AiAgentService;
+
+  const pendingToolMessage = {
+    createdAt: new Date('2026-08-03T00:00:00.000Z'),
+    id: 'tool-msg-1',
+    role: 'tool',
+    topicId: 'topic-1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFindById.mockImplementation(async (id: string) => ({ ...pendingToolMessage, id }));
+    mockUpdateMessagePlugin.mockResolvedValue(undefined);
+    mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockFindLatestParkedOperationId.mockResolvedValue('op-parked-1');
+    mockRecordCompletion.mockResolvedValue(undefined);
+    mockInterruptOperation.mockResolvedValue(true);
+    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+  });
+
+  it('settles every pending row in place and retires the parked operation', async () => {
+    const result = await service.stopPendingApproval({
+      toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+      topicId: 'topic-1',
+    });
+
+    // In place: the approval pause already wrote these rows. Inserting fresh
+    // aborted rows would duplicate every tool AND leave the originals pending,
+    // which is what keeps the approval cards on screen after a stop.
+    for (const id of ['tool-msg-1', 'tool-msg-2']) {
+      expect(mockUpdateToolMessage).toHaveBeenCalledWith(id, {
+        content: 'Tool execution was aborted by user.',
+      });
+      expect(mockUpdateMessagePlugin).toHaveBeenCalledWith(id, {
+        intervention: { status: 'aborted' },
+      });
+    }
+
+    // The parked op is resolved from the topic — the client has lost its id by
+    // the time the user decides to stop.
+    expect(mockInterruptOperation).toHaveBeenCalledWith('op-parked-1');
+    expect(mockRecordCompletion).toHaveBeenCalledWith(
+      'op-parked-1',
+      expect.objectContaining({ completionReason: 'interrupted', status: 'interrupted' }),
+    );
+    expect(result.settledToolMessageIds).toEqual(['tool-msg-1', 'tool-msg-2']);
+  });
+
+  it('nothing runs and the model is not continued', async () => {
+    await service.stopPendingApproval({ toolMessageIds: ['tool-msg-1'], topicId: 'topic-1' });
+
+    // A stop is not a rejection: a rejection resumes the model so it can
+    // respond, a stop ends the turn outright.
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a target from another topic before writing anything', async () => {
+    mockFindById.mockImplementation(async (id: string) => ({
+      ...pendingToolMessage,
+      id,
+      topicId: id === 'tool-msg-2' ? 'other-topic' : 'topic-1',
+    }));
+
+    await expect(
+      service.stopPendingApproval({
+        toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow(/topicId does not match/);
+
+    // Validation runs before any write, so a refused stop cannot half-clear the
+    // batch and strand the rest against a run that is already gone.
+    expect(mockUpdateMessagePlugin).not.toHaveBeenCalled();
+    expect(mockInterruptOperation).not.toHaveBeenCalled();
   });
 });

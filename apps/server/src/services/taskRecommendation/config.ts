@@ -44,17 +44,33 @@ export interface GmailTaskRecommendationProviderConfig extends TaskRecommendatio
   queries: GmailTaskRecommendationQuery[];
 }
 
+/** Notion collection policy for task-oriented workspace signals. */
+export interface NotionTaskRecommendationProviderConfig extends TaskRecommendationProviderConfig {
+  /** Maximum pages enriched with Notion-flavored Markdown. */
+  maxContentPages: number;
+  /** Maximum actionable Notion records serialized into one recommendation call. */
+  maxSignals: number;
+  /** Age after the last edit at which a page becomes a maintenance review candidate. */
+  staleAfterDays: number;
+  /**
+   * Minimum share of dated visible items that must be stale before coverage-first guidance applies.
+   * @default 0.9
+   */
+  staleItemRatioThreshold: number;
+  /** Additional trusted writing policy used when the visible Notion scan is stale-dominant. */
+  staleWorkspacePrinciples: readonly string[];
+}
+
+/** X collection policy for recent public post and mention signals. */
+export interface TwitterTaskRecommendationProviderConfig extends TaskRecommendationProviderConfig {
+  /** Maximum deduplicated recent X records serialized into one recommendation call. */
+  maxSignals: number;
+}
+
 /** Complete configurable policy for onboarding task generation. */
 export interface TaskRecommendationConfig {
   /** Cross-provider recommendation allocation policy. */
   allocation: TaskRecommendationAllocationConfig;
-  /** Provider playbooks keyed by connector identifier. */
-  providers: {
-    /** GitHub recommendation and collection policy. */
-    github: GitHubTaskRecommendationProviderConfig;
-    /** Gmail recommendation and collection policy. */
-    gmail: GmailTaskRecommendationProviderConfig;
-  };
   /** Cross-provider recommendation writing policy. */
   writing: OnboardingTaskRecommendationWritingGuide;
 }
@@ -62,30 +78,9 @@ export interface TaskRecommendationConfig {
 /** Default recommendation policy kept in one injectable configuration object. */
 export const defaultTaskRecommendationConfig: TaskRecommendationConfig = {
   allocation: {
-    maxPerProvider: 6,
+    maxPerProvider: 2,
     minPerProvider: 2,
-    targetTotal: 9,
-  },
-  providers: {
-    github: {
-      ...DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.github,
-      maxContextLength: 24_000,
-      maxSignals: 24,
-      staleAfterDays: 120,
-    },
-    gmail: {
-      ...DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.gmail,
-      maxContextLength: 24_000,
-      maxSignals: 32,
-      queries: [
-        { kind: 'actionable', query: 'in:inbox newer_than:30d (is:important OR is:starred)' },
-        { kind: 'follow_up_candidate', query: 'in:sent older_than:7d newer_than:90d' },
-        {
-          kind: 'subscription_cleanup',
-          query: 'newer_than:180d (category:promotions OR unsubscribe)',
-        },
-      ],
-    },
+    targetTotal: 4,
   },
   writing: DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.writing,
 };
@@ -93,14 +88,11 @@ export const defaultTaskRecommendationConfig: TaskRecommendationConfig = {
 /** Computes provider budgets from an injectable recommendation policy. */
 export class TaskRecommendationConfigurator {
   private readonly allocation: TaskRecommendationAllocationConfig;
-  /** Provider-specific collection and prompt policy keyed by connector. */
-  readonly providers: TaskRecommendationConfig['providers'];
   /** Shared title, instruction, and source policy for every provider writer. */
   readonly writing: OnboardingTaskRecommendationWritingGuide;
 
   constructor(config: TaskRecommendationConfig = defaultTaskRecommendationConfig) {
     this.allocation = config.allocation;
-    this.providers = config.providers;
     this.writing = config.writing;
   }
 

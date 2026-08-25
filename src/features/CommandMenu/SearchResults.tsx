@@ -4,7 +4,8 @@ import {
   GROUP_CHAT_TOPIC_URL,
   GROUP_CHAT_URL,
 } from '@lobechat/const';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
@@ -24,6 +25,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -269,9 +271,12 @@ const SearchResults = memo<SearchResultsProps>(
             <Avatar
               avatar={result.agent.avatar || DEFAULT_AVATAR}
               background={result.agent.backgroundColor || undefined}
+              name={agentDisplayName(result.agent, t('defaultAgent'))}
               size={14}
             />
-            <span style={{ flex: 'none' }}>{result.agent.title || t('defaultAgent')}</span>
+            <span style={{ flex: 'none' }}>
+              {agentDisplayName(result.agent, t('defaultAgent'))}
+            </span>
             <span style={{ flex: 'none' }}>·</span>
             <span style={{ flex: 'none' }}>{formattedDate}</span>
             {description && (

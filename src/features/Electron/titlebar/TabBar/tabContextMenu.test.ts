@@ -9,13 +9,17 @@ const build = (index: number, totalCount: number, pinned = false, pinnedCount = 
   buildTabContextMenuItems({
     id: 'tab-1',
     index,
+    inSplitView: false,
     onClose: vi.fn(),
     onCloseLeft: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseRight: vi.fn(),
+    onCloseSplitView: vi.fn(),
+    onOpenInSplitView: vi.fn(),
     onTogglePin: vi.fn(),
     pinned,
     pinnedCount,
+    splitViewEnabled: true,
     t: (key) => key,
     totalCount,
   });
@@ -56,6 +60,62 @@ describe('pin entry', () => {
     const pin = items.find((item) => !!item && 'key' in item && item.key === 'togglePin');
 
     expect(pin && 'disabled' in pin ? pin.disabled : undefined).toBeFalsy();
+  });
+});
+
+describe('split view entry', () => {
+  it('hides split view while the alpha lab is disabled', () => {
+    const items = buildTabContextMenuItems({
+      id: 'tab-1',
+      inSplitView: false,
+      index: 0,
+      onClose: vi.fn(),
+      onCloseLeft: vi.fn(),
+      onCloseOthers: vi.fn(),
+      onCloseRight: vi.fn(),
+      onCloseSplitView: vi.fn(),
+      onOpenInSplitView: vi.fn(),
+      onTogglePin: vi.fn(),
+      pinned: false,
+      pinnedCount: 0,
+      splitViewEnabled: false,
+      t: (key) => key,
+      totalCount: 2,
+    });
+
+    expect(items.some((item) => item && 'key' in item && item.key === 'openInSplitView')).toBe(
+      false,
+    );
+  });
+
+  it('offers opening a tab in split view', () => {
+    const items = build(0, 2);
+    const entry = items.find((item) => !!item && 'key' in item && item.key === 'openInSplitView');
+
+    expect(entry && 'label' in entry ? entry.label : undefined).toBe('tab.openInSplitView');
+  });
+
+  it('offers closing split view for a tab already shown in a pane', () => {
+    const items = buildTabContextMenuItems({
+      id: 'tab-1',
+      inSplitView: true,
+      index: 0,
+      onClose: vi.fn(),
+      onCloseLeft: vi.fn(),
+      onCloseOthers: vi.fn(),
+      onCloseRight: vi.fn(),
+      onCloseSplitView: vi.fn(),
+      onOpenInSplitView: vi.fn(),
+      onTogglePin: vi.fn(),
+      pinned: false,
+      pinnedCount: 0,
+      splitViewEnabled: true,
+      t: (key) => key,
+      totalCount: 2,
+    });
+    const entry = items.find((item) => !!item && 'key' in item && item.key === 'closeSplitView');
+
+    expect(entry && 'label' in entry ? entry.label : undefined).toBe('tab.closeSplitView');
   });
 });
 

@@ -54,12 +54,20 @@ describe('builtin executor registry', () => {
     );
   }, 30_000);
 
-  it('registers visual understanding executor APIs', async () => {
+  it('registers multimodal understanding executor APIs', async () => {
     await registerBuiltinToolExecutors();
 
-    await expect(
-      hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeVisualMedia),
-    ).resolves.toBe(true);
+    await expect(hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia)).resolves.toBe(
+      true,
+    );
+  }, 30_000);
+
+  it('registers the hook-only Grok Build executor without exposing invokable APIs', async () => {
+    await registerBuiltinToolExecutors();
+
+    expect(getRegisteredIdentifiers()).toContain('grok-build');
+    await expect(hasExecutor('grok-build', 'execute')).resolves.toBe(false);
+    expect(getApiNamesForIdentifier('grok-build')).toEqual([]);
   }, 30_000);
 
   it('rejects nested sub-agent execution', async () => {

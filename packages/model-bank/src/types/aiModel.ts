@@ -224,6 +224,11 @@ export interface Pricing {
    * Fallback approximate per-video price (USD) when detailed pricing table is unavailable
    */
   approximatePricePerVideo?: number;
+  /**
+   * Positive model-specific audio input token rate used for duration-based pre-flight estimates.
+   * Authoritative billing continues to use provider-reported usage.
+   */
+  audioTokensPerSecond?: number;
   currency?: ModelPriceCurrency;
   units: PricingUnit[];
 }
@@ -314,7 +319,145 @@ export interface AIBaseModelCard {
 
 export const isAiModelVisible = (model: { visible?: boolean }) => model.visible !== false;
 
+/**
+ * User-level default reasoning params for a model instance (userId + providerId + modelId),
+ * stored under `ai_models.config.chatConfig` on the personal-scope row (workspaceId IS NULL).
+ *
+ * Field names intentionally mirror the same-named `LobeAgentChatConfig` fields so
+ * `applyModelExtendParams` can consume this object unchanged. Deliberately narrow:
+ * only the reasoning-effort family + `reasoningMode` — other extend params
+ * (textVerbosity, thinking budget/level, ...) remain agent-scoped for now.
+ */
+export interface AiModelReasoningConfig {
+  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
+  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
+  effort?: 'low' | 'medium' | 'high' | 'max';
+  glm5_2ReasoningEffort?: 'high' | 'max';
+  glm5_3ReasoningEffort?: 'low' | 'high' | 'max';
+  gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
+  gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
+  grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
+  kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
+  opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningMode?: 'standard' | 'pro';
+  ring2_6ReasoningEffort?: 'high' | 'xhigh';
+  step3_5ReasoningEffort?: 'low' | 'high';
+}
+
+export const AiModelReasoningConfigSchema = z.object({
+  codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+  deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
+  deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
+  effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+  glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
+  glm5_3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
+  gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
+  gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
+  gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
+  gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
+  grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+  grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+  grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+  hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
+  kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
+  opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+  reasoningMode: z.enum(['standard', 'pro']).optional(),
+  ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
+  step3_5ReasoningEffort: z.enum(['low', 'high']).optional(),
+});
+
+/**
+ * The extend params covered by AiModelReasoningConfig. Each entry is both an
+ * ExtendParamsType value and the AiModelReasoningConfig key it reads from —
+ * used to filter which model-instance defaults a given model actually supports.
+ */
+export const MODEL_REASONING_EXTEND_PARAMS = Object.keys(
+  AiModelReasoningConfigSchema.shape,
+) as (keyof AiModelReasoningConfig)[];
+
+/**
+ * Ordered level list per reasoning param (low → high), mirroring the
+ * ControlsForm slider level definitions so select-style controls can render
+ * the same choices.
+ */
+export const MODEL_REASONING_PARAM_LEVELS: {
+  [K in keyof AiModelReasoningConfig]-?: readonly NonNullable<AiModelReasoningConfig[K]>[];
+} = {
+  codexMaxReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
+  deepseekV4GAReasoningEffort: ['none', 'low', 'high', 'max'],
+  deepseekV4ReasoningEffort: ['none', 'high', 'max'],
+  effort: ['low', 'medium', 'high', 'max'],
+  glm5_2ReasoningEffort: ['high', 'max'],
+  glm5_3ReasoningEffort: ['low', 'high', 'max'],
+  gpt5_1ReasoningEffort: ['none', 'low', 'medium', 'high'],
+  gpt5_2ProReasoningEffort: ['medium', 'high', 'xhigh'],
+  gpt5_2ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh'],
+  gpt5_6ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+  gpt5ReasoningEffort: ['minimal', 'low', 'medium', 'high'],
+  grok4_3ReasoningEffort: ['none', 'low', 'medium', 'high'],
+  grok4_5ReasoningEffort: ['low', 'medium', 'high'],
+  grok4_6ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
+  grok4_20ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
+  hy3ReasoningEffort: ['no_think', 'low', 'high'],
+  kimiK3ReasoningEffort: ['low', 'high', 'max'],
+  opus47Effort: ['low', 'medium', 'high', 'xhigh', 'max'],
+  reasoningEffort: ['low', 'medium', 'high'],
+  reasoningMode: ['standard', 'pro'],
+  ring2_6ReasoningEffort: ['high', 'xhigh'],
+  step3_5ReasoningEffort: ['low', 'high'],
+};
+
+/**
+ * Fallback level shown when the user has not saved a model-instance value,
+ * mirroring each ControlsForm slider's defaultValue (gpt5_2ReasoningEffort is
+ * model-dependent there: 'medium' for gpt-5.5, 'none' otherwise).
+ */
+export const MODEL_REASONING_PARAM_DEFAULTS: {
+  [K in keyof AiModelReasoningConfig]-?: NonNullable<AiModelReasoningConfig[K]>;
+} = {
+  codexMaxReasoningEffort: 'medium',
+  deepseekV4GAReasoningEffort: 'high',
+  deepseekV4ReasoningEffort: 'high',
+  effort: 'high',
+  glm5_2ReasoningEffort: 'max',
+  glm5_3ReasoningEffort: 'max',
+  gpt5_1ReasoningEffort: 'none',
+  gpt5_2ProReasoningEffort: 'medium',
+  gpt5_2ReasoningEffort: 'none',
+  gpt5_6ReasoningEffort: 'medium',
+  gpt5ReasoningEffort: 'medium',
+  grok4_3ReasoningEffort: 'low',
+  grok4_5ReasoningEffort: 'high',
+  grok4_6ReasoningEffort: 'high',
+  grok4_20ReasoningEffort: 'medium',
+  hy3ReasoningEffort: 'high',
+  kimiK3ReasoningEffort: 'max',
+  opus47Effort: 'high',
+  reasoningEffort: 'medium',
+  reasoningMode: 'standard',
+  ring2_6ReasoningEffort: 'high',
+  step3_5ReasoningEffort: 'low',
+};
+
 export interface AiModelConfig {
+  /**
+   * User-level default reasoning params for this model instance; see
+   * AiModelReasoningConfig. Not synced from remote model lists.
+   */
+  chatConfig?: AiModelReasoningConfig;
+
   /**
    * used in azure and volcengine
    */
@@ -337,6 +480,7 @@ export type ExtendParamsType =
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
   | 'effort'
+  | 'deepseekV4GAReasoningEffort'
   | 'deepseekV4ReasoningEffort'
   | 'reasoningEffort'
   | 'reasoningMode'
@@ -346,9 +490,11 @@ export type ExtendParamsType =
   | 'gpt5_2ProReasoningEffort'
   | 'gpt5_6ReasoningEffort'
   | 'glm5_2ReasoningEffort'
+  | 'glm5_3ReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
   | 'grok4_5ReasoningEffort'
+  | 'grok4_6ReasoningEffort'
   | 'hy3ReasoningEffort'
   | 'kimiK3ReasoningEffort'
   | 'ring2_6ReasoningEffort'
@@ -394,6 +540,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'enableAdaptiveThinking',
   'disableContextCaching',
   'effort',
+  'deepseekV4GAReasoningEffort',
   'deepseekV4ReasoningEffort',
   'reasoningEffort',
   'reasoningMode',
@@ -403,9 +550,11 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ProReasoningEffort',
   'gpt5_6ReasoningEffort',
   'glm5_2ReasoningEffort',
+  'glm5_3ReasoningEffort',
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
   'grok4_5ReasoningEffort',
+  'grok4_6ReasoningEffort',
   'hy3ReasoningEffort',
   'kimiK3ReasoningEffort',
   'ring2_6ReasoningEffort',
@@ -569,6 +718,9 @@ export interface AiProviderModelListItem {
 // Update
 export const UpdateAiModelSchema = z.object({
   abilities: AiModelAbilitiesSchema.optional(),
+  // NOTE: `chatConfig` is deliberately NOT accepted here — model-instance reasoning
+  // defaults go through the dedicated updateAiModelReasoningConfig procedure so the
+  // generic update path can never carry (and thus never stomp) that namespace.
   config: z
     .object({
       deploymentName: z.string().optional(),

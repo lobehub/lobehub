@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 import { PageAgentProvider } from '@/features/PageEditor/PageAgentProvider';
-import FileDetailComponent from '@/routes/(main)/resource/features/FileDetail';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import FileDetailComponent from '@/features/ResourceManager/FileDetail';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
 
@@ -72,8 +72,8 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
   const fileDetail = fromStore ?? fromFetch;
 
   return (
-    <Flexbox horizontal height={'100%'} width={'100%'}>
-      <Flexbox flex={1} height={'100%'}>
+    <Flexbox horizontal height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
         <NavHeader
           left={
             <Flexbox
@@ -121,7 +121,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
             left: { flex: 1, minWidth: 0, overflow: 'hidden', padding: 0 },
           }}
         />
-        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+        <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <FileContent fileId={currentViewItemId} />
         </Flexbox>
       </Flexbox>

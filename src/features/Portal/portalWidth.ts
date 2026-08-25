@@ -25,6 +25,7 @@ const VIEW_MIN_WIDTH: PortalWidths = {
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Thread]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.ToolUI]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.Topic]: CHAT_PORTAL_TOOL_UI_WIDTH,
 };
 
 /**

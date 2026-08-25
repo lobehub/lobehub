@@ -1,4 +1,5 @@
-export type OnboardingTaskRecommendationProviderId = 'github' | 'gmail';
+/** Connector identifier supplied by a registered task recommendation provider. */
+export type OnboardingTaskRecommendationProviderId = string;
 
 /** Provider-specific examples and safety rules used to recommend onboarding tasks. */
 export interface OnboardingTaskRecommendationProviderGuide {
@@ -16,6 +17,12 @@ export interface OnboardingTaskRecommendationWritingGuide {
   maxSourcesPerRecommendation: number;
   /** Guidance that keeps task titles distinguishable in large cross-project lists. */
   titlePrinciples: readonly string[];
+}
+
+/** Provider prompt configuration with optional policies activated by trusted runtime conditions. */
+interface OnboardingTaskRecommendationProviderPromptConfig extends OnboardingTaskRecommendationProviderGuide {
+  /** Writing policy used when a Notion collector establishes a stale-dominant bounded scan. */
+  staleWorkspacePrinciples?: readonly string[];
 }
 
 interface OnboardingTaskRecommendationPromptInput {
@@ -37,6 +44,8 @@ interface OnboardingTaskRecommendationJsonSchema {
   };
   strict: true;
 }
+
+export const ONBOARDING_TASK_RECOMMENDATION_PROMPT_VERSION = 'v1';
 
 /** Structured output contract shared by the recommendation prompt and server-side generation. */
 export const ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA = {
@@ -94,15 +103,50 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
         'Prefer direct and important mail over promotions, except for an explicit subscription-cleanup task.',
       ],
     },
+    notion: {
+      examples: [
+        'Title: Prepare the next launch checklist from the Product Launch page. Instruction: Read the linked Notion page in the background, group its unchecked items by dependency and owner evidence, and return a private prioritized checklist with ambiguous ownership called out. Do not edit the page, check boxes, assign people, or post comments.',
+        'Title: Review unresolved decisions in the API redesign notes. Instruction: Inspect the linked planning page, extract TODO, TBD, and decision markers with their surrounding context, and return a private decision brief that separates confirmed choices from open questions. Do not modify the document or notify collaborators.',
+        'Title: Assess whether the dormant onboarding runbook needs refresh. Instruction: Compare the linked page’s last-edit date, structure, and visible content, then return a private maintenance assessment with stale sections and a proposed review plan. Treat age as a review signal rather than proof that the page is obsolete, and do not edit or archive it.',
+      ],
+      principles: [
+        'Prefer pages with explicit unchecked tasks, TODO or TBD markers, decision notes, or concrete maintenance signals over generic recently edited documents.',
+        'A page being accessible does not establish that the user authored, owns, or is responsible for it.',
+        'Treat old pages as review opportunities, not proof that content is obsolete or work is overdue.',
+        'Default to read-only work that returns a private checklist, decision brief, synthesis, or maintenance plan. Never edit pages, check tasks, change properties, comment, mention collaborators, move, duplicate, or archive content without later explicit user approval.',
+      ],
+      staleWorkspacePrinciples: [
+        'The runtime has established that the bounded accessible Notion scan is dominated by items older than the configured freshness threshold. Return exactly one recommendation, centered on coverage and freshness rather than the subject matter of the old pages.',
+        'A small minority of recently edited items does not by itself prove that the old subject matter is current. A recent item may be a hub, index, or access-related page; treat current work as unknown unless the supplied evidence explicitly establishes it.',
+        'Do not turn old TODOs, unchecked boxes, decisions, or technical topics into current execution work. Their age makes current ownership, priority, and validity unknown until the user reviews them.',
+        'The recommendation must produce a private coverage summary and a short user-facing checklist to verify the Notion workspace, account, integration, page, and Teamspace access; look for or authorize more recent pages; and only then decide which old pages to refresh, retain, or archive.',
+        'Describe incomplete authorization only as a possibility. Never claim that newer or unauthorized pages exist, and never ask the agent to bypass Notion access controls.',
+      ],
+    },
+    twitter: {
+      examples: [
+        'Title: Prepare a reply shortlist for recent X questions. Instruction: Review the linked public mentions in the background, group genuine questions and useful feedback by topic, and return a private prioritized shortlist with concise draft replies and uncertainty called out. Do not post, reply, like, repost, follow, or send direct messages.',
+        'Title: Analyze discussion around the recent product launch post. Instruction: Compare the linked authored post with its supplied public discussion signals, summarize recurring reactions and unanswered questions, and return a private response brief plus suggested follow-up themes. Treat engagement as attention rather than approval, and do not perform any X action.',
+        'Title: Prepare the next X content brief from recent engineering posts. Instruction: Synthesize the linked authored posts into a private brief of recurring themes, audience questions, and two differentiated draft directions. Preserve the user’s demonstrated voice without inventing opinions, and leave publishing for explicit user approval.',
+      ],
+      principles: [
+        'Use only supplied authored posts and public mentions from the recent-search window; missing activity is not evidence that a topic or audience interest does not exist.',
+        'Keep authored posts distinct from third-party mentions, replies, and quotes. Never attribute another account’s statement or intent to the user.',
+        'Treat likes, reposts, replies, quotes, and view counts as attention signals rather than approval, urgency, or an obligation to respond.',
+        'Prefer private analysis, response triage, content briefs, and draft replies that can be reviewed later. Never post, reply, like, repost, quote, follow, unfollow, mute, block, bookmark, or send a direct message without later explicit user approval.',
+      ],
+    },
   },
   writing: {
     instructionPrinciples: [
+      'The selected task will start immediately after onboarding confirmation. Write a self-contained first-run instruction that the assigned agent can execute without waiting for another user message.',
       'Write two to four sentences addressed directly to an autonomous agent. State the background work it can perform, the concrete private deliverable it must return, and the completion criteria.',
+      'Select only the highest-value recommendations for this provider. Rank evidence by urgency, recurrence, user impact, and leverage; when the limit is two, return the two strongest distinct candidates in that order. Skip low-signal, generic, duplicated, or merely convenient work.',
       'Include enough project, person, or subject context for the Inbox agent to execute the task without guessing which similarly named work item is intended.',
       'Preserve uncertainty from the evidence and state any user approval boundary explicitly.',
       'Prefer tasks that can finish asynchronously without interrupting the user: gather evidence, analyze activity, summarize, compare, prioritize, or prepare a draft, checklist, report, or patch plan.',
       'Minimize clarification requests by making conservative assumptions and recording them in the result. Ask the user only when a consequential choice or new authorization is required.',
-      'Do not perform external side effects by default. Email sends, deletion, unsubscribe, archive, label changes, GitHub comments, review submission, approval, merge, close, label, and push operations require a later explicit user-approved action.',
+      'Do not perform external side effects by default. Email sends, deletion, unsubscribe, archive, label changes, GitHub comments, review submission, approval, merge, close, label, push, and X posting, replying, liking, reposting, following, or direct messaging require a later explicit user-approved action.',
     ],
     maxSourcesPerRecommendation: 4,
     titlePrinciples: [
@@ -113,10 +157,7 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
     ],
   },
 } as const satisfies {
-  providers: Record<
-    OnboardingTaskRecommendationProviderId,
-    OnboardingTaskRecommendationProviderGuide
-  >;
+  providers: Record<string, OnboardingTaskRecommendationProviderPromptConfig>;
   writing: OnboardingTaskRecommendationWritingGuide;
 };
 

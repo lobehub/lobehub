@@ -14,6 +14,8 @@ import type {
   AgentBuilderContext,
   AgentContextDocument,
   AgentGroupConfig,
+  GroupAgentBuilderContext,
+  GroupOfficialToolItem,
   OfficialToolItem,
   OnboardingContext,
   PlanTodoConfig,
@@ -30,6 +32,7 @@ import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
 
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { MessageModel as MessageModelClass } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
@@ -317,7 +320,24 @@ export const buildServerCallLlmContext = async ({
   let credsListStr = '';
   if (ctx.userId) {
     try {
-      const marketService = new MarketService({ userInfo: { userId: ctx.userId } });
+      // Read market accessToken from DB so the server-side runtime can
+      // authenticate with the Market API instead of falling back to an
+      // anonymous trustedClientToken (which 401s on creds endpoints).
+      let marketAccessToken: string | undefined;
+      if (ctx.serverDB) {
+        try {
+          const userModel = new UserModel(ctx.serverDB, ctx.userId);
+          const settings = await userModel.getUserSettings();
+          marketAccessToken = (settings?.market as any)?.accessToken;
+        } catch {
+          // non-fatal — MarketService will fall back to trustedClientToken
+        }
+      }
+
+      const marketService = new MarketService({
+        accessToken: marketAccessToken,
+        userInfo: { userId: ctx.userId },
+      });
       // Inside a workspace, the agent must only see the workspace's shared
       // organization credentials — personal creds are not visible here.
       const credsResult = ctx.workspaceId
@@ -452,6 +472,7 @@ export const buildServerCallLlmContext = async ({
             avatar: editingConfig.avatar ?? undefined,
             backgroundColor: editingConfig.backgroundColor ?? undefined,
             description: editingConfig.description ?? undefined,
+            name: editingConfig.name ?? undefined,
             tags: editingConfig.tags ?? undefined,
             title: editingConfig.title ?? undefined,
           },
@@ -463,7 +484,106 @@ export const buildServerCallLlmContext = async ({
     }
   }
 
+  // Group Agent Builder — mirrors the block above for the group Profile panel.
+  // Without this the model has no idea which group it is editing, so it cannot
+  // address members by id (updateAgentPrompt) and falls back to telling the user
+  // to wire the group up by hand — built-in group agents were missing from the member list.
+  let groupAgentBuilderContext: GroupAgentBuilderContext | undefined;
+  const editingGroupId = state.metadata?.editingGroupId;
+  if (editingGroupId && ctx.serverDB && ctx.userId) {
+    try {
+      const chatGroupModel = new ChatGroupModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      const [group, roster] = await Promise.all([
+        chatGroupModel.findById(editingGroupId),
+        chatGroupModel.getGroupAgentsWithMeta(editingGroupId),
+      ]);
+
+      if (group) {
+        const supervisorAgentId = roster.find((member) => member.role === 'supervisor')?.agentId;
+
+        let supervisorConfig: GroupAgentBuilderContext['supervisorConfig'];
+        let enabledPlugins: string[] = [];
+        if (supervisorAgentId) {
+          const supervisorModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+          const supervisor = await supervisorModel.getAgentConfigById(supervisorAgentId);
+          if (supervisor) {
+            // Pinned identifiers only — `supervisorConfig.plugins` is a prompt
+            // formatting DTO and a disabled plugin isn't "enabled".
+            enabledPlugins = getActivePluginIds(
+              Array.isArray(supervisor.plugins) ? supervisor.plugins : undefined,
+            );
+            supervisorConfig = {
+              model: supervisor.model ?? undefined,
+              plugins: enabledPlugins,
+              provider: supervisor.provider ?? undefined,
+            };
+          }
+        }
+
+        const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((tool) => tool.identifier));
+        const groupOfficialTools: GroupOfficialToolItem[] = [];
+
+        for (const tool of builtinTools) {
+          if (tool.hidden) continue;
+          if (composioIdentifiers.has(tool.identifier)) continue;
+          groupOfficialTools.push({
+            description: tool.manifest?.meta?.description,
+            enabled: enabledPlugins.includes(tool.identifier),
+            identifier: tool.identifier,
+            installed: true,
+            name: tool.manifest?.meta?.title || tool.identifier,
+            type: 'builtin',
+          });
+        }
+
+        if (composioEnv.COMPOSIO_API_KEY) {
+          try {
+            const connectedComposioIds = await loadConnectedComposioIds(
+              ctx.serverDB,
+              ctx.userId,
+              ctx.workspaceId,
+              supervisorAgentId,
+            );
+            for (const tool of COMPOSIO_APP_TYPES) {
+              groupOfficialTools.push({
+                description: `LobeHub Mcp Server: ${tool.label}`,
+                enabled: enabledPlugins.includes(tool.identifier),
+                identifier: tool.identifier,
+                installed: connectedComposioIds.has(tool.identifier),
+                name: tool.label,
+                type: 'composio',
+              });
+            }
+          } catch (composioError) {
+            log('Failed to load Composio status for groupAgentBuilderContext: %O', composioError);
+          }
+        }
+
+        groupAgentBuilderContext = {
+          config: {
+            openingMessage: group.config?.openingMessage || undefined,
+            openingQuestions: group.config?.openingQuestions ?? undefined,
+            systemPrompt: group.content || undefined,
+          },
+          groupId: editingGroupId,
+          groupTitle: group.title || undefined,
+          members: roster.map((member) => ({
+            description: member.description ?? undefined,
+            id: member.agentId,
+            isSupervisor: member.role === 'supervisor',
+            title: member.title || 'Untitled Agent',
+          })),
+          officialTools: groupOfficialTools,
+          supervisorConfig,
+        };
+      }
+    } catch (error) {
+      log('Failed to build groupAgentBuilderContext for group %s: %O', editingGroupId, error);
+    }
+  }
+
   const contextEngineInput = {
+    additionalContexts: llmPayload.additionalContexts,
     agentDocuments,
     ...(agentBuilderContext && { agentBuilderContext }),
     agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
@@ -478,6 +598,9 @@ export const buildServerCallLlmContext = async ({
       COMPOSIO_SERVICES_LIST: composioServicesListStr,
       CREDS_LIST: credsListStr,
       language: serverLanguage,
+      // Only override the generator's 'en-US' locale fallback when the user info
+      // fetch actually resolved a language — an empty string would render blank.
+      ...(serverLanguage && { locale: serverLanguage }),
       memory_effort: memoryEffort,
       sandbox_enabled: sandboxEnabled,
       sandbox_uploaded_files: sandboxUploadedFiles,
@@ -488,9 +611,12 @@ export const buildServerCallLlmContext = async ({
     capabilities,
     botPlatformContext: ctx.botPlatformContext,
     discordContext: ctx.discordContext,
+    enableExpertise: state.enableExpertise,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: ctx.evalContext,
+    expertise: state.expertise,
     forceFinish: state.forceFinish,
+    ...(groupAgentBuilderContext && { groupAgentBuilderContext }),
     historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),
     initialContext: (state as any).initialContext?.initialContext,
     knowledge: {

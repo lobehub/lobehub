@@ -2,11 +2,13 @@ import { errorNameFrom } from '@lobechat/utils';
 import type { PublicServeOptions, WorkflowContext } from '@upstash/workflow';
 
 import { getServerDB } from '@/database/server';
+import { publishOnboardingGenerationProgress } from '@/server/services/onboardingProgress';
 import {
   createTaskRecommendationService,
   type TaskRecommendationProviderResult,
   type TaskRecommendationService,
 } from '@/server/services/taskRecommendation/service';
+import { runStep } from '@/server/workflows/step';
 
 import {
   type ProcessOnboardingTaskRecommendationPayload,
@@ -46,14 +48,16 @@ export const processOnboardingTaskRecommendations = async (
 ) => {
   const payload = ProcessOnboardingTaskRecommendationPayloadSchema.parse(context.requestPayload);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  const plan = await context.run('session:begin', () =>
+  const plan = await runStep(context, 'session:begin', () =>
     service.begin(payload.topicId, payload.sessionId, payload.sourceFingerprint),
   );
+  await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
   if (!plan.ready) return service.get(payload.topicId);
 
   const results = await Promise.all(
     plan.providerIds.map((providerId) =>
-      context.run(
+      runStep(
+        context,
         `provider:${providerId}:generate`,
         async (): Promise<TaskRecommendationProviderResult> => {
           try {
@@ -77,9 +81,11 @@ export const processOnboardingTaskRecommendations = async (
       ),
     ),
   );
-  return context.run('session:commit', () =>
+  const session = await runStep(context, 'session:commit', () =>
     service.commit(payload.topicId, payload.sessionId, results),
   );
+  await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+  return session;
 };
 
 /** Terminalizes a recommendation session after workflow-level retries are exhausted. */
@@ -89,7 +95,9 @@ export const failOnboardingTaskRecommendations = async (
 ) => {
   const payload = ProcessOnboardingTaskRecommendationPayloadSchema.parse(input);
   const service = await (dependencies.createService ?? createService)(payload.userId);
-  return service.fail(payload.topicId, payload.sessionId);
+  const failed = await service.fail(payload.topicId, payload.sessionId);
+  if (failed) await publishOnboardingGenerationProgress(payload.userId, payload.topicId);
+  return failed;
 };
 
 /** Upstash parser and failure callback for the recommendation workflow endpoint. */

@@ -21,6 +21,8 @@ export interface RecentItem {
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
+  /** The member who owns this item — for author attribution in workspace team views. */
+  userId?: string;
 }
 
 const recentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -38,6 +40,8 @@ export const recentRouter = router({
       z
         .object({
           limit: z.number().optional(),
+          /** Restrict a workspace feed to the viewer's own items (mine/team toggle). */
+          mineOnly: z.boolean().optional(),
           types: z.array(z.enum(['topic', 'document', 'task'])).optional(),
           withTopicPreview: z.boolean().optional(),
         })
@@ -46,7 +50,12 @@ export const recentRouter = router({
     .query(async ({ ctx, input }): Promise<RecentItem[]> => {
       const limit = input?.limit ?? 10;
 
-      const items = await ctx.recentModel.queryRecent(limit, input?.types, input?.withTopicPreview);
+      const items = await ctx.recentModel.queryRecent(
+        limit,
+        input?.types,
+        input?.withTopicPreview,
+        input?.mineOnly,
+      );
 
       return items.map((item) => {
         let routePath: string;
@@ -86,6 +95,7 @@ export const recentRouter = router({
           title: item.title,
           type: item.type,
           updatedAt: item.updatedAt,
+          userId: item.userId,
         };
       });
     }),

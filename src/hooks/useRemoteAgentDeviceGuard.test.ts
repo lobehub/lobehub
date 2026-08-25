@@ -12,6 +12,7 @@ vi.mock('@/services/device', () => ({
 }));
 
 const mockedUseEffectiveAgencyConfig = vi.mocked(useEffectiveAgencyConfig);
+const mockedCheckCapability = vi.mocked(deviceService.checkCapability);
 const mockedListDevices = vi.mocked(deviceService.listDevices);
 
 describe('useRemoteAgentDeviceGuard', () => {
@@ -61,6 +62,52 @@ describe('useRemoteAgentDeviceGuard', () => {
     const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
 
     await waitFor(() => expect(result.current.status).toBe('device-offline'));
+  });
+
+  it('defers an unknown author-personal binding to authoritative server routing', async () => {
+    mockedUseEffectiveAgencyConfig.mockReturnValue({
+      agencyConfig: {
+        boundDeviceId: 'author-device',
+        heterogeneousProvider: { type: 'openclaw' },
+      },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: true,
+    });
+    mockedListDevices.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
+
+    await waitFor(() => expect(result.current.status).toBe('ok'));
+    expect(mockedCheckCapability).not.toHaveBeenCalled();
+  });
+
+  it('probes a personal device through the personal gateway principal', async () => {
+    mockedUseEffectiveAgencyConfig.mockReturnValue({
+      agencyConfig: {
+        boundDeviceId: 'member-device',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'hermes' },
+      },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    });
+    mockedListDevices.mockResolvedValue([
+      { deviceId: 'member-device', online: true, scope: 'personal' },
+    ] as never);
+    mockedCheckCapability.mockResolvedValue({ available: true });
+
+    const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
+
+    await waitFor(() => expect(result.current.status).toBe('ok'));
+    expect(mockedCheckCapability).toHaveBeenCalledWith({
+      deviceId: 'member-device',
+      platform: 'hermes',
+      scope: 'personal',
+    });
   });
 
   it('stays in checking (and does not probe) while the workspace preference loads', async () => {

@@ -8,10 +8,31 @@ import { runHeteroTask } from '../heteroTask';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
+const fsState = vi.hoisted(() => ({ content: undefined as string | undefined }));
+const notifyMutateMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const prepareSpawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
   spawn: spawnMock,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
+}));
+
+vi.mock('node:fs', () => ({
+  default: {
+    mkdirSync: vi.fn(),
+    readFileSync: vi.fn(() => {
+      if (fsState.content === undefined) throw new Error('File not found');
+      return fsState.content;
+    }),
+    writeFileSync: vi.fn((_path: string, content: string) => {
+      fsState.content = content;
+    }),
+  },
 }));
 
 // task registry — use real implementation backed by a temporary in-memory map
@@ -30,7 +51,7 @@ vi.mock('../../daemon/taskRegistry', () => ({
 vi.mock('../../api/client', () => ({
   getTrpcClient: vi.fn().mockResolvedValue({
     agentNotify: {
-      notify: { mutate: vi.fn().mockResolvedValue(undefined) },
+      notify: { mutate: notifyMutateMock },
     },
   }),
 }));
@@ -41,7 +62,46 @@ vi.mock('../../utils/logger', () => ({
   log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
+beforeEach(() => {
+  resolveRemotePlatformRuntimeMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv) => ({
+      available: true,
+      execute: vi.fn(),
+      prepareSpawn: (args: string[]) => prepareSpawnMock(type, args, baseEnv),
+    }),
+  );
+  prepareSpawnMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+      args,
+      command: `/resolved/bin/${type}`,
+      env: {
+        ...baseEnv,
+        PATH: '/resolved/bin:/runtime/bin:/usr/bin',
+      },
+    }),
+  );
+});
+
 // ─── Helpers ───
+
+function resetTrpcClientMock() {
+  notifyMutateMock.mockResolvedValue(undefined);
+  getTrpcClientMock.mockImplementation(
+    () =>
+      Promise.resolve({
+        agentNotify: { notify: { mutate: notifyMutateMock } },
+      }) as ReturnType<typeof getTrpcClient>,
+  );
+}
+
+function makeMockStream() {
+  const listeners: Array<(chunk: Buffer) => void> = [];
+
+  return {
+    on: vi.fn((_event: string, cb: (chunk: Buffer) => void) => listeners.push(cb)),
+    _emit: (content: string) => listeners.forEach((cb) => cb(Buffer.from(content))),
+  };
+}
 
 function makeMockChild(pid = 9999) {
   const listeners: Record<string, Array<(...a: any[]) => void>> = {};
@@ -50,6 +110,8 @@ function makeMockChild(pid = 9999) {
       (listeners[event] ??= []).push(cb);
     }),
     pid,
+    stderr: makeMockStream(),
+    stdout: makeMockStream(),
     unref: vi.fn(),
     _emit: (event: string, ...args: any[]) => listeners[event]?.forEach((cb) => cb(...args)),
   };
@@ -63,9 +125,11 @@ describe('runHeteroTask (openclaw)', () => {
     // Clear task store
     for (const key of Object.keys(taskStore)) delete taskStore[key];
     execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+    resetTrpcClientMock();
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -90,6 +154,43 @@ describe('runHeteroTask (openclaw)', () => {
     expect(messageArg).toContain('lh notify');
     expect(messageArg).toContain('MSG_ID');
   });
+
+  it.each([
+    {
+      environmentAgentId: 'ops-default',
+      expectedAgentId: 'researcher',
+      platformAgentId: ' researcher ',
+    },
+    {
+      environmentAgentId: 'ops-default',
+      expectedAgentId: 'ops-default',
+      platformAgentId: undefined,
+    },
+    {
+      environmentAgentId: 'ops-default',
+      expectedAgentId: 'ops-default',
+      platformAgentId: '   ',
+    },
+    { environmentAgentId: '', expectedAgentId: 'main', platformAgentId: undefined },
+  ])(
+    'selects OpenClaw agent $expectedAgentId from platform config before environment fallback',
+    async ({ environmentAgentId, expectedAgentId, platformAgentId }) => {
+      vi.stubEnv('OPENCLAW_AGENT_ID', environmentAgentId);
+      spawnMock.mockReturnValue(makeMockChild());
+
+      await runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-agent-selection',
+        platformAgentId,
+        prompt: 'hello',
+        taskId: 'task-agent-selection',
+        topicId: 'topic-agent-selection',
+      });
+
+      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      expect(spawnArgs[spawnArgs.indexOf('--agent') + 1]).toBe(expectedAgentId);
+    },
+  );
 
   it('always injects protocol even on the second turn of the same session', async () => {
     const child1 = makeMockChild(1111);
@@ -150,6 +251,37 @@ describe('runHeteroTask (openclaw)', () => {
 
     expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
     expect(spawnMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('isolates concurrent group members that share a topic', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-child-1',
+      parentOperationId: 'op-parent',
+      prompt: 'member one',
+      taskId: 'task-child-1',
+      topicId: 'topic-shared',
+    });
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-child-2',
+      parentOperationId: 'op-parent',
+      prompt: 'member two',
+      taskId: 'task-child-2',
+      topicId: 'topic-shared',
+    });
+
+    expect(killSpy).not.toHaveBeenCalled();
+    const firstArgs = spawnMock.mock.calls[0][1] as string[];
+    const secondArgs = spawnMock.mock.calls[1][1] as string[];
+    expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+    expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+    expect(saveTask).toHaveBeenLastCalledWith(
+      expect.objectContaining({ parentOperationId: 'op-parent', taskId: 'task-child-2' }),
+    );
   });
 
   it('does not kill processes for a different topicId', async () => {
@@ -220,6 +352,36 @@ describe('runHeteroTask (openclaw)', () => {
     expect(spawnArgs).toContain('--local');
   });
 
+  it('spawns the resolved OpenClaw executable with its recovered PATH', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-resolved',
+      prompt: 'hello',
+      taskId: 'task-resolved',
+      topicId: 'topic-resolved',
+    });
+
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.any(Array),
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/resolved/bin/openclaw',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      }),
+    );
+  });
+
   it('removes task and ignores already-exited process when killing concurrent task', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw new Error('No such process');
@@ -273,6 +435,7 @@ describe('runHeteroTask (openclaw)', () => {
       string[],
       { env: NodeJS.ProcessEnv },
     ];
+    expect(spawnOpts.env.LOBEHUB_OPERATION_ID).toBe('op-ws');
     expect(spawnOpts.env.LOBEHUB_WORKSPACE_ID).toBe('ws-42');
   });
 
@@ -302,5 +465,229 @@ describe('runHeteroTask (openclaw)', () => {
     for (const call of getTrpcClientMock.mock.calls) {
       expect(call[0]).toBe('ws-99');
     }
+  });
+
+  it('reports a signal exit as a cancelled terminal signal', async () => {
+    const child = makeMockChild(7788);
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-cancelled',
+      prompt: 'cancel me',
+      taskId: 'task-cancelled',
+      topicId: 'topic-cancelled',
+    });
+
+    child._emit('close', null, 'SIGINT');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelled: true,
+        done: true,
+        operationId: 'op-cancelled',
+        role: 'assistant',
+        topicId: 'topic-cancelled',
+      }),
+    );
+  });
+});
+
+describe('runHeteroTask retry ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fsState.content = undefined;
+    for (const key of Object.keys(taskStore)) delete taskStore[key];
+    execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+    resetTrpcClientMock();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['openclaw', 'hermes'] as const)(
+    'ignores the stale %s close callback after an exact task retry',
+    async (agentType) => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const oldChild = makeMockChild(1111);
+      const replacementChild = makeMockChild(2222);
+      spawnMock.mockReturnValueOnce(oldChild).mockReturnValueOnce(replacementChild);
+
+      await runHeteroTask({
+        agentType,
+        operationId: 'op-old',
+        prompt: 'first attempt',
+        taskId: 'task-retry',
+        topicId: 'topic-retry',
+      });
+      await runHeteroTask({
+        agentType,
+        operationId: 'op-replacement',
+        prompt: 'retry',
+        taskId: 'task-retry',
+        topicId: 'topic-retry',
+      });
+
+      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(taskStore['task-retry']).toEqual(expect.objectContaining({ pid: 2222 }));
+
+      oldChild._emit('close', null, 'SIGTERM');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(taskStore['task-retry']).toEqual(expect.objectContaining({ pid: 2222 }));
+      expect(getTrpcClientMock).not.toHaveBeenCalled();
+      expect(notifyMutateMock).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('runHeteroTask (hermes)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fsState.content = undefined;
+    for (const key of Object.keys(taskStore)) delete taskStore[key];
+    execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+    resetTrpcClientMock();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('relays stdout intact and saves the final session id from stderr', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-hermes-1',
+      prompt: 'hello',
+      taskId: 'task-hermes-1',
+      topicId: 'topic-hermes',
+    });
+
+    const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { stdio: string[] }];
+    expect(spawnOptions.stdio).toEqual(['ignore', 'pipe', 'pipe']);
+
+    child.stdout._emit('session_id: part of the final answer\nHello from Hermes\n');
+    child.stderr._emit(
+      'Resuming session metadata...\r\nsession_id: session-before-compaction\r\n' +
+        'Context compacted\r\nsession_id: session-continuation\r\n',
+    );
+    child._emit('close', 0, null);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'session_id: part of the final answer\nHello from Hermes',
+        topicId: 'topic-hermes',
+      }),
+    );
+    expect(JSON.parse(fsState.content!)).toEqual({
+      'topic-hermes': 'session-continuation',
+    });
+  });
+
+  it('spawns the resolved Hermes executable with its recovered PATH', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-resolved',
+      prompt: 'hello',
+      taskId: 'task-resolved',
+      topicId: 'topic-resolved',
+    });
+
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'hermes',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'hermes',
+      ['chat', '--query', 'hello', '--quiet', '--accept-hooks'],
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/resolved/bin/hermes',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      }),
+    );
+  });
+
+  it('resumes the saved session and replaces it with a continuation id', async () => {
+    const firstChild = makeMockChild(1001);
+    const secondChild = makeMockChild(1002);
+    const thirdChild = makeMockChild(1003);
+    spawnMock
+      .mockReturnValueOnce(firstChild)
+      .mockReturnValueOnce(secondChild)
+      .mockReturnValueOnce(thirdChild);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-1',
+      prompt: 'remember this',
+      taskId: 'task-1',
+      topicId: 'topic-multi-turn',
+    });
+    firstChild.stderr._emit('session_id: session-a\n');
+    firstChild._emit('close', 0, null);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-2',
+      prompt: 'what did I say?',
+      taskId: 'task-2',
+      topicId: 'topic-multi-turn',
+    });
+    expect(spawnMock.mock.calls[1][1]).toEqual([
+      'chat',
+      '--query',
+      'what did I say?',
+      '--quiet',
+      '--accept-hooks',
+      '--resume',
+      'session-a',
+    ]);
+
+    secondChild.stderr._emit('session_id: session-continuation\n');
+    secondChild._emit('close', 0, null);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-3',
+      prompt: 'continue',
+      taskId: 'task-3',
+      topicId: 'topic-multi-turn',
+    });
+    expect(spawnMock.mock.calls[2][1]).toContain('session-continuation');
+  });
+
+  it('still relays a successful response when stderr has no session id', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-no-session',
+      prompt: 'hello',
+      taskId: 'task-no-session',
+      topicId: 'topic-no-session',
+    });
+    child.stdout._emit('Successful response\n');
+    child.stderr._emit('Provider diagnostic only\n');
+    child._emit('close', 0, null);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Successful response' }),
+    );
+    expect(fsState.content).toBeUndefined();
   });
 });

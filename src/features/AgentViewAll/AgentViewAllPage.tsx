@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { Avatar, Center, Empty, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
 import { Button, DropdownMenu, Segmented, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -14,16 +14,16 @@ import { useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import { useKeepSidebarGroupsListed } from '@/features/HomeSidebar/Body/Agent/List/useAgentList';
+import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
+import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
+import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
-import { useKeepSidebarGroupsListed } from '@/routes/(main)/home/_layout/Body/Agent/List/useAgentList';
-import { AgentModalProvider } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import { useSidebarItemVisibility } from '@/routes/(main)/home/_layout/Body/Agent/useSidebarItemVisibility';
-import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -299,6 +299,7 @@ const AgentViewAllPage = memo(() => {
     let matched = query
       ? items.filter(
           (item) =>
+            item.name?.toLowerCase().includes(query) ||
             item.title?.toLowerCase().includes(query) ||
             item.description?.toLowerCase().includes(query),
         )
@@ -313,7 +314,10 @@ const AgentViewAllPage = memo(() => {
 
     const direction = orderDirection === 'asc' ? 1 : -1;
     return [...matched].sort((a, b) => {
-      if (orderBy === 'title') return direction * (a.title ?? '').localeCompare(b.title ?? '');
+      // Sort on the label the rows actually render, not the raw title — otherwise
+      // a list of personal names comes back ordered by their hidden roles.
+      if (orderBy === 'title')
+        return direction * agentDisplayName(a, '').localeCompare(agentDisplayName(b, ''));
       if (orderBy === 'author') return direction * authorName(a).localeCompare(authorName(b));
       return direction * (dayjs(a.updatedAt).valueOf() - dayjs(b.updatedAt).valueOf());
     });
@@ -652,12 +656,10 @@ AgentViewAllPage.displayName = 'AgentViewAllPage';
 // blank-agent creation, and that modal lives in AgentModalContext — normally
 // mounted by the Home layout, which this standalone route is NOT inside. Wrap
 // the page so the "+" menu opens the same create wizard as the sidebar.
-const AgentViewAllPageWithModals = memo(() => (
+const AgentViewAllPageWithModals = () => (
   <AgentModalProvider>
     <AgentViewAllPage />
   </AgentModalProvider>
-));
-
-AgentViewAllPageWithModals.displayName = 'AgentViewAllPageWithModals';
+);
 
 export default AgentViewAllPageWithModals;

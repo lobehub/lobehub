@@ -86,7 +86,7 @@ EOF
   fi
 fi
 
-# report.md is rendered as the verify page's "Details" tail — free-form COMMENT.
+# report.md is rendered as the acceptance page's "Details" tail — free-form COMMENT.
 # The scope (范围), per-case table (用例), overall conclusion, and the score are
 # all STRUCTURED on the page now (result.json scenario/context + cases +
 # summary.conclusion + summary.score), so DON'T repeat any of them here or they

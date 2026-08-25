@@ -1,13 +1,15 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
+import type { SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
   ContextMenuTrigger,
   Flexbox,
   type MenuProps,
+  Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -23,8 +25,8 @@ import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
 
-/** Fixed action-column width (sidebar-eye toggle only) so rows stay aligned. */
-export const ACTION_COL_WIDTH = 40;
+/** Fixed action-column width (sidebar-eye toggle + "…" menu) so rows stay aligned. */
+export const ACTION_COL_WIDTH = 64;
 
 /** Author avatar slot — reserved even when the author is unknown. */
 const AUTHOR_COL_WIDTH = 20;
@@ -107,7 +109,10 @@ interface AgentRowProps {
 const AgentRow = memo<AgentRowProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
-    const { id, title, type, updatedAt } = item;
+    const { id, type, updatedAt } = item;
+    // Groups have no personal name, so this resolves to their title.
+    const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
+    const roleTag = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
@@ -140,7 +145,7 @@ const AgentRow = memo<AgentRowProps>(
           onPointerEnter={activateMenu}
         >
           <WorkspaceLink
-            aria-label={title || undefined}
+            aria-label={displayTitle}
             className={styles.identity}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
@@ -148,9 +153,16 @@ const AgentRow = memo<AgentRowProps>(
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               {/* Single-line row (Linear-style density) — the description only
                 renders in card mode, where there is room to browse. */}
-              <Text ellipsis className={'agent-row-title'} weight={500}>
-                {title || t('agentViewAll.untitled')}
-              </Text>
+              <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+                <Text ellipsis className={'agent-row-title'} weight={500}>
+                  {displayTitle}
+                </Text>
+                {roleTag ? (
+                  <Tag size={'small'} style={{ flex: 'none' }}>
+                    {roleTag}
+                  </Tag>
+                ) : null}
+              </Flexbox>
             </Flexbox>
           </WorkspaceLink>
           {/* Trailing cluster (Task-list-style): label pills + author avatar +
@@ -206,12 +218,11 @@ const AgentRow = memo<AgentRowProps>(
                 onClick={handleToggleSidebar}
               />
             )}
-            {/* Headless: the row's context menu is the only actions entry. It
-              carries the sidebar toggle too — the eye icon above is a fast
-              single-click path, but right-click is where users look for the
-              row's actions, and the toggle went missing there. */}
+            {/* Visible "…" trigger AND right-click open the same menu — the
+              context menu alone proved undiscoverable (users assumed rows had
+              no actions). The menu carries the sidebar toggle too; the eye
+              icon stays as the fast single-click path. */}
             <ItemActions
-              hideTrigger
               anchor={anchor}
               forceActivated={menuActivated}
               includeSidebarToggle={Boolean(onToggleSidebar)}

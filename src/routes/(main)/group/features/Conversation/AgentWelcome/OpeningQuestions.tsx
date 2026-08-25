@@ -44,7 +44,7 @@ interface OpeningQuestionsProps {
 
 const OpeningQuestions = memo<OpeningQuestionsProps>(({ mobile, questions }) => {
   const { t } = useTranslation(['welcome', 'chat']);
-  const [sendMessage] = useConversationStore((s) => [s.sendMessage]);
+  const fillInputMessage = useConversationStore((s) => s.fillInputMessage);
 
   // Same per-resource General-access gating as the chat input (see
   // useChatInputResourceAccess): private groups are never gated.
@@ -71,7 +71,7 @@ const OpeningQuestions = memo<OpeningQuestionsProps>(({ mobile, questions }) => 
               onClick={
                 canUseResource
                   ? () => {
-                      sendMessage({ message: question });
+                      fillInputMessage(question);
                     }
                   : undefined
               }

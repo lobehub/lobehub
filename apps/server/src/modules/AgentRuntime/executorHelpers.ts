@@ -1,7 +1,7 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
-import { resolveSubAgentModel } from '@lobechat/const';
+import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
 import { type OperationToolSet } from '@lobechat/context-engine';
 import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtime';
 import {
@@ -36,6 +36,21 @@ export const TOOL_PRICING: Record<string, number> = {
 export const TOOL_MAX_RETRIES = 2;
 
 export const GEN_AI_FUNCTION_TOOL_TYPE: ToolType = 'function';
+
+/**
+ * Models occasionally select a member by its displayed name even though group
+ * management actions require its persisted agent id. Accept an exact display
+ * name only when it resolves unambiguously within this operation's snapshot.
+ */
+export const resolveGroupMemberId = (
+  requestedAgentId: string,
+  agentMap: Record<string, { name: string }> | undefined,
+): string => {
+  if (!agentMap || requestedAgentId in agentMap) return requestedAgentId;
+
+  const matches = Object.entries(agentMap).filter(([, member]) => member.name === requestedAgentId);
+  return matches.length === 1 ? matches[0][0] : requestedAgentId;
+};
 
 export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
@@ -205,12 +220,20 @@ export const buildServerVirtualSubAgentRunner = (
   if (!agentId || !topicId) return undefined;
 
   const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  // enough: when a run continues a topic whose model was switched, execAgent
+  // keeps the topic-pinned model only in `modelRuntimeConfig` while the
+  // metadata config retains the agent default.
+  const parentEffectiveModel =
+    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
-      //     the parent — it takes the parent's `agencyConfig.subagent` model.
+      //     the parent — it takes the parent's `agencyConfig.subagent` override,
+      //     or follows the parent's effective (topic-pinned) model when none is
+      //     configured.
       //   - `callAgent` names an existing agent, which carries a model the user
       //     configured on it. Overriding that would discard a deliberate choice,
       //     the same way forcing a group member onto the sub-agent default would.
@@ -218,7 +241,12 @@ export const buildServerVirtualSubAgentRunner = (
       // re-derive it from the parent config.
       const subAgentModel = targetAgentId
         ? undefined
-        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent);
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
+      // Thinking / reasoning-effort overrides configured for the sub-agent
+      // model; same callSubAgent-only carve-out as the model above.
+      const subAgentChatConfig = targetAgentId
+        ? undefined
+        : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
       // 1. Create the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
@@ -241,6 +269,7 @@ export const buildServerVirtualSubAgentRunner = (
       //    bridge that backfills this tool message and resumes the parent op.
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
+        chatConfig: subAgentChatConfig,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
         model: subAgentModel?.model,
@@ -319,7 +348,13 @@ export const buildServerAgentMemberRunner = (
 
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
-      const expectedMembers = members.length;
+      const agentMap = (state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> }
+        | undefined)?.agentMap;
+      const resolvedMembers = members.map((member) => ({
+        ...member,
+        agentId: resolveGroupMemberId(member.agentId, agentMap),
+      }));
+      const expectedMembers = resolvedMembers.length;
       if (expectedMembers === 0) return { started: false, startedCount: 0 };
 
       // In-group multi-member actions (broadcast) render as an AgentCouncil: each
@@ -378,7 +413,7 @@ export const buildServerAgentMemberRunner = (
       // 3. Fork members.
       let startedCount = 0;
       await Promise.all(
-        members.map(async (member, i) => {
+        resolvedMembers.map(async (member, i) => {
           const anchorMessageId = anchorIds[i];
           try {
             const result = await execGroupMember({

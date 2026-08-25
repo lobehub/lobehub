@@ -50,6 +50,17 @@ export interface SkillContextProviderConfig {
 }
 
 /**
+ * Select the activated skills whose full content gets injected into the system
+ * prompt by SkillContextProvider.
+ *
+ * Exported so ActivationResultTrimProcessor can decide, with the exact same
+ * predicate, whether an activateSkill tool result's full content is already
+ * carried by the system prompt and can therefore be trimmed from history.
+ */
+export const selectActivatedSkills = (enabledSkills?: SkillMeta[]): SkillMeta[] =>
+  (enabledSkills ?? []).filter((s) => s.activated && s.content);
+
+/**
  * Skill Context Provider
  * Injects lightweight skill metadata into the system prompt so the LLM knows
  * which skills are available and can invoke them via `runSkill`.
@@ -75,7 +86,7 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     }
 
     // Separate activated skills (inject content directly) from available skills (list only)
-    const activatedSkills = enabledSkills.filter((s) => s.activated && s.content);
+    const activatedSkills = selectActivatedSkills(enabledSkills);
     const availableSkills = enabledSkills.filter((s) => !s.activated);
 
     const contentParts: string[] = [];

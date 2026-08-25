@@ -34,8 +34,7 @@ const readFileMock = vi.mocked(fsPromises.readFile);
 const callExecFile = (stdout: string) => {
   execFileMock.mockImplementationOnce(((...args: unknown[]) => {
     const callback = [...args].reverse().find((arg) => typeof arg === 'function') as
-      | ((error: Error | null, stdout: string) => void)
-      | undefined;
+      ((error: Error | null, stdout: string) => void) | undefined;
     callback?.(null, stdout);
     return {} as childProcess.ChildProcess;
   }) as typeof childProcess.execFile);
@@ -68,18 +67,46 @@ describe('cliSpawn', () => {
     expect(execFileMock).not.toHaveBeenCalled();
   });
 
-  it('prefers a Windows executable returned by where', async () => {
+  it('falls through to a later .exe only when an earlier .cmd shim cannot be unwrapped', async () => {
     platformMock.mockReturnValue('win32');
-    callExecFile(
-      ['C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd', 'C:\\Tools\\gemini.exe'].join('\r\n'),
-    );
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\gemini.cmd';
+    callExecFile([shimPath, 'C:\\Tools\\gemini.exe'].join('\r\n'));
+    existingPaths(shimPath);
+    // Content that matches none of the known npm-shim patterns (a custom
+    // installer script, not a standard npm cmd-shim).
+    readFileMock.mockResolvedValue('@ECHO off\r\nset SOME_CUSTOM_LAUNCHER=1\r\n');
 
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
     await expect(resolveCliSpawnPlan('gemini', ['--version'])).resolves.toEqual({
       args: ['--version'],
       command: 'C:\\Tools\\gemini.exe',
     });
-    expect(readFileMock).not.toHaveBeenCalled();
+    expect(readFileMock).toHaveBeenCalledWith(shimPath, 'utf8');
+  });
+
+  it('does not skip an earlier resolvable .cmd shim in favour of a later bare .exe', async () => {
+    // Regression test: an MSIX App Execution Alias stub (e.g. the
+    // WindowsApps\...\codex.exe placeholder some MSIX-packaged tools add to
+    // PATH) can appear on PATH after a perfectly usable earlier `.cmd` shim
+    // (e.g. a WinGet-installed `codex.cmd`). Node's execFile/spawn throws
+    // EPERM on that stub, so PATH order must win over "prefer any .exe".
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\Microsoft\\WinGet\\Links\\codex.cmd';
+    const exePath =
+      'C:\\Users\\Hanam\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenAI.Codex\\codex-x86_64-pc-windows-msvc.exe';
+    const appExecutionAliasStub =
+      'C:\\Users\\Hanam\\AppData\\Local\\Microsoft\\WindowsApps\\OpenAI.Codex_1.0\\app\\resources\\codex.exe';
+    callExecFile([shimPath, appExecutionAliasStub].join('\r\n'));
+    existingPaths(shimPath, exePath);
+    readFileMock.mockResolvedValue(
+      `@ECHO off\r\n"%~dp0..\\Packages\\OpenAI.Codex\\codex-x86_64-pc-windows-msvc.exe" %*\r\n`,
+    );
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan('codex', ['--version'])).resolves.toEqual({
+      args: ['--version'],
+      command: exePath,
+    });
   });
 
   it('resolves Windows npm shell shim to a package executable', async () => {
@@ -113,6 +140,21 @@ describe('cliSpawn', () => {
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
     await expect(resolveCliSpawnPlan(shimPath, ['--version'])).resolves.toEqual({
       args: ['--version'],
+      command: exePath,
+    });
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves the TRAE Windows shim that uses the native %~dp0 batch expansion', async () => {
+    platformMock.mockReturnValue('win32');
+    const shimPath = 'C:\\Users\\Hanam\\AppData\\Local\\Programs\\TraeCLI\\bin\\traecli.cmd';
+    const exePath = 'C:\\Users\\Hanam\\AppData\\Local\\Programs\\TraeCLI\\bin\\traex.exe';
+    existingPaths(shimPath, exePath);
+    readFileMock.mockResolvedValue('@echo off\r\n"%~dp0traex.exe" %*\r\n');
+
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    await expect(resolveCliSpawnPlan(shimPath, ['acp', 'serve'])).resolves.toEqual({
+      args: ['acp', 'serve'],
       command: exePath,
     });
     expect(execFileMock).not.toHaveBeenCalled();
@@ -159,6 +201,7 @@ describe('cliSpawn', () => {
     platformMock.mockReturnValue('win32');
     const shimPath = 'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\example-cli.cmd';
     const nodePath = 'C:\\Program Files\\nodejs\\node.exe';
+    const recoveredEnv = { ...process.env, PATH: 'C:\\Program Files\\nodejs;C:\\Windows' };
     const scriptPath =
       'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\node_modules\\example-cli\\bin\\cli.js';
     existingPaths(shimPath, scriptPath);
@@ -166,10 +209,11 @@ describe('cliSpawn', () => {
     readFileMock.mockResolvedValue('node "%dp0%\\node_modules\\example-cli\\bin\\cli.js" %*\r\n');
 
     const { resolveCliSpawnPlan } = await import('./cliSpawn');
-    await expect(resolveCliSpawnPlan(shimPath, ['--help'])).resolves.toEqual({
+    await expect(resolveCliSpawnPlan(shimPath, ['--help'], recoveredEnv)).resolves.toEqual({
       args: [scriptPath, '--help'],
       command: nodePath,
     });
+    expect(execFileMock.mock.calls[0]![2]).toMatchObject({ env: recoveredEnv });
   });
 
   it('resolves the npm generated %_prog% .cmd shim form used by Codex and Gemini', async () => {
@@ -225,5 +269,31 @@ describe('cliSpawn', () => {
       args: ['--version'],
       command: shimPath,
     });
+  });
+
+  it('accepts the exact Windows command-line limit and rejects one UTF-16 unit more', async () => {
+    platformMock.mockReturnValue('win32');
+    const command = 'C:\\codex.exe';
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    const exactPrompt = 'a'.repeat(32_767 - command.length - 2);
+
+    await expect(resolveCliSpawnPlan(command, [exactPrompt])).resolves.toEqual({
+      args: [exactPrompt],
+      command,
+    });
+    await expect(resolveCliSpawnPlan(command, [`${exactPrompt}a`])).rejects.toThrow(
+      /Windows command line requires 32768 UTF-16 code units/,
+    );
+  });
+
+  it('counts astral characters as two Windows UTF-16 code units', async () => {
+    platformMock.mockReturnValue('win32');
+    const command = 'C:\\codex.exe';
+    const { resolveCliSpawnPlan } = await import('./cliSpawn');
+    const promptPrefix = 'a'.repeat(32_767 - command.length - 3);
+
+    await expect(resolveCliSpawnPlan(command, [`${promptPrefix}😀`])).rejects.toThrow(
+      /Windows command line requires 32768 UTF-16 code units/,
+    );
   });
 });

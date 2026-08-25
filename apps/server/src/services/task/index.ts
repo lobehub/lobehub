@@ -1,4 +1,9 @@
+import { randomUUID } from 'node:crypto';
+
+import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
+  CreateTaskGoalInput,
+  GoalItem,
   TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAuthor,
@@ -6,6 +11,7 @@ import type {
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskItem,
+  TaskSchedulerContext,
   TaskStatus,
   TaskTopicHandoff,
   WorkspaceData,
@@ -13,10 +19,13 @@ import type {
 import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
+import { GoalModel } from '@/database/models/goal';
+import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
@@ -25,6 +34,8 @@ import { resolveAttachmentMetadata } from '../file/resolveAttachments';
 import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { createTaskSchedulerModule } from '../taskScheduler';
+import { resolveTaskAcceptance } from '../verify/taskAcceptance';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -47,6 +58,7 @@ export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
+  config?: Record<string, unknown>;
   // Runtime-state pockets stored on the task row (tasks.context JSONB). Used at
   // creation to record `context.origin` — the creator conversation pointer.
   context?: TaskContext;
@@ -54,11 +66,17 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
+  /**
+   * Bind a goal entity (`goals` row) to the created task — the task becomes the
+   * goal's execution carrier and the outer verify-driven round loop applies.
+   */
+  goal?: CreateTaskGoalInput;
   identifierPrefix?: string;
   instruction: string;
   name?: string;
   parentTaskId?: string;
   priority?: number;
+  projectId?: string;
   schedulePattern?: string;
   scheduleTimezone?: string;
   sortOrder?: number;
@@ -88,6 +106,7 @@ export class TaskService {
   private agentModel: AgentModel;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
+  private projectModel: ProjectModel;
   private taskTopicModel: TaskTopicModel;
   private topicModel: TopicModel;
   private userId: string;
@@ -99,6 +118,7 @@ export class TaskService {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
@@ -113,13 +133,29 @@ export class TaskService {
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
 
-    const createData: CreateTaskInput & { config?: Record<string, unknown> } = { ...input };
+    const { goal, ...taskInput } = input;
+    const createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> } = {
+      ...taskInput,
+    };
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
       const parent = await this.resolveOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
       parentVisibility = parent.visibility;
+      if (createData.projectId && createData.projectId !== parent.projectId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Subtask must belong to the same project as its parent',
+        });
+      }
+      createData.projectId ??= parent.projectId ?? undefined;
+    }
+
+    if (createData.projectId) {
+      const project = await this.projectModel.findManageableById(createData.projectId);
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      createData.identifierPrefix ??= project.identifier;
     }
 
     // Pull the model/provider snapshot and the agent's visibility in a single
@@ -129,7 +165,7 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = agentInfo.snapshot;
+        if (agentInfo.snapshot) createData.config = { ...agentInfo.snapshot, ...createData.config };
         agentVisibility = agentInfo.visibility;
       }
     }
@@ -158,7 +194,42 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    return this.taskModel.create(createData);
+    const task = await this.taskModel.create(createData);
+
+    if (goal) {
+      // Not a transaction on purpose: TaskModel.create's identifier-conflict
+      // retry loop relies on continuing after a 23505, which an enclosing
+      // transaction would abort. Compensate instead — a task committed without
+      // its promised goal is a ghost on goal surfaces (it never lists as a
+      // goal), and a retry would stack another one.
+      let created: GoalItem;
+      try {
+        created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
+          agentId: task.assigneeAgentId,
+          // `null` is the user's explicit "no cap"; `undefined` means they never
+          // chose, which falls back to the documented default. The floor keeps a
+          // degenerate 1-round loop from ever passing verify-then-stop.
+          maxRounds:
+            goal.maxRounds === undefined
+              ? DEFAULT_GOAL_MAX_ROUNDS
+              : goal.maxRounds === null
+                ? null
+                : Math.max(2, goal.maxRounds),
+          maxTotalCost: goal.maxTotalCost ?? null,
+          projectId: task.projectId,
+          requirement: goal.requirement ?? null,
+          subjectId: task.id,
+          subjectType: 'task',
+          title: goal.title?.trim() || task.name?.trim() || task.instruction,
+        });
+      } catch (error) {
+        await this.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
+      return { ...task, goal: created };
+    }
+
+    return task;
   }
 
   /**
@@ -365,6 +436,20 @@ export class TaskService {
     const task = await this.taskModel.updateStatus(resolved.id, status, extra);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
+    // Canceling the carrier task cancels its goal: the loop has no executor
+    // left, and a "running" goal over a canceled task would be a lie. The
+    // user's positive sign-off (`achieved`) is never downgraded. Best-effort —
+    // goal state must not block the task transition.
+    if (status === 'canceled') {
+      try {
+        const goalModel = new GoalModel(this.db, this.userId, this.workspaceId);
+        const goal = await goalModel.findBySubject('task', task.id);
+        if (goal && goal.status !== 'achieved') await goalModel.updateStatus(goal.id, 'canceled');
+      } catch (err) {
+        console.error('[TaskService.updateStatus] goal cancel mirror failed:', err);
+      }
+    }
+
     // Stamp the schedule run-count window each time the user (re)starts a
     // scheduled task. The cron dispatcher itself flips a task running →
     // scheduled on every tick, so we exclude that natural cycle by only
@@ -379,6 +464,60 @@ export class TaskService {
       await this.taskModel.updateContext(task.id, {
         scheduler: { scheduleStartedAt: new Date().toISOString() },
       });
+    }
+
+    // Heartbeat ticks are one-shot delayed messages that re-arm themselves
+    // after each run. Seed the very first message when a user starts/restarts
+    // the schedule; otherwise a fresh heartbeat task has no event capable of
+    // reaching the lifecycle re-arm path.
+    if (
+      status === 'scheduled' &&
+      task.automationMode === 'heartbeat' &&
+      task.heartbeatInterval &&
+      task.heartbeatInterval > 0 &&
+      resolved.status !== 'running' &&
+      resolved.status !== 'scheduled'
+    ) {
+      const scheduler = createTaskSchedulerModule();
+      const schedulerContext = (resolved.context as TaskContext | null)?.scheduler as
+        TaskSchedulerContext | undefined;
+      const previousTickMessageId = schedulerContext?.tickMessageId;
+      const tickToken = randomUUID();
+      let tickMessageId: string | undefined;
+
+      try {
+        // Invalidate the previous generation before publishing. This closes
+        // the race where an old QStash delivery arrives while the replacement
+        // message is being created.
+        await this.taskModel.updateContext(task.id, { scheduler: { tickToken } });
+        tickMessageId = await scheduler.scheduleNextTopic({
+          delay: task.heartbeatInterval,
+          taskId: task.id,
+          tickToken,
+          userId: this.userId,
+        });
+
+        await this.taskModel.updateContext(task.id, {
+          scheduler: {
+            consecutiveFailures: schedulerContext?.consecutiveFailures ?? 0,
+            scheduledAt: new Date().toISOString(),
+            tickMessageId,
+            tickToken,
+          },
+        });
+      } catch (error) {
+        // Never expose a scheduled status without a persisted tick. Restore
+        // the user-visible state and cancel a newly published message when
+        // persistence was the failing step.
+        if (tickMessageId) await scheduler.cancelScheduled(tickMessageId).catch(() => undefined);
+        await this.taskModel.update(task.id, { context: resolved.context });
+        await this.taskModel.updateStatus(task.id, resolved.status);
+        throw error;
+      }
+
+      if (previousTickMessageId) {
+        await scheduler.cancelScheduled(previousTickMessageId).catch(() => undefined);
+      }
     }
 
     const unlocked: string[] = [];
@@ -514,13 +653,22 @@ export class TaskService {
     // brief-type activities — the UI converges on Task Run. Briefs are therefore
     // not fetched/enriched here (see the omitted brief spread below). The brief
     // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace] = await Promise.all([
-      this.taskModel.findAllDescendants(task.id),
-      this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
-      this.taskModel.getComments(task.id).catch(() => []),
-      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-    ]);
+    const [allDescendants, dependencies, directTopics, comments, workspace, goal, acceptance] =
+      await Promise.all([
+        this.taskModel.findAllDescendants(task.id),
+        this.taskModel.getDependencies(task.id),
+        this.taskTopicModel
+          .findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT)
+          .catch(() => []),
+        this.taskModel.getComments(task.id).catch(() => []),
+        this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
+        new GoalModel(this.db, this.userId, this.workspaceId)
+          .findBySubject('task', task.id)
+          .catch(() => undefined),
+        resolveTaskAcceptance(this.db, this.userId, task.id, this.workspaceId).catch(
+          () => undefined,
+        ),
+      ]);
 
     const allDescendantIds = allDescendants.map((s) => s.id);
     const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
@@ -646,6 +794,7 @@ export class TaskService {
             ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
             : {}),
           status: s.status,
+          updatedAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : undefined,
         };
       });
     };
@@ -719,6 +868,13 @@ export class TaskService {
 
     const authorMap = await this.resolveAuthors(agentIds, userIds);
 
+    // Every run row answers "and did it pass?" on its own (with counts). Without this the
+    // activity feed lists rounds that all look alike, and the only way to learn
+    // a round's verdict is to leave for the acceptance page.
+    const verifyByOperation = await new VerifyRunModel(this.db, this.userId, this.workspaceId)
+      .findByOperations(topics.map((t) => t.operationId).filter((id): id is string => Boolean(id)))
+      .catch(() => new Map());
+
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
     const createdActivity: TaskDetailActivity | null =
       task.createdAt && creatorId
@@ -734,9 +890,11 @@ export class TaskService {
       ...topics.map((t) => {
         const handoff = t.handoff as TaskTopicHandoff | null;
         const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
+        const verifyRun = t.operationId ? verifyByOperation.get(t.operationId) : undefined;
         return {
           author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
           completedAt: toISO(t.completedAt),
+          cost: t.totalCost == null ? null : Number(t.totalCost),
           // Raw last assistant message of the run, shown alongside
           // the synthesized summary on the run card.
           content: handoff?.content,
@@ -751,6 +909,20 @@ export class TaskService {
           sourceTaskName: t.sourceTaskName,
           time: toISO(t.createdAt),
           title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
+          // What opened this round. Without it the feed cannot distinguish a run
+          // the user started from one the goal loop / scheduler opened on its
+          // own — they render identically apart from `#seq`.
+          trigger: t.trigger ?? null,
+          verify: verifyRun
+            ? {
+                acceptanceId: verifyRun.acceptanceId,
+                passed: verifyRun.passed,
+                roundIndex: verifyRun.roundIndex,
+                runId: verifyRun.id,
+                status: verifyRun.status,
+                total: verifyRun.total,
+              }
+            : null,
           type: 'topic' as const,
         };
       }),
@@ -780,6 +952,7 @@ export class TaskService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
+    const taskContext = task.context ? (task.context as TaskContext) : undefined;
     const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
 
     return {
@@ -801,11 +974,13 @@ export class TaskService {
       editorData: task.editorData ?? undefined,
       error: task.error,
       files: taskFiles.length > 0 ? taskFiles : undefined,
+      goal: goal ?? null,
       heartbeat:
         task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
+              scheduledAt: taskContext?.scheduler?.scheduledAt,
               timeout: task.heartbeatTimeout,
             }
           : undefined,
@@ -823,13 +998,17 @@ export class TaskService {
               timezone: task.scheduleTimezone,
             }
           : undefined,
+      startedAt: task.startedAt ? new Date(task.startedAt).toISOString() : undefined,
       status: task.status,
       userId: task.assigneeUserId,
-      verify: this.taskModel.getVerifyConfig(task),
+      verify: acceptance
+        ? { ...acceptance.config, requirement: acceptance.requirement }
+        : this.taskModel.getVerifyConfig(task),
       visibility: task.visibility,
       subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,
+      updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined,
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
       workspaceId: task.workspaceId ?? null,
     };

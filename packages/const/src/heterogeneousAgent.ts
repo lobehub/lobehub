@@ -10,10 +10,23 @@ export const HETERO_CONTINUE_PROMPT =
  * that keeps an agent on the cloud path must sanitize the model too, not just the
  * provider config.
  */
-export const HETEROGENEOUS_AGENT_MODEL_IDS = ['amp', 'claude-code', 'codex', 'opencode'] as const;
+export const HETEROGENEOUS_AGENT_MODEL_IDS = [
+  'amp',
+  'claude-code',
+  'codebuddy',
+  'codex',
+  'cursor',
+  'kimi-code',
+  'opencode',
+  'pi',
+  'qoder',
+] as const;
+
+export type HeterogeneousAgentModelId = (typeof HETEROGENEOUS_AGENT_MODEL_IDS)[number];
 
 const HETEROGENEOUS_AGENT_MODEL_ID_SET = new Set<string>(HETEROGENEOUS_AGENT_MODEL_IDS);
 
 /** Whether a bare `model` value identifies a legacy heterogeneous agent runtime. */
-export const isHeterogeneousAgentModelId = (model?: string | null): boolean =>
-  !!model && HETEROGENEOUS_AGENT_MODEL_ID_SET.has(model);
+export const isHeterogeneousAgentModelId = (
+  model?: string | null,
+): model is HeterogeneousAgentModelId => !!model && HETEROGENEOUS_AGENT_MODEL_ID_SET.has(model);

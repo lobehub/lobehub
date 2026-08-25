@@ -7,6 +7,7 @@ import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
 import { type AgentPluginEntry, AgentPluginEntrySchema } from './pluginConfig';
+import type { AgentProfile } from './profile';
 import type { LobeAgentTTSConfig } from './tts';
 
 /**
@@ -18,6 +19,8 @@ export interface AgentRankItem {
   backgroundColor: string | null;
   count: number;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
 }
 
@@ -37,33 +40,42 @@ export interface LobeAgentConfig {
    * Used to save the complete state of the rich text editor, including special nodes like mention
    */
   editorData?: any;
+
   fewShots?: FewShots;
   files?: FileItem[];
   id?: string;
-
   /**
    * knowledge bases
    */
   knowledgeBases?: KnowledgeBaseItem[];
+
   /**
    * Language model used by the agent
    * @default gpt-4o-mini
    */
   model: string;
+  /**
+   * The agent's personal name (e.g. "Alice", "小艾") — the identity it is
+   * addressed by. Distinct from {@link LobeAgentConfig.title}, which describes
+   * the role it plays ("Health Assistant" / "健康助手"). Optional: agents
+   * created before this field existed have no name.
+   */
+  name?: string;
 
   /**
    * Opening message
    */
   openingMessage?: string;
+
   /**
    * Opening questions
    */
   openingQuestions?: string[];
-
   /**
    * Language model parameters
    */
   params: LLMParams;
+
   /**
    * Enabled plugins. Each entry is either a legacy bare identifier string
    * (implicit pinned) or a tri-state `{ identifier, mode }` object — see
@@ -72,6 +84,8 @@ export interface LobeAgentConfig {
    * `getPluginMode`) over reading this field directly.
    */
   plugins?: AgentPluginEntry[];
+  /** Character sheet — traits and artwork; see {@link AgentProfile}. */
+  profile?: AgentProfile | null;
 
   /**
    *  Model provider
@@ -84,7 +98,8 @@ export interface LobeAgentConfig {
   systemRole: string;
 
   /**
-   * Agent title/name
+   * The role the agent plays, shown as its display label across the app
+   * (see {@link LobeAgentConfig.name} for the personal name).
    */
   title?: string;
 
@@ -116,6 +131,7 @@ export const CreateAgentSchema = z.object({
   fewShots: z.unknown().optional(),
   marketIdentifier: z.string().nullish(),
   model: z.string().nullish(),
+  name: z.string().nullish(),
   openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
   params: z.record(z.string(), z.unknown()).optional(),
@@ -151,15 +167,27 @@ export interface AgentItem {
   id: string;
   /** Market agent identifier for published agents */
   marketIdentifier?: string | null;
+  /** Default extension bag for values with no column and no home in `profile`. */
+  metadata?: Record<string, unknown> | null;
   model?: string | null;
+  /** Personal name of the agent — see {@link LobeAgentConfig.name}. */
+  name?: string | null;
   openingMessage?: string | null;
   openingQuestions?: string[];
   params?: any;
   plugins?: AgentPluginEntry[];
+  /** Character sheet — traits and artwork; see {@link AgentProfile}. */
+  profile?: AgentProfile | null;
   provider?: string | null;
   /** Session group ID for direct grouping */
   sessionGroupId?: string | null;
   slug?: string | null;
+  /**
+   * The society (agent org) this agent belongs to, or `null` for a standalone
+   * one. A real column rather than a metadata key: agents get listed and
+   * filtered by it.
+   */
+  societyId?: string | null;
   systemRole?: string | null;
   tags?: string[];
   title?: string | null;

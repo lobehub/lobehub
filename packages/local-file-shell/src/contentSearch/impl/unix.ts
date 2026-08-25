@@ -100,6 +100,12 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     const { tool: preferredTool } = params;
     const logPrefix = `[grepContent: ${params.pattern}]`;
 
+    const missingScope = await this.missingScopeResult(params);
+    if (missingScope) {
+      logger.warn(`${logPrefix} ${missingScope.error}`);
+      return missingScope;
+    }
+
     try {
       if (preferredTool && ['rg', 'ag', 'grep'].includes(preferredTool)) {
         logger.debug(`${logPrefix} Using preferred tool: ${preferredTool}`);
@@ -205,7 +211,12 @@ export abstract class UnixContentSearch extends BaseContentSearch {
           matches = lines;
           const hasContext = params['-A'] || params['-B'] || params['-C'];
           if (hasContext) {
-            totalMatches = await this.getActualMatchCount(tool, params);
+            totalMatches = await this.getActualMatchCount(
+              tool,
+              params,
+              searchRoot,
+              this.searchTarget(searchPath, searchRoot),
+            );
           } else {
             totalMatches = lines.length;
           }
@@ -267,19 +278,32 @@ export abstract class UnixContentSearch extends BaseContentSearch {
     return searchPath === searchRoot ? '.' : `./${path.basename(searchPath)}`;
   }
 
+  /**
+   * `searchRoot`/`target` must be the same pair the main search ran with: a
+   * file-valued `scope` is legal, but execa's `cwd` must be a directory, so
+   * running the count from the raw scope used to throw and silently return 0 —
+   * the summary then said "Found 0 matches" above output that plainly contained
+   * the match lines.
+   */
   protected async getActualMatchCount(
     tool: 'ag' | 'grep' | 'rg',
     params: GrepContentParams,
+    searchRoot: string,
+    target: string,
   ): Promise<number> {
     const countParams = { ...params, '-A': undefined, '-B': undefined, '-C': undefined };
-    const args = this.buildGrepArgs(tool, {
-      ...countParams,
-      output_mode: 'count',
-    } as GrepContentParams);
+    const args = this.buildGrepArgs(
+      tool,
+      {
+        ...countParams,
+        output_mode: 'count',
+      } as GrepContentParams,
+      target,
+    );
 
     try {
       const { stdout } = await execa(tool, args, {
-        cwd: this.resolveSearchPath(params),
+        cwd: searchRoot,
         reject: false,
         stdin: 'ignore',
       });

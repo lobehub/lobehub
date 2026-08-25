@@ -36,7 +36,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store', () => ({
+vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: any) => unknown) =>
     selector({
       libraryId: undefined,
@@ -47,7 +47,7 @@ vi.mock('@/routes/(main)/resource/features/store', () => ({
     }),
 }));
 
-vi.mock('@/routes/(main)/resource/features/store/selectors', () => ({
+vi.mock('@/features/ResourceManager/store/selectors', () => ({
   isExplorerItemSelected: () => false,
 }));
 
@@ -153,6 +153,6 @@ describe('FileListItem', () => {
   it('disables selection for rows the workspace member did not upload', () => {
     render(<FileListItem {...baseProps} selectable={false} />);
 
-    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(screen.getByRole('checkbox')).toHaveAttribute('aria-disabled', 'true');
   });
 });

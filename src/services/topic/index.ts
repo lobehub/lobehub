@@ -84,6 +84,8 @@ export class TopicService {
     return lambdaClient.topic.getTopics.query({
       agentId: params.agentId,
       current: params.current,
+      editingAgentId: params.editingAgentId,
+      editingGroupId: params.editingGroupId,
       excludeStatuses: params.excludeStatuses,
       excludeTriggers: params.excludeTriggers,
       groupId: params.groupId,
@@ -155,6 +157,14 @@ export class TopicService {
 
   updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
+  };
+
+  settleRunningOperation = (
+    id: string,
+    operationId: string,
+    status?: NonNullable<ChatTopic['status']>,
+  ) => {
+    return lambdaClient.topic.settleRunningOperation.mutate({ id, operationId, status });
   };
 
   getShareInfo = (topicId: string) => {

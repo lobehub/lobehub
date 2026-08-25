@@ -1,13 +1,13 @@
 'use client';
 
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
+import { t as translate } from 'i18next';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
-import React, { memo, Suspense, useState } from 'react';
+import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import McpDetail from '@/features/MCP/MCPDetail';
@@ -23,10 +23,21 @@ import { type DiscoverMcpItem } from '@/types/discover';
 
 import { itemStyles } from '../style';
 
+const openSkillDetailModal = (identifier: string) =>
+  createModal({
+    content: (
+      <Suspense fallback={<McpDetailLoading />}>
+        <McpDetail noSettings identifier={identifier} />
+      </Suspense>
+    ),
+    footer: null,
+    title: translate('dev.title.skillDetails', { ns: 'plugin' }),
+    width: 800,
+  });
+
 const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => {
   const styles = itemStyles;
   const { t } = useTranslation('plugin');
-  const [detailOpen, setDetailOpen] = useState(false);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -127,49 +138,35 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
   };
 
   return (
-    <>
-      <Flexbox className={styles.container} gap={0}>
-        <Block
-          clickable
-          horizontal
-          align={'center'}
-          gap={12}
-          paddingBlock={12}
-          paddingInline={12}
-          style={{ cursor: 'pointer' }}
-          variant={'outlined'}
-          onClick={() => setDetailOpen(true)}
-        >
-          <PluginAvatar avatar={icon} size={40} />
-          <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.title}>{name}</span>
-              <MCPTag showText={false} />
-            </Flexbox>
-            {description && <span className={styles.description}>{description}</span>}
-          </Flexbox>
-          <div onClick={stopPropagation}>{renderAction()}</div>
-        </Block>
-
-        {!!installProgress && (
-          <Flexbox paddingInline={12}>
-            <MCPInstallProgress identifier={identifier} />
-          </Flexbox>
-        )}
-      </Flexbox>
-      <ImperativeModal
-        destroyOnHidden
-        footer={null}
-        open={detailOpen}
-        title={t('dev.title.skillDetails')}
-        width={800}
-        onCancel={() => setDetailOpen(false)}
+    <Flexbox className={styles.container} gap={0}>
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        gap={12}
+        paddingBlock={12}
+        paddingInline={12}
+        style={{ cursor: 'pointer' }}
+        variant={'outlined'}
+        onClick={() => openSkillDetailModal(identifier)}
       >
-        <Suspense fallback={<McpDetailLoading />}>
-          <McpDetail noSettings identifier={identifier} />
-        </Suspense>
-      </ImperativeModal>
-    </>
+        <PluginAvatar avatar={icon} size={40} />
+        <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={8}>
+            <span className={styles.title}>{name}</span>
+            <MCPTag showText={false} />
+          </Flexbox>
+          {description && <span className={styles.description}>{description}</span>}
+        </Flexbox>
+        <div onClick={stopPropagation}>{renderAction()}</div>
+      </Block>
+
+      {!!installProgress && (
+        <Flexbox paddingInline={12}>
+          <MCPInstallProgress identifier={identifier} />
+        </Flexbox>
+      )}
+    </Flexbox>
   );
 });
 

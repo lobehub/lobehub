@@ -1,6 +1,6 @@
 'use client';
 
-import Page from '@/routes/(main)/settings/skill';
+import Page from '@/features/Settings/skill';
 
 const WorkspaceSkillSetting = () => <Page />;
 

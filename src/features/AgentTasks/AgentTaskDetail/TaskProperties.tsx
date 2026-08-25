@@ -9,6 +9,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
+import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
 import TaskScheduleConfig from './TaskScheduleConfig';
 
 interface StatusMeta {
@@ -69,6 +70,10 @@ const TaskProperties = memo(() => {
           <Text weight={500}>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
         </Block>
       </TaskStatusTag>
+
+      {/* The human layer: whether the delivery is accepted. Read-only here —
+          the decision itself is made on the acceptance page this links to. */}
+      <TaskAcceptanceStateRow />
 
       <TaskPriorityTag priority={priority} taskIdentifier={taskId}>
         <Block

@@ -5,6 +5,7 @@ import type { HeterogeneousAgentBroadcastEvents } from './heterogeneousAgent';
 import type { NavigationBroadcastEvents } from './navigation';
 import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
+import type { RendererOtaBroadcastEvents } from './rendererOta';
 import type { ScreenCaptureBroadcastEvents } from './screenCapture';
 import type { SystemBroadcastEvents } from './system';
 import type { TerminalBroadcastEvents } from './terminal';
@@ -25,6 +26,7 @@ export interface MainBroadcastEvents
     HeterogeneousAgentBroadcastEvents,
     NavigationBroadcastEvents,
     RemoteServerBroadcastEvents,
+    RendererOtaBroadcastEvents,
     ScreenCaptureBroadcastEvents,
     SystemBroadcastEvents,
     TerminalBroadcastEvents,
@@ -51,5 +53,6 @@ export type {
   AuthorizationProgress,
   MarketAuthorizationParams,
 } from './remoteServer';
+export type { RendererOtaUpdateInfo } from './rendererOta';
 export type { OverlayDispatchMessagePayload } from './screenCapture';
 export type { OpenSettingsWindowOptions } from './windows';

@@ -183,6 +183,17 @@ export interface SubAgentProgressData extends StepCompleteData {
 }
 
 /**
+ * A heterogeneous CLI lease renewal carried by `step_complete` while the
+ * underlying process is alive but has no user-visible output. It deliberately
+ * uses a phase instead of a new event type so the out-of-repo gateway worker
+ * can treat the stream write as activity without a coordinated protocol
+ * rollout. UI and persistence consumers ignore this advisory event.
+ */
+export interface OperationHeartbeatData extends StepCompleteData {
+  phase: 'operation_heartbeat';
+}
+
+/**
  * Producer → consumer: structured-input request the user must answer
  * directly (no tool execution involved). The producer's tool handler stays
  * blocked until a matching `agent_intervention_response` (correlated by

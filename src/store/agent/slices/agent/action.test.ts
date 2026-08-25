@@ -7,6 +7,8 @@ import { setScopedMutate } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -176,6 +178,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'stale',
               id: 'agent-1',
+              name: null,
               title: 'Stale Agent',
             },
           ],
@@ -187,6 +190,86 @@ describe('AgentSlice Actions', () => {
       });
 
       expect(result.current.availableAgents).toBeUndefined();
+    });
+
+    it('should seed a personal name matching the user language', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const status = useGlobalStore.getState().status;
+      useGlobalStore.setState({ status: { ...status, language: 'zh-CN' } });
+      const { result } = renderHook(() => useAgentStore());
+
+      try {
+        await act(async () => {
+          await result.current.createAgent({ config: { title: '健康助手' } });
+        });
+
+        const config = vi.mocked(agentService.createAgent).mock.calls[0][0].config!;
+        expect(config.title).toBe('健康助手');
+        expect(config.name).toMatch(/^\p{Script=Han}+$/u);
+      } finally {
+        useGlobalStore.setState({ status });
+      }
+    });
+
+    it('names a heterogeneous agent after its owner instead of a personal name', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const userState = useUserStore.getState();
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { fullName: 'Max', id: 'user-1' } as any,
+      });
+      const { result } = renderHook(() => useAgentStore());
+
+      try {
+        await act(async () => {
+          await result.current.createAgent({
+            config: {
+              agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+              title: 'Claude Code',
+            },
+          });
+        });
+
+        // Test i18n serves the default (English) chat resources.
+        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe(
+          "Max's Claude Code",
+        );
+      } finally {
+        useUserStore.setState({ isSignedIn: userState.isSignedIn, user: userState.user });
+      }
+    });
+
+    it('leaves a heterogeneous agent unnamed for an anonymous owner', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const userState = useUserStore.getState();
+      useUserStore.setState({ isSignedIn: false, user: undefined });
+      const { result } = renderHook(() => useAgentStore());
+
+      try {
+        await act(async () => {
+          await result.current.createAgent({
+            config: {
+              agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+              title: 'Claude Code',
+            },
+          });
+        });
+
+        expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBeUndefined();
+      } finally {
+        useUserStore.setState({ isSignedIn: userState.isSignedIn, user: userState.user });
+      }
+    });
+
+    it('should keep a name the caller already provided', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const { result } = renderHook(() => useAgentStore());
+
+      await act(async () => {
+        await result.current.createAgent({ config: { name: 'Ada', title: 'Math Tutor' } });
+      });
+
+      expect(vi.mocked(agentService.createAgent).mock.calls[0][0].config?.name).toBe('Ada');
     });
   });
 
@@ -223,6 +306,7 @@ describe('AgentSlice Actions', () => {
           backgroundColor: null,
           description: 'Helps with setup',
           id: 'agent-1',
+          name: null,
           title: 'Setup',
         },
       ]);
@@ -238,6 +322,7 @@ describe('AgentSlice Actions', () => {
             backgroundColor: null,
             description: 'Helps with setup',
             id: 'agent-1',
+            name: null,
             title: 'Setup',
           },
         ]);
@@ -286,6 +371,35 @@ describe('AgentSlice Actions', () => {
       // The background fetch only populates agentMap; it must not steal the active agent.
       expect(result.current.activeAgentId).toBe('routed-agent');
     });
+
+    it('replaces a stale profile snapshot so omitted editorData is cleared', async () => {
+      useAgentStore.setState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            editorData: { root: { children: [{ text: 'Old prompt' }] } },
+            id: 'agent-1',
+            systemRole: 'Old prompt',
+          } as any,
+        },
+      });
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValue({
+        id: 'agent-1',
+        systemRole: 'New prompt from Agent Builder',
+      } as any);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual({
+          id: 'agent-1',
+          systemRole: 'New prompt from Agent Builder',
+        });
+      });
+      expect(useAgentStore.getState().agentMap['agent-1']).not.toHaveProperty('editorData');
+    });
   });
 
   describe('invalidateAvailableAgents', () => {
@@ -300,6 +414,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'stale',
               id: 'agent-1',
+              name: null,
               title: 'Stale Agent',
             },
           ],
@@ -863,6 +978,7 @@ describe('AgentSlice Actions', () => {
               backgroundColor: null,
               description: 'Old Desc',
               id: 'agent-1',
+              name: null,
               title: 'Old Title',
             },
           ],

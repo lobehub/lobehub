@@ -1,6 +1,7 @@
 import type {
   ChatToolPayload,
   ModelUsage,
+  RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
   RuntimeStepContext,
 } from '@lobechat/types';
@@ -119,6 +120,7 @@ export interface Agent {
 // ── Payloads ──────────────────────────────────────────────
 
 export interface CallLLMPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
   isFirstMessage?: boolean;
   messages: any[];
@@ -258,6 +260,14 @@ export interface AgentInstructionCallTool extends AgentInstructionBase {
 
 export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for tools whose row already
+     * exists as a pending placeholder (batch human approval: the approval pause
+     * created one row per pending tool). The executor UPDATES those rows instead
+     * of inserting new ones — without this, resuming an approved batch would
+     * duplicate every tool message and orphan the pending originals.
+     */
+    existingToolMessageIds?: Record<string, string>;
     parentMessageId: string;
     toolsCalling: ChatToolPayload[];
   } & any;
@@ -266,6 +276,15 @@ export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
 
 export interface AgentInstructionResolveAbortedTools extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for calls whose row is already
+     * on disk as a pending placeholder (an approval pause creates one row per
+     * pending tool). The executor UPDATES those rows to the aborted state
+     * instead of inserting new ones — without this, aborting a parked approval
+     * duplicates every tool row and leaves the originals `pending`, so the
+     * approval cards stay on screen after Stop.
+     */
+    existingToolMessageIds?: Record<string, string>;
     /** Parent message ID (assistant message) */
     parentMessageId: string;
     /** Reason for the abort */
