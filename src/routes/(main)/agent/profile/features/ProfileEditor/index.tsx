@@ -1,7 +1,11 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  isHeterogeneousProviderBindingSupported,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
+import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Tabs } from '@lobehub/ui/base-ui';
@@ -13,9 +17,13 @@ import { useTranslation } from 'react-i18next';
 
 import ModelSelect from '@/features/ModelSelect';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -57,6 +65,8 @@ const ProfileEditor = memo(() => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
+  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
+    useEffectiveAgencyConfig(agentId);
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -78,6 +88,27 @@ const ProfileEditor = memo(() => {
     });
   };
 
+  const updateHeterogeneousAuthMode = async (
+    authMode: HeterogeneousAuthMode,
+    apiConfig?: HeterogeneousApiConfig,
+  ) => {
+    if (!canEdit || !heterogeneousProvider) return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, apiConfig, authMode },
+      },
+    });
+  };
+
+  const updateHeterogeneousApiConfig = async (apiConfig: HeterogeneousApiConfig | undefined) => {
+    if (!canEdit || !heterogeneousProvider) return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
+      },
+    });
+  };
+
   const updateBoundDeviceId = async (boundDeviceId: string) => {
     await updateAgentConfigById(agentId, {
       agencyConfig: { ...config?.agencyConfig, boundDeviceId, executionTarget: 'device' },
@@ -89,6 +120,57 @@ const ProfileEditor = memo(() => {
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
   const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
+  const apiModeLabEnabled = useUserStore(labPreferSelectors.enableAgentProviderBinding);
+  const localDesktopAvailable =
+    isDesktop &&
+    !!heterogeneousProvider &&
+    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
+    resolveExecutionTarget(effectiveAgencyConfig, {
+      clientExecutionAvailable: true,
+      isHetero: true,
+      workspaceScoped,
+    }) === 'local';
+  // Workspace agents are excluded even when the author could spawn them
+  // locally: the binding UI would list workspace-scoped providers, but Desktop
+  // main resolves the reference in the personal scope only (see
+  // `selectRuntimeType`'s personal-scope guard). The deployment-default API
+  // source is not a user-provider binding, so it stays available whenever
+  // local Desktop execution is available.
+  const apiModeAvailable = localDesktopAvailable && !isWorkspaceAgent;
+  const useFetchServerDefaultCapability = useAgentStore(
+    (s) => s.useFetchServerDefaultHeterogeneousCapability,
+  );
+  // V1 wires only these two native protocol paths. Future client drivers may widen this gate,
+  // while model/runtime compatibility must continue to come from the server capability below.
+  const serverDefaultAgentType =
+    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+      ? heterogeneousProvider.type
+      : undefined;
+  // Labs-gated with the rest of API mode: with the flag off we never fetch the
+  // capability, so the deployment-default option cannot surface anywhere.
+  const serverCapabilityEnabled =
+    apiModeLabEnabled && localDesktopAvailable && !!serverDefaultAgentType;
+  const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
+  const serverDefaultModels =
+    serverCapability.data?.enabled === true && serverDefaultAgentType
+      ? serverCapability.data.models[serverDefaultAgentType]
+      : [];
+  const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
+  const serverDefaultUnavailableReason = !apiModeLabEnabled
+    ? undefined
+    : !localDesktopAvailable
+      ? t('heterogeneousStatus.apiMode.localOnly')
+      : serverCapability.error
+        ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
+        : serverCapability.data?.enabled === false
+          ? t(
+              serverCapability.data.reason === 'disabled'
+                ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
+                : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
+            )
+          : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
+            ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
+            : undefined;
   const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
     ? [
         ...(showCloudHeterogeneousTab
@@ -111,8 +193,20 @@ const ProfileEditor = memo(() => {
           disabled: !isDesktop,
           children: (
             <HeterogeneousAgentStatusCard
+              apiModeAvailable={apiModeAvailable}
+              apiModeLabEnabled={apiModeLabEnabled}
+              apiModeWorkspaceBlocked={isWorkspaceAgent}
               provider={heterogeneousProvider}
+              serverDefaultAvailable={serverDefaultAvailable}
+              serverDefaultLoading={serverCapabilityEnabled && serverCapability.isLoading}
+              serverDefaultModels={serverDefaultModels}
+              serverDefaultUnavailableReason={serverDefaultUnavailableReason}
+              onApiConfigChange={updateHeterogeneousApiConfig}
+              onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
+              onServerDefaultRetry={() => {
+                void serverCapability.mutate();
+              }}
             />
           ),
         },

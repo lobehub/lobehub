@@ -1,21 +1,16 @@
 import { Hono } from 'hono';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { scheduleNightlyReview } from '../scheduleNightlyReview';
 
 const mocks = vi.hoisted(() => ({
-  dispatchNightlyReviewRequests: vi.fn(),
-  getServerDB: vi.fn(),
+  publishPaginateUsersEntry: vi.fn(),
 }));
 
-vi.mock('@/database/server', () => ({
-  getServerDB: mocks.getServerDB,
-}));
-
-vi.mock('@/server/services/agentSignal/services', () => ({
-  createServerNightlyReviewScheduleService: () => ({
-    dispatchNightlyReviewRequests: mocks.dispatchNightlyReviewRequests,
-  }),
+vi.mock('@/server/workflows/agentSignal/nightlyReview', () => ({
+  AgentSignalNightlyReviewWorkflow: {
+    publishPaginateUsersEntry: mocks.publishPaginateUsersEntry,
+  },
 }));
 
 const createApp = () => {
@@ -29,23 +24,34 @@ const createApp = () => {
 describe('scheduleNightlyReview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getServerDB.mockResolvedValue({});
-    mocks.dispatchNightlyReviewRequests.mockResolvedValue({ enqueued: 2, skipped: 1 });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-03T18:30:00.000Z'));
+    mocks.publishPaginateUsersEntry.mockResolvedValue({ messageId: 'nightly-message-1' });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('uses bounded defaults when QStash sends an empty body', async () => {
     /**
      * @example
-     * expect(response.status).toBe(200);
+     * expect(response.status).toBe(202);
      */
     const response = await createApp().request('/cron-hourly-nightly-self-review', {
       method: 'POST',
     });
 
-    await expect(response.json()).resolves.toEqual({ enqueued: 2, skipped: 1, success: true });
-    expect(mocks.dispatchNightlyReviewRequests).toHaveBeenCalledWith({
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({
+      scheduled: true,
+      success: true,
+      messageId: 'nightly-message-1',
+    });
+    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledWith({
       cursor: undefined,
-      limit: 500,
+      pageSize: 50,
+      requestedAt: '2026-05-03T18:30:00.000Z',
       targetLimit: 20,
       whitelist: undefined,
     });
@@ -54,7 +60,7 @@ describe('scheduleNightlyReview', () => {
   it('forwards valid scheduler options from the request body', async () => {
     /**
      * @example
-     * expect(dispatchNightlyReviewRequests).toHaveBeenCalledWith(options);
+     * expect(triggerPaginateUsers).toHaveBeenCalledWith(options);
      */
     const response = await createApp().request('/cron-hourly-nightly-self-review', {
       body: JSON.stringify({
@@ -67,12 +73,40 @@ describe('scheduleNightlyReview', () => {
       method: 'POST',
     });
 
-    await expect(response.json()).resolves.toEqual({ enqueued: 2, skipped: 1, success: true });
-    expect(mocks.dispatchNightlyReviewRequests).toHaveBeenCalledWith({
-      cursor: { createdAt: new Date('2026-05-04T00:00:00.000Z'), id: 'user-1' },
-      limit: 100,
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({
+      scheduled: true,
+      success: true,
+      messageId: 'nightly-message-1',
+    });
+    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledWith({
+      cursor: { createdAt: '2026-05-04T00:00:00.000Z', id: 'user-1' },
+      pageSize: 100,
+      requestedAt: '2026-05-03T18:30:00.000Z',
       targetLimit: 5,
       whitelist: ['user-1'],
+    });
+  });
+
+  it('reports a failed publish as 500 so the error reaches the DLQ', async () => {
+    /**
+     * Regression: the publish used to stall until Cloudflare returned 524 with an empty body, so
+     * every failed tick landed in the DLQ carrying no diagnosis at all.
+     *
+     * @example
+     * expect(response.status).toBe(500);
+     */
+    mocks.publishPaginateUsersEntry.mockRejectedValue(
+      new Error('nightly review cron publish timed out after 10000ms'),
+    );
+
+    const response = await createApp().request('/cron-hourly-nightly-self-review', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'nightly review cron publish timed out after 10000ms',
     });
   });
 });

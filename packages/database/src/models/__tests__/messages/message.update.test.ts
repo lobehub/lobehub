@@ -1423,7 +1423,7 @@ describe('MessageModel Update Tests', () => {
       expect(result.success).toBe(true);
       // Query should complete within 100ms even with many messages
       // (indexed lookup should be O(1), not O(n))
-      expect(duration).toBeLessThan(30);
+      expect(duration).toBeLessThan(100);
 
       // Verify the update was correct
       const parentResult = await serverDB

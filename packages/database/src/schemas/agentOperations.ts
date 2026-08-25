@@ -1,5 +1,9 @@
 import { verifyRunStatuses } from '@lobechat/const/verify';
-import type { VerifyCheckItem } from '@lobechat/types';
+import type {
+  AgentOperationCompletionReason,
+  AgentOperationStatus,
+  VerifyCheckItem,
+} from '@lobechat/types';
 import { boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
@@ -8,26 +12,6 @@ import { chatGroups } from './chatGroup';
 import { tasks } from './task';
 import { threads, topics } from './topic';
 import { workspaces } from './workspace';
-
-const operationStatuses = [
-  'idle',
-  'running',
-  'waiting_for_human',
-  'waiting_for_async_tool',
-  'done',
-  'error',
-  'interrupted',
-] as const;
-
-const completionReasons = [
-  'done',
-  'error',
-  'interrupted',
-  'max_steps',
-  'cost_limit',
-  'waiting_for_human',
-  'waiting_for_async_tool',
-] as const;
 
 export interface AgentOperationInterruption {
   canResume: boolean;
@@ -74,8 +58,8 @@ export const agentOperations = pgTable(
     parentOperationId: text('parent_operation_id'),
 
     // ---- Lifecycle ----
-    status: text('status', { enum: operationStatuses }).notNull(),
-    completionReason: text('completion_reason', { enum: completionReasons }),
+    status: text('status').$type<AgentOperationStatus>().notNull(),
+    completionReason: text('completion_reason').$type<AgentOperationCompletionReason>(),
 
     // ---- Verify (delivery checker) — DEPRECATED, moved to verify_runs ----
     // The plan snapshot + rollup status now live on `verify_runs` (the session

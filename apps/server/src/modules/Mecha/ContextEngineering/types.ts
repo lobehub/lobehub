@@ -20,6 +20,7 @@ import type {
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
 import type {
+  ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
   UIChatMessage,
@@ -84,6 +85,10 @@ export interface ServerMessagesEngineParams {
   additionalVariables?: Record<string, string>;
   /** Agent documents to inject into context based on load rules and positions */
   agentDocuments?: AgentContextDocument[];
+  /** Immutable expertise captured when the operation started. */
+  expertise?: ExpertiseContextSnapshot;
+  /** Whether to inject the operation expertise snapshot. */
+  enableExpertise?: boolean;
   /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
   userTimezone?: string;
   // ========== Extended contexts ==========

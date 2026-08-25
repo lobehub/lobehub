@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { TopicGroupMode } from '../topic/topic';
 
 export interface HeterogeneousAgentAuthDescriptor {
@@ -178,6 +180,36 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.x.ai/build/overview',
+      errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'no cached auth token found',
+        'session expired',
+        'run `grok login`',
+      ],
+      signInCommand: 'grok login',
+    },
+    defaultCommand: 'grok',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Grok',
+    install: {
+      commands: [
+        'curl -fsSL https://x.ai/cli/install.sh | bash',
+        'irm https://x.ai/cli/install.ps1 | iex',
+      ],
+      docsUrl: 'https://docs.x.ai/build/overview',
+    },
+    kind: 'local-cli',
+    menuKey: 'newGrokBuildAgent',
+    menuLabelKey: 'newGrokBuildAgent',
+    resume: { supported: true },
+    title: 'Grok Build',
+    type: 'grok-build',
+  },
+  {
+    auth: {
       docsUrl: 'https://moonshotai.github.io/kimi-code/en/',
       errorMessage: 'Kimi Code could not authenticate. Run `kimi`, use `/login`, then retry.',
       patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'no model configured'],
@@ -274,17 +306,80 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     title: 'Qoder',
     type: 'qoder',
   },
+  {
+    auth: {
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+      errorMessage: 'TRAE CLI could not authenticate. Sign in through TRAE Enterprise, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not logged in',
+        'please (?:log|sign) in',
+      ],
+      signInCommand: 'traecli',
+    },
+    defaultCommand: 'traecli',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Trae',
+    install: {
+      commands: [],
+      docsUrl: 'https://docs.volcengine.com/docs/86677/2387326?lang=zh',
+    },
+    kind: 'local-cli',
+    menuKey: 'newTraeAgent',
+    menuLabelKey: 'newTraeAgent',
+    resume: { supported: true },
+    title: 'TRAE CLI',
+    type: 'trae',
+  },
 ] as const satisfies readonly LocalHeterogeneousAgentDescriptor[];
 
+export const LOCAL_HETEROGENEOUS_AGENT_TYPES = HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type);
+
+export const LocalHeterogeneousAgentTypeSchema = z.enum(LOCAL_HETEROGENEOUS_AGENT_TYPES);
+
+export interface RemoteHeterogeneousAgentCliDescriptor {
+  command: string;
+  validation: {
+    helpKeywords?: readonly string[];
+    keywords?: readonly string[];
+    pattern?: string;
+  };
+  wellKnownHomePaths?: readonly string[];
+}
+
 export interface RemoteHeterogeneousAgentDescriptor {
+  cli: RemoteHeterogeneousAgentCliDescriptor;
   kind: 'remote-task';
   title: string;
   type: string;
 }
 
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
-  { kind: 'remote-task', title: 'OpenClaw', type: 'openclaw' },
-  { kind: 'remote-task', title: 'Hermes', type: 'hermes' },
+  {
+    cli: {
+      command: 'openclaw',
+      validation: {
+        helpKeywords: ['Usage: openclaw'],
+        keywords: ['openclaw'],
+        pattern: '^v?\\d+\\.\\d+\\.\\d+(?:[-+][\\dA-Za-z.-]+)?$',
+      },
+      wellKnownHomePaths: ['.openclaw/bin/openclaw', '.local/bin/openclaw'],
+    },
+    kind: 'remote-task',
+    title: 'OpenClaw',
+    type: 'openclaw',
+  },
+  {
+    cli: {
+      command: 'hermes',
+      validation: { keywords: ['hermes'] },
+      wellKnownHomePaths: ['.local/bin/hermes'],
+    },
+    kind: 'remote-task',
+    title: 'Hermes',
+    type: 'hermes',
+  },
 ] as const satisfies readonly RemoteHeterogeneousAgentDescriptor[];
 
 export type HeterogeneousAgentDescriptor =

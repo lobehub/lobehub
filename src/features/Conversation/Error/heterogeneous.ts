@@ -32,10 +32,12 @@ export const isHeterogeneousAgentStatusGuideError = (
       agentType === 'codebuddy' ||
       agentType === 'codex' ||
       agentType === 'cursor' ||
+      agentType === 'grok-build' ||
       agentType === 'kimi-code' ||
       agentType === 'opencode' ||
       agentType === 'pi' ||
-      agentType === 'qoder') &&
+      agentType === 'qoder' ||
+      agentType === 'trae') &&
     typeof code === 'string' &&
     HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES.has(code)
   );

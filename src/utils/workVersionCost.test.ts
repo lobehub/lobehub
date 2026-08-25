@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { computeWorkVersionCostDeltas, formatWorkVersionCost } from './workVersionCost';
 
 describe('formatWorkVersionCost', () => {
-  it('hides missing or zero cost', () => {
+  it('hides unknown cost but renders known-zero as $0.00', () => {
     expect(formatWorkVersionCost(null)).toBeNull();
-    expect(formatWorkVersionCost(0)).toBeNull();
+    expect(formatWorkVersionCost(undefined)).toBeNull();
+    expect(formatWorkVersionCost(0)).toBe('$0.00');
+  });
+
+  it('hides negative cost defensively', () => {
+    expect(formatWorkVersionCost(-0.01)).toBeNull();
   });
 
   it('keeps small cumulative costs visible', () => {

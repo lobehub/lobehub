@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
+import { registerWorksForOperation } from '@/server/services/workRegistration';
 
 import { CompletionLifecycle, isSuccessLikeCompletionReason } from '../CompletionLifecycle';
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
-import { registerWorksForOperation } from '../workRegistration';
 
 // Default async no-op implementation: the production code chains `.catch` on
 // the returned promise, so a bare vi.fn() (returning undefined) would throw
@@ -22,7 +22,7 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
   notifyAgentRunCompleted: mockNotifyAgentRunCompleted,
 }));
 
-vi.mock('../workRegistration', () => ({
+vi.mock('@/server/services/workRegistration', () => ({
   registerWorksForOperation: vi.fn(),
 }));
 
@@ -548,6 +548,21 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
 
     expect(persistCompletion).toHaveBeenCalledBefore(dispatch);
   });
+
+  it('does not dispatch hooks when another owner already interrupted the operation', async () => {
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(false);
+    const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await lifecycle.dispatchHooks(
+      'op-reclaimed',
+      { metadata: { _hooks: [] }, status: 'done' },
+      'done',
+    );
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
@@ -730,6 +745,17 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     await lifecycle.dispatchHooks('op-1', doneState, 'done');
 
     expect(mockNotifyAgentRunCompleted).not.toHaveBeenCalled();
+  });
+
+  it('preserves an in-group member role in synthesized completion state', () => {
+    const lifecycle = buildLifecycle();
+
+    const state = (lifecycle as any).buildStateFromInput({
+      operationId: 'op-member',
+      orchestrationRole: 'member',
+    });
+
+    expect(state.metadata.orchestrationRole).toBe('member');
   });
 
   it.each(['max_steps', 'cost_limit'])(
@@ -1070,6 +1096,48 @@ describe('CompletionLifecycle.emitSignalEvents — assistant anchor', () => {
     expect(emission.payload).toMatchObject({
       anchorMessageId: 'msg-assistant',
       assistantMessageId: 'msg-assistant',
+    });
+  });
+
+  it('hydrates a persisted self-reflection marker when terminal state metadata lost it', async () => {
+    const emitSpy = vi
+      .spyOn(agentSignalService, 'emitAgentSignalSourceEvent')
+      .mockResolvedValue(undefined as any);
+    const lifecycle = buildLifecycle();
+    (lifecycle as any).agentOperationModel = {
+      findById: vi.fn().mockResolvedValue({
+        metadata: {
+          agentSignal: {
+            agentId: 'agent-1',
+            kind: 'self-reflection',
+            sourceId: 'reflection-source-1',
+            topicId: 'tpc-1',
+          },
+        },
+      }),
+    };
+
+    await lifecycle.emitSignalEvents(
+      'op-1',
+      {
+        messages: [{ content: 'review complete', id: 'msg-assistant', role: 'assistant' }],
+        metadata: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
+        stepCount: 1,
+      },
+      'done',
+    );
+
+    const [emission] = emitSpy.mock.calls[0];
+    expect(emission.payload).toMatchObject({
+      selfIteration: {
+        marker: {
+          agentId: 'agent-1',
+          kind: 'self-reflection',
+          sourceId: 'reflection-source-1',
+          topicId: 'tpc-1',
+        },
+        userId: 'user-1',
+      },
     });
   });
 });

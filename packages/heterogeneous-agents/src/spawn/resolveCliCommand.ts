@@ -32,6 +32,7 @@ export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
  */
 export interface CliCommandStatus {
   available: boolean;
+  error?: string;
   path?: string;
   /**
    * PATH used to resolve/validate the command, surfaced only when it differs
@@ -46,6 +47,8 @@ export interface CliCommandStatus {
 
 interface ValidateOptions {
   validateFlag?: string;
+  /** Capability-probe argv. Defaults to `--help`. */
+  validateHelpArgs?: string[];
   /** Additional `--help` markers that must all be present after version validation. */
   validateHelpKeywords?: string[];
   validateKeywords?: string[];
@@ -56,6 +59,12 @@ interface ValidateOptions {
 interface ResolvedCommand {
   env?: NodeJS.ProcessEnv;
   path: string;
+  resolvedPathEnv?: string;
+}
+
+interface RecoveredProbeEnvironment {
+  env: NodeJS.ProcessEnv;
+  resolvedPathEnv: string;
 }
 
 const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
@@ -135,8 +144,15 @@ const getLoginShellPath = async (): Promise<string | undefined> => {
   }
 };
 
-const getCachedLoginShellPath = async (): Promise<string | undefined> => {
-  shellPathPromise ??= getLoginShellPath();
+/**
+ * Share one login-shell lookup between concurrent probes, but discard it once
+ * settled. A later Rescan must observe PATH edits made by an installer while
+ * the desktop app is already running.
+ */
+const getCurrentLoginShellPath = async (): Promise<string | undefined> => {
+  shellPathPromise ??= getLoginShellPath().finally(() => {
+    shellPathPromise = undefined;
+  });
   return shellPathPromise;
 };
 
@@ -195,7 +211,7 @@ const readMergedWindowsRegistryPath = async (): Promise<string | undefined> => {
  * answer for the process lifetime would re-create the staleness it fixes: a
  * CLI installed after the first failed scan would stay "not installed" until
  * the app restarted. `reg query` is a couple of short-lived processes, and it
- * only runs when `where` already came up empty.
+ * only runs after the complete inherited-environment pass fails.
  */
 const getWindowsRegistryPath = async (): Promise<string | undefined> => {
   registryPathPromise ??= readMergedWindowsRegistryPath().finally(() => {
@@ -216,6 +232,26 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
     });
 
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
+};
+
+const recoverProbeEnvironment = async (
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<RecoveredProbeEnvironment | undefined> => {
+  const recoveredPath = isWindows()
+    ? await getWindowsRegistryPath()
+    : await getCurrentLoginShellPath();
+  const currentPath = probeEnv?.PATH ?? process.env.PATH;
+  const resolvedPathEnv = mergePathValues(recoveredPath, currentPath);
+
+  if (!resolvedPathEnv || resolvedPathEnv === currentPath) return;
+
+  return {
+    env: {
+      ...(probeEnv ?? process.env),
+      PATH: resolvedPathEnv,
+    },
+    resolvedPathEnv,
+  };
 };
 
 const getCommandPathLines = async (
@@ -249,37 +285,21 @@ const getCommandPathLines = async (
  * makes detection immune to unknown shim shapes instead of chasing them with
  * more regexes.
  */
-const resolveCommandCandidates = async (command: string): Promise<ResolvedCommand[]> => {
+const resolveCommandCandidates = async (
+  command: string,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<ResolvedCommand[]> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return [];
 
+  const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
+
   if (isPathLikeCommand(trimmedCommand)) {
-    return [{ path: trimmedCommand }];
+    return [{ env: probeEnv, path: trimmedCommand, resolvedPathEnv }];
   }
 
   const whichCommand = isWindows() ? 'where' : 'which';
-  let lines = await getCommandPathLines(whichCommand, trimmedCommand);
-  let lookupEnv: NodeJS.ProcessEnv | undefined;
-
-  if (!lines) {
-    // PATH recovery, per platform: macOS/Linux re-read the login shell's PATH,
-    // Windows re-reads the registry environment (the inherited block is a
-    // creation-time snapshot that never picks up a later install).
-    const recoveredPath = isWindows()
-      ? await getWindowsRegistryPath()
-      : await getCachedLoginShellPath();
-    const lookupPath = mergePathValues(recoveredPath, process.env.PATH);
-
-    if (lookupPath && lookupPath !== process.env.PATH) {
-      const fallbackEnv = {
-        ...process.env,
-        PATH: lookupPath,
-      };
-      lines = await getCommandPathLines(whichCommand, trimmedCommand, fallbackEnv);
-      if (lines) lookupEnv = fallbackEnv;
-    }
-  }
-
+  const lines = await getCommandPathLines(whichCommand, trimmedCommand, probeEnv);
   if (!lines) return [];
 
   // Windows `where` lists every PATHEXT match (e.g. for `codex` npm ships a
@@ -287,12 +307,13 @@ const resolveCommandCandidates = async (command: string): Promise<ResolvedComman
   // ones we can execute, still in PATH order.
   if (isWindows()) {
     return pickWindowsRunnables(lines).map((runnablePath) => ({
-      env: lookupEnv,
+      env: probeEnv,
       path: runnablePath,
+      resolvedPathEnv,
     }));
   }
 
-  return [{ env: lookupEnv, path: lines[0] }];
+  return [{ env: probeEnv, path: lines[0], resolvedPathEnv }];
 };
 
 const quoteWindowsShellToken = (token: string): string =>
@@ -358,7 +379,7 @@ const execProbe = async (
     });
   }
 
-  const spawnPlan = await resolveCliSpawnPlan(command, args);
+  const spawnPlan = await resolveCliSpawnPlan(command, args, env);
   if (isWindows() && spawnPlan.command === command && isWindowsShimPath(command)) {
     return UNRESOLVED_SHIM;
   }
@@ -375,9 +396,10 @@ const execProbe = async (
  * matching `--version` output against a keyword or output pattern (avoids
  * collisions with an unrelated executable of the same name).
  */
-export const detectValidatedCommand = async (
+const detectValidatedCommandInEnvironment = async (
   command: string,
   options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
   const trimmedCommand = command.trim();
   if (!trimmedCommand) return { available: false };
@@ -385,6 +407,7 @@ export const detectValidatedCommand = async (
 
   const {
     validateFlag = '--version',
+    validateHelpArgs = ['--help'],
     validateHelpKeywords,
     validateKeywords,
     validatePattern,
@@ -394,11 +417,14 @@ export const detectValidatedCommand = async (
   // Resolve via where/which BEFORE invoking. On Windows this is what discovers
   // npm-installed shims like `claude.cmd` under %APPDATA%\npm — `execFile`
   // alone won't apply PATHEXT and can't run .cmd files directly.
-  const candidates = await resolveCommandCandidates(trimmedCommand);
-  if (candidates.length === 0) return { available: false };
+  const candidates = await resolveCommandCandidates(trimmedCommand, probeEnv);
+  const resolvedPathEnv = probeEnv?.PATH === process.env.PATH ? undefined : probeEnv?.PATH;
+  if (candidates.length === 0) {
+    return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
+  }
 
   const validateCandidate = async (
-    { env, path: resolvedPath }: ResolvedCommand,
+    { env, path: resolvedPath, resolvedPathEnv }: ResolvedCommand,
     viaShell: boolean,
   ): Promise<CliCommandStatus | typeof UNRESOLVED_SHIM> => {
     let result;
@@ -426,13 +452,13 @@ export const detectValidatedCommand = async (
       return { available: false };
     }
 
-    // Kimi Code shares the `kimi` executable name with the retired Python
-    // kimi-cli. Both can print a valid version, so capability-probe the exact
-    // resolved binary before accepting it as the stream-json runtime.
+    // Some command names and version banners identify multiple products. When
+    // configured, capability-probe the exact resolved binary before accepting
+    // it as the runtime this adapter needs.
     if (validateHelpKeywords?.length) {
       let helpResult;
       try {
-        helpResult = await execProbe(resolvedPath, ['--help'], env, viaShell);
+        helpResult = await execProbe(resolvedPath, validateHelpArgs, env, viaShell);
       } catch {
         return { available: false };
       }
@@ -465,12 +491,11 @@ export const detectValidatedCommand = async (
     return {
       available: true,
       path: resolvedPath,
-      // `env` is set only when resolution fell back to a recovered PATH (login
-      // shell on macOS/Linux, registry on Windows). Surface that PATH so the
-      // spawn site can carry it into the child env — otherwise a
-      // `#!/usr/bin/env node` shim resolved here can't find `node` under the
-      // leaner inherited PATH (Finder-launched Electron).
-      resolvedPathEnv: env?.PATH,
+      // Surface a caller-supplied or recovered PATH when it differs from the
+      // detector process, so the spawn site can preserve the environment that
+      // made validation succeed. Otherwise an `#!/usr/bin/env node` shim can
+      // validate here but fail when launched from a leaner host environment.
+      resolvedPathEnv,
       // CLIs format their banners differently (`codex-cli 0.147.0`,
       // `1.2.3 (Claude Code)`, etc.). Keep validation against the original
       // output, but expose only the version so every consumer renders the same
@@ -499,8 +524,62 @@ export const detectValidatedCommand = async (
     if (status !== UNRESOLVED_SHIM && status.available) return status;
   }
 
-  return { available: false };
+  return resolvedPathEnv ? { available: false, resolvedPathEnv } : { available: false };
 };
+
+const isProbeableCommand = (command: string): boolean => {
+  const trimmedCommand = command.trim();
+  return trimmedCommand.length > 0 && !(isWindows() && WINDOWS_SHELL_METAS.test(trimmedCommand));
+};
+
+/**
+ * Validate an ordered command chain with candidate precedence above environment
+ * precedence: candidate 1 inherited → candidate 1 recovered → candidate 2
+ * inherited → candidate 2 recovered. PATH recovery is attempted at most once
+ * and reused, so lookup misses and validation failures share the same edge
+ * without letting a well-known fallback outrank the user's login-PATH command.
+ */
+export const detectValidatedCommandCandidates = async (
+  commands: string[],
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => {
+  let lastStatus: CliCommandStatus = { available: false };
+  let recoveryAttempted = false;
+  let recovered: RecoveredProbeEnvironment | undefined;
+
+  for (const command of commands) {
+    const inheritedStatus = await detectValidatedCommandInEnvironment(command, options, probeEnv);
+    if (inheritedStatus.available) return inheritedStatus;
+    lastStatus = inheritedStatus;
+
+    // Invalid Windows shell expressions must not trigger even the registry
+    // helper processes used for PATH recovery.
+    if (!isProbeableCommand(command)) continue;
+
+    if (!recoveryAttempted) {
+      recoveryAttempted = true;
+      recovered = await recoverProbeEnvironment(probeEnv);
+    }
+    if (!recovered) continue;
+
+    const recoveredStatus = await detectValidatedCommandInEnvironment(
+      command,
+      options,
+      recovered.env,
+    );
+    if (recoveredStatus.available) return recoveredStatus;
+    lastStatus = recoveredStatus;
+  }
+
+  return lastStatus;
+};
+
+export const detectValidatedCommand = async (
+  command: string,
+  options: ValidateOptions,
+  probeEnv?: NodeJS.ProcessEnv,
+): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'amp': {
@@ -522,6 +601,13 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
   },
+  'grok-build': {
+    validateHelpArgs: ['agent', '--help'],
+    validateHelpKeywords: ['agent', 'stdio'],
+    validateKeywords: ['grok'],
+    validatePattern:
+      /^grok\s+v?\d+\.\d+\.\d+(?:[-+][\dA-Z.-]+)?(?:\s+\([^)]+\))?(?:\s+\[[^\]]+\])?$/i,
+  },
   'kimi-code': {
     validateHelpKeywords: ['--prompt', '--output-format'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
@@ -537,6 +623,15 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   },
   'qoder': {
     // Qoder prints a bare semantic version for `--version`.
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'trae': {
+    // The official binary and the unrelated open-source trajectory runner both
+    // identify themselves as `trae-cli`. Distinguish them by the ACP runtime
+    // LobeHub actually needs rather than by executable name or version banner.
+    validateHelpArgs: ['acp', 'serve', '--help'],
+    validateHelpKeywords: ['Start the ACP server', '--yolo'],
+    validateKeywords: ['trae', 'traecode'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
 } as const satisfies Record<HeterogeneousCliAgentType, ValidateOptions>;
@@ -620,7 +715,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
     }
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
-      return [path.join(homedir(), '.local', 'bin', 'agent')];
+      return [
+        path.join(homedir(), '.local', 'bin', 'agent'),
+        // Cursor's installer creates both names. Keep the unambiguous legacy
+        // alias as a fallback when another CLI shadows the generic `agent`.
+        path.join(homedir(), '.local', 'bin', 'cursor-agent'),
+      ];
+    }
+    case 'grok-build': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), '.grok', 'bin', 'grok.exe')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.grok', 'bin', 'grok')];
     }
     case 'kimi-code': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
@@ -662,6 +769,26 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), 'Library', 'pnpm', 'qodercli'),
       ];
     }
+    case 'trae': {
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        if (!localAppData) return [];
+
+        const currentBinDir = path.win32.join(localAppData, 'Programs', 'TraeCLI', 'bin');
+        const legacyBinDir = path.win32.join(localAppData, 'trae-cli', 'bin');
+        return [
+          path.win32.join(currentBinDir, 'traex.exe'),
+          path.win32.join(legacyBinDir, 'traecli.exe'),
+          path.win32.join(legacyBinDir, 'trae-cli.exe'),
+        ];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'traecli'),
+        path.join(homedir(), '.local', 'bin', 'trae-cli'),
+      ];
+    }
     default: {
       return [];
     }
@@ -671,26 +798,22 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
 export const detectHeterogeneousCliCommand = async (
   agentType: HeterogeneousCliAgentType,
   command: string,
+  probeEnv?: NodeJS.ProcessEnv,
 ): Promise<CliCommandStatus> => {
   const validator = HETEROGENEOUS_CLI_AGENT_OPTIONS[agentType];
   if (!validator) return { available: false };
-
-  const status = await detectValidatedCommand(command, validator);
-  if (status.available) return status;
 
   // The default command missing from PATH may still live at a well-known install
   // location (e.g. the Codex desktop app's bundled CLI). Only probe those for the
   // default command: the well-known paths hold the *default* binary, so applying
   // them to a custom command (e.g. `claude-beta`) would silently resolve it to
   // stock `claude` instead of reporting the configured command as missing.
-  if (command.trim() === DEFAULT_HETERO_COMMAND[agentType]) {
-    for (const candidate of getWellKnownCommandPaths(agentType)) {
-      const fallbackStatus = await detectValidatedCommand(candidate, validator);
-      if (fallbackStatus.available) return fallbackStatus;
-    }
-  }
+  const commands =
+    command.trim() === DEFAULT_HETERO_COMMAND[agentType]
+      ? [command, ...getWellKnownCommandPaths(agentType)]
+      : [command];
 
-  return status;
+  return detectValidatedCommandCandidates(commands, validator, probeEnv);
 };
 
 /**

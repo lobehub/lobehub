@@ -22,7 +22,8 @@ const MemorySetting = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canManageMemory, reason } = usePermission('manage_settings');
   const [form] = Form.useForm();
-  const { memory } = useUserStore(settingsSelectors.currentSettings, isEqual);
+  const memory = useUserStore(settingsSelectors.currentMemorySettings, isEqual);
+  const memoryEnabled = useUserStore(settingsSelectors.memoryEnabled);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
@@ -31,16 +32,13 @@ const MemorySetting = memo(() => {
   const memorySettings: FormGroupItemType = {
     children: [
       {
-        children: (
-          <Tooltip title={reason}>
-            <Switch disabled={!canManageMemory} />
-          </Tooltip>
-        ),
+        children: <Switch disabled={!canManageMemory} />,
         desc: t('memory.enabled.desc'),
         label: t('memory.enabled.title'),
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enabled',
+        tooltip: reason,
         valuePropName: 'checked',
       },
       {
@@ -51,7 +49,7 @@ const MemorySetting = memo(() => {
               disabled={!canManageMemory}
               levels={MEMORY_EFFORT_LEVELS}
               style={{ minWidth: 160 }}
-              value={memory?.effort ?? 'medium'}
+              value={memory.effort}
               marks={{
                 0: t('memory.effort.level.low'),
                 1: t('memory.effort.level.medium'),
@@ -79,7 +77,7 @@ const MemorySetting = memo(() => {
     <Form
       collapsible={false}
       form={form}
-      initialValues={memory}
+      initialValues={{ ...memory, enabled: memoryEnabled }}
       items={[memorySettings]}
       itemsType={'group'}
       variant={'filled'}

@@ -104,7 +104,7 @@ const ProviderCard = memo<ProviderCardProps>(
               >
                 {source === 'custom'
                   ? description
-                  : t(`${id}.description`, { defaultValue: description })}
+                  : description && t(`${id}.description`, { defaultValue: description })}
               </Text>
             </Flexbox>
           </div>

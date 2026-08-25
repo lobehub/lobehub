@@ -38,6 +38,7 @@ vi.mock('@lobehub/ui/icons', () => ({
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: vi.fn(),
+  DropdownMenu: ({ children }: { children: ReactNode }) => children,
 }));
 
 vi.mock('antd', () => ({

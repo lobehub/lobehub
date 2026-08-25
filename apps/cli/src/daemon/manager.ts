@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
 
 function getLobehubDir() {
-  return path.join(os.homedir(), '.lobehub');
+  return path.join(os.homedir(), CLI_CONFIG_DIR_NAME);
 }
 
 function getPidPath() {

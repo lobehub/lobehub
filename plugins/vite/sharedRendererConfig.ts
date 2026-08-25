@@ -428,6 +428,10 @@ export const sharedOptimizeDeps = {
   ],
 };
 
+// Workspace packages can resolve @lobehub/editor through different peer-dependency
+// snapshots. They must still share one LexicalComposerContext at runtime.
+export const sharedRendererDedupe = ['@lobehub/editor', 'react', 'react-dom'];
+
 export const __testing = {
   sharedChunkFileNames,
   sharedManualChunks,

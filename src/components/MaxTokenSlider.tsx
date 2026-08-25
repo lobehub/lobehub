@@ -1,10 +1,11 @@
 import { Flexbox, InputNumber } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+
+import DiscreteSlider from './DiscreteSlider';
 
 const Kibi = 1024;
 
@@ -46,40 +47,35 @@ const MaxTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defaultValu
 
   const isMobile = useIsMobile();
 
-  const marks = useMemo(() => {
-    return {
-      [exponent(2)]: '0',
-      [exponent(4)]: isMobile ? '4' : '4K', // 4 Kibi = 4096
-      [exponent(8)]: isMobile ? '8' : '8K',
-      [exponent(16)]: isMobile ? '16' : '16K',
-      [exponent(32)]: isMobile ? '32' : '32K',
-      [exponent(64)]: isMobile ? '64' : '64K',
-      [exponent((128 / Kibi) * 1000)]: ' ', // hide tick mark
-      [exponent((200 / Kibi) * 1000)]: isMobile ? '200' : '200k', // 200,000
-      [exponent(Kibi)]: '1M',
-      [exponent(2 * Kibi)]: '2M',
-    };
-  }, [isMobile]);
+  const options = useMemo(
+    () => [
+      { label: '0', value: exponent(2) },
+      { label: isMobile ? '4' : '4K', value: exponent(4) }, // 4 Kibi = 4096
+      { label: isMobile ? '8' : '8K', value: exponent(8) },
+      { label: isMobile ? '16' : '16K', value: exponent(16) },
+      { label: isMobile ? '32' : '32K', value: exponent(32) },
+      { label: isMobile ? '64' : '64K', value: exponent(64) },
+      { ariaLabel: '128k', label: ' ', value: exponent((128 / Kibi) * 1000) }, // hide tick label
+      { label: isMobile ? '200' : '200k', value: exponent((200 / Kibi) * 1000) },
+      { label: '1M', value: exponent(Kibi) },
+      { label: '2M', value: exponent(2 * Kibi) },
+    ],
+    [isMobile],
+  );
 
   return (
     <Flexbox horizontal align={'center'} gap={12}>
       <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={exponent(2 * Kibi)}
-          min={exponent(2)}
-          step={null}
+        <DiscreteSlider
+          options={options}
           value={powValue}
-          tooltip={{
-            formatter: (x) => {
-              if (typeof x === 'undefined') return;
-              if (x <= exponent(2)) return t('MaxTokenSlider.unlimited');
+          formatTooltip={(sliderValue) => {
+            if (sliderValue <= exponent(2)) return t('MaxTokenSlider.unlimited');
 
-              const value = getRealValue(x);
-              if (value < 125) return value.toFixed(0) + 'K';
-              else if (value < Kibi) return ((value * Kibi) / 1000).toFixed(0) + 'k';
-              return (value / Kibi).toFixed(0) + 'M';
-            },
+            const realValue = getRealValue(sliderValue);
+            if (realValue < 125) return realValue.toFixed(0) + 'K';
+            if (realValue < Kibi) return ((realValue * Kibi) / 1000).toFixed(0) + 'k';
+            return (realValue / Kibi).toFixed(0) + 'M';
           }}
           onChange={updateWithPowValue}
         />

@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
 import { isProgrammaticTestCheck } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyPlan,
+  GENERATED_CRITERIA_JSON_SCHEMA,
+  VERIFY_PLAN_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
@@ -14,8 +19,7 @@ import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildPlanPrompt, VERIFY_PLAN_PROMPT_VERSION } from './prompts';
-import { GENERATED_CRITERIA_JSON_SCHEMA, RawGeneratedCriteriaSchema } from './schema';
+import { RawGeneratedCriteriaSchema } from './schema';
 
 const log = debug('lobe-server:verify-plan-generator');
 
@@ -46,7 +50,7 @@ export interface GeneratePlanParams {
   verifyRubricId?: string | null;
 }
 
-/** One agent-authored check, fully specified by the model (the `generateVerifyPlan` tool). */
+/** One check draft, fully specified by its author (AI generation or user editing). */
 export interface CriterionDraft {
   /** One-sentence summary; stored on the `verify_criteria.description` column. */
   description?: string;
@@ -161,104 +165,7 @@ export class VerifyPlanGeneratorService {
       : {};
   }
 
-  /**
-   * The agent-authored path (the `generateVerifyPlan` tool): the model enumerates
-   * the checks itself, so we (1) create a `verify_criteria` row per check, (2)
-   * create a `verify_rubric` titled by the goal and aggregate the criteria under
-   * it (reusable), (3) snapshot the rubric onto the operation and confirm it so
-   * the checks run automatically on completion. Mirrors `createDocument`: full
-   * creation from the model's input, not instantiation of a pre-existing rubric.
-   */
-  async createPlanFromCriteria(params: {
-    criteria: CriterionDraft[];
-    operationId: string;
-    title: string;
-  }): Promise<{ items: VerifyCheckItem[]; rubricId: string }> {
-    // 1. Create the rubric (the run's named, reusable delivery standard).
-    const rubric = await this.rubricModel.create({ title: params.title });
-
-    // 2. Create each criterion and build the frozen snapshot items in one pass.
-    const items: VerifyCheckItem[] = [];
-    const links: { criterionId: string; sortOrder: number }[] = [];
-    for (const [index, draft] of params.criteria.entries()) {
-      // Default to auto-repair: a failing check should attempt a fix rather than
-      // silently waiting for manual intervention.
-      const onFail = draft.onFail ?? 'auto_repair';
-      const required = draft.required ?? true;
-      const verifierType = draft.verifierType ?? 'llm';
-
-      // The detailed judging instruction is the criterion's rule body — it lives
-      // in a document (editable, history-tracked), referenced by documentId.
-      let documentId: string | null = null;
-      if (draft.instruction) {
-        const doc = await this.documentModel.create({
-          content: draft.instruction,
-          fileType: VERIFY_INSTRUCTION_FILE_TYPE,
-          source: `verify-criterion:${rubric.id}:${index}`,
-          sourceType: 'agent',
-          title: draft.title,
-          totalCharCount: draft.instruction.length,
-          totalLineCount: draft.instruction.split('\n').length,
-          ...this.inheritedVisibility,
-        });
-        documentId = doc.id;
-      }
-
-      const verifierConfig = {
-        ...draft.verifierConfig,
-        ...(draft.requiredEvidence ? { requiredEvidence: draft.requiredEvidence } : {}),
-      };
-      const criterion = await this.criterionModel.create({
-        description: draft.description,
-        documentId,
-        onFail,
-        required,
-        title: draft.title,
-        verifierConfig,
-        verifierType,
-      });
-
-      links.push({ criterionId: criterion.id, sortOrder: index });
-      items.push({
-        description: draft.description,
-        documentId,
-        id: criterion.id,
-        index,
-        onFail,
-        required,
-        sourceCriterionId: criterion.id,
-        sourceRubricId: rubric.id,
-        title: draft.title,
-        verifierConfig,
-        verifierType,
-      });
-    }
-
-    // 3. Aggregate the criteria under the rubric (criteria reusable across rubrics).
-    await this.rubricModel.setCriteria(rubric.id, links);
-
-    // 4. Snapshot onto the run + confirm so it runs when the op completes.
-    const run = await this.runModel.ensureForOperation(params.operationId, { title: params.title });
-    await this.runModel.setPlan(run.id, items);
-    await this.runModel.confirmPlan(run.id);
-
-    log(
-      'created rubric %s with %d criteria for op %s',
-      rubric.id,
-      items.length,
-      params.operationId,
-    );
-    return { items, rubricId: rubric.id };
-  }
-
-  /**
-   * Config-time AI generation: turn a one-sentence acceptance requirement into a
-   * set of proposed criteria for the user to review/edit before saving. Runs the
-   * SAME traced generation as the run-time plan path (`buildPlanPrompt` +
-   * `GENERATED_CRITERIA_JSON_SCHEMA` + `TRACING_SCENARIOS.VerifyPlanGen`), so each
-   * call lands in `llm_generation_tracing` for later precision work. Returns
-   * drafts only — nothing is persisted and no operation is required.
-   */
+  /** Draft criteria for the generic task verification configuration surface. */
   async generateCriteria(params: {
     context?: string;
     goal: string;
@@ -266,21 +173,14 @@ export class VerifyPlanGeneratorService {
     modelConfig: { model: string; provider: string };
   }): Promise<CriterionDraft[]> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
-    const { system, user } = buildPlanPrompt({
-      context: params.context,
-      goal: params.goal,
-      maxCriteria,
-    });
-
-    const ai = new AiGenerationService(this.db, this.userId);
-    const raw = await ai.generateObject(
+    const raw = await new AiGenerationService(this.db, this.userId).generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
-        model: params.modelConfig.model,
-        provider: params.modelConfig.provider,
+        ...chainVerifyPlan({
+          context: params.context,
+          goal: params.goal,
+          maxCriteria,
+        }),
+        ...params.modelConfig,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       },
@@ -298,15 +198,18 @@ export class VerifyPlanGeneratorService {
       log('config criteria-gen output did not match schema: %O', parsed.error.flatten());
       return [];
     }
-    return withoutProgrammaticTests(parsed.data.criteria.slice(0, maxCriteria)).map((c) => ({
-      description: c.description,
-      instruction: c.instruction,
-      onFail: c.onFail ?? 'manual',
-      requiredEvidence: c.requiredEvidence,
-      required: c.required ?? true,
-      title: c.title,
-      verifierType: c.verifierType,
-    }));
+
+    return withoutProgrammaticTests(parsed.data.criteria.slice(0, maxCriteria)).map(
+      (criterion) => ({
+        description: criterion.description,
+        instruction: criterion.instruction,
+        onFail: criterion.onFail ?? 'manual',
+        requiredEvidence: criterion.requiredEvidence,
+        required: criterion.required ?? true,
+        title: criterion.title,
+        verifierType: criterion.verifierType,
+      }),
+    );
   }
 
   /**
@@ -421,7 +324,7 @@ export class VerifyPlanGeneratorService {
     modelConfig: { model: string; provider: string };
     operationId: string;
   }): Promise<VerifyCheckItem[]> {
-    const { system, user } = buildPlanPrompt({
+    const chain = chainVerifyPlan({
       context: params.context,
       existingTitles: params.existingTitles,
       goal: params.goal,
@@ -431,10 +334,7 @@ export class VerifyPlanGeneratorService {
     const ai = new AiGenerationService(this.db, this.userId);
     const raw = await ai.generateObject(
       {
-        messages: [
-          { content: system, role: 'system' as const },
-          { content: user, role: 'user' as const },
-        ],
+        ...chain,
         model: params.modelConfig.model,
         provider: params.modelConfig.provider,
         schema: GENERATED_CRITERIA_JSON_SCHEMA,

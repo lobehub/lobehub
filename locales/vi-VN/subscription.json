@@ -340,6 +340,8 @@
   "payDiffPrice": "Thanh toán phần chênh lệch",
   "payDiffPriceApprox": "Xấp xỉ",
   "payDiffPriceTip": "Số tiền thực tế sẽ hiển thị trên trang thanh toán",
+  "payment.downgradeFailed.desc": "Không thể lên lịch hạ cấp của bạn. Vui lòng thử lại sau, hoặc liên hệ với chúng tôi qua email nếu vấn đề vẫn tiếp diễn",
+  "payment.downgradeFailed.title": "Hạ Cấp Thất Bại",
   "payment.error.actions.billing": "Quản lý thanh toán",
   "payment.error.actions.home": "Quay về trang chủ",
   "payment.error.desc": "Không tìm thấy ID gói đăng ký: {{id}}. Nếu bạn có thắc mắc, vui lòng liên hệ với chúng tôi qua email",
@@ -363,7 +365,6 @@
   "plans.btn.noAction": "Gói bị khóa",
   "plans.btn.payment": "Mua",
   "plans.btn.paymentDesc": "Hỗ trợ thẻ tín dụng / Alipay / WeChat Pay",
-  "plans.btn.paymentDescForZarinpal": "Hỗ trợ thẻ tín dụng",
   "plans.btn.soon": "Sắp ra mắt",
   "plans.cancelDowngrade": "Hủy hạ cấp đã lên lịch",
   "plans.cancelDowngradeSuccess": "Hạ cấp đã lên lịch đã được hủy",
@@ -633,11 +634,5 @@
   "usage.overview.title": "Tổng quan sử dụng",
   "usage.remaining": "Còn lại",
   "usage.storage.embeddings.used": "Lưu trữ vector",
-  "usage.storage.file.used": "Sử dụng tệp",
-  "zarinpal.infoModal.desc": "Theo yêu cầu chính sách, vui lòng hoàn tất thông tin cá nhân sau trước khi đặt hàng:",
-  "zarinpal.infoModal.phone.label": "Số điện thoại",
-  "zarinpal.infoModal.phone.placeholder": "Vui lòng nhập số điện thoại",
-  "zarinpal.infoModal.phone.rule": "Vui lòng nhập số điện thoại hợp lệ",
-  "zarinpal.infoModal.submit": "Mua hàng",
-  "zarinpal.infoModal.title": "Điền thông tin bắt buộc"
+  "usage.storage.file.used": "Sử dụng tệp"
 }

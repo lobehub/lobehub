@@ -6,7 +6,7 @@ export const resolveNavPanelKey = (
   const isWorkspaceRoute =
     !!activeWorkspaceSlug && segments.length > 0 && segments[0] === activeWorkspaceSlug;
   const routeSegments = isWorkspaceRoute ? segments.slice(1) : segments;
-  const [rootSegment, childSegment] = routeSegments;
+  const [rootSegment, childSegment, grandchildSegment] = routeSegments;
 
   if (rootSegment === 'settings') {
     return isWorkspaceRoute ? 'workspace-settings' : 'settings';
@@ -14,7 +14,7 @@ export const resolveNavPanelKey = (
 
   switch (rootSegment) {
     case 'agent': {
-      return 'agent';
+      return grandchildSegment === 'docs' ? 'agent-docs' : 'agent';
     }
 
     case 'community': {
@@ -39,6 +39,10 @@ export const resolveNavPanelKey = (
 
     case 'page': {
       return 'page';
+    }
+
+    case 'project': {
+      return 'project';
     }
 
     case 'resource': {

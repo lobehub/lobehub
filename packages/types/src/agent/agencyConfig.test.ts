@@ -4,21 +4,54 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
+  canPublishAgentTopicLink,
+  formatServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousModel,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
+  resolveAgentTopicSharePolicy,
+  unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
+  AMP_AGENT_MODES,
   codexModelSupportsFastSpeed,
   getCodexReasoningEffortLevels,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  resolveAmpAgentMode,
   resolveClaudeCodeModel,
   resolveClaudeCodeReasoningEffort,
   resolveCodexModel,
   resolveCodexReasoningEffort,
   resolveCodexSpeedMode,
 } from './heteroSelectorCapabilities';
+
+describe('server-default heterogeneous model request', () => {
+  it('only accepts the namespaced operation model used for CLI metadata', () => {
+    expect(formatServerDefaultHeterogeneousModel('gpt-5.4')).toBe('lobehub/gpt-5.4');
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.4', 'gpt-5.4')).toBe(true);
+    expect(isServerDefaultHeterogeneousModel('lobehub-default', 'gpt-5.4')).toBe(false);
+    expect(isServerDefaultHeterogeneousModel('lobehub/gpt-5.5', 'gpt-5.4')).toBe(false);
+  });
+
+  it('unwraps namespaced CLI reports and the legacy Claude Code alias', () => {
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub/claude-sonnet-4-6')).toBe(
+      'claude-sonnet-4-6',
+    );
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub/gpt-5.4', 'ignored')).toBe('gpt-5.4');
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub-default', 'claude-sonnet-4-6')).toBe(
+      'claude-sonnet-4-6',
+    );
+    expect(unwrapServerDefaultHeterogeneousModel('lobehub-default')).toBe('lobehub-default');
+    expect(unwrapServerDefaultHeterogeneousModel('claude-opus-4-6', 'claude-sonnet-4-6')).toBe(
+      'claude-opus-4-6',
+    );
+    expect(unwrapServerDefaultHeterogeneousModel(undefined, 'claude-sonnet-4-6')).toBe(
+      'claude-sonnet-4-6',
+    );
+  });
+});
 
 describe('normalizeHeterogeneousProviderConfig', () => {
   it('recovers a legacy adapterType before considering the command', () => {
@@ -106,7 +139,33 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
-  it('passes AMP native args through direct spawns and encodes them for lh hetero exec', () => {
+  it('resolves Amp mode from native args before the structured field', () => {
+    expect(resolveAmpAgentMode(undefined)).toBe(HETEROGENEOUS_AGENT_DEFAULT_SELECTION);
+    expect(resolveAmpAgentMode({ mode: 'high' })).toBe('high');
+    expect(resolveAmpAgentMode({ args: ['--mode=ultra'], mode: 'low' })).toBe('ultra');
+  });
+
+  it.each(AMP_AGENT_MODES)(
+    'forwards structured Amp mode %s through direct and legacy-compatible device paths',
+    (mode) => {
+      const provider: HeterogeneousProviderConfig = { mode, type: 'amp' };
+
+      expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', mode]);
+      expect(buildHeteroExecArgs(provider)).toEqual(['--agent-arg=--mode', `--agent-arg=${mode}`]);
+    },
+  );
+
+  it('does not override Amp mode when Default is selected', () => {
+    const provider: HeterogeneousProviderConfig = {
+      mode: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      type: 'amp',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toBeUndefined();
+    expect(buildHeteroExecArgs(provider)).toBeUndefined();
+  });
+
+  it('keeps raw Amp args compatible with direct spawns and lh hetero exec', () => {
     const provider: HeterogeneousProviderConfig = { args: ['--mode', 'high'], type: 'amp' };
 
     expect(buildHeteroSpawnArgs(provider)).toEqual(['--mode', 'high']);
@@ -139,6 +198,62 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'cursor',
       }),
     ).toEqual(['--model', 'gpt-5']);
+  });
+
+  it('forwards Grok Build model and effort through direct ACP and device execution', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--no-subagents'],
+      effort: 'xhigh',
+      model: 'grok-4.6',
+      type: 'grok-build',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--no-subagents',
+      '--model',
+      'grok-4.6',
+      '--effort',
+      'xhigh',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--no-subagents',
+      '--agent-arg=--model',
+      '--agent-arg=grok-4.6',
+      '--agent-arg=--effort',
+      '--agent-arg=xhigh',
+    ]);
+  });
+
+  it('keeps native Grok Build selector flags authoritative', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['-m=grok-build', '--reasoning-effort=low'],
+      effort: 'high',
+      model: 'grok-4.6',
+      type: 'grok-build',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['-m=grok-build', '--reasoning-effort=low']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=-m=grok-build',
+      '--agent-arg=--reasoning-effort=low',
+    ]);
+  });
+
+  it('keeps TRAE model selection in the wrapper instead of native process arguments', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--feature', 'test'],
+      effort: 'high',
+      model: 'ignored-selector',
+      type: 'trae',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--feature', 'test']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--feature',
+      '--agent-arg=test',
+      '--model',
+      'ignored-selector',
+    ]);
   });
 
   it('forwards Qoder native args, model, and reasoning effort', () => {
@@ -513,6 +628,12 @@ describe('codex reasoning effort capabilities', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.6-luna')).toEqual(maxLevels);
   });
 
+  it('uses the model-specific levels supported by custom server-default models', () => {
+    expect(getCodexReasoningEffortLevels('deepseek-v4-flash')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('deepseek-v4-pro')).toEqual(['low', 'high', 'max']);
+    expect(getCodexReasoningEffortLevels('glm-5.2')).toEqual(['high', 'max']);
+  });
+
   it('uses conservative common levels for old, unknown, and default models', () => {
     expect(getCodexReasoningEffortLevels('gpt-5.5')).toEqual(commonLevels);
     expect(getCodexReasoningEffortLevels('gpt-5.4-mini')).toEqual(commonLevels);
@@ -765,5 +886,64 @@ describe('resolveAgentAgencyConfig', () => {
         { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
       ),
     ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
+  });
+});
+
+describe('resolveAgentTopicSharePolicy', () => {
+  it('never restricts a personal agent — there is nobody to restrict', () => {
+    expect(
+      resolveAgentTopicSharePolicy({
+        agencyConfig: { topicSharePolicy: 'restricted' },
+        workspaceId: null,
+      }),
+    ).toBe('member');
+  });
+
+  it('keeps legacy workspace rows on the behaviour they were created with', () => {
+    expect(resolveAgentTopicSharePolicy({ workspaceId: 'workspace-1' })).toBe('member');
+    expect(resolveAgentTopicSharePolicy({ agencyConfig: {}, workspaceId: 'workspace-1' })).toBe(
+      'member',
+    );
+  });
+
+  it('honours an explicit restriction on a workspace agent', () => {
+    expect(
+      resolveAgentTopicSharePolicy({
+        agencyConfig: { topicSharePolicy: 'restricted' },
+        workspaceId: 'workspace-1',
+      }),
+    ).toBe('restricted');
+  });
+});
+
+describe('canPublishAgentTopicLink', () => {
+  const restricted = {
+    agencyConfig: { topicSharePolicy: 'restricted' as const },
+    userId: 'author',
+    workspaceId: 'workspace-1',
+  };
+
+  it('falls back to the role gate when no agent resolved', () => {
+    // Legacy session-only topics, or a row the caller cannot read: there is no
+    // policy to apply, so this must not become a second, silent denial.
+    expect(canPublishAgentTopicLink(undefined, { userId: 'member' })).toBe(true);
+    expect(canPublishAgentTopicLink(null, { userId: 'member' })).toBe(true);
+  });
+
+  it('blocks a plain member on a restricted agent', () => {
+    expect(canPublishAgentTopicLink(restricted, { userId: 'member' })).toBe(false);
+  });
+
+  it('lets the agent author and workspace owners through', () => {
+    expect(canPublishAgentTopicLink(restricted, { userId: 'author' })).toBe(true);
+    expect(canPublishAgentTopicLink(restricted, { isWorkspaceOwner: true, userId: 'member' })).toBe(
+      true,
+    );
+  });
+
+  it('does not match an author against a missing viewer id', () => {
+    expect(canPublishAgentTopicLink({ ...restricted, userId: null }, { userId: undefined })).toBe(
+      false,
+    );
   });
 });

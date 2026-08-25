@@ -10,6 +10,9 @@ describe('resolveNavPanelKey', () => {
     ['/lobe-team/task/task-1', 'lobe-team', 'home'],
     ['/agent/agent-1', null, 'agent'],
     ['/lobe-team/agent/agent-1', 'lobe-team', 'agent'],
+    ['/agent/agent-1/docs', null, 'agent-docs'],
+    ['/agent/agent-1/docs/docs-1', null, 'agent-docs'],
+    ['/lobe-team/agent/agent-1/docs/docs-1', 'lobe-team', 'agent-docs'],
     ['/group/group-1', null, 'group'],
     ['/settings/profile', null, 'settings'],
     ['/lobe-team/settings/general', 'lobe-team', 'workspace-settings'],
@@ -20,6 +23,8 @@ describe('resolveNavPanelKey', () => {
     ['/lobe-team/eval', 'lobe-team', 'eval'],
     ['/lobe-team/eval/bench/benchmark-1', 'lobe-team', 'evalBench'],
     ['/lobe-team/page/page-1', 'lobe-team', 'page'],
+    ['/project/project-1', null, 'project'],
+    ['/lobe-team/project/project-1/library/kb-1', 'lobe-team', 'project'],
     ['/lobe-team/image', 'lobe-team', 'image'],
     ['/lobe-team/video', 'lobe-team', 'video'],
   ])('maps %s to %s', (pathname, activeWorkspaceSlug, expected) => {

@@ -59,6 +59,7 @@ export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
 export const verifyRunStatuses = [
   'unverified',
   'planned',
+  'collecting_evidence',
   'verifying',
   'passed',
   'failed',
@@ -235,7 +236,7 @@ export const acceptanceCheckReviewActions = ['accept', 'ignore', 'reject'] as co
 export type AcceptanceCheckReviewAction = (typeof acceptanceCheckReviewActions)[number];
 
 /**
- * Why a reviewer rejected a check. The offline baseline (LOBE-13035) found that
+ * Why a reviewer rejected a check. The offline baseline found that
  * three different models converged on the same "wrong" answer for 24 of the
  * checks a human had rejected — because the reject button is the only outbound
  * channel on the page, so it carries three unrelated jobs at once. Only `unmet`
@@ -323,6 +324,7 @@ export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
+  'agent',
   'agent-browser',
   'cdp',
   'cli',

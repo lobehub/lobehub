@@ -39,6 +39,7 @@ interface CreateTaskInlineEntryProps {
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
+  projectId?: string;
   /**
    * `hero` adapts the entry for the empty-tasks landing: hides collapse,
    * enlarges the editor area, and forces autoFocus.
@@ -55,6 +56,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     onCreated,
     parentTaskId,
     placeholder,
+    projectId,
     variant = 'default',
   } = props;
   const isHero = variant === 'hero';
@@ -87,8 +89,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // Persist the in-progress draft per scope so a reload / accidental close
   // doesn't eat a long prompt. Skipped for the transient subtask composer.
   const draftStorageKey = useMemo(
-    () => (parentTaskId ? null : `lobehub:task-create-draft:${agentId ?? 'all'}`),
-    [agentId, parentTaskId],
+    () => (parentTaskId ? null : `lobehub:task-create-draft:${projectId ?? agentId ?? 'all'}`),
+    [agentId, parentTaskId, projectId],
   );
   // Tracks which scope key the editor is currently hydrated for. The component
   // is reused across /agent/A/tasks -> /agent/B/tasks -> /tasks without
@@ -228,6 +230,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         name,
         parentTaskId,
         priority: priority || undefined,
+        projectId,
         // Only send visibility in workspace mode; personal mode lets the server
         // fall through to the schema default ('public', inert in personal mode).
         visibility: activeWorkspaceId ? visibility : undefined,
@@ -266,6 +269,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     onCreated,
     parentTaskId,
     priority,
+    projectId,
     canCreateTask,
     visibility,
   ]);

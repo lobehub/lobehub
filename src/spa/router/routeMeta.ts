@@ -21,8 +21,15 @@ export interface DynamicRouteMetaProps {
   params: RouteMetaParams;
 }
 
+export type RouteSkeletonChrome = 'page' | 'body';
+
+export interface RouteSkeletonProps {
+  chrome?: RouteSkeletonChrome;
+}
+
 export interface RouteMeta extends StaticRouteMeta {
   DynamicMeta?: ComponentType<DynamicRouteMetaProps>;
+  Skeleton?: ComponentType<RouteSkeletonProps>;
 }
 
 export interface RouteHandle {

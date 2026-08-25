@@ -13,14 +13,16 @@ const PRESERVED_AGENT_SUB_PATHS = new Set(['topics', 'profile', 'channel']);
  * same view. Topic / task ids belong to the previous agent and are
  * intentionally dropped.
  */
+export const resolvePreservedAgentUrl = (pathname: string, agentId: string): string => {
+  const match = pathname.match(/^\/agent\/[^/]+\/([^/]+)\/?$/);
+  const subPath = match?.[1];
+  if (subPath && PRESERVED_AGENT_SUB_PATHS.has(subPath)) {
+    return `/agent/${agentId}/${subPath}`;
+  }
+  return AGENT_CHAT_URL(agentId, false);
+};
+
 export const usePreservedAgentUrl = (agentId: string): string => {
   const { pathname } = useActiveLocation();
-  return useMemo(() => {
-    const match = pathname.match(/^\/agent\/[^/]+\/([^/]+)\/?$/);
-    const subPath = match?.[1];
-    if (subPath && PRESERVED_AGENT_SUB_PATHS.has(subPath)) {
-      return `/agent/${agentId}/${subPath}`;
-    }
-    return AGENT_CHAT_URL(agentId, false);
-  }, [agentId, pathname]);
+  return useMemo(() => resolvePreservedAgentUrl(pathname, agentId), [agentId, pathname]);
 };

@@ -3,7 +3,8 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import { Checkbox, stopPropagation } from '@lobehub/ui';
+import { stopPropagation } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -387,10 +388,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     }, [isMarkdown, isPage, url, isInView, markdownContent, id]);
 
     const { menuItems } = useFileItemDropdown({
+      fileId,
       fileType,
       filename: name,
       id,
       libraryId: knowledgeBaseId,
+      size,
       sourceType,
       url,
       userId,

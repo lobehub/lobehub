@@ -6,7 +6,7 @@ import { ServerOperationStore } from './ServerOperationStore';
 
 const topicMock = {
   findById: vi.fn(),
-  updateMetadata: vi.fn(),
+  takeRunningOperation: vi.fn(),
 };
 
 vi.mock('@/database/models/topic', () => ({
@@ -28,7 +28,7 @@ const markedWith = (operationId: string) => ({
 describe('ServerOperationStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    topicMock.updateMetadata.mockResolvedValue(undefined);
+    topicMock.takeRunningOperation.mockResolvedValue(undefined);
   });
 
   describe('clearRunningMark', () => {
@@ -37,7 +37,7 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-main').clearRunningMark();
 
-      expect(topicMock.updateMetadata).toHaveBeenCalledWith('topic-1', { runningOperation: null });
+      expect(topicMock.takeRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main');
     });
 
     it('leaves the mark alone when it belongs to another operation', async () => {
@@ -50,7 +50,7 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-child').clearRunningMark();
 
-      expect(topicMock.updateMetadata).not.toHaveBeenCalled();
+      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
     });
 
     it('is a no-op when the topic carries no mark', async () => {
@@ -58,21 +58,36 @@ describe('ServerOperationStore', () => {
 
       await createStore('op-main').clearRunningMark();
 
-      expect(topicMock.updateMetadata).not.toHaveBeenCalled();
+      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
     });
 
     it('skips the lookup entirely without a topic', async () => {
       await createTopiclessStore().clearRunningMark();
 
       expect(topicMock.findById).not.toHaveBeenCalled();
-      expect(topicMock.updateMetadata).not.toHaveBeenCalled();
+      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
     });
 
     it('swallows lookup failures — clearing the mark is best-effort', async () => {
       topicMock.findById.mockRejectedValue(new Error('db down'));
 
       await expect(createStore('op-main').clearRunningMark()).resolves.toBeUndefined();
-      expect(topicMock.updateMetadata).not.toHaveBeenCalled();
+      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+    });
+
+    it('takes a matching child marker without clearing its parent', async () => {
+      topicMock.findById.mockResolvedValue({
+        metadata: {
+          runningOperation: {
+            ...markedWith('op-parent').metadata.runningOperation,
+            childOperations: [{ assistantMessageId: 'asst-child', operationId: 'op-child' }],
+          },
+        },
+      });
+
+      await createStore('op-child').clearRunningMark();
+
+      expect(topicMock.takeRunningOperation).toHaveBeenCalledWith('topic-1', 'op-child');
     });
   });
 });

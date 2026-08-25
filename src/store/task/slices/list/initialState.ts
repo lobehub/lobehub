@@ -4,8 +4,6 @@ import type { taskService } from '@/services/task';
 export type TaskListItem = Awaited<ReturnType<typeof taskService.list>>['data'][number];
 export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['data'][number];
 
-export type TaskViewMode = 'kanban' | 'list';
-
 /**
  * Top-of-list visibility chip selection:
  *   - 'all'       → don't narrow further, show every visible task
@@ -15,36 +13,49 @@ export type TaskViewMode = 'kanban' | 'list';
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
+export type TaskKanbanGroupBy = 'assignee' | 'priority' | 'status';
 
 export interface TaskListSliceState {
-  isScheduledTaskListInit: boolean;
+  groupListQueryAutomated?: boolean;
   isTaskGroupListInit: boolean;
   isTaskListInit: boolean;
   listAgentId?: string;
+  /** Grouping dimension of the task data currently stored in `taskGroups`. */
+  listGroupBy: TaskKanbanGroupBy;
+  /** Excluded statuses of the current grouped query, as a sorted signature. */
+  listGroupExcludeStatuses?: string;
+  /**
+   * Automation filter of the task data currently stored in `tasks` — `false`
+   * for Home's recent block (live schedules excluded server-side), undefined
+   * for the unfiltered Tasks page. Tracked like `listQueryVisibility` so a
+   * scope change resets the shared field instead of rendering the other
+   * surface's filter.
+   */
+  listQueryAutomated?: boolean;
+  /**
+   * Status narrowing of the data in `tasks`, as an order-insensitive signature
+   * (sorted, comma-joined) — undefined when the query is unnarrowed. Tracked
+   * for the same scope-reset reason as `listQueryAutomated`.
+   */
+  listQueryStatuses?: string;
   /** Effective visibility of the task data currently stored in `tasks`. */
   listQueryVisibility: TaskListVisibilityFilter;
   /** Defaults to 'all' so the Tasks top entry shows every visible task
    *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
-  /** Tasks driven by a schedule or heartbeat — a separate query from `tasks`. */
-  scheduledTasks: TaskListItem[];
-  scheduledTasksTotal: number;
   taskGroups: TaskGroupItem[];
   tasks: TaskListItem[];
   tasksTotal: number;
-  viewMode: TaskViewMode;
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
-  isScheduledTaskListInit: false,
+  groupListQueryAutomated: undefined,
   isTaskGroupListInit: false,
   isTaskListInit: false,
+  listGroupBy: 'status',
   listQueryVisibility: 'all',
   listVisibility: 'all',
-  scheduledTasks: [],
-  scheduledTasksTotal: 0,
   taskGroups: [],
   tasks: [],
   tasksTotal: 0,
-  viewMode: 'list',
 };

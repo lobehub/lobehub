@@ -7,7 +7,7 @@ import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import LibIcon from '@/components/LibIcon';
+import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -141,7 +141,11 @@ const Libraries = memo(() => {
                 navigate(`/resource/library/${item.id}`);
               }}
             >
-              <LibIcon size={18} />
+              <LibraryStatusIcon
+                memberRestricted={(item as { memberRestricted?: boolean }).memberRestricted}
+                size={18}
+                visibility={item.visibility}
+              />
               <span className={styles.name}>{item.name}</span>
             </button>
           ))}

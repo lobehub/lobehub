@@ -12,7 +12,37 @@
  * `@lobechat/agent-gateway-client` (which is a browser-side WebSocket client
  * that producers have no business pulling in).
  */
+export {
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  CodexAppServerClient,
+  type CodexAppServerClientOptions,
+  CodexAppServerConnectionError,
+  CodexAppServerRpcError,
+  CodexThreadSession,
+  type CodexThreadSessionOptions,
+  getCodexAppServerUnsupportedArgs,
+  isCodexAppServerCompatibilityError,
+} from '../codex';
 export type { UsageData } from '../types';
+export {
+  ACP_PROTOCOL_VERSION,
+  AcpAgentSession,
+  type AcpAgentSessionConfig,
+  type AcpAgentSessionOptions,
+  type AcpPermissionOption,
+  parseAcpPermissionOptions,
+  selectAcpPermissionOption,
+} from './acpAgentSession';
+export {
+  type AcpRpcErrorData,
+  type AcpRpcMessage,
+  AcpRpcResponseError,
+  AcpServerRequestError,
+  AcpStdioClient,
+  type AcpStdioClientOptions,
+} from './acpStdioClient';
 export {
   AgentStreamPipeline,
   type AgentStreamPipelineOptions,
@@ -33,16 +63,6 @@ export {
   type HeterogeneousAgentRuntimeTask,
 } from './claudeAgentSdkSession';
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
-export {
-  buildCodexAppServerArgs,
-  buildCodexAppServerInput,
-  buildCodexAppServerThreadParams,
-  CodexAppServerSession,
-  type CodexAppServerSessionOptions,
-  type CodexAppServerThreadParams,
-  type CodexAppServerUserInput,
-  getCodexAppServerUnsupportedArgs,
-} from './codexAppServerSession';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
   type CodexInitialModelResolution,
@@ -55,10 +75,26 @@ export {
   resolveCodexInitialModel,
 } from './codexModel';
 export {
+  buildCursorAcpArgs,
+  buildCursorAcpPrompt,
+  CursorAcpSession,
+  type CursorAcpSessionOptions,
+  type CursorAcpTextPromptBlock,
+  isCursorAcpSessionNotFoundError,
+  normalizeCursorQuestion,
+} from './cursorAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,
 } from './fileStoreImageUploader';
+export {
+  buildGrokAcpArgs,
+  buildGrokAcpPrompt,
+  type GrokAcpContentBlock,
+  GrokAcpSession,
+  type GrokAcpSessionOptions,
+} from './grokAcpSession';
 export {
   type AgentContentBlock,
   type AgentImageBlock,
@@ -97,7 +133,6 @@ export {
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
-  CURSOR_BASE_ARGS,
   KIMI_CODE_BASE_ARGS,
   OPENCODE_BASE_ARGS,
   PI_BASE_ARGS,
@@ -106,6 +141,16 @@ export {
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,
+  spawnTraeAcpAgent,
 } from './spawnAgent';
 export { toStreamEvent } from './streamEvent';
+export {
+  buildTraeAcpArgs,
+  buildTraeAcpPrompt,
+  type TraeAcpImagePromptBlock,
+  type TraeAcpPromptBlock,
+  TraeAcpSession,
+  type TraeAcpSessionOptions,
+  type TraeAcpTextPromptBlock,
+} from './traeAcpSession';
 export type { AgentStreamEvent, AgentStreamEventType } from '@lobechat/agent-gateway-client';

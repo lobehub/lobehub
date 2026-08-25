@@ -1,6 +1,7 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';

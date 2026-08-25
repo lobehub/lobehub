@@ -128,6 +128,8 @@ interface CustomBetterAuthOptions {
    * Omit to keep cookies host-only.
    */
   cookieDomain?: string;
+  /** Namespace every Better Auth cookie so colocated deployments cannot overwrite each other. */
+  cookiePrefix?: string;
   plugins: BetterAuthPlugin[];
 }
 
@@ -296,6 +298,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       ...(cookieDomain && {
         crossSubDomainCookies: { domain: cookieDomain, enabled: true },
       }),
+      ...(customOptions.cookiePrefix && { cookiePrefix: customOptions.cookiePrefix }),
       database: {
         /**
          * Align Better Auth user IDs with our shared idGenerator for consistency.

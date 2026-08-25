@@ -276,6 +276,7 @@ export class DocumentService {
    */
   async queryDocuments(params?: {
     current?: number;
+    excludeKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
     sourceTypes?: string[];
@@ -530,10 +531,11 @@ export class DocumentService {
   async trySaveCurrentDocumentHistory(
     documentId: string,
     saveSource: DocumentHistorySaveSource,
+    editorDataOverride?: Record<string, any>,
   ): Promise<SaveDocumentHistoryResult | undefined> {
     try {
       const currentDocument = await this.documentModel.findById(documentId);
-      const editorData = currentDocument?.editorData;
+      const editorData = editorDataOverride ?? currentDocument?.editorData;
       if (!isValidEditorData(editorData)) return undefined;
 
       const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);

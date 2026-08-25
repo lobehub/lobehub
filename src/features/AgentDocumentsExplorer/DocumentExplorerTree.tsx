@@ -17,6 +17,8 @@ import type {
 import {
   DISABLE_ROW_TEXT_SELECTION_CSS,
   DOCUMENT_TREE_ICON_CSS,
+  DOCUMENT_TREE_LAYOUT,
+  DOCUMENT_TREE_ROW_CSS,
   ExplorerTree,
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
@@ -30,12 +32,22 @@ import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
 import { isOrphanSkillBundleItem } from './types';
+import { usePanelBackground } from './usePanelBackground';
 import { canDropDocument } from './utils/canDrop';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
-const DOCUMENT_TREE_UNSAFE_CSS = `${DOCUMENT_TREE_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}\n${DISABLE_ROW_TEXT_SELECTION_CSS}`;
+// Only used when every ancestor is transparent; the documents page is the
+// common case and paints colorBgLayout.
+const DEFAULT_PANEL_BACKGROUND = '#000';
+
+const DOCUMENT_TREE_UNSAFE_CSS = [
+  DOCUMENT_TREE_ICON_CSS,
+  DOCUMENT_TREE_ROW_CSS,
+  HIDE_POINTER_FOCUS_RING_CSS,
+  DISABLE_ROW_TEXT_SELECTION_CSS,
+].join('\n');
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
 // files with extensions (e.g. `Untitled document.md`), narrow the selection to
@@ -59,12 +71,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-selected-bg-override: ${cssVar.colorFillSecondary};
     --trees-selected-fg-override: ${cssVar.colorText};
     --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorTextSecondary};
-    --trees-fg-muted-override: ${cssVar.colorTextSecondary};
+
+    /* Every row is a document the user can open, so labels keep the primary
+       text color; only the glyphs step back. Mirrors the sidebar NavItem, which
+       pairs colorText titles with colorTextDescription icons. */
+    --trees-fg-override: ${cssVar.colorText};
+    --trees-fg-muted-override: ${cssVar.colorTextDescription};
     --trees-accent-override: ${cssVar.colorPrimary};
-    --trees-padding-inline-override: 0px;
-    --trees-font-size-override: 12px;
-    --trees-border-radius-override: 6px;
+
+    /* Nesting reads from indentation alone — no indent guides. */
+    --trees-indent-guide-bg-override: transparent;
+
+    /* Documents are prose, not code: give rows the breathing room of a
+       Notion / 语雀 outline instead of the IDE density the Files tree wants.
+       Row height and label size match the sidebar NavItem (36px / 14px). */
+    --trees-font-size-override: ${DOCUMENT_TREE_LAYOUT.fontSize}px;
+    --trees-level-gap-override: ${DOCUMENT_TREE_LAYOUT.levelGap}px;
+    --trees-item-row-gap-override: ${DOCUMENT_TREE_LAYOUT.iconGap}px;
+    --trees-item-padding-x-override: 8px;
+    --trees-item-margin-x-override: 4px;
+    --trees-padding-inline-override: 4px;
+    --trees-border-radius-override: 8px;
+
+    /* Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root. */
+    --explorer-tree-icon-fg: ${cssVar.colorTextDescription};
+
   `,
 }));
 
@@ -140,9 +171,23 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       })),
     [documents, resolveNodeName, resolveParentRowId],
   );
+  // pierre's truncation marker masks the characters it overlays with this color;
+  // it has to be whatever the surrounding panel paints (see usePanelBackground).
+  const panelBackground = usePanelBackground(containerRef, DEFAULT_PANEL_BACKGROUND);
+
   const treeStyleVars = useMemo(
-    () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
+    () =>
+      getExplorerTreeStyleVars({
+        iconWidth: DOCUMENT_TREE_LAYOUT.iconWidth,
+        reserveChevronSlot: nodes.some((node) => node.isFolder),
+        rowGap: DOCUMENT_TREE_LAYOUT.iconGap,
+      }),
     [nodes],
+  );
+
+  const treeStyle = useMemo(
+    () => ({ ...style, ...treeStyleVars, '--explorer-tree-panel-bg': panelBackground }),
+    [panelBackground, style, treeStyleVars],
   );
 
   const parentMap = useMemo(() => {
@@ -386,7 +431,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   );
 
   return (
-    <div className={styles.tree} ref={containerRef} style={{ ...style, ...treeStyleVars }}>
+    <div className={styles.tree} ref={containerRef} style={treeStyle}>
       {nodes.length === 0 ? (
         // Keep the toolbar reachable (new folder / new doc) above the placeholder.
         <Flexbox height={'100%'}>
@@ -404,6 +449,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           getContextMenuItems={getContextMenuItems}
           header={toolbar}
           iconSet="complete"
+          itemHeight={DOCUMENT_TREE_LAYOUT.itemHeight}
           nodes={nodes}
           ref={treeRef}
           style={{ height: '100%' }}

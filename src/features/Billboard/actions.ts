@@ -1,7 +1,11 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, OFFICIAL_URL } from '@lobechat/const';
+import urlJoin from 'url-join';
 
 import { openChangelogModal } from '@/components/ChangelogModal';
 import { openFeedbackModal } from '@/components/FeedbackModal';
+import { electronSystemService } from '@/services/electron/system';
+import { getElectronStoreState } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
 import { getUserStoreState } from '@/store/user';
 
 /**
@@ -15,11 +19,43 @@ export const BILLBOARD_ACTIONS = ['openChangelog', 'openFeedback', 'resetOnboard
 
 export type BillboardAction = (typeof BILLBOARD_ACTIONS)[number];
 
-/** Actions only meaningful on the web SPA (desktop has its own onboarding flow). */
-const WEB_ONLY_ACTIONS: readonly BillboardAction[] = ['resetOnboarding'];
-
 export const isBillboardAction = (value: unknown): value is BillboardAction =>
   typeof value === 'string' && (BILLBOARD_ACTIONS as readonly string[]).includes(value);
+
+const isOfficialWebOrigin = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.location.origin === new URL(OFFICIAL_URL).origin;
+  } catch {
+    return false;
+  }
+};
+
+const isOnOfficialCloud = () => {
+  const state = getElectronStoreState();
+  if (
+    electronSyncSelectors.isSyncActive(state) &&
+    electronSyncSelectors.storageMode(state) === 'cloud'
+  ) {
+    return true;
+  }
+
+  return isOfficialWebOrigin();
+};
+
+type BillboardActionGuard = (action: BillboardAction) => BillboardAction | null;
+
+const onlyWhen =
+  (target: BillboardAction, available: () => boolean): BillboardActionGuard =>
+  (action) =>
+    action !== target || available() ? action : null;
+
+/**
+ * Availability pipeline: the action flows through each guard, and any guard
+ * may drop it to null (the CTA then falls back to `linkUrl`). Add a guard per
+ * constraint instead of branching inside `resolveBillboardAction`.
+ */
+const actionGuards: BillboardActionGuard[] = [onlyWhen('resetOnboarding', isOnOfficialCloud)];
 
 /**
  * Narrow a platform-configured value to an action this client can actually run:
@@ -28,8 +64,10 @@ export const isBillboardAction = (value: unknown): value is BillboardAction =>
  */
 export const resolveBillboardAction = (value: unknown): BillboardAction | null => {
   if (!isBillboardAction(value)) return null;
-  if (isDesktop && WEB_ONLY_ACTIONS.includes(value)) return null;
-  return value;
+  return actionGuards.reduce<BillboardAction | null>(
+    (action, guard) => (action ? guard(action) : null),
+    value,
+  );
 };
 
 const billboardActionHandlers: Record<BillboardAction, () => Promise<void> | void> = {
@@ -41,6 +79,12 @@ const billboardActionHandlers: Record<BillboardAction, () => Promise<void> | voi
   },
   resetOnboarding: async () => {
     await getUserStoreState().resetOnboarding();
+
+    if (isDesktop) {
+      await electronSystemService.openExternalLink(urlJoin(OFFICIAL_URL, '/onboarding'));
+      return;
+    }
+
     window.location.href = '/onboarding';
   },
 };

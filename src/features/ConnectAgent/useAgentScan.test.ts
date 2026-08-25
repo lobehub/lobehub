@@ -37,6 +37,28 @@ describe('scanLocal', () => {
       command: 'hermes',
     });
   });
+
+  it('preserves detector and IPC failure reasons', async () => {
+    detectHeterogeneousAgentCommand.mockImplementation(async ({ agentType }) => {
+      if (agentType === 'openclaw') {
+        return { available: false, error: 'openclaw failed validation' };
+      }
+      if (agentType === 'hermes') throw new Error('hermes scan timed out');
+      return { available: false };
+    });
+
+    const agents = await scanLocal();
+
+    expect(agents.openclaw).toEqual({
+      available: false,
+      reason: 'openclaw failed validation',
+      version: undefined,
+    });
+    expect(agents.hermes).toEqual({
+      available: false,
+      reason: 'hermes scan timed out',
+    });
+  });
 });
 
 describe('buildPlatformAgencyConfig', () => {
@@ -73,5 +95,23 @@ describe('buildConnectAgentConfig', () => {
       name: 'Research Agent',
       title: 'default',
     });
+  });
+
+  it('stamps the runtime type as the agent provider for platform agents', () => {
+    expect(
+      buildConnectAgentConfig({
+        provider: getConnectableProvider('hermes')!,
+        target: { kind: 'local' },
+      }),
+    ).toMatchObject({ provider: 'hermes' });
+  });
+
+  it('stamps the runtime type as the agent provider for CLI agents', () => {
+    expect(
+      buildConnectAgentConfig({
+        provider: getConnectableProvider('claude-code')!,
+        target: { deviceId: 'device-1', kind: 'device' },
+      }),
+    ).toMatchObject({ provider: 'claude-code' });
   });
 });

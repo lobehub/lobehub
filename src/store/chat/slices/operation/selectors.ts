@@ -6,6 +6,7 @@ import { type Operation, type OperationType } from './types';
 import {
   AI_RUNTIME_OPERATION_TYPES,
   INPUT_LOADING_OPERATION_TYPES,
+  isQueueBlockingOperation,
   QUEUE_BLOCKING_OPERATION_TYPES,
 } from './types';
 
@@ -228,6 +229,37 @@ const getOperationsByContext =
   };
 
 /**
+ * Whether a later conversation operation has taken ownership of this context.
+ *
+ * A run can publish `visible_output_end` before its terminal snapshot arrives,
+ * which intentionally lets the next send start. The old snapshot must not then
+ * replace the newer turn's optimistic messages. Status is deliberately ignored:
+ * the newer send may already have handed off to its runtime (or even settled),
+ * but its later registration in the context index still proves that the older
+ * snapshot is superseded. The index is local insertion order, so it remains
+ * monotonic even when restored server timestamps and the client clock differ.
+ * Child operations stay within their parent's turn and therefore cannot claim
+ * conversation ownership from that turn's terminal reconciliation.
+ */
+const hasNewerConversationOperation =
+  (operationId: string, context: Operation['context']) =>
+  (s: ChatStoreState): boolean => {
+    const operation = s.operations[operationId];
+    if (!operation || !context.agentId) return false;
+
+    const operations = getOperationsByContext({ ...context, agentId: context.agentId })(s);
+    const operationIndex = operations.findIndex((candidate) => candidate.id === operationId);
+    if (operationIndex < 0) return false;
+
+    return operations
+      .slice(operationIndex + 1)
+      .some(
+        (candidate) =>
+          !candidate.parentOperationId && QUEUE_BLOCKING_OPERATION_TYPES.includes(candidate.type),
+      );
+  };
+
+/**
  * Check if there's a running operation in a specific context
  * Use this for loading states in components that display a specific conversation
  */
@@ -275,8 +307,11 @@ const isAgentRuntimeVisiblyRunningByContext =
   };
 
 /**
- * All running queue-blocking operation ids in a context (see
- * QUEUE_BLOCKING_OPERATION_TYPES). "Send now" cancels every one of them, not just
+ * All live queue-blocking operation ids in a context (see
+ * `isQueueBlockingOperation` — the same predicate the enqueue check uses, so
+ * "Send now" cancels exactly what a fresh send would have queued behind and
+ * never fires at an op that already stopped holding the queue). "Send now"
+ * cancels every one of them, not just
  * the first: a retry via delAndRegenerate/delAndResendThread runs an outer
  * wrapper `regenerate` op AND an inner regenerateUserMessage `regenerate` op at
  * once, so cancelling only one would leave the queue blocked and make "Send now"
@@ -286,8 +321,9 @@ const getRunningQueueBlockingOperationIds =
   (context: MessageMapKeyInput) =>
   (s: ChatStoreState): string[] => {
     if (!context.agentId) return [];
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
     return getOperationsByContext(context)(s)
-      .filter((op) => QUEUE_BLOCKING_OPERATION_TYPES.includes(op.type) && op.status === 'running')
+      .filter((op) => isQueueBlockingOperation(op, { hasQueuedMessages }))
       .map((op) => op.id);
   };
 
@@ -899,6 +935,7 @@ export const operationSelectors = {
   getRunningQueueBlockingOperationIds,
   getRunningToolCallStartTime,
   hasAnyRunningOperation,
+  hasNewerConversationOperation,
   hasRunningOperationByContext,
   hasRunningOperationType,
   /** @deprecated Use isAgentRuntimeRunning instead */

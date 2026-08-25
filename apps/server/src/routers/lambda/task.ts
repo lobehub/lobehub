@@ -1,5 +1,6 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
-import type { TaskListItem, TaskParticipant } from '@lobechat/types';
+import type { GoalStatus } from '@lobechat/const/goal';
+import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -7,6 +8,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -19,10 +21,23 @@ import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
+import { AcceptanceService } from '@/server/services/verify/acceptanceService';
+import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
+/** Manual task status → bound goal lifecycle state. */
+const taskStatusToGoalStatus: Record<string, GoalStatus | undefined> = {
+  backlog: 'planning',
+  canceled: 'canceled',
+  completed: 'review',
+  failed: 'failed',
+  paused: 'paused',
+  running: 'running',
+  scheduled: 'planning',
+};
 
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -32,6 +47,7 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId, wsId),
       editLockService: new EditLockService(ctx.userId),
+      goalModel: new GoalModel(ctx.serverDB, ctx.userId, wsId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
@@ -50,6 +66,15 @@ const taskProcedureWrite = taskProcedure.use(withScopedPermission('agent:update'
 // Resolution happens in the model layer via model.resolve()
 const idInput = z.object({ id: z.string() });
 
+const taskVerifyConfigPatchSchema = z.object({
+  enabled: z.boolean().nullish(),
+  maxIterations: z.number().min(1).max(10).nullish(),
+  requirement: z.string().nullish(),
+  verifierAgentId: z.string().nullish(),
+  verifyCriteriaIds: z.array(z.string()).nullish(),
+  verifyRubricId: z.string().nullish(),
+});
+
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
@@ -62,6 +87,16 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
+  // Bind a goal entity (`goals` row) to the created task; the task becomes the
+  // goal's execution carrier and the outer verify-driven round loop applies.
+  goal: z
+    .object({
+      maxRounds: z.number().int().nullish(),
+      maxTotalCost: z.number().nullish(),
+      requirement: z.string().nullish(),
+      title: z.string().optional(),
+    })
+    .optional(),
   identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
@@ -117,6 +152,7 @@ const listSchema = z.object({
   parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+  projectId: z.string().optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
   // UI-side narrowing of the result set. Omitted means "All" (the chip's
   // default 'private' is enforced client-side; the server stays permissive
@@ -124,23 +160,32 @@ const listSchema = z.object({
   visibility: z.enum(['private', 'public']).optional(),
 });
 
-const groupListSchema = z.object({
-  assigneeAgentId: z.string().optional(),
-  groups: z
-    .array(
-      z.object({
-        key: z.string(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-        statuses: z.array(z.string()).min(1).max(10),
-      }),
-    )
-    .min(1)
-    .max(10),
-  hasGoal: z.boolean().optional(),
-  parentTaskId: z.string().nullish(),
-  visibility: z.enum(['private', 'public']).optional(),
-});
+const groupListSchema = z
+  .object({
+    assigneeAgentId: z.string().optional(),
+    automated: z.boolean().optional(),
+    excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
+    groupBy: z.enum(['assignee', 'priority']).optional(),
+    groups: z
+      .array(
+        z.object({
+          key: z.string(),
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+          statuses: z.array(z.string()).min(1).max(10),
+        }),
+      )
+      .min(1)
+      .max(10)
+      .optional(),
+    hasGoal: z.boolean().optional(),
+    parentTaskId: z.string().nullish(),
+    projectId: z.string().optional(),
+    visibility: z.enum(['private', 'public']).optional(),
+  })
+  .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
+    message: 'Provide either groups or groupBy',
+  });
 
 // Helper: resolve id/identifier and throw if not found
 async function resolveOrThrow(model: TaskModel, id: string) {
@@ -413,7 +458,31 @@ export const taskRouter = router({
 
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
     try {
-      const task = await ctx.taskService.createTask(input);
+      const parsedVerify = taskVerifyConfigPatchSchema.safeParse(input.config?.verify);
+      const { verify: _legacyVerify, ...taskConfig } = input.config ?? {};
+      const task = await ctx.taskService.createTask({
+        ...input,
+        config: parsedVerify.success ? taskConfig : input.config,
+      });
+      try {
+        if (parsedVerify.success) {
+          const { requirement, ...rawConfig } = parsedVerify.data;
+          const config = Object.fromEntries(
+            Object.entries(rawConfig).filter(([, value]) => value != null),
+          );
+          await new AcceptanceService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).ensureForSubject('task', task.id, {
+            config,
+            requirement: requirement ?? undefined,
+          });
+        }
+      } catch (error) {
+        await ctx.taskModel.delete(task.id).catch(() => {});
+        throw error;
+      }
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -468,10 +537,13 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
-      if (!(task.config as { goal?: unknown } | null)?.goal) {
+      const goal = await ctx.goalModel.findBySubject('task', task.id);
+      if (!goal) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a goal root' });
       }
       assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
+      // TaskModel owns the transaction and removes goal rows for the complete
+      // subtree before deleting its tasks.
       const count = await model.deleteSubtree(task.id);
       return { count, data: task, message: 'Goal deleted', success: true };
     } catch (error) {
@@ -754,6 +826,11 @@ export const taskRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const task = await resolveOrThrow(ctx.taskModel, input.id);
+        // A manually (re)started goal leaves its paused/review state and runs.
+        const goal = await ctx.goalModel.findBySubject('task', task.id);
+        if (goal) await ctx.goalModel.updateStatus(goal.id, 'running');
+
         const runner = new TaskRunnerService(
           ctx.serverDB,
           ctx.userId,
@@ -762,7 +839,7 @@ export const taskRouter = router({
         return await runner.runTask({
           continueTopicId: input.continueTopicId,
           extraPrompt: input.prompt,
-          taskId: input.id,
+          taskId: task.id,
         });
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -973,7 +1050,16 @@ export const taskRouter = router({
     try {
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
-      return { data: model.getVerifyConfig(task) || null, success: true };
+      const resolved = await resolveTaskAcceptance(
+        ctx.serverDB,
+        ctx.userId,
+        task.id,
+        ctx.workspaceId ?? undefined,
+      );
+      return {
+        data: resolved ? { ...resolved.config, requirement: resolved.requirement } : null,
+        success: true,
+      };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:getVerifyConfig]', error);
@@ -990,16 +1076,8 @@ export const taskRouter = router({
       idInput.merge(
         z.object({
           // `.nullish()` lets callers clear a saved field: `null` removes it
-          // (JSON can't send `undefined`), omission leaves it untouched. See
-          // TaskModel.updateVerifyConfig.
-          verify: z.object({
-            enabled: z.boolean().nullish(),
-            maxIterations: z.number().min(1).max(10).nullish(),
-            requirement: z.string().nullish(),
-            verifierAgentId: z.string().nullish(),
-            verifyCriteriaIds: z.array(z.string()).nullish(),
-            verifyRubricId: z.string().nullish(),
-          }),
+          // (JSON can't send `undefined`), omission leaves it untouched.
+          verify: taskVerifyConfigPatchSchema,
         }),
       ),
     )
@@ -1007,11 +1085,42 @@ export const taskRouter = router({
       const { id, verify } = input;
       try {
         const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
-        const task = await model.updateVerifyConfig(resolved.id, verify);
-        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        const task = await resolveOrThrow(model, id);
+        const acceptanceService = new AcceptanceService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        const resolvedAcceptance = await resolveTaskAcceptance(
+          ctx.serverDB,
+          ctx.userId,
+          task.id,
+          ctx.workspaceId ?? undefined,
+        );
+        const acceptance =
+          resolvedAcceptance?.acceptance ??
+          (await acceptanceService.ensureForSubject('task', task.id));
+        const nextConfig = { ...acceptance.config } as Record<string, unknown>;
+        for (const [key, value] of Object.entries(verify)) {
+          if (key === 'requirement') continue;
+          if (value === null) delete nextConfig[key];
+          else if (value !== undefined) nextConfig[key] = value;
+        }
+        const requirement =
+          verify.requirement === undefined ? acceptance.requirement : verify.requirement;
+        const updated = await acceptanceService.acceptanceModel.updatePolicy(acceptance.id, {
+          config: nextConfig,
+          requirement,
+        });
+        if (!updated) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance policy not found' });
+        }
+        const data: TaskVerifyConfig = {
+          ...(nextConfig as TaskVerifyConfig),
+          requirement: requirement ?? undefined,
+        };
         return {
-          data: model.getVerifyConfig(task),
+          data,
           message: 'Verify config updated',
           success: true,
         };
@@ -1322,6 +1431,12 @@ export const taskRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await ctx.taskService.updateStatus(input);
+        // Manual task status changes drive the bound goal's own state machine.
+        const goal = await ctx.goalModel.findBySubject('task', result.task.id);
+        if (goal) {
+          const goalStatus = taskStatusToGoalStatus[input.status];
+          if (goalStatus) await ctx.goalModel.updateStatus(goal.id, goalStatus);
+        }
         const { task, unlocked, paused, checkpointTriggered, allSubtasksDone, parentTaskId } =
           result;
         return {

@@ -3,6 +3,7 @@ import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types'
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
@@ -12,7 +13,8 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
-import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
+import { resolveWorkAttemptBudget } from '@/server/services/goal/recoveryPolicy';
+import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 
 /** Cap on unresolved checks carried into the next round's prompt. */
 const MAX_GOAL_FAILED_CHECKS = 8;
@@ -28,11 +30,13 @@ const resolveGoalLoopContext = async (
   task: TaskItem,
   deps: BuildTaskPromptDeps,
 ): Promise<TaskRunPromptGoalLoop | undefined> => {
-  const { db, taskModel, userId, workspaceId } = deps;
-  const goal = taskModel.getGoalConfig(task);
+  const { db, userId, workspaceId } = deps;
+  const goalModel = new GoalModel(db, userId, workspaceId);
+  const taskCarriedGoal = await goalModel.findBySubject('task', task.id);
+  const goal = taskCarriedGoal ?? (await goalModel.findByWorkTask(task.id));
   if (!goal || !task.totalTopics) return undefined;
 
-  const budget = resolveGoalRoundBudget(goal);
+  const budget = resolveWorkAttemptBudget(goal, Boolean(taskCarriedGoal));
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
     round: (task.totalTopics || 0) + 1,
@@ -221,19 +225,26 @@ export async function buildTaskPrompt(
 
   const taskFiles = toFileMetas(taskFileIds);
 
-  // Delivery-acceptance (verify) context: resolve the task's verify config
-  // (with parent inheritance) and the referenced criteria so the builder knows
+  // Delivery-acceptance context: resolve the Task's Acceptance policy and the
+  // referenced criteria so the builder knows
   // what to self-evidence while it works. Run-time handles (verifyRunId /
   // checkItemId) don't exist yet at prompt-build time — the verify skill
   // resolves those at runtime from the builder's operationId.
-  const verifyConfig = await taskModel.resolveVerifyConfig(task.id).catch(() => undefined);
-  const verifyEnabled = !!verifyConfig && verifyConfig.enabled !== false;
+  const resolvedAcceptance = await resolveTaskAcceptance(db, userId, task.id, workspaceId).catch(
+    () => undefined,
+  );
+  const verifyConfig = resolvedAcceptance?.config;
+  const verifyEnabled = !!resolvedAcceptance && verifyConfig?.enabled !== false;
   let verifyCriteria: Array<{
     required?: boolean;
     requiredEvidence?: Array<{ hint?: string; type: string }>;
     title: string;
   }> = [];
-  if (verifyEnabled && (verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length)) {
+  if (
+    verifyEnabled &&
+    verifyConfig &&
+    (verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length)
+  ) {
     const criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
     const rubricModel = new VerifyRubricModel(db, userId, workspaceId);
     const collected = (
@@ -333,7 +344,7 @@ export async function buildTaskPrompt(
             criteria: verifyCriteria,
             enabled: true,
             maxIterations: verifyConfig?.maxIterations,
-            requirement: verifyConfig?.requirement,
+            requirement: resolvedAcceptance?.requirement,
           }
         : undefined,
       subtasks: subtasks.map((s: any) => ({

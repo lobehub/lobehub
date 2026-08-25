@@ -210,6 +210,61 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('operation lease', () => {
+    it('refreshes a running operation and only settles an expired lease', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-lease';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+      await model.touchRunning(operationId);
+      const refreshed = await model.findById(operationId);
+      expect(refreshed!.updatedAt.getTime()).toBeGreaterThan(
+        new Date('2026-01-01T00:00:00.000Z').getTime(),
+      );
+
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(
+        false,
+      );
+      expect((await model.findById(operationId))?.status).toBe('running');
+
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(true);
+      expect(await model.findById(operationId)).toMatchObject({
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+      });
+    });
+
+    it('does not let a late completion overwrite a reclaimed operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-reclaimed-completion-race';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(true);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'done',
+          status: 'done',
+        }),
+      ).toBe(false);
+      expect(await model.findById(operationId)).toMatchObject({
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+      });
+    });
+  });
+
   describe('sumChildUsage', () => {
     const seedChild = async (
       model: AgentOperationModel,

@@ -21,10 +21,12 @@ import {
   codeBuddyExecutor,
   codexExecutor,
   cursorExecutor,
+  grokBuildExecutor,
   kimiCodeExecutor,
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
+  traeExecutor,
 } from './heteroCli';
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
@@ -46,10 +48,12 @@ export const builtinToolExecutors = [
   codeBuddyExecutor,
   codexExecutor,
   cursorExecutor,
+  grokBuildExecutor,
   kimiCodeExecutor,
   openCodeExecutor,
   piExecutor,
   qoderExecutor,
+  traeExecutor,
   agentBuilderExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,

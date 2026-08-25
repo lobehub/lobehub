@@ -5,7 +5,9 @@ import type { LambdaRouter } from '@/server/routers/lambda';
 import type { ToolsRouter } from '@/server/routers/tools';
 
 import { getValidToken } from '../auth/refresh';
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
+import { cliPackageName } from '../pkg';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { resolveWorkspaceId, withWorkspaceHeader } from './workspace';
@@ -29,7 +31,7 @@ async function getAuthAndServer(): Promise<{ headers: Record<string, string>; se
     };
   }
 
-  const envApiKey = process.env[CLI_API_KEY_ENV];
+  const envApiKey = readCliApiKeyEnv();
   if (envApiKey) {
     const serverUrl = resolveServerUrl();
 
@@ -42,7 +44,7 @@ async function getAuthAndServer(): Promise<{ headers: Record<string, string>; se
   const result = await getValidToken();
   if (!result) {
     log.error(
-      `No authentication found. Run 'lh login' (or 'npx -y @lobehub/cli login') first, or set ${CLI_API_KEY_ENV}.`,
+      `No authentication found. Run '${CLI_PRIMARY_BIN} login' (or 'npx -y ${cliPackageName} login') first, or set ${CLI_API_KEY_ENV}.`,
     );
     process.exit(1);
   }

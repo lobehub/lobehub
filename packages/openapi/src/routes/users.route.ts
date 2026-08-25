@@ -36,7 +36,7 @@ UserRoutes.get(
   // Reachability is not disclosure: the payload is scoped inside
   // `UserController.getCurrentUser` — a key without `user:read` receives only
   // `{ id }`, and `messageCount` additionally needs `chat:read`. Widen there,
-  // under a scope check, rather than by gating the route. See LOBE-12934.
+  // under a scope check, rather than by gating the route.
   async (c) => {
     const userController = new UserController();
     return await userController.getCurrentUser(c);

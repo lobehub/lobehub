@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid/non-secure';
 import { devices } from '../schemas/device';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+import { ResourcePermissionModel } from './resourcePermission';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
 
@@ -76,16 +77,30 @@ export class WorkspaceMemberModel {
       )
       .returning({ deviceId: devices.deviceId });
 
-    await this.db
-      .update(workspaceMembers)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.userId, userId),
-          isNull(workspaceMembers.deletedAt),
-        ),
-      );
+    // Same reasoning one level up: a per-member resource grant only means
+    // anything while they belong to the workspace, and the soft delete is
+    // reactivated by `addMember`, so a grant left behind would silently restore
+    // their old access on re-invite. Workspace-wide rows carry no subject and
+    // stay.
+    //
+    // Soft-delete first, then revoke, both in one transaction: the update takes
+    // the membership row lock that a concurrent grant waits on, so a grant can
+    // never land in the window between the two statements. Reversing the order
+    // would leave exactly that gap.
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(workspaceMembers)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, userId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        );
+
+      await new ResourcePermissionModel(tx, workspaceId).removeMemberGrants(userId);
+    });
 
     // Surfaced so callers can best-effort unenroll any still-connected gateway
     // socket for these devices: deleting the row alone also removes it from the

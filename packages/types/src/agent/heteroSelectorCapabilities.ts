@@ -17,6 +17,13 @@ export const HETEROGENEOUS_AGENT_DEFAULT_SELECTION = 'default' as const;
 
 export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 
+/** Amp agent modes, mirrored 1:1 with the CLI's `--mode <mode>` flag. */
+export const AMP_AGENT_MODES = ['low', 'medium', 'high', 'ultra'] as const;
+
+export type AmpAgentMode = (typeof AMP_AGENT_MODES)[number];
+
+export type HeterogeneousAgentMode = AmpAgentMode | HeterogeneousAgentDefaultSelection;
+
 /**
  * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
  * `--effort <level>` flag.
@@ -24,6 +31,13 @@ export type HeterogeneousAgentDefaultSelection = typeof HETEROGENEOUS_AGENT_DEFA
 const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
+
+/** Grok Build reasoning-effort levels accepted by the CLI's `--effort` flag. */
+const GROK_BUILD_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
+
+export type GrokBuildReasoningEffort = (typeof GROK_BUILD_REASONING_EFFORT_LEVELS)[number];
+
+export const GROK_BUILD_REASONING_EFFORT_FLAGS = ['--effort', '--reasoning-effort'] as const;
 
 /**
  * Codex reasoning-effort levels, mirrored to the CLI config key
@@ -40,6 +54,23 @@ const CODEX_REASONING_EFFORT_LEVELS = [
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number];
 
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
+
+/**
+ * Non-OpenAI models explicitly supported through a model-specific Codex catalog
+ * and the deployment-owned server-default relay. Keep this list explicit: tool
+ * support alone does not prove that Codex's request and continuation behavior
+ * is compatible.
+ */
+export const CODEX_SERVER_DEFAULT_CUSTOM_MODELS = [
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'glm-5.2',
+] as const;
+
+export type CodexServerDefaultCustomModel = (typeof CODEX_SERVER_DEFAULT_CUSTOM_MODELS)[number];
+
+const CODEX_DEEPSEEK_V4_REASONING_EFFORT_LEVELS = ['low', 'high', 'max'] as const;
+const CODEX_GLM_5_2_REASONING_EFFORT_LEVELS = ['high', 'max'] as const;
 
 const CODEX_MAX_REASONING_EFFORT_LEVELS = [
   ...CODEX_COMMON_REASONING_EFFORT_LEVELS,
@@ -60,7 +91,10 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
 export type HeterogeneousReasoningEffortLevel =
-  ClaudeCodeReasoningEffort | CodexReasoningEffort | QoderReasoningEffort;
+  | ClaudeCodeReasoningEffort
+  | CodexReasoningEffort
+  | GrokBuildReasoningEffort
+  | QoderReasoningEffort;
 
 export type HeterogeneousReasoningEffort =
   HeterogeneousReasoningEffortLevel | HeterogeneousAgentDefaultSelection;
@@ -98,6 +132,9 @@ const CODEX_FAST_SPEED_MODELS = [
  */
 const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
 
+export const isAmpAgentMode = (value: string | undefined): value is AmpAgentMode =>
+  !!value && AMP_AGENT_MODES.includes(value as AmpAgentMode);
+
 export const isClaudeCodeReasoningEffort = (
   value: string | undefined,
 ): value is ClaudeCodeReasoningEffort =>
@@ -105,6 +142,16 @@ export const isClaudeCodeReasoningEffort = (
 
 export const isCodexReasoningEffort = (value: string | undefined): value is CodexReasoningEffort =>
   !!value && CODEX_REASONING_EFFORT_LEVELS.includes(value as CodexReasoningEffort);
+
+export const isCodexServerDefaultCustomModel = (
+  model: string,
+): model is CodexServerDefaultCustomModel =>
+  CODEX_SERVER_DEFAULT_CUSTOM_MODELS.includes(model as CodexServerDefaultCustomModel);
+
+export const isGrokBuildReasoningEffort = (
+  value: string | undefined,
+): value is GrokBuildReasoningEffort =>
+  !!value && GROK_BUILD_REASONING_EFFORT_LEVELS.includes(value as GrokBuildReasoningEffort);
 
 export const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
   !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
@@ -119,6 +166,12 @@ export const isCodexFastServiceTier = (value: string | undefined): boolean =>
  * cannot be known until the CLI resolves the model.
  */
 export const getCodexReasoningEffortLevels = (model: string): readonly CodexReasoningEffort[] => {
+  if (model === 'deepseek-v4-flash' || model === 'deepseek-v4-pro') {
+    return CODEX_DEEPSEEK_V4_REASONING_EFFORT_LEVELS;
+  }
+
+  if (model === 'glm-5.2') return CODEX_GLM_5_2_REASONING_EFFORT_LEVELS;
+
   if (
     CODEX_ULTRA_REASONING_MODELS.includes(model as (typeof CODEX_ULTRA_REASONING_MODELS)[number])
   ) {
@@ -144,9 +197,17 @@ export const codexModelSupportsFastSpeed = (model: string): boolean =>
 export interface HeteroSelectionSource {
   args?: string[];
   effort?: string | null;
+  mode?: string | null;
   model?: string | null;
   speed?: string | null;
 }
+
+export const resolveAmpAgentMode = (
+  source: HeteroSelectionSource | null | undefined,
+): HeterogeneousAgentMode => {
+  const mode = (getCliFlagValue(source?.args, '--mode') ?? source?.mode)?.trim();
+  return isAmpAgentMode(mode) ? mode : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
 
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 
@@ -198,6 +259,15 @@ export const resolveCodexSpeedMode = (
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
+const resolveGrokBuildReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getAnyCliFlagValue(source?.args, GROK_BUILD_REASONING_EFFORT_FLAGS) ?? source?.effort
+  )?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
 const resolveQoderReasoningEffort = (
   source: HeteroSelectionSource | null | undefined,
 ): QoderReasoningEffort | HeterogeneousAgentDefaultSelection => {
@@ -224,6 +294,11 @@ export type HeteroCliEncoding =
   { flags: readonly string[]; kind: 'flag' } | { key: string; kind: 'config' };
 
 export interface HeteroSelectorModelCapability {
+  /**
+   * Native argv/config spellings for providers selected before process start.
+   * Protocol-native agents such as TRAE apply the persisted value after ACP
+   * session setup and therefore intentionally expose no CLI encoding.
+   */
   encodings: readonly HeteroCliEncoding[];
   /**
    * Flags cleared together with the model but never read back as its value.
@@ -252,8 +327,15 @@ export interface HeteroSelectorSpeedCapability {
   supported: (model: string) => boolean;
 }
 
+export interface HeteroSelectorModeCapability {
+  encodings: readonly HeteroCliEncoding[];
+  levels: readonly AmpAgentMode[];
+  resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousAgentMode;
+}
+
 export interface HeteroSelectorCapability {
   effort?: HeteroSelectorEffortCapability;
+  mode?: HeteroSelectorModeCapability;
   model?: HeteroSelectorModelCapability;
   speed?: HeteroSelectorSpeedCapability;
 }
@@ -270,7 +352,13 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
-  'amp': {},
+  'amp': {
+    mode: {
+      encodings: [{ flags: ['--mode'], kind: 'flag' }],
+      levels: AMP_AGENT_MODES,
+      resolve: resolveAmpAgentMode,
+    },
+  },
   'claude-code': {
     effort: {
       encodings: [{ flags: ['--effort'], kind: 'flag' }],
@@ -312,7 +400,25 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       supported: codexModelSupportsFastSpeed,
     },
   },
-  'cursor': {},
+  'cursor': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
+  'grok-build': {
+    effort: {
+      encodings: [{ flags: GROK_BUILD_REASONING_EFFORT_FLAGS, kind: 'flag' }],
+      levels: () => GROK_BUILD_REASONING_EFFORT_LEVELS,
+      resolve: resolveGrokBuildReasoningEffort,
+    },
+    model: {
+      encodings: [MODEL_FLAGS_ENCODING],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'kimi-code': {},
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
@@ -333,6 +439,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     },
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },
+  'trae': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
 } satisfies Record<LocalHeterogeneousAgentType, HeteroSelectorCapability>;
 
 export const getHeteroSelectorCapability = (
@@ -341,10 +450,11 @@ export const getHeteroSelectorCapability = (
   HETERO_SELECTOR_CAPABILITIES[type as LocalHeterogeneousAgentType];
 
 export const isHeteroSelectorAvailable = (type: string | undefined): boolean =>
-  !!getHeteroSelectorCapability(type)?.model;
+  Object.keys(getHeteroSelectorCapability(type) ?? {}).length > 0;
 
 export interface HeteroSelection {
   effort?: HeterogeneousReasoningEffort;
+  mode?: HeterogeneousAgentMode;
   model?: string;
   speed?: HeterogeneousSpeedMode;
 }
@@ -401,6 +511,11 @@ export const applyHeteroSelection = (
 
   if ('effort' in selection && capability.effort) {
     args = clearEncodings(args, capability.effort.encodings);
+    cleared = true;
+  }
+
+  if ('mode' in selection && capability.mode) {
+    args = clearEncodings(args, capability.mode.encodings);
     cleared = true;
   }
 

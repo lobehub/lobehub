@@ -1,0 +1,23 @@
+{
+  "name": "@lobechat/electron-mac-notifications",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build:native": "node scripts/build-native.mjs",
+    "install": "node scripts/build-native.mjs"
+  },
+  "dependencies": {
+    "@lobechat/napi-loader": "workspace:*"
+  },
+  "devDependencies": {
+    "node-addon-api": "^8.5.0",
+    "node-gyp": "^11.4.2"
+  },
+  "lobechat": {
+    "nativeAddonPlatforms": [
+      "darwin"
+    ]
+  }
+}

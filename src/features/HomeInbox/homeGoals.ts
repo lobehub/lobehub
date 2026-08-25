@@ -60,19 +60,14 @@ const goalTitle = (goal: GoalListItem) =>
  * A goal with no acceptance row at all falls back to its task status, which is
  * the right reading: nothing has judged it yet.
  */
-export const buildHomeGoalEntries = (
-  goals: GoalListItem[],
-  acceptanceStatusByTaskId: Record<string, string> = {},
-): HomeGoalEntry[] => {
+export const buildHomeGoalEntries = (goals: GoalListItem[]): HomeGoalEntry[] => {
   const entries = goals.flatMap<HomeGoalEntry>((goal) => {
-    const config = goal.config as { goal?: { maxIterations?: number | null } } | null;
-    const maxRounds = config?.goal?.maxIterations ?? null;
+    const maxRounds = goal.goal?.maxRounds ?? null;
     const rounds = goal.totalTopics ?? 0;
     const { statusKey } = getGoalPresentation({
-      acceptanceStatus: acceptanceStatusByTaskId[goal.id],
+      goalStatus: goal.goal?.status ?? 'planning',
       maxRounds,
       rounds,
-      taskStatus: goal.status,
     });
     if (!isOpenGoalStatus(statusKey)) return [];
 

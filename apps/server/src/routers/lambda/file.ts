@@ -31,6 +31,11 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertFileNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
+  getRestrictedKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
@@ -306,6 +311,8 @@ export const fileRouter = router({
       const item = await ctx.fileModel.findById(input.id);
       if (!item) throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
 
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
+
       return {
         chunkTaskId: item.chunkTaskId,
         clientId: item.clientId,
@@ -336,6 +343,8 @@ export const fileRouter = router({
 
       if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
 
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
+
       const statusMap = await getKnowledgeItemStatusMap(ctx, [item]);
       const status = statusMap.get(item.id)!;
 
@@ -361,7 +370,13 @@ export const fileRouter = router({
     }),
 
   getFiles: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
-    const fileList = await ctx.fileModel.query(input);
+    if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+    const excludeKnowledgeBaseIds =
+      !input.knowledgeBaseId && input.showFilesInKnowledgeBase
+        ? await getRestrictedKnowledgeBaseIds(ctx)
+        : undefined;
+
+    const fileList = await ctx.fileModel.query({ ...input, excludeKnowledgeBaseIds });
     const statusMap = await getKnowledgeItemStatusMap(ctx, fileList);
 
     const resultFiles = [] as any[];
@@ -399,10 +414,16 @@ export const fileRouter = router({
     }),
 
   getKnowledgeItems: fileProcedure.input(QueryFileListSchema).query(async ({ ctx, input }) => {
+    if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+    const excludeKnowledgeBaseIds = input.knowledgeBaseId
+      ? undefined
+      : await getRestrictedKnowledgeBaseIds(ctx);
+
     // Request one more item than limit to check if there are more items
     const limit = input.limit ?? 50;
     const knowledgeItems = await ctx.knowledgeRepo.query({
       ...input,
+      excludeKnowledgeBaseIds,
       limit: limit + 1,
     });
 
@@ -454,6 +475,11 @@ export const fileRouter = router({
   resolveKnowledgeItemIds: fileProcedure
     .input(QueryFileListSchema)
     .query(async ({ ctx, input }): Promise<{ ids: string[]; total: number }> => {
+      if (input.knowledgeBaseId) await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId);
+      const excludeKnowledgeBaseIds = input.knowledgeBaseId
+        ? undefined
+        : await getRestrictedKnowledgeBaseIds(ctx);
+
       const ids: string[] = [];
       const batchSize = 500;
       let offset = 0;
@@ -463,6 +489,7 @@ export const fileRouter = router({
         const knowledgeItems = await ctx.knowledgeRepo.query({
           ...input,
           creatorUserId: isWorkspaceNonOwner(ctx) ? ctx.userId : undefined,
+          excludeKnowledgeBaseIds,
           limit: batchSize + 1,
           offset,
         });
@@ -564,12 +591,19 @@ export const fileRouter = router({
     }),
 
   recentFiles: fileProcedure
-    .input(z.object({ limit: z.number().max(50).optional() }).optional())
+    .input(
+      z
+        .object({
+          limit: z.number().max(50).optional(),
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Files only (pages are excluded in SQL, so `limit` can't be eaten by
       // page rows that are then filtered out).
-      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file');
+      const fileItems = await ctx.knowledgeRepo.queryRecent(limit, 'file', input?.visibility);
 
       if (fileItems.length === 0) return [];
 
@@ -622,12 +656,19 @@ export const fileRouter = router({
     }),
 
   recentPages: fileProcedure
-    .input(z.object({ limit: z.number().max(50).optional() }).optional())
+    .input(
+      z
+        .object({
+          limit: z.number().max(50).optional(),
+          visibility: z.enum(['private', 'public']).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 12;
       // Pages only (folders and files are excluded in SQL, so `limit` can't be
       // eaten by rows that are then filtered out).
-      return ctx.knowledgeRepo.queryRecent(limit, 'page');
+      return ctx.knowledgeRepo.queryRecent(limit, 'page', input?.visibility);
     }),
 
   removeFile: fileProcedure

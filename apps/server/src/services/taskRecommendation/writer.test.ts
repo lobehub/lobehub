@@ -59,7 +59,14 @@ describe('TaskRecommendationWriter', () => {
     expect(generatedCall.input).toEqual(
       expect.objectContaining({ model: 'model-1', provider: 'provider-1' }),
     );
-    expect(generatedCall.options).toEqual({ metadata: { trigger: RequestTrigger.Onboarding } });
+    expect(generatedCall.options).toEqual({
+      metadata: { trigger: RequestTrigger.Onboarding },
+      tracing: {
+        promptVersion: 'v1',
+        scenario: 'onboarding_task_recommendation',
+        schemaName: 'onboarding_task_recommendations',
+      },
+    });
     expect(generatedCall.input.messages.at(1)?.content).toContain(
       '<connector-evidence provider="github">',
     );

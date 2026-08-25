@@ -1345,6 +1345,34 @@ describe('LobeOpenAICompatibleFactory', () => {
         }
       });
 
+      it('should classify media download failures as InvalidRequestFormat', async () => {
+        const apiError = new OpenAI.APIError(
+          400,
+          {
+            error: {
+              message: 'failed to download or process media content',
+              type: 'invalid_request_error',
+            },
+            status: 400,
+          },
+          'failed to download or process media content',
+          new Headers(),
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Describe this image', role: 'user' }],
+            model: 'mimo-v2.5',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          errorType: AgentRuntimeErrorType.InvalidRequestFormat,
+          provider,
+        });
+      });
+
       it('should throw AgentRuntimeError with invalidErrorType if no apiKey is provided', async () => {
         try {
           new LobeMockProvider({});
