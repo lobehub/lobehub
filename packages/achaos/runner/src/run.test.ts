@@ -96,6 +96,29 @@ describe('runChaosExperiment', () => {
     expect(result.error?.name).toBe('ChaosSafetyError');
   });
 
+  it('rejects a programmatic experiment without an oracle', async () => {
+    const registry = new ChaosRegistry().registerAdapter({ inject: vi.fn(), name: 'test' });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, oracles: [] },
+      registry,
+    });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosConfigError');
+  });
+
+  it('reports an unselected probabilistic trigger as inconclusive', async () => {
+    const inject = vi.fn();
+    const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, trigger: { probability: 0, when: 'immediate' } },
+      registry,
+    });
+    expect(result.status).toBe('inconclusive');
+    expect(inject).not.toHaveBeenCalled();
+  });
+
   it('honors an after trigger by exercising the system before injection', async () => {
     const order: string[] = [];
     const registry = new ChaosRegistry()
@@ -144,7 +167,7 @@ describe('runChaosExperiment', () => {
             { once: true },
           );
         }),
-      experiment: { ...experiment, oracles: [], timeoutMs: 5 },
+      experiment: { ...experiment, timeoutMs: 5 },
       registry,
     });
     expect(result.status).toBe('failed');

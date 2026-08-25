@@ -103,6 +103,30 @@ describe('runtime chaos adapter', () => {
     );
   });
 
+  it('stops without retrying a tool attempt when its delay is disarmed', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor(
+        { durationMs: 60_000, type: 'delay' },
+        { apiName: 'search', phase: 'tool_attempt' },
+      ),
+    );
+    const execute = vi.fn(async () => ({ content: 'success', success: true }));
+    const point = { apiName: 'search', callIndex: 0, operationId: 'op-1', stepIndex: 1 };
+    const pending = executeToolWithRetry(
+      () => executeToolAttemptWithChaos(controller, point, execute),
+      { maxRetries: 1 },
+    );
+    await adapter.cleanup!(receipt, contextFor({ type: 'drop' }, {}));
+    const result = await pending;
+    expect(result.attempts).toBe(1);
+    expect(result.result).toEqual(
+      expect.objectContaining({ error: expect.objectContaining({ kind: 'stop' }), success: false }),
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('duplicates a completion delivery exactly as configured', async () => {
     const controller = new RuntimeChaosController();
     await createRuntimeChaosAdapter(controller).inject(

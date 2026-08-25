@@ -10,9 +10,13 @@ export interface ToolAttemptChaosPoint {
   stepIndex: number;
 }
 
-const retryableFailure = (message: string, errorType: string): ToolRunResult => ({
+const failedAttempt = (
+  message: string,
+  errorType: string,
+  kind: 'retry' | 'stop',
+): ToolRunResult => ({
   content: JSON.stringify({ error: message, errorType }),
-  error: { errorType, kind: 'retry', message },
+  error: { errorType, kind, message },
   success: false,
 });
 
@@ -28,13 +32,21 @@ export const executeToolAttemptWithChaos = async (
       try {
         await delayWithAbort(effect.durationMs, signal);
       } catch {
-        return retryableFailure('Tool attempt canceled while chaos delay was active', 'Canceled');
+        return failedAttempt(
+          'Tool attempt canceled while chaos delay was active',
+          'Canceled',
+          'stop',
+        );
       }
     }
     if (effect.type === 'drop')
-      return retryableFailure('Tool attempt dropped by chaos experiment', 'ChaosDroppedToolCall');
+      return failedAttempt(
+        'Tool attempt dropped by chaos experiment',
+        'ChaosDroppedToolCall',
+        'retry',
+      );
     if (effect.type === 'throw')
-      return retryableFailure(effect.message ?? effect.errorType, effect.errorType);
+      return failedAttempt(effect.message ?? effect.errorType, effect.errorType, 'retry');
   }
   return execute();
 };

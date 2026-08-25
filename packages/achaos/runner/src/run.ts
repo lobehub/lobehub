@@ -94,15 +94,47 @@ export const runChaosExperiment = async ({
     };
   }
 
+  if (experiment.oracles.length === 0) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'oracle_required' });
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      error: { message: 'Chaos experiments require at least one oracle', name: 'ChaosConfigError' },
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'aborted',
+      timeline,
+    };
+  }
+
+  const probability = experiment.trigger.probability ?? 1;
+  if (context.random() >= probability) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'trigger_not_selected', status: 'inconclusive' });
+    controller.abort('chaos_run_skipped');
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'inconclusive',
+      timeline,
+    };
+  }
+
   const adapter = registry.resolveAdapter(experiment.target.adapter);
   const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
   let error: unknown;
 
   try {
-    const probability = experiment.trigger.probability ?? 1;
-    if (context.random() > probability)
-      throw new Error('Deterministic trigger skipped the injection');
     const runExercise = async () => {
       if (!exercise) return;
       await withTimeout(exercise(context), experiment.timeoutMs, controller);
