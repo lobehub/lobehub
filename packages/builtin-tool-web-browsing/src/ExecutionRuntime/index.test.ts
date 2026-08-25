@@ -1,3 +1,4 @@
+import { EMPTY_SEARCH_RESULTS_PROMPT } from '@lobechat/prompts';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WebBrowsingExecutionRuntime } from './index';
@@ -67,7 +68,8 @@ describe('WebBrowsingExecutionRuntime', () => {
       const result = await runtime.search({ query: 'test' });
 
       expect(result.success).toBe(true);
-      expect(result.content).toBe('<searchResults />');
+      expect(result.content).toBe(EMPTY_SEARCH_RESULTS_PROMPT);
+      expect(result.content).toContain('do not resend the same query');
     });
 
     it('should return success: false when webSearch throws', async () => {
@@ -81,6 +83,53 @@ describe('WebBrowsingExecutionRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toBe('Network error');
+    });
+  });
+
+  describe('crawlMultiPages', () => {
+    it('should keep the failing url and guidance visible for error items', async () => {
+      const mockSearchService = {
+        crawlPages: vi.fn().mockResolvedValue({
+          results: [
+            {
+              crawler: 'naive',
+              data: {
+                content: 'x'.repeat(20),
+                contentType: 'text',
+                title: 'OK page',
+                url: 'https://ok.example.com/',
+              },
+              originalUrl: 'https://ok.example.com/',
+            },
+            {
+              crawler: 'search1api',
+              data: {
+                content:
+                  'Dead link: the server confirmed this page does not exist (HTTP 404). Do not retry this URL.',
+                errorMessage: 'Not Found',
+                errorType: 'PageNotFoundError',
+                retryable: false,
+              },
+              originalUrl: 'https://raw.githubusercontent.com/foo/bar/main/env.release',
+            },
+          ],
+        }),
+        webSearch: vi.fn(),
+      };
+
+      const runtime = new WebBrowsingExecutionRuntime({ searchService: mockSearchService });
+      const result = await runtime.crawlMultiPages({
+        urls: [
+          'https://ok.example.com/',
+          'https://raw.githubusercontent.com/foo/bar/main/env.release',
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('<page url="https://ok.example.com/" title="OK page"');
+      expect(result.content).toContain(
+        '<error errorType="PageNotFoundError" errorMessage="Not Found" url="https://raw.githubusercontent.com/foo/bar/main/env.release">Dead link: the server confirmed this page does not exist (HTTP 404). Do not retry this URL.</error>',
+      );
     });
   });
 });

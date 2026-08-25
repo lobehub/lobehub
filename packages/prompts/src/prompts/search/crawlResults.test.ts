@@ -135,6 +135,24 @@ describe('crawlResultsPrompt', () => {
 </crawlResults>`);
   });
 
+  it('should render error guidance content as element text', () => {
+    const results = [
+      {
+        content:
+          'Dead link: the server confirmed this page does not exist (HTTP 404). Do not retry this URL.',
+        errorMessage: 'Not Found',
+        errorType: 'PageNotFoundError',
+        url: 'https://raw.githubusercontent.com/foo/bar/main/env.release',
+      },
+    ];
+
+    const xml = crawlResultsPrompt(results);
+
+    expect(xml).toEqual(`<crawlResults>
+  <error errorType="PageNotFoundError" errorMessage="Not Found" url="https://raw.githubusercontent.com/foo/bar/main/env.release">Dead link: the server confirmed this page does not exist (HTTP 404). Do not retry this URL.</error>
+</crawlResults>`);
+  });
+
   it('should handle error without url', () => {
     const results = [
       {

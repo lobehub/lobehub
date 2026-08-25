@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  HTTPStatusError,
+  isRetryableCrawlError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+} from '../../utils/errorType';
 import * as withTimeoutModule from '../../utils/withTimeout';
 import { search1api } from '../search1api';
 
@@ -62,6 +68,36 @@ describe('search1api crawler', () => {
     await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toThrow(
       PageNotFoundError,
     );
+  });
+
+  it('should throw PageNotFoundError carrying the status when the target is 410 Gone', async () => {
+    mockFetch.mockResolvedValue(
+      createMockResponse('Gone', { ok: false, status: 410, statusText: 'Gone' }),
+    );
+
+    await expect(search1api('https://example.com', { filterOptions: {} })).rejects.toMatchObject({
+      name: 'PageNotFoundError',
+      status: 410,
+    });
+  });
+
+  it('should throw a non-retryable HTTPStatusError with the provider message on 400', async () => {
+    mockFetch.mockResolvedValue(
+      createMockResponse('URL points to non-document content (image/svg+xml)', {
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+      }),
+    );
+
+    const error = await search1api('https://example.com/logo.svg', { filterOptions: {} }).catch(
+      (e) => e,
+    );
+
+    expect(error).toBeInstanceOf(HTTPStatusError);
+    expect(error.status).toBe(400);
+    expect(error.message).toContain('URL points to non-document content (image/svg+xml)');
+    expect(isRetryableCrawlError(error)).toBe(false);
   });
 
   it('should throw error for other failed responses', async () => {

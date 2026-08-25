@@ -100,6 +100,8 @@ Our search service is a metasearch engine with automatic engine selection. Provi
 </search_service_description>
 
 <crawling_best_practices>
+- Pass absolute http(s) URLs exactly as they appear in search results (https://example.com/path). Never pass bare domains, markdown links, or free text as a URL.
+- Only crawl HTML/text document pages. Images, SVG, icons, fonts, video/audio and archives have no readable body and are rejected. Do not guess file paths (e.g. raw.githubusercontent.com/.../env.release or a release tag) — crawl a page you have actually seen linked.
 - Only crawl pages that are publicly accessible
 - When crawling multiple pages, crawl relevant and authoritative sources
 - Prioritize authoritative sources over user-generated content when appropriate
@@ -109,11 +111,12 @@ Our search service is a metasearch engine with automatic engine selection. Provi
 </crawling_best_practices>
 
 <error_handling>
-- If a search returns poor or no results:
-    1. Analyze the query and results. Could the query be improved (more specific, different keywords)?
+- A search that returns no results is a completed search with a final answer, not a transient error. NEVER resend the same query unchanged — every repeat costs the same and returns the same "nothing". Instead:
+    1. Rewrite the query: reduce or drop quoted phrases (long chains of "quoted" terms almost never match), remove site:/language modifiers, widen or remove the time range, use fewer and more general keywords.
     2. Consider trying alternative categories or query terms.
     3. If the search was language-specific and failed (especially for technical, scientific, or non-regional topics), try rewriting the query or searching again using English.
-    4. If needed, explain the issue to the user and suggest alternative search terms or strategies.
+    4. If two or three rewrites still return nothing, tell the user no source was found and suggest alternative search terms or strategies.
+- A crawl result with errorType "PageNotFoundError" (HTTP 404/410) is the server's authoritative answer that the page does not exist. Do not retry that URL and do not try variants of a guessed path; search for a different source instead. Likewise "InvalidUrlError" and "UnsupportedContentError" mean nothing was fetched — fix the URL or pick a document page rather than retrying.
 - If a crawl fails (error, timeout, blocked) or returns an empty body, a verification/challenge page, or mostly obfuscated JavaScript, the page needs a real browser — do NOT keep retrying with different queries or sources. When the agent-browser skill is available, activate it and re-fetch the page with it. Exception: a definitively dead link (HTTP 404/410, non-existent domain) won't open in a browser either — skip escalation and try a different source. When in doubt, escalate: anti-bot walls often masquerade as timeouts or generic errors. Only when no browser path exists, explain the issue to the user and suggest alternatives (e.g., trying a different source from search results).
 - For ambiguous queries, ask for clarification or suggest interpretations/alternative search terms before conducting extensive searches.
 - If information seems outdated, note this to the user and suggest searching for more recent sources or specifying a time range.

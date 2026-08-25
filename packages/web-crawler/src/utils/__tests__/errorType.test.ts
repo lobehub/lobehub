@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  HTTPStatusError,
+  InvalidUrlError,
   isFetchNetworkError,
+  isRetryableCrawlError,
   NetworkConnectionError,
   PageNotFoundError,
   TimeoutError,
   toFetchError,
+  UnsupportedContentError,
 } from '../errorType';
 
 describe('errorType', () => {
@@ -235,7 +239,7 @@ describe('errorType', () => {
             expect(e.name).toBe('TimeoutError');
             expect(e.message).toBe('timeout error');
           } else {
-            throw new Error('Unexpected error type');
+            throw new Error('Unexpected error type', { cause: e });
           }
         }
       });
@@ -256,5 +260,30 @@ describe('errorType', () => {
         }
       });
     });
+  });
+});
+
+describe('isRetryableCrawlError', () => {
+  it('should never retry authoritative failures', () => {
+    expect(isRetryableCrawlError(new PageNotFoundError('Not Found'))).toBe(false);
+    expect(isRetryableCrawlError(new PageNotFoundError('Gone', 410))).toBe(false);
+    expect(isRetryableCrawlError(new InvalidUrlError('bad'))).toBe(false);
+    expect(isRetryableCrawlError(new UnsupportedContentError('svg'))).toBe(false);
+  });
+
+  it('should not retry provider 4xx rejections except 408/429', () => {
+    expect(isRetryableCrawlError(new HTTPStatusError('400', 400))).toBe(false);
+    expect(isRetryableCrawlError(new HTTPStatusError('401', 401))).toBe(false);
+    expect(isRetryableCrawlError(new HTTPStatusError('422', 422))).toBe(false);
+    expect(isRetryableCrawlError(new HTTPStatusError('408', 408))).toBe(true);
+    expect(isRetryableCrawlError(new HTTPStatusError('429', 429))).toBe(true);
+  });
+
+  it('should retry transient failures', () => {
+    expect(isRetryableCrawlError(new HTTPStatusError('502', 502))).toBe(true);
+    expect(isRetryableCrawlError(new NetworkConnectionError())).toBe(true);
+    expect(isRetryableCrawlError(new TimeoutError('timeout'))).toBe(true);
+    expect(isRetryableCrawlError(new Error('unknown'))).toBe(true);
+    expect(isRetryableCrawlError(undefined)).toBe(true);
   });
 });

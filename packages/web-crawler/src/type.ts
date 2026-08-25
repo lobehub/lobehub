@@ -12,6 +12,11 @@ export interface CrawlErrorResult {
   content: string;
   errorMessage?: string;
   errorType?: string;
+  /**
+   * `false` when re-issuing the same crawl cannot succeed (dead link, invalid URL,
+   * resource file, rejected request). Absent means a retry may be worthwhile.
+   */
+  retryable?: boolean;
   url?: string;
 }
 

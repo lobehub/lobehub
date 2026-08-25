@@ -274,10 +274,24 @@ describe('WebBrowsingExecutor', () => {
     });
 
     it('should handle error items in crawl results', async () => {
+      // crawlPages always nests the per-url outcome under `data` — success and
+      // failure alike (see CrawlUniformResult)
       const mockResponse = {
         results: [
-          { data: { title: 'Page 1', content: 'Content 1', url: 'https://example1.com' } },
-          { errorMessage: 'Failed to crawl' },
+          {
+            crawler: 'naive',
+            data: { title: 'Page 1', content: 'Content 1', url: 'https://example1.com' },
+            originalUrl: 'https://example1.com',
+          },
+          {
+            crawler: 'naive',
+            data: {
+              content: 'Fail to crawl the page.',
+              errorMessage: 'Failed to crawl',
+              errorType: 'NetworkConnectionError',
+            },
+            originalUrl: 'https://invalid.com',
+          },
         ],
       };
       mockCrawlPages.mockResolvedValue(mockResponse);
@@ -289,7 +303,12 @@ describe('WebBrowsingExecutor', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.content).toBeDefined();
+      // the failing url has to survive into the model-facing XML, otherwise the
+      // model cannot tell which of the crawled pages to give up on
+      expect(result.content).toContain('<page url="https://example1.com"');
+      expect(result.content).toContain(
+        '<error errorType="NetworkConnectionError" errorMessage="Failed to crawl" url="https://invalid.com">',
+      );
     });
   });
 

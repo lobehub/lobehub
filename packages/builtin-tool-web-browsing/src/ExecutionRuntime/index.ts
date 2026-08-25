@@ -116,8 +116,9 @@ export class WebBrowsingExecutionRuntime {
     }
 
     const content = results.map((item) =>
-      'errorMessage' in item
-        ? item
+      'errorMessage' in item.data
+        ? // keep the failing url attached so the model knows which page to give up on
+          { ...item.data, url: item.data.url ?? item.originalUrl }
         : {
             ...item.data,
             // if crawl too many content
