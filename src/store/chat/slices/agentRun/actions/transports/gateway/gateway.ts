@@ -7,6 +7,7 @@ import {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatTopicMetadata,
+  ChatTopicStatus,
   ConversationContext,
   ExecAgentResult,
   MessageMetadata,
@@ -863,13 +864,17 @@ export class GatewayActionImpl {
               viewing || !succeeded ? 'active' : 'unread',
             )
             .catch(console.error);
-          // Also clear the local store copy — the server clear above does NOT touch
-          // the Zustand topic map that useGatewayReconnect reads. Ownership-guarded
-          // on its own, so it is safe to call either way.
+          // Also clear the local store copy — the server settle above does NOT
+          // touch the Zustand topic map that useGatewayReconnect (and the sidebar
+          // spinner) read. Mirror the same 'active' decision passed to the server
+          // call above; omit it for the unwatched-clean-completion case, which
+          // `markTopicUnread` owns. Ownership-guarded on its own (see
+          // clearLocalRunningOperation), so it is safe to call either way.
           this.clearLocalRunningOperation({
             agentId: resolvedMessageContext.agentId,
             groupId: resolvedMessageContext.groupId,
             operationId: result.operationId,
+            status: viewing || !succeeded ? 'active' : undefined,
             topicId: result.topicId,
           });
         }
@@ -1171,15 +1176,25 @@ export class GatewayActionImpl {
     agentId?: string;
     groupId?: string;
     operationId: string;
+    /**
+     * Mirror the topic's terminal status into the local Zustand copy alongside
+     * the metadata clear. Omit for the "clean completion, not watching" case —
+     * that one is owned by `markTopicUnread` elsewhere.
+     */
+    status?: ChatTopicStatus;
     topicId: string;
   }): void => {
-    const { topicId, operationId, agentId, groupId } = params;
+    const { topicId, operationId, agentId, groupId, status } = params;
     const state = this.#get();
     const key = topicMapKey({
       agentId: agentId ?? state.activeAgentId,
       groupId: groupId ?? state.activeGroupId,
     });
     const existingTopic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
+    // Same ownership guard the removed client-side `superseded` check used to
+    // provide: if a newer run already overwrote this topic's local marker with
+    // its own operationId, this stale session's completion must not clobber it
+    // (neither the metadata clear nor, now, the status write).
     if (existingTopic?.metadata?.runningOperation?.operationId !== operationId) return;
 
     state.internal_dispatchTopic({
@@ -1189,6 +1204,15 @@ export class GatewayActionImpl {
       type: 'updateTopic',
       value: { metadata: { ...existingTopic.metadata, runningOperation: null } },
     });
+
+    // Routed through `internal_pinTopicStatus`, not a bare dispatch: it also
+    // registers the pending-write pin so a topic-list refetch racing in
+    // behind this (e.g. within the 15s window of the 'running' pin set at
+    // run start) reconciles to this status instead of reapplying the stale
+    // 'running' one and stranding the spinner again.
+    if (status) {
+      state.internal_pinTopicStatus?.({ agentId, groupId, status, topicId });
+    }
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {
