@@ -1586,14 +1586,28 @@ describe('GatewayService', () => {
         expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
       });
 
-      it('stays out of the way when gateway mode is off', async () => {
+      it('reports retryable, not success, when no gateway host is configured yet', async () => {
+        // Deployments are not atomic: a gateway can come up and announce
+        // before the URL routing to it reaches this side. Answering "fine"
+        // would end the announcement for good and leave it empty.
         mockGatewayClient.isEnabled = false;
         mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = undefined;
 
-        await service.reconcileHost('node');
+        const outcome = await service.reconcileHost('node');
 
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/not configured yet/i);
         expect(mockNodeGatewayClient.getStats).not.toHaveBeenCalled();
         expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+      });
+
+      it('reports retryable when the announcing host is not in the configured set', async () => {
+        mockNodeGateway.configured = false;
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/not configured yet/i);
       });
     });
 

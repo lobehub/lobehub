@@ -230,17 +230,28 @@ export class GatewayService {
    * another.
    */
   async reconcileHost(host: MessageGatewayHost): Promise<HostReconcileOutcome> {
+    // Reachable only with the gateway feature switched on — the caller
+    // answers a disabled deployment before getting here — so this means the
+    // configuration has not arrived yet, not that there is nothing to do.
+    // Deployments are not atomic: a gateway can come up and announce before
+    // the URL that routes to it reaches this side. Saying "fine" would end
+    // the announcement for good and leave that gateway empty until the
+    // periodic reconcile, so it has to read as retryable.
     if (!this.useMessageGateway) {
-      log('reconcileHost(%s): gateway mode off, ignoring', host);
-      return { connected: 0, failed: 0, ok: true, reason: 'gateway mode off' };
+      log('reconcileHost(%s): no gateway host configured yet', host);
+      return { connected: 0, failed: 0, ok: false, reason: 'gateway not configured yet' };
     }
 
     const outcomes = await this.syncGatewayConnections([host]);
-    // A host that produced no outcome was filtered out of the round — it is
-    // not configured, so there is nothing to rebuild and nothing went wrong.
-    return (
-      outcomes.get(host) ?? { connected: 0, failed: 0, ok: true, reason: 'host not configured' }
-    );
+    // No outcome means this host was filtered out of the round: it is not in
+    // the configured set, which for a host that just announced itself is the
+    // same not-yet-configured race as above.
+    const outcome = outcomes.get(host);
+    if (!outcome) {
+      log('reconcileHost(%s): host is not configured on this side', host);
+      return { connected: 0, failed: 0, ok: false, reason: 'host not configured yet' };
+    }
+    return outcome;
   }
 
   async ensureRunning(): Promise<void> {

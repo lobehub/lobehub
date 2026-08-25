@@ -44,6 +44,25 @@ const cooldownKey = (host: MessageGatewayHost) => `lobehub:gateway:announce:cool
 const lockKey = (host: MessageGatewayHost) => `lobehub:gateway:announce:lock:${host}`;
 
 /**
+ * Compare-and-delete: only ever drop the lock while it is still ours. A lease
+ * that has already passed to someone else must not be released by its former
+ * holder.
+ */
+const releaseLock = (
+  redis: { eval: (...args: unknown[]) => Promise<unknown> },
+  host: MessageGatewayHost,
+  token: string,
+) =>
+  redis
+    .eval(
+      `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+      1,
+      lockKey(host),
+      token,
+    )
+    .catch(() => undefined);
+
+/**
  * Ask the caller to come back later rather than dropping its request. The
  * caller is a gateway sitting on an empty registry: silently discarding its
  * announcement is how a restart that lands inside the window ends up waiting
@@ -115,6 +134,18 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
       const locked = await redis.set(lockKey(host), lockToken, 'EX', ANNOUNCE_LOCK_SECONDS, 'NX');
       if (locked !== 'OK') return retryLater(c, 5, 'rebuild in progress');
       holdsLock = true;
+
+      // The two checks are not one atomic step, so a request that read no
+      // cooldown while another was still rebuilding can arrive here just
+      // after that one finished and wrote it. Without this re-read it would
+      // start a second full rebuild immediately and walk straight past the
+      // crash-loop cap.
+      const settled = await redis.ttl(cooldownKey(host));
+      if (settled > 0) {
+        await releaseLock(redis, host, lockToken);
+        holdsLock = false;
+        return retryLater(c, settled, 'cooldown');
+      }
     } catch (err) {
       log('announce: redis guard unavailable, rebuilding anyway: %O', err);
     }
@@ -173,16 +204,6 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
     return c.json({ error: 'Reconcile failed', reconciled: false }, 503);
   } finally {
     if (renewer) clearInterval(renewer);
-    // Compare-and-delete: only ever drop the lock while it is still ours.
-    if (redis && holdsLock) {
-      await redis
-        .eval(
-          `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
-          1,
-          lockKey(host),
-          lockToken,
-        )
-        .catch(() => undefined);
-    }
+    if (redis && holdsLock) await releaseLock(redis, host, lockToken);
   }
 }

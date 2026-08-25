@@ -143,6 +143,21 @@ describe('gatewayAnnounce', () => {
       expect(mockRedis.client!.eval).toHaveBeenCalledTimes(2);
     });
 
+    it('defers when a cooldown appears between the first check and the lock', async () => {
+      // Another request finished rebuilding in that gap and wrote the
+      // cooldown. Without the re-read this one would rebuild immediately and
+      // walk past the crash-loop cap.
+      mockRedis.client!.ttl.mockResolvedValueOnce(-2).mockResolvedValueOnce(42);
+
+      const r = await call({ host: 'node' });
+
+      expect(r.status).toBe(429);
+      expect(r.headers['Retry-After']).toBe('42');
+      expect(mockReconcileHost).not.toHaveBeenCalled();
+      // And it hands the lock back rather than sitting on it.
+      expect(mockRedis.client!.eval).toHaveBeenCalled();
+    });
+
     it('renews its own lease while the rebuild is still running', async () => {
       // A rebuild slower than the lease would otherwise have the lock expire
       // underneath it, letting a waiting caller start a second one alongside.
