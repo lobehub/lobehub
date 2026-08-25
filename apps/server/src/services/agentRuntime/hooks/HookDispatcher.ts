@@ -223,8 +223,10 @@ export class HookDispatcher {
     const toolCallEvent: ToolCallHookEvent = {
       ...event,
       mock: (result) => {
+        if (isMocked) return false;
         isMocked = true;
         mockedResult = result;
+        return true;
       },
       operationId,
     };
@@ -236,6 +238,7 @@ export class HookDispatcher {
       } catch (error) {
         log('[%s][beforeToolCall] Hook error (non-fatal): %s %O', operationId, hook.id, error);
       }
+      if (isMocked) break;
     }
 
     return isMocked && mockedResult ? { isMocked: true, result: mockedResult } : null;
