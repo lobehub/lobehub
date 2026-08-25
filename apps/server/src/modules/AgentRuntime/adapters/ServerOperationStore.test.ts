@@ -5,8 +5,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { ServerOperationStore } from './ServerOperationStore';
 
 const topicMock = {
-  findById: vi.fn(),
-  takeRunningOperation: vi.fn(),
+  settleRunningOperation: vi.fn(),
 };
 
 vi.mock('@/database/models/topic', () => ({
@@ -21,73 +20,40 @@ const createStore = (operationId: string | undefined, topicId: string | undefine
 const createTopiclessStore = () =>
   new ServerOperationStore(db, 'user-1', undefined, undefined, 'op-main');
 
-const markedWith = (operationId: string) => ({
-  metadata: { runningOperation: { assistantMessageId: 'asst-1', operationId } },
-});
-
 describe('ServerOperationStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    topicMock.takeRunningOperation.mockResolvedValue(undefined);
+    topicMock.settleRunningOperation.mockResolvedValue(undefined);
   });
 
   describe('clearRunningMark', () => {
-    it('clears the mark when this operation owns it', async () => {
-      topicMock.findById.mockResolvedValue(markedWith('op-main'));
-
+    it('atomically clears and settles the operation', async () => {
       await createStore('op-main').clearRunningMark();
 
-      expect(topicMock.takeRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main');
+      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main');
     });
 
-    it('leaves the mark alone when it belongs to another operation', async () => {
+    it('delegates child ownership handling to the atomic model operation', async () => {
       // Regression: a `callSubAgent` / group-member child runs in an isolation
       // thread on its PARENT's topic and finishes minutes before the parent. The
       // unconditional clear wiped the parent's reconnect anchor mid-run, so every
       // later client open saw no `runningOperation`, never opened a gateway
       // WebSocket, and rendered a frozen REST snapshot until the run ended.
-      topicMock.findById.mockResolvedValue(markedWith('op-parent'));
-
       await createStore('op-child').clearRunningMark();
 
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
-    });
-
-    it('is a no-op when the topic carries no mark', async () => {
-      topicMock.findById.mockResolvedValue({ metadata: {} });
-
-      await createStore('op-main').clearRunningMark();
-
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-child');
     });
 
     it('skips the lookup entirely without a topic', async () => {
       await createTopiclessStore().clearRunningMark();
 
-      expect(topicMock.findById).not.toHaveBeenCalled();
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
+      expect(topicMock.settleRunningOperation).not.toHaveBeenCalled();
     });
 
-    it('swallows lookup failures — clearing the mark is best-effort', async () => {
-      topicMock.findById.mockRejectedValue(new Error('db down'));
+    it('swallows settlement failures — clearing the mark is best-effort', async () => {
+      topicMock.settleRunningOperation.mockRejectedValue(new Error('db down'));
 
       await expect(createStore('op-main').clearRunningMark()).resolves.toBeUndefined();
-      expect(topicMock.takeRunningOperation).not.toHaveBeenCalled();
-    });
-
-    it('takes a matching child marker without clearing its parent', async () => {
-      topicMock.findById.mockResolvedValue({
-        metadata: {
-          runningOperation: {
-            ...markedWith('op-parent').metadata.runningOperation,
-            childOperations: [{ assistantMessageId: 'asst-child', operationId: 'op-child' }],
-          },
-        },
-      });
-
-      await createStore('op-child').clearRunningMark();
-
-      expect(topicMock.takeRunningOperation).toHaveBeenCalledWith('topic-1', 'op-child');
     });
   });
 });

@@ -4,8 +4,9 @@ import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 
 /**
- * Server {@link OperationStore} adapter. `clearRunningMark` drops the topic's
- * `runningOperation` so a reconnect doesn't re-trigger after completion.
+ * Server {@link OperationStore} adapter. `clearRunningMark` atomically drops
+ * the topic's `runningOperation` and settles its persisted running status so a
+ * reconnect doesn't re-trigger after completion.
  * Best-effort: missing topic/user is a no-op and failures are swallowed
  * (matches the prior server-local `finish` behavior).
  */
@@ -36,16 +37,8 @@ export class ServerOperationStore implements OperationStore {
     if (!this.topicId || !this.userId) return;
     try {
       const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId);
-      const topic = await topicModel.findById(this.topicId);
-      const marker = topic?.metadata?.runningOperation;
-      const markedOperationId = marker?.operationId;
-      const isChild = marker?.childOperations?.some(
-        (child) => child.operationId === this.operationId,
-      );
-      // No mark (already cleared) or someone else's mark — nothing of ours to drop.
-      if (!markedOperationId || (markedOperationId !== this.operationId && !isChild)) return;
-
-      await topicModel.takeRunningOperation(this.topicId, this.operationId!);
+      if (!this.operationId) return;
+      await topicModel.settleRunningOperation(this.topicId, this.operationId);
     } catch {
       // best-effort — swallow
     }

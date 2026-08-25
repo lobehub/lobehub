@@ -621,6 +621,58 @@ describe('TopicModel', () => {
       expect(row?.status).toBe('active');
     });
 
+    it('lets the same client operation refine the server-settled status', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'server finish before client completion',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+      await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.lastSettledOperationId).toBe('op-old');
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('active');
+    });
+
+    it('keeps a client-refined status when the server settlement retries', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'server settlement retry',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+      await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+      await topicModel.settleRunningOperation(topic.id, 'op-old');
+
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('active');
+    });
+
+    it('does not let an older settled operation overwrite the latest terminal status', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          lastSettledOperationId: 'op-new',
+          runningOperation: null,
+        },
+        status: 'unread',
+        title: 'newer operation already settled',
+      });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.lastSettledOperationId).toBe('op-new');
+      expect(row?.status).toBe('unread');
+    });
+
     it('atomically removes only a matching child operation', async () => {
       const childHooks = [
         {

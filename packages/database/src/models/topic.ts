@@ -1326,9 +1326,10 @@ export class TopicModel {
   /**
    * Atomically clear and settle the operation that still owns a topic.
    * A row lock keeps a stale terminal callback from clearing a newer operation
-   * between the ownership check and update. Missing markers are intentionally
-   * not settled because a client-side run can set `status = 'running'` without
-   * an operation marker, so there is no proof that the terminal callback owns it.
+   * between the ownership check and update. A missing marker can only refine
+   * the terminal status when `lastSettledOperationId` proves the same operation
+   * already settled it; otherwise it remains untouched because an unmarked
+   * client-side run provides no ownership proof.
    *
    * The result distinguishes a missing marker from a conflicting operation:
    * some legitimate hetero callbacks arrive after another terminal path has
@@ -1338,7 +1339,7 @@ export class TopicModel {
   settleRunningOperation = async (
     id: string,
     operationId: string,
-    status: TopicItem['status'] = 'unread',
+    status?: TopicItem['status'],
   ) => {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
@@ -1350,6 +1351,16 @@ export class TopicModel {
       const runningOperation = existing?.metadata?.runningOperation;
       if (!runningOperation) {
         const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        if (
+          existing?.metadata?.lastSettledOperationId === operationId &&
+          existing.status !== 'running' &&
+          status
+        ) {
+          await tx
+            .update(topics)
+            .set({ status, updatedAt: new Date() })
+            .where(and(eq(topics.id, id), this.ownership()));
+        }
         return {
           assistantMessageId:
             currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
@@ -1366,6 +1377,7 @@ export class TopicModel {
 
       const metadata = {
         ...existing.metadata,
+        ...(isRoot ? { lastSettledOperationId: operationId } : {}),
         runningOperation: isRoot
           ? null
           : {
@@ -1380,7 +1392,7 @@ export class TopicModel {
         .update(topics)
         .set({
           metadata,
-          ...(isRoot && existing.status === 'running' ? { status } : {}),
+          ...(isRoot && existing.status === 'running' ? { status: status ?? 'unread' } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, id), this.ownership()));
