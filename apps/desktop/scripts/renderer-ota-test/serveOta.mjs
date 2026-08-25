@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, openSync, readSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 
@@ -19,7 +19,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  res.writeHead(200, { 'cache-control': 'no-store' });
+  const fd = openSync(file, 'r');
+  const head = Buffer.alloc(2);
+  const n = readSync(fd, head, 0, 2, 0);
+  closeSync(fd);
+  const gzip = n >= 2 && head[0] === 0x1f && head[1] === 0x8b;
+  res.writeHead(200, {
+    'cache-control': 'no-store',
+    ...(gzip ? { 'content-encoding': 'gzip' } : {}),
+  });
   createReadStream(file).pipe(res);
   console.log(`200 ${url.pathname}`);
 });

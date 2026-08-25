@@ -75,6 +75,28 @@ describe('isValidManifestShape', () => {
   it('rejects non r<N> versions', () => {
     expect(isValidManifestShape({ ...baseManifest(), version: '1.2.3' })).toBe(false);
   });
+
+  it('accepts a signed tree delta', () => {
+    const manifest = baseManifest();
+    manifest.deltas = [
+      {
+        fromVersion: 'r0',
+        ops: [
+          { op: 'copy', path: 'apps/desktop/index.html', sha256: 'a'.repeat(64) },
+          {
+            fromSha256: 'b'.repeat(64),
+            op: 'patch',
+            patchSha256: 'c'.repeat(64),
+            patchSize: 12,
+            path: 'assets/entry-abc.js',
+            sha256: 'd'.repeat(64),
+            size: 20,
+          },
+        ],
+      },
+    ];
+    expect(isValidManifestShape(manifest)).toBe(true);
+  });
 });
 
 describe('diffManifest', () => {

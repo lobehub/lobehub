@@ -50,7 +50,7 @@ node scripts/renderer-ota-test/serveOta.mjs /tmp/ota-feed 8787
 
 - 等下一轮检查，或在 DevTools console 手动触发:
   `await window.electronAPI.invoke('rendererOta.checkNow')`
-- serveOta 日志：只有 hash 变化的文件被拉取 (增量生效)
+- serveOta 日志：未变文件 copy，改动走 zstd `--patch-from` 差分；原文 `.bin` 为 gzip
 - 应用左下角出现「新版本已就绪，刷新即可使用」toast
 - 点「立即刷新」: 窗口 reload (应用不重启), 改动的文案出现
 - `~/Library/Application Support/<dev userData>/renderer-ota/pointer.json`:

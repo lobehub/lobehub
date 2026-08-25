@@ -338,8 +338,10 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
+          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           retention-days: 3
+          update-channel: canary
 
   # ============================================
   # 合并 macOS 多架构 latest-mac.yml 文件

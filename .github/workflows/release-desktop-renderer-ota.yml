@@ -6,8 +6,10 @@ name: Release Desktop Renderer OTA
 # 前提: renderer/<channel>/base.json 由全量发版流程写入 (desktop-publish-s3)。
 # 门禁: HEAD 的 mainHash 必须等于该 marker —— main 变了只能走全量发版,
 #       此工作流会直接跳过。
-# 产物: renderer/<channel>/<mainHash>/latest.json (签名 manifest)
-#       renderer/files/<sha256>.bin (内容寻址,增量上传)
+# 产物: renderer/<channel>/<mainHash>/latest.json (签名 manifest + zstd tree delta)
+#       renderer/<channel>/<mainHash>/versions/rN.json (打下一版差分用的文件清单)
+#       renderer/files/<sha256>.bin (gzip CAS: 原文或 zstd --patch-from 补丁)
+# delta: r0 + 最近 2 个 rN，客户端只下一份对得上的 fromVersion
 # ============================================
 
 on:
@@ -124,13 +126,22 @@ jobs:
         if: steps.gate.outputs.allowed == 'true'
         env:
           RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          CHANNEL: ${{ inputs.channel }}
+          MAIN_HASH: ${{ steps.gate.outputs.main_hash }}
         run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y zstd
+
           node apps/desktop/scripts/buildRendererManifest.mjs \
             --renderer=apps/desktop/dist/renderer \
             --out=renderer-ota-out \
             --channel=${{ inputs.channel }} \
             --version=${{ steps.version.outputs.version }} \
-            --mainHash=${{ steps.gate.outputs.main_hash }}
+            --mainHash=${{ steps.gate.outputs.main_hash }} \
+            --feed-url="$UPDATE_SERVER_URL/renderer/$CHANNEL/$MAIN_HASH" \
+            --cas-base-url="$UPDATE_SERVER_URL/renderer/files"
 
       - name: Upload to S3
         if: steps.gate.outputs.allowed == 'true'
@@ -151,9 +162,16 @@ jobs:
           # CAS objects first (immutable, skip existing), manifest last so a
           # client never sees a manifest whose files are not yet uploaded.
           aws s3 sync renderer-ota-out/files "s3://$S3_BUCKET/renderer/files" \
-            --size-only $ENDPOINT_ARG
+            --size-only \
+            --content-encoding gzip \
+            --content-type application/octet-stream \
+            --cache-control public,max-age=31536000,immutable \
+            $ENDPOINT_ARG
           aws s3 cp "renderer-ota-out/$CHANNEL/$MAIN_HASH/latest.json" \
             "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/latest.json" \
+            --cache-control no-store $ENDPOINT_ARG
+          aws s3 cp "renderer-ota-out/$CHANNEL/$MAIN_HASH/versions/${{ steps.version.outputs.version }}.json" \
+            "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/versions/${{ steps.version.outputs.version }}.json" \
             --cache-control no-store $ENDPOINT_ARG
 
           echo "✅ Published renderer patch ${{ steps.version.outputs.version }} for $CHANNEL/$MAIN_HASH"
