@@ -4,7 +4,7 @@ import type {
   UserTopicWorkflowPayload,
 } from '../../extract';
 import type { MemoryWorkflowTriggerResult, MemoryWorkflowTriggerService } from '../types';
-import { getQueues } from '../workers/queues';
+import { DEFAULT_JOB_OPTIONS, getQueues } from '../workers/queues';
 
 /**
  * BullMQ-backed workflow trigger implementation.
@@ -23,7 +23,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
     if (!payload.baseUrl) throw new Error('Missing baseUrl for workflow trigger');
 
     const queues = getQueues();
-    const job = await queues.processUsers.add('process-users', payload);
+    const job = await queues.processUsers.add('process-users', payload, DEFAULT_JOB_OPTIONS);
     return { workflowRunId: `bullmq-${job.id}` };
   }
 
@@ -35,6 +35,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
 
     const queues = getQueues();
     const job = await queues.hourly.add('hourly', payload, {
+      ...DEFAULT_JOB_OPTIONS,
       jobId: options?.workflowRunId,
     });
     return { workflowRunId: `bullmq-${job.id}` };
@@ -46,7 +47,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
     if (!payload.baseUrl) throw new Error('Missing baseUrl for workflow trigger');
 
     const queues = getQueues();
-    const job = await queues.userTopics.add('user-topics', payload);
+    const job = await queues.userTopics.add('user-topics', payload, DEFAULT_JOB_OPTIONS);
     return { workflowRunId: `bullmq-${job.id}` };
   }
 
@@ -58,6 +59,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
 
     const queues = getQueues();
     const job = await queues.processTopics.add('process-topics', payload, {
+      ...DEFAULT_JOB_OPTIONS,
       jobId: `topics-${userId}-${Date.now()}`,
     });
     return { workflowRunId: `bullmq-${job.id}` };
@@ -71,6 +73,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
 
     const queues = getQueues();
     const job = await queues.processTopic.add('process-topic', payload, {
+      ...DEFAULT_JOB_OPTIONS,
       jobId: `topic-${userId}-${payload.topicIds?.[0] ?? Date.now()}`,
     });
     return { workflowRunId: `bullmq-${job.id}` };
@@ -87,7 +90,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
     const job = await queues.personaUpdate.add(
       'persona-update',
       { hourlyTaskId: options?.hourlyTaskId, userIds: [userId] },
-      { jobId: `persona-${userId}-${Date.now()}` },
+      { ...DEFAULT_JOB_OPTIONS, jobId: `persona-${userId}-${Date.now()}` },
     );
     return { workflowRunId: `bullmq-${job.id}` };
   }

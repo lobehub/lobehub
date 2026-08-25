@@ -13,13 +13,14 @@ let _impl: MemoryWorkflowTriggerService | null = null;
  * 1. MEMORY_WORKFLOW_MODE=local-queue → BullMQ
  * 2. MEMORY_WORKFLOW_MODE=local → in-process
  * 3. AGENT_RUNTIME_MODE=queue → QStash (existing behavior)
- * 4. Default → local (in-process)
+ * 4. Default → QStash if QSTASH_TOKEN is set, otherwise local
  */
 export const getMemoryWorkflowMode = (): MemoryWorkflowMode => {
   const explicit = process.env.MEMORY_WORKFLOW_MODE;
   if (explicit === 'local-queue') return 'bullmq';
   if (explicit === 'local') return 'local';
   if (process.env.AGENT_RUNTIME_MODE === 'queue') return 'qstash';
+  if (process.env.QSTASH_TOKEN) return 'qstash';
   return 'local';
 };
 

@@ -5,6 +5,55 @@ import { getRedisConfig } from '@/envs/redis';
 const BULLMQ_PREFIX = process.env.MEMORY_WORKFLOW_BULLMQ_PREFIX ?? 'bull';
 
 /**
+ * Default job options applied to all queues.
+ *
+ * - attempts: 3 with exponential backoff — handles transient Redis/DB failures
+ * - removeOnComplete: keep last 100 completed jobs, expire after 1 day
+ * - removeOnFail: keep last 50 failed jobs, expire after 7 days
+ */
+const DEFAULT_JOB_OPTIONS = {
+  attempts: 3,
+  backoff: { delay: 1000, factor: 2, type: 'exponential' as const },
+  removeOnComplete: { age: 86_400, count: 100 },
+  removeOnFail: { age: 604_800, count: 50 },
+};
+
+/**
+ * Parses a Redis URL into ioredis connection options.
+ *
+ * BullMQ passes options to ioredis, which does not recognize a `url` property
+ * in the object form. We parse the URL to extract host, port, and credentials.
+ */
+const parseRedisUrl = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    const connection: Record<string, unknown> = {
+      db: 0,
+      host: parsed.hostname || '127.0.0.1',
+      port: Number(parsed.port) || 6379,
+    };
+
+    if (parsed.password) {
+      connection.password = decodeURIComponent(parsed.password);
+    }
+
+    if (parsed.username && parsed.username !== 'default') {
+      connection.username = decodeURIComponent(parsed.username);
+    }
+
+    if (parsed.pathname && parsed.pathname !== '/') {
+      const db = parseInt(parsed.pathname.slice(1), 10);
+      if (!Number.isNaN(db)) connection.db = db;
+    }
+
+    return connection;
+  } catch {
+    // If URL parsing fails, let ioredis try to handle it
+    return { url };
+  }
+};
+
+/**
  * Builds the BullMQ Redis connection options from the existing LobeHub Redis config.
  *
  * BullMQ uses ioredis internally (already a project dependency). This shares
@@ -20,20 +69,7 @@ const getBullMQConnection = () => {
     );
   }
 
-  const connection: Record<string, unknown> = {
-    db: config.database ?? 0,
-    host: undefined,
-    port: undefined,
-    url: config.url,
-  };
-
-  if (config.password) {
-    connection.password = config.password;
-  }
-
-  if (config.username) {
-    connection.username = config.username;
-  }
+  const connection = parseRedisUrl(config.url);
 
   if (config.tls) {
     connection.tls = {};
@@ -67,12 +103,12 @@ const createQueues = () => {
  * Returns the BullMQ queue instances, creating them on first call.
  *
  * Queues are:
- * - `memory:hourly` — hourly cron entry point (concurrency: 1)
- * - `memory:process-users` — user batch fan-out (concurrency: 1)
- * - `memory:user-topics` — per-user topic discovery (concurrency: 25)
- * - `memory:process-topics` — topic batch fan-out (concurrency: 20)
- * - `memory:process-topic` — per-topic extraction (concurrency: 5 per user)
- * - `memory:persona-update` — persona composition (concurrency: 1 per user)
+ * - `memory-hourly` — hourly cron entry point (concurrency: 1)
+ * - `memory-process-users` — user batch fan-out (concurrency: 1)
+ * - `memory-user-topics` — per-user topic discovery (concurrency: 25)
+ * - `memory-process-topics` — topic batch fan-out (concurrency: 20)
+ * - `memory-process-topic` — per-topic extraction (concurrency: 5 per user)
+ * - `memory-persona-update` — persona composition (concurrency: 1 per user)
  */
 export const getQueues = () => {
   if (!_queues) {
@@ -80,6 +116,12 @@ export const getQueues = () => {
   }
   return _queues;
 };
+
+/**
+ * Default job options for BullMQ producers. Callers should spread these
+ * into their `add()` calls to get retry and cleanup behavior.
+ */
+export { DEFAULT_JOB_OPTIONS };
 
 /**
  * Closes all queue instances. Call during graceful shutdown.
