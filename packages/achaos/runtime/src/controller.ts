@@ -22,6 +22,7 @@ interface ArmedFault {
 export interface RuntimeChaosActivation {
   effect: ChaosEffect;
   markApplied: () => void;
+  release: () => void;
   signal: AbortSignal;
 }
 
@@ -113,6 +114,11 @@ export class RuntimeChaosController {
           if (applied) return;
           applied = true;
           fault.activations += 1;
+        },
+        release: () => {
+          if (applied) return;
+          applied = true;
+          fault.claims -= 1;
         },
         signal: fault.abort.signal,
       });

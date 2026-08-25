@@ -760,6 +760,33 @@ describe('HookDispatcher', () => {
       expect(secondHandler).not.toHaveBeenCalled();
     });
 
+    it('should stop after a hook mocks and then throws', async () => {
+      const secondHandler = vi.fn();
+      dispatcher.register(operationId, [
+        {
+          handler: async (event: any) => {
+            event.mock({ content: '{"first":true}', success: true });
+            throw new Error('after mock');
+          },
+          id: 'mock-then-throw',
+          type: 'beforeToolCall',
+        },
+        { handler: secondHandler, id: 'must-not-run', type: 'beforeToolCall' },
+      ]);
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
+        apiName: 'search',
+        args: {},
+        callIndex: 1,
+        identifier: 'twitter',
+        stepIndex: 0,
+      });
+      expect(result).toEqual({
+        isMocked: true,
+        result: { content: '{"first":true}', success: true },
+      });
+      expect(secondHandler).not.toHaveBeenCalled();
+    });
+
     it('should return mock when only one of multiple handlers calls mock()', async () => {
       const observeHandler = vi.fn();
       dispatcher.register(operationId, [

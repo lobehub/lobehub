@@ -40,7 +40,7 @@ export const createBeforeToolCallChaosHandler =
       stepIndex: event.stepIndex,
     });
 
-    for (const { effect, markApplied, signal } of activations) {
+    for (const { effect, markApplied, release, signal } of activations) {
       if (effect.type === 'delay') {
         markApplied();
         try {
@@ -52,18 +52,18 @@ export const createBeforeToolCallChaosHandler =
           return;
         }
       }
-      if (
-        effect.type === 'drop' &&
-        event.mock(
+      if (effect.type === 'drop') {
+        const accepted = event.mock(
           failedToolResult('Tool call dropped by chaos experiment', 'ChaosDroppedToolCall'),
-        )
-      )
-        markApplied();
-      if (
-        effect.type === 'replace_result' &&
-        event.mock({ content: effect.content, success: true })
-      )
-        markApplied();
+        );
+        if (accepted) markApplied();
+        else release();
+      }
+      if (effect.type === 'replace_result') {
+        const accepted = event.mock({ content: effect.content, success: true });
+        if (accepted) markApplied();
+        else release();
+      }
     }
   };
 

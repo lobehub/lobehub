@@ -125,6 +125,32 @@ describe('runtime chaos adapter', () => {
     );
   });
 
+  it('releases a losing mock reservation for a later eligible call', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor(
+        { type: 'drop' },
+        { apiName: 'search', phase: 'before_tool_call' },
+        { maxInjections: 1 },
+      ),
+    );
+    const handler = createBeforeToolCallChaosHandler(controller);
+    const point = {
+      apiName: 'search',
+      callIndex: 0,
+      operationId: 'op-reservation',
+      stepIndex: 1,
+    };
+    await handler({ ...point, mock: vi.fn(() => false) });
+    const acceptedMock = vi.fn(() => true);
+    await handler({ ...point, callIndex: 1, mock: acceptedMock });
+    expect(acceptedMock).toHaveBeenCalledOnce();
+    await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
+      true,
+    );
+  });
+
   it('does not activate an effect unsupported by the matched phase', async () => {
     const controller = new RuntimeChaosController();
     const adapter = createRuntimeChaosAdapter(controller);
