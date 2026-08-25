@@ -95,6 +95,17 @@ export const goalRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
+        config: z
+          .object({
+            recovery: z
+              .object({
+                maxAttemptsPerWork: z.number().int().positive().optional(),
+                maxStepsPerRun: z.number().int().positive().nullable().optional(),
+                operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
+              })
+              .optional(),
+          })
+          .optional(),
         maxRounds: z.number().int().positive().optional(),
         maxTotalCost: z.number().positive().optional(),
         projectId: z.string().optional(),

@@ -11,6 +11,7 @@ import {
   and,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
@@ -591,7 +592,9 @@ export class TaskModel {
 
   async groupList(
     options: TaskListFilterOptions & {
-      groups: Array<{
+      excludeStatuses?: string[];
+      groupBy?: 'assignee' | 'priority';
+      groups?: Array<{
         key: string;
         limit?: number;
         offset?: number;
@@ -600,59 +603,215 @@ export class TaskModel {
     },
   ): Promise<
     Array<{
+      assigneeAgentId?: string | null;
       hasMore: boolean;
       key: string;
       limit: number;
       offset: number;
+      priority?: number;
       tasks: TaskItem[];
       total: number;
     }>
   > {
-    const { groups } = options;
+    const { assigneeAgentId, excludeStatuses, groupBy, groups } = options;
+
+    if ((!groups || groups.length === 0) && !groupBy) {
+      throw new Error('Task groups or a grouping dimension are required');
+    }
+
     const baseConditions = this.buildListConditions(options);
-    const normalizedGroups = groups.map((group) => ({
-      ...group,
-      statuses: Array.from(new Set(group.statuses)),
-    }));
+    if (excludeStatuses?.length) {
+      baseConditions.push(notInArray(tasks.status, excludeStatuses));
+    }
 
-    const allStatuses = Array.from(new Set(normalizedGroups.flatMap((group) => group.statuses)));
-    const countQuery = this.db
-      .select({ count: sql<number>`count(*)`, status: tasks.status })
-      .from(tasks)
-      .where(and(...baseConditions, inArray(tasks.status, allStatuses)))
-      .groupBy(tasks.status);
+    interface GroupQuery {
+      assigneeAgentId?: string | null;
+      conditions: SQL[];
+      key: string;
+      limit: number;
+      offset: number;
+      prefetchedTasks?: TaskItem[];
+      priority?: number;
+      total: number;
+    }
 
-    const groupQueries = normalizedGroups.map(async (group) => {
-      const limit = group.limit ?? 50;
-      const offset = group.offset ?? 0;
+    let groupQueries: GroupQuery[];
 
-      const groupTasks = await this.db
-        .select()
+    if (groupBy === 'assignee') {
+      const limit = 50;
+      const rankedTasks = this.db
+        .select({
+          ...getTableColumns(tasks),
+          groupRank:
+            sql<number>`row_number() over (partition by ${tasks.assigneeAgentId} order by ${tasks.createdAt} desc)`.as(
+              'group_rank',
+            ),
+        })
         .from(tasks)
-        .where(and(...baseConditions, inArray(tasks.status, group.statuses)))
-        .orderBy(desc(tasks.createdAt))
-        .limit(limit)
-        .offset(offset);
+        .where(and(...baseConditions))
+        .as('ranked_assignee_tasks');
+      const [countResult, rankedTaskRows] = await Promise.all([
+        this.db
+          .select({ assigneeAgentId: tasks.assigneeAgentId, count: sql<number>`count(*)` })
+          .from(tasks)
+          .where(and(...baseConditions))
+          .groupBy(tasks.assigneeAgentId),
+        this.db
+          .select()
+          .from(rankedTasks)
+          .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+          .orderBy(rankedTasks.assigneeAgentId, rankedTasks.groupRank),
+      ]);
+      const assigneeCounts = new Map(
+        countResult.map((row) => [row.assigneeAgentId, Number(row.count)]),
+      );
+      const tasksByAssignee = new Map<string | null, TaskItem[]>();
+      for (const row of rankedTaskRows) {
+        const { groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(task.assigneeAgentId) ?? [];
+        groupTasks.push(task);
+        tasksByAssignee.set(task.assigneeAgentId, groupTasks);
+      }
 
-      return {
-        key: group.key,
+      // Keep an empty Unassigned column as a stable drop target even when every
+      // current task already has an owner. Other assignees are data-derived;
+      // showing every agent as an empty column would make large workspaces
+      // unusable without a separate "show empty columns" control.
+      if (!assigneeAgentId && !assigneeCounts.has(null)) assigneeCounts.set(null, 0);
+
+      groupQueries = [...assigneeCounts.entries()].map(([groupAssigneeAgentId, total]) => ({
+        assigneeAgentId: groupAssigneeAgentId,
+        conditions: [
+          groupAssigneeAgentId
+            ? eq(tasks.assigneeAgentId, groupAssigneeAgentId)
+            : isNull(tasks.assigneeAgentId),
+        ],
+        key: groupAssigneeAgentId ? `assignee:${groupAssigneeAgentId}` : 'assignee:unassigned',
         limit,
-        offset,
-        tasks: groupTasks,
-        statuses: group.statuses,
-      };
-    });
-    const [countResult, queriedGroups] = await Promise.all([countQuery, Promise.all(groupQueries)]);
-    const countByStatus = new Map(countResult.map(({ count, status }) => [status, Number(count)]));
-    const results = queriedGroups.map(({ statuses, ...group }) => {
-      const total = statuses.reduce((sum, status) => sum + (countByStatus.get(status) ?? 0), 0);
-
-      return {
-        ...group,
-        hasMore: group.offset + group.tasks.length < total,
+        offset: 0,
+        prefetchedTasks: tasksByAssignee.get(groupAssigneeAgentId) ?? [],
         total,
-      };
-    });
+      }));
+    } else if (groupBy === 'priority') {
+      const priorities = [1, 2, 3, 4, 0];
+      const countQuery = this.db
+        .select({ count: sql<number>`count(*)`, priority: tasks.priority })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .groupBy(tasks.priority);
+      const taskQueries = priorities.map(async (priority) => {
+        const conditions = [
+          priority === 0
+            ? or(eq(tasks.priority, priority), isNull(tasks.priority))!
+            : eq(tasks.priority, priority),
+        ];
+        const limit = 50;
+        const offset = 0;
+        const prefetchedTasks = await this.db
+          .select()
+          .from(tasks)
+          .where(and(...baseConditions, ...conditions))
+          .orderBy(desc(tasks.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        return {
+          conditions,
+          key: `priority:${priority}`,
+          limit,
+          offset,
+          prefetchedTasks,
+          priority,
+          total: 0,
+        };
+      });
+      const [countResult, queriedGroups] = await Promise.all([
+        countQuery,
+        Promise.all(taskQueries),
+      ]);
+      const priorityCounts = new Map<number, number>();
+      for (const row of countResult) {
+        const priority = row.priority ?? 0;
+        priorityCounts.set(priority, (priorityCounts.get(priority) ?? 0) + Number(row.count));
+      }
+
+      // Priority is a finite dimension, so include empty values as usable drop
+      // targets. The order matches the task list's semantic rank.
+      groupQueries = queriedGroups.map((group) => ({
+        ...group,
+        total: priorityCounts.get(group.priority) ?? 0,
+      }));
+    } else {
+      const statusGroups = (groups ?? []).map((group) => ({
+        ...group,
+        statuses: Array.from(new Set(group.statuses)),
+      }));
+      const allStatuses = Array.from(new Set(statusGroups.flatMap((group) => group.statuses)));
+      const countQuery = this.db
+        .select({ count: sql<number>`count(*)`, status: tasks.status })
+        .from(tasks)
+        .where(and(...baseConditions, inArray(tasks.status, allStatuses)))
+        .groupBy(tasks.status);
+      const taskQueries = statusGroups.map(async (group) => {
+        const conditions = [inArray(tasks.status, group.statuses)];
+        const limit = group.limit ?? 50;
+        const offset = group.offset ?? 0;
+        const prefetchedTasks = await this.db
+          .select()
+          .from(tasks)
+          .where(and(...baseConditions, ...conditions))
+          .orderBy(desc(tasks.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        return {
+          conditions,
+          key: group.key,
+          limit,
+          offset,
+          prefetchedTasks,
+          statuses: group.statuses,
+          total: 0,
+        };
+      });
+      const [countResult, queriedGroups] = await Promise.all([
+        countQuery,
+        Promise.all(taskQueries),
+      ]);
+      const countByStatus = new Map(countResult.map((row) => [row.status, Number(row.count)]));
+
+      groupQueries = queriedGroups.map(({ statuses, ...group }) => ({
+        ...group,
+        total: statuses.reduce((sum, status) => sum + (countByStatus.get(status) ?? 0), 0),
+      }));
+    }
+
+    const results = await Promise.all(
+      groupQueries.map(async (group) => {
+        const groupTasks =
+          group.prefetchedTasks ??
+          (await this.db
+            .select()
+            .from(tasks)
+            .where(and(...baseConditions, ...group.conditions))
+            .orderBy(desc(tasks.createdAt))
+            .limit(group.limit)
+            .offset(group.offset));
+
+        return {
+          ...(group.assigneeAgentId !== undefined
+            ? { assigneeAgentId: group.assigneeAgentId }
+            : {}),
+          hasMore: group.offset + groupTasks.length < group.total,
+          key: group.key,
+          limit: group.limit,
+          offset: group.offset,
+          ...(group.priority !== undefined ? { priority: group.priority } : {}),
+          tasks: groupTasks,
+          total: group.total,
+        };
+      }),
+    );
 
     const taskIds = Array.from(
       new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),

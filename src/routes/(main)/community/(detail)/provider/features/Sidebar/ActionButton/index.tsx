@@ -21,7 +21,9 @@ const ActionButton = memo(() => {
       <ShareButton
         meta={{
           avatar: <ProviderIcon provider={identifier} size={64} type={'avatar'} />,
-          desc: t(`${identifier}.description`, { defaultValue: description }),
+          desc: description
+            ? t(`${identifier}.description`, { defaultValue: description })
+            : undefined,
           tags: (
             <Flexbox horizontal align={'center'} gap={4} justify={'center'} wrap={'wrap'}>
               {models

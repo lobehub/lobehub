@@ -139,8 +139,7 @@ const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;
 const getTaskStatusGroup = (task: TaskListItem): NonNullable<TaskGroupMeta['status']> =>
   TASK_STATUS_TO_GROUP_MAP[task.status] ?? 'backlog';
 
-const getTaskAssigneeMeta = (task: TaskListItem): TaskGroupMeta => {
-  const agentId = task.assigneeAgentId;
+export const getTaskAssigneeGroupMeta = (agentId: string | null | undefined): TaskGroupMeta => {
   if (!agentId) {
     return {
       groupBy: 'assignee',
@@ -158,6 +157,25 @@ const getTaskAssigneeMeta = (task: TaskListItem): TaskGroupMeta => {
 };
 
 const getTaskAssigneeSortValue = (task: TaskListItem) => task.assigneeAgentId ?? '';
+
+export const getTaskPriorityGroupMeta = (
+  priorityValue: number | null | undefined,
+): TaskGroupMeta => {
+  const priority = priorityValue ?? 0;
+  const labelKeyMap: Record<number, string> = {
+    0: 'taskDetail.priority.none',
+    1: 'taskDetail.priority.urgent',
+    2: 'taskDetail.priority.high',
+    3: 'taskDetail.priority.normal',
+    4: 'taskDetail.priority.low',
+  };
+  return {
+    groupBy: 'priority',
+    key: `priority:${priority}`,
+    label: t(labelKeyMap[priority] ?? labelKeyMap[0], { defaultValue: '', ns: 'chat' }),
+    priority,
+  };
+};
 
 const toTime = (value: Date | string | null | undefined): number => {
   if (!value) return 0;
@@ -231,7 +249,7 @@ export const compareTaskItems = (
 export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): TaskGroupMeta => {
   switch (groupBy) {
     case 'assignee': {
-      return getTaskAssigneeMeta(task);
+      return getTaskAssigneeGroupMeta(task.assigneeAgentId);
     }
     case 'automationMode': {
       // Automated tasks created before automationMode was introduced are schedules.
@@ -244,20 +262,7 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
       };
     }
     case 'priority': {
-      const priority = getPriorityValue(task);
-      const labelKeyMap: Record<number, string> = {
-        0: 'taskDetail.priority.none',
-        1: 'taskDetail.priority.urgent',
-        2: 'taskDetail.priority.high',
-        3: 'taskDetail.priority.normal',
-        4: 'taskDetail.priority.low',
-      };
-      return {
-        groupBy: 'priority',
-        key: `priority:${priority}`,
-        label: t(labelKeyMap[priority] ?? labelKeyMap[0], { defaultValue: '', ns: 'chat' }),
-        priority,
-      };
+      return getTaskPriorityGroupMeta(getPriorityValue(task));
     }
     case 'status': {
       const groupedStatus = getTaskStatusGroup(task);

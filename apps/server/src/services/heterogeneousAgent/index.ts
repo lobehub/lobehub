@@ -100,6 +100,8 @@ export const normalizeHeterogeneousFinishError = (
 };
 
 export interface HeterogeneousAgentServiceOptions {
+  /** Inject a pre-built operation model (used by tests). */
+  agentOperationModel?: AgentOperationModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
@@ -128,6 +130,7 @@ export interface HeterogeneousAgentServiceOptions {
  * `topic.metadata.heterogeneousSessions`.
  */
 export class HeterogeneousAgentService {
+  private readonly agentOperationModel: AgentOperationModel;
   private readonly db: LobeChatDatabase;
   private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
@@ -146,6 +149,8 @@ export class HeterogeneousAgentService {
     this.userId = userId;
     const workspaceId = options.workspaceId;
     this.workspaceId = workspaceId;
+    this.agentOperationModel =
+      options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
@@ -172,6 +177,12 @@ export class HeterogeneousAgentService {
       agentType,
       events.length,
     );
+
+    const leaseRefreshed = await this.agentOperationModel.touchRunning(operationId);
+    if (!leaseRefreshed) {
+      log('heteroIngest: ignore terminal or missing operation op=%s', operationId);
+      return;
+    }
 
     // Persist FIRST, then publish — the renderer's gateway handler triggers
     // `fetchAndReplaceMessages` on stream_start / tool_end / step_complete,

@@ -8,7 +8,7 @@ import { workflowClient } from '@/libs/qstash';
 const log = debug('lobe-server:workflows:agent-eval-run');
 
 // Workflow paths
-const WORKFLOW_PATHS = {
+export const WORKFLOW_PATHS = {
   executeTestCase: '/api/workflows/agent-eval-run/execute-test-case',
   finalizeRun: '/api/workflows/agent-eval-run/finalize-run',
   onThreadComplete: '/api/workflows/agent-eval-run/on-thread-complete',

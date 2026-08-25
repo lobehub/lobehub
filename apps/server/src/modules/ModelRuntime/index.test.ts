@@ -412,7 +412,7 @@ describe('initModelRuntimeFromServerConfig', () => {
 
     expect(initialize).toHaveBeenCalledWith(
       ModelProvider.LobeHub,
-      { userId: 'user-1' },
+      { userId: 'user-1', workspaceId: 'workspace-1' },
       expect.anything(),
     );
     initialize.mockRestore();

@@ -142,6 +142,7 @@ const STEP_ABORT_POLL_INTERVAL_MS = 2_000;
 /** Cap on the exponential backoff multiplier after consecutive poll failures. */
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
+const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 
 const toToolForwardingFailure = (error?: unknown): ToolRunResult => ({
@@ -383,6 +384,7 @@ export interface AgentRuntimeServiceOptions {
  * ```
  */
 export class AgentRuntimeService {
+  private agentOperationModel: AgentOperationModel;
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
@@ -442,6 +444,7 @@ export class AgentRuntimeService {
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
     const workspaceId = this.workspaceId;
+    this.agentOperationModel = new AgentOperationModel(db, this.userId, workspaceId);
     this.messageModel = new MessageModel(db, this.userId, workspaceId);
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId);
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
@@ -463,13 +466,28 @@ export class AgentRuntimeService {
     stepIndex: number,
     ownerId: string,
   ): () => void {
+    let heartbeatTick = 0;
     const timer = setInterval(() => {
-      this.coordinator
-        .refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId)
-        .then((refreshed) => {
+      heartbeatTick += 1;
+      const refreshDurableLease = heartbeatTick % DURABLE_LEASE_HEARTBEAT_EVERY_TICKS === 0;
+
+      Promise.all([
+        this.coordinator.refreshStepLock(operationId, stepIndex, STEP_LOCK_TTL_SECONDS, ownerId),
+        refreshDurableLease
+          ? this.agentOperationModel.touchRunning(operationId)
+          : Promise.resolve(true),
+      ])
+        .then(([refreshed, leaseRefreshed]) => {
           if (!refreshed) {
             log(
               '[%s][%d] Step lock heartbeat did not refresh; ownership may have changed',
+              operationId,
+              stepIndex,
+            );
+          }
+          if (!leaseRefreshed) {
+            log(
+              '[%s][%d] Durable operation lease was lost; terminal persistence will be rejected',
               operationId,
               stepIndex,
             );
@@ -563,6 +581,7 @@ export class AgentRuntimeService {
       deviceAccessPolicy,
       discordContext,
       evalContext,
+      evalRuntime,
       enableExpertise,
       expertise,
       executionPlan,
@@ -664,6 +683,7 @@ export class AgentRuntimeService {
           deviceSystemInfo,
           discordContext,
           evalContext,
+          evalRuntime,
           executionPlan,
           // need be removed
           modelRuntimeConfig,
@@ -861,6 +881,40 @@ export class AgentRuntimeService {
       return this.handleGroupMemberTimeout(groupMemberTimeout);
     }
 
+    // Redis keeps the resumable step state, but the durable operation row is
+    // the authority for cancellation/recovery. A queued QStash delivery can
+    // outlive a crashed process and arrive after Goal recovery has atomically
+    // marked that operation interrupted. ACK it without touching the old
+    // topic; otherwise the abandoned attempt can finish concurrently with its
+    // replacement and submit a second Acceptance run.
+    try {
+      const durableOperation = await this.agentOperationModel.findById(operationId);
+      if (
+        durableOperation &&
+        ['done', 'error', 'interrupted', 'abandoned'].includes(durableOperation.status)
+      ) {
+        log(
+          '[%s][%d] Skipping delivery for terminal durable operation (%s)',
+          operationId,
+          stepIndex,
+          durableOperation.status,
+        );
+        return {
+          nextStepScheduled: false,
+          state: {
+            status:
+              durableOperation.status === 'abandoned' ? 'interrupted' : durableOperation.status,
+          },
+          stepResult: null,
+          success: true,
+        };
+      }
+    } catch (error) {
+      // Preserve runtime availability when the durable store has a transient
+      // read failure. The step lock and normal persistence path still apply.
+      log('[%s][%d] Durable operation status check failed: %O', operationId, stepIndex, error);
+    }
+
     // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
     // without claiming the step lock or executing anything. Idempotent — the
     // CAS guarantees at most one real resume regardless of how many checks run.
@@ -1012,6 +1066,9 @@ export class AgentRuntimeService {
       };
     }
 
+    await this.agentOperationModel.touchRunning(operationId).catch((error) => {
+      log('[%s][%d] Operation lease refresh failed: %O', operationId, stepIndex, error);
+    });
     const stopStepLockHeartbeat = this.startStepLockHeartbeat(
       operationId,
       stepIndex,
@@ -3033,13 +3090,13 @@ export class AgentRuntimeService {
 
     if (
       metadata?.trigger === RequestTrigger.Eval &&
-      metadata.evalContext?.toolForwarding &&
+      metadata.evalRuntime?.toolForwarding &&
       !hookDispatcher.hasHook(operationId, EVAL_TOOL_FORWARDING_HOOK_ID)
     ) {
       hookDispatcher.register(operationId, [
         createEvalToolForwardingHook(
-          metadata.evalContext.toolForwarding,
-          metadata.evalContext.caseId,
+          metadata.evalRuntime.toolForwarding,
+          metadata.evalRuntime.caseId,
         ),
       ]);
     }

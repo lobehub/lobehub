@@ -462,6 +462,44 @@ describe('GeneralChatAgent', () => {
       ]);
     });
 
+    it('should return a recoverable result for a stale dynamic tool call', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        allowedToolNames: ['lobe-activator____activateTools'],
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+      const toolCall: ChatToolPayload = {
+        apiName: 'listOnlineDevices',
+        arguments: '{}',
+        id: 'call-1',
+        identifier: 'lobe-remote-device',
+        type: 'builtin',
+      };
+
+      const result = await agent.runner(
+        createMockContext('llm_result', {
+          hasToolsCalling: true,
+          parentMessageId: 'msg-1',
+          toolsCalling: [toolCall],
+        }),
+        createMockState(),
+      );
+
+      expect(result).toEqual([
+        {
+          payload: {
+            blockedContent:
+              'Tool execution blocked because the tool is not allowed in the current execution scope.',
+            blockedReason: 'tool_not_allowed',
+            parentMessageId: 'msg-1',
+            toolsCalling: [toolCall],
+          },
+          type: 'resolve_blocked_tools',
+        },
+      ]);
+    });
+
     it('should execute allowed tools, resolve denied tools, then pause for approval', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },

@@ -1,4 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
+import { useEffect } from 'react';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
@@ -6,7 +7,12 @@ import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
-import type { TaskGroupItem, TaskListItem, TaskListVisibilityFilter } from './initialState';
+import type {
+  TaskGroupItem,
+  TaskKanbanGroupBy,
+  TaskListItem,
+  TaskListVisibilityFilter,
+} from './initialState';
 
 /**
  * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
@@ -76,13 +82,21 @@ export class TaskListSliceActionImpl {
   }
 
   refreshTaskGroupList = async (): Promise<void> => {
-    const { listAgentId, listVisibility } = this.#get();
+    const {
+      groupListQueryAutomated,
+      listAgentId,
+      listGroupBy,
+      listGroupExcludeStatuses,
+      listVisibility,
+    } = this.#get();
     await mutate(
       taskKeys.groupList(
         listAgentId,
         listVisibility,
+        listGroupBy,
+        listGroupExcludeStatuses,
         projectIdFromListKey(listAgentId),
-        this.#get().groupListQueryAutomated,
+        groupListQueryAutomated,
       ),
     );
   };
@@ -91,7 +105,13 @@ export class TaskListSliceActionImpl {
     taskService.list(params);
 
   refreshTaskList = async (): Promise<void> => {
-    const { listAgentId, listVisibility } = this.#get();
+    const {
+      groupListQueryAutomated,
+      listAgentId,
+      listGroupBy,
+      listGroupExcludeStatuses,
+      listVisibility,
+    } = this.#get();
     const projectId = projectIdFromListKey(listAgentId);
     await Promise.all([
       // Every cached variant of the list — both orderings, any visibility chip
@@ -103,8 +123,10 @@ export class TaskListSliceActionImpl {
         taskKeys.groupList(
           listAgentId,
           listVisibility,
+          listGroupBy,
+          listGroupExcludeStatuses,
           projectId,
-          this.#get().groupListQueryAutomated,
+          groupListQueryAutomated,
         ),
       ),
       // A schedule can be attached, changed or removed from any task edit, so
@@ -138,37 +160,92 @@ export class TaskListSliceActionImpl {
       allAgents?: boolean;
       automated?: boolean;
       enabled?: boolean;
+      excludeStatuses?: readonly TaskStatus[];
+      groupBy?: TaskKanbanGroupBy;
       projectId?: string;
     } = {},
   ) => {
-    const { agentId, allAgents = false, automated, enabled = true, projectId } = options;
+    const {
+      agentId,
+      allAgents = false,
+      automated,
+      enabled = true,
+      excludeStatuses,
+      groupBy = 'status',
+      projectId,
+    } = options;
     const effectiveKey = projectId
       ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
       : allAgents
         ? ALL_AGENTS_LIST_KEY
         : agentId;
-    if (
-      effectiveKey &&
-      (this.#get().listAgentId !== effectiveKey ||
-        this.#get().groupListQueryAutomated !== automated)
-    ) {
+    const excludeStatusesSignature = excludeStatuses?.length
+      ? [...excludeStatuses].sort().join(',')
+      : undefined;
+    const { groupListQueryAutomated, listAgentId, listGroupBy, listGroupExcludeStatuses } =
+      this.#get();
+    const isQueryScopeCurrent =
+      !effectiveKey ||
+      (listAgentId === effectiveKey &&
+        groupListQueryAutomated === automated &&
+        listGroupBy === groupBy &&
+        listGroupExcludeStatuses === excludeStatusesSignature);
+
+    // Reset after render so changing the board dimension never notifies React
+    // subscribers while another component is rendering. The caller gates old
+    // groups with `isQueryScopeCurrent` until this effect commits the new scope.
+    useEffect(() => {
+      if (!effectiveKey) return;
+
+      const current = this.#get();
+      if (
+        current.listAgentId === effectiveKey &&
+        current.groupListQueryAutomated === automated &&
+        current.listGroupBy === groupBy &&
+        current.listGroupExcludeStatuses === excludeStatusesSignature
+      ) {
+        return;
+      }
+
       this.#set(
-        { ...scopeChangeResetState, groupListQueryAutomated: automated, listAgentId: effectiveKey },
+        current.listAgentId !== effectiveKey
+          ? {
+              ...scopeChangeResetState,
+              groupListQueryAutomated: automated,
+              listAgentId: effectiveKey,
+              listGroupBy: groupBy,
+              listGroupExcludeStatuses: excludeStatusesSignature,
+            }
+          : {
+              isTaskGroupListInit: false,
+              groupListQueryAutomated: automated,
+              listGroupBy: groupBy,
+              listGroupExcludeStatuses: excludeStatusesSignature,
+              taskGroups: [],
+            },
         false,
-        'useFetchTaskGroupList/syncAgentId',
+        'useFetchTaskGroupList/syncQueryScope',
       );
-    }
+    }, [automated, effectiveKey, excludeStatusesSignature, groupBy]);
     const listVisibility = this.#get().listVisibility;
 
-    return useClientDataSWR(
+    const swr = useClientDataSWR(
       enabled && effectiveKey
-        ? taskKeys.groupList(effectiveKey, listVisibility, projectId, automated)
+        ? taskKeys.groupList(
+            effectiveKey,
+            listVisibility,
+            groupBy,
+            excludeStatusesSignature,
+            projectId,
+            automated,
+          )
         : null,
       async () => {
         return taskService.groupList({
           assigneeAgentId: allAgents ? undefined : agentId,
-          automated,
-          groups: DEFAULT_KANBAN_GROUPS,
+          ...(automated === undefined ? {} : { automated }),
+          excludeStatuses: excludeStatuses?.length ? [...excludeStatuses] : undefined,
+          ...(groupBy === 'status' ? { groups: DEFAULT_KANBAN_GROUPS } : { groupBy }),
           hasGoal: false,
           projectId,
           visibility: filterToServerVisibility(listVisibility),
@@ -176,6 +253,17 @@ export class TaskListSliceActionImpl {
       },
       {
         onSuccess: (data: { data: TaskGroupItem[] }) => {
+          const current = this.#get();
+          if (
+            current.listAgentId !== effectiveKey ||
+            current.groupListQueryAutomated !== automated ||
+            current.listGroupBy !== groupBy ||
+            current.listGroupExcludeStatuses !== excludeStatusesSignature ||
+            current.listVisibility !== listVisibility
+          ) {
+            return;
+          }
+
           this.#set(
             { isTaskGroupListInit: true, taskGroups: data.data },
             false,
@@ -185,6 +273,8 @@ export class TaskListSliceActionImpl {
         revalidateOnFocus: false,
       },
     );
+
+    return { ...swr, isQueryScopeCurrent };
   };
 
   /**

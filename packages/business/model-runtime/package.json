@@ -9,5 +9,8 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/model-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
   }
 }

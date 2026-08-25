@@ -690,6 +690,23 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
     });
 
+    it('acks a delayed delivery after the durable operation was abandoned', async () => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        id: mockParams.operationId,
+        status: 'abandoned',
+      });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result).toEqual({
+        nextStepScheduled: false,
+        state: { status: 'interrupted' },
+        stepResult: null,
+        success: true,
+      });
+      expect(mockCoordinator.tryClaimStep).not.toHaveBeenCalled();
+    });
+
     it('should pass resolved contextWindowTokens into compressionConfig', async () => {
       vi.mocked(getModelPropertyWithFallback).mockResolvedValueOnce(200_000);
 

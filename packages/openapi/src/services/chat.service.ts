@@ -373,7 +373,7 @@ export class ChatService extends BaseService {
       const modelRuntime = await initModelRuntimeWithUserPayload(
         provider,
         { apiKey, userId: this.userId! },
-        {},
+        this.workspaceId ? { workspaceId: this.workspaceId } : {},
         hooks,
       );
 

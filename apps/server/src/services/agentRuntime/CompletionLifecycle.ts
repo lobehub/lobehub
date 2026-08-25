@@ -209,7 +209,11 @@ export class CompletionLifecycle {
    * outage must never block hook dispatch or the executor's terminal
    * cleanup path.
    */
-  private async persistCompletion(operationId: string, state: any, reason: string): Promise<void> {
+  private async persistCompletion(
+    operationId: string,
+    state: any,
+    reason: string,
+  ): Promise<boolean> {
     const completionReason: any =
       reason === 'max_steps' ||
       reason === 'cost_limit' ||
@@ -255,7 +259,7 @@ export class CompletionLifecycle {
     };
 
     try {
-      await this.agentOperationModel.recordCompletion(operationId, {
+      const accepted = await this.agentOperationModel.recordCompletion(operationId, {
         completedAt,
         completionReason,
         cost: state?.cost ?? null,
@@ -286,6 +290,12 @@ export class CompletionLifecycle {
         // the scalar columns — the reporting surface — carry the whole tree.
         usage: state?.usage ?? null,
       });
+      if (!accepted) {
+        const operation = await this.agentOperationModel.findById(operationId);
+        // Preserve the historical best-effort behavior when no durable start
+        // row exists, but never let a conflicting terminal owner be replaced.
+        if (operation) return false;
+      }
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
     }
@@ -305,6 +315,8 @@ export class CompletionLifecycle {
         log('[%s] Failed to recompute topic usage rollup (non-fatal): %O', operationId, error);
       }
     }
+
+    return true;
   }
 
   /** Best-effort child-usage rollup — a DB hiccup must not fail the completion write. */
@@ -642,7 +654,11 @@ export class CompletionLifecycle {
 
       // Finalize the agent_operations row before user hooks fire so
       // downstream consumers see the row in its terminal shape.
-      await this.persistCompletion(operationId, state, reason);
+      const completionAccepted = await this.persistCompletion(operationId, state, reason);
+      if (completionAccepted === false) {
+        log('[%s] Skipping hooks for an operation with a conflicting terminal owner', operationId);
+        return;
+      }
 
       if (isAsyncToolPark) return;
 

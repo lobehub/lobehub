@@ -38,6 +38,7 @@ import { I18nManager } from './infrastructure/I18nManager';
 import { IoCContainer } from './infrastructure/IoCContainer';
 import { LocalFileProtocolManager } from './infrastructure/LocalFileProtocolManager';
 import { ProtocolManager } from './infrastructure/ProtocolManager';
+import { RendererUpdateManager } from './infrastructure/rendererOta/RendererUpdateManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
@@ -68,6 +69,7 @@ export class App {
   staticFileServerManager: StaticFileServerManager;
   protocolManager: ProtocolManager;
   rendererUrlManager: RendererUrlManager;
+  rendererUpdateManager: RendererUpdateManager;
   localFileProtocolManager: LocalFileProtocolManager;
   binaryManager: BinaryManager;
   screenCaptureManager: ScreenCaptureManager;
@@ -155,6 +157,16 @@ export class App {
     this.protocolManager = new ProtocolManager(this);
     this.binaryManager = new BinaryManager(this);
     this.screenCaptureManager = new ScreenCaptureManager(this);
+
+    // Resolve the renderer OTA pointer and set the app:// serving root before
+    // any window starts loading.
+    this.rendererUpdateManager = new RendererUpdateManager(this);
+    this.rendererUpdateManager.initialize();
+    app.on('web-contents-created', (_event, webContents) => {
+      webContents.on('render-process-gone', () => {
+        this.rendererUpdateManager.handleRendererCrash();
+      });
+    });
 
     // Register built-in binary specs
     this.registerBuiltinBinarySpecs();
@@ -331,6 +343,7 @@ export class App {
 
     // Initialize updater manager
     await this.updaterManager.initialize();
+    this.rendererUpdateManager.startScheduledChecks();
     this.screenCaptureManager.prewarmPermissionCheck();
 
     logger.info('Post-first-frame initialization completed');

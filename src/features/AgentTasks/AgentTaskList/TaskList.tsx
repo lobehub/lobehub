@@ -1,7 +1,7 @@
-import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import { CalendarClock, ClipboardCheckIcon, HeartPulse, UserRound } from 'lucide-react';
+import { ClipboardCheckIcon } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,14 +12,6 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
-import AssigneeAvatar from '../features/AssigneeAvatar';
-import PriorityHighIcon from '../features/icons/PriorityHighIcon';
-import PriorityLowIcon from '../features/icons/PriorityLowIcon';
-import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
-import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
-import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
-import TaskStatusIcon from '../features/TaskStatusIcon';
-import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions, TaskRow } from './listViewOptions';
 import {
   buildTaskRows,
@@ -28,6 +20,7 @@ import {
   groupTaskItems,
   HIDDEN_WHEN_COMPLETED_STATUSES,
 } from './listViewOptions';
+import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import TaskRowIndent from './TaskRowIndent';
 
@@ -76,14 +69,6 @@ const renderTaskListBlock = (rows: TaskRow[], sub?: boolean, routeScope?: TaskIt
   </Block>
 );
 
-const PRIORITY_ICON_MAP = {
-  0: PriorityNoneIcon,
-  1: PriorityUrgentIcon,
-  2: PriorityHighIcon,
-  3: PriorityMediumIcon,
-  4: PriorityLowIcon,
-} as const;
-
 const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
   'assignee',
   'automationMode',
@@ -97,58 +82,9 @@ const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: Tas
   return TASK_GROUP_BY_VALUES.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
 };
 
-const AssigneeLabel = memo<{ agentId: string }>(({ agentId }) => {
-  const displayMeta = useAgentDisplayMeta(agentId);
-  return <>{displayMeta?.title}</>;
-});
-
-const renderGroupPrefix = (group: TaskGroupMeta) => {
-  if (group.groupBy === 'assignee') {
-    if (group.assigneeId) {
-      return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
-    }
-    return <Icon icon={UserRound} size={14} />;
-  }
-
-  if (group.groupBy === 'priority') {
-    const priority = group.priority ?? 0;
-    const PriorityIcon =
-      PRIORITY_ICON_MAP[priority as keyof typeof PRIORITY_ICON_MAP] || PriorityNoneIcon;
-    return (
-      <PriorityIcon
-        color={priority === 1 ? cssVar.orange : cssVar.colorTextDescription}
-        size={16}
-      />
-    );
-  }
-
-  if (group.groupBy === 'automationMode') {
-    return (
-      <Icon
-        color={cssVar.colorTextDescription}
-        icon={group.automationMode === 'heartbeat' ? HeartPulse : CalendarClock}
-        size={16}
-      />
-    );
-  }
-
-  if (group.groupBy === 'status') {
-    const status = group.status ?? 'backlog';
-
-    return <TaskStatusIcon size={16} status={status} />;
-  }
-
-  return null;
-};
-
 const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) => (
   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
-      {renderGroupPrefix(group)}
-      <Text ellipsis weight={500}>
-        {group.assigneeId ? <AssigneeLabel agentId={group.assigneeId} /> : group.label}
-      </Text>
-    </Flexbox>
+    <TaskGroupLabel group={group} />
     <Text fontSize={12} type={'secondary'}>
       {count}
     </Text>

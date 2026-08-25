@@ -54,13 +54,18 @@ export const compressContext =
     const threadId = operation.threadId ?? state.metadata?.threadId;
     const compression = transports.compression;
     const llm = transports.llm;
-    const lastMessage = messages.at(-1);
-    const preservedMessages =
-      messages.length > 1 && lastMessage?.role === 'user' ? [lastMessage] : [];
+    // The latest user turn is the active contract even after assistant/tool steps have followed it.
+    // Keep it verbatim and re-inject it after the summary so compression can never demote a Task's
+    // Current Work instruction into historical prose or reactivate an older objective.
+    const latestUserMessage =
+      messages.length > 1 ? messages.findLast((message) => message.role === 'user') : undefined;
+    const preservedMessages = latestUserMessage ? [latestUserMessage] : [];
     const preservedMessageIds = new Set(
       preservedMessages.map((message) => message.id).filter((id): id is string => Boolean(id)),
     );
-    const messagesToCompress = preservedMessages.length > 0 ? messages.slice(0, -1) : messages;
+    const messagesToCompress = latestUserMessage
+      ? messages.filter((message) => message !== latestUserMessage)
+      : messages;
     const createNextContext = ({
       groupId,
       parentMessageId,

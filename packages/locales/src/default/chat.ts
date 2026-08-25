@@ -329,6 +329,7 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.defaultName': "{{owner}}'s {{product}}",
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
@@ -1799,6 +1800,7 @@ export default {
   'taskList.empty': 'No tasks yet',
   'taskList.emptyHero.greeting': 'What should we tackle today?',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
+  'taskList.form.columns': 'Columns',
   'taskList.form.grouping': 'Grouping',
   'taskList.form.nestedSubTasks': 'Nested sub-tasks',
   'taskList.form.orderCompletedByRecency': 'Sort completed tasks by recency',

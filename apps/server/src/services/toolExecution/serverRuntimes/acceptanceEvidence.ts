@@ -2,6 +2,8 @@ import type { SubmitAcceptanceEvidenceParams } from '@lobechat/builtin-tool-acce
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
@@ -22,9 +24,15 @@ class AcceptanceEvidenceExecutionRuntime {
     if (!params.checkItemId || !params.evidence?.length) {
       return { error: 'INVALID_ARGUMENTS', success: false };
     }
-    if (params.evidence.some((item) => Boolean(item.content) === Boolean(item.fileId))) {
+    if (
+      params.evidence.some(
+        (item) =>
+          [item.content, item.documentId, item.fileId].filter((value) => Boolean(value)).length !==
+          1,
+      )
+    ) {
       return {
-        content: 'Every evidence item must provide exactly one of content or fileId.',
+        content: 'Every evidence item must provide exactly one of content, documentId, or fileId.',
         error: 'INVALID_EVIDENCE',
         success: false,
       };
@@ -42,6 +50,41 @@ class AcceptanceEvidenceExecutionRuntime {
     );
     const item = run?.plan?.find((candidate) => candidate.id === params.checkItemId);
     if (!run || !item) return { error: 'UNKNOWN_CRITERION', success: false };
+
+    const documentIds = [
+      ...new Set(params.evidence.flatMap((evidence) => evidence.documentId ?? [])),
+    ];
+    if (documentIds.length > 0) {
+      const documents = await new DocumentModel(this.db, this.userId, this.workspaceId).findByIds(
+        documentIds,
+      );
+      const existingIds = new Set(documents.map((document) => document.id));
+      const unknownId = documentIds.find((id) => !existingIds.has(id));
+      if (unknownId) {
+        return {
+          content: `Document ${unknownId} does not exist or is not accessible. Use an id from documents.id, not agent_documents.id.`,
+          error: 'UNKNOWN_DOCUMENT',
+          success: false,
+        };
+      }
+    }
+
+    const fileIds = [...new Set(params.evidence.flatMap((evidence) => evidence.fileId ?? []))];
+    if (fileIds.length > 0) {
+      const files = await Promise.all(
+        fileIds.map((fileId) =>
+          new FileModel(this.db, this.userId, this.workspaceId).findById(fileId),
+        ),
+      );
+      const unknownIndex = files.findIndex((file) => !file);
+      if (unknownIndex >= 0) {
+        return {
+          content: `File ${fileIds[unknownIndex]} does not exist or is not accessible. Use an id from files.id.`,
+          error: 'UNKNOWN_FILE',
+          success: false,
+        };
+      }
+    }
 
     const result = await new VerifyCheckResultModel(
       this.db,
@@ -64,6 +107,7 @@ class AcceptanceEvidenceExecutionRuntime {
         checkResultId: result.id,
         content: evidence.content ?? null,
         description: evidence.description ?? null,
+        documentId: evidence.documentId ?? null,
         fileId: evidence.fileId ?? null,
         type: evidence.type,
       })),

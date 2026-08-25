@@ -9,13 +9,17 @@ import type {
 } from '@lobechat/context-engine';
 import type {
   ChatTopicBotContext,
+  EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
-import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type {
+  EvalContext,
+  ServerUserMemoryConfig,
+} from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
 
@@ -427,7 +431,10 @@ export interface OperationCreationParams {
   discordContext?: any;
   /** Whether ContextEngine may inject the operation expertise snapshot. */
   enableExpertise?: boolean;
-  evalContext?: any;
+  /** Evaluation prompt data consumed by Context Engine. */
+  evalContext?: EvalContext;
+  /** Evaluation execution controls consumed by Agent Runtime. */
+  evalRuntime?: EvalRuntimeContext;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
    * Forwarded into `state.metadata.executionPlan` so step-level layers (the
@@ -557,4 +564,8 @@ export interface StartExecutionResult {
   operationId: string;
   scheduled: boolean;
   success: boolean;
+}
+export interface EvalRuntimeContext {
+  caseId?: string;
+  toolForwarding?: EvalToolForwardingConfig;
 }

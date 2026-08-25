@@ -143,6 +143,8 @@ export interface ChatTopicMetadata {
    * written without it can never be attributed afterwards.
    */
   editingGroupId?: string;
+  /** Restored-history tail used as the source message for eval attempt threads. */
+  evalHistoryTailMessageId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start

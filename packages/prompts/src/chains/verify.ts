@@ -244,6 +244,8 @@ export interface JudgeEvidence {
   accessUrl?: string;
   content?: string | null;
   description?: string | null;
+  /** Referenced LobeHub document id. Its readable content is hydrated by the verifier service. */
+  documentId?: string | null;
   /**
    * Stored artifact id (screenshot / video / large text). Inline judges must
    * load supported files into the actual model message; agent verifiers attach
@@ -272,9 +274,11 @@ export const describeEvidence = (evidence: JudgeEvidence[] | undefined): string 
     const caption = e.description ? ` — ${e.description}` : '';
     const payload = e.content
       ? `: ${e.content}`
-      : e.fileId
-        ? ' [artifact attached to this judge request]'
-        : ' [artifact metadata only; contents unavailable]';
+      : e.documentId
+        ? ' [document attached to this judge request]'
+        : e.fileId
+          ? ' [artifact attached to this judge request]'
+          : ' [artifact metadata only; contents unavailable]';
     return `  - (${e.type})${caption}${payload}`;
   });
   return `\nEvidence captured during the run:\n${lines.join('\n')}`;

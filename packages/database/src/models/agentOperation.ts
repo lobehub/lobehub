@@ -1,4 +1,8 @@
-import type { VerifyRunStatus } from '@lobechat/types';
+import type {
+  AgentOperationCompletionReason,
+  AgentOperationStatus,
+  VerifyRunStatus,
+} from '@lobechat/types';
 import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
@@ -55,14 +59,7 @@ export interface ChildUsageRollup {
 
 export interface RecordOperationCompletionParams {
   completedAt?: Date;
-  completionReason?:
-    | 'done'
-    | 'error'
-    | 'interrupted'
-    | 'max_steps'
-    | 'cost_limit'
-    | 'waiting_for_human'
-    | 'waiting_for_async_tool';
+  completionReason?: AgentOperationCompletionReason;
   cost?: Record<string, unknown> | null;
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
@@ -74,8 +71,7 @@ export interface RecordOperationCompletionParams {
   processingTimeMs?: number | null;
   /** Backfill the executed provider — see {@link RecordOperationCompletionParams.model}. */
   provider?: string | null;
-  status:
-    'running' | 'waiting_for_human' | 'waiting_for_async_tool' | 'done' | 'error' | 'interrupted';
+  status: Exclude<AgentOperationStatus, 'idle'>;
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -163,7 +159,7 @@ export class AgentOperationModel {
   async recordCompletion(
     operationId: string,
     params: RecordOperationCompletionParams,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updates: Partial<NewAgentOperation> = {
       completionReason: params.completionReason,
       status: params.status,
@@ -190,10 +186,26 @@ export class AgentOperationModel {
     if (params.interruption !== undefined) updates.interruption = params.interruption;
     if (params.traceS3Key !== undefined) updates.traceS3Key = params.traceS3Key;
 
-    await this.db
+    const [row] = await this.db
       .update(agentOperations)
       .set(updates)
-      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          or(
+            inArray(agentOperations.status, [
+              'running',
+              'waiting_for_human',
+              'waiting_for_async_tool',
+            ]),
+            eq(agentOperations.status, params.status),
+          ),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
   }
 
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
@@ -216,6 +228,48 @@ export class AgentOperationModel {
         ),
       )
       .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /** Refresh the durable liveness lease while an operation owns an execution step. */
+  async touchRunning(operationId: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
+   * Atomically retire an operation whose liveness lease has expired. A concurrent
+   * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
+   */
+  async settleStaleRunning(operationId: string, staleBefore: Date): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
     return Boolean(row);
   }
 

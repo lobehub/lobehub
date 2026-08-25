@@ -21,6 +21,20 @@ export type GoalStatus =
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 
+/** Automatic recovery policy shared by task-carried goals and Goal Graph work. */
+export interface GoalRecoveryPolicy {
+  /** Maximum execution attempts for one Work before escalating to a decision gate. */
+  maxAttemptsPerWork?: number;
+  /** Per-operation agent step limit. Null/undefined leaves the runtime uncapped. */
+  maxStepsPerRun?: number | null;
+  /** Time without a durable runtime lease refresh before a running Work is reclaimed. */
+  operationLeaseTimeoutMs?: number;
+}
+
+export interface GoalConfig {
+  recovery?: GoalRecoveryPolicy;
+}
+
 /**
  * The goal entity as exposed to clients — a mirror of the `goals` table row.
  * Everything execution-specific (rounds run, cost spent, acceptance checks)
@@ -29,6 +43,7 @@ export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 export interface GoalItem {
   agentId: string | null;
   completedAt: Date | null;
+  config: GoalConfig | null;
   createdAt: Date;
   id: string;
   /** Round budget; null = uncapped. */

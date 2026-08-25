@@ -897,7 +897,7 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
-      it('should drop explicitly namespaced tools that were not offered this turn', () => {
+      it('should drop an explicitly namespaced API missing from its manifest', () => {
         const toolCalls = [
           {
             function: { arguments: '{}', name: 'lobe-local-system____submitEvidence' },
@@ -928,35 +928,41 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
-      it('should drop valid explicitly namespaced tools that were not offered this turn', () => {
+      it('should preserve a manifest-backed stale dynamic tool for downstream scope rejection', () => {
         const toolCalls = [
           {
-            function: { arguments: '{}', name: 'lobe-local-system____runCommand' },
+            function: { arguments: '{}', name: 'lobe-remote-device____listOnlineDevices' },
             id: 'call_1',
             type: 'function',
           },
         ];
 
         const manifests = {
-          'lobe-acceptance-evidence': {
-            api: [{ description: '', name: 'submitEvidence', parameters: {} }],
-            identifier: 'lobe-acceptance-evidence',
+          'lobe-activator': {
+            api: [{ description: '', name: 'activateTools', parameters: {} }],
+            identifier: 'lobe-activator',
             meta: {},
             type: 'builtin' as const,
           },
-          'lobe-local-system': {
-            api: [{ description: '', name: 'runCommand', parameters: {} }],
-            identifier: 'lobe-local-system',
+          'lobe-remote-device': {
+            api: [{ description: '', name: 'listOnlineDevices', parameters: {} }],
+            identifier: 'lobe-remote-device',
             meta: {},
             type: 'builtin' as const,
           },
         };
 
-        const result = resolver.resolve(toolCalls, manifests, [
-          'lobe-acceptance-evidence____submitEvidence',
-        ]);
+        const result = resolver.resolve(toolCalls, manifests, ['lobe-activator____activateTools']);
 
-        expect(result).toEqual([]);
+        expect(result).toEqual([
+          {
+            apiName: 'listOnlineDevices',
+            arguments: '{}',
+            id: 'call_1',
+            identifier: 'lobe-remote-device',
+            type: 'builtin',
+          },
+        ]);
       });
 
       it('should accept an explicitly offered tool when no prompt manifest is available', () => {

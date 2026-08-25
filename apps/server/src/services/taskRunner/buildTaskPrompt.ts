@@ -13,7 +13,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
-import { resolveGoalRoundBudget } from '@/server/services/verify/goalBudget';
+import { resolveWorkAttemptBudget } from '@/server/services/goal/recoveryPolicy';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 
 /** Cap on unresolved checks carried into the next round's prompt. */
@@ -31,10 +31,12 @@ const resolveGoalLoopContext = async (
   deps: BuildTaskPromptDeps,
 ): Promise<TaskRunPromptGoalLoop | undefined> => {
   const { db, userId, workspaceId } = deps;
-  const goal = await new GoalModel(db, userId, workspaceId).findBySubject('task', task.id);
+  const goalModel = new GoalModel(db, userId, workspaceId);
+  const taskCarriedGoal = await goalModel.findBySubject('task', task.id);
+  const goal = taskCarriedGoal ?? (await goalModel.findByWorkTask(task.id));
   if (!goal || !task.totalTopics) return undefined;
 
-  const budget = resolveGoalRoundBudget(goal);
+  const budget = resolveWorkAttemptBudget(goal, Boolean(taskCarriedGoal));
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
     round: (task.totalTopics || 0) + 1,

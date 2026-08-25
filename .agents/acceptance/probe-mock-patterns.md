@@ -1422,6 +1422,22 @@ pool instance along the way (the log shows
 `GPU process exited unexpectedly: exit_code=15`), so the order is: fix the port and
 start the server first, then start Electron.
 
+### Renderer OTA: creating a real download delta in dev
+
+**Situation:** verifying renderer OTA incremental download in dev, where the
+"builtin" renderer (`apps/desktop/dist/renderer`) is the same directory the build
+writes to.
+
+**Doesn't work:** rebuild + publish the manifest from `dist/renderer`, then
+trigger a check — the manager diffs against the builtin tree, which now equals
+the manifest tree, so every file is hardlink-reused and 0 files download.
+
+**Works:** snapshot `dist/renderer` before the new build; publish the manifest
+from the fresh build output; then restore the snapshot over `dist/renderer` so
+the local tree differs from the manifest. The check then downloads only the real
+delta. Also: read the feed server's 404 line after boot to learn the exact
+`<channel>/<mainHash>` path the running app expects instead of recomputing it.
+
 ### Dev server, install, and ports
 
 #### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port

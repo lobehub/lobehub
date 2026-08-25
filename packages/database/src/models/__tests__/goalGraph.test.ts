@@ -47,6 +47,25 @@ describe('GoalGraphModel', () => {
     expect(graph?.events.map((event) => event.eventType)).toEqual(['created', 'created', 'linked']);
   });
 
+  it('creates a synthesized node only once when coordinators race', async () => {
+    const goal = await goalModel.create({
+      subjectType: 'standalone',
+      title: 'Concurrent synthesis',
+    });
+    const input = { kind: 'work' as const, title: 'Complete full Goal acceptance' };
+
+    const results = await Promise.all([
+      graphModel.createNodeOnce(goal.id, input),
+      graphModel.createNodeOnce(goal.id, input),
+    ]);
+    const graph = await graphModel.getGraph(goal.id);
+
+    expect(results.filter((result) => result?.created)).toHaveLength(1);
+    expect(new Set(results.map((result) => result?.node.id))).toHaveLength(1);
+    expect(graph?.nodes).toHaveLength(1);
+    expect(graph?.events).toHaveLength(1);
+  });
+
   it('creates and resolves a durable human decision', async () => {
     const goal = await goalModel.create({ subjectType: 'standalone', title: 'Decision goal' });
     const node = await graphModel.createNode(goal.id, {

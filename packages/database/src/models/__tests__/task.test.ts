@@ -451,6 +451,72 @@ describe('TaskModel', () => {
   });
 
   describe('groupList', () => {
+    it('should group tasks by assignee and keep an unassigned column', async () => {
+      const firstAgentId = await createAgent('group-assignee-first');
+      const secondAgentId = await createAgent('group-assignee-second');
+      const model = new TaskModel(serverDB, userId);
+
+      await model.create({ assigneeAgentId: firstAgentId, instruction: 'First assigned task' });
+      await model.create({ assigneeAgentId: secondAgentId, instruction: 'Second assigned task' });
+      await model.create({ instruction: 'Unassigned task' });
+      const completed = await model.create({
+        assigneeAgentId: firstAgentId,
+        instruction: 'Completed task',
+      });
+      await model.updateStatus(completed.id, 'completed', { completedAt: new Date() });
+
+      const result = await model.groupList({
+        excludeStatuses: ['completed', 'canceled'],
+        groupBy: 'assignee',
+      });
+
+      expect(result).toHaveLength(3);
+      expect(result.find((group) => group.key === `assignee:${firstAgentId}`)?.total).toBe(1);
+      expect(result.find((group) => group.key === `assignee:${secondAgentId}`)?.total).toBe(1);
+      const unassigned = result.find((group) => group.key === 'assignee:unassigned');
+      expect(unassigned?.assigneeAgentId).toBeNull();
+      expect(unassigned?.tasks.map((task) => task.instruction)).toEqual(['Unassigned task']);
+
+      const agentScopedResult = await model.groupList({
+        assigneeAgentId: firstAgentId,
+        groupBy: 'assignee',
+      });
+      expect(agentScopedResult.map((group) => group.key)).toEqual([`assignee:${firstAgentId}`]);
+    });
+
+    it('should expose every priority as a kanban drop target', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'High priority', priority: 2 });
+
+      const result = await model.groupList({ groupBy: 'priority' });
+
+      expect(result.map((group) => group.key)).toEqual([
+        'priority:1',
+        'priority:2',
+        'priority:3',
+        'priority:4',
+        'priority:0',
+      ]);
+      expect(result.find((group) => group.key === 'priority:2')?.total).toBe(1);
+      expect(result.find((group) => group.key === 'priority:1')?.total).toBe(0);
+    });
+
+    it('should combine null and zero values in the no-priority group total', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await model.create({ instruction: 'Explicit no priority', priority: 0 });
+      const nullablePriority = await model.create({ instruction: 'Nullable priority' });
+      await serverDB.update(tasks).set({ priority: null }).where(eq(tasks.id, nullablePriority.id));
+
+      const result = await model.groupList({ groupBy: 'priority' });
+      const noPriority = result.find((group) => group.key === 'priority:0');
+
+      expect(noPriority?.total).toBe(2);
+      expect(noPriority?.tasks.map((task) => task.instruction).sort()).toEqual([
+        'Explicit no priority',
+        'Nullable priority',
+      ]);
+    });
+
     it('should return grouped tasks by status', async () => {
       const model = new TaskModel(serverDB, userId);
 

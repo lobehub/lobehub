@@ -1,5 +1,6 @@
-import { API_KEY_PREFIX, BRANDING_NAME, LOBE_CHAT_CLOUD } from '@lobechat/business-const';
+import { BRANDING_NAME, LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { OFFICIAL_URL } from '@lobechat/const/url';
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';

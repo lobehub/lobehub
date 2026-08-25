@@ -1,4 +1,4 @@
-import { API_KEY_PREFIX } from '@lobechat/business-const';
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

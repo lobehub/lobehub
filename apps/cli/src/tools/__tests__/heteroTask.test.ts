@@ -10,10 +10,16 @@ const spawnMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const fsState = vi.hoisted(() => ({ content: undefined as string | undefined }));
 const notifyMutateMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const prepareSpawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
   spawn: spawnMock,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
 }));
 
 vi.mock('node:fs', () => ({
@@ -55,6 +61,26 @@ const getTrpcClientMock = vi.mocked(getTrpcClient);
 vi.mock('../../utils/logger', () => ({
   log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+
+beforeEach(() => {
+  resolveRemotePlatformRuntimeMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv) => ({
+      available: true,
+      execute: vi.fn(),
+      prepareSpawn: (args: string[]) => prepareSpawnMock(type, args, baseEnv),
+    }),
+  );
+  prepareSpawnMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+      args,
+      command: `/resolved/bin/${type}`,
+      env: {
+        ...baseEnv,
+        PATH: '/resolved/bin:/runtime/bin:/usr/bin',
+      },
+    }),
+  );
+});
 
 // ─── Helpers ───
 
@@ -326,6 +352,36 @@ describe('runHeteroTask (openclaw)', () => {
     expect(spawnArgs).toContain('--local');
   });
 
+  it('spawns the resolved OpenClaw executable with its recovered PATH', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-resolved',
+      prompt: 'hello',
+      taskId: 'task-resolved',
+      topicId: 'topic-resolved',
+    });
+
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.any(Array),
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/resolved/bin/openclaw',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      }),
+    );
+  });
+
   it('removes task and ignores already-exited process when killing concurrent task', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw new Error('No such process');
@@ -532,6 +588,36 @@ describe('runHeteroTask (hermes)', () => {
     expect(JSON.parse(fsState.content!)).toEqual({
       'topic-hermes': 'session-continuation',
     });
+  });
+
+  it('spawns the resolved Hermes executable with its recovered PATH', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-resolved',
+      prompt: 'hello',
+      taskId: 'task-resolved',
+      topicId: 'topic-resolved',
+    });
+
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'hermes',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'hermes',
+      ['chat', '--query', 'hello', '--quiet', '--accept-hooks'],
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/resolved/bin/hermes',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      }),
+    );
   });
 
   it('resumes the saved session and replaces it with a continuation id', async () => {

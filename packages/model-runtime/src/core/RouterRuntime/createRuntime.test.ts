@@ -584,6 +584,93 @@ describe('createRouterRuntime', () => {
       );
     });
 
+    it.each<
+      [
+        string,
+        (
+          runtime: InstanceType<ReturnType<typeof createRouterRuntime>>,
+          options: any,
+        ) => Promise<unknown>,
+      ]
+    >([
+      [
+        'chat',
+        (runtime, options) =>
+          runtime.chat({ messages: [], model: 'request-model', temperature: 0.7 }, options),
+      ],
+      [
+        'createImage',
+        (runtime, options) =>
+          runtime.createImage(
+            { model: 'request-model', params: { prompt: 'a cat' } } as any,
+            options,
+          ),
+      ],
+      [
+        'createVideo',
+        (runtime, options) =>
+          runtime.createVideo(
+            { model: 'request-model', params: { prompt: 'a cat' } } as any,
+            options,
+          ),
+      ],
+      [
+        'generateObject',
+        (runtime, options) =>
+          runtime.generateObject(
+            {
+              messages: [],
+              model: 'request-model',
+              schema: { name: 'result', schema: { properties: {}, type: 'object' } },
+            },
+            options,
+          ),
+      ],
+      [
+        'embeddings',
+        (runtime, options) =>
+          runtime.embeddings({ input: 'hello', model: 'request-model' }, options),
+      ],
+      [
+        'textToSpeech',
+        (runtime, options) =>
+          runtime.textToSpeech({ input: 'hello', model: 'request-model', voice: 'alloy' }, options),
+      ],
+    ])(
+      'should forward request pricing context to dynamic routers for %s',
+      async (_method, call) => {
+        class MockRuntime implements LobeRuntimeAI {
+          chat = vi.fn().mockResolvedValue('chat-response');
+          createImage = vi.fn().mockResolvedValue({ imageUrl: 'image-url' });
+          createVideo = vi.fn().mockResolvedValue({ inferenceId: 'video-id' });
+          embeddings = vi.fn().mockResolvedValue([]);
+          generateObject = vi.fn().mockResolvedValue({});
+          textToSpeech = vi.fn().mockResolvedValue('speech-response');
+        }
+
+        const dynamicRoutersFunction = vi.fn(() => [
+          {
+            apiType: 'openai' as const,
+            models: ['request-model'],
+            options: {},
+            runtime: MockRuntime as any,
+          },
+        ]);
+        const Runtime = createRouterRuntime({
+          id: 'test-runtime',
+          routers: dynamicRoutersFunction,
+        });
+        const pricingContext = { plan: 'premium', scope: 'personal' } as const;
+
+        await call(new Runtime(), { pricingContext });
+
+        expect(dynamicRoutersFunction).toHaveBeenCalledWith(expect.any(Object), {
+          model: 'request-model',
+          pricingContext,
+        });
+      },
+    );
+
     it('should throw NoAvailableProvider error when dynamic routers function returns empty array', async () => {
       const emptyRoutersFunction = () => [];
 
@@ -817,6 +904,54 @@ describe('createRouterRuntime', () => {
 
       // Verify chat was called twice (once per option)
       expect(mockChatAlwaysFail).toHaveBeenCalledTimes(2);
+    });
+
+    it('should fallback when a provider reports insufficient account quota', async () => {
+      const attemptedKeys: string[] = [];
+
+      class AccountBalanceRuntime implements LobeRuntimeAI {
+        private readonly apiKey: string;
+
+        constructor(options: { apiKey: string }) {
+          this.apiKey = options.apiKey;
+        }
+
+        chat = vi.fn().mockImplementation(async () => {
+          attemptedKeys.push(this.apiKey);
+
+          if (this.apiKey === 'key-1') {
+            throw {
+              error: {
+                code: 'invalid_request_error',
+                message: 'Insufficient Balance',
+                type: 'unknown_error',
+              },
+              errorType: AgentRuntimeErrorType.InsufficientQuota,
+              status: 402,
+            };
+          }
+
+          return 'success';
+        });
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: AccountBalanceRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 })).resolves.toBe(
+        'success',
+      );
+      expect(attemptedKeys).toEqual(['key-1', 'key-2']);
     });
 
     it('should throw error when options array is empty', async () => {

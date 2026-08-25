@@ -548,6 +548,21 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
 
     expect(persistCompletion).toHaveBeenCalledBefore(dispatch);
   });
+
+  it('does not dispatch hooks when another owner already interrupted the operation', async () => {
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(false);
+    const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await lifecycle.dispatchHooks(
+      'op-reclaimed',
+      { metadata: { _hooks: [] }, status: 'done' },
+      'done',
+    );
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });
 
 describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {

@@ -1,7 +1,7 @@
 import { API_KEY_PREFIX } from '@lobechat/business-const';
 import { describe, expect, it } from 'vitest';
 
-import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
+import { API_KEY_PREFIX, generateApiKey, isApiKeyExpired, validateApiKeyFormat } from './apiKey';
 
 describe('apiKey', () => {
   describe('generateApiKey', () => {
