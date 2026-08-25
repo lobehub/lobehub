@@ -250,7 +250,6 @@ export const dataSlice: StateCreator<
     // only local optimistic updates. Fetching would return empty array and overwrite local data.
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
     const contextKey = messageMapKey(context);
-    const storeContextKeyAtRequest = messageMapKey(get().context);
     const onMessagesChange = get().onMessagesChange;
 
     log(
@@ -272,21 +271,22 @@ export const dataSlice: StateCreator<
         // Fresh in-memory or prefetched data can render without an immediate
         // switch-time revalidation. Missing cache data still fetches because
         // SWR always loads when `data` is undefined.
+        syncBeforePaint: true,
         onData: (data) => {
           if (!data) return;
           if (!context.topicId) return;
 
           const storeContextKey = messageMapKey(get().context);
-          if (storeContextKeyAtRequest !== storeContextKey) {
+          if (contextKey !== storeContextKey) {
             log(
-              '[useFetchMessages] dropped stale result | requestStoreContextKey=%s | storeContextKey=%s',
-              storeContextKeyAtRequest,
+              '[useFetchMessages] deferred result until context switch | requestContextKey=%s | storeContextKey=%s',
+              contextKey,
               storeContextKey,
             );
-            return;
+            return false;
           }
 
-          // Defense-in-depth gate: drop any SWR onData while the
+          // Defense-in-depth gate: defer any SWR onData while the
           // topic is streaming. DB fan-out for chunk writes is async and lags
           // the WS push by anywhere from 100ms to several seconds; an SWR
           // refetch that lands inside that window returns the assistant row
@@ -300,7 +300,7 @@ export const dataSlice: StateCreator<
           // updatedAt comparison degenerates when server's pushed snapshot
           // carries a DB updatedAt equal to a later stale fetch's row.
           if (operationSelectors.isAgentRuntimeRunningByContext(context)(getChatStoreState()))
-            return;
+            return false;
 
           const prevDbMessages = get().dbMessages;
           const activeVoiceMessageIds = new Set(

@@ -38,6 +38,7 @@ import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
+import { useHydratedConversationMessages } from './useHydratedConversationMessages';
 
 const log = debug('lobe-render:agent:ConversationArea');
 
@@ -68,12 +69,9 @@ const Conversation = memo(() => {
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
-  const chatKey = useMemo(
-    () => messageMapKey(context),
-    [context.agentId, context.topicId, context.threadId],
-  );
+  const chatKey = messageMapKey(context);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+  const messages = useHydratedConversationMessages(context);
 
   log('contextKey %s: %o', chatKey, messages);
 

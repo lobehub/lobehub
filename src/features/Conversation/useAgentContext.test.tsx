@@ -12,14 +12,22 @@ import { initialEditorState } from '@/store/document/slices/editor';
 import { useAgentContext } from './useAgentContext';
 
 const activeWorkspaceSlugMock = vi.hoisted(() => ({ value: null as string | null }));
+const coordinateMock = vi.hoisted(
+  () => ['agt_1', 'tpc_1', null] as [string, string | null, string | null],
+);
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => activeWorkspaceSlugMock.value,
 }));
 
+vi.mock('./useAgentConversationCoordinate', () => ({
+  useAgentConversationCoordinate: () => coordinateMock,
+}));
+
 describe('useAgentContext', () => {
   beforeEach(() => {
     activeWorkspaceSlugMock.value = null;
+    coordinateMock.splice(0, coordinateMock.length, 'agt_1', 'tpc_1', null);
     useChatStore.setState(
       {
         ...initialChatState,

@@ -2,11 +2,14 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type PropsWithChildren, useLayoutEffect } from 'react';
+import { type Cache, SWRConfig, unstable_serialize } from 'swr';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
+import { topicKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
@@ -642,6 +645,38 @@ describe('topic action', () => {
   });
 
   describe('useFetchTopics', () => {
+    it('projects a hydrated topic list before the first layout frame', () => {
+      const agentId = 'hydrated-agent';
+      const containerKey = topicMapKey({ agentId });
+      const cachedTopics = [{ id: 'topic-cached', title: 'Cached Topic' }] as ChatTopic[];
+      const cacheKey = topicKeys.list(containerKey, { isInbox: undefined, pageSize: 20 });
+      const cache = new Map([
+        [unstable_serialize(cacheKey), { data: { items: cachedTopics, total: 1 } }],
+      ]);
+      const layoutObservations: Array<ChatTopic[] | undefined> = [];
+      const wrapper = ({ children }: PropsWithChildren) =>
+        createElement(
+          SWRConfig,
+          { value: { provider: () => cache as unknown as Cache } },
+          children,
+        );
+      (topicService.getTopics as Mock).mockReturnValue(new Promise<never>(() => {}));
+
+      const result = renderHook(
+        () => {
+          useChatStore.getState().useFetchTopics(true, { agentId });
+
+          useLayoutEffect(() => {
+            layoutObservations.push(useChatStore.getState().topicDataMap[containerKey]?.items);
+          }, []);
+        },
+        { wrapper },
+      );
+
+      expect(layoutObservations).toEqual([cachedTopics]);
+      result.unmount();
+    });
+
     it('should fetch topics for a given session id', async () => {
       const sessionId = 'test-session-id';
       const topics = [{ id: 'topic-id', title: 'Test Topic' }];

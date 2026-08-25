@@ -57,8 +57,8 @@ export interface CreateStoreParams {
    * context — StoreUpdater resets state in place instead), so this only covers
    * genuine mounts: first navigation to a surface, or hosts that key the whole
    * provider themselves (e.g. eval bench). Without a seed such a mount starts
-   * `messagesInit: false` and only gets populated by a post-paint effect — one
-   * blank frame, i.e. the "message disappears then reappears" flicker.
+   * `messagesInit: false`; a hydrated SWR snapshot is projected before paint,
+   * while a real cache miss remains loading until its request settles.
    * `undefined` means "not fetched yet" (stay uninitialized); `[]` means
    * "loaded, empty".
    */
