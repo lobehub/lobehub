@@ -225,18 +225,36 @@ describe('runChaosExperiment', () => {
     const registry = new ChaosRegistry().registerAdapter({
       cleanup,
       inject: async (context) => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await new Promise((resolve) => setTimeout(resolve, 15));
         return { adapter: 'test', injectionId: context.runId };
       },
       name: 'test',
     });
     const result = await runChaosExperiment({
       environment: 'test',
-      experiment: { ...experiment, timeoutMs: 5 },
+      experiment: { ...experiment, timeoutMs: 10 },
       registry,
     });
     expect(result.status).toBe('failed');
     expect(cleanup).toHaveBeenCalledOnce();
     expect(result.injection?.adapter).toBe('test');
+  });
+
+  it('bounds reconciliation when a timed-out injection never settles', async () => {
+    const cleanup = vi.fn(async () => {});
+    const registry = new ChaosRegistry().registerAdapter({
+      cleanup,
+      inject: async () => new Promise<never>(() => {}),
+      name: 'test',
+    });
+    const startedAt = Date.now();
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, timeoutMs: 5 },
+      registry,
+    });
+    expect(result.status).toBe('failed');
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(cleanup).not.toHaveBeenCalled();
   });
 });

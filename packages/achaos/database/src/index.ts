@@ -14,7 +14,8 @@ export interface DatabaseChaosPort {
 export const createDatabaseChaosAdapter = (port: DatabaseChaosPort): ChaosAdapter => ({
   cleanup: port.restore
     ? async (receipt, context) => {
-        if (receipt.cleanupToken) await port.restore!(receipt.cleanupToken, context);
+        if (!receipt.cleanupToken) throw new Error('Database cleanup requires a mutation snapshot');
+        await port.restore!(receipt.cleanupToken, context);
       }
     : undefined,
   inject: async (context) => {

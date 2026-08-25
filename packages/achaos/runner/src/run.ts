@@ -201,9 +201,14 @@ export const runChaosExperiment = async ({
   } finally {
     if (!injection && injectionPromise && cleanupPolicy === 'always' && adapter.cleanup) {
       try {
-        injection = await injectionPromise;
+        const reconciliationController = new AbortController();
+        injection = await withTimeout(
+          injectionPromise,
+          experiment.timeoutMs,
+          reconciliationController,
+        );
       } catch {
-        // A rejected injection produced no receipt or state to reconcile.
+        // A rejected or still-stuck injection produced no bounded receipt to reconcile.
       }
     }
     const oraclesPassed = oracleResults.every(({ status }) => status === 'passed');
