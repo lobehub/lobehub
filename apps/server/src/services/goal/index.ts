@@ -620,6 +620,7 @@ export class GoalService {
       'Execute only the Current Work contract. Do not implement, validate, or pre-empt any sibling or downstream Work node, even when the overall goal context describes it.',
       'The complete requirements for this Work are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Work; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
       'Create implementation-level subtasks when useful. Finish the operation once the Current Work deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
+      'Make the final delivery self-contained for an independent verifier that may not have workspace access. Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands; file paths and claims that checks passed are not sufficient evidence by themselves.',
       'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',
     ]
       .filter(Boolean)

@@ -84,6 +84,9 @@ describe('GoalService', () => {
     expect(task?.instruction).toContain(
       'Do not invoke Acceptance skills or Acceptance CLI commands',
     );
+    expect(task?.instruction).toContain(
+      'Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands',
+    );
   });
 
   it('gates every responsible task with a work-scoped Acceptance requirement', async () => {
