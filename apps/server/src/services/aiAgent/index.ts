@@ -2595,20 +2595,52 @@ export class AiAgentService {
             userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
-      } else {
+      } else if (appContext?.isolationThread && parentOperationId) {
+        // Isolation-thread children (callAgent / callSubAgent) run on the
+        // SPAWNER's topic and finish long before it does. heteroIngest and
+        // heteroFinish both require this child's operationId to resolve via
+        // topic.metadata.runningOperation (root or childOperations) — see
+        // the comment above childOperation — or every streamed batch is
+        // dropped as stale and the terminal onComplete hooks (including the
+        // callAgent resume bridge) never fire. Nest under the parent's own
+        // marker instead of claiming the topic-level root outright, so the
+        // parent's marker survives for the rest of its still-running turn.
+        const attachedToParent = await this.topicModel.appendRunningOperationChild(
+          topicId,
+          parentOperationId,
+          childOperation,
+        );
+        if (!attachedToParent) {
+          // Parent isn't (or is no longer) the topic's current root marker —
+          // e.g. a nested isolation chain, or the parent already settled.
+          // Fall back to claiming the marker directly so this child is still
+          // discoverable by its own operationId, rather than permanently
+          // unrecognized by heteroIngest/heteroFinish.
+          await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
+        }
+      } else if (!appContext?.isolationThread) {
         await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
       }
 
-      const persistMirrorTarget = async () => {
-        if (!params.topicStartOwnerOperationId) return;
+      // Always persist operation metadata (userId/workspaceId) to the state
+      // manager, not just for topic-owner-mirrored runs. `subAgentCallback`
+      // (the QStash-delivered completion bridge for callAgent/callSubAgent
+      // children) resolves `userId` from this same store to authorize
+      // resuming the parent — without it, a hetero child spawned via
+      // callAgent has no metadata row, the callback 401s, and the parent
+      // operation is never resumed (stays parked until the inactivity
+      // watchdog abandons it).
+      const persistOperationMetadata = async () => {
         try {
           await createAgentStateManager().createOperationMetadata(operationId, {
-            mirrorToOperationId: params.topicStartOwnerOperationId,
+            ...(params.topicStartOwnerOperationId && {
+              mirrorToOperationId: params.topicStartOwnerOperationId,
+            }),
             userId: this.userId,
             workspaceId: this.workspaceId,
           });
         } catch (err) {
-          log('execAgent: failed to persist hetero mirror target: %O', err);
+          log('execAgent: failed to persist hetero operation metadata: %O', err);
         }
       };
 
@@ -2702,7 +2734,7 @@ export class AiAgentService {
 
         // Open the stream channel so the gateway WS subscription can receive
         // notify_update events published by agentNotify.notify.
-        await persistMirrorTarget();
+        await persistOperationMetadata();
         const streamManager = createStreamEventManager();
         await streamManager
           .publishAgentRuntimeInit(operationId, {
@@ -2805,7 +2837,7 @@ export class AiAgentService {
         // the init only powers reconnect, not the run. `createStreamEventManager`
         // probes Redis synchronously, so guard construction too, not just publish.
         try {
-          await persistMirrorTarget();
+          await persistOperationMetadata();
           await createStreamEventManager().publishAgentRuntimeInit(operationId, {
             agentId: resolvedAgentId,
             assistantMessageId: assistantMessageRecord.id,
