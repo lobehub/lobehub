@@ -195,6 +195,7 @@ const TaskSubtasks = memo(() => {
       showContextMenu(
         buildItems({
           assigneeAgentId: subtask.assignee?.id,
+          assigneeUserId: subtask.assigneeUserId,
           identifier: subtask.identifier,
           priority: subtask.priority,
           status: subtask.status,
@@ -202,6 +203,7 @@ const TaskSubtasks = memo(() => {
       );
       installKeyboardHandlers({
         assigneeAgentId: subtask.assignee?.id,
+        assigneeUserId: subtask.assigneeUserId,
         identifier: subtask.identifier,
         priority: subtask.priority,
         status: subtask.status,

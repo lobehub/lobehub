@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import type {
   CreateTaskGoalInput,
@@ -21,6 +22,7 @@ import { TRPCError } from '@trpc/server';
 import { AgentModel } from '@/database/models/agent';
 import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
+import { RbacModel } from '@/database/models/rbac';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -704,6 +706,17 @@ export class TaskService {
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'Assignee user is not a member of this workspace',
+      });
+    }
+
+    const canManageTasks = await new RbacModel(this.db, assigneeUserId).hasAnyPermission(
+      [...TASK_ASSIGNEE_PERMISSION_CODES],
+      { userId: assigneeUserId, workspaceId: this.workspaceId },
+    );
+    if (!canManageTasks) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user cannot manage tasks in this workspace',
       });
     }
   }

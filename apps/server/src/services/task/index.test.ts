@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
+import { RbacModel } from '@/database/models/rbac';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
@@ -29,6 +31,14 @@ vi.mock('@/database/models/taskTopic', () => ({
 
 vi.mock('@/database/models/brief', () => ({
   BriefModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/workspaceMember', () => ({
+  WorkspaceMemberModel: vi.fn(),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -117,6 +127,14 @@ describe('TaskService', () => {
     findByTaskId: vi.fn(),
   };
 
+  const mockRbacModel = {
+    hasAnyPermission: vi.fn().mockResolvedValue(true),
+  };
+
+  const mockWorkspaceMemberModel = {
+    getMember: vi.fn().mockResolvedValue({ role: 'member', userId: 'member-1' }),
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     cancelScheduled.mockResolvedValue(undefined);
@@ -127,6 +145,34 @@ describe('TaskService', () => {
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
     (BriefModel as any).mockImplementation(() => mockBriefModel);
+    (RbacModel as any).mockImplementation(() => mockRbacModel);
+    (WorkspaceMemberModel as any).mockImplementation(() => mockWorkspaceMemberModel);
+  });
+
+  describe('assertAssigneeUserAssignable', () => {
+    it('rejects a workspace member without task write permissions', async () => {
+      mockWorkspaceMemberModel.getMember.mockResolvedValueOnce({
+        role: 'viewer',
+        userId: 'viewer-1',
+      });
+      mockRbacModel.hasAnyPermission.mockResolvedValueOnce(false);
+
+      const service = new TaskService(db, userId, 'workspace-1');
+
+      await expect(service.assertAssigneeUserAssignable('viewer-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockRbacModel.hasAnyPermission).toHaveBeenCalledWith(
+        ['agent:update:all', 'agent:update:owner'],
+        { userId: 'viewer-1', workspaceId: 'workspace-1' },
+      );
+    });
+
+    it('accepts a workspace member with task write permissions', async () => {
+      const service = new TaskService(db, userId, 'workspace-1');
+
+      await expect(service.assertAssigneeUserAssignable('member-1')).resolves.toBeUndefined();
+    });
   });
 
   describe('getTaskDetail', () => {

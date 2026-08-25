@@ -1,4 +1,5 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -179,8 +180,13 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const isPrivateTask = taskVisibility === 'private';
     const members = useMemo(() => {
       if (hideMembers) return [];
-      if (isPrivateTask) return allMembers.filter((member) => member.userId === creatorId);
-      return allMembers;
+      const assignableMembers = allMembers.filter((member) =>
+        canWorkspaceRoleBeTaskAssignee(member.role),
+      );
+      if (isPrivateTask) {
+        return assignableMembers.filter((member) => member.userId === creatorId);
+      }
+      return assignableMembers;
     }, [hideMembers, isPrivateTask, creatorId, allMembers]);
 
     // Workspace bucket: pinned + grouped + ungrouped. In personal mode this is the
