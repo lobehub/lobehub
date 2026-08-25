@@ -112,7 +112,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
     operationFindById.mockResolvedValue({
       agentId: 'builder',
       id: 'op-1',
-      model: 'kimi-code',
+      model: null,
       provider: 'kimi-code',
       taskId: 'task-1',
       topicId: 'topic-1',
