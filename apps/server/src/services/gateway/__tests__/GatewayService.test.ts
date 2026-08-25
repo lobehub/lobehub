@@ -1348,11 +1348,14 @@ describe('GatewayService', () => {
           expect.objectContaining({ connectionId: 'wechat-provider', platform: 'wechat' }),
           { ensure: true },
         );
-        // Not one request to the default host, of any kind.
-        expect(mockGatewayClient.getStats).not.toHaveBeenCalled();
-        expect(mockGatewayClient.getRegisteredIds).not.toHaveBeenCalled();
+        // The default host is read but never acted on. Reading is two admin
+        // requests and wakes nothing; connecting is what wakes a dormant
+        // connection, and that is what must not reach a host which did not
+        // restart. Reading it is what lets this round see connections another
+        // host still owns instead of building duplicates alongside them.
         expect(mockGatewayClient.connect).not.toHaveBeenCalled();
         expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+        expect(mockGatewayClient.disconnectAll).not.toHaveBeenCalled();
       });
 
       it('reports failure when the host admin surface is unreachable', async () => {
@@ -1593,6 +1596,54 @@ describe('GatewayService', () => {
 
         expect(outcome.ok).toBe(true);
         expect(outcome.connected).toBe(0);
+      });
+
+      it('does not duplicate connections another host still owns', async () => {
+        // The cutover window: the platform list already routes wechat to node,
+        // the node gateway restarts and announces, and the default host has
+        // not been drained yet. Building here too would have both hosts
+        // polling the same bot until the next full reconcile.
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+        // Still held by the host it is being migrated away from.
+        mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+
+        await service.reconcileHost('node');
+
+        expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+        // And the out-of-scope host is left alone rather than drained here.
+        expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      });
+
+      it('does not drain a messenger poller from an out-of-scope host', async () => {
+        mockFindAllLinksByPlatform.mockResolvedValue([
+          {
+            applicationId: 'bot-1@im.bot',
+            credentials: { baseUrl: 'https://ilink.test', botId: 'bot-1', botToken: 'tok' },
+            tenantId: 'alice',
+            userId: 'user-1',
+          },
+        ]);
+        mockGatewayClient.getRegisteredIds.mockResolvedValue({
+          ids: ['messenger:wechat:alice:user-user-1'],
+        });
+
+        await service.reconcileHost('node');
+
+        expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+        expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
       });
 
       it('loads only the platforms the scoped host owns', async () => {

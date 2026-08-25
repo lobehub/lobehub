@@ -324,9 +324,8 @@ export class GatewayService {
     // others must not be touched: visiting them would wake connections that
     // were deliberately asleep, spending their resources to answer a question
     // about a host that did not restart.
-    const hosts = getConfiguredMessageGatewayHosts().filter(
-      (host) => !scope || scope.includes(host),
-    );
+    const configured = getConfiguredMessageGatewayHosts();
+    const hosts = configured.filter((host) => !scope || scope.includes(host));
     if (hosts.length === 0) {
       log('Gateway sync: no configured host matches scope %o, nothing to do', scope);
       return outcomes;
@@ -337,8 +336,16 @@ export class GatewayService {
       gateKeeper,
       hosts,
     );
+
+    // Snapshots come from EVERY configured host, even the ones a scoped round
+    // will not act on. Reading a host's admin surface is two requests to it
+    // and wakes nothing — the waking happens in the connect pass, which is
+    // what stays scoped. Reading only the scoped host would blind this round
+    // to connections another host still owns, and it would then build its own
+    // copies alongside them: during a platform migration that is duplicate
+    // delivery, lasting until the next full reconcile.
     const snapshots = new Map<MessageGatewayHost, ActualConnectionsSnapshot | null>();
-    for (const host of hosts) {
+    for (const host of configured) {
       snapshots.set(host, await this.fetchActualConnections(getMessageGatewayClientForHost(host)));
     }
 
@@ -348,7 +355,7 @@ export class GatewayService {
     // so disconnecting there first would take the platform dark until some
     // later round. Only hosts with a complete snapshot are safe destinations.
     const hostsReadyToReceive = new Set(
-      hosts.filter((host) => snapshots.get(host)?.complete === true),
+      configured.filter((host) => snapshots.get(host)?.complete === true),
     );
 
     // Ids a snapshot shows on a host that no longer owns them — i.e. mid-move.
@@ -432,6 +439,7 @@ export class GatewayService {
       gateKeeper,
       snapshots,
       hostsReadyToReceive,
+      new Set(hosts),
     );
     for (const [host, reason] of messengerProblems) {
       const outcome = outcomes.get(host);
@@ -728,6 +736,7 @@ export class GatewayService {
     gateKeeper: KeyVaultsGateKeeper,
     snapshots: Map<MessageGatewayHost, ActualConnectionsSnapshot | null>,
     hostsReadyToReceive: Set<MessageGatewayHost>,
+    actedOn: Set<MessageGatewayHost>,
   ): Promise<Map<MessageGatewayHost, string>> {
     /** host → why its messenger pass could not finish. */
     const problems = new Map<MessageGatewayHost, string>();
@@ -735,10 +744,9 @@ export class GatewayService {
       if (definition.connectionMode !== 'polling') continue;
       const platform = definition.id;
       const host = resolveMessageGatewayHost(platform);
-      // Out of scope this round — `snapshots` only holds the hosts being
-      // visited, so a platform owned elsewhere has nothing to reconcile
-      // against and must not be touched.
-      if (!snapshots.has(host)) continue;
+      // Out of scope this round: another host owns this platform, so it is
+      // not this round's job to reconcile it.
+      if (!actedOn.has(host)) continue;
       const client = getMessageGatewayClientForHost(host);
       if (!client.isEnabled) continue;
 
@@ -833,6 +841,22 @@ export class GatewayService {
           log(
             'Gateway sync[%s]: %s host has no usable snapshot — leaving %d %s connection(s) on %s host',
             host,
+            host,
+            strayIds.length,
+            platform,
+            otherHost,
+          );
+          continue;
+        }
+
+        // Draining a host this round was told not to act on would be a
+        // mutation outside its scope. Leaving those ids marked is enough: the
+        // connect pass skips them, so nothing is duplicated, and they keep
+        // working where they are until a full round moves them properly.
+        if (!actedOn.has(otherHost)) {
+          strayIds.forEach((id) => stillElsewhere.add(id));
+          log(
+            'Gateway sync[%s]: %d %s connection(s) still on the out-of-scope %s host, deferring',
             host,
             strayIds.length,
             platform,
