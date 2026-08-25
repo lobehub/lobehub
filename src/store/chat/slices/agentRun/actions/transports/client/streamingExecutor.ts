@@ -40,7 +40,6 @@ import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
-import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
@@ -600,21 +599,28 @@ export class StreamingExecutorActionImpl {
     // (markTopicUnread / writeTopicStatus 'active'), with `cleanupStaleRunningTopics`
     // as the backstop if this tab dies mid-run.
     if (topicId && !isSubAgent) {
-      // Local optimistic dispatch only — persistence is routed through the
-      // ownership-guarded `claimRunningStatus`, not `updateTopicStatus`'s
-      // unconditional UPDATE. A delayed persist here could otherwise land
-      // AFTER the terminal lifecycle already correctly settled a fast run
-      // back to its terminal status, silently re-stranding surfaces that
-      // read the stored status — see `TopicModel.claimRunningStatus`.
-      this.#get().internal_pinTopicStatus?.({
+      // Deliberately NOT `claimRunningStatus`, unlike the gateway transport.
+      // That guard only writes when the operation's marker is still the topic's
+      // current `metadata.runningOperation` — and this transport never puts a
+      // marker there. The client run executes in the browser; `startOperation`
+      // mints an in-memory `op_<nanoid>` and `sendMessageInServer` persists
+      // messages without touching topic metadata. Only the server runtime
+      // (`execAgent`) and the hetero path write that marker, so a guarded claim
+      // from here can never match and would silently drop the write entirely,
+      // undoing the very reason this call exists (see the note above).
+      //
+      // The unguarded write's own risk — a delayed persist landing after the
+      // terminal status — is unchanged from before #18685 and has no marker to
+      // fence against; it needs the client path to publish a marker first.
+      const runningWrite = this.#get().updateTopicStatus?.({
         agentId,
         groupId,
         ...(scope === 'group' || scope === 'group_agent' ? { scope } : {}),
         status: 'running',
         topicId,
       });
-      topicService.claimRunningStatus(topicId, operationId).catch((error) => {
-        console.error('[streamingExecutor] running status claim failed:', error);
+      void runningWrite?.catch((error) => {
+        console.error('[streamingExecutor] running status write failed:', error);
       });
     }
 
