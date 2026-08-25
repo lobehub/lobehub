@@ -1,8 +1,10 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
+import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { nanoid } from 'nanoid/non-secure';
 
 import { devices } from '../schemas/device';
+import { tasks } from '../schemas/task';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { ResourcePermissionModel } from './resourcePermission';
@@ -100,6 +102,11 @@ export class WorkspaceMemberModel {
         );
 
       await new ResourcePermissionModel(tx, workspaceId).removeMemberGrants(userId);
+
+      await tx
+        .update(tasks)
+        .set({ assigneeUserId: null })
+        .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.assigneeUserId, userId)));
     });
 
     // Surfaced so callers can best-effort unenroll any still-connected gateway
@@ -110,16 +117,28 @@ export class WorkspaceMemberModel {
   };
 
   updateMemberRole = async (workspaceId: string, userId: string, role: MemberRole) => {
-    return this.db
-      .update(workspaceMembers)
-      .set({ role })
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.userId, userId),
-          isNull(workspaceMembers.deletedAt),
-        ),
-      );
+    return this.db.transaction(async (tx) => {
+      const updatedMembers = await tx
+        .update(workspaceMembers)
+        .set({ role })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, userId),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        )
+        .returning({ userId: workspaceMembers.userId });
+
+      if (updatedMembers.length > 0 && !canWorkspaceRoleBeTaskAssignee(role)) {
+        await tx
+          .update(tasks)
+          .set({ assigneeUserId: null })
+          .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.assigneeUserId, userId)));
+      }
+
+      return updatedMembers;
+    });
   };
 
   // ===== Invitations ===== //
