@@ -68,6 +68,7 @@ import type {
   ExecSubAgentParams,
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
+  HeterogeneousTopicModel,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   LobeAgentConfig,
@@ -81,6 +82,7 @@ import type {
 } from '@lobechat/types';
 import {
   AgentGraphSchema,
+  applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   ChatErrorType,
   getActivePluginIds,
@@ -89,6 +91,7 @@ import {
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
+  resolveHeterogeneousProviderTopicModel,
   ThreadStatus,
   ThreadType,
 } from '@lobechat/types';
@@ -2039,6 +2042,11 @@ export class AiAgentService {
     // getTopicModelById).
     let model = agentConfig.model!;
     let provider = agentConfig.provider!;
+    const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+    const heterogeneousTopicModelSnapshot = heterogeneousProvider
+      ? resolveHeterogeneousProviderTopicModel(heterogeneousProvider)
+      : undefined;
+    let pinnedHeterogeneousTopicModel: HeterogeneousTopicModel | undefined;
 
     if (!topicId) {
       if (resume) {
@@ -2081,16 +2089,12 @@ export class AiAgentService {
           : undefined;
 
       const fallbackTitleSource = markdownToTxt(prompt);
-      // A heterogeneous agent has no chat model to snapshot: the external CLI
-      // owns model selection, so `model` here is a stale agent default and
-      // `provider` is NULL (defaulted to the platform chat provider) on every
-      // agent created before the runtime type was stamped on the agent row.
-      // Pin the runtime type and leave the model to the per-run backfill — the
-      // same rule the assistant placeholder below and the client's
-      // `snapshotAgentModel` follow. Detection mirrors the hetero early exit.
+      // Heterogeneous topics use the same snapshot rule as the client: persist
+      // the selected CLI model (including `default`) or user-provider API binding.
+      // Runtimes without a model selector, legacy rows, and Agent-scoped
+      // server-default API configs still pin only the runtime type.
       const heteroSnapshotType =
-        agentConfig.agencyConfig?.heterogeneousProvider?.type ??
-        (isHeterogeneousAgentModelId(model) ? model : undefined);
+        heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
       const newTopic = await this.topicModel.create(
@@ -2106,8 +2110,8 @@ export class AiAgentService {
           groupId: appContext?.groupId,
           metadata,
           // Snapshot the effective model as the topic's pinned model (config).
-          model: heteroSnapshotType ? undefined : model,
-          provider: heteroSnapshotType ?? provider,
+          model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
+          provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
           title:
             title !== undefined
               ? title
@@ -2137,6 +2141,7 @@ export class AiAgentService {
       if (pinnedModel) {
         model = modelOverride || pinnedModel;
         provider = providerOverride || existingTopic?.provider || provider;
+        pinnedHeterogeneousTopicModel = { model, provider };
         log(
           'execAgent: using topic-pinned model=%s provider=%s for topic %s',
           model,
@@ -2475,8 +2480,11 @@ export class AiAgentService {
           : undefined;
       const heteroExecArgs = isLocalHeterogeneousType(heteroType)
         ? buildHeteroExecArgs(
-            agentConfig.agencyConfig?.heterogeneousProvider?.type === heteroType
-              ? agentConfig.agencyConfig.heterogeneousProvider
+            heterogeneousProvider?.type === heteroType
+              ? applyTopicModelToHeterogeneousProvider(
+                  heterogeneousProvider,
+                  pinnedHeterogeneousTopicModel,
+                )
               : { type: heteroType },
           )
         : undefined;

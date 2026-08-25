@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
+  applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   canPublishAgentTopicLink,
@@ -12,6 +13,7 @@ import {
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
   resolveAgentTopicSharePolicy,
+  resolveHeterogeneousProviderTopicModel,
   unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
@@ -113,6 +115,88 @@ describe('pruneWorkingDirByDeviceDeletes', () => {
     expect(() =>
       pruneWorkingDirByDeviceDeletes(undefined, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
+  });
+});
+
+describe('heterogeneous topic models', () => {
+  it('snapshots the persisted selector and Default', () => {
+    expect(
+      resolveHeterogeneousProviderTopicModel({
+        args: ['--model', 'cursor-arg-model'],
+        model: 'stale-structured-model',
+        type: 'cursor',
+      }),
+    ).toEqual({ model: 'stale-structured-model', provider: 'cursor' });
+    expect(resolveHeterogeneousProviderTopicModel({ type: 'cursor' })).toEqual({
+      model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      provider: 'cursor',
+    });
+  });
+
+  it('keeps server-default API models Agent-scoped and ignores stale topic bindings', () => {
+    const config = {
+      apiConfig: { model: 'server-model', source: 'server-default' },
+      authMode: 'api',
+      type: 'claude-code',
+    } as const;
+
+    expect(resolveHeterogeneousProviderTopicModel(config)).toBeUndefined();
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'stale-topic-model',
+        provider: 'anthropic',
+      }),
+    ).toBe(config);
+  });
+
+  it('overrides a CLI model without retaining a conflicting global flag', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      {
+        args: ['--model', 'global-model', '--mode', 'plan'],
+        model: 'global-model',
+        type: 'cursor',
+      },
+      { model: 'topic-model', provider: 'cursor' },
+    );
+
+    expect(effective).toEqual({
+      args: ['--mode', 'plan'],
+      model: 'topic-model',
+      type: 'cursor',
+    });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--mode', 'plan', '--model', 'topic-model']);
+  });
+
+  it('overrides an API binding and drops a provider-specific fast model', () => {
+    expect(
+      applyTopicModelToHeterogeneousProvider(
+        {
+          apiConfig: {
+            model: 'global-model',
+            providerId: 'openai',
+            smallFastModel: 'gpt-4.1-mini',
+          },
+          authMode: 'api',
+          type: 'cursor',
+        },
+        { model: 'topic-model', provider: 'anthropic' },
+      ),
+    ).toMatchObject({
+      apiConfig: { model: 'topic-model', providerId: 'anthropic' },
+      authMode: 'api',
+      type: 'cursor',
+    });
+  });
+
+  it('ignores a topic model pinned for another heterogeneous runtime', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'codex-topic-model',
+        provider: 'codex',
+      }),
+    ).toBe(config);
   });
 });
 

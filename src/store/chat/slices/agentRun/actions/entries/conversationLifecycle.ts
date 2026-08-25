@@ -18,6 +18,7 @@ import type {
   UIChatMessage,
 } from '@lobechat/types';
 import {
+  applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
@@ -1562,12 +1563,16 @@ export class ConversationLifecycleActionImpl {
         } else if (reason === 'binding_changed') {
           toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
         }
+        const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
+          heterogeneousProvider,
+          topic?.model ? { model: topic.model, provider: topic.provider || '' } : undefined,
+        );
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroExecutionAssistantId,
           context: heteroExecutionContext,
           contextSelections: effectiveContextSelections,
-          heterogeneousProvider,
+          heterogeneousProvider: effectiveHeterogeneousProvider,
           imageList: persistedImageList?.length ? persistedImageList : undefined,
           message,
           operationId: heteroOpId,

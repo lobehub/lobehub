@@ -7,7 +7,7 @@ import type {
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
-import { resolveAgentAgencyConfig } from '@lobechat/types';
+import { applyTopicModelToHeterogeneousProvider, resolveAgentAgencyConfig } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
@@ -213,6 +213,14 @@ const runHeterogeneousFromExistingMessage = async (
   else if (reason === 'binding_changed')
     toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
 
+  const topicModel = context.topicId
+    ? topicSelectors.getTopicModelById(context.topicId)(chatStore)
+    : undefined;
+  const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
+    heterogeneousProvider,
+    topicModel,
+  );
+
   const assistantMsg = await messageService.createMessage({
     agentId,
     content: LOADING_FLAT,
@@ -243,7 +251,7 @@ const runHeterogeneousFromExistingMessage = async (
   await executeHeterogeneousAgent(() => useChatStore.getState(), {
     assistantMessageId: assistantMsg.id,
     context,
-    heterogeneousProvider,
+    heterogeneousProvider: effectiveHeterogeneousProvider,
     imageList: imageList?.length ? imageList : undefined,
     message: prompt,
     operationId: heteroOpId,
