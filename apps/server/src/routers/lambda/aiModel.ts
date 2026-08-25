@@ -1,3 +1,5 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import { TRPCError } from '@trpc/server';
 import { type AiProviderModelListItem } from 'model-bank';
 import {
@@ -190,9 +192,25 @@ export const aiModelRouter = router({
         type: input.type,
       };
 
-      return getUserScopedAiProviderModelList(ctx.userId, input.id, options, (scopedOptions) =>
-        ctx.aiInfraRepos.getAiProviderModelList(input.id, scopedOptions),
+      const models = await getUserScopedAiProviderModelList(
+        ctx.userId,
+        input.id,
+        options,
+        (scopedOptions) => ctx.aiInfraRepos.getAiProviderModelList(input.id, scopedOptions),
       );
+
+      // Beta-gated LobeHub models (see isLobeHubModelAvailable) must not appear
+      // in an ungranted user's picker at all — not just be blocked at send time,
+      // the way createImage/createVideo already gate on the same function. Scoped
+      // to the branded provider only; every other provider's list is untouched.
+      if (input.id !== BRANDING_PROVIDER) return models;
+
+      const userEmail = (await UserModel.findById(ctx.serverDB, ctx.userId))?.email;
+      const availability = await Promise.all(
+        models.map((model) => isLobeHubModelAvailable(model.id, model.type, { userEmail })),
+      );
+
+      return models.filter((_, index) => availability[index]);
     }),
 
   removeAiModel: aiModelProcedure

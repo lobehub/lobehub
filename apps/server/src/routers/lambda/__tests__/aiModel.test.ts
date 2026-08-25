@@ -1,15 +1,21 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiModelModel } from '@/database/models/aiModel';
+import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 
 import { aiModelRouter } from '../aiModel';
 
 const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+const mockIsLobeHubModelAvailable = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
   getModelRedirects: vi.fn(async () => ({})),
+}));
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  isLobeHubModelAvailable: mockIsLobeHubModelAvailable,
 }));
 vi.mock('@/database/models/aiModel');
 vi.mock('@/database/models/user');
@@ -36,6 +42,7 @@ describe('aiModelRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
   });
 
   it('should create ai model', async () => {
@@ -162,6 +169,35 @@ describe('aiModelRouter', () => {
       enabled: undefined,
       limit: undefined,
       offset: undefined,
+    });
+    expect(mockIsLobeHubModelAvailable).not.toHaveBeenCalled();
+  });
+
+  it('should filter out beta-gated LobeHub models the user is not authorized for', async () => {
+    const mockModelList = [
+      { id: 'model-1', type: 'chat' },
+      { id: 'model-2-beta', type: 'chat' },
+    ];
+    const mockGetList = vi.fn().mockResolvedValue(mockModelList);
+    vi.mocked(AiInfraRepos).mockImplementation(
+      () =>
+        ({
+          getAiProviderModelList: mockGetList,
+        }) as any,
+    );
+    vi.mocked(UserModel.findById).mockResolvedValue({ email: 'user@example.com' } as any);
+    mockIsLobeHubModelAvailable.mockImplementation(async (id: string) => id !== 'model-2-beta');
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    const result = await caller.getAiProviderModelList({ id: BRANDING_PROVIDER });
+
+    expect(result).toEqual([{ id: 'model-1', type: 'chat' }]);
+    expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('model-1', 'chat', {
+      userEmail: 'user@example.com',
+    });
+    expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('model-2-beta', 'chat', {
+      userEmail: 'user@example.com',
     });
   });
 
