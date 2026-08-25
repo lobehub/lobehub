@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
@@ -271,9 +272,16 @@ describe('StreamingExecutor actions', () => {
       });
 
       const { result } = renderHook(() => useChatStore());
-      const updateTopicStatusSpy = vi
-        .spyOn(result.current, 'updateTopicStatus')
-        .mockResolvedValue(undefined as any);
+      // Run-start persistence now goes through the ownership-guarded
+      // `topicService.claimRunningStatus` instead of `updateTopicStatus`'s
+      // unconditional UPDATE (see `TopicModel.claimRunningStatus`); the local
+      // optimistic dispatch is still `internal_pinTopicStatus`.
+      const pinTopicStatusSpy = vi
+        .spyOn(result.current, 'internal_pinTopicStatus')
+        .mockImplementation(() => {});
+      const claimRunningStatusSpy = vi
+        .spyOn(topicService, 'claimRunningStatus')
+        .mockResolvedValue(true);
 
       const streamSpy = vi
         .spyOn(chatService, 'createAssistantMessageStream')
@@ -298,15 +306,17 @@ describe('StreamingExecutor actions', () => {
         });
       });
 
-      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+      expect(pinTopicStatusSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: TEST_IDS.SESSION_ID,
           status: 'running',
           topicId: TEST_IDS.TOPIC_ID,
         }),
       );
+      expect(claimRunningStatusSpy).toHaveBeenCalledWith(TEST_IDS.TOPIC_ID, expect.any(String));
 
-      updateTopicStatusSpy.mockRestore();
+      pinTopicStatusSpy.mockRestore();
+      claimRunningStatusSpy.mockRestore();
       streamSpy.mockRestore();
     });
 
@@ -316,9 +326,12 @@ describe('StreamingExecutor actions', () => {
       });
 
       const { result } = renderHook(() => useChatStore());
-      const updateTopicStatusSpy = vi
-        .spyOn(result.current, 'updateTopicStatus')
-        .mockResolvedValue(undefined as any);
+      const pinTopicStatusSpy = vi
+        .spyOn(result.current, 'internal_pinTopicStatus')
+        .mockImplementation(() => {});
+      const claimRunningStatusSpy = vi
+        .spyOn(topicService, 'claimRunningStatus')
+        .mockResolvedValue(true);
 
       const streamSpy = vi
         .spyOn(chatService, 'createAssistantMessageStream')
@@ -344,11 +357,13 @@ describe('StreamingExecutor actions', () => {
         });
       });
 
-      expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
+      expect(pinTopicStatusSpy).not.toHaveBeenCalledWith(
         expect.objectContaining({ status: 'running' }),
       );
+      expect(claimRunningStatusSpy).not.toHaveBeenCalled();
 
-      updateTopicStatusSpy.mockRestore();
+      pinTopicStatusSpy.mockRestore();
+      claimRunningStatusSpy.mockRestore();
       streamSpy.mockRestore();
     });
 
