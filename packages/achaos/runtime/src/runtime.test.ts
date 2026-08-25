@@ -5,11 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { createRuntimeChaosAdapter } from './adapter';
 import { deliverCompletionWithChaos } from './completion';
 import { RuntimeChaosController } from './controller';
+import { executeToolAttemptWithChaos } from './toolAttempt';
 import { createBeforeToolCallChaosHandler } from './toolHook';
 
 const contextFor = (
   effect: ChaosExperiment['effect'],
   selector: Record<string, unknown>,
+  options?: { maxInjections?: number; signal?: AbortSignal },
 ): ChaosRunContext => ({
   environment: 'test',
   experiment: {
@@ -19,7 +21,7 @@ const contextFor = (
     id: 'runtime-fault',
     layer: 'L2-agent-runtime',
     oracles: [{ name: 'noop' }],
-    safety: { allowedEnvironments: ['test'] },
+    safety: { allowedEnvironments: ['test'], maxInjections: options?.maxInjections },
     seed: 'seed',
     target: { adapter: 'runtime', selector },
     timeoutMs: 1000,
@@ -27,15 +29,15 @@ const contextFor = (
   },
   random: createSeededRandom('seed'),
   runId: 'run-runtime',
-  signal: new AbortController().signal,
+  signal: options?.signal ?? new AbortController().signal,
 });
 
 describe('runtime chaos adapter', () => {
-  it('injects a deterministic tool failure through beforeToolCall', async () => {
+  it('injects deterministic result replacement through beforeToolCall', async () => {
     const controller = new RuntimeChaosController();
     const adapter = createRuntimeChaosAdapter(controller);
     await adapter.inject(
-      contextFor({ errorType: 'RateLimited', type: 'throw' }, { apiName: 'search' }),
+      contextFor({ content: '{"ok":false}', type: 'replace_result' }, { apiName: 'search' }),
     );
     const mock = vi.fn();
     await createBeforeToolCallChaosHandler(controller)({
@@ -46,8 +48,26 @@ describe('runtime chaos adapter', () => {
       stepIndex: 1,
     });
     expect(mock).toHaveBeenCalledWith({
-      content: JSON.stringify({ error: 'RateLimited', errorType: 'RateLimited' }),
+      content: '{"ok":false}',
     });
+  });
+
+  it('injects one failure inside the retry attempt and honors maxInjections', async () => {
+    const controller = new RuntimeChaosController();
+    await createRuntimeChaosAdapter(controller).inject(
+      contextFor(
+        { errorType: 'RateLimited', type: 'throw' },
+        { apiName: 'search', phase: 'tool_attempt' },
+        { maxInjections: 1 },
+      ),
+    );
+    const execute = vi.fn(async () => 'success');
+    const point = { apiName: 'search', callIndex: 0, operationId: 'op-1', stepIndex: 1 };
+    await expect(executeToolAttemptWithChaos(controller, point, execute)).rejects.toThrow(
+      'RateLimited',
+    );
+    await expect(executeToolAttemptWithChaos(controller, point, execute)).resolves.toBe('success');
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it('duplicates a completion delivery exactly as configured', async () => {
@@ -65,5 +85,27 @@ describe('runtime chaos adapter', () => {
       deliver,
     );
     expect(deliver).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels a delayed completion when the runtime fault is disarmed', async () => {
+    const parent = new AbortController();
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor(
+        { durationMs: 60_000, type: 'delay' },
+        { operationId: 'op-delayed', phase: 'completion' },
+        { signal: parent.signal },
+      ),
+    );
+    const deliver = vi.fn(async () => {});
+    const pending = deliverCompletionWithChaos(
+      controller,
+      { operationId: 'op-delayed', payload: {} },
+      deliver,
+    );
+    await adapter.cleanup!(receipt, contextFor({ type: 'drop' }, {}));
+    await expect(pending).rejects.toThrow('Chaos fault disarmed');
+    expect(deliver).not.toHaveBeenCalled();
   });
 });

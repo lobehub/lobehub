@@ -12,7 +12,7 @@ target:
   adapter: runtime
   selector:
     apiName: search
-    phase: before_tool_call
+    phase: tool_attempt
 trigger:
   when: before
   probability: 1

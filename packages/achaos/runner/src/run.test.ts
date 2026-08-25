@@ -51,6 +51,23 @@ describe('runChaosExperiment', () => {
     expect(cleanup).toHaveBeenCalledOnce();
   });
 
+  it('defaults programmatic experiments to always cleanup', async () => {
+    const cleanup = vi.fn(async () => {});
+    const registry = new ChaosRegistry()
+      .registerAdapter({
+        cleanup,
+        inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
+        name: 'test',
+      })
+      .registerOracle({
+        evaluate: async () => ({ message: 'healthy', name: 'healthy', status: 'passed' }),
+        name: 'healthy',
+      });
+    const { cleanup: _cleanup, ...withoutCleanup } = experiment;
+    await runChaosExperiment({ environment: 'test', experiment: withoutCleanup, registry });
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it('blocks environments outside the blast-radius policy', async () => {
     const registry = new ChaosRegistry().registerAdapter({ inject: vi.fn(), name: 'test' });
     const result = await runChaosExperiment({ environment: 'production', experiment, registry });

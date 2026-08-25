@@ -95,6 +95,7 @@ export const runChaosExperiment = async ({
   }
 
   const adapter = registry.resolveAdapter(experiment.target.adapter);
+  const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
   let error: unknown;
 
@@ -128,7 +129,7 @@ export const runChaosExperiment = async ({
     const shouldCleanup =
       injection &&
       adapter.cleanup &&
-      (experiment.cleanup === 'always' || (experiment.cleanup === 'on_success' && !error));
+      (cleanupPolicy === 'always' || (cleanupPolicy === 'on_success' && !error));
     if (shouldCleanup) {
       record('cleanup_started');
       try {
