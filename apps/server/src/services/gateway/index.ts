@@ -368,7 +368,7 @@ export class GatewayService {
 
     for (const host of hosts) {
       const snapshot = snapshots.get(host) ?? null;
-      const { connected, failed } = await this.connectHostConnections({
+      const { connected, failed, unestablished } = await this.connectHostConnections({
         counts: drainCounts.get(host) ?? { gatedDisconnected: 0, gatedSize: 0, stale: 0 },
         currentlyElsewhere,
         desired,
@@ -377,17 +377,21 @@ export class GatewayService {
         snapshot,
       });
 
-      // Everything that makes this round non-authoritative. The periodic
-      // reconcile shrugs these off and retries later; a caller waiting on a
-      // rebuild must not be told the fleet is back when it is not.
+      // Success is defined positively — every connection this host is
+      // supposed to hold now exists — rather than as a list of known failure
+      // modes. A blacklist has to be extended every time a new way of not
+      // connecting is added (a rejected connect, missing credentials, a
+      // platform that would not load), and each omission silently reports a
+      // rebuild that did not happen. `unestablished` counts desired entries
+      // this round could not turn into a connection, whatever the reason.
       const reason = !snapshot
         ? 'admin snapshot unavailable'
         : !snapshot.complete
           ? 'registry snapshot incomplete'
           : !desiredComplete
             ? 'desired set incomplete'
-            : failed > 0
-              ? `${failed} connection(s) failed`
+            : unestablished > 0
+              ? `${unestablished} connection(s) not established`
               : undefined;
 
       outcomes.set(host, { connected, failed, ok: !reason, reason });
@@ -501,7 +505,7 @@ export class GatewayService {
     drainedThisRound: Set<string>;
     host: MessageGatewayHost;
     snapshot: ActualConnectionsSnapshot | null;
-  }): Promise<{ connected: number; failed: number }> {
+  }): Promise<{ connected: number; failed: number; unestablished: number }> {
     const { counts, currentlyElsewhere, drainedThisRound, host, snapshot: actual } = params;
     const client = getMessageGatewayClientForHost(host);
     const desired = this.hostDesiredSlice(params.desired, host);
@@ -510,6 +514,8 @@ export class GatewayService {
     let deferred = 0;
     let skipped = 0;
     let failed = 0;
+    /** Desired here, but nothing this round could turn into a connection. */
+    let unconnectable = 0;
 
     // Registered-only wake candidates are SAMPLED, not taken head-first: the
     // desired map iterates in a stable order, and parked connections (409,
@@ -538,6 +544,7 @@ export class GatewayService {
           // fail — leave whatever connection state the gateway already holds.
           if (Object.keys(provider.credentials).length === 0) {
             skipped++;
+            unconnectable++;
             log('Gateway sync: %s credentials unavailable, skipping connect', provider.id);
             return;
           }
@@ -654,7 +661,7 @@ export class GatewayService {
       registeredOnlyDeferred,
     );
 
-    return { connected, failed };
+    return { connected, failed, unestablished: failed + unconnectable };
   }
 
   /**
@@ -931,7 +938,13 @@ export class GatewayService {
         failed,
       );
 
-      if (failed > 0) problems.set(host, `${failed} ${platform} link(s) failed`);
+      // Same positive definition as the bot-provider pass: a link that is
+      // desired but has no usable credentials was not rebuilt either, and a
+      // key-vault failure lands every link here rather than in `failed`.
+      const unestablished = failed + unusable.size;
+      if (unestablished > 0) {
+        problems.set(host, `${unestablished} ${platform} link(s) not established`);
+      }
     }
 
     return problems;

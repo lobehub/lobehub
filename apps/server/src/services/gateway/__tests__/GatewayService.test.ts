@@ -1429,7 +1429,50 @@ describe('GatewayService', () => {
         const outcome = await service.reconcileHost('node');
 
         expect(outcome.ok).toBe(false);
-        expect(outcome.reason).toMatch(/link\(s\) failed/i);
+        expect(outcome.reason).toMatch(/not established/i);
+      });
+
+      it('reports failure when a provider cannot be connected for lack of credentials', async () => {
+        // A key-vault failure decrypts to nothing. The provider stays desired
+        // (so the stale pass leaves it alone) and the connect is skipped —
+        // but skipped is not rebuilt, and a gateway told otherwise stops
+        // retrying with that connection still missing.
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: {},
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/not established/i);
+      });
+
+      it('reports failure when a messenger link has no usable credentials', async () => {
+        mockFindAllLinksByPlatform.mockResolvedValue([
+          {
+            applicationId: 'bot-1@im.bot',
+            credentials: {},
+            tenantId: 'alice',
+            userId: 'user-1',
+          },
+        ]);
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/not established/i);
       });
 
       it('reports success for a host that legitimately owns nothing', async () => {
