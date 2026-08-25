@@ -9,7 +9,7 @@ import type {
   ChaosTimelineEvent,
   ChaosTimelineEventType,
 } from '@achaos/core';
-import { createSeededRandom } from '@achaos/core';
+import { chaosExperimentSchema, createSeededRandom } from '@achaos/core';
 
 import type { ChaosRegistry } from './registry';
 
@@ -69,6 +69,28 @@ export const runChaosExperiment = async ({
   const controller = new AbortController();
   const record = (type: ChaosTimelineEventType, data?: Record<string, unknown>) =>
     timeline.push({ at: now().toISOString(), data, type });
+
+  record('run_started', { environment });
+
+  const parsedExperiment = chaosExperimentSchema.safeParse(experiment);
+  if (!parsedExperiment.success) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'invalid_experiment' });
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      error: { message: parsedExperiment.error.message, name: 'ChaosConfigError' },
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'aborted',
+      timeline,
+    };
+  }
+  experiment = parsedExperiment.data;
+
   const context: ChaosRunContext = {
     environment,
     experiment,
@@ -76,8 +98,6 @@ export const runChaosExperiment = async ({
     runId,
     signal: controller.signal,
   };
-
-  record('run_started', { environment });
 
   if (!experiment.safety.allowedEnvironments.includes(environment)) {
     const finishedAt = now();

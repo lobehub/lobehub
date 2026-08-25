@@ -24,16 +24,20 @@ export const createStateAdapter = (state: AgentChaosTestState): ChaosAdapter => 
   cleanup: async (receipt) => {
     const previousLease = receipt.cleanupToken?.operationLease;
     const previous = receipt.cleanupToken?.operationStatus;
+    const previousToolResult = receipt.cleanupToken?.toolResult;
     if (previousLease === 'active' || previousLease === 'stale') {
       state.operationLease = previousLease;
     }
     if (previous === 'running' || previous === 'abandoned' || previous === 'done') {
       state.operationStatus = previous;
     }
+    if (typeof previousToolResult === 'string') state.toolResult = previousToolResult;
+    else delete state.toolResult;
   },
   inject: async (context) => {
     const previousLease = state.operationLease;
     const previous = state.operationStatus;
+    const previousToolResult = state.toolResult;
     if (context.experiment.effect.type === 'throw') {
       state.toolResult = JSON.stringify({ errorType: context.experiment.effect.errorType });
     }
@@ -45,7 +49,11 @@ export const createStateAdapter = (state: AgentChaosTestState): ChaosAdapter => 
     }
     return {
       adapter: 'state',
-      cleanupToken: { operationLease: previousLease, operationStatus: previous },
+      cleanupToken: {
+        operationLease: previousLease,
+        operationStatus: previous,
+        toolResult: previousToolResult,
+      },
       injectionId: `${context.runId}:state`,
     };
   },

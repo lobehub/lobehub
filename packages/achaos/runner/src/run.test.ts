@@ -163,6 +163,22 @@ describe('runChaosExperiment', () => {
     expect(result.error?.name).toBe('ChaosConfigError');
   });
 
+  it('validates numeric constraints on programmatic experiments', async () => {
+    const inject = vi.fn();
+    const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: {
+        ...experiment,
+        effect: { count: 0, type: 'duplicate' },
+      } as ChaosExperiment,
+      registry,
+    });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosConfigError');
+    expect(inject).not.toHaveBeenCalled();
+  });
+
   it('reports an unselected probabilistic trigger as inconclusive', async () => {
     const inject = vi.fn();
     const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });

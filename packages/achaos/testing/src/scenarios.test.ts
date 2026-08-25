@@ -41,4 +41,31 @@ describe('first-phase deterministic scenarios', () => {
     expect(state.operationLease).toBe('stale');
     expect(state.operationStatus).toBe('abandoned');
   });
+
+  it('restores the prior tool result after an always-cleanup experiment', async () => {
+    const state = createAgentChaosTestState();
+    state.toolResult = 'baseline';
+    const registry = new ChaosRegistry().registerAdapter(createStateAdapter(state)).registerOracle(
+      createStateOracle(state, 'tool-failure-observed', (current) => ({
+        message: current.toolResult ?? 'missing tool result',
+        passed: current.toolResult?.includes('RateLimited') ?? false,
+      })),
+    );
+    const experiment: ChaosExperiment = {
+      cleanup: 'always',
+      description: 'Inject a transient tool failure',
+      effect: { errorType: 'RateLimited', type: 'throw' },
+      id: 'tool-failure-cleanup',
+      layer: 'L1-model-runtime',
+      oracles: [{ name: 'tool-failure-observed' }],
+      safety: { allowedEnvironments: ['test'] },
+      seed: 'tool-failure-cleanup-v1',
+      target: { adapter: 'state', selector: {} },
+      timeoutMs: 1000,
+      trigger: { when: 'immediate' },
+    };
+    const result = await runChaosExperiment({ environment: 'test', experiment, registry });
+    expect(result.status).toBe('passed');
+    expect(state.toolResult).toBe('baseline');
+  });
 });
