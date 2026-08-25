@@ -12,8 +12,8 @@ export const createProcessChaosAdapter = ({
 }: ProcessChaosAdapterOptions): ChaosAdapter => ({
   inject: async (context) => {
     const pid = context.experiment.target.selector.pid;
-    if (typeof pid !== 'number' || !Number.isInteger(pid))
-      throw new Error('Process target requires an integer pid');
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0)
+      throw new Error('Process target requires a positive integer pid');
     if (!allowedPids.has(pid)) throw new Error(`PID ${pid} is not owned by this chaos run`);
     if (!context.experiment.safety.destructive)
       throw new Error('kill_process requires safety.destructive=true');

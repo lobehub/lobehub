@@ -179,6 +179,22 @@ describe('runChaosExperiment', () => {
     expect(inject).not.toHaveBeenCalled();
   });
 
+  it('returns a structured configuration failure for an unknown adapter', async () => {
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment,
+      registry: new ChaosRegistry(),
+    });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosConfigError');
+    expect(result.timeline.at(-1)).toEqual(
+      expect.objectContaining({
+        data: { reason: 'adapter_not_registered' },
+        type: 'run_completed',
+      }),
+    );
+  });
+
   it('reports an unselected probabilistic trigger as inconclusive', async () => {
     const inject = vi.fn();
     const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });

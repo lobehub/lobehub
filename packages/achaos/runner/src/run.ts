@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  ChaosAdapter,
   ChaosExercise,
   ChaosExperiment,
   ChaosOracleResult,
@@ -178,7 +179,25 @@ export const runChaosExperiment = async ({
     };
   }
 
-  const adapter = registry.resolveAdapter(experiment.target.adapter);
+  let adapter: ChaosAdapter;
+  try {
+    adapter = registry.resolveAdapter(experiment.target.adapter);
+  } catch (adapterError) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'adapter_not_registered' });
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      error: { ...serializeError(adapterError), name: 'ChaosConfigError' },
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'aborted',
+      timeline,
+    };
+  }
   const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
   let injectionPromise: ReturnType<typeof adapter.inject> | undefined;
