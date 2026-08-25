@@ -1,6 +1,6 @@
 # Goal Chaos integration
 
-Goal consumes Agent Chaos through application-owned adapters. `@chaos/*` must not import Goal,
+Goal consumes Agent Chaos through application-owned adapters. `@achaos/*` must not import Goal,
 Task, Drizzle schemas, QStash, or server services.
 
 ## Test harness
@@ -10,7 +10,7 @@ Place concrete integration code under `apps/server/src/services/goal/__chaos__/`
 1. Arrange a real Goal Graph, Work Task, Topic and Agent Operation in `getTestDB()`.
 2. Register `createRuntimeChaosHooks(controller)` on the operation when the fault is inside an
    Agent Runtime step or tool call.
-3. Register an application `@chaos/database` port for scoped lease/state mutations.
+3. Register an application `@achaos/database` port for scoped lease/state mutations.
 4. Drive the production action (`GoalService.tick`, completion ingestion, scheduled wake, or
    human decision) as the runner exercise.
 5. Evaluate persisted state with application-owned oracles; never use the builder Agent's text as

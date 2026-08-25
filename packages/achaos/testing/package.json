@@ -1,0 +1,20 @@
+{
+  "name": "@achaos/testing",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --silent='passed-only'"
+  },
+  "dependencies": {
+    "@achaos/core": "workspace:*",
+    "@achaos/runner": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.6"
+  }
+}
