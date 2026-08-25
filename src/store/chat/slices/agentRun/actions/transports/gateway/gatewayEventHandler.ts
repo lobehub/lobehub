@@ -386,6 +386,12 @@ export const createGatewayEventHandler = (
     gatewayOperationId?: string;
     operationId: string;
     /**
+     * Settle the persisted topic row as soon as the runtime terminal arrives.
+     * The Gateway session may stay connected after `agent_runtime_end`, so
+     * waiting for `onSessionComplete` can leave the topic stuck `running`.
+     */
+    onRunTerminal?: (event: { succeeded: boolean }) => Promise<void>;
+    /**
      * Shared run lifecycle for this run, assembled by the caller (gateway.ts).
      * Only the gateway transport supplies it — it drives the terminal lifecycle
      * (completeRun / afterRunComplete) here. hetero reuses this handler ONLY for
@@ -406,7 +412,7 @@ export const createGatewayEventHandler = (
     runtimeType?: 'gateway' | 'hetero';
   },
 ) => {
-  const { context, operationId, runLifecycle } = params;
+  const { context, onRunTerminal, operationId, runLifecycle } = params;
   const gatewayOperationId = params.gatewayOperationId ?? operationId;
   const runtimeType = params.runtimeType ?? 'gateway';
 
@@ -1179,6 +1185,7 @@ export const createGatewayEventHandler = (
               ...lifecycleEventBase,
               status,
             });
+            await onRunTerminal?.({ succeeded: status === 'completed' });
             if (!requeued && status === 'completed') {
               // Notification body, resolved most-authoritative first:
               //
@@ -1259,6 +1266,7 @@ export const createGatewayEventHandler = (
           // legacy completeOperation for any other caller for safety.
           if (runtimeType === 'gateway' && runLifecycle) {
             await runLifecycle.completeRun({ ...lifecycleEventBase, status: 'failed' });
+            await onRunTerminal?.({ succeeded: false });
           } else {
             get().completeOperation(operationId);
           }

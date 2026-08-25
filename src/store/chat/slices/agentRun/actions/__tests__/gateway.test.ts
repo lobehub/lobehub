@@ -27,7 +27,7 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
-    settleRunningOperation: vi.fn().mockResolvedValue(undefined),
+    settleRunningOperation: vi.fn().mockResolvedValue({ status: 'settled' }),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -168,7 +168,9 @@ function createTestAction() {
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
-    vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
+    vi.mocked(topicService.settleRunningOperation).mockResolvedValue({
+      status: 'settled',
+    } as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
@@ -1243,17 +1245,18 @@ describe('GatewayActionImpl', () => {
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       // Ignore any dispatches from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
-
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
-      expect(internalDispatchTopic).toHaveBeenCalledWith({
-        agentId: 'agent-1',
-        groupId: undefined,
-        id: 'topic-1',
-        type: 'updateTopic',
-        value: { metadata: { model: 'gpt-4', runningOperation: null } },
-      });
+      await vi.waitFor(() =>
+        expect(internalDispatchTopic).toHaveBeenCalledWith({
+          agentId: 'agent-1',
+          groupId: undefined,
+          id: 'topic-1',
+          scope: undefined,
+          type: 'updateTopic',
+          value: { metadata: { model: 'gpt-4', runningOperation: null }, status: 'active' },
+        }),
+      );
     });
 
     // Background completion: the run's owning agent bucket must be targeted even
@@ -1330,21 +1333,22 @@ describe('GatewayActionImpl', () => {
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
-
       // The user switched away before the run finished in the background.
       state.activeAgentId = 'agent-2';
       state.activeTopicId = null;
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
-      expect(internalDispatchTopic).toHaveBeenCalledWith({
-        agentId: 'agent-1',
-        groupId: undefined,
-        id: 'topic-1',
-        type: 'updateTopic',
-        value: { metadata: { model: 'gpt-4', runningOperation: null } },
-      });
+      await vi.waitFor(() =>
+        expect(internalDispatchTopic).toHaveBeenCalledWith({
+          agentId: 'agent-1',
+          groupId: undefined,
+          id: 'topic-1',
+          scope: undefined,
+          type: 'updateTopic',
+          value: { metadata: { model: 'gpt-4', runningOperation: null }, status: 'active' },
+        }),
+      );
     });
 
     // A late close may observe a stale local marker even after another tab has
@@ -1425,7 +1429,9 @@ describe('GatewayActionImpl', () => {
       internalDispatchTopic.mockClear();
       updateTopicStatus.mockClear();
       vi.mocked(topicService.settleRunningOperation).mockClear();
-      vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
+      vi.mocked(topicService.settleRunningOperation).mockResolvedValue({
+        status: 'conflict',
+      } as never);
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
@@ -1827,17 +1833,19 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
-        .mockClear()
-        .mockResolvedValue(undefined as never);
+      vi.mocked(topicService.settleRunningOperation).mockClear();
       captured.onSessionComplete!({ authFailed: false, succeeded: true, terminalReceived: true });
 
       // The run lifecycle owns completion when a terminal event arrives, so the
       // reconnect path must not double-complete its local op here.
       expect(completeOperation).not.toHaveBeenCalled();
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        runningOperation: null,
-      });
+      await vi.waitFor(() =>
+        expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+          'topic-1',
+          'server-op-1',
+          'active',
+        ),
+      );
     });
 
     // auth_failed (or a failed token refresh) is authoritative that the op is
@@ -1853,15 +1861,17 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
-        .mockClear()
-        .mockResolvedValue(undefined as never);
+      vi.mocked(topicService.settleRunningOperation).mockClear();
       captured.onSessionComplete!({ authFailed: true, succeeded: false, terminalReceived: false });
 
       expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        runningOperation: null,
-      });
+      await vi.waitFor(() =>
+        expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+          'topic-1',
+          'server-op-1',
+          'active',
+        ),
+      );
     });
 
     // Seeds a topic whose local metadata still carries a runningOperation, wires up
@@ -1983,16 +1993,18 @@ describe('GatewayActionImpl', () => {
       });
 
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
       captured.onSessionComplete!({ authFailed: false, succeeded: false, terminalReceived: true });
 
-      expect(internalDispatchTopic).toHaveBeenCalledWith({
-        agentId: 'agent-1',
-        groupId: undefined,
-        id: 'topic-1',
-        type: 'updateTopic',
-        value: { metadata: { model: 'gpt-4', runningOperation: null } },
-      });
+      await vi.waitFor(() =>
+        expect(internalDispatchTopic).toHaveBeenCalledWith({
+          agentId: 'agent-1',
+          groupId: undefined,
+          id: 'topic-1',
+          scope: undefined,
+          type: 'updateTopic',
+          value: { metadata: { model: 'gpt-4', runningOperation: null }, status: 'active' },
+        }),
+      );
     });
 
     // An ambiguous close (no terminal event, no auth failure) must NOT clear the

@@ -814,6 +814,13 @@ export class GatewayActionImpl {
       // the same WS that gatewayConnections is keyed on.
       gatewayOperationId: result.operationId,
       operationId: gatewayOpId,
+      onRunTerminal: ({ succeeded }) =>
+        this.settleTopicOperation({
+          context: resolvedMessageContext,
+          operationId: result.operationId,
+          succeeded,
+          topicId: result.topicId,
+        }),
       // Shared run lifecycle: drives the terminal completeRun / afterRunComplete
       // for the gateway transport (op completion + unread + queue drain +
       // notification) at `agent_runtime_end` / `error`.
@@ -849,30 +856,12 @@ export class GatewayActionImpl {
         // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
-        if (result.topicId) {
-          // A clean completion the user isn't watching is owned by
-          // `markTopicUnread` (status: 'unread'). Every other case (viewing,
-          // error, abort) settles the running state back to 'active'. The server
-          // compares the operation id under the topic row lock so a late close
-          // from another tab cannot clear or settle a newer run.
-          const viewing = this.#get().activeTopicId === result.topicId;
-          topicService
-            .settleRunningOperation(
-              result.topicId,
-              result.operationId,
-              viewing || !succeeded ? 'active' : 'unread',
-            )
-            .catch(console.error);
-          // Also clear the local store copy — the server clear above does NOT touch
-          // the Zustand topic map that useGatewayReconnect reads. Ownership-guarded
-          // on its own, so it is safe to call either way.
-          this.clearLocalRunningOperation({
-            agentId: resolvedMessageContext.agentId,
-            groupId: resolvedMessageContext.groupId,
-            operationId: result.operationId,
-            topicId: result.topicId,
-          });
-        }
+        void this.settleTopicOperation({
+          context: resolvedMessageContext,
+          operationId: result.operationId,
+          succeeded,
+          topicId: result.topicId,
+        });
         onComplete?.();
       },
       operationId: result.operationId,
@@ -1003,6 +992,8 @@ export class GatewayActionImpl {
       // the same WS that gatewayConnections is keyed on.
       gatewayOperationId: operationId,
       operationId: gatewayOpId,
+      onRunTerminal: ({ succeeded }) =>
+        this.settleTopicOperation({ context, operationId, succeeded, topicId }),
       runLifecycle: buildRunLifecycle(this.#get, {
         context,
         parentMessageId: assistantMessageId,
@@ -1047,33 +1038,7 @@ export class GatewayActionImpl {
         // the local op never sticks `running`.
         if (authFailed) this.#get().completeOperation(gatewayOpId);
 
-        // Same supersede guard as executeGatewayAgent's onSessionComplete: a
-        // newer run may own this topic by now, and both writes below are
-        // unconditional stomps that would retire it mid-flight.
-        const superseded = this.#isSupersededRunningOperation({
-          agentId: context.agentId,
-          operationId,
-          topicId,
-        });
-
-        // See executeGatewayAgent's onSessionComplete: a clean background
-        // completion is left to markTopicUnread (status: 'unread').
-        const viewing = this.#get().activeTopicId === topicId;
-        if (!superseded && (viewing || !succeeded)) {
-          void this.#get().updateTopicStatus?.({
-            agentId: context.agentId,
-            status: 'active',
-            topicId,
-          });
-        }
-        // Clear the persisted marker useGatewayReconnect keys off so a dead op
-        // doesn't get reconnected on every reload / task-drawer open.
-        if (!superseded) {
-          topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
-        }
-        // Mirror the clear into the local store — the server clear above leaves the
-        // Zustand topic map stale, which useGatewayReconnect keys off.
-        this.clearLocalRunningOperation({ agentId: context.agentId, operationId, topicId });
+        void this.settleTopicOperation({ context, operationId, succeeded, topicId });
       },
       operationId,
       resumeOnConnect: true,
@@ -1117,6 +1082,50 @@ export class GatewayActionImpl {
       });
   };
 
+  private settleTopicOperation = async (params: {
+    context: ConversationContext;
+    operationId: string;
+    succeeded: boolean;
+    topicId: string;
+  }): Promise<void> => {
+    const { context, operationId, succeeded, topicId } = params;
+    const status = this.#get().activeTopicId === topicId || !succeeded ? 'active' : 'unread';
+    const result = await topicService
+      .settleRunningOperation(topicId, operationId, status)
+      .catch((error) => {
+        console.error('[Gateway] failed to settle topic operation:', error);
+        return undefined;
+      });
+    if (!result || result.status === 'conflict') return;
+
+    const state = this.#get();
+    const scope =
+      context.scope === 'group' || context.scope === 'group_agent' ? context.scope : undefined;
+    const key = topicMapKey({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      scope,
+    });
+    const topic = state.topicDataMap[key]?.items?.find((item) => item.id === topicId);
+    const localOwner = topic?.metadata?.runningOperation?.operationId;
+    if (!topic || (localOwner && localOwner !== operationId)) return;
+
+    state.internal_dispatchTopic({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      id: topicId,
+      scope,
+      type: 'updateTopic',
+      value: {
+        metadata:
+          localOwner === operationId
+            ? { ...topic.metadata, runningOperation: null }
+            : topic.metadata,
+        status,
+      },
+    });
+  };
+
   /**
    * Clear the client-store copy of `topic.metadata.runningOperation`.
    *
@@ -1138,35 +1147,6 @@ export class GatewayActionImpl {
    * user switched agent/group, when the active-bucket `getTopicById` would miss the topic
    * and leave its marker stale.
    */
-  /**
-   * Whether a DIFFERENT run has since claimed this topic's `runningOperation`.
-   *
-   * Read from the local topic map, which every run's start writes optimistically
-   * — so a session closing after a newer run began can tell "my run ended" from
-   * "the topic is idle" and keep its hands off the newer run's markers.
-   *
-   * Deliberately false when the topic carries no marker at all (not loaded into
-   * `topicDataMap`, or already cleared): there is nothing to protect, and the
-   * caller's clear must still run so a dead marker never survives.
-   */
-  #isSupersededRunningOperation = (params: {
-    agentId?: string;
-    groupId?: string;
-    operationId: string;
-    topicId: string;
-  }): boolean => {
-    const { agentId, groupId, operationId, topicId } = params;
-    const state = this.#get();
-    const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
-    });
-    const owner = state.topicDataMap[key]?.items?.find((t) => t.id === topicId)?.metadata
-      ?.runningOperation?.operationId;
-
-    return !!owner && owner !== operationId;
-  };
-
   private clearLocalRunningOperation = (params: {
     agentId?: string;
     groupId?: string;

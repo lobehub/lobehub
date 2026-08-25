@@ -78,7 +78,11 @@ function createMockStore() {
 
 function createHandler(
   store: ReturnType<typeof createMockStore>,
-  overrides?: { assistantMessageId?: string; gatewayOperationId?: string },
+  overrides?: {
+    assistantMessageId?: string;
+    gatewayOperationId?: string;
+    onRunTerminal?: (event: { succeeded: boolean }) => Promise<void>;
+  },
 ) {
   const get = vi.fn(() => store) as any;
   const assistantMessageId = overrides?.assistantMessageId ?? 'msg-initial';
@@ -88,6 +92,7 @@ function createHandler(
     context,
     gatewayOperationId: overrides?.gatewayOperationId,
     operationId: 'op-1',
+    onRunTerminal: overrides?.onRunTerminal,
     // The gateway transport injects the shared run lifecycle (built once per run
     // in gateway.ts). Build the real one here so the terminal completeRun /
     // afterRunComplete path under test runs against the mock store.
@@ -1531,6 +1536,17 @@ describe('createGatewayEventHandler', () => {
       );
     });
 
+    it('settles the topic on agent_runtime_end without waiting for the Gateway session to close', async () => {
+      const store = createMockStore();
+      const onRunTerminal = vi.fn().mockResolvedValue(undefined);
+      const handler = createHandler(store, { onRunTerminal });
+
+      handler(makeEvent('agent_runtime_end'));
+      await flush();
+
+      expect(onRunTerminal).toHaveBeenCalledWith({ succeeded: true });
+    });
+
     it.each(['interrupted', 'waiting_for_async_tool'])(
       'agent_runtime_end with reason "%s" completes the op but does NOT mark unread (cancel/park)',
       async (reason) => {
@@ -1544,6 +1560,17 @@ describe('createGatewayEventHandler', () => {
         expect(store.markTopicUnread).not.toHaveBeenCalled();
       },
     );
+
+    it('settles an error terminal as unsuccessful without waiting for session close', async () => {
+      const store = createMockStore();
+      const onRunTerminal = vi.fn().mockResolvedValue(undefined);
+      const handler = createHandler(store, { onRunTerminal });
+
+      handler(makeEvent('error', { message: 'failed' }));
+      await flush();
+
+      expect(onRunTerminal).toHaveBeenCalledWith({ succeeded: false });
+    });
 
     // the agent_runtime_end handler completes the op once via
     // the shared run lifecycle, and gateway.ts onSessionComplete no longer
