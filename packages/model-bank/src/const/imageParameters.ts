@@ -83,6 +83,10 @@ export const nanoBanana2LiteParameters: ModelParamsSchema = {
     default: [],
   },
   prompt: { default: '' },
+  thinkingLevel: {
+    default: 'minimal',
+    enum: ['minimal', 'high'],
+  },
 };
 
 export const nanoBanana2Parameters: ModelParamsSchema = {
