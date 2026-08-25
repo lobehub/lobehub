@@ -727,6 +727,9 @@ describe('HookDispatcher', () => {
 
   describe('dispatchBeforeToolCall — edge cases', () => {
     it('should preserve the first mock() call when multiple handlers call mock()', async () => {
+      const secondHandler = vi.fn(async (event: any) => {
+        event.mock({ content: '{"second":true}', success: true });
+      });
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
@@ -736,9 +739,7 @@ describe('HookDispatcher', () => {
           type: 'beforeToolCall',
         },
         {
-          handler: async (event: any) => {
-            event.mock({ content: '{"second":true}', success: true });
-          },
+          handler: secondHandler,
           id: 'mock-2',
           type: 'beforeToolCall',
         },
@@ -756,6 +757,7 @@ describe('HookDispatcher', () => {
         isMocked: true,
         result: { content: '{"first":true}', success: true },
       });
+      expect(secondHandler).not.toHaveBeenCalled();
     });
 
     it('should return mock when only one of multiple handlers calls mock()', async () => {

@@ -15,4 +15,23 @@ describe('createDatabaseChaosAdapter', () => {
     ).rejects.toThrow('Database cleanup requires a mutation snapshot');
     expect(restore).not.toHaveBeenCalled();
   });
+
+  it('preserves a class port receiver during cancellation', async () => {
+    class StatefulPort {
+      canceled = false;
+
+      async cancel() {
+        this.canceled = true;
+      }
+
+      async mutate() {
+        return {};
+      }
+    }
+
+    const port = new StatefulPort();
+    const adapter = createDatabaseChaosAdapter(port);
+    await adapter.cancelInjection!({} as ChaosRunContext);
+    expect(port.canceled).toBe(true);
+  });
 });

@@ -13,7 +13,7 @@ export interface DatabaseChaosPort {
 
 /** Database adapter owns no schema; applications supply scoped mutate/restore ports. */
 export const createDatabaseChaosAdapter = (port: DatabaseChaosPort): ChaosAdapter => ({
-  cancelInjection: port.cancel,
+  cancelInjection: port.cancel ? async (context) => port.cancel!(context) : undefined,
   cleanup: port.restore
     ? async (receipt, context) => {
         if (!receipt.cleanupToken) throw new Error('Database cleanup requires a mutation snapshot');

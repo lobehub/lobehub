@@ -235,6 +235,7 @@ export class HookDispatcher {
       try {
         log('[%s][beforeToolCall] Dispatching: %s', operationId, hook.id);
         await hook.handler(toolCallEvent as any);
+        if (isMocked) break;
       } catch (error) {
         log('[%s][beforeToolCall] Hook error (non-fatal): %s %O', operationId, hook.id, error);
       }
