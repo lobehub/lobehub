@@ -308,6 +308,38 @@ export class GatewayService {
     // there while the new host's connect pass builds them up.
     const hosts = getConfiguredMessageGatewayHosts();
 
+    // A platform name nothing recognises is a typo, and its only visible
+    // effect is that the migration silently does not happen — the name simply
+    // never matches, so everything stays on the default host. Say so once per
+    // round instead of leaving someone to wonder why the flip did nothing.
+    const routedNames = (gatewayEnv.MESSAGE_GATEWAY_NODE_PLATFORMS ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (routedNames.length > 0) {
+      const known = new Set([
+        ...platformRegistry.listPlatforms().map((definition) => definition.id),
+        ...messengerPlatformRegistry.listPlatforms().map((definition) => definition.id),
+      ]);
+      const unknown = routedNames.filter((name) => !known.has(name));
+      if (unknown.length > 0) {
+        log(
+          'Gateway sync: MESSAGE_GATEWAY_NODE_PLATFORMS names %o, which match no known platform — those entries do nothing',
+          unknown,
+        );
+      }
+    }
+
+    // What each host says it can serve. Routing a platform to a host it cannot
+    // serve is otherwise an outage, not a no-op: the stale pass drains the
+    // connections off their old host, and the connect that should replace them
+    // is rejected — so they end up nowhere. One request per host per round.
+    const declaredPlatforms = new Map<MessageGatewayHost, Set<string> | null>();
+    for (const host of hosts) {
+      const capabilities = await getMessageGatewayClientForHost(host).getCapabilities();
+      declaredPlatforms.set(host, capabilities ? new Set(capabilities.platforms ?? []) : null);
+    }
+
     const { desired, desiredComplete, gated } = await this.buildDesiredConnections(
       serverDB,
       gateKeeper,
@@ -357,6 +389,7 @@ export class GatewayService {
       drainCounts.set(
         host,
         await this.drainHostConnections({
+          declaredPlatforms,
           desired,
           desiredComplete,
           drainedThisRound,
@@ -373,6 +406,7 @@ export class GatewayService {
       await this.connectHostConnections({
         counts: drainCounts.get(host) ?? { gatedDisconnected: 0, gatedSize: 0, stale: 0 },
         currentlyElsewhere,
+        declaredPlatforms,
         desired,
         drainedThisRound,
         host,
@@ -385,6 +419,7 @@ export class GatewayService {
       gateKeeper,
       snapshots,
       hostsReadyToReceive,
+      declaredPlatforms,
     );
 
     log(
@@ -404,6 +439,24 @@ export class GatewayService {
     return new Map(
       [...desired].filter(([, entry]) => resolveMessageGatewayHost(entry.platform) === host),
     );
+  }
+
+  /**
+   * Whether `host` has told us it cannot serve `platform`.
+   *
+   * Only an explicit declaration counts. A gateway that does not describe
+   * itself makes no claim, and absence of information must never be read as a
+   * refusal — the Cloudflare gateway has no capabilities endpoint at all, and
+   * treating that as "refuses everything" would block the rollback path,
+   * where connections move BACK to it.
+   */
+  private hostRefusesPlatform(
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>,
+    host: MessageGatewayHost,
+    platform: string,
+  ): boolean {
+    const declared = declaredPlatforms.get(host);
+    return !!declared && !declared.has(platform);
   }
 
   /** Slice of the gated set whose platforms route to `host`. */
@@ -570,6 +623,7 @@ export class GatewayService {
    * is built on its new one.
    */
   private async drainHostConnections(params: {
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>;
     desired: Map<string, DesiredGatewayConnection>;
     desiredComplete: boolean;
     drainedThisRound: Set<string>;
@@ -580,6 +634,7 @@ export class GatewayService {
     snapshot: ActualConnectionsSnapshot | null;
   }): Promise<HostDrainCounts> {
     const {
+      declaredPlatforms,
       desiredComplete,
       drainedThisRound,
       host,
@@ -607,6 +662,7 @@ export class GatewayService {
         host,
         hostsReadyToReceive,
         drainedThisRound,
+        declaredPlatforms,
       );
     } else if (actual) {
       log('Gateway sync: desired set incomplete, skipping stale-connection cleanup this round');
@@ -622,12 +678,20 @@ export class GatewayService {
   private async connectHostConnections(params: {
     counts: HostDrainCounts;
     currentlyElsewhere: Set<string>;
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>;
     desired: Map<string, DesiredGatewayConnection>;
     drainedThisRound: Set<string>;
     host: MessageGatewayHost;
     snapshot: ActualConnectionsSnapshot | null;
   }): Promise<void> {
-    const { counts, currentlyElsewhere, drainedThisRound, host, snapshot: actual } = params;
+    const {
+      counts,
+      currentlyElsewhere,
+      declaredPlatforms,
+      drainedThisRound,
+      host,
+      snapshot: actual,
+    } = params;
     const client = getMessageGatewayClientForHost(host);
     const desired = this.hostDesiredSlice(params.desired, host);
 
@@ -658,6 +722,15 @@ export class GatewayService {
       desired.values(),
       async ({ connectionMode, platform, provider }) => {
         try {
+          // Told us it cannot serve this platform. The connect would be
+          // rejected anyway; skipping keeps one clear line in the log instead
+          // of an error per connection, and pairs with the stale pass, which
+          // leaves these running wherever they already are.
+          if (this.hostRefusesPlatform(declaredPlatforms, host, platform)) {
+            skipped++;
+            return;
+          }
+
           // Credentials missing/undecryptable: the provider is still desired
           // (protected from the stale pass) but a connect attempt can only
           // fail — leave whatever connection state the gateway already holds.
@@ -794,6 +867,7 @@ export class GatewayService {
     gateKeeper: KeyVaultsGateKeeper,
     snapshots: Map<MessageGatewayHost, ActualConnectionsSnapshot | null>,
     hostsReadyToReceive: Set<MessageGatewayHost>,
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>,
   ): Promise<void> {
     for (const definition of messengerPlatformRegistry.listPlatforms()) {
       if (definition.connectionMode !== 'polling') continue;
@@ -801,6 +875,19 @@ export class GatewayService {
       const host = resolveMessageGatewayHost(platform);
       const client = getMessageGatewayClientForHost(host);
       if (!client.isEnabled) continue;
+
+      // Routed to a host that says it cannot serve this platform. Skipping the
+      // whole platform leaves every connection where it already runs — the
+      // teardown below would otherwise strip them from their current host for
+      // a destination that will reject them.
+      if (this.hostRefusesPlatform(declaredPlatforms, host, platform)) {
+        log(
+          'Gateway sync[%s]: host does not serve %s — leaving its connections where they are',
+          host,
+          platform,
+        );
+        continue;
+      }
 
       const prefix = `messenger:${platform}:`;
 
@@ -1207,6 +1294,7 @@ export class GatewayService {
     host: MessageGatewayHost,
     hostsReadyToReceive: Set<MessageGatewayHost>,
     drainedThisRound: Set<string>,
+    declaredPlatforms: Map<MessageGatewayHost, Set<string> | null>,
   ): Promise<number> {
     const allStaleIds = [...actual.keys()].filter(
       (id) => !desired.has(id) && !gated.has(id) && !isMessengerConnectionId(id),
@@ -1270,6 +1358,21 @@ export class GatewayService {
                 host,
                 id,
                 owner,
+              );
+              return;
+            }
+
+            // Routed somewhere that has told us it cannot serve this platform.
+            // Draining here would be worse than doing nothing: the connect
+            // meant to replace it gets rejected, so the connection ends up on
+            // neither host. Leave it running and let the misrouting be fixed.
+            if (this.hostRefusesPlatform(declaredPlatforms, owner, row.platform)) {
+              log(
+                'Gateway sync[%s]: %s is routed to the %s host, which does not serve %s — refusing to drain',
+                host,
+                id,
+                owner,
+                row.platform,
               );
               return;
             }

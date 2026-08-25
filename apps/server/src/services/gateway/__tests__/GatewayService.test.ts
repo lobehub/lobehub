@@ -10,6 +10,7 @@ const mockGatewayClient = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   disconnectAll: vi.fn(),
+  getCapabilities: vi.fn(),
   getRegisteredIds: vi.fn(),
   getStats: vi.fn(),
   getStatus: vi.fn(),
@@ -29,6 +30,7 @@ const mockNodeGatewayClient = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
   disconnectAll: vi.fn(),
+  getCapabilities: vi.fn(),
   getRegisteredIds: vi.fn(),
   getStats: vi.fn(),
   getStatus: vi.fn(),
@@ -201,6 +203,11 @@ describe('GatewayService', () => {
     mockFindByAgentId.mockResolvedValue([]);
     mockFindByIds.mockResolvedValue([]);
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
+    // Default: neither host describes itself. The Cloudflare gateway has no
+    // capabilities endpoint at all, so "makes no claim" is the normal case and
+    // must never be read as "serves nothing".
+    mockGatewayClient.getCapabilities.mockResolvedValue(null);
+    mockNodeGatewayClient.getCapabilities.mockResolvedValue(null);
     // Default: admin snapshot unavailable → sync falls back to per-connection
     // getStatus and skips stale-connection cleanup (matches pre-reconciliation behavior).
     mockGatewayClient.getStats.mockRejectedValue(new Error('stats unavailable'));
@@ -1537,6 +1544,128 @@ describe('GatewayService', () => {
       await service.ensureRunning();
 
       expect(mockNodeGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Routing a platform to a host that cannot serve it ───
+
+  describe('platform capability guard', () => {
+    const CONNECTION_ID = 'messenger:wechat:t1:user-u1';
+
+    beforeEach(() => {
+      mockGatewayClient.isEnabled = true;
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+      mockNodeGateway.configured = true;
+      mockNodeGatewayClient.isConfigured = true;
+      mockNodeGatewayClient.isEnabled = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+    });
+
+    /** The default host is holding the WeChat poller; routing says it moves. */
+    const defaultHostHoldsIt = () => {
+      mockGatewayClient.getStats.mockResolvedValue({
+        byPlatform: { wechat: 1 },
+        connections: [
+          {
+            connectionId: CONNECTION_ID,
+            platform: 'wechat',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [CONNECTION_ID] });
+    };
+
+    // Draining into a host that rejects the platform is worse than doing
+    // nothing: the connect meant to replace the connection fails, so it ends
+    // up on neither host. A misrouted env var must be a no-op, not an outage.
+    it('refuses to drain a platform off its host when the destination declines it', async () => {
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({
+        platforms: ['whatsapp-baileys'],
+      });
+      defaultHostHoldsIt();
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    // Same fixture, guard off — proves the case above is the guard talking and
+    // not a setup that never had a teardown to begin with.
+    it('performs the same move when the destination declares the platform', async () => {
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({ platforms: ['wechat'] });
+      defaultHostHoldsIt();
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.disconnect).toHaveBeenCalledWith(CONNECTION_ID);
+    });
+
+    // The load-bearing half of the rule. The Cloudflare gateway has no
+    // capabilities endpoint, so a rollback — clearing the platform list to
+    // move connections BACK to it — targets a host that declares nothing.
+    // Reading that silence as a refusal would make rollback impossible.
+    it('does not treat a host that declares nothing as refusing anything', async () => {
+      mockNodeGateway.platforms = [];
+      mockGatewayClient.getCapabilities.mockResolvedValue(null);
+      // The node host is the one still holding it — this is the rollback.
+      mockNodeGatewayClient.getStats.mockResolvedValue({
+        byPlatform: { wechat: 1 },
+        connections: [
+          {
+            connectionId: CONNECTION_ID,
+            platform: 'wechat',
+            state: { status: 'connected' },
+            userId: 'u1',
+          },
+        ],
+        total: 1,
+      });
+      mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [CONNECTION_ID] });
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+
+      await service.ensureRunning();
+
+      expect(mockNodeGatewayClient.disconnect).toHaveBeenCalledWith(CONNECTION_ID);
+    });
+
+    it('skips the connect for a bot-channel platform the host declines', async () => {
+      mockNodeGateway.platforms = ['discord'];
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({ platforms: ['wechat'] });
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockFindAllLinksByPlatform.mockResolvedValue([]);
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              {
+                applicationId: 'app-1',
+                credentials: { token: 'x' },
+                id: 'prov-1',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+
+      await service.ensureRunning();
+
       expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
     });
   });
