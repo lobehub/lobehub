@@ -102,5 +102,15 @@ export const createServerConfigStore = (initState?: Partial<ServerConfigStore>) 
 
 export const getServerConfigStoreState = () => store?.getState();
 
+/**
+ * Patch server config fields after mount. Co-located with the store so
+ * out-of-provider surfaces (e.g. the share micro-app seeding
+ * `agentGatewayUrl` from the share payload — it never fetches the global
+ * config) don't reach for raw `window.global_serverConfigStore.setState`.
+ */
+export const patchServerConfig = (patch: Partial<GlobalServerConfig>) => {
+  store?.setState((state) => ({ serverConfig: { ...state.serverConfig, ...patch } }));
+};
+
 export const { useStore: useServerConfigStore, Provider } =
   createContext<StoreApiWithSelector<ServerConfigStore>>();

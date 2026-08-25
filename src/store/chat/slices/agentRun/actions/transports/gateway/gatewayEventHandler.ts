@@ -412,6 +412,16 @@ export const createGatewayEventHandler = (
   const gatewayOperationId = params.gatewayOperationId ?? operationId;
   const runtimeType = params.runtimeType ?? 'gateway';
 
+  /**
+   * Agent self-iteration signals are an owner-side feature: the agentSignal
+   * lambda resolves the agent in the caller's own scope, so a share visitor's
+   * emission 404s with "Agent not found". Drop them for share-visitor runs.
+   */
+  const emitAgentSignal: typeof emitClientAgentSignalSourceEvent = async (input) => {
+    if (context.agentShareId) return undefined;
+    return emitClientAgentSignalSourceEvent(input);
+  };
+
   const runScope: RunScope = context.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
   const lifecycleEventBase = {
     context,
@@ -730,7 +740,7 @@ export const createGatewayEventHandler = (
             }
           }
 
-          void emitClientAgentSignalSourceEvent({
+          void emitAgentSignal({
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
@@ -1148,7 +1158,7 @@ export const createGatewayEventHandler = (
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
-            void emitClientAgentSignalSourceEvent({
+            void emitAgentSignal({
               payload: {
                 agentId: context.agentId,
                 operationId,
@@ -1170,7 +1180,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
 
-          void emitClientAgentSignalSourceEvent({
+          void emitAgentSignal({
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
@@ -1319,7 +1329,7 @@ export const createGatewayEventHandler = (
           const messageError = toChatMessageError(event.data);
           const errorMessage = messageError.message;
 
-          void emitClientAgentSignalSourceEvent({
+          void emitAgentSignal({
             payload: {
               agentId: context.agentId,
               errorMessage,
@@ -1346,14 +1356,23 @@ export const createGatewayEventHandler = (
             get().completeOperation(operationId);
           }
 
-          const updateResult = await messageService
-            .updateMessageError(currentAssistantMessageId, messageError, {
-              agentId: context.agentId,
-              groupId: context.groupId,
-              threadId: context.threadId,
-              topicId: context.topicId,
-            })
-            .catch(console.error);
+          // Share visitors must not persist through the owner-scoped
+          // `message.update`: it resolves rows in the CALLER's scope, so the
+          // visitor call "succeeds" with 0 rows updated and its response
+          // messages (queried as the visitor) come back empty — replacing the
+          // bucket with [] and leaving the inline error overlay nothing to
+          // attach to. Fall through to the share-aware refetch + overlay;
+          // server-side error persistence for share runs is a known v1 gap.
+          const updateResult = context.agentShareId
+            ? undefined
+            : await messageService
+                .updateMessageError(currentAssistantMessageId, messageError, {
+                  agentId: context.agentId,
+                  groupId: context.groupId,
+                  threadId: context.threadId,
+                  topicId: context.topicId,
+                })
+                .catch(console.error);
 
           if (updateResult?.success && updateResult.messages) {
             get().replaceMessages(updateResult.messages, { context });

@@ -78,11 +78,20 @@ function createMockStore() {
 
 function createHandler(
   store: ReturnType<typeof createMockStore>,
-  overrides?: { assistantMessageId?: string; gatewayOperationId?: string },
+  overrides?: {
+    assistantMessageId?: string;
+    contextOverrides?: Record<string, unknown>;
+    gatewayOperationId?: string;
+  },
 ) {
   const get = vi.fn(() => store) as any;
   const assistantMessageId = overrides?.assistantMessageId ?? 'msg-initial';
-  const context = { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any;
+  const context = {
+    agentId: 'agent-1',
+    scope: 'session',
+    topicId: 'topic-1',
+    ...overrides?.contextOverrides,
+  } as any;
   return createGatewayEventHandler(get, {
     assistantMessageId,
     context,
@@ -1283,6 +1292,97 @@ describe('createGatewayEventHandler', () => {
         expect.any(Object),
       );
       expect(store.replaceMessages).toHaveBeenCalledTimes(1);
+    });
+
+    // Regression: the `message.update` mutation resolves rows in the
+    // CALLER's scope. A share visitor calling the owner-scoped
+    // `updateMessageError` would "succeed" with 0 rows updated and its
+    // response messages (queried as the visitor) come back empty — wiping
+    // the message bucket with []. The handler must skip the owner-scoped
+    // persistence entirely for share-visitor runs and fall through to the
+    // share-aware refetch + inline error overlay instead.
+    it('should NOT call updateMessageError for a share-visitor run and still surface the inline error', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store, {
+        contextOverrides: { agentShareId: 'share-1' },
+      });
+
+      handler(makeEvent('error', { message: 'Something went wrong' }));
+      await flush();
+
+      expect(messageService.updateMessageError).not.toHaveBeenCalled();
+      // Falls through to the share-aware refetch instead of trusting an
+      // (absent) mutation response.
+      expect(messageService.getMessages).toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
+
+      // The inline error overlay still lands regardless of persistence.
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: {
+            error: {
+              body: { message: 'Something went wrong' },
+              message: 'Something went wrong',
+              type: 'AgentRuntimeError',
+            },
+          },
+        },
+        { operationId: 'op-1' },
+      );
+    });
+  });
+
+  describe('share-visitor agentSignal emission', () => {
+    // Regression: the agentSignal lambda resolves the agent in the CALLER's
+    // own scope, so a share visitor's emission 404s with "Agent not found".
+    // The handler must drop the emission entirely for share-visitor runs
+    // instead of forwarding it and eating the 404.
+    it('should NOT emit agentSignal on stream_start for a share-visitor run', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store, {
+        contextOverrides: { agentShareId: 'share-1' },
+      });
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', role: 'assistant' },
+        }),
+      );
+      await flush();
+
+      expect(emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
+      // The rest of stream_start handling still proceeds normally.
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
+    });
+
+    it('should NOT emit agentSignal on error for a share-visitor run', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store, {
+        contextOverrides: { agentShareId: 'share-1' },
+      });
+
+      handler(makeEvent('error', { message: 'Something went wrong' }));
+      await flush();
+
+      expect(emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
+    });
+
+    it('should still emit agentSignal for a non-share (owner) run', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', role: 'assistant' },
+        }),
+      );
+      await flush();
+
+      expect(emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceType: 'client.gateway.stream_start' }),
+      );
     });
   });
 

@@ -12,6 +12,11 @@ vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: { findByShareIdWithAccessCheck: (...args: any[]) => mockAccessCheck(...args) },
 }));
 
+const mockGetAgentShareBudgetRemaining = vi.fn();
+vi.mock('@/business/server/agent-share/agentShareBudgetGate', () => ({
+  getAgentShareBudgetRemaining: (...args: any[]) => mockGetAgentShareBudgetRemaining(...args),
+}));
+
 const mockFindById = vi.fn();
 const mockCountBySender = vi.fn();
 const mockQueryBySender = vi.fn();
@@ -82,6 +87,8 @@ describe('shareChatRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAccessCheck.mockResolvedValue(share);
+    // Not gated by default (mirrors the OSS stub) — existing cases stay unaffected.
+    mockGetAgentShareBudgetRemaining.mockResolvedValue(null);
     mockFindById.mockResolvedValue(visitorTopic);
     mockCountBySender.mockResolvedValue(0);
     mockQueryBySender.mockResolvedValue([]);
@@ -92,6 +99,30 @@ describe('shareChatRouter', () => {
   });
 
   describe('execAgent', () => {
+    it('rejects the run when the agent share budget is exhausted, before any topic/message row is touched', async () => {
+      mockGetAgentShareBudgetRemaining.mockResolvedValue(0);
+      const caller = await createCaller();
+
+      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'InsufficientBudgetForModel',
+      });
+      expect(mockGetAgentShareBudgetRemaining).toHaveBeenCalledWith({ agentId: share.agentId });
+      expect(mockCountBySender).not.toHaveBeenCalled();
+      expect(mockMessageCount).not.toHaveBeenCalled();
+      expect(mockExecAgent).not.toHaveBeenCalled();
+    });
+
+    it('does not block the run when the budget gate is not gated (null)', async () => {
+      mockGetAgentShareBudgetRemaining.mockResolvedValue(null);
+      const caller = await createCaller();
+
+      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).resolves.toMatchObject({
+        operationId: 'op-1',
+      });
+      expect(mockExecAgent).toHaveBeenCalled();
+    });
+
     it('rejects a new-topic run once the visitor topic cap is reached', async () => {
       mockCountBySender.mockResolvedValue(2);
       const caller = await createCaller();
