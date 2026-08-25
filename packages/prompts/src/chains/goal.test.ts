@@ -26,9 +26,6 @@ describe('chainGoalCriteriaDraft', () => {
     );
     expect(chain.messages[0].content).toContain('Preserve every explicit numeric threshold');
     expect(chain.messages[0].content).toContain('do not invent an arbitrary one');
-    expect(chain.messages[0].content).toContain(
-      'distinguish the stopping condition from the safety budget',
-    );
     expect(GOAL_CRITERIA_DRAFT_JSON_SCHEMA.schema.required).toEqual([
       'title',
       'instruction',

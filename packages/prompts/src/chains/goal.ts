@@ -89,7 +89,6 @@ export const chainGoalCriteriaDraft = ({
         '- Criteria must remain valid across multiple attempts. Do not mention the current round, temporary progress, or how the agent should work.',
         '- Preserve every explicit numeric threshold, comparison operator, unit, time window, and stopping condition from the user exactly; never weaken or omit them.',
         '- When the user did not provide a numeric threshold, do not invent an arbitrary one. Define a measurable, domain-appropriate success condition from the stated outcome and make any assumption explicit for user review.',
-        '- For iterative optimization or training goals, distinguish the stopping condition from the safety budget. State what metric ends successful iteration and what round, time, or cost cap stops an unsuccessful run for review.',
         '- Never use unit tests, test suites, coverage, type-checks, lint, or a clean build as user-facing acceptance criteria.',
         '- List the evidence needed to judge each criterion. Use [] only when the final text answer alone is sufficient.',
         '- Use verifierType="agent" when judging requires active investigation, opening files, or multiple evidence types; use "llm" only for inline text or a directly inspectable image; use "program" only for deterministic command checks.',
