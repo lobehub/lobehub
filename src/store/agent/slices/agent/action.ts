@@ -691,9 +691,8 @@ export class AgentSliceActionImpl {
       missing.map(async (file) => {
         const fileId = file.id!;
 
-        // The same file can be mounted more than once, and the next send can
-        // start before this parse settles; one shared promise per file id keeps
-        // those from racing into duplicate parse calls.
+        // The next send can start before this parse settles; one shared promise
+        // per file id keeps concurrent sends from racing into duplicate parse calls.
         let request = this.#pendingAgentFileContents.get(fileId);
         if (!request) {
           // No caller's signal is attached to the shared parse: one send pressing
