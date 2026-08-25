@@ -710,6 +710,53 @@ describe('TopicModel', () => {
 
       expect(settled).toEqual({ assistantMessageId: 'msg-current', status: 'missing' });
     });
+
+    // Regression: a brand-new topic's row has no `status` column default (it
+    // is inserted as `null`), and the client's run-start `status: 'running'`
+    // write is fire-and-forget — for a fast reply, this settle can land first
+    // and observe `status: null` rather than `'running'`. Without treating
+    // `null` the same as `'running'`, the settle used to skip the status
+    // write entirely, and the late run-start write would then stamp
+    // `'running'` permanently onto an already-completed topic (nothing left
+    // to ever correct it, since `metadata.runningOperation` is already null).
+    it('settles a brand-new topic whose run-start status write has not landed yet (status still null)', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'fast reply on a brand-new topic',
+      });
+      // Deliberately skip `topicModel.update(topic.id, { status: 'running' })`
+      // — the row's `status` stays at its post-INSERT `null`, simulating the
+      // settle arriving before the fire-and-forget run-start write lands.
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      expect(settled).toEqual(
+        expect.objectContaining({ assistantMessageId: 'msg-old', status: 'settled' }),
+      );
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('active');
+    });
+
+    it('still skips the status write when the topic was explicitly set to a non-running status (e.g. archived)', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-old', operationId: 'op-old' },
+        },
+        title: 'archived mid-run',
+      });
+      await topicModel.update(topic.id, { status: 'archived' });
+
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-old', 'active');
+
+      expect(settled.status).toBe('settled');
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      // Not clobbered back to 'active' — the user's archive action wins.
+      expect(row?.status).toBe('archived');
+    });
   });
 
   describe('updateMetadata', () => {
