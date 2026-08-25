@@ -172,6 +172,20 @@ function mapGatewayStatusToRuntimeStatus(
   }
 }
 
+/**
+ * Whether a `connect` response means the connection now exists.
+ *
+ * `connect` resolves for every outcome, including the two that mean it did
+ * not work — a gateway that answers `error` or `disconnected` has told us the
+ * connection is not there. Counting those as established is how a rebuild
+ * reports success while leaving connections offline.
+ *
+ * `connecting` and `dormant` do count: the first completes asynchronously,
+ * the second is a registered connection that wakes on its own.
+ */
+const isEstablished = (status: MessageGatewayConnectionStatus['state']['status']): boolean =>
+  status !== 'error' && status !== 'disconnected';
+
 const log = debug('lobe-server:service:gateway');
 
 /**
@@ -634,7 +648,11 @@ export class GatewayService {
             status: mapGatewayStatusToRuntimeStatus(result.status),
           });
 
-          connected++;
+          if (isEstablished(result.status)) {
+            connected++;
+          } else {
+            unconnectable++;
+          }
           log('Gateway sync: %s %s:%s', result.status, platform, provider.applicationId);
         } catch (err) {
           failed++;
@@ -877,7 +895,7 @@ export class GatewayService {
               botId?: string;
               botToken?: string;
             };
-            await client.connect(
+            const result = await client.connect(
               {
                 applicationId: link.applicationId!,
                 capabilities: { messageMonitoring: { enabled: false } },
@@ -895,7 +913,19 @@ export class GatewayService {
               },
               { ensure: true },
             );
-            connected++;
+            // Same rule as the bot-provider pass: the gateway answering
+            // `error` or `disconnected` means this poller is not running.
+            if (isEstablished(result.status)) {
+              connected++;
+            } else {
+              failed++;
+              log(
+                'Gateway sync[%s]: messenger %s reported %s, not established',
+                host,
+                connectionId,
+                result.status,
+              );
+            }
           } catch (err) {
             failed++;
             log('Gateway sync[%s]: messenger connect failed %s: %O', host, connectionId, err);

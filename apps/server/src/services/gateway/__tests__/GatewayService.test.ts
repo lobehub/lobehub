@@ -1475,6 +1475,73 @@ describe('GatewayService', () => {
         expect(outcome.reason).toMatch(/not established/i);
       });
 
+      it('reports failure when the gateway answers with a terminal status', async () => {
+        // `connect` resolves for every outcome, including the ones that mean
+        // it did not work. A resolved `error` is not a rejected promise, so
+        // the rejected-connect tests never covered this.
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+        mockNodeGatewayClient.connect.mockResolvedValue({ status: 'error' });
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+        expect(outcome.reason).toMatch(/not established/i);
+      });
+
+      it('accepts connecting and dormant as established', async () => {
+        // Both mean the connection exists: one is completing asynchronously,
+        // the other is registered and wakes on its own.
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+
+        for (const status of ['connecting', 'dormant'] as const) {
+          mockNodeGatewayClient.connect.mockResolvedValue({ status });
+          const outcome = await service.reconcileHost('node');
+          expect(outcome.ok, `status=${status}`).toBe(true);
+        }
+      });
+
+      it('reports failure when a messenger poller answers with a terminal status', async () => {
+        mockFindAllLinksByPlatform.mockResolvedValue([
+          {
+            applicationId: 'bot-1@im.bot',
+            credentials: { baseUrl: 'https://ilink.test', botId: 'bot-1', botToken: 'tok' },
+            tenantId: 'alice',
+            userId: 'user-1',
+          },
+        ]);
+        mockNodeGatewayClient.connect.mockResolvedValue({ status: 'disconnected' });
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(outcome.ok).toBe(false);
+      });
+
       it('reports success for a host that legitimately owns nothing', async () => {
         // The pre-cutover shape: node configured, no platform routed to it.
         // Nothing to rebuild is not a failure, and must not make the gateway
