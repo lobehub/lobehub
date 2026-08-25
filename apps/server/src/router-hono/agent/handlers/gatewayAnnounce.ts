@@ -29,11 +29,16 @@ const AnnounceSchema = z.object({
 const ANNOUNCE_COOLDOWN_SECONDS = 60;
 
 /**
- * Upper bound on how long one rebuild may hold the slot. Only a crashed
- * invocation reaches it — the lock is released in `finally` — so it exists to
- * stop a dead process from blocking recovery, not to bound normal work.
+ * Lease on the lock, renewed while the rebuild is still running. Short so a
+ * crashed invocation stops blocking recovery quickly; renewed so a slow one —
+ * a large fleet, an unhurried database — never has its lease expire out from
+ * under it, which would let a waiting caller start a second rebuild alongside
+ * the first.
  */
-const ANNOUNCE_LOCK_SECONDS = 180;
+const ANNOUNCE_LOCK_SECONDS = 30;
+
+/** Renewal interval, comfortably inside the lease. */
+const ANNOUNCE_LOCK_RENEW_MS = 10_000;
 
 const cooldownKey = (host: MessageGatewayHost) => `lobehub:gateway:announce:cooldown:${host}`;
 const lockKey = (host: MessageGatewayHost) => `lobehub:gateway:announce:lock:${host}`;
@@ -122,6 +127,24 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
   // backoff; letting it see a failure is what turns a transient database or
   // admin-surface blip into a retry instead of an outage lasting until the
   // periodic reconcile. Scoping keeps this cheap enough to await.
+  // Hold the lease open for as long as the work runs. Only ours is renewed —
+  // the same compare-and-set the release uses — so a lease that already
+  // passed to someone else is never extended.
+  const renewer =
+    redis && holdsLock
+      ? setInterval(() => {
+          void redis
+            .eval(
+              `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end`,
+              1,
+              lockKey(host),
+              lockToken,
+              String(ANNOUNCE_LOCK_SECONDS),
+            )
+            .catch(() => undefined);
+        }, ANNOUNCE_LOCK_RENEW_MS)
+      : undefined;
+
   try {
     const outcome = await new GatewayService().reconcileHost(host);
 
@@ -149,6 +172,7 @@ export async function gatewayAnnounce(c: Context): Promise<Response> {
     // the retry is not turned away.
     return c.json({ error: 'Reconcile failed', reconciled: false }, 503);
   } finally {
+    if (renewer) clearInterval(renewer);
     // Compare-and-delete: only ever drop the lock while it is still ours.
     if (redis && holdsLock) {
       await redis

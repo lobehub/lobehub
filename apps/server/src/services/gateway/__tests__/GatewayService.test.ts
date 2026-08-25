@@ -1323,8 +1323,8 @@ describe('GatewayService', () => {
       it('rebuilds the node host without touching the default gateway at all', async () => {
         // The whole point of scoping: a node restart must not ensure-connect
         // dormant connections on the default host to see if they are alive.
-        // On Cloudflare that wake is billable, and not paying for it is what
-        // this migration is for.
+        // Waking a connection that was deliberately asleep spends the other
+        // host's resources to answer a question about this one.
         mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
           platform === 'wechat'
             ? [

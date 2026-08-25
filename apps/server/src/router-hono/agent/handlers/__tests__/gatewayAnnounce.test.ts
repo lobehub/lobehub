@@ -143,6 +143,35 @@ describe('gatewayAnnounce', () => {
       expect(mockRedis.client!.eval).toHaveBeenCalledTimes(2);
     });
 
+    it('renews its own lease while the rebuild is still running', async () => {
+      // A rebuild slower than the lease would otherwise have the lock expire
+      // underneath it, letting a waiting caller start a second one alongside.
+      vi.useFakeTimers();
+      let finish: () => void = () => {};
+      mockReconcileHost.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve({ connected: 1, failed: 0, ok: true });
+          }),
+      );
+
+      const pending = call({ host: 'node' });
+      await vi.advanceTimersByTimeAsync(25_000);
+
+      const renewals = mockRedis.client!.eval.mock.calls.filter(([script]) =>
+        String(script).includes('expire'),
+      );
+      expect(renewals.length).toBeGreaterThan(0);
+      // Renewal is a compare-and-set on our own token, never a blind extend.
+      expect(renewals[0][3]).toBe(
+        mockRedis.client!.set.mock.calls.find(([key]) => String(key).includes('lock'))?.[1],
+      );
+
+      finish();
+      await pending;
+      vi.useRealTimers();
+    });
+
     it('releases only its own lock, by token', async () => {
       await call({ host: 'node' });
 

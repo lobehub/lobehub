@@ -224,9 +224,10 @@ export class GatewayService {
    * fleet back in seconds instead of hours.
    *
    * Scoped on purpose: a full round would ensure-connect dormant connections
-   * on the OTHER hosts to check whether they are still alive, and on the
-   * default host waking a dormant connection is billable. Restart recovery
-   * must not cost anything on a host that never restarted.
+   * on the OTHER hosts to check whether they are still alive, and waking a
+   * connection that was deliberately asleep consumes resources on a host that
+   * had nothing to recover from. One gateway restarting should not disturb
+   * another.
    */
   async reconcileHost(host: MessageGatewayHost): Promise<HostReconcileOutcome> {
     if (!this.useMessageGateway) {
@@ -309,9 +310,9 @@ export class GatewayService {
     // in which a cross-host move can complete, since it needs both the source
     // drain and the destination connect. A scoped round is for the case where
     // one host is known to have lost its connections (a restart) and the
-    // others must not be touched: visiting them would wake dormant
-    // connections that were deliberately asleep, which on the default host is
-    // billable and is exactly what this migration exists to stop paying for.
+    // others must not be touched: visiting them would wake connections that
+    // were deliberately asleep, spending their resources to answer a question
+    // about a host that did not restart.
     const hosts = getConfiguredMessageGatewayHosts().filter(
       (host) => !scope || scope.includes(host),
     );
