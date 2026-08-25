@@ -27,7 +27,8 @@ export const executeToolAttemptWithChaos = async (
   execute: () => Promise<ToolRunResult>,
 ): Promise<ToolRunResult> => {
   const activations = controller.activationsFor({ ...point, phase: 'tool_attempt' });
-  for (const { effect, signal } of activations) {
+  for (const { effect, markApplied, signal } of activations) {
+    markApplied();
     if (effect.type === 'delay') {
       try {
         await delayWithAbort(effect.durationMs, signal);

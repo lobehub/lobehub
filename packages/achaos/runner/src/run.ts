@@ -159,6 +159,7 @@ export const runChaosExperiment = async ({
   const adapter = registry.resolveAdapter(experiment.target.adapter);
   const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
+  let injectionPromise: ReturnType<typeof adapter.inject> | undefined;
   let error: unknown;
 
   try {
@@ -169,7 +170,8 @@ export const runChaosExperiment = async ({
     };
     if (experiment.trigger.when === 'after') await runExercise();
 
-    injection = await withTimeout(adapter.inject(context), experiment.timeoutMs, controller);
+    injectionPromise = adapter.inject(context);
+    injection = await withTimeout(injectionPromise, experiment.timeoutMs, controller);
     record('fault_injected', { adapter: adapter.name, injectionId: injection.injectionId });
 
     if (experiment.trigger.when !== 'after') await runExercise();
@@ -197,6 +199,13 @@ export const runChaosExperiment = async ({
   } catch (caught) {
     error = caught;
   } finally {
+    if (!injection && injectionPromise && cleanupPolicy === 'always' && adapter.cleanup) {
+      try {
+        injection = await injectionPromise;
+      } catch {
+        // A rejected injection produced no receipt or state to reconcile.
+      }
+    }
     const oraclesPassed = oracleResults.every(({ status }) => status === 'passed');
     const shouldCleanup =
       injection &&

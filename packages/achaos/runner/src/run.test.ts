@@ -219,4 +219,24 @@ describe('runChaosExperiment', () => {
     expect(phaseWasAborted).toBe(true);
     expect(cleanupWasAborted).toBe(false);
   });
+
+  it('reconciles and cleans up an injection that resolves after its timeout', async () => {
+    const cleanup = vi.fn(async () => {});
+    const registry = new ChaosRegistry().registerAdapter({
+      cleanup,
+      inject: async (context) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { adapter: 'test', injectionId: context.runId };
+      },
+      name: 'test',
+    });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, timeoutMs: 5 },
+      registry,
+    });
+    expect(result.status).toBe('failed');
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(result.injection?.adapter).toBe('test');
+  });
 });

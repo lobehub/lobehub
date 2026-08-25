@@ -32,7 +32,8 @@ export const createBeforeToolCallChaosHandler =
       stepIndex: event.stepIndex,
     });
 
-    for (const { effect, signal } of activations) {
+    for (const { effect, markApplied, signal } of activations) {
+      markApplied();
       if (effect.type === 'delay') {
         try {
           await delayWithAbort(effect.durationMs, signal);

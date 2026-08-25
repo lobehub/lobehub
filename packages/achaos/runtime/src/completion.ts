@@ -17,7 +17,8 @@ export const deliverCompletionWithChaos = async (
     phase: 'completion',
   });
   let deliveries = 1;
-  for (const { effect, signal } of activations) {
+  for (const { effect, markApplied, signal } of activations) {
+    markApplied();
     if (effect.type === 'drop') return;
     if (effect.type === 'delay') await delayWithAbort(effect.durationMs, signal);
     if (effect.type === 'duplicate') deliveries = effect.count;

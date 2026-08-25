@@ -11,6 +11,7 @@ export interface RuntimeChaosPoint {
 interface ArmedFault {
   abort: AbortController;
   activations: number;
+  claims: number;
   detachParentAbort: () => void;
   effect: ChaosEffect;
   injectionId: string;
@@ -20,11 +21,25 @@ interface ArmedFault {
 
 export interface RuntimeChaosActivation {
   effect: ChaosEffect;
+  markApplied: () => void;
   signal: AbortSignal;
 }
 
 const matches = (point: RuntimeChaosPoint, selector: Record<string, unknown>) =>
   Object.entries(selector).every(([key, value]) => point[key as keyof RuntimeChaosPoint] === value);
+
+const supports = (phase: RuntimeChaosPoint['phase'], effect: ChaosEffect) => {
+  if (phase === 'before_tool_call')
+    return effect.type === 'delay' || effect.type === 'drop' || effect.type === 'replace_result';
+  if (phase === 'completion')
+    return (
+      effect.type === 'delay' ||
+      effect.type === 'drop' ||
+      effect.type === 'duplicate' ||
+      effect.type === 'throw'
+    );
+  return effect.type === 'delay' || effect.type === 'drop' || effect.type === 'throw';
+};
 
 /** Operation-scoped deterministic fault controller consumed by Runtime hook adapters. */
 export class RuntimeChaosController {
@@ -38,6 +53,7 @@ export class RuntimeChaosController {
     this.#faults.set(injectionId, {
       abort,
       activations: 0,
+      claims: 0,
       detachParentAbort: () => context.signal.removeEventListener('abort', onParentAbort),
       effect: context.experiment.effect,
       injectionId,
@@ -65,9 +81,23 @@ export class RuntimeChaosController {
   activationsFor(point: RuntimeChaosPoint): RuntimeChaosActivation[] {
     const activations: RuntimeChaosActivation[] = [];
     for (const fault of this.#faults.values()) {
-      if (!matches(point, fault.selector) || fault.activations >= fault.maxInjections) continue;
-      fault.activations += 1;
-      activations.push({ effect: fault.effect, signal: fault.abort.signal });
+      if (
+        !matches(point, fault.selector) ||
+        !supports(point.phase, fault.effect) ||
+        fault.claims >= fault.maxInjections
+      )
+        continue;
+      fault.claims += 1;
+      let applied = false;
+      activations.push({
+        effect: fault.effect,
+        markApplied: () => {
+          if (applied) return;
+          applied = true;
+          fault.activations += 1;
+        },
+        signal: fault.abort.signal,
+      });
     }
     return activations;
   }

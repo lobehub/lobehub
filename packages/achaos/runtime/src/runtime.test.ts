@@ -68,6 +68,27 @@ describe('runtime chaos adapter', () => {
     );
   });
 
+  it('does not activate an effect unsupported by the matched phase', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor(
+        { content: 'unused', type: 'replace_result' },
+        { operationId: 'op-1', phase: 'completion' },
+      ),
+    );
+    const deliver = vi.fn(async () => {});
+    await deliverCompletionWithChaos(
+      controller,
+      { operationId: 'op-1', payload: undefined },
+      deliver,
+    );
+    await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
+      false,
+    );
+    expect(deliver).toHaveBeenCalledOnce();
+  });
+
   it('injects a retryable failure through the production retry helper', async () => {
     const controller = new RuntimeChaosController();
     await createRuntimeChaosAdapter(controller).inject(
