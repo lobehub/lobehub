@@ -1376,11 +1376,26 @@ export class TopicModel {
             },
       } as ChatTopicMetadata;
 
+      // The status write only degrades to a no-op when `existing.status` holds
+      // some OTHER meaningful value (archived / completed / scheduled / …) that
+      // this settle must not clobber — `isRoot` (a matching runningOperation
+      // marker) already proves ownership of the run, so this is not an
+      // additional ownership check. `null` is included alongside 'running':
+      // a brand-new topic's row is inserted with no `status` at all (no column
+      // default), and the client's own run-start `status: 'running'` write is
+      // fire-and-forget — for a fast reply, this settle's terminal write can
+      // land before that one, observe `null`, and (without this) skip writing
+      // 'active'/'unread' entirely. The run-start write then lands moments
+      // later, unconditionally stamping 'running' with nothing left to ever
+      // correct it, since `metadata.runningOperation` is already cleared above
+      // and no future settle call has anything left to match against.
+      const statusUnclaimed = existing.status === 'running' || existing.status === null;
+
       await tx
         .update(topics)
         .set({
           metadata,
-          ...(isRoot && existing.status === 'running' ? { status } : {}),
+          ...(isRoot && statusUnclaimed ? { status } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, id), this.ownership()));
