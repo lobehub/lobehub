@@ -73,12 +73,16 @@ const fileExists = async (filePath: string): Promise<boolean> => {
   }
 };
 
-const execFileString = async (command: string, args: string[]): Promise<string> =>
+const execFileString = async (
+  command: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+): Promise<string> =>
   new Promise((resolve, reject) => {
     execFile(
       command,
       args,
-      { timeout: 3000, windowsHide: true },
+      { env, timeout: 3000, windowsHide: true },
       (error: Error | null, stdout: string) => {
         if (error) {
           reject(error);
@@ -88,9 +92,6 @@ const execFileString = async (command: string, args: string[]): Promise<string> 
       },
     );
   });
-
-const pickWindowsExecutable = (candidates: string[]): string | undefined =>
-  candidates.find((candidate) => WINDOWS_EXE_EXT_PATTERN.test(candidate));
 
 const pickWindowsNodeExecutable = (candidates: string[]): string | undefined =>
   candidates.find(
@@ -141,12 +142,15 @@ const getExistingShimPathToken = async (
   return (await fileExists(resolvedPath)) ? resolvedPath : undefined;
 };
 
-const resolveWindowsNodeCommand = async (shimPath: string): Promise<string | undefined> => {
+const resolveWindowsNodeCommand = async (
+  shimPath: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | undefined> => {
   const localNodePath = path.win32.join(path.win32.dirname(shimPath), 'node.exe');
   if (await fileExists(localNodePath)) return localNodePath;
 
   try {
-    const stdout = await execFileString('where', ['node']);
+    const stdout = await execFileString('where', ['node'], env);
     const candidates = stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -158,10 +162,14 @@ const resolveWindowsNodeCommand = async (shimPath: string): Promise<string | und
   }
 };
 
-const getNodeCommand = async (shimPath: string, token: string): Promise<string | undefined> => {
+const getNodeCommand = async (
+  shimPath: string,
+  token: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | undefined> => {
   const trimmedToken = token.trim().replaceAll(/^['"]|['"]$/g, '');
   if (/^node(?:\.exe)?$/i.test(trimmedToken) || /^%_prog%$/i.test(trimmedToken)) {
-    return resolveWindowsNodeCommand(shimPath);
+    return resolveWindowsNodeCommand(shimPath, env);
   }
 
   const resolvedPath = await getExistingShimPathToken(shimPath, trimmedToken);
@@ -174,8 +182,9 @@ const getNodeScriptTarget = async (
   shimPath: string,
   nodeToken: string,
   scriptToken: string,
+  env?: NodeJS.ProcessEnv,
 ): Promise<WindowsShimTarget | undefined> => {
-  const command = await getNodeCommand(shimPath, nodeToken);
+  const command = await getNodeCommand(shimPath, nodeToken, env);
   if (!command) return;
 
   const scriptPath = await getExistingShimPathToken(shimPath, scriptToken);
@@ -187,6 +196,7 @@ const getNodeScriptTarget = async (
 const inferWindowsNodeScriptFromShim = async (
   shimPath: string,
   source: string,
+  env?: NodeJS.ProcessEnv,
 ): Promise<WindowsShimTarget | undefined> => {
   const patterns: Array<RegExp | [RegExp, string]> = [
     /exec\s+"(\$basedir[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
@@ -205,7 +215,7 @@ const inferWindowsNodeScriptFromShim = async (
     const scriptToken = Array.isArray(pattern) ? match[2] : match[2];
     if (!nodeToken || !scriptToken) continue;
 
-    const target = await getNodeScriptTarget(shimPath, nodeToken, scriptToken);
+    const target = await getNodeScriptTarget(shimPath, nodeToken, scriptToken, env);
     if (target) return target;
   }
 };
@@ -230,6 +240,7 @@ const inferWindowsExecutableFromShim = async (
 
 const inferWindowsNpmShimTarget = async (
   shimPath: string,
+  env?: NodeJS.ProcessEnv,
 ): Promise<WindowsShimTarget | undefined> => {
   if (WINDOWS_EXE_EXT_PATTERN.test(shimPath)) return { command: shimPath };
   if (!(await fileExists(shimPath))) return;
@@ -237,7 +248,7 @@ const inferWindowsNpmShimTarget = async (
   try {
     const source = await readFile(shimPath, 'utf8');
     return (
-      (await inferWindowsNodeScriptFromShim(shimPath, source)) ??
+      (await inferWindowsNodeScriptFromShim(shimPath, source, env)) ??
       (await inferWindowsExecutableFromShim(shimPath, source))
     );
   } catch {
@@ -247,19 +258,27 @@ const inferWindowsNpmShimTarget = async (
 
 const resolveWindowsBareCommand = async (
   command: string,
+  env?: NodeJS.ProcessEnv,
 ): Promise<WindowsShimTarget | undefined> => {
   try {
-    const stdout = await execFileString('where', [command]);
+    const stdout = await execFileString('where', [command], env);
     const candidates = stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
 
-    const executable = pickWindowsExecutable(candidates);
-    if (executable) return { command: executable };
-
+    // Walk candidates in PATH order — `inferWindowsNpmShimTarget` already
+    // returns a bare `.exe` as-is and unwraps a `.cmd`/`.bat`/extensionless
+    // shim via static parsing. Do NOT pre-scan for any `.exe` first: an
+    // earlier `.cmd` shim that resolves to a real target must win over a
+    // later bare `.exe`, e.g. a WinGet-installed `codex.cmd` ahead of the
+    // `WindowsApps\...` App Execution Alias stub some MSIX-packaged tools
+    // (e.g. the Codex desktop app) also add to PATH — Node's execFile/spawn
+    // throws EPERM on that stub, so picking it over an earlier working shim
+    // breaks CLI launch. Same PATH-order rule already applied to detection
+    // candidates in resolveCliCommand.ts (see #17376).
     for (const candidate of candidates) {
-      const target = await inferWindowsNpmShimTarget(candidate);
+      const target = await inferWindowsNpmShimTarget(candidate, env);
       if (target) return target;
     }
 
@@ -272,13 +291,14 @@ const resolveWindowsBareCommand = async (
 export const resolveCliSpawnPlan = async (
   command: string,
   args: string[],
+  env?: NodeJS.ProcessEnv,
 ): Promise<CliSpawnPlan> => {
   const trimmedCommand = command.trim();
   if (!isWindows() || !trimmedCommand) return { args, command };
 
   const target = isPathLikeCommand(trimmedCommand)
-    ? await inferWindowsNpmShimTarget(trimmedCommand)
-    : await resolveWindowsBareCommand(trimmedCommand);
+    ? await inferWindowsNpmShimTarget(trimmedCommand, env)
+    : await resolveWindowsBareCommand(trimmedCommand, env);
 
   const spawnPlan = target
     ? { args: [...(target.argsPrefix ?? []), ...args], command: target.command }

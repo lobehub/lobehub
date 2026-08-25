@@ -1,3 +1,4 @@
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
@@ -693,7 +694,7 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         },
         securitySchemes: {
           bearerAuth: {
-            bearerFormat: 'API Key (sk-lh-...) or OIDC JWT',
+            bearerFormat: `API Key (${API_KEY_PREFIX}...) or OIDC JWT`,
             scheme: 'bearer',
             type: 'http',
           },

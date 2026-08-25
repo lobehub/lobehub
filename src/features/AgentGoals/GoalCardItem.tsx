@@ -55,14 +55,15 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
     <GoalAcceptance taskId={task.id}>
       {({ bundle, error, isLoading, retry }) => {
         const presentation = getGoalPresentation({
-          acceptanceStatus: bundle?.acceptance.status,
           checks: bundle?.checks,
-          goalStatus: goal?.status,
-          maxRounds: goal?.maxRounds,
+          goalStatus: goal?.status ?? 'planning',
+          maxRounds: goal?.maxRounds ?? null,
           rounds: task.totalTopics ?? 0,
-          taskStatus: task.status,
         });
-        if (!isLoading && !shouldShowGoal(presentation.statusKey, hideAchieved ? 'active' : 'all'))
+        if (
+          !isLoading &&
+          !shouldShowGoal(goal?.status ?? 'planning', hideAchieved ? 'active' : 'all')
+        )
           return null;
 
         return (
@@ -86,7 +87,7 @@ export const GoalCardItem = memo<GoalItemProps>((props) => {
             >
               <Flexbox gap={4} style={{ minWidth: 0 }}>
                 <Flexbox horizontal align={'center'} gap={7}>
-                  <GoalStatusGlyph size={13} statusKey={presentation.statusKey} />
+                  <GoalStatusGlyph size={13} status={goal?.status ?? 'planning'} />
                   <Text ellipsis fontSize={15} weight={600}>
                     {title}
                   </Text>

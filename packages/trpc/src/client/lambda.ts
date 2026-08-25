@@ -177,7 +177,7 @@ const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalCon
 // request timeout the response comes back as an HTML error page instead of JSON,
 // so every sibling procedure in the batch (e.g. `agent.getAgentConfigById`) fails
 // its `JSON.parse` with `Unexpected token '<'`. Split it out so a slow message
-// read only slows itself. See LOBE-13229.
+// read only slows itself.
 const slowProcedures = new Set(['market.getAssistantList', 'message.getMessages']);
 const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedures]);
 

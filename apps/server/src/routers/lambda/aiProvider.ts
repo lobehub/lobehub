@@ -1,5 +1,10 @@
 import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import {
+  HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
+  type HeterogeneousProviderBindingRuntime,
+  resolveHeterogeneousProviderBinding,
+} from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -46,6 +51,24 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
     },
   });
 });
+
+const resolveProviderBindingAgentTypes = (
+  state: AiProviderRuntimeState,
+): Record<string, string[]> =>
+  Object.fromEntries(
+    state.enabledAiProviders.map(({ id }) => [
+      id,
+      HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES.filter(
+        (agentType) =>
+          !!resolveHeterogeneousProviderBinding({
+            agentType,
+            apiConfig: { model: '__capability_probe__', providerId: id },
+            providerEnabled: true,
+            runtimeConfig: state.runtimeConfig[id],
+          }).resolution,
+      ),
+    ]),
+  );
 
 export const aiProviderRouter = router({
   checkProviderConnectivity: aiProviderProcedure
@@ -152,11 +175,13 @@ export const aiProviderRouter = router({
       const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
         ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
       );
+      const providerBindingAgentTypes = resolveProviderBindingAgentTypes(state);
 
       // restricted API keys must not exfiltrate decrypted provider credentials
       if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
         return {
           ...state,
+          providerBindingAgentTypes,
           runtimeConfig: Object.fromEntries(
             Object.entries(state.runtimeConfig).map(([id, config]) => [
               id,
@@ -166,7 +191,40 @@ export const aiProviderRouter = router({
         };
       }
 
-      return state;
+      return { ...state, providerBindingAgentTypes };
+    }),
+
+  /**
+   * Narrow credential-bearing endpoint for Desktop-local heterogeneous-agent
+   * bindings. Desktop main calls this with the current OIDC identity and no
+   * workspace scope — provider binding is personal-agent/local-execution only
+   * (`selectRuntimeType` rejects API-mode runs for workspace agents, even for
+   * the author who can spawn them in-process) — and
+   * renderer IPC receives only the provider/model reference. `enabledModels`
+   * makes Desktop main the authority on model availability instead of the
+   * renderer's possibly stale store state.
+   */
+  getProviderBindingRuntime: aiProviderProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }): Promise<HeterogeneousProviderBindingRuntime> => {
+      const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
+        ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
+      );
+      const enabled = state.enabledAiProviders.some(({ id }) => id === input.id);
+      const runtimeConfig = state.runtimeConfig[input.id];
+      const enabledModels = state.enabledAiModels
+        .filter((model) => model.providerId === input.id)
+        .map(({ id, providerId, type }) => ({ id, providerId, type }));
+
+      if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        return {
+          enabled,
+          enabledModels,
+          runtimeConfig: runtimeConfig ? { ...runtimeConfig, keyVaults: {} } : undefined,
+        };
+      }
+
+      return { enabled, enabledModels, runtimeConfig };
     }),
 
   // Provider rows carry workspace-shared credentials and the model-layer where is

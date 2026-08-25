@@ -1519,6 +1519,29 @@ describe('DocumentService', () => {
   });
 
   describe('trySaveCurrentDocumentHistory', () => {
+    it('should save an explicit repaired editor state instead of the persisted stale state', async () => {
+      const staleEditorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const repairedEditorData = {
+        root: { children: [{ children: [], id: 'repaired', type: 'paragraph' }], type: 'root' },
+      };
+      mockDocumentModel.findById.mockResolvedValue({
+        editorData: staleEditorData,
+        id: 'doc-1',
+      });
+      mockDocumentHistoryService.createHistory.mockResolvedValue({
+        id: 'history-1',
+        savedAt: new Date(),
+      });
+
+      await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call', repairedEditorData);
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({ editorData: repairedEditorData }),
+      );
+    });
+
     it('should create a history entry from the current document editor data', async () => {
       const editorData = {
         root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },

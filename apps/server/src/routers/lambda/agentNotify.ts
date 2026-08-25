@@ -1,4 +1,5 @@
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -48,6 +49,8 @@ const agentNotifyWriteProcedure = agentNotifyProcedure.use(withScopedPermission(
 const NotifySchema = z.object({
   /** Agent ID to trigger (overrides the topic's default agent) */
   agentId: z.string().optional(),
+  /** Signal that the remote hetero run was cancelled by a process signal. */
+  cancelled: z.boolean().optional(),
   /** Message content from the external agent */
   content: z.string(),
   /**
@@ -80,6 +83,12 @@ const NotifySchema = z.object({
    */
   messageId: z.string().optional(),
   /**
+   * Server-assigned operation identity for this callback. Remote CLI/Desktop
+   * clients propagate it through LOBEHUB_OPERATION_ID; assistant callbacks
+   * need it to distinguish concurrent group members sharing one topic.
+   */
+  operationId: z.string().optional(),
+  /**
    * Role of the message to write:
    * - 'user' (default): write as user message and trigger the agent to reply
    * - 'assistant': write directly as assistant message without an extra LLM call
@@ -108,6 +117,7 @@ export const agentNotifyRouter = router({
       threadId,
       role = 'user',
       continue: shouldContinue = false,
+      cancelled = false,
       done = false,
       error: terminalError,
       messageId,
@@ -115,7 +125,8 @@ export const agentNotifyRouter = router({
 
     // An error is itself a terminal signal — finalize the run even if the
     // remote agent didn't also set `done`.
-    const isTerminal = done || !!terminalError;
+    const isTerminal = done || !!terminalError || cancelled;
+    const completionReason = terminalError ? 'error' : cancelled ? 'interrupted' : 'done';
 
     log(
       'notify: topicId=%s, agentId=%s, role=%s, continue=%s, done=%s, messageId=%s, content=%s',
@@ -139,8 +150,35 @@ export const agentNotifyRouter = router({
 
     // Extract the operationId seeded by execAgent for remote hetero agents.
     // Used to publish notify_update / agent_runtime_end events to the gateway WS.
-    const remoteOperationId = (topic.metadata as any)?.runningOperation?.operationId as
-      string | undefined;
+    const marker = (topic.metadata as any)?.runningOperation;
+    let remoteOperationId = input.operationId ?? marker?.operationId;
+    let activeOperation =
+      remoteOperationId && marker
+        ? marker.operationId === remoteOperationId
+          ? marker
+          : marker.childOperations?.find((child: any) => child.operationId === remoteOperationId)
+        : marker;
+
+    // Legacy CLI clients do not send operationId. Keep them working when the
+    // topic has exactly one remote operation; concurrent remote members remain
+    // ambiguous and must use an operation-scoped client.
+    if (role === 'assistant' && !input.operationId && marker?.childOperations?.length) {
+      const remoteCandidates = [marker, ...(marker.childOperations ?? [])].filter((operation) =>
+        isRemoteHeterogeneousType(operation.heteroType),
+      );
+      if (remoteCandidates.length === 1) {
+        [activeOperation] = remoteCandidates;
+        remoteOperationId = activeOperation.operationId;
+      } else {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            remoteCandidates.length > 1
+              ? 'operationId is required when multiple remote operations are active'
+              : 'operationId is required for child operations',
+        });
+      }
+    }
 
     const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
@@ -160,6 +198,25 @@ export const agentNotifyRouter = router({
       workspaceId: ctx.workspaceId,
     });
 
+    // Reject late callbacks after their exact operation marker has been removed.
+    // This applies to progress as well as terminal delivery: a delayed update must
+    // not overwrite a completed member's final message.
+    let terminalRetry = false;
+    if (role === 'assistant' && input.operationId && !activeOperation) {
+      const operation = await new AgentOperationModel(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).findById(input.operationId);
+      terminalRetry = isTerminal && !!operation?.completedAt;
+      if (!terminalRetry) {
+        log('notify: ignoring stale callback for operationId=%s', input.operationId);
+        return { messageId: undefined, operationId: undefined, topicId };
+      }
+    }
+
+    const terminalOperation = activeOperation;
+
     /**
      * Publish a stream event for remote hetero agents (openclaw / hermes).
      * Fire-and-forget — stream publish failures must not break the notify response.
@@ -169,18 +226,6 @@ export const agentNotifyRouter = router({
       try {
         const stream = getStreamManager();
         if (isTerminal) {
-          // Signal task completion — frontend gateway WS subscription closes.
-          // A `terminalError` finalizes the run as failed; otherwise it succeeded.
-          await stream.publishAgentRuntimeEnd({
-            finalState: terminalError
-              ? { error: terminalError.message, reason: 'error' }
-              : { reason: 'success' },
-            operationId: remoteOperationId,
-            reason: terminalError ? 'error' : 'success',
-            reasonDetail: terminalError?.message ?? 'Remote hetero agent task completed',
-            stepIndex: 0,
-          });
-
           // Remote hetero (openclaw / hermes) has no `heteroFinish` callback, so
           // this is its terminal funnel. Route it through CompletionLifecycle's
           // single entry — the SAME owner the CLI / in-process paths use — so
@@ -189,20 +234,20 @@ export const agentNotifyRouter = router({
           // success the delivery-checker verify gate runs against the task's plan.
           // (Previously this fired the stripped-down dispatchTerminalHooks, which
           // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
-          // Hooks were serialized onto runningOperation at dispatch time.
-          const serializedHooks = (topic.metadata as any)?.runningOperation?.hooks as
-            SerializedHook[] | undefined;
+          // Use the terminal claim snapshot. Publishing the end event lets a
+          // connected client clear the live marker before this continuation runs.
+          const serializedHooks = terminalOperation?.hooks as SerializedHook[] | undefined;
           let lastAssistantContent: string | undefined = content || undefined;
           if (!lastAssistantContent && writtenMessageId) {
             const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
             lastAssistantContent = (msg?.content as string | undefined) ?? undefined;
           }
           // Mirror heteroFinish's done-path prep (this is the openclaw/hermes
-          // equivalent terminal funnel). Skipped on the error path (verify is
-          // done-only). Each step is self-guarded so a failure degrades instead
+          // equivalent terminal funnel). Only needed for successful completion
+          // (verify is done-only). Each step is self-guarded so a failure degrades instead
           // of aborting the terminal funnel.
           let goal: unknown = '';
-          if (!terminalError) {
+          if (completionReason === 'done') {
             // Guarantee the task's verify plan is DURABLY persisted before the gate
             // (completeOperation → runVerifyOnCompletion) reads it. The start-side
             // instantiation in execAgent is fire-and-forget on a SEPARATE
@@ -239,32 +284,54 @@ export const agentNotifyRouter = router({
               log('notify: failed to resolve verify goal (non-fatal): %O', err);
             }
           }
-          await new CompletionLifecycle(
-            ctx.serverDB,
-            ctx.userId,
-            ctx.workspaceId ?? undefined,
-          ).completeOperation(
-            {
-              agentId,
-              assistantMessageId: writtenMessageId,
-              deliverable: lastAssistantContent,
-              error: terminalError ?? undefined,
-              goal,
-              operationId: remoteOperationId,
-              serializedHooks,
-              topicId,
-              userId: ctx.userId,
-            },
-            terminalError ? 'error' : 'done',
-            // openclaw/hermes surface their failure via the runtime-end stream event
-            // + their own message write, not the lifecycle's assistant-row error
-            // write — keep that prior behavior on the error path.
-            { skipErrorMessageWrite: true },
-          );
+          if (!terminalRetry) {
+            await new CompletionLifecycle(
+              ctx.serverDB,
+              ctx.userId,
+              ctx.workspaceId ?? undefined,
+            ).completeOperation(
+              {
+                agentId,
+                assistantMessageId: writtenMessageId,
+                deliverable: lastAssistantContent,
+                error: terminalError ?? undefined,
+                goal,
+                operationId: remoteOperationId,
+                orchestrationRole: terminalOperation?.orchestrationRole,
+                serializedHooks,
+                topicId,
+                userId: ctx.userId,
+              },
+              completionReason,
+              // openclaw/hermes surface their failure via the runtime-end stream event
+              // + their own message write, not the lifecycle's assistant-row error
+              // write — keep that prior behavior on the error path.
+              { skipErrorMessageWrite: true },
+            );
+          }
 
-          // The operation is finished — drop the running marker so a duplicate
-          // terminal signal / reconnect doesn't re-fire the hooks.
-          await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
+          // Claim the marker before publishing. A retry after a successful
+          // lifecycle can then publish the missing stream event without firing
+          // completion hooks a second time.
+          if (!terminalRetry) {
+            const claimed = await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId);
+            if (!claimed) return;
+          }
+
+          const streamReason = completionReason === 'done' ? 'success' : completionReason;
+          await stream.publishAgentRuntimeEnd({
+            finalState: terminalError
+              ? { error: terminalError.message, reason: 'error' }
+              : { reason: streamReason },
+            operationId: remoteOperationId,
+            reason: streamReason,
+            reasonDetail:
+              terminalError?.message ??
+              (cancelled
+                ? 'Remote hetero agent task cancelled'
+                : 'Remote hetero agent task completed'),
+            stepIndex: 0,
+          });
         } else {
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
@@ -279,6 +346,7 @@ export const agentNotifyRouter = router({
           remoteOperationId,
           err,
         );
+        if (isTerminal) throw err;
       }
     };
 
@@ -289,8 +357,7 @@ export const agentNotifyRouter = router({
         // 1. Caller-supplied messageId (subsequent notify calls with --message-id)
         // 2. Placeholder assistantMessageId seeded by execAgent (first notify call for remote hetero)
         // Using the placeholder avoids creating a second empty bubble in the UI.
-        const placeholderMessageId = (topic.metadata as any)?.runningOperation
-          ?.assistantMessageId as string | undefined;
+        const placeholderMessageId = terminalOperation?.assistantMessageId as string | undefined;
         const resolvedMessageId = messageId ?? placeholderMessageId;
 
         // Update existing message if we have a resolved target
@@ -313,11 +380,12 @@ export const agentNotifyRouter = router({
           // `lastAssistantContent` — bot completion callbacks and the task
           // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
           if (isTerminal && !content) {
-            void publishRemoteHeteroEvent(resolvedMessageId);
+            await publishRemoteHeteroEvent(resolvedMessageId);
             return { messageId: resolvedMessageId, operationId: undefined, topicId };
           }
           await ctx.messageModel.update(resolvedMessageId, { content });
-          void publishRemoteHeteroEvent(resolvedMessageId);
+          if (isTerminal) await publishRemoteHeteroEvent(resolvedMessageId);
+          else void publishRemoteHeteroEvent(resolvedMessageId);
           if (shouldContinue) {
             const result = await ctx.aiAgentService.execAgent({
               agentId,
@@ -335,7 +403,7 @@ export const agentNotifyRouter = router({
         // Terminal signal (done or error) with no messageId and empty content →
         // just finalize the run, no DB write.
         if (isTerminal && !content) {
-          void publishRemoteHeteroEvent();
+          await publishRemoteHeteroEvent();
           return { messageId: undefined, operationId: undefined, topicId };
         }
 
@@ -347,7 +415,8 @@ export const agentNotifyRouter = router({
           topicId,
         });
 
-        void publishRemoteHeteroEvent(msg.id);
+        if (isTerminal) await publishRemoteHeteroEvent(msg.id);
+        else void publishRemoteHeteroEvent(msg.id);
 
         // Optionally trigger a follow-up agent turn.
         // Use resume=true + parentMessageId so execAgent skips creating an

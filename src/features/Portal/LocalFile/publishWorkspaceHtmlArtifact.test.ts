@@ -18,6 +18,7 @@ describe('publishWorkspaceHtmlArtifact', () => {
       }),
     );
     const publishArtifact = vi.fn(async () => ({
+      id: 'dep_1',
       latestRevisionNumber: 2,
       publicUrl: 'https://example.lobehub.com/page',
     }));
@@ -48,6 +49,7 @@ describe('publishWorkspaceHtmlArtifact', () => {
     );
 
     expect(result).toEqual({
+      id: 'dep_1',
       publicUrl: 'https://example.lobehub.com/page',
       revision: 2,
     });

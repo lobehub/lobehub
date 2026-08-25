@@ -2,6 +2,8 @@
   "description": "Estas funciones son experimentales. Podríamos eliminarlas y podrían tener errores. Nos encantaría recibir tus comentarios mientras las usas.",
   "features.agentGraphConfig.desc": "Mostrar la configuración de tiempo de ejecución del gráfico en la configuración avanzada del perfil del agente.",
   "features.agentGraphConfig.title": "Configuración de Tiempo de Ejecución del Gráfico del Agente",
+  "features.agentProviderBinding.desc": "Permite que los agentes locales compatibles utilicen un proveedor de API configurado y un modelo en lugar de su suscripción. Disponible inicialmente para Claude Code y Codex en ejecución local en escritorio.",
+  "features.agentProviderBinding.title": "Vinculación de Proveedor de Agente",
   "features.agentSelfIteration.desc": "Permite que el asistente reflexione, desarrolle autoconsciencia y realice iteraciones continuas a lo largo de intentos e interacciones.",
   "features.agentSelfIteration.title": "Autoiteración del agente",
   "features.artifactDeployment.desc": "Publica artefactos en una URL alojada y gestiona lanzamientos desde la barra lateral de conversación",

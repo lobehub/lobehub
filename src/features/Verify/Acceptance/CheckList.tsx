@@ -1,6 +1,5 @@
 'use client';
 
-import { acceptanceRejectIntents } from '@lobechat/const/verify';
 import type {
   AcceptanceGroupFeedback,
   AcceptanceRejectIntent,
@@ -48,6 +47,7 @@ import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AudioPlayer from '@/features/AudioPlayer';
+import { useIsHydrated } from '@/hooks/useIsHydrated';
 import type { AcceptanceBundle } from '@/services/verify';
 
 import {
@@ -72,6 +72,7 @@ import { openGroupFeedbackModal } from './modals';
 import type { CheckProposal } from './proposal';
 import { classifyProposalEdit } from './proposal';
 import ProposalCard from './ProposalCard';
+import { ScreenshotTiles } from './ScreenshotTiles';
 
 export type AcceptanceCheck = AcceptanceBundle['checks'][number];
 export type AcceptanceCheckState = AcceptanceCheck['state'];
@@ -414,17 +415,28 @@ const imageRatio = (item: AcceptanceEvidence): string | undefined =>
   item.fileWidth && item.fileHeight ? `${item.fileWidth} / ${item.fileHeight}` : undefined;
 
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
-const comparisonContent = (item: AcceptanceEvidence) =>
-  item.type === 'video' ? (
-    <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />
-  ) : item.type === 'audio' ? (
-    <AudioPlayer
-      fullWidth
-      alt={item.description ?? item.fileName ?? item.type}
-      downloadFileName={item.fileName ?? 'audio'}
-      url={item.fileUrl!}
-    />
-  ) : (
+const comparisonContent = (item: AcceptanceEvidence) => {
+  if (item.type === 'video')
+    return <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />;
+  if (item.type === 'audio')
+    return (
+      <AudioPlayer
+        fullWidth
+        alt={item.description ?? item.fileName ?? item.type}
+        downloadFileName={item.fileName ?? 'audio'}
+        url={item.fileUrl!}
+      />
+    );
+  if (item.type === 'screenshot' && item.fileUrl)
+    return (
+      <ScreenshotTiles
+        alt={item.description ?? item.fileName ?? item.type}
+        fileHeight={item.fileHeight}
+        fileWidth={item.fileWidth}
+        src={item.fileUrl}
+      />
+    );
+  return (
     <Image
       preview
       alt={item.description ?? item.fileName ?? item.type}
@@ -434,6 +446,7 @@ const comparisonContent = (item: AcceptanceEvidence) =>
       variant={'borderless'}
     />
   );
+};
 
 const EvidenceList = memo<{
   evidence: AcceptanceEvidence[];
@@ -477,9 +490,12 @@ const EvidenceList = memo<{
     content: comparisonContent(item),
   });
 
+  const consumedScreenshotIds = new Set<string>();
+
   return (
     <Flexbox gap={12}>
       {sorted.map((item) => {
+        if (consumedScreenshotIds.has(item.id)) return null;
         if (pairedIds.has(item.id)) {
           const comparison = readEvidenceComparison(item.metadata)!;
           // The pair renders once, anchored at its `before` half.
@@ -523,56 +539,85 @@ const EvidenceList = memo<{
             </Flexbox>
           );
         const overlay = overlays?.get(item.id);
-        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type) && overlay?.length)
+        if (item.fileUrl && item.type === 'screenshot') {
+          const run = [item];
+          const start = sorted.indexOf(item);
+          for (let index = start + 1; index < sorted.length; index++) {
+            const next = sorted[index]!;
+            if (pairedIds.has(next.id) || !next.fileUrl || next.type !== 'screenshot') break;
+            run.push(next);
+            consumedScreenshotIds.add(next.id);
+          }
           return (
-            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
-              {/* Comments stay off here — the proposal card already lists them
-                  against the same badge numbers. */}
-              <AnnotatedImage
-                annotations={overlay}
-                showComments={false}
-                src={item.fileUrl}
-                imageStyle={
-                  item.fileWidth && item.fileHeight
-                    ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
-                    : undefined
-                }
-              />
-              {caption}
+            <Flexbox
+              horizontal
+              align={'flex-start'}
+              gap={12}
+              key={item.id}
+              style={{ maxWidth: '100%' }}
+              wrap={'wrap'}
+            >
+              {run.map((shot) => {
+                const shotCaption = meaningfulEvidenceCaption(shot.description);
+                return (
+                  <ScreenshotTiles
+                    alt={shot.description ?? shot.fileName ?? shot.type}
+                    annotations={overlays?.get(shot.id)}
+                    fileHeight={shot.fileHeight}
+                    fileWidth={shot.fileWidth}
+                    key={shot.id}
+                    src={shot.fileUrl!}
+                    caption={
+                      shotCaption ? (
+                        <span className={styles.caption}>{shotCaption}</span>
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
             </Flexbox>
           );
-        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type))
+        }
+        if (item.fileUrl && IMAGE_EVIDENCE.has(item.type)) {
           return (
             <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
-              {/* The frame owns the border — the inner Image must not draw its
-                  own, or the two 1px borders stack visibly. The frame also
-                  reserves the aspect ratio so the row's height is settled
-                  before the image loads (no expand jump). */}
-              <Flexbox
-                className={styles.evidenceImage}
-                style={
-                  item.fileWidth && item.fileHeight
-                    ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
-                    : undefined
-                }
-              >
-                <Image
-                  alt={item.description ?? item.fileName ?? item.type}
-                  loading={'lazy'}
+              {overlay?.length ? (
+                <AnnotatedImage
+                  annotations={overlay}
+                  showComments={false}
                   src={item.fileUrl}
-                  variant={'borderless'}
-                  style={{
-                    borderRadius: 0,
-                    maxWidth: '100%',
-                    // Fill the ratio-reserving frame; without known dimensions
-                    // the image keeps its intrinsic size (legacy evidence).
-                    width: item.fileWidth && item.fileHeight ? '100%' : undefined,
-                  }}
+                  imageStyle={
+                    item.fileWidth && item.fileHeight
+                      ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
+                      : undefined
+                  }
                 />
-              </Flexbox>
+              ) : (
+                <Flexbox
+                  className={styles.evidenceImage}
+                  style={
+                    item.fileWidth && item.fileHeight
+                      ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
+                      : undefined
+                  }
+                >
+                  <Image
+                    alt={item.description ?? item.fileName ?? item.type}
+                    loading={'lazy'}
+                    src={item.fileUrl}
+                    variant={'borderless'}
+                    style={{
+                      borderRadius: 0,
+                      maxWidth: '100%',
+                      width: item.fileWidth && item.fileHeight ? '100%' : undefined,
+                    }}
+                  />
+                </Flexbox>
+              )}
               {caption}
             </Flexbox>
           );
+        }
         if (item.content && markdownTextEvidenceTypes.has(item.type))
           return (
             <Flexbox gap={4} key={item.id}>
@@ -609,12 +654,13 @@ const EvidenceList = memo<{
  */
 const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
   const { t } = useTranslation('verify');
+  const hydrated = useIsHydrated();
   return (
     <Flexbox horizontal align={'center'} gap={6}>
       <Icon color={cssVar.colorTextQuaternary} icon={BadgeCheck} size={13} />
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.review.acceptedNote', {
-          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+          time: hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : '',
         })}
       </Text>
     </Flexbox>
@@ -623,12 +669,13 @@ const AcceptedNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) =
 
 const IgnoredNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ review }) => {
   const { t } = useTranslation('verify');
+  const hydrated = useIsHydrated();
   return (
     <Flexbox horizontal align={'center'} gap={6}>
       <Icon color={cssVar.colorTextQuaternary} icon={Ban} size={13} />
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.review.ignoredNote', {
-          time: dayjs(review.createdAt).format('MM-DD HH:mm'),
+          time: hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : '',
         })}
       </Text>
     </Flexbox>
@@ -645,6 +692,7 @@ const FeedbackCard = memo<{
   review: AcceptanceCheckReviewEntry;
 }>(({ evidenceById, review }) => {
   const { t } = useTranslation('verify');
+  const hydrated = useIsHydrated();
   if (review.action === 'accept') return <AcceptedNote review={review} />;
   if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
@@ -666,7 +714,7 @@ const FeedbackCard = memo<{
           {t('acceptance.review.feedbackLabel')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
-          {dayjs(review.createdAt).format('MM-DD HH:mm')}
+          {hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : null}
         </Text>
       </Flexbox>
       {review.comment && <Text style={{ fontSize: 12 }}>{review.comment}</Text>}
@@ -914,11 +962,6 @@ const CheckRow = memo<{
     const [ignoring, setIgnoring] = useState(false);
     const [rejecting, setRejecting] = useState(false);
     const [reviewComment, setReviewComment] = useState('');
-    // The focused surface rejects straight from its text area, bypassing the
-    // annotation modal — so it needs its own intent selector. Without one, every
-    // reject typed here landed unclassified, which is exactly the conflation
-    // this feature exists to undo.
-    const [rejectIntent, setRejectIntent] = useState<AcceptanceRejectIntent>('unmet');
     // The proposal starts folded: it is a suggestion, and an open panel on every
     // unreviewed check would push the evidence the reviewer came for below the fold.
     const [proposalOpen, setProposalOpen] = useState(false);
@@ -971,7 +1014,7 @@ const CheckRow = memo<{
           .map((item) => ({ fileUrl: item.fileUrl!, id: item.id })),
         initialAnnotations: fromProposal?.annotations ?? undefined,
         initialComment: fromProposal?.comment ?? reviewComment,
-        onConfirm: async ({ annotations, comment, fileIds, rejectIntent }) => {
+        onConfirm: async ({ annotations, comment, fileIds }) => {
           const ok = await onReview({
             action: 'reject',
             annotations: annotations.length > 0 ? annotations : undefined,
@@ -987,7 +1030,6 @@ const CheckRow = memo<{
                   },
                 }
               : {}),
-            rejectIntent,
           });
           if (ok) {
             setReviewComment('');
@@ -1037,7 +1079,6 @@ const CheckRow = memo<{
         action: 'reject',
         checkItemIds: [check.id],
         comment,
-        rejectIntent,
       });
       setRejecting(false);
       if (ok) setReviewComment('');
@@ -1478,29 +1519,6 @@ const CheckRow = memo<{
                     value={reviewComment}
                     onChange={(event) => setReviewComment(event.target.value)}
                   />
-                  {/* Only meaningful once there is something to reject with —
-                      an intent picker above an empty box is noise. */}
-                  {Boolean(reviewComment.trim()) && (
-                    <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-                      <Text fontSize={12} type={'secondary'}>
-                        {t('acceptance.review.intentLabel')}
-                      </Text>
-                      {acceptanceRejectIntents.map((value) => (
-                        <Button
-                          disabled={reviewPending}
-                          key={value}
-                          size={'small'}
-                          type={rejectIntent === value ? 'primary' : 'default'}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setRejectIntent(value);
-                          }}
-                        >
-                          {t(`acceptance.review.intent.${value}` as never)}
-                        </Button>
-                      ))}
-                    </Flexbox>
-                  )}
                   <Flexbox horizontal gap={8}>
                     <Button
                       block
@@ -1731,6 +1749,7 @@ const CheckList = memo<CheckListProps>(
     round,
   }) => {
     const { t } = useTranslation('verify');
+    const hydrated = useIsHydrated();
     const [acceptingGroup, setAcceptingGroup] = useState<string | null>(null);
 
     const visible = (check: AcceptanceCheck) =>
@@ -2031,7 +2050,7 @@ const CheckList = memo<CheckListProps>(
                             {t('acceptance.group.feedbackLabel')}
                           </Text>
                           <Text fontSize={12} type={'secondary'}>
-                            {dayjs(entry.createdAt).format('MM-DD HH:mm')}
+                            {hydrated ? dayjs(entry.createdAt).format('MM-DD HH:mm') : null}
                           </Text>
                         </Flexbox>
                         <Text style={{ fontSize: 12 }}>{entry.comment}</Text>

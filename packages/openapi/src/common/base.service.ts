@@ -431,16 +431,11 @@ export abstract class BaseService implements IBaseService {
     }
 
     /**
-     * When the user does not have ALL permission, the following scenarios are not allowed:
-     * 1. Querying all data
-     * 2. Querying a specific user's data, but the target resource does not belong to the current user
+     * Asking for everyone's data. Without ALL permission there is nothing to
+     * fall back to — an owner-scoped grant cannot answer an unscoped question.
      */
-    if (!resourceBelongTo || resourceBelongTo !== this.userId) {
-      this.log(
-        'warn',
-        'Permission denied: current user has no ALL permission, or target resource does not belong to current user',
-        logContext,
-      );
+    if (resourceInfo === ALL_SCOPE) {
+      this.log('warn', 'Permission denied: ALL-scope request without ALL permission', logContext);
       return {
         isPermitted: false,
         message: `no permission,current user has no ALL permission,and resource not belong to current user`,
@@ -448,37 +443,49 @@ export abstract class BaseService implements IBaseService {
     }
 
     /**
-     * When the target resource belongs to the current user, any permission allows the operation
-     * Since ALL permission was already checked above, only owner permission needs to be checked here
+     * A named resource owned by somebody else. Owner permission is irrelevant
+     * here — it grants access to your own rows, never to theirs.
      */
-    if (resourceBelongTo === this.userId) {
-      // Check if the user has owner permission for the corresponding action
-      const hasOwnerAccess = await this.hasOwnerPermission(permissionKey);
-
-      if (hasOwnerAccess) {
-        this.log('info', 'Permission granted: current user has owner permission', logContext);
-        return {
-          condition: { userId: resourceBelongTo },
-          isPermitted: true,
-        };
-      }
-
-      this.log(
-        'warn',
-        'Permission denied: target resource belongs to current user, but user has no owner permission for this operation',
-        logContext,
-      );
+    if (resourceBelongTo && resourceBelongTo !== this.userId) {
+      this.log('warn', 'Permission denied: target resource belongs to another user', logContext);
       return {
         isPermitted: false,
-        message: `no permission,resource belong to current user,but current user has no any ${permissionKey} permission`,
+        message: `no permission,current user has no ALL permission,and resource not belong to current user`,
       };
     }
 
-    // If we reach here, apply fallback logic
-    this.log('info', `Fallback: no permission`, logContext);
+    /**
+     * Either the resource is the caller's, or no owner could be resolved for
+     * it. Denying the second case alongside the one above is what made every
+     * `POST /api/v1/chat` answer 403.
+     *
+     * `getResourceBelongTo` returns `undefined` for two unrelated situations:
+     * a row that does not exist, and a row that has no per-user owner at all.
+     * Built-in models are the latter — nobody owns them — so "does this model
+     * belong to you" has no true answer, and treating the absent answer as
+     * "it belongs to someone else" denied every caller holding
+     * `ai_model:invoke:owner`, which is exactly what personal accounts get.
+     *
+     * The owner check below is still the gate, and the returned condition is
+     * pinned to the caller either way, so an unowned resource cannot widen a
+     * query past the caller's own rows. A row that genuinely does not exist
+     * now reaches the service and surfaces as "not found" rather than as a
+     * permission error — also the truthful answer.
+     */
+    const hasOwnerAccess = await this.hasOwnerPermission(permissionKey);
+
+    if (hasOwnerAccess) {
+      this.log('info', 'Permission granted: current user has owner permission', logContext);
+      return {
+        condition: { userId: this.userId },
+        isPermitted: true,
+      };
+    }
+
+    this.log('warn', 'Permission denied: no owner permission for this operation', logContext);
     return {
       isPermitted: false,
-      message: `permission validation error for: ${permissionKey}`,
+      message: `no permission,resource belong to current user,but current user has no any ${permissionKey} permission`,
     };
   }
 

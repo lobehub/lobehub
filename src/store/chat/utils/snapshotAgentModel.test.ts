@@ -33,15 +33,12 @@ describe('snapshotAgentModel', () => {
     expect(snapshotAgentModel(id)).toEqual({ model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER });
   });
 
-  it('pins the runtime type — not the chat defaults — for a heterogeneous agent', () => {
+  it('snapshots the CLI default selection for a heterogeneous agent', () => {
     const id = seedAgent('hetero', {
       agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
     });
 
-    // `model` stays unset: the CLI owns model selection and reports the real
-    // model per run. Falling back to DEFAULT_MODEL/DEFAULT_PROVIDER here is what
-    // pinned `<default provider>` onto CLI topics.
-    expect(snapshotAgentModel(id)).toEqual({ provider: 'claude-code' });
+    expect(snapshotAgentModel(id)).toEqual({ model: 'default', provider: 'claude-code' });
   });
 
   it('ignores a stale agent model when the agent is heterogeneous', () => {
@@ -51,7 +48,52 @@ describe('snapshotAgentModel', () => {
       provider: DEFAULT_PROVIDER,
     });
 
-    expect(snapshotAgentModel(id)).toEqual({ provider: 'codex' });
+    expect(snapshotAgentModel(id)).toEqual({ model: 'default', provider: 'codex' });
+  });
+
+  it('snapshots the persisted heterogeneous selector instead of legacy native args', () => {
+    const id = seedAgent('cursor-with-model-arg', {
+      agencyConfig: {
+        heterogeneousProvider: {
+          args: ['--model', 'composer-2'],
+          model: 'stale-model',
+          type: 'cursor',
+        },
+      },
+    });
+
+    expect(snapshotAgentModel(id)).toEqual({ model: 'stale-model', provider: 'cursor' });
+  });
+
+  it('snapshots a heterogeneous API binding', () => {
+    const id = seedAgent('cursor-api', {
+      agencyConfig: {
+        heterogeneousProvider: {
+          apiConfig: { model: 'claude-sonnet-4-6', providerId: 'anthropic' },
+          authMode: 'api',
+          type: 'cursor',
+        },
+      },
+    });
+
+    expect(snapshotAgentModel(id)).toEqual({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
+  it('keeps a server-default API model Agent-scoped', () => {
+    const id = seedAgent('claude-server-default', {
+      agencyConfig: {
+        heterogeneousProvider: {
+          apiConfig: { model: 'claude-sonnet-4-6', source: 'server-default' },
+          authMode: 'api',
+          type: 'claude-code',
+        },
+      },
+    });
+
+    expect(snapshotAgentModel(id)).toEqual({ provider: 'claude-code' });
   });
 
   it('pins nothing when a heterogeneous config carries no type', () => {

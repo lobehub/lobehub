@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "No se pudo ensamblar el contexto de la conversación para esta solicitud. Por favor, vuelve a intentarlo; si el problema persiste, contacta al soporte.",
   "DatabasePersistError": "Una operación de base de datos falló al guardar o cargar esta conversación. Por favor, vuelve a intentarlo; si el problema persiste, contacta al soporte.",
   "ExceededContextWindow": "El contenido de la solicitud actual excede la longitud que el modelo puede manejar. Por favor, reduce la cantidad de contenido y vuelve a intentarlo.",
+  "HarnessJsonParseError": "No se pudo leer un payload interno, por lo que esta operación se detuvo. Reintentar la misma solicitud generará el mismo error — por favor, inicie un nuevo mensaje; si el problema persiste, contacte al soporte.",
   "InsufficientQuota": "Lo sentimos, se ha alcanzado la cuota para esta clave. Por favor, verifica si el saldo de tu cuenta es suficiente o vuelve a intentarlo después de aumentar la cuota de la clave.",
   "InvalidBedrockCredentials": "La autenticación de Bedrock falló. Por favor, verifica el AccessKeyId/SecretAccessKey y vuelve a intentarlo.",
   "InvalidComfyUIArgs": "Configuración inválida de ComfyUI. Por favor, verifica los ajustes y vuelve a intentarlo.",

@@ -13,3 +13,9 @@ export enum ArtifactType {
   Python = 'python',
   React = 'application/lobe.artifacts.react',
 }
+
+export interface SharedArtifactData {
+  id: string;
+  iframeSrc: string;
+  title: string | null;
+}

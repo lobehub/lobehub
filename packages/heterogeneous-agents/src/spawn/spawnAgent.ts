@@ -1,24 +1,27 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
+import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
-import { HETERO_WORKING_DIRECTORY_NOT_FOUND } from './classifyProcessFailure';
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
+import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
+import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 export interface SpawnAgentOptions {
   /** Registered local heterogeneous-agent type key. */
   agentType: string;
+  /** Bridge for bidirectional question requests emitted by ACP agents. */
+  askUserBridge?: AskUserBridge;
   /**
    * Override the CLI binary name. Defaults to the agent's standard executable.
    * Use this when the binary lives at a non-default
@@ -203,15 +206,6 @@ export const AMP_BASE_ARGS = [
   '--no-archive-after-execute',
 ] as const;
 
-export const CURSOR_BASE_ARGS = [
-  '-p',
-  '--force',
-  '--trust',
-  '--output-format',
-  'stream-json',
-  '--stream-partial-output',
-] as const;
-
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
 export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
@@ -237,8 +231,6 @@ interface BuildSpawnArgsParams {
   includePartialMessages: boolean;
   /** Per-agent input args produced by `buildAgentInput` (e.g. Codex `--image`). */
   inputArgs: string[];
-  /** Text payload produced by `buildAgentInput`; Cursor passes it positionally. */
-  inputText: string;
   /** Native session id for resume; undefined for fresh runs. */
   resumeSessionId: string | undefined;
 }
@@ -291,20 +283,6 @@ const buildAmpArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsP
     : executionArgs;
 };
 
-const buildCursorArgs = ({
-  extraArgs,
-  inputArgs,
-  inputText,
-  resumeSessionId,
-}: BuildSpawnArgsParams) => [
-  ...CURSOR_BASE_ARGS,
-  ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
-  ...extraArgs,
-  ...inputArgs,
-  '--',
-  inputText,
-];
-
 const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
   ...OPENCODE_BASE_ARGS,
   ...(resumeSessionId ? ['--session', resumeSessionId] : []),
@@ -356,9 +334,6 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
     }
     case 'codex': {
       return buildCodexArgs(params);
-    }
-    case 'cursor': {
-      return buildCursorArgs(params);
     }
     case 'kimi-code': {
       return buildKimiCodeArgs(params);
@@ -546,6 +521,46 @@ const spawnGrokAcpAgent = async (
   };
 };
 
+const spawnCursorAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = buildCursorAcpPrompt(options.prompt);
+  const bridge = createAcpSpawnBridge();
+  const session = new CursorAcpSession({
+    args: options.extraArgs ?? [],
+    askUserBridge: options.askUserBridge,
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    env: { ...process.env, ...options.env },
+    onEvents: bridge.onEvents,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  const { exit, kill } = bridge.attach(session);
+
+  return {
+    events: bridge.events,
+    exit,
+    kill,
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return session.sessionId;
+    },
+    stderr: bridge.stderr,
+  };
+};
+
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
  * Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
@@ -566,14 +581,12 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const cwd = options.cwd || process.cwd();
-  if (!existsSync(cwd)) {
-    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
-      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
-      workingDirectory: cwd,
-    });
-  }
+  assertSpawnableWorkingDirectory(cwd);
   if (options.agentType === 'grok-build') {
     return spawnGrokAcpAgent(options, command, cwd);
+  }
+  if (options.agentType === 'cursor') {
+    return spawnCursorAcpAgent(options, command, cwd);
   }
 
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
@@ -582,7 +595,6 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     extraArgs: options.extraArgs ?? [],
     includePartialMessages: options.includePartialMessages ?? false,
     inputArgs: inputPlan.args,
-    inputText: inputPlan.stdin,
     resumeSessionId: options.resumeSessionId,
   });
   const childEnv = {
@@ -654,12 +666,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   );
 
   if (proc.stdin) {
-    if (options.agentType === 'cursor') proc.stdin.end();
-    else {
-      proc.stdin.write(inputPlan.stdin, () => {
-        proc.stdin?.end();
-      });
-    }
+    proc.stdin.write(inputPlan.stdin, () => {
+      proc.stdin?.end();
+    });
   }
 
   // ALL pipeline work — push / flush — runs through this single chain so:
@@ -768,12 +777,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
   const requestedCommand = resolveHeterogeneousAgentCommand('trae', options.command);
   const cwd = options.cwd || process.cwd();
-  if (!existsSync(cwd)) {
-    throw Object.assign(new Error(`Working directory does not exist: ${cwd}`), {
-      code: HETERO_WORKING_DIRECTORY_NOT_FOUND,
-      workingDirectory: cwd,
-    });
-  }
+  assertSpawnableWorkingDirectory(cwd);
   const command =
     isPathLikeCommand(requestedCommand) && !path.isAbsolute(requestedCommand)
       ? path.resolve(cwd, requestedCommand)

@@ -53,6 +53,7 @@ export function registerNotifyCommand(program: Command) {
             content: options.content,
             continue: options.continue,
             messageId: options.messageId,
+            operationId: process.env.LOBEHUB_OPERATION_ID,
             role: options.role,
             threadId: options.threadId,
             topicId: options.topic,

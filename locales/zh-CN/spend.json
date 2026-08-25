@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS（每秒令牌数）：每秒生成的令牌数量",
+  "duration.TPS": "tok/s（每秒令牌数）：每秒生成的令牌数量",
   "duration.TTFT": "TTFT（首令牌时间）：生成首个令牌的延迟",
   "duration.completion": "输出完成时间",
   "duration.latency": "耗时",

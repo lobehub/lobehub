@@ -2,6 +2,8 @@
   "description": "Deze functies zijn experimenteel. We kunnen ze verwijderen en ze kunnen bugs bevatten. We horen graag uw feedback tijdens het gebruik ervan.",
   "features.agentGraphConfig.desc": "Toon grafiek runtime-configuratie in de geavanceerde instellingen van een agentprofiel.",
   "features.agentGraphConfig.title": "Agent Grafiek Runtime-configuratie",
+  "features.agentProviderBinding.desc": "Laat ondersteunde lokale agents een geconfigureerde API-provider en model gebruiken in plaats van hun abonnement. Aanvankelijk beschikbaar voor Claude Code en Codex bij lokale uitvoering op desktop.",
+  "features.agentProviderBinding.title": "Agent Provider Binding",
   "features.agentSelfIteration.desc": "De assistent kan hierdoor reflecteren, zelfinzicht opbouwen en zich continu blijven verbeteren via aanhoudende pogingen en interacties.",
   "features.agentSelfIteration.title": "Agent-zelfiteratie",
   "features.artifactDeployment.desc": "Publiceer artefacten naar een gehoste URL en beheer releases vanuit de zijbalk van het gesprek",

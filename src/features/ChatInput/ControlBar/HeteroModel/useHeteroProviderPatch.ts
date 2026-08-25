@@ -3,6 +3,7 @@ import { applyHeteroSelection } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { useAgentStore } from '@/store/agent';
+import { useChatStore } from '@/store/chat';
 
 export const useHeteroProviderPatch = ({
   agentId,
@@ -14,15 +15,27 @@ export const useHeteroProviderPatch = ({
   provider: HeterogeneousProviderConfig | undefined;
 }) => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const updateTopicModel = useChatStore((s) => s.updateTopicModel);
 
   return useCallback(
     async (selection: HeteroSelection) => {
-      if (!enabled || !agentId) return;
+      if (!enabled || !agentId || !provider) return;
 
+      const { model, ...agentSelection } = selection;
+      if (activeTopicId && model !== undefined) {
+        await updateTopicModel(activeTopicId, { model, provider: provider.type });
+        if (Object.keys(agentSelection).length === 0) return;
+      }
       await updateAgentConfigById(agentId, {
-        agencyConfig: { heterogeneousProvider: applyHeteroSelection(provider, selection) },
+        agencyConfig: {
+          heterogeneousProvider: applyHeteroSelection(
+            provider,
+            activeTopicId ? agentSelection : selection,
+          ),
+        },
       });
     },
-    [agentId, enabled, provider, updateAgentConfigById],
+    [activeTopicId, agentId, enabled, provider, updateAgentConfigById, updateTopicModel],
   );
 };

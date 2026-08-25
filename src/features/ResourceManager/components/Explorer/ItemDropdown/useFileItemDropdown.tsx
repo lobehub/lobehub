@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import RepoIcon from '@/components/LibIcon';
+import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -38,11 +39,20 @@ import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
+  /**
+   * The underlying `files.id` when the row is a file. The unified resource
+   * list addresses a file that backs a derived page by the PAGE id
+   * (`COALESCE(d.id, f.id)` in KnowledgeRepo), so `id` alone cannot be used
+   * for file-table lookups such as the messenger push.
+   */
+  fileId?: string | null;
   filename: string;
   fileType: string;
   id: string;
   libraryId?: string;
   onRenameStart?: () => void;
+  /** Byte size when available — powers the push modal's oversize pre-warning. */
+  size?: number;
   sourceType?: string;
   url: string;
   userId?: string | null;
@@ -59,11 +69,13 @@ interface UseFileItemDropdownReturn {
  * Shared with folder tree and explorer
  */
 export const useFileItemDropdown = ({
+  fileId,
   id,
   libraryId,
   url,
   filename,
   fileType,
+  size,
   sourceType,
   onRenameStart,
   userId,
@@ -117,6 +129,15 @@ export const useFileItemDropdown = ({
     !isPDF &&
     !isOfficeFile &&
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
+
+  // Pages/documents have no storage URL to attach, so only real files get the
+  // "Send to chat platform" entry. The server resolves the attachment by
+  // `files.id`, but a file that backs a derived page is listed under the PAGE
+  // id — always prefer the row's underlying `fileId` when it carries one.
+  const sendToMessengerItem = useSendToMessengerMenuItem({
+    enabled: !isFolder && !isPage && !!url,
+    file: { fileType, id: fileId ?? id, name: filename, size },
+  });
 
   const menuItems = useCallback(() => {
     // Filter out current knowledge base and constrain by visibility scope:
@@ -312,43 +333,6 @@ export const useFileItemDropdown = ({
             },
           },
         canEditResources && isOwnPublicFile && { type: 'divider' },
-        ...libraryRelatedActions,
-        hasKnowledgeBaseActions && {
-          type: 'divider',
-        },
-        canEditResources &&
-          isInLibrary && {
-            icon: <Icon icon={FolderInputIcon} />,
-            key: 'moveToFolder',
-            label: t('FileManager.actions.moveToFolder'),
-            onClick: async ({ domEvent }) => {
-              domEvent.stopPropagation();
-
-              openMoveToFolderModal({
-                fileId: id,
-                knowledgeBaseId: libraryId,
-              });
-            },
-          },
-        canEditResources &&
-          isFolder && {
-            disabled: !canManage,
-            icon: <Icon icon={PencilIcon} />,
-            key: 'rename',
-            label: canManage ? (
-              t('FileManager.actions.rename')
-            ) : (
-              <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
-                <span>{t('FileManager.actions.rename')}</span>
-              </Tooltip>
-            ),
-            onClick: async ({ domEvent }) => {
-              domEvent.stopPropagation();
-              if (!canManage) return;
-              onRenameStart?.();
-            },
-            sfSymbol: 'pencil',
-          },
         {
           icon: <Icon icon={LinkIcon} />,
           key: 'copyUrl',
@@ -413,6 +397,44 @@ export const useFileItemDropdown = ({
             downloadingToast.close();
           },
         },
+        sendToMessengerItem,
+        (hasKnowledgeBaseActions || (canEditResources && (isInLibrary || isFolder))) && {
+          type: 'divider',
+        },
+        ...libraryRelatedActions,
+        canEditResources &&
+          isInLibrary && {
+            icon: <Icon icon={FolderInputIcon} />,
+            key: 'moveToFolder',
+            label: t('FileManager.actions.moveToFolder'),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+
+              openMoveToFolderModal({
+                fileId: id,
+                knowledgeBaseId: libraryId,
+              });
+            },
+          },
+        canEditResources &&
+          isFolder && {
+            disabled: !canManage,
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: canManage ? (
+              t('FileManager.actions.rename')
+            ) : (
+              <Tooltip title={t('manageOnlyCreator', { ns: 'common' })}>
+                <span>{t('FileManager.actions.rename')}</span>
+              </Tooltip>
+            ),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              if (!canManage) return;
+              onRenameStart?.();
+            },
+            sfSymbol: 'pencil',
+          },
         canEditResources && {
           type: 'divider',
         },
@@ -483,6 +505,7 @@ export const useFileItemDropdown = ({
     setFileVisibility,
     refreshFileList,
     removeFilesFromKnowledgeBase,
+    sendToMessengerItem,
     sourceType,
     t,
     url,

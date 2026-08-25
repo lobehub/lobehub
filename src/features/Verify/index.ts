@@ -6,6 +6,11 @@ export {
   groupChecks,
   shouldGroupChecks,
 } from './Acceptance/CheckList';
+export {
+  OriginConversationProvider,
+  type OriginConversationSlot,
+  type OriginTopicPanelProps,
+} from './Acceptance/originConversation';
 export { default as AcceptanceWorkspace } from './Acceptance/Workspace';
 export { default as AcceptanceEmptyDetail } from './Acceptance/Workspace/EmptyDetail';
 export { default as CheckerDock } from './CheckerDock';

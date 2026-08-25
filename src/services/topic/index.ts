@@ -159,6 +159,14 @@ export class TopicService {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
   };
 
+  settleRunningOperation = (
+    id: string,
+    operationId: string,
+    status?: NonNullable<ChatTopic['status']>,
+  ) => {
+    return lambdaClient.topic.settleRunningOperation.mutate({ id, operationId, status });
+  };
+
   getShareInfo = (topicId: string) => {
     return lambdaClient.topic.getShareInfo.query({ topicId });
   };

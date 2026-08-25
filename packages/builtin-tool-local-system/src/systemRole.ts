@@ -72,7 +72,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'file_path': The absolute path to the file to modify.
     - 'old_string': The exact text to replace.
     - 'new_string': The replacement text.
-    - 'replace_all' (Optional): Replace all occurrences.
+    - 'replace_all' (Optional): Replace all occurrences. Without it, 'old_string' must match exactly once — include surrounding lines to make it unique, or the edit is refused rather than applied to an arbitrary match.
 - For executing shell commands: Use 'runCommand'. Provide the following parameters:
     - 'command': The shell command to execute.
     - 'description' (Optional but recommended): A clear, concise description of what the command does (5-10 words, in active voice). **IMPORTANT: Always use the same language as the user's input.** If the user speaks Chinese, write the description in Chinese; if English, use English, etc.

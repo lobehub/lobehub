@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (Tokeny na sekundę): Liczba tokenów generowanych na sekundę",
+  "duration.TPS": "tok/s (Tokeny na sekundę): Liczba tokenów generowanych na sekundę",
   "duration.TTFT": "TTFT (Czas do pierwszego tokena): Opóźnienie pierwszego tokena",
   "duration.completion": "Czas zakończenia generowania",
   "duration.latency": "Czas trwania",

@@ -1,3 +1,5 @@
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat';
@@ -64,7 +66,21 @@ class MessengerService {
   };
 
   sendMessengerPush = async (params: {
-    content: string;
+    /**
+     * Referenced by id only — the server resolves each file to a stable access
+     * URL from the owned row. Deliberately no caller-supplied URL: the platform
+     * senders fetch it server-side.
+     */
+    attachments?: {
+      fileId: string;
+      type: 'image' | 'file' | 'video' | 'audio';
+    }[];
+    content?: string;
+    /**
+     * What to do with an image the platform will not take at full size:
+     * recompress it (default) or send the original as a download link.
+     */
+    oversizeImageStrategy?: MessengerOversizeImageStrategy;
     platform: MessengerPlatform;
     tenantId?: string;
   }) => {

@@ -808,6 +808,7 @@
   "lobehub.claude-sonnet-4-6.description": "Claude Sonnet 4.6 offre la migliore combinazione di velocità e intelligenza di Anthropic.",
   "lobehub.claude-sonnet-5.description": "Claude Sonnet 5 è il modello Sonnet più agentico di Anthropic, progettato per codifica sostenuta, utilizzo di strumenti e flussi di lavoro a lungo contesto con velocità ed efficienza di livello Sonnet.",
   "lobehub.dall-e-3.description": "L'ultimo modello DALL·E, rilasciato a novembre 2023, supporta una generazione di immagini più realistica e accurata con dettagli più forti.",
+  "lobehub.deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp è un modello multimodale sperimentale che eguaglia V4 Flash nelle capacità testuali e aggiunge la comprensione delle immagini per i flussi di lavoro degli agenti visivi.",
   "lobehub.deepseek-v4-flash.description": "DeepSeek V4 Flash bilancia risposte rapide con un forte ragionamento per flussi di lavoro sensibili alla latenza.",
   "lobehub.deepseek-v4-pro.description": "DeepSeek V4 Pro è attualmente il modello più economico che offre comunque buone prestazioni per le attività agentiche quotidiane.",
   "lobehub.dola-seedream-5-0-pro-260628.description": "ByteDance Seedream 5.0 Pro di BytePlus è un modello di generazione di immagini ad alta precisione con controllo preciso del posizionamento degli elementi, supportando la generazione di immagini da testo e la modifica di singole immagini a risoluzione 2K.",

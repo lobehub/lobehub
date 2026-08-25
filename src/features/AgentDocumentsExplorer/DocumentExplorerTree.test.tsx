@@ -164,7 +164,16 @@ vi.mock('@/features/ExplorerTree', () => {
 
   return {
     DISABLE_ROW_TEXT_SELECTION_CSS: '',
+    DOCUMENT_TREE_ROW_CSS: '',
     DOCUMENT_TREE_ICON_CSS: '',
+    DOCUMENT_TREE_LAYOUT: {
+      fontSize: 14,
+      iconGap: 8,
+      iconSize: 16,
+      iconWidth: 16,
+      itemHeight: 36,
+      levelGap: 8,
+    },
     ExplorerTree,
     FOLDER_ICON_CSS: '',
     HIDE_POINTER_FOCUS_RING_CSS: '',

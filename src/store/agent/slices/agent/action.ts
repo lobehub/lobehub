@@ -1,5 +1,6 @@
 import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
@@ -14,7 +15,7 @@ import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { agentConfigKeys } from '@/libs/swr/keys';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
@@ -24,6 +25,7 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { aiAgentService } from '@/services/aiAgent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
@@ -38,13 +40,23 @@ import type {
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -142,15 +154,26 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    // Seed a personal name so a new agent has an identity before the Agent
+    // Seed a default name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
+    //
+    // A heterogeneous agent never draws a personal name: it is the user's
+    // external tool, not one of our own agents, so its default reads as whose
+    // tool it is — "{owner}'s {product}" (e.g. "Max 的 Claude Code").
+    const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
       ...params.config,
-      name: params.config?.name || randomAgentName(locale),
+      name:
+        params.config?.name ||
+        (heteroProvider
+          ? heteroAgentDefaultName(
+              params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+            )
+          : randomAgentName(locale)),
     };
 
     const result = await agentService.createAgent({ ...params, config });
@@ -449,6 +472,11 @@ export class AgentSliceActionImpl {
     );
   };
 
+  useFetchServerDefaultHeterogeneousCapability = (enabled: boolean) =>
+    useClientDataSWR(enabled ? agentConfigKeys.serverDefaultHeterogeneousCapability() : null, () =>
+      aiAgentService.getServerDefaultHeterogeneousCapability(),
+    );
+
   /**
    * Re-trigger the agent config fetch after a failure. Clears the recorded
    * error first so consumers fall back to the loading skeleton, then
@@ -605,6 +633,10 @@ export class AgentSliceActionImpl {
         draft[id] = config;
       } else {
         draft[id] = merge(draft[id], config);
+        // The character sheet is authored as one document — `AgentModel`
+        // replaces it rather than merging — so mirror that here, or a trait the
+        // user just cleared reappears until the next full fetch.
+        if (Object.hasOwn(config, 'profile')) draft[id].profile = config.profile;
         // merge() can't drop keys; honor `undefined` as a per-device delete so
         // clearing a working directory takes effect optimistically.
         pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);

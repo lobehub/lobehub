@@ -7,6 +7,7 @@ import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  groupTaskItems,
   normalizeTaskListViewOptions,
 } from './listViewOptions';
 
@@ -47,6 +48,29 @@ describe('normalizeTaskListViewOptions', () => {
 
     expect(options.showSubTasks).toBe(true);
     expect(options.nestedSubTasks).toBe(false);
+  });
+});
+
+describe('automation mode grouping', () => {
+  it('groups scheduled and heartbeat tasks separately with schedule first', () => {
+    const schedule = task('schedule', { automationMode: 'schedule' });
+    const heartbeat = task('heartbeat', { automationMode: 'heartbeat' });
+    expect(
+      groupTaskItems([heartbeat, schedule], 'automationMode').map(([group, items]) => [
+        group.automationMode,
+        items.map((item) => item.id),
+      ]),
+    ).toEqual([
+      ['schedule', ['schedule']],
+      ['heartbeat', ['heartbeat']],
+    ]);
+  });
+
+  it('does not create an empty automation group', () => {
+    const heartbeat = task('heartbeat', { automationMode: 'heartbeat' });
+    const groups = groupTaskItems([heartbeat], 'automationMode');
+
+    expect(groups.map(([group]) => group.key)).toEqual(['automationMode:heartbeat']);
   });
 });
 

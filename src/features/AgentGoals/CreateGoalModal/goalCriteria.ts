@@ -6,8 +6,19 @@ import { verifyService } from '@/services/verify';
 interface GenerateGoalCriteriaParams {
   context?: string;
   goal: string;
-  model: string;
-  provider: string;
+}
+
+const preserveOriginalGoal = (goal: string, generatedInstruction: string) => {
+  const original = goal.trim();
+  const generated = generatedInstruction.trim();
+
+  return generated.includes(original) ? generated : `${original}\n\n${generated}`;
+};
+
+export interface GeneratedGoalPlan {
+  criteria: GoalCriterionDraft[];
+  instruction: string;
+  title: string;
 }
 
 export const withGoalCriterionDefaults = (draft: VerifyCriterionDraft): GoalCriterionDraft => ({
@@ -27,17 +38,18 @@ export const createFallbackGoalCriterion = (goal: string): GoalCriterionDraft =>
 export const generateGoalCriteria = async ({
   context,
   goal,
-  model,
-  provider,
-}: GenerateGoalCriteriaParams): Promise<GoalCriterionDraft[]> => {
-  const generated = await verifyService.generateCriteria({
+}: GenerateGoalCriteriaParams): Promise<GeneratedGoalPlan> => {
+  const generated = await verifyService.generateGoalPlan({
     context,
     goal,
     maxCriteria: 8,
-    modelConfig: { model, provider },
   });
 
-  if (generated.length === 0) throw new Error('No acceptance criteria were generated.');
+  if (!generated || generated.criteria.length === 0) throw new Error('No goal plan was generated.');
 
-  return generated.map(withGoalCriterionDefaults);
+  return {
+    ...generated,
+    criteria: generated.criteria.map(withGoalCriterionDefaults),
+    instruction: preserveOriginalGoal(goal, generated.instruction),
+  };
 };

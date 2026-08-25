@@ -176,13 +176,13 @@ describe('Footer help menu tracking', () => {
     expect(getApp.compareDocumentPosition(github) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   }, 20000);
 
-  it('does not show Get App in desktop builds', async () => {
+  it('shows Get App in desktop builds too', async () => {
     const user = userEvent.setup();
     await renderFooter({ desktop: true, hideGitHub: false });
 
     await user.click(screen.getByRole('button', { name: 'Help' }));
 
-    expect(screen.queryByRole('link', { name: 'Get App' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Get App' })).toHaveAttribute('href', '/apps');
   }, 20000);
 
   it('tracks menu open with the visible item keys', async () => {

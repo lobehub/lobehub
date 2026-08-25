@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
+import type { AgentContextDocument } from '../AgentDocumentInjector';
 import {
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -215,7 +216,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        2 user-created docs. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
 
         TITLE                     ID                                    SIZE  UPDATED
         Daily Brief 提取框架          2af6eb88-8bdb-468f-887f-620baa394efa  35    2026-04-27
@@ -229,7 +230,7 @@ describe('AgentDocumentInjector', () => {
     // in the index changed the prompt prefix every minute and broke provider-side
     // prompt caching. The index must stay byte-identical as wall-clock time passes.
     it('should render a time-stable index so the prompt cache prefix survives', async () => {
-      const documents = [
+      const documents: AgentContextDocument[] = [
         {
           content: 'note',
           filename: 'note.md',
@@ -241,7 +242,7 @@ describe('AgentDocumentInjector', () => {
           title: 'Note',
           updatedAt: new Date('2026-04-28T23:59:00.000Z'),
         },
-      ];
+      ] satisfies AgentContextDocument[];
       const renderAt = async (currentTime: Date) => {
         const provider = new AgentDocumentContextInjector({ currentTime, documents });
         const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
@@ -283,42 +284,43 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('empty');
     });
 
-    it('should hide web-crawled docs from the index and surface the count', async () => {
+    it('should hide web-crawled docs behind a stable index hint', async () => {
+      const documents = [
+        {
+          content: 'user note',
+          filename: 'daily-brief.txt',
+          id: '2af6eb88-8bdb-468f-887f-620baa394efa',
+          loadPosition: 'before-first-user',
+          loadRules: { rule: 'always' },
+          policyLoad: 'progressive',
+          sourceType: 'file',
+          title: 'Daily Brief',
+          updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+        },
+        {
+          content: 'gold price page',
+          filename: 'gold-price-1.html',
+          id: 'web-1',
+          loadPosition: 'before-first-user',
+          loadRules: { rule: 'always' },
+          policyLoad: 'progressive',
+          sourceType: 'web',
+          title: 'Gold price',
+        },
+        {
+          content: 'gold news',
+          filename: 'gold-news.html',
+          id: 'web-2',
+          loadPosition: 'before-first-user',
+          loadRules: { rule: 'always' },
+          policyLoad: 'progressive',
+          sourceType: 'web',
+          title: 'Gold news',
+        },
+      ] satisfies AgentContextDocument[];
       const provider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),
-        documents: [
-          {
-            content: 'user note',
-            filename: 'daily-brief.txt',
-            id: '2af6eb88-8bdb-468f-887f-620baa394efa',
-            loadPosition: 'before-first-user',
-            loadRules: { rule: 'always' },
-            policyLoad: 'progressive',
-            sourceType: 'file',
-            title: 'Daily Brief',
-            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
-          },
-          {
-            content: 'gold price page',
-            filename: 'gold-price-1.html',
-            id: 'web-1',
-            loadPosition: 'before-first-user',
-            loadRules: { rule: 'always' },
-            policyLoad: 'progressive',
-            sourceType: 'web',
-            title: 'Gold price',
-          },
-          {
-            content: 'gold news',
-            filename: 'gold-news.html',
-            id: 'web-2',
-            loadPosition: 'before-first-user',
-            loadRules: { rule: 'always' },
-            policyLoad: 'progressive',
-            sourceType: 'web',
-            title: 'Gold news',
-          },
-        ],
+        documents,
       });
 
       const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
@@ -326,8 +328,8 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        1 user-created doc. Use readDocument(id) for full content.
-        2 web-crawled docs hidden — call listDocuments(sourceType='web') to see them.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
+        Web-crawled docs are available but omitted here — call listDocuments(sourceType='web') to discover them.
 
         TITLE        ID                                    SIZE  UPDATED
         Daily Brief  2af6eb88-8bdb-468f-887f-620baa394efa  9     2026-04-27
@@ -335,6 +337,18 @@ describe('AgentDocumentInjector', () => {
       `);
       expect(result.messages[0].content).not.toContain('Gold price');
       expect(result.messages[0].content).not.toContain('Gold news');
+      const injectedContent = result.messages[0].content;
+      expect(typeof injectedContent).toBe('string');
+      if (typeof injectedContent !== 'string') throw new TypeError('Expected string content');
+      expect(injectedContent.split("listDocuments(sourceType='web')")).toHaveLength(2);
+
+      const oneWebDocumentProvider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: documents.slice(0, 2),
+      });
+      const oneWebDocumentResult = await oneWebDocumentProvider.process(context);
+
+      expect(oneWebDocumentResult.messages[0].content).toBe(result.messages[0].content);
     });
 
     it('should collapse same-folder docs into a summary row and keep root docs flat', async () => {
@@ -399,7 +413,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        4 user-created docs. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
         1 folder collapsed (📁) — call listDocuments(parentId=<id>) to list a folder's docs.
 
         TITLE      ID      SIZE  UPDATED
@@ -466,7 +480,7 @@ describe('AgentDocumentInjector', () => {
 
       expect(result.messages[0].content).toMatchInlineSnapshot(`
         "<agent_documents_index>
-        1 user-created doc. Use readDocument(id) for full content.
+        User-created docs, when present, are listed below — use readDocument(id) for full content.
 
         TITLE      ID                                    SIZE   UPDATED
         周报与平台对话分析  d14dca54-7b38-44d5-9bdb-f3fed8c5f947  empty  2026-04-16

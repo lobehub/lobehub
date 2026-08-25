@@ -2,6 +2,7 @@ export * from './agent';
 export * from './agentExecution';
 export * from './agentGroup';
 export * from './agentHook';
+export * from './agentOperation';
 export * from './aiChat';
 export * from './aiProvider';
 export * from './apiKey';

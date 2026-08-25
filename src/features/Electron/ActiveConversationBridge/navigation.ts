@@ -18,7 +18,7 @@ export const subscribeActiveConversationNavigation = (
     }
 
     const coordinate = getCoordinate();
-    if (!coordinate.isConversation || !coordinate.routeAgentId) return;
+    if (!coordinate.isConversation || (!coordinate.routeAgentId && !coordinate.groupId)) return;
 
     if (state.activeTopicId === undefined && coordinate.topicId) {
       useChatStore.setState(
