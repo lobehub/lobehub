@@ -1443,7 +1443,11 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(call?.[1]).not.toHaveProperty('mirrorToOperationId');
     });
 
-    it('does not clobber the topic running-operation marker for an isolation-thread child', async () => {
+    it('nests an isolation-thread child under the parent marker instead of claiming topic root', async () => {
+      // heteroIngest/heteroFinish resolve an operationId via
+      // topic.metadata.runningOperation (root or childOperations) — a plain
+      // updateMetadata() here would clobber the parent's own root marker
+      // instead of nesting under it.
       await service.execAgent({
         agentId: 'agent-1',
         appContext: { isolationThread: true, topicId: 'topic-1' },
@@ -1451,7 +1455,28 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         prompt: 'do the task as a callAgent child',
       } as any);
 
+      expect(topicMock.appendRunningOperationChild).toHaveBeenCalledWith(
+        'topic-1',
+        'parent-operation',
+        expect.objectContaining({ operationId: expect.stringContaining('op_') }),
+      );
+      // Not claimed as the topic's own root marker.
       expect(findRunningOpSeed()).toBeUndefined();
+    });
+
+    it('falls back to claiming the topic marker when the parent is not the current root (e.g. nested isolation chain)', async () => {
+      topicMock.appendRunningOperationChild.mockResolvedValueOnce(false);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, topicId: 'topic-1' },
+        parentOperationId: 'parent-operation',
+        prompt: 'do the task as a callAgent child',
+      } as any);
+
+      // Otherwise this child would never be recognized by
+      // heteroIngest/heteroFinish at all.
+      expect(findRunningOpSeed()).toBeDefined();
     });
   });
 });

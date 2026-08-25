@@ -2591,13 +2591,30 @@ export class AiAgentService {
             userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
           };
         }
-      } else if (!appContext?.isolationThread) {
+      } else if (appContext?.isolationThread && parentOperationId) {
         // Isolation-thread children (callAgent / callSubAgent) run on the
-        // SPAWNER's topic and finish long before it does — see the parity
-        // comment on the standard (non-hetero) branch below. Claiming the
-        // topic-level marker here would clobber the parent's own marker and
-        // then null it out again once this child settles, even though the
-        // parent operation is still running.
+        // SPAWNER's topic and finish long before it does. heteroIngest and
+        // heteroFinish both require this child's operationId to resolve via
+        // topic.metadata.runningOperation (root or childOperations) — see
+        // the comment above childOperation — or every streamed batch is
+        // dropped as stale and the terminal onComplete hooks (including the
+        // callAgent resume bridge) never fire. Nest under the parent's own
+        // marker instead of claiming the topic-level root outright, so the
+        // parent's marker survives for the rest of its still-running turn.
+        const attachedToParent = await this.topicModel.appendRunningOperationChild(
+          topicId,
+          parentOperationId,
+          childOperation,
+        );
+        if (!attachedToParent) {
+          // Parent isn't (or is no longer) the topic's current root marker —
+          // e.g. a nested isolation chain, or the parent already settled.
+          // Fall back to claiming the marker directly so this child is still
+          // discoverable by its own operationId, rather than permanently
+          // unrecognized by heteroIngest/heteroFinish.
+          await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
+        }
+      } else if (!appContext?.isolationThread) {
         await this.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
       }
 
