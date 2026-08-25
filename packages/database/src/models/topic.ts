@@ -1376,26 +1376,11 @@ export class TopicModel {
             },
       } as ChatTopicMetadata;
 
-      // The status write only degrades to a no-op when `existing.status` holds
-      // some OTHER meaningful value (archived / completed / scheduled / …) that
-      // this settle must not clobber — `isRoot` (a matching runningOperation
-      // marker) already proves ownership of the run, so this is not an
-      // additional ownership check. `null` is included alongside 'running':
-      // a brand-new topic's row is inserted with no `status` at all (no column
-      // default), and the client's own run-start `status: 'running'` write is
-      // fire-and-forget — for a fast reply, this settle's terminal write can
-      // land before that one, observe `null`, and (without this) skip writing
-      // 'active'/'unread' entirely. The run-start write then lands moments
-      // later, unconditionally stamping 'running' with nothing left to ever
-      // correct it, since `metadata.runningOperation` is already cleared above
-      // and no future settle call has anything left to match against.
-      const statusUnclaimed = existing.status === 'running' || existing.status === null;
-
       await tx
         .update(topics)
         .set({
           metadata,
-          ...(isRoot && statusUnclaimed ? { status } : {}),
+          ...(isRoot && existing.status === 'running' ? { status } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, id), this.ownership()));
@@ -1411,50 +1396,6 @@ export class TopicModel {
         status: 'settled' as const,
         threadId: operation.threadId ?? undefined,
       };
-    });
-  };
-
-  /**
-   * Claim `status = 'running'` for a topic on behalf of the operation that's
-   * about to start it — but only if that operation's marker (root or child)
-   * is still the current `metadata.runningOperation` when this write lands.
-   *
-   * The client's run-start status write is fire-and-forget and, on the
-   * new-topic path, queued behind other awaited client work — it can be
-   * significantly delayed. Without this guard it is a plain unconditional
-   * `UPDATE`, so for a fast reply it can land AFTER `settleRunningOperation`
-   * already correctly resolved the run back to its terminal status,
-   * silently re-stamping `'running'` with nothing left to ever correct it
-   * (the marker is already cleared, so no future settle call has anything
-   * to match against). This is the run-start mirror of the ownership check
-   * `settleRunningOperation` already does on the run-end side.
-   *
-   * A row lock keeps a concurrent settle from clearing the marker between
-   * the read and the write. Returns `true` when the write happened (or the
-   * topic was already `'running'`), `false` when the guard didn't match.
-   */
-  claimRunningStatus = async (id: string, operationId: string): Promise<boolean> => {
-    return this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
-        .from(topics)
-        .where(and(eq(topics.id, id), this.ownership()))
-        .for('update');
-
-      const runningOperation = existing?.metadata?.runningOperation;
-      const isCurrent =
-        runningOperation?.operationId === operationId ||
-        runningOperation?.childOperations?.some((child) => child.operationId === operationId);
-
-      if (!isCurrent) return false;
-      if (existing?.status === 'running') return true;
-
-      await tx
-        .update(topics)
-        .set({ status: 'running', updatedAt: new Date() })
-        .where(and(eq(topics.id, id), this.ownership()));
-
-      return true;
     });
   };
 

@@ -167,10 +167,6 @@ export class TopicService {
     return lambdaClient.topic.settleRunningOperation.mutate({ id, operationId, status });
   };
 
-  claimRunningStatus = (id: string, operationId: string) => {
-    return lambdaClient.topic.claimRunningStatus.mutate({ id, operationId });
-  };
-
   getShareInfo = (topicId: string) => {
     return lambdaClient.topic.getShareInfo.query({ topicId });
   };

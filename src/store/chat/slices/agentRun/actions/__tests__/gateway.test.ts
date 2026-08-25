@@ -27,7 +27,6 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
-    claimRunningStatus: vi.fn().mockResolvedValue(true),
     settleRunningOperation: vi.fn().mockResolvedValue(undefined),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
@@ -170,7 +169,6 @@ describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
-    vi.mocked(topicService.claimRunningStatus).mockResolvedValue(true);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
@@ -541,7 +539,6 @@ describe('GatewayActionImpl', () => {
       const internalReplaceTopicId = vi.fn();
       const onOperationCancel = vi.fn();
       const replaceMessages = vi.fn();
-      const internalPinTopicStatus = vi.fn();
       const refreshTopic = vi.fn().mockResolvedValue(undefined);
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const switchTopic = vi.fn();
@@ -559,7 +556,6 @@ describe('GatewayActionImpl', () => {
         associateMessageWithOperation,
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
-        internal_pinTopicStatus: internalPinTopicStatus,
         internal_replaceTopicId: internalReplaceTopicId,
         moveQueuedMessages,
         moveVoiceMessages,
@@ -589,7 +585,6 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         get,
         internalDispatchTopic,
-        internalPinTopicStatus,
         internalReplaceTopicId,
         mockClient,
         moveQueuedMessages,
@@ -675,7 +670,7 @@ describe('GatewayActionImpl', () => {
     });
 
     it('should execute as the target agent while routing messages to the parent conversation', async () => {
-      const { action, internalPinTopicStatus, moveQueuedMessages, startOperation } =
+      const { action, moveQueuedMessages, startOperation, updateTopicStatus } =
         createExecuteTestAction();
       const executionContext = {
         agentId: 'target-agent',
@@ -724,7 +719,7 @@ describe('GatewayActionImpl', () => {
         messageMapKey(messageContext),
         messageMapKey(messageContext),
       );
-      expect(internalPinTopicStatus).toHaveBeenCalledWith(
+      expect(updateTopicStatus).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'parent-agent', topicId: 'topic-1' }),
       );
     });

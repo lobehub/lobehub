@@ -599,19 +599,6 @@ export class StreamingExecutorActionImpl {
     // (markTopicUnread / writeTopicStatus 'active'), with `cleanupStaleRunningTopics`
     // as the backstop if this tab dies mid-run.
     if (topicId && !isSubAgent) {
-      // Deliberately NOT `claimRunningStatus`, unlike the gateway transport.
-      // That guard only writes when the operation's marker is still the topic's
-      // current `metadata.runningOperation` — and this transport never puts a
-      // marker there. The client run executes in the browser; `startOperation`
-      // mints an in-memory `op_<nanoid>` and `sendMessageInServer` persists
-      // messages without touching topic metadata. Only the server runtime
-      // (`execAgent`) and the hetero path write that marker, so a guarded claim
-      // from here can never match and would silently drop the write entirely,
-      // undoing the very reason this call exists (see the note above).
-      //
-      // The unguarded write's own risk — a delayed persist landing after the
-      // terminal status — is unchanged from before #18685 and has no marker to
-      // fence against; it needs the client path to publish a marker first.
       const runningWrite = this.#get().updateTopicStatus?.({
         agentId,
         groupId,

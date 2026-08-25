@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
-import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
@@ -275,9 +274,6 @@ describe('StreamingExecutor actions', () => {
       const updateTopicStatusSpy = vi
         .spyOn(result.current, 'updateTopicStatus')
         .mockResolvedValue(undefined as any);
-      const claimRunningStatusSpy = vi
-        .spyOn(topicService, 'claimRunningStatus')
-        .mockResolvedValue(true);
 
       const streamSpy = vi
         .spyOn(chatService, 'createAssistantMessageStream')
@@ -309,15 +305,7 @@ describe('StreamingExecutor actions', () => {
           topicId: TEST_IDS.TOPIC_ID,
         }),
       );
-      // NOT the gateway transport's ownership-guarded `claimRunningStatus`.
-      // That guard only writes when the operation is still the topic's current
-      // `metadata.runningOperation`, and this transport never publishes such a
-      // marker (`startOperation` is in-memory; `sendMessageInServer` does not
-      // touch topic metadata) — so routing this write through it drops it
-      // silently, and the assertion above would keep passing on a mock.
-      expect(claimRunningStatusSpy).not.toHaveBeenCalled();
 
-      claimRunningStatusSpy.mockRestore();
       updateTopicStatusSpy.mockRestore();
       streamSpy.mockRestore();
     });

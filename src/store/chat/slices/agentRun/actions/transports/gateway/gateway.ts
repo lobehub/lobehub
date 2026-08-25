@@ -737,22 +737,11 @@ export class GatewayActionImpl {
     }
 
     if (result.topicId) {
-      // Local optimistic dispatch only — persistence is routed through the
-      // ownership-guarded `claimRunningStatus`, not `updateTopicStatus`'s
-      // unconditional UPDATE. This write is fire-and-forget and, on the
-      // new-topic path, queued behind several awaited steps above, so it can
-      // be significantly delayed; an unconditional persist could land AFTER
-      // `settleRunningOperation` already correctly resolved a fast reply back
-      // to its terminal status, silently re-stranding the sidebar spinner —
-      // see `TopicModel.claimRunningStatus`'s doc comment.
-      this.#get().internal_pinTopicStatus?.({
+      void this.#get().updateTopicStatus?.({
         agentId: messageContext.agentId,
         groupId: messageContext.groupId,
         status: 'running',
         topicId: result.topicId,
-      });
-      topicService.claimRunningStatus(result.topicId, result.operationId).catch((err) => {
-        console.error('[executeGatewayAgent] failed to claim running status: %O', err);
       });
     }
 
