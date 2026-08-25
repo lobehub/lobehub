@@ -6,6 +6,15 @@ export const formatChaosResult = (result: ChaosRunResult) =>
   JSON.stringify(
     {
       ...result,
+      ...(result.injection
+        ? {
+            injection: {
+              adapter: result.injection.adapter,
+              details: result.injection.details,
+              injectionId: result.injection.injectionId,
+            },
+          }
+        : {}),
       schemaVersion: 1,
     },
     undefined,

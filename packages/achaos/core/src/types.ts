@@ -94,7 +94,7 @@ export interface ChaosRunResult {
   error?: { message: string; name: string };
   experimentId: string;
   finishedAt: string;
-  injection?: ChaosInjectionReceipt;
+  injection?: Omit<ChaosInjectionReceipt, 'cleanupToken'>;
   oracleResults: ChaosOracleResult[];
   runId: string;
   seed: string;
@@ -124,7 +124,7 @@ export interface ChaosAdapter {
 }
 
 export interface ChaosOracle {
-  evaluate: (context: ChaosRunContext) => Promise<ChaosOracleResult>;
+  evaluate: (context: ChaosRunContext, spec: ChaosOracleSpec) => Promise<ChaosOracleResult>;
   name: string;
 }
 

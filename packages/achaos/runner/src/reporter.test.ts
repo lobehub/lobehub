@@ -5,20 +5,30 @@ import { formatChaosResult } from './reporter';
 
 describe('formatChaosResult', () => {
   it('emits a versioned machine-readable CI result', () => {
-    const result: ChaosRunResult = {
+    const result = {
       durationMs: 1,
       experimentId: 'test',
       finishedAt: '2026-01-01T00:00:00.001Z',
+      injection: {
+        adapter: 'database',
+        cleanupToken: { password: 'secret', row: { private: true } },
+        details: { table: 'operations' },
+        injectionId: 'injection',
+      },
       oracleResults: [],
       runId: 'run',
       seed: 'seed',
       startedAt: '2026-01-01T00:00:00.000Z',
       status: 'passed',
       timeline: [],
-    };
-    expect(JSON.parse(formatChaosResult(result))).toMatchObject({
+    } as unknown as ChaosRunResult;
+    const report = JSON.parse(formatChaosResult(result));
+    expect(report).toMatchObject({
+      injection: { adapter: 'database', details: { table: 'operations' } },
       schemaVersion: 1,
       status: 'passed',
     });
+    expect(report.injection.cleanupToken).toBeUndefined();
+    expect(formatChaosResult(result)).not.toContain('secret');
   });
 });

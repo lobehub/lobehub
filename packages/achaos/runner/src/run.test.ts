@@ -249,6 +249,27 @@ describe('runChaosExperiment', () => {
     expect(order).toEqual(['exercise', 'inject']);
   });
 
+  it('passes each oracle specification to its evaluator', async () => {
+    const evaluate = vi.fn(async () => ({
+      message: 'healthy',
+      name: 'healthy',
+      status: 'passed' as const,
+    }));
+    const registry = new ChaosRegistry()
+      .registerAdapter({
+        inject: async () => ({ adapter: 'test', injectionId: 'params' }),
+        name: 'test',
+      })
+      .registerOracle({ evaluate, name: 'healthy' });
+    const oracle = { name: 'healthy', params: { recoveryBoundMs: 500 } };
+    await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, oracles: [oracle] },
+      registry,
+    });
+    expect(evaluate).toHaveBeenCalledWith(expect.any(Object), oracle);
+  });
+
   it('aborts a timed-out phase and gives cleanup a fresh signal', async () => {
     let phaseWasAborted = false;
     let cleanupWasAborted = true;

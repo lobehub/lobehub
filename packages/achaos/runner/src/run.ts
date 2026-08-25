@@ -4,6 +4,7 @@ import type {
   ChaosAdapter,
   ChaosExercise,
   ChaosExperiment,
+  ChaosInjectionReceipt,
   ChaosOracleResult,
   ChaosRunContext,
   ChaosRunResult,
@@ -28,6 +29,12 @@ const combineErrors = (primary: unknown, secondary: unknown, secondaryLabel: str
   aggregateError.name = 'ChaosAggregateError';
   return aggregateError;
 };
+
+const reportableInjection = (injection: ChaosInjectionReceipt) => ({
+  adapter: injection.adapter,
+  details: injection.details,
+  injectionId: injection.injectionId,
+});
 
 const withTimeout = async <T>(
   promise: Promise<T>,
@@ -259,7 +266,7 @@ export const runChaosExperiment = async ({
     }
     for (const spec of experiment.oracles) {
       const result = await withTimeout(
-        registry.resolveOracle(spec.name).evaluate(context),
+        registry.resolveOracle(spec.name).evaluate(context, spec),
         spec.timeoutMs ?? experiment.timeoutMs,
         controller,
       );
@@ -317,7 +324,7 @@ export const runChaosExperiment = async ({
     ...(error ? { error: serializeError(error) } : {}),
     experimentId: experiment.id,
     finishedAt: finishedAt.toISOString(),
-    ...(injection ? { injection } : {}),
+    ...(injection ? { injection: reportableInjection(injection) } : {}),
     oracleResults,
     runId,
     seed: experiment.seed,
