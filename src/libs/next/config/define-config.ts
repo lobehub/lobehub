@@ -10,6 +10,7 @@ interface CustomNextConfig {
   outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
   outputFileTracingIncludes?: NextConfig['outputFileTracingIncludes'];
   redirects?: Redirect[];
+  rewrites?: NextConfig['rewrites'];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
 }
@@ -351,6 +352,7 @@ export function defineConfig(config: CustomNextConfig) {
       },
       ...(config.redirects ?? []),
     ],
+    rewrites: config.rewrites,
     // when external packages in dev mode with turbopack, this config will lead to bundle error
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',

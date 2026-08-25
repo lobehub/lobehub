@@ -1,5 +1,3 @@
-import { type NextRequest } from 'next/server';
-
 /**
  * Prepare Request object for tRPC fetchRequestHandler
  *
@@ -13,7 +11,7 @@ import { type NextRequest } from 'next/server';
  * @param req - The original NextRequest object
  * @returns A cloned Request object with an independent body stream
  */
-export function prepareRequestForTRPC(req: NextRequest): Request {
+export function prepareRequestForTRPC(req: Request): Request {
   // Clone the Request to create an independent body stream
   // This ensures tRPC can read the body even if the original request's body was disturbed
   return req.clone();
