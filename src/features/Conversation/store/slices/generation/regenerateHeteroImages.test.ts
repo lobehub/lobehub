@@ -68,7 +68,10 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: {
+    getTopicById: () => () => undefined,
+    getTopicModelById: () => () => undefined,
+  },
 }));
 
 vi.mock('@/store/electron', () => ({
