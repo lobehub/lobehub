@@ -29,9 +29,12 @@ const BodySchema = z.object({
  * short-circuits before the token check (same reasoning as `gatewayCallback`).
  *
  * This endpoint returns every credential the named host needs, so it is also
- * the one place a single token can read the whole set. The audit log below is
- * the control that makes such a read visible; it doubles as the signal that
- * the host restarted.
+ * the one place a single token can read a whole set. Every gateway
+ * authenticates with the same service token, so the token cannot say which
+ * one is calling — which is exactly why only one host is allowed to be asked
+ * for. See the `default` rejection below. The audit log is the other control:
+ * it makes such a read visible, and doubles as the signal that a host
+ * restarted.
  */
 export async function gatewayDesiredConnections(c: Context): Promise<Response> {
   if (gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1') {
@@ -60,6 +63,17 @@ export async function gatewayDesiredConnections(c: Context): Promise<Response> {
   }
 
   const { host } = parsed.data;
+
+  // The `default` host rebuilds from its own durable registry and never pulls,
+  // so asking for its slice can only be a caller reaching for credentials that
+  // are not its own. That matters because every gateway authenticates with the
+  // same service token: the token cannot tell us who is calling, so keeping
+  // exactly one pull-capable host is what makes the question answerable at
+  // all. A second one would need per-host credentials first.
+  if (host === 'default') {
+    log('refused a pull for the default host, which does not rebuild this way');
+    return c.json({ error: 'The default host does not rebuild by pulling' }, 403);
+  }
 
   // A host this deployment does not route to has no desired set to hand out.
   // Answering with an empty list would say "hold nothing", which is a

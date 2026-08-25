@@ -108,6 +108,19 @@ describe('gatewayDesiredConnections', () => {
     expect(mockListDesired).not.toHaveBeenCalled();
   });
 
+  // `host` is caller-controlled and every gateway authenticates with the same
+  // service token, so a token that leaks out of one gateway must not be able
+  // to name a different one and read its credentials. Only the host that
+  // actually rebuilds this way may be asked for.
+  it('refuses a pull for the host that does not rebuild by pulling', async () => {
+    const res = await gatewayDesiredConnections(
+      buildContext({ authHeader: AUTH, body: { host: 'default' } }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(mockListDesired).not.toHaveBeenCalled();
+  });
+
   // An empty list would tell the caller "hold nothing" and stop its retry.
   // "I do not route to you yet" is a different statement and has to stay
   // retryable, or a gateway that boots before its URL is configured never
