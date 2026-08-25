@@ -1,4 +1,9 @@
-import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
+import {
+  BRANDING_PROVIDER,
+  isOfficialProvider,
+  OFFICIAL_PROVIDER_DISABLE_ERROR,
+} from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import {
   HETEROGENEOUS_PROVIDER_BINDING_AGENT_TYPES,
@@ -7,6 +12,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { type EnabledAiModel } from 'model-bank';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -53,6 +59,33 @@ const aiProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
     },
   });
 });
+
+/**
+ * Drops beta-gated LobeHub models the caller isn't authorized for from an
+ * `enabledAiModels` list.
+ *
+ * `getUserScopedAiProviderRuntimeState`'s own `hiddenBuiltinModels` gate (via
+ * `getHiddenBuiltinModelsForUser`) is a no-op stub, so `state.enabledAiModels`
+ * — the field the chat model picker's `enabledChatModelList` is actually built
+ * from client-side (see `resolveUserScopedBuiltinModelState`) — reaches the
+ * client unfiltered otherwise. This is a separate data source from the fetched
+ * catalog `/webapi/lobehub-model-config` already filters; both need the same
+ * gate for a beta model to be fully hidden.
+ */
+const filterAvailableEnabledAiModels = async (
+  enabledAiModels: EnabledAiModel[],
+  userEmail: string | undefined,
+): Promise<EnabledAiModel[]> => {
+  const availability = await Promise.all(
+    enabledAiModels.map((model) =>
+      model.providerId === BRANDING_PROVIDER
+        ? isLobeHubModelAvailable(model.id, model.type, { userEmail })
+        : true,
+    ),
+  );
+
+  return enabledAiModels.filter((_, index) => availability[index]);
+};
 
 const resolveProviderBindingAgentTypes = (
   state: AiProviderRuntimeState,
@@ -175,9 +208,14 @@ export const aiProviderRouter = router({
   getAiProviderRuntimeState: aiProviderProcedure
     .input(z.object({ isLogin: z.boolean().optional() }))
     .query(async ({ ctx }): Promise<AiProviderRuntimeState> => {
-      const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
+      const rawState = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
         ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
       );
+      const userEmail = (await UserModel.findById(ctx.serverDB, ctx.userId))?.email;
+      const state: AiProviderRuntimeState = {
+        ...rawState,
+        enabledAiModels: await filterAvailableEnabledAiModels(rawState.enabledAiModels, userEmail),
+      };
       const providerBindingAgentTypes = resolveProviderBindingAgentTypes(state);
 
       // restricted API keys must not exfiltrate decrypted provider credentials
@@ -213,11 +251,15 @@ export const aiProviderRouter = router({
       const state = await getUserScopedAiProviderRuntimeState(ctx.userId, () =>
         ctx.aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults),
       );
+      const userEmail = (await UserModel.findById(ctx.serverDB, ctx.userId))?.email;
       const enabled = state.enabledAiProviders.some(({ id }) => id === input.id);
       const runtimeConfig = state.runtimeConfig[input.id];
-      const enabledModels = state.enabledAiModels
-        .filter((model) => model.providerId === input.id)
-        .map(({ id, providerId, type }) => ({ id, providerId, type }));
+      const enabledModels = (
+        await filterAvailableEnabledAiModels(
+          state.enabledAiModels.filter((model) => model.providerId === input.id),
+          userEmail,
+        )
+      ).map(({ id, providerId, type }) => ({ id, providerId, type }));
 
       if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
         return {

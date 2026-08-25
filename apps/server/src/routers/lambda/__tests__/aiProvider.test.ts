@@ -14,10 +14,14 @@ import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/
 import { aiProviderRouter } from '../aiProvider';
 
 const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+const mockIsLobeHubModelAvailable = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/server/aiProvider', () => ({
   getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
   getModelRedirects: vi.fn(async () => ({})),
+}));
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  isLobeHubModelAvailable: mockIsLobeHubModelAvailable,
 }));
 vi.mock('@/server/globalConfig');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
@@ -70,6 +74,7 @@ describe('aiProviderRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
 
     vi.mocked(getServerGlobalConfig).mockReturnValue({
       aiProvider: {},
@@ -278,6 +283,51 @@ describe('aiProviderRouter', () => {
       expect(result.enabledAiModels).toEqual([visibleChatModel, visibleImageModel]);
       expect(result.enabledChatAiProviders).toEqual([lobehubProvider]);
       expect(result.enabledImageAiProviders).toEqual([openaiProvider]);
+    });
+
+    it('should drop beta-gated LobeHub models the caller is not authorized for', async () => {
+      const betaModel = {
+        abilities: {},
+        enabled: true,
+        id: 'beta-chat-model',
+        providerId: 'lobehub',
+        type: 'chat' as const,
+      };
+      const ordinaryModel = {
+        abilities: {},
+        enabled: true,
+        id: 'ordinary-chat-model',
+        providerId: 'lobehub',
+        type: 'chat' as const,
+      };
+      const otherProviderModel = {
+        abilities: {},
+        enabled: true,
+        id: 'other-provider-model',
+        providerId: 'openai',
+        type: 'chat' as const,
+      };
+      const runtimeState: AiProviderRuntimeState = {
+        ...mockRuntimeState,
+        enabledAiModels: [betaModel, ordinaryModel, otherProviderModel],
+      };
+      vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi
+        .fn()
+        .mockResolvedValue(runtimeState);
+      mockIsLobeHubModelAvailable.mockImplementation(
+        async (id: string) => id !== 'beta-chat-model',
+      );
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+      const result = await caller.getAiProviderRuntimeState({});
+
+      expect(result.enabledAiModels).toEqual([ordinaryModel, otherProviderModel]);
+      // Non-lobehub providers are never passed through the beta gate at all.
+      expect(mockIsLobeHubModelAvailable).not.toHaveBeenCalledWith(
+        'other-provider-model',
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 
