@@ -808,6 +808,7 @@
   "lobehub.claude-sonnet-4-6.description": "Claude Sonnet 4.6 是速度與智能的最佳結合。",
   "lobehub.claude-sonnet-5.description": "Claude Sonnet 5 是 Anthropic 最具代理性的 Sonnet 模型，專為持續編碼、工具使用以及長上下文工作流程而設計，具備 Sonnet 級別的速度和效率。",
   "lobehub.dall-e-3.description": "最新的 DALL·E 模型於 2023 年 11 月發布，支持更真實、準確的圖像生成，細節更為強大。",
+  "lobehub.deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp 是一款實驗性多模態模型，具備與 V4 Flash 相當的文本能力，並新增影像理解功能以支援視覺代理工作流程。",
   "lobehub.deepseek-v4-flash.description": "DeepSeek V4 Flash 在快速響應與強大推理之間取得平衡，適用於對延遲敏感的工作流程。",
   "lobehub.deepseek-v4-pro.description": "DeepSeek V4 Pro 是目前最具性價比的模型，仍能在日常代理任務中表現出色。",
   "lobehub.dola-seedream-5-0-pro-260628.description": "ByteDance Seedream 5.0 Pro 由 BytePlus 開發，是一款高精度的圖像生成模型，能精確控制元素定位，支持 2K 分辨率的文本生成圖像和單圖編輯。",

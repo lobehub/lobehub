@@ -73,7 +73,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           color: cssVar.colorTextSecondary,
         }}
       >
-        {t(`${identifier}.description`, { defaultValue: description })}
+        {description && t(`${identifier}.description`, { defaultValue: description })}
       </Flexbox>
     </Flexbox>
   );

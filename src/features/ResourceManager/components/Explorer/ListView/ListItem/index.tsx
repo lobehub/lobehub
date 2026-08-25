@@ -237,11 +237,13 @@ const FileListItem = ({
     slug,
   });
   const { menuItems } = useFileItemDropdown({
+    fileId,
     fileType,
     filename: name,
     id,
     libraryId: resourceManagerState.libraryId,
     onRenameStart: isFolder ? handleRenameStart : undefined,
+    size,
     sourceType,
     url,
     userId,

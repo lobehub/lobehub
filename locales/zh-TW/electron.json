@@ -6,6 +6,7 @@
   "gateway.statusDisconnected": "未連接到網關",
   "gateway.title": "設備網關",
   "navigation.agents": "代理",
+  "navigation.apps": "應用程式",
   "navigation.channels": "頻道",
   "navigation.chat": "對話",
   "navigation.discover": "發現",

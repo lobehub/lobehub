@@ -146,6 +146,8 @@
   "updater.later": "稍后",
   "updater.newVersionAvailable": "新版本可用",
   "updater.newVersionAvailableDesc": "发现新版本 {{version}}，是否立即下载？",
+  "updater.refreshToApply": "立即刷新",
+  "updater.rendererUpdateReady": "新版本已就绪,刷新即可使用",
   "updater.restartAndInstall": "安装更新并重启",
   "updater.updateError": "更新错误",
   "updater.updateReady": "有新版本可用",

@@ -114,6 +114,30 @@ describe('preferenceSelectors', () => {
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
     });
 
+    it('keeps agent provider binding disabled by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(false);
+    });
+
+    it('returns the configured agent provider binding preference', () => {
+      store.preference.lab = { enableAgentProviderBinding: true };
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(true);
+    });
+
+    it('keeps the feature on for users who enabled it under the legacy Claude-specific key', () => {
+      store.preference.lab = { enableClaudeCodeApiMode: true };
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(true);
+    });
+
+    it('lets an explicit new-key choice override the legacy key', () => {
+      store.preference.lab = { enableAgentProviderBinding: false, enableClaudeCodeApiMode: true };
+
+      expect(labPreferSelectors.enableAgentProviderBinding(store)).toBe(false);
+    });
+
     it('keeps OAuth app management hidden by default', () => {
       store.preference.lab = undefined;
 

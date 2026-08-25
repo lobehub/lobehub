@@ -217,6 +217,13 @@ export class GatewayHttpClient {
     topicId: string;
     userId: string;
     workspaceId?: string;
+    /**
+     * Topic/run workspace for device-side ingest. Distinct from
+     * {@link workspaceId}, which routes the request to a device pool. A
+     * workspace topic dispatched to a personal device still needs this so
+     * `lh hetero exec` can write back under the topic's scope.
+     */
+    ingestWorkspaceId?: string;
   }): Promise<{ success: boolean; error?: string }> {
     const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {

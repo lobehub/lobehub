@@ -1,11 +1,11 @@
 'use client';
 
-import type { AgentModelSelectionPolicy } from '@lobechat/types';
+import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
 import type { FormGroupItemType } from '@lobehub/ui';
 import { Empty, Form, Icon } from '@lobehub/ui';
 import { Alert } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { Bot, InfoIcon, LockIcon, MonitorSmartphone, UsersIcon } from 'lucide-react';
+import { Bot, InfoIcon, LockIcon, MonitorSmartphone, Share2, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,6 +41,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     accessLevel,
     accessLoading,
     canEditConfig,
+    canEditPolicies,
     canFixExecutionTarget,
     canManageAccess,
     executionTargetPolicy,
@@ -52,9 +53,16 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     setAccessLevel,
     setExecutionTargetPolicy,
     setModelPolicy,
+    setTopicSharePolicy,
+    topicSharePolicy,
   } = useGroupPermission(groupId);
 
   const accessOptions = useAccessLevelOptions({ accessLevel, isPrivate });
+
+  // Same authority as the Agent page: these write the supervisor agent's
+  // policy keys, which the server accepts only from its creator or the
+  // workspace owner and silently drops from anyone else's save.
+  const policiesDisabled = !canEditConfig || !canEditPolicies;
   const labelKeys = getSelectionPolicyLabelKeys(isPrivate);
   const sections = resolveGroupPermissionSections({
     accessError,
@@ -63,6 +71,26 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
     isPrivate,
     isWorkspaceGroup,
   });
+
+  // Deliberately not a `member`/`fixed` pair like the rows below: sharing is a
+  // capability, not a setting members switch, so the labels name who may do it.
+  const topicSharePolicyOptions = useMemo(
+    (): PolicyOption<AgentTopicSharePolicy>[] => [
+      {
+        desc: t('permission.page.groupTopicSharePolicyMemberDesc'),
+        icon: UsersIcon,
+        label: t('settingAgent.topicSharePolicy.membersCanShare'),
+        value: 'member',
+      },
+      {
+        desc: t('permission.page.groupTopicSharePolicyRestrictedDesc'),
+        icon: LockIcon,
+        label: t('settingAgent.topicSharePolicy.membersCannotShare'),
+        value: 'restricted',
+      },
+    ],
+    [t],
+  );
 
   const modelPolicyOptions = useMemo(
     (): PolicyOption<AgentModelSelectionPolicy>[] => [
@@ -146,6 +174,33 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
             desc: t(sections.accessDescKey),
             label: t('permission.page.accessLevelLabel'),
           },
+          // Group topics are stored against the supervisor agent, so this row
+          // writes the same field the Agent Permission page does. Without it
+          // the policy would still apply to group conversations with no way to
+          // see or change it from the group.
+          ...(sections.showConfigCard
+            ? [
+                {
+                  avatar: (
+                    <span className={styles.rowIcon}>
+                      <Icon icon={Share2} size={16} />
+                    </span>
+                  ),
+                  children: (
+                    <PolicySelect
+                      disabled={policiesDisabled}
+                      options={topicSharePolicyOptions}
+                      value={topicSharePolicy}
+                      onChange={setTopicSharePolicy}
+                    />
+                  ),
+                  desc: canEditPolicies
+                    ? t('permission.page.groupTopicSharePolicyDesc')
+                    : t('permission.noManagePermission'),
+                  label: t('settingAgent.topicSharePolicy.title'),
+                },
+              ]
+            : []),
         ],
         title: t('permission.page.memberGroup'),
       }
@@ -165,13 +220,15 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
             ),
             children: (
               <PolicySelect
-                disabled={!canEditConfig}
+                disabled={policiesDisabled}
                 options={modelPolicyOptions}
                 value={modelPolicy}
                 onChange={setModelPolicy}
               />
             ),
-            desc: t('permission.page.groupModelPolicyDesc'),
+            desc: canEditPolicies
+              ? t('permission.page.groupModelPolicyDesc')
+              : t('permission.noManagePermission'),
             label: t('settingAgent.modelPolicy.title'),
           },
           {
@@ -182,13 +239,15 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
             ),
             children: (
               <PolicySelect
-                disabled={!canEditConfig}
+                disabled={policiesDisabled}
                 options={executionPolicyOptions}
                 value={executionTargetPolicy}
                 onChange={setExecutionTargetPolicy}
               />
             ),
-            desc: t('permission.page.groupDevicePolicyDesc'),
+            desc: canEditPolicies
+              ? t('permission.page.groupDevicePolicyDesc')
+              : t('permission.noManagePermission'),
             label: t('settingAgent.devicePolicy.title'),
           },
         ],

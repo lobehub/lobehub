@@ -1,5 +1,6 @@
 // @vitest-environment node
 import Anthropic from '@anthropic-ai/sdk';
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
@@ -7,6 +8,7 @@ import {
   createAnthropicCompatibleRuntime,
   createDefaultAnthropicClient,
   DEFAULT_ANTHROPIC_TIMEOUT,
+  handleDefaultAnthropicError,
 } from './index';
 
 vi.mock('@anthropic-ai/sdk', () => {
@@ -143,6 +145,33 @@ describe('createDefaultAnthropicClient', () => {
   });
 });
 
+describe('handleDefaultAnthropicError', () => {
+  it('should classify provider balance errors as insufficient quota', () => {
+    expect(
+      handleDefaultAnthropicError(
+        {
+          error: {
+            error: {
+              code: 'invalid_request_error',
+              message: 'Insufficient Balance',
+              type: 'unknown_error',
+            },
+          },
+          status: 402,
+        },
+        { apiKey: 'test-key', baseURL: 'https://api.example.com/anthropic' },
+      ),
+    ).toMatchObject({
+      error: {
+        code: 'invalid_request_error',
+        message: 'Insufficient Balance',
+        type: 'unknown_error',
+      },
+      errorType: AgentRuntimeErrorType.InsufficientQuota,
+    });
+  });
+});
+
 describe('createAnthropicCompatibleRuntime', () => {
   it('should normalize default baseURL before creating a custom client', () => {
     const createClient = vi.fn((options) => ({ baseURL: options.baseURL }) as unknown as Anthropic);
@@ -212,6 +241,48 @@ describe('createAnthropicCompatibleRuntime', () => {
       expect.objectContaining({ model: 'logical-model' }),
     );
     expect(createClient.mock.calls[0][0]).not.toHaveProperty('modelIdMapping');
+  });
+
+  it('should classify provider balance errors without a custom error handler', async () => {
+    const messagesCreate = vi.fn().mockRejectedValue({
+      error: {
+        error: {
+          code: 'invalid_request_error',
+          message: 'Insufficient Balance',
+          type: 'unknown_error',
+        },
+      },
+      status: 402,
+    });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://api.example.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+
+    await expect(
+      runtime.chat({
+        messages: [{ content: 'hi', role: 'user' }],
+        model: 'test-model',
+        responseMode: 'json',
+        stream: false,
+      } as any),
+    ).rejects.toMatchObject({
+      errorType: AgentRuntimeErrorType.InsufficientQuota,
+    });
   });
 
   it('should retain the exact provider request and raw streaming response diagnostics', async () => {

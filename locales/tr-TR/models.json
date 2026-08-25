@@ -808,6 +808,7 @@
   "lobehub.claude-sonnet-4-6.description": "Claude Sonnet 4.6, hız ve zekanın en iyi kombinasyonunu sunar.",
   "lobehub.claude-sonnet-5.description": "Claude Sonnet 5, Anthropic'in en etkili Sonnet modeli olup, uzun süreli kodlama, araç kullanımı ve uzun bağlamlı iş akışları için Sonnet seviyesinde hız ve verimlilikle tasarlanmıştır.",
   "lobehub.dall-e-3.description": "Kasım 2023'te piyasaya sürülen en yeni DALL·E modeli, daha gerçekçi ve doğru görüntü oluşturmayı, daha güçlü detaylarla destekler.",
+  "lobehub.deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp, metin yeteneklerinde V4 Flash ile eşleşen ve görsel ajan iş akışları için görüntü anlayışını ekleyen deneysel bir çok modlu modeldir.",
   "lobehub.deepseek-v4-flash.description": "DeepSeek V4 Flash, gecikme hassasiyeti olan iş akışları için hızlı yanıtları güçlü akıl yürütme ile dengeler.",
   "lobehub.deepseek-v4-pro.description": "DeepSeek V4 Pro, günlük otonom görevlerde iyi performans gösteren en uygun fiyatlı modeldir.",
   "lobehub.dola-seedream-5-0-pro-260628.description": "ByteDance Seedream 5.0 Pro, BytePlus tarafından geliştirilen, eleman konumlandırmasında hassas kontrol sağlayan, 2K çözünürlükte metinden görüntüye ve tek görüntü düzenlemeyi destekleyen yüksek hassasiyetli bir görüntü oluşturma modelidir.",

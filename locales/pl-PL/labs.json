@@ -2,6 +2,8 @@
   "description": "Te funkcje są eksperymentalne. Mogą zostać usunięte i mogą zawierać błędy. Będziemy wdzięczni za Twoją opinię podczas ich używania.",
   "features.agentGraphConfig.desc": "Pokaż konfigurację czasu wykonywania grafu w zaawansowanych ustawieniach profilu agenta.",
   "features.agentGraphConfig.title": "Konfiguracja czasu wykonywania grafu agenta",
+  "features.agentProviderBinding.desc": "Pozwól obsługiwanym lokalnym agentom korzystać z skonfigurowanego dostawcy API i modelu zamiast ich subskrypcji. Początkowo dostępne dla Claude Code i Codex w lokalnym wykonaniu na komputerze.",
+  "features.agentProviderBinding.title": "Powiązanie Dostawcy Agenta",
   "features.agentSelfIteration.desc": "Pozwala asystentowi na refleksję, budowanie samoświadomości oraz ciągłe doskonalenie poprzez kolejne próby i interakcje.",
   "features.agentSelfIteration.title": "Samoiteracja agenta",
   "features.artifactDeployment.desc": "Publikuj artefakty na hostowanym URL i zarządzaj wydaniami z poziomu paska bocznego rozmowy",

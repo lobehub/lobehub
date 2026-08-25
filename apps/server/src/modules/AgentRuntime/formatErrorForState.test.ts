@@ -52,7 +52,54 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(ChatErrorType.InternalServerError);
       expect(result.message).toBe('boom');
-      expect(result.body).toEqual({ name: 'TypeError' });
+      expect(result.body).toMatchObject({ name: 'TypeError' });
+    });
+
+    it('persists the stack of an unclassified Error so the throw site is locatable', () => {
+      // `name` + `message` alone are useless for a recurring harness 500 — the
+      // only thing that identifies where it blew up is the stack.
+      const result = formatErrorForState(new Error('some opaque internal failure'));
+
+      expect(result.type).toBe(ChatErrorType.InternalServerError);
+      expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
+    });
+
+    it('classifies a harness JSON.parse throw instead of leaving a bare 500', () => {
+      // The production shape: `SyntaxError` out of a harness `JSON.parse`,
+      // previously stored as `{ type: 500, body: { name: 'SyntaxError' } }` with
+      // no attribution, category or failure accounting at all.
+      const result = formatErrorForState(
+        new SyntaxError('Bad escaped character in JSON at position 46269 (line 1 column 46270)'),
+      );
+
+      expect(result.type).toBe(AgentRuntimeErrorType.HarnessJsonParseError);
+      expect(result.attribution).toBe('harness');
+      expect(result.category).toBe('stream');
+      expect(result.numericId).toBe(7008);
+      expect(result.countAsFailure).toBe(true);
+      // Deterministic — the same corrupt payload re-parses to the same failure,
+      // so a transport retry would only re-burn the run's tokens.
+      expect(result.retryable).toBe(false);
+      // Classification must not cost us the throw site.
+      expect((result.body as { name?: string; stack?: string }).name).toBe('SyntaxError');
+      expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
+    });
+
+    it('truncates an oversized stack instead of storing it whole', () => {
+      const error = new Error('boom');
+      error.stack = 'x'.repeat(10_000);
+
+      const stack = (formatErrorForState(error).body as { stack?: string }).stack;
+
+      expect(stack).toHaveLength(1001);
+      expect(stack?.endsWith('…')).toBe(true);
+    });
+
+    it('omits `stack` when the thrown Error carries none', () => {
+      const error = new Error('boom');
+      error.stack = undefined;
+
+      expect((formatErrorForState(error).body as { stack?: string }).stack).toBeUndefined();
     });
 
     it('falls back to AgentRuntimeError for unknown thrown values', () => {

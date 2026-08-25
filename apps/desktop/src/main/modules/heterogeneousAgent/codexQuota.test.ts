@@ -183,7 +183,7 @@ describe('fetchCodexQuota', () => {
     expect(readFile).toHaveBeenCalledWith('/tmp/codex-home/auth.json', 'utf8');
     expect(spawnMock).toHaveBeenCalledWith(
       '/custom/bin/codex',
-      ['-s', 'read-only', '-a', 'untrusted', 'app-server'],
+      ['app-server'],
       expect.objectContaining({
         env: expect.objectContaining({
           CODEX_HOME: '/tmp/codex-home',

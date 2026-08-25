@@ -360,6 +360,30 @@ describe('hetero exec command', () => {
     });
   });
 
+  it('passes Grok Build --model and --effort through as spawnAgent extraArgs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'grok-build',
+      '--prompt',
+      'hi',
+      '--model',
+      'grok-4.6',
+      '--effort',
+      'xhigh',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('grok-build', undefined);
+    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
+      agentType: 'grok-build',
+      command: 'grok',
+      extraArgs: ['--model', 'grok-4.6', '--effort', 'xhigh'],
+    });
+  });
+
   it('translates Codex --effort to native model_reasoning_effort config', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -513,9 +537,36 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         agentType: 'cursor',
+        askUserBridge: undefined,
         command: 'agent',
         extraArgs: ['--mode', 'plan', '--model', 'sonnet-4-thinking'],
         resumeSessionId: 'cursor-session',
+      }),
+    );
+  });
+
+  it('passes an intervention bridge to server-ingest Cursor runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'cursor',
+      '--prompt',
+      'do thing',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-cursor-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'cursor',
+        askUserBridge: expect.objectContaining({ pending: expect.any(Function) }),
       }),
     );
   });

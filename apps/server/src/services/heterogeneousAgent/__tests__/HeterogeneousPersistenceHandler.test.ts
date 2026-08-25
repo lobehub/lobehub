@@ -1760,6 +1760,29 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('warm replica step resync', () => {
+    it('reports a late advanced batch as stale after its operation was removed', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'step1' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValue({ agentId: null, id: 'topic-1', metadata: {} });
+
+      await expect(
+        h.handler.ingest({
+          events: [buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'late' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow('Stale hetero operation op-1');
+    });
+
     it('switches to the DB-persisted step assistant when a later-step batch lands on a stale warm replica', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

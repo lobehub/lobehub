@@ -808,6 +808,7 @@
   "lobehub.claude-sonnet-4-6.description": "Claude Sonnet 4.6 بهترین ترکیب سرعت و هوش Anthropic است.",
   "lobehub.claude-sonnet-5.description": "Claude Sonnet 5 مدل Sonnet Anthropic است که بیشترین عاملیت را دارد و برای کدنویسی پایدار، استفاده از ابزارها و جریان‌های کاری با زمینه طولانی با سرعت و کارایی سطح Sonnet ساخته شده است.",
   "lobehub.dall-e-3.description": "جدیدترین مدل DALL·E که در نوامبر 2023 منتشر شده است، از تولید تصاویر واقعی‌تر و دقیق‌تر با جزئیات قوی‌تر پشتیبانی می‌کند.",
+  "lobehub.deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp یک مدل چندوجهی آزمایشی است که قابلیت‌های متنی V4 Flash را مطابقت می‌دهد و درک تصویر را برای جریان‌های کاری عامل بصری اضافه می‌کند.",
   "lobehub.deepseek-v4-flash.description": "DeepSeek V4 Flash تعادل بین پاسخ‌های سریع و استدلال قوی را برای جریان‌های کاری حساس به تأخیر برقرار می‌کند.",
   "lobehub.deepseek-v4-pro.description": "DeepSeek V4 Pro در حال حاضر مقرون‌به‌صرفه‌ترین مدلی است که همچنان در وظایف عامل روزمره عملکرد خوبی دارد.",
   "lobehub.dola-seedream-5-0-pro-260628.description": "مدل Seedream 5.0 Pro از ByteDance توسط BytePlus یک مدل تولید تصویر با دقت بالا است که کنترل دقیقی بر موقعیت عناصر دارد و از تبدیل متن به تصویر و ویرایش تصویر تکی با وضوح 2K پشتیبانی می‌کند.",

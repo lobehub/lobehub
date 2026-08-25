@@ -40,9 +40,15 @@ const { goalCreate, goalFindBySubject } = vi.hoisted(() => ({
   goalFindBySubject: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { resolveTaskAcceptance } = vi.hoisted(() => ({
+  resolveTaskAcceptance: vi.fn(),
+}));
+
 vi.mock('@/database/models/goal', () => ({
   GoalModel: vi.fn(() => ({ create: goalCreate, findBySubject: goalFindBySubject })),
 }));
+
+vi.mock('@/server/services/verify/taskAcceptance', () => ({ resolveTaskAcceptance }));
 
 // AiAgentService pulls in ~14 sub-dependencies in its constructor; mock it so
 // the running-status branch in updateStatus doesn't drag them in.
@@ -115,6 +121,7 @@ describe('TaskService', () => {
     vi.clearAllMocks();
     cancelScheduled.mockResolvedValue(undefined);
     scheduleNextTopic.mockResolvedValue('tick-new');
+    resolveTaskAcceptance.mockResolvedValue(undefined);
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     (AgentModel as any).mockImplementation(() => mockAgentModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
@@ -183,6 +190,43 @@ describe('TaskService', () => {
       expect(result?.activities).toBeUndefined();
       expect(result?.workspace).toBeUndefined();
       expect(result?.parent).toBeNull();
+    });
+
+    it('surfaces the effective inherited Acceptance policy', async () => {
+      const task = {
+        createdAt: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: 'Do something',
+        lastHeartbeatAt: null,
+        parentTaskId: 'task_parent',
+        priority: 'normal',
+        status: 'todo',
+      };
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.findById.mockResolvedValue(null);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      resolveTaskAcceptance.mockResolvedValue({
+        acceptance: { id: 'acceptance-child' },
+        config: { enabled: true, maxIterations: 2 },
+        requirement: 'Inherited contract',
+      });
+
+      const result = await new TaskService(db, userId, 'workspace-1').getTaskDetail('TASK-1');
+
+      expect(result?.verify).toEqual({
+        enabled: true,
+        maxIterations: 2,
+        requirement: 'Inherited contract',
+      });
     });
 
     it('should resolve parent task info when parentTaskId is set', async () => {

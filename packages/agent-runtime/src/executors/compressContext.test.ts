@@ -212,10 +212,11 @@ describe('compressContext executor', () => {
         topicId: 'topic-123',
       }),
     );
-    expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+    expect(result.newState.messages).toEqual([
       { content: 'summary', id: 'group-123', role: 'compressedGroup' },
       preservedMessage,
     ]);
+    expect((result.nextContext?.payload as any).compressedMessages).toBeUndefined();
     expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
     expect(result.events).toContainEqual({
       groupId: 'group-123',
@@ -235,6 +236,48 @@ describe('compressContext executor', () => {
         type: 'afterCompact',
       }),
     );
+  });
+
+  it('preserves the latest user Work contract even after assistant and tool messages', async () => {
+    const activeContract = {
+      content: 'Current Work contract: verify Micron BW 150 suppliers only',
+      id: 'msg-current-work',
+      role: 'user',
+    };
+    const toolResult = { content: 'search result', id: 'msg-tool', role: 'tool' };
+    messagesQuery.mockResolvedValue([
+      { content: 'old objective', id: 'msg-old', role: 'user' },
+      activeContract,
+      { content: 'searching', id: 'msg-assistant', role: 'assistant' },
+      toolResult,
+    ]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [{ content: 'old objective', id: 'msg-old', role: 'user' }],
+    });
+    compressionFinalizeGroup.mockResolvedValue({
+      messages: [{ content: 'historical summary', id: 'group-123', role: 'compressedGroup' }],
+    });
+
+    const state = createState({
+      messages: [
+        { content: 'old objective', id: 'msg-old', role: 'user' },
+        activeContract,
+        { content: 'searching', id: 'msg-assistant', role: 'assistant' },
+        toolResult,
+      ],
+    });
+    const result = await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['msg-old', 'msg-assistant', 'msg-tool'],
+      }),
+    );
+    expect(result.newState.messages).toEqual([
+      { content: 'historical summary', id: 'group-123', role: 'compressedGroup' },
+      activeContract,
+    ]);
   });
 
   it('skips without compression side effects when topic context is missing', async () => {
@@ -331,8 +374,9 @@ describe('compressContext executor', () => {
         sourceGroupIds: ['source-group-1', 'source-group-2'],
       }),
     );
-    expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+    expect(result.newState.messages).toEqual([
       { content: 'combined summary', id: 'group-123', role: 'compressedGroup' },
+      { content: 'recent question', id: 'msg-recent', role: 'user' },
     ]);
     expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-recent');
   });
@@ -434,10 +478,8 @@ describe('compressContext executor', () => {
       }),
     );
     expect(compressionFinalizeGroup).not.toHaveBeenCalled();
-    expect(result.nextContext?.payload as any).toMatchObject({
-      compressedMessages: expect.arrayContaining([sourceGroup]),
-      skipped: true,
-    });
+    expect(result.newState.messages).toEqual(expect.arrayContaining([sourceGroup]));
+    expect(result.nextContext?.payload as any).toMatchObject({ skipped: true });
   });
 
   it('rolls back instead of finalizing when the compression signal is aborted', async () => {

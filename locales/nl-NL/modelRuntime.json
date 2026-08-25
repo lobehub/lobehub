@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Het samenstellen van de gesprekscontext voor dit verzoek is mislukt. Probeer het opnieuw; neem contact op met de ondersteuning als het probleem aanhoudt.",
   "DatabasePersistError": "Een databasebewerking is mislukt bij het opslaan of laden van dit gesprek. Probeer het opnieuw; neem contact op met de ondersteuning als het probleem aanhoudt.",
   "ExceededContextWindow": "De inhoud van het huidige verzoek overschrijdt de lengte die het model aankan. Verminder de hoeveelheid inhoud en probeer het opnieuw.",
+  "HarnessJsonParseError": "Een interne payload kon niet worden teruggelezen, waardoor deze operatie is gestopt. Het opnieuw proberen van dezelfde aanvraag zal dezelfde fout opleveren — start een nieuw bericht; als het probleem aanhoudt, neem dan contact op met de ondersteuning.",
   "InsufficientQuota": "Sorry, het quotum voor deze sleutel is bereikt. Controleer of uw accountbalans toereikend is of probeer het opnieuw nadat u het quotum van de sleutel hebt verhoogd.",
   "InvalidBedrockCredentials": "Bedrock-authenticatie is mislukt. Controleer de AccessKeyId/SecretAccessKey en probeer het opnieuw.",
   "InvalidComfyUIArgs": "Ongeldige ComfyUI-configuratie. Controleer de instellingen en probeer het opnieuw.",

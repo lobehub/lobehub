@@ -1,7 +1,9 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { useEffect } from 'react';
 
+import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useElectronStore } from '@/store/electron';
 
 /**
@@ -22,6 +24,12 @@ const ElectronAppStateSync = () => {
   ]);
 
   useInitElectronAppState();
+
+  useEffect(() => {
+    // Renderer OTA boot check: main rolls back the hot-updated bundle if this
+    // ping never arrives after a swap.
+    rendererOtaService.bootPing('mounted').catch(() => {});
+  }, []);
 
   useWatchBroadcast('appStateUpdated', (state) => {
     updateElectronAppState(state);

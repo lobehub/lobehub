@@ -53,6 +53,48 @@ describe('acquireTopicStartReservation', () => {
       topicModel,
     });
 
-    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'new-start', 'old-operation');
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'new-start', {
+      allowRunningOperationId: undefined,
+      ignoreRunningOperation: undefined,
+      replacesOperationId: 'old-operation',
+    });
+  });
+
+  it('passes the parent operation ownership through for in-group children', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await expect(
+      acquireTopicStartReservation({
+        allowRunningOperationId: 'parent-operation',
+        reservationId: 'child-operation',
+        topicId: 'topic-1',
+        topicModel,
+      }),
+    ).resolves.toBe(true);
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'child-operation', {
+      allowRunningOperationId: 'parent-operation',
+      ignoreRunningOperation: undefined,
+      replacesOperationId: undefined,
+    });
+  });
+
+  it('forwards the interactive bypass so a composer send never waits on a run', async () => {
+    const tryReserveTaskCallback = vi.fn().mockResolvedValue(true);
+    const topicModel = { tryReserveTaskCallback } as unknown as TopicModel;
+
+    await acquireTopicStartReservation({
+      ignoreRunningOperation: true,
+      reservationId: 'composer-send',
+      topicId: 'topic-1',
+      topicModel,
+    });
+
+    expect(tryReserveTaskCallback).toHaveBeenCalledWith('topic-1', 'composer-send', {
+      allowRunningOperationId: undefined,
+      ignoreRunningOperation: true,
+      replacesOperationId: undefined,
+    });
   });
 });

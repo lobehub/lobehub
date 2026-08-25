@@ -8,11 +8,14 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useParams, useSearchParams } from 'react-router';
 
 import { RouteMetaBridge } from '@/features/RouteMeta';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { useReportPanelExpand } from '../../Workspace/useReportPanelExpand';
 import AcceptanceListPanel from './AcceptanceListPanel';
+import AcceptanceProjectActions from './AcceptanceProjectActions';
+
+const renderProjectActions = (projectId?: string) => (
+  <AcceptanceProjectActions projectId={projectId} />
+);
 
 const styles = createStaticStyles(({ css }) => ({
   expandBtn: css`
@@ -53,30 +56,20 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/**
- * Acceptance workspace shell — the acceptance twin of {@link VerifyWorkspace}:
- * a persistent, collapsible acceptance-list panel on the left and the selected
- * aggregate (or the empty placeholder) rendered through the router `Outlet`.
- * An anonymous visitor holding a public acceptance link gets only the detail —
- * the list is the owner's, so it renders for signed-in users alone.
- */
 const AcceptanceWorkspace = memo(() => {
   const { t } = useTranslation('verify');
   const panel = useReportPanelExpand();
   const { checkId } = useParams<{ checkId: string }>();
   const [searchParams] = useSearchParams();
   const hasFocusedCheck = Boolean(checkId || searchParams.get('check'));
-  const isAuthLoaded = useUserStore(authSelectors.isLoaded);
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const canShowList = Boolean(isAuthLoaded && isLogin);
+  const showList = !hasFocusedCheck;
 
   return (
     <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
-      {/* Standalone route (outside the app main layout): drive the tab title here. */}
       <RouteMetaBridge />
-      {canShowList && !hasFocusedCheck && <AcceptanceListPanel {...panel} />}
+      {showList && <AcceptanceListPanel {...panel} renderProjectActions={renderProjectActions} />}
       <div className={styles.main}>
-        {canShowList && !hasFocusedCheck && !panel.expand && (
+        {showList && !panel.expand && (
           <button
             aria-label={t('workspace.expand')}
             className={styles.expandBtn}

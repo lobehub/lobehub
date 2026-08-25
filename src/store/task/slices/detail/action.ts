@@ -406,7 +406,11 @@ export class TaskDetailSliceActionImpl {
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
 
-    if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
+    if (
+      assigneeAgentId !== undefined ||
+      data.parentTaskId !== undefined ||
+      data.priority !== undefined
+    ) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };

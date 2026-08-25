@@ -1,8 +1,9 @@
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
-import { messages, topics } from '@/database/schemas';
+import { agentEvalTestCases, messages, topics } from '@/database/schemas';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import type * as AgentEvalRunWorkflowModule from '@/server/workflows/agentEvalRun';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
@@ -294,6 +295,11 @@ describe('AgentEvalRunService', () => {
     it('should only trigger workflow for a timed-out pass@1 trajectory without mutating state', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
 
+      await serverDB
+        .update(agentEvalTestCases)
+        .set({ metadata: { caseId: 'case-42' } })
+        .where(eq(agentEvalTestCases.id, testCase.id));
+
       const [userMessage] = await serverDB
         .insert(messages)
         .values({
@@ -344,6 +350,7 @@ describe('AgentEvalRunService', () => {
       expect(AgentEvalRunWorkflow.triggerResumeAgentTrajectory).toHaveBeenCalledWith(
         expect.objectContaining({
           appContext: { topicId: topic.id },
+          caseId: 'case-42',
           envPrompt: undefined,
           maxSteps: undefined,
           parentMessageId: userMessage.id,

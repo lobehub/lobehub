@@ -1,3 +1,4 @@
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -250,7 +251,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
       },
     });
 
@@ -283,7 +284,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -300,7 +301,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-2',
       },
     });
@@ -316,7 +317,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
       },
     });
 
@@ -332,7 +333,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -353,7 +354,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -370,7 +371,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -387,7 +388,7 @@ describe('createLambdaContext', () => {
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
         'Oidc-Auth': 'oidc-token',
-        'X-API-Key': 'sk-lh-bbbbbbbbbbbbbbbb',
+        'X-API-Key': `${API_KEY_PREFIX}bbbbbbbbbbbbbbbb`,
       },
     });
 
