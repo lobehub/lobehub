@@ -1,13 +1,17 @@
 // @vitest-environment node
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { type LobeRuntimeAI } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '@/auth';
+import { UserModel } from '@/database/models/user';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { POST } from './route';
+
+const mockIsLobeHubModelAvailable = vi.hoisted(() => vi.fn());
 
 vi.mock('@/app/(backend)/middleware/auth/utils', () => ({
   checkAuthMethod: vi.fn(),
@@ -26,6 +30,14 @@ vi.mock('@/auth', () => ({
   },
 }));
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: { findById: vi.fn() },
+}));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  isLobeHubModelAvailable: mockIsLobeHubModelAvailable,
+}));
+
 // 模拟请求和响应
 let request: Request;
 beforeEach(() => {
@@ -39,6 +51,8 @@ beforeEach(() => {
     session: {} as any,
     user: { id: 'test-user-id' } as any,
   });
+
+  mockIsLobeHubModelAvailable.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -103,6 +117,12 @@ describe('POST handler', () => {
       expect(response).toEqual(mockChatResponse);
       expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
         user: 'test-user-id',
+        metadata: {
+          provider: 'test-provider',
+          sessionId: undefined,
+          topicId: undefined,
+          trigger: 'chat',
+        },
         signal: expect.anything(),
       });
     });
@@ -142,6 +162,55 @@ describe('POST handler', () => {
         },
         errorType: 500,
       });
+    });
+
+    it('should reject a beta-gated LobeHub model the user is not authorized for', async () => {
+      const mockParams = Promise.resolve({ provider: BRANDING_PROVIDER });
+      request = new Request(new URL('https://test.com'), {
+        method: 'POST',
+        body: JSON.stringify({ model: 'beta-model' }),
+      });
+
+      vi.mocked(UserModel.findById).mockResolvedValue({ email: 'user@example.com' } as any);
+      mockIsLobeHubModelAvailable.mockResolvedValue(false);
+
+      const mockRuntime: LobeRuntimeAI = { baseURL: 'abc', chat: vi.fn() };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await POST(request as unknown as Request, { params: mockParams });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        body: {
+          error: { modelType: 'chat', requestedModel: 'beta-model' },
+          provider: BRANDING_PROVIDER,
+        },
+        errorType: ChatErrorType.LobeHubModelDeprecated,
+      });
+      expect(mockRuntime.chat).not.toHaveBeenCalled();
+      expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('beta-model', 'chat', {
+        getUserEmail: expect.any(Function),
+      });
+    });
+
+    it('should not gate models for a provider other than the branded one', async () => {
+      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      request = new Request(new URL('https://test.com'), {
+        method: 'POST',
+        body: JSON.stringify({ model: 'some-model' }),
+      });
+
+      const mockChatResponse: any = { success: true };
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockResolvedValue(mockChatResponse),
+      };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await POST(request as unknown as Request, { params: mockParams });
+
+      expect(response).toEqual(mockChatResponse);
+      expect(mockIsLobeHubModelAvailable).not.toHaveBeenCalled();
     });
   });
 });

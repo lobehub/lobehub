@@ -1,8 +1,11 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { UserModel } from '@/database/models/user';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -26,6 +29,22 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
     // ============  2. create chat completion   ============ //
 
     const data = (await req.json()) as ChatStreamPayload;
+
+    // Same gate createImage/createVideo already apply for beta-gated LobeHub
+    // models (see isLobeHubModelAvailable) — text chat was the one invocation
+    // path that never checked it, so a model hidden from the picker could still
+    // be reached by sending its id directly.
+    if (
+      provider === BRANDING_PROVIDER &&
+      !(await isLobeHubModelAvailable(data.model, 'chat', {
+        getUserEmail: async () => (await UserModel.findById(serverDB, userId))?.email,
+      }))
+    ) {
+      return createErrorResponse(ChatErrorType.LobeHubModelDeprecated, {
+        error: { modelType: 'chat', requestedModel: data.model },
+        provider,
+      });
+    }
 
     const tracePayload = getTracePayload(req);
 
