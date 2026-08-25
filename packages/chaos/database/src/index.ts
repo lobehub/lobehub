@@ -1,0 +1,30 @@
+import type { ChaosAdapter, ChaosRunContext } from '@chaos/core';
+
+export interface DatabaseMutationReceipt {
+  details?: Record<string, unknown>;
+  snapshot?: Record<string, unknown>;
+}
+
+export interface DatabaseChaosPort {
+  mutate: (context: ChaosRunContext) => Promise<DatabaseMutationReceipt>;
+  restore?: (snapshot: Record<string, unknown>, context: ChaosRunContext) => Promise<void>;
+}
+
+/** Database adapter owns no schema; applications supply scoped mutate/restore ports. */
+export const createDatabaseChaosAdapter = (port: DatabaseChaosPort): ChaosAdapter => ({
+  cleanup: port.restore
+    ? async (receipt, context) => {
+        if (receipt.cleanupToken) await port.restore!(receipt.cleanupToken, context);
+      }
+    : undefined,
+  inject: async (context) => {
+    const result = await port.mutate(context);
+    return {
+      adapter: 'database',
+      cleanupToken: result.snapshot,
+      details: result.details,
+      injectionId: `${context.runId}:database`,
+    };
+  },
+  name: 'database',
+});

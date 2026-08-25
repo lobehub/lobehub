@@ -1,0 +1,14 @@
+{
+  "name": "@chaos/runner",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@chaos/core": "workspace:*",
+    "yaml": "^2.8.2"
+  }
+}
