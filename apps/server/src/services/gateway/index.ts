@@ -434,10 +434,18 @@ export class GatewayService {
    * Rows that can never connect — credentials missing or undecryptable — are
    * counted into `excluded` and left out. They must not fail the call: a
    * single unreadable row would otherwise keep a whole gateway empty forever.
+   *
+   * Connections another host still holds are withheld and counted into
+   * `deferred`. Routing alone does not make a connection safe to build: right
+   * after a platform is routed here, the previous host is still polling it,
+   * and handing it over before that host is drained double-delivers every
+   * message until a later reconcile catches up. The periodic reconcile owns
+   * the hand-off; this call only refuses to race it.
    */
   async listDesiredConnectionsForHost(host: MessageGatewayHost): Promise<{
     complete: boolean;
     connections: { config: MessageGatewayConnectionConfig; ensure: true }[];
+    deferred: number;
     excluded: number;
   }> {
     const serverDB = await getServerDB();
@@ -445,6 +453,32 @@ export class GatewayService {
 
     const connections: { config: MessageGatewayConnectionConfig; ensure: true }[] = [];
     let excluded = 0;
+    let deferred = 0;
+
+    // What every OTHER host still holds. Read-only, and only two admin
+    // requests per host — they reach the gateway's own registry, not the
+    // individual connections, so asking wakes nothing.
+    //
+    // A host whose admin surface is unreachable is treated as holding
+    // nothing, deliberately, and matching the reconcile's own rule: a
+    // steady-state deployment has no connections on the wrong host at all, so
+    // blocking every restart recovery on an unrelated host's outage costs far
+    // more availability than the duplicate window it would avoid — and that
+    // window only opens if the outage overlaps an actual migration.
+    const elsewhere = new Set<string>();
+    for (const other of getConfiguredMessageGatewayHosts()) {
+      if (other === host) continue;
+      const snapshot = await this.fetchActualConnections(getMessageGatewayClientForHost(other));
+      if (!snapshot) {
+        log(
+          'Gateway pull[%s]: %s host snapshot unavailable, cannot confirm it is drained',
+          host,
+          other,
+        );
+        continue;
+      }
+      snapshot.connections.forEach((_status, id) => elsewhere.add(id));
+    }
 
     // Paid-gated providers never enter the desired set, so nothing here can
     // hand back a connection the next reconcile round would tear down again.
@@ -456,6 +490,11 @@ export class GatewayService {
     for (const entry of this.hostDesiredSlice(desired, host).values()) {
       if (Object.keys(entry.provider.credentials).length === 0) {
         excluded++;
+        continue;
+      }
+      if (elsewhere.has(entry.provider.id)) {
+        deferred++;
+        log('Gateway pull[%s]: %s still held elsewhere, withholding', host, entry.provider.id);
         continue;
       }
       connections.push({ config: buildBotProviderConnectConfig(entry), ensure: true });
@@ -492,6 +531,11 @@ export class GatewayService {
           excluded++;
           continue;
         }
+        if (elsewhere.has(connectionId)) {
+          deferred++;
+          log('Gateway pull[%s]: %s still held elsewhere, withholding', host, connectionId);
+          continue;
+        }
         connections.push({
           config: buildMessengerPollingConnectConfig({ connectionId, link, platform }),
           ensure: true,
@@ -501,15 +545,22 @@ export class GatewayService {
 
     // Audit surface: this is the one place that hands out a host's whole
     // credential set, and it doubles as the signal that the host restarted.
+    // Withheld entries make this a partial answer, so the caller keeps asking
+    // instead of settling for the set it got. It will run out of attempts long
+    // before a hand-off finishes — that is fine: finishing one is the periodic
+    // reconcile's job, not this call's.
+    if (deferred > 0) complete = false;
+
     log(
-      'Gateway pull[%s]: %d connection(s), excluded=%d, complete=%s',
+      'Gateway pull[%s]: %d connection(s), excluded=%d, deferred=%d, complete=%s',
       host,
       connections.length,
       excluded,
+      deferred,
       complete,
     );
 
-    return { complete, connections, excluded };
+    return { complete, connections, deferred, excluded };
   }
 
   /**
