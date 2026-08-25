@@ -113,6 +113,7 @@ describe('runChaosExperiment', () => {
     });
     const productionExperiment: ChaosExperiment = {
       ...experiment,
+      cleanup: 'never',
       safety: { allowedEnvironments: ['production'] },
     };
     const blocked = await runChaosExperiment({
@@ -225,7 +226,11 @@ describe('runChaosExperiment', () => {
   it('preflights oracle registrations before injecting a fault', async () => {
     const inject = vi.fn(async () => ({ adapter: 'process', injectionId: 'destructive' }));
     const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });
-    const result = await runChaosExperiment({ environment: 'test', experiment, registry });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, cleanup: 'never' },
+      registry,
+    });
     expect(result.status).toBe('aborted');
     expect(result.error?.name).toBe('ChaosConfigError');
     expect(inject).not.toHaveBeenCalled();
@@ -244,6 +249,15 @@ describe('runChaosExperiment', () => {
     expect(inject).not.toHaveBeenCalled();
   });
 
+  it('rejects cleanup policies unsupported by an irreversible adapter', async () => {
+    const inject = vi.fn();
+    const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });
+    const result = await runChaosExperiment({ environment: 'test', experiment, registry });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosConfigError');
+    expect(inject).not.toHaveBeenCalled();
+  });
+
   it('reports an unselected probabilistic trigger as inconclusive', async () => {
     const inject = vi.fn();
     const registry = withHealthyOracle(
@@ -251,7 +265,11 @@ describe('runChaosExperiment', () => {
     );
     const result = await runChaosExperiment({
       environment: 'test',
-      experiment: { ...experiment, trigger: { probability: 0, when: 'immediate' } },
+      experiment: {
+        ...experiment,
+        cleanup: 'never',
+        trigger: { probability: 0, when: 'immediate' },
+      },
       registry,
     });
     expect(result.status).toBe('inconclusive');
@@ -287,7 +305,7 @@ describe('runChaosExperiment', () => {
       exercise: async () => {
         order.push('exercise');
       },
-      experiment: { ...experiment, trigger: { when: 'after' } },
+      experiment: { ...experiment, cleanup: 'never', trigger: { when: 'after' } },
       registry,
     });
     expect(order).toEqual(['exercise', 'inject']);
@@ -308,7 +326,7 @@ describe('runChaosExperiment', () => {
     const oracle = { name: 'healthy', params: { recoveryBoundMs: 500 } };
     await runChaosExperiment({
       environment: 'test',
-      experiment: { ...experiment, oracles: [oracle] },
+      experiment: { ...experiment, cleanup: 'never', oracles: [oracle] },
       registry,
     });
     expect(evaluate).toHaveBeenCalledWith(expect.any(Object), oracle);

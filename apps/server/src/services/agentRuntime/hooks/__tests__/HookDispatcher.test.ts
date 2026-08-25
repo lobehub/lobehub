@@ -726,7 +726,7 @@ describe('HookDispatcher', () => {
   });
 
   describe('dispatchBeforeToolCall — edge cases', () => {
-    it('should use the last mock() call when multiple handlers call mock()', async () => {
+    it('should preserve the first mock() call when multiple handlers call mock()', async () => {
       dispatcher.register(operationId, [
         {
           handler: async (event: any) => {
@@ -754,7 +754,7 @@ describe('HookDispatcher', () => {
 
       expect(result).toEqual({
         isMocked: true,
-        result: { content: '{"second":true}', success: true },
+        result: { content: '{"first":true}', success: true },
       });
     });
 

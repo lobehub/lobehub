@@ -54,6 +54,9 @@ export interface ChaosExperiment {
 
 export type ChaosRunStatus = 'passed' | 'failed' | 'inconclusive' | 'aborted';
 
+export type ChaosJsonValue =
+  boolean | null | number | string | ChaosJsonValue[] | { [key: string]: ChaosJsonValue };
+
 export type ChaosTimelineEventType =
   | 'run_started'
   | 'steady_state_checked'
@@ -85,7 +88,7 @@ export interface ChaosOracleResult {
 export interface ChaosInjectionReceipt {
   adapter: string;
   cleanupToken?: Record<string, unknown>;
-  details?: Record<string, unknown>;
+  details?: Record<string, ChaosJsonValue>;
   injectionId: string;
 }
 

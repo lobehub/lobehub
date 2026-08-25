@@ -2,6 +2,20 @@ import { writeFile } from 'node:fs/promises';
 
 import type { ChaosRunResult } from '@achaos/core';
 
+const createSafeReplacer = () => {
+  const seen = new WeakSet<object>();
+  return (_key: string, value: unknown) => {
+    if (typeof value === 'bigint') return `${value}n`;
+    if (typeof value === 'function' || typeof value === 'symbol')
+      return `[Unsupported ${typeof value}]`;
+    if (value && typeof value === 'object') {
+      if (seen.has(value)) return '[Circular]';
+      seen.add(value);
+    }
+    return value;
+  };
+};
+
 export const formatChaosResult = (result: ChaosRunResult) =>
   JSON.stringify(
     {
@@ -17,7 +31,7 @@ export const formatChaosResult = (result: ChaosRunResult) =>
         : {}),
       schemaVersion: 1,
     },
-    undefined,
+    createSafeReplacer(),
     2,
   );
 

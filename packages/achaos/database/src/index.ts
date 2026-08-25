@@ -1,7 +1,7 @@
-import type { ChaosAdapter, ChaosRunContext } from '@achaos/core';
+import type { ChaosAdapter, ChaosJsonValue, ChaosRunContext } from '@achaos/core';
 
 export interface DatabaseMutationReceipt {
-  details?: Record<string, unknown>;
+  details?: Record<string, ChaosJsonValue>;
   snapshot?: Record<string, unknown>;
 }
 

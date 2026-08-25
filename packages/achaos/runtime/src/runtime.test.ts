@@ -51,7 +51,7 @@ describe('runtime chaos adapter', () => {
     const receipt = await adapter.inject(
       contextFor({ content: '{"ok":false}', type: 'replace_result' }, { apiName: 'search' }),
     );
-    const mock = vi.fn();
+    const mock = vi.fn(() => true);
     await createBeforeToolCallChaosHandler(controller)({
       apiName: 'search',
       callIndex: 0,
@@ -91,7 +91,7 @@ describe('runtime chaos adapter', () => {
       ),
     );
     parent.abort('run completed');
-    const mock = vi.fn();
+    const mock = vi.fn(() => true);
     await createBeforeToolCallChaosHandler(controller)({
       apiName: 'search',
       callIndex: 0,
@@ -100,6 +100,26 @@ describe('runtime chaos adapter', () => {
       stepIndex: 2,
     });
     expect(mock).not.toHaveBeenCalled();
+    await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
+      false,
+    );
+  });
+
+  it('does not mark a chaos mock applied when an earlier hook owns the mock slot', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor({ type: 'drop' }, { apiName: 'search', phase: 'before_tool_call' }),
+    );
+    const mock = vi.fn(() => false);
+    await createBeforeToolCallChaosHandler(controller)({
+      apiName: 'search',
+      callIndex: 0,
+      mock,
+      operationId: 'op-claimed',
+      stepIndex: 1,
+    });
+    expect(mock).toHaveBeenCalledOnce();
     await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
       false,
     );

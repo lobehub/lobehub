@@ -206,6 +206,26 @@ export const runChaosExperiment = async ({
       timeline,
     };
   }
+  const cleanupPolicy = experiment.cleanup ?? 'always';
+  if (cleanupPolicy !== 'never' && !adapter.cleanup) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'cleanup_not_supported' });
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      error: {
+        message: `Adapter ${adapter.name} does not support cleanup policy ${cleanupPolicy}`,
+        name: 'ChaosConfigError',
+      },
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'aborted',
+      timeline,
+    };
+  }
   if (adapter.cleanup && !adapter.cancelInjection) {
     const finishedAt = now();
     record('run_completed', { reason: 'cancellable_injection_required' });
@@ -264,7 +284,6 @@ export const runChaosExperiment = async ({
       timeline,
     };
   }
-  const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
   let injectionPromise: ReturnType<typeof adapter.inject> | undefined;
   let error: unknown;
