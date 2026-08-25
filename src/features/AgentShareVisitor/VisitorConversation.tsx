@@ -56,6 +56,7 @@ const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
       <ReadOnlyConversationArea agentId={agentId} agentShareId={shareId} topicId={activeTopicId} />
       <VisitorComposer
         agentId={agentId}
+        blockedKey={data.budgetExhausted ? 'share.visitor.errors.insufficientBudget' : undefined}
         // The gateway transport already switched the store to the new topic
         // (`switchTopic`); refreshing the list makes it show up in the panel.
         shareId={shareId}

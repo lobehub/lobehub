@@ -1,8 +1,10 @@
 import type { SharedAgentData, SharedTopicData } from '@lobechat/types';
 import { z } from 'zod';
 
+import { getAgentShareBudgetRemaining } from '@/business/server/agent-share/agentShareBudgetGate';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -22,7 +24,15 @@ export const shareRouter = router({
         await AgentShareModel.incrementUserViewCount(ctx.serverDB, input.shareId);
       }
 
+      const budgetRemaining = await getAgentShareBudgetRemaining({ agentId: share.agentId });
+
       return {
+        // Lets the visitor UI disable the composer up front instead of
+        // surfacing the failure only after a rejected send.
+        budgetExhausted: budgetRemaining !== null && budgetRemaining <= 0,
+        // The share micro-app has no global server config — ship the gateway
+        // URL with the share payload so visitor execution can connect.
+        ...(appEnv.AGENT_GATEWAY_URL ? { agentGatewayUrl: appEnv.AGENT_GATEWAY_URL } : undefined),
         agentId: share.agentId,
         agentMeta: {
           avatar: share.agentAvatar,

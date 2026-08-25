@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { getAgentShareBudgetRemaining } from '@/business/server/agent-share/agentShareBudgetGate';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
@@ -83,6 +84,17 @@ export const shareChatRouter = router({
         input.shareId,
         ctx.userId,
       );
+
+      // Budget precheck BEFORE any row is created: the runtime billing gate
+      // would reject the run anyway (mid-run, after the topic and placeholder
+      // messages persisted), leaving junk topics with a "..." assistant row.
+      const budgetRemaining = await getAgentShareBudgetRemaining({ agentId: share.agentId });
+      if (budgetRemaining !== null && budgetRemaining <= 0) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: ChatErrorType.InsufficientBudgetForModel,
+        });
+      }
 
       const { maxTopicsPerVisitor, maxTurnsPerTopic } = share.shareConfig;
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);

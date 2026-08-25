@@ -26,6 +26,12 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => ({})),
 }));
 
+// Pin the env-derived field so the assertion doesn't depend on whether the
+// local/CI environment exports AGENT_GATEWAY_URL.
+vi.mock('@/envs/app', () => ({
+  appEnv: { AGENT_GATEWAY_URL: 'https://gateway.example.com' },
+}));
+
 const agentShare = {
   agentAvatar: 'avatar.png',
   agentBackgroundColor: '#ffffff',
@@ -76,6 +82,7 @@ describe('shareRouter', () => {
       const result = await caller.getSharedAgent({ shareId: agentShare.shareId });
 
       expect(result).toEqual({
+        agentGatewayUrl: 'https://gateway.example.com',
         agentId: 'agent-1',
         agentMeta: {
           avatar: 'avatar.png',
@@ -86,6 +93,7 @@ describe('shareRouter', () => {
           slug: 'shared-agent',
           title: 'Research Assistant',
         },
+        budgetExhausted: false,
         isOwner: false,
         shareId: agentShare.shareId,
         visibility: 'link',

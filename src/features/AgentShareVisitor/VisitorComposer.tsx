@@ -12,6 +12,12 @@ import { operationSelectors } from '@/store/chat/selectors';
 
 interface VisitorComposerProps {
   agentId: string;
+  /**
+   * Copy key of a standing block (e.g. exhausted share budget). When set the
+   * composer is disabled and the reason is shown persistently — sending would
+   * only fail server-side anyway.
+   */
+  blockedKey?: string;
   /** Refresh the visitor topic list after a send created a new topic. */
   onTopicCreated?: (topicId: string) => void;
   shareId: string;
@@ -37,7 +43,7 @@ const resolveErrorKey = (error: unknown): string => {
  * gateway-streamed answer out.
  */
 const VisitorComposer = memo<VisitorComposerProps>(
-  ({ agentId, onTopicCreated, shareId, topicId }) => {
+  ({ agentId, blockedKey, onTopicCreated, shareId, topicId }) => {
     const { t } = useTranslation('agent');
     const [value, setValue] = useState('');
     const [errorKey, setErrorKey] = useState<string>();
@@ -53,10 +59,11 @@ const VisitorComposer = memo<VisitorComposerProps>(
       }),
     );
     const busy = sending || isStreaming;
+    const displayedErrorKey = blockedKey ?? errorKey;
 
     const send = async () => {
       const message = value.trim();
-      if (!message || busy) return;
+      if (!message || busy || blockedKey) return;
 
       setErrorKey(undefined);
       setSending(true);
@@ -84,22 +91,29 @@ const VisitorComposer = memo<VisitorComposerProps>(
 
     return (
       <Flexbox gap={4} paddingBlock={8} paddingInline={12}>
-        {errorKey && (
-          <span style={{ color: cssVar.colorError, fontSize: 12 }}>{t(errorKey as any)}</span>
+        {displayedErrorKey && (
+          <span style={{ color: cssVar.colorError, fontSize: 12 }}>
+            {t(displayedErrorKey as any)}
+          </span>
         )}
         <Flexbox
           horizontal
-          align={'flex-end'}
+          // Center the single-line state (the textarea is shorter than the send
+          // button, so the text would otherwise hug the bottom edge); once the
+          // textarea grows it becomes the tallest child and the button pins to
+          // the bottom via its own alignSelf.
+          align={'center'}
           gap={8}
           style={{
             background: cssVar.colorFillQuaternary,
             border: `1px solid ${cssVar.colorBorderSecondary}`,
-            borderRadius: 8,
-            padding: 8,
+            borderRadius: 12,
+            padding: '6px 6px 6px 12px',
           }}
         >
           <TextArea
             autoSize={{ maxRows: 6, minRows: 1 }}
+            disabled={!!blockedKey}
             placeholder={t('share.visitor.input.placeholder')}
             style={{ border: 'none', boxShadow: 'none', padding: 0 }}
             value={value}
@@ -112,9 +126,10 @@ const VisitorComposer = memo<VisitorComposerProps>(
             }}
           />
           <ActionIcon
-            disabled={busy || !value.trim()}
+            disabled={busy || !!blockedKey || !value.trim()}
             icon={SendHorizonal}
             loading={busy}
+            style={{ alignSelf: 'flex-end' }}
             title={t('share.visitor.input.send')}
             onClick={() => void send()}
           />

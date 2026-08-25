@@ -9,6 +9,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { getServerConfigStoreState, patchServerConfig } from '@/store/serverConfig/store';
 
 import { sharedAgentDisplayName } from './displayName';
 import { navigateFromShareToAgent } from './navigation';
@@ -27,6 +28,16 @@ const AgentShareVisitorPage = memo<{ data: SharedAgentData }>(({ data }) => {
   useEffect(() => {
     if (data?.isOwner) navigateFromShareToAgent(data.agentId);
   }, [data?.agentId, data?.isOwner]);
+
+  useEffect(() => {
+    // The share micro-app boots ServerConfigStore empty (it never fetches the
+    // global server config), but the gateway transport reads
+    // `serverConfig.agentGatewayUrl` from that store to build the WebSocket
+    // URL. Seed it from the share payload so visitor execution can connect.
+    if (!data.agentGatewayUrl) return;
+    if (getServerConfigStoreState()?.serverConfig?.agentGatewayUrl) return;
+    patchServerConfig({ agentGatewayUrl: data.agentGatewayUrl });
+  }, [data.agentGatewayUrl]);
 
   // Loading and error states render in the route layout's ShareShell.
   // Owners also stay empty while the hard navigation exits the Share router.
