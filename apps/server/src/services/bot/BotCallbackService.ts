@@ -29,6 +29,7 @@ import {
   resolveBotProviderConfig,
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
+import { deliverEditedReply } from './replyDelivery';
 import {
   renderAgentError,
   renderFinalReply,
@@ -594,22 +595,33 @@ export class BotCallbackService {
     attachments?: BotMessageAttachment[],
     strictDelivery = false,
   ): Promise<boolean> {
-    const payload = attachments && attachments.length > 0 ? { attachments, content: text } : text;
+    const hasAttachments = attachments && attachments.length > 0;
+    const payload = hasAttachments ? { attachments, content: text } : text;
 
     if (canEdit && progressMessageId) {
       try {
-        await messenger.editMessage(progressMessageId, payload);
-        // Positive delivery record (console, not debug): "we sent it and the
-        // platform accepted it" must be provable from production logs alone —
-        // burned days on inferring delivery from the absence of
-        // error logs while the target thread had been deleted out from under
-        // the bot.
-        console.info(
-          `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
-        );
+        const { usedFallback } = await deliverEditedReply({
+          attachments,
+          editText: (completionText) => messenger.editMessage(progressMessageId, completionText),
+          postAttachments: (items) =>
+            messenger.createMessage({ attachments: items, content: '' }).then(() => {}),
+          postText: (completionText) => messenger.createMessage(completionText).then(() => {}),
+          text,
+        });
+        if (usedFallback) {
+          console.info('[BotCallbackService] completion reply delivered via createMessage');
+        } else {
+          console.info(
+            `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
+          );
+        }
         return true;
       } catch (error) {
-        log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
+        console.error(
+          `[BotCallbackService] edited reply delivery failed: ${describePlatformError(error)}`,
+        );
+        if (strictDelivery) throw error;
+        return false;
       }
     }
     try {

@@ -86,12 +86,30 @@ export class FeishuMessageService implements MessageRuntimeService {
     // Feishu sends a DM by addressing the user directly via receive_id;
     // no separate createDM step is needed. The API implicitly creates/reuses
     // a p2p chat and returns chat_id in the raw response.
-    // TODO: attachments — sendFeishuAttachments requires a chat_id which we
-    // only get after the first text message ships. Ship text now, attachments
-    // in a follow-up if needed.
-    const { messageId, raw } = await this.api.sendDirectMessage(params.userId, params.content);
+    const textResult = params.content.trim()
+      ? await this.api.sendDirectMessage(params.userId, params.content)
+      : undefined;
+    const chatId = textResult?.raw?.chat_id;
+    let attachmentMessageIds: string[] = [];
+    if (params.attachments?.length) {
+      if (chatId)
+        attachmentMessageIds = await sendFeishuAttachments(this.api, chatId, params.attachments);
+      else
+        attachmentMessageIds = await sendFeishuAttachments(
+          this.api,
+          params.userId,
+          params.attachments,
+          undefined,
+          true,
+        );
+    }
+    if (params.attachments?.length && attachmentMessageIds.length === 0) {
+      throw new Error('Feishu direct message delivered no attachments');
+    }
+    const messageId = textResult?.messageId ?? attachmentMessageIds.at(-1);
+    if (!messageId) throw new Error('Feishu direct message delivered no content');
     return {
-      channelId: raw?.chat_id ?? params.userId,
+      channelId: chatId ?? params.userId,
       messageId,
       platform: this.platformName,
     };
@@ -214,7 +232,9 @@ export class FeishuMessageService implements MessageRuntimeService {
   };
 
   replyToThread = async (params: ReplyToThreadParams): Promise<ReplyToThreadState> => {
-    const result = await this.api.replyMessage(params.threadId, params.content);
+    // threadId here is the topic root message id — the card reply lands
+    // inside that topic.
+    const result = await this.api.replyCard(params.threadId, params.content);
     return { messageId: result.messageId, threadId: params.threadId };
   };
 

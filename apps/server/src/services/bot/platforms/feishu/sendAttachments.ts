@@ -87,9 +87,10 @@ const loadAttachmentBuffer = async (
  */
 export const sendFeishuAttachments = async (
   api: LarkApiClient,
-  chatId: string,
+  receiveId: string,
   attachments: BotMessageAttachment[],
   replyToMessageId?: string,
+  directMessage = false,
 ): Promise<string[]> => {
   const sentIds: string[] = [];
   for (const [index, att] of attachments.entries()) {
@@ -105,7 +106,9 @@ export const sendFeishuAttachments = async (
         const payload = JSON.stringify({ image_key });
         const { messageId } = replyToMessageId
           ? await api.replyMessageWithMsgType(replyToMessageId, 'image', payload)
-          : await api.sendMessageWithMsgType(chatId, 'image', payload);
+          : directMessage
+            ? await api.sendDirectMessageWithMsgType(receiveId, 'image', payload)
+            : await api.sendMessageWithMsgType(receiveId, 'image', payload);
         sentIds.push(messageId);
       } else {
         const fileType = inferFeishuFileType(att);
@@ -115,7 +118,9 @@ export const sendFeishuAttachments = async (
         const payload = JSON.stringify({ file_key });
         const { messageId } = replyToMessageId
           ? await api.replyMessageWithMsgType(replyToMessageId, msgType, payload)
-          : await api.sendMessageWithMsgType(chatId, msgType, payload);
+          : directMessage
+            ? await api.sendDirectMessageWithMsgType(receiveId, msgType, payload)
+            : await api.sendMessageWithMsgType(receiveId, msgType, payload);
         sentIds.push(messageId);
       }
     } catch (error) {
@@ -125,6 +130,7 @@ export const sendFeishuAttachments = async (
         att.name ?? '(unnamed)',
         error,
       );
+      console.error(`[Feishu] failed to send ${att.type} attachment at index ${index}:`, error);
     }
   }
   return sentIds;

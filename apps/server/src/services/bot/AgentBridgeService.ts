@@ -12,13 +12,13 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import { GatewayService } from '@/server/services/gateway';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from './createBotCompletionHook';
-import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import { formatGroupHistoryBlock, formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { BotMessageAttachment, BotReplyLocale, PlatformClient } from './platforms';
 import {
@@ -30,6 +30,7 @@ import {
 } from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import { buildRecentChannelHistory } from './recentChannelHistory';
+import { deliverEditedReply } from './replyDelivery';
 import {
   renderAgentError,
   renderError,
@@ -880,8 +881,7 @@ export class AgentBridgeService {
     // The fetched messages are prepended to the user prompt (not the system
     // prompt) below, so they persist in the topic and survive later turns.
     let recentGroupMessages:
-      | Array<{ author: string; text: string; attachments?: AttachmentSource[] }>
-      | undefined;
+      Array<{ author: string; text: string; attachments?: AttachmentSource[] }> | undefined;
     if (
       platformDef?.preInjectGroupHistory &&
       botContext?.platformThreadId &&
@@ -1663,8 +1663,26 @@ export class AgentBridgeService {
                         // placeholder; every further chunk is a fresh reply to
                         // the same trigger (multi-part replies). Attachments
                         // stay in the hook-event shape — the messenger consumes
-                        // exactly that.
-                        if (chunks[0] !== lastProgressText) {
+                        // exactly that. A single-chunk reply never enters the
+                        // loop below, so its attachments ride the FIRST post —
+                        // `edit` is text-only and would drop them.
+                        if (chunks.length === 1 && hasAttachments) {
+                          const delivered = await deliverEditedReply({
+                            attachments: event.attachments as BotMessageAttachment[],
+                            currentText: lastProgressText,
+                            editText: (text) => replyDelivery.edit(text),
+                            postAttachments: (attachments) => replyDelivery.post('', attachments),
+                            postText: (text) => replyDelivery.post(text),
+                            text: chunks[0],
+                          });
+                          lastProgressText = delivered.text;
+                          if (delivered.usedFallback) {
+                            log(
+                              'executeWithCallback[local]: completion reply delivered via fallback post, thread=%s',
+                              thread.id,
+                            );
+                          }
+                        } else if (chunks[0] !== lastProgressText) {
                           await replyDelivery.edit(chunks[0]);
                           lastProgressText = chunks[0];
                         }

@@ -5,6 +5,7 @@ import { sendFeishuAttachments } from './sendAttachments';
 
 const makeApi = () => ({
   replyMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-r1', raw: {} }),
+  sendDirectMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-dm1', raw: {} }),
   sendMessageWithMsgType: vi.fn().mockResolvedValue({ messageId: 'm-1', raw: {} }),
   uploadFile: vi.fn().mockResolvedValue({ file_key: 'file_xyz' }),
   uploadImage: vi.fn().mockResolvedValue({ image_key: 'img_abc' }),
@@ -54,6 +55,25 @@ describe('sendFeishuAttachments', () => {
     );
     expect(api.sendMessageWithMsgType).not.toHaveBeenCalled();
     expect(ids).toEqual(['m-r1']);
+  });
+
+  it('sends directly to a user for attachment-only DMs', async () => {
+    const api = makeApi();
+
+    const ids = await sendFeishuAttachments(
+      api as any,
+      'ou_user',
+      [{ data: Buffer.from('img').toString('base64'), type: 'image' }],
+      undefined,
+      true,
+    );
+
+    expect(api.sendDirectMessageWithMsgType).toHaveBeenCalledWith(
+      'ou_user',
+      'image',
+      JSON.stringify({ image_key: 'img_abc' }),
+    );
+    expect(ids).toEqual(['m-dm1']);
   });
 
   it('infers file_type from extension/mime', async () => {
