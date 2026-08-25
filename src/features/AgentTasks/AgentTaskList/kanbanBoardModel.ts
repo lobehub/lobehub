@@ -58,7 +58,10 @@ export const getKanbanTaskPatch = (
   column: KanbanColumnDefinition,
 ): Partial<TaskListItem> | undefined => {
   if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
-    return { assigneeAgentId: column.groupMeta.assigneeId ?? null };
+    return {
+      assigneeAgentId: column.groupMeta.assigneeId ?? null,
+      assigneeUserId: column.groupMeta.assigneeUserId ?? null,
+    };
   }
   if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
     return { priority: column.groupMeta.priority ?? 0 };

@@ -1108,4 +1108,214 @@ describe('Task Router Integration', () => {
       );
     });
   });
+
+  describe('human assignee (assigneeUserId)', () => {
+    it('should allow assigning to self in personal mode', async () => {
+      const created = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Self-assigned task',
+      });
+      expect(created.data.assigneeUserId).toBe(userId);
+
+      const cleared = await caller.update({ assigneeUserId: null, id: created.data.id });
+      expect(cleared.data.assigneeUserId).toBeNull();
+    });
+
+    it('should reject assigning to another user in personal mode', async () => {
+      otherUserId = await createTestUser(serverDB);
+
+      await expect(
+        caller.create({ assigneeUserId: otherUserId, instruction: 'Cross-user assignment' }),
+      ).rejects.toThrow('Assignee user not found');
+
+      const task = await caller.create({ instruction: 'Reassign target' });
+      await expect(
+        caller.update({ assigneeUserId: otherUserId, id: task.data.id }),
+      ).rejects.toThrow('Assignee user not found');
+    });
+
+    it('should validate workspace membership when assigning in workspace mode', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const outsiderId = await createTestUser(serverDB);
+      const removedId = await createTestUser(serverDB);
+      const workspaceId = 'task-assignee-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Assignee Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId, workspaceId },
+        { deletedAt: new Date(), role: 'member', userId: removedId, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+
+      const assigned = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Assigned to a member',
+      });
+      expect(assigned.data.assigneeUserId).toBe(otherUserId);
+
+      await expect(
+        wsCaller.create({ assigneeUserId: outsiderId, instruction: 'Assigned to an outsider' }),
+      ).rejects.toThrow('Assignee user is not a member of this workspace');
+
+      await expect(
+        wsCaller.update({ assigneeUserId: removedId, id: assigned.data.id }),
+      ).rejects.toThrow('Assignee user is not a member of this workspace');
+
+      try {
+        await cleanupTestUser(serverDB, outsiderId);
+        await cleanupTestUser(serverDB, removedId);
+      } catch {
+        /* cascade cleanup is best-effort */
+      }
+    });
+
+    it('should keep private tasks creator-only for human assignees', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-private-assignee-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Private Assignee Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+
+      // Creating a private task assigned to another member is rejected.
+      await expect(
+        wsCaller.create({
+          assigneeUserId: otherUserId,
+          instruction: 'Private cross-member create',
+          visibility: 'private',
+        }),
+      ).rejects.toThrow('A private task can only be assigned to its creator');
+
+      // A private task can still be self-assigned; assigning another member is rejected.
+      const privateTask = await wsCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Private task',
+        visibility: 'private',
+      });
+      expect(privateTask.data.assigneeUserId).toBe(userId);
+      await expect(
+        wsCaller.update({ assigneeUserId: otherUserId, id: privateTask.data.id }),
+      ).rejects.toThrow('A private task can only be assigned to its creator');
+
+      // Demoting a member-assigned public task to private is rejected until unassigned.
+      const publicTask = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Public task assigned to member',
+        visibility: 'public',
+      });
+      await expect(
+        wsCaller.updateVisibility({ id: publicTask.data.id, visibility: 'private' }),
+      ).rejects.toThrow('A private task can only be assigned to its creator');
+      await wsCaller.update({ assigneeUserId: null, id: publicTask.data.id });
+      const demoted = await wsCaller.updateVisibility({
+        id: publicTask.data.id,
+        visibility: 'private',
+      });
+      expect(demoted.data.visibility).toBe('private');
+    });
+
+    it('should keep automation and a human assignee mutually exclusive', async () => {
+      // Creating an automated task with a human assignee is rejected.
+      await expect(
+        caller.create({
+          assigneeUserId: userId,
+          automationMode: 'schedule',
+          instruction: 'Automated cross-assign',
+          schedulePattern: '0 9 * * *',
+        }),
+      ).rejects.toThrow('An automated task cannot be assigned to a member');
+
+      // Assigning a member to an existing automated task is rejected.
+      const automated = await caller.create({
+        automationMode: 'schedule',
+        instruction: 'Automated task',
+        schedulePattern: '0 9 * * *',
+      });
+      await expect(
+        caller.update({ assigneeUserId: userId, id: automated.data.id }),
+      ).rejects.toThrow('An automated task cannot be assigned to a member');
+
+      // Scheduling a member-assigned task is rejected until unassigned.
+      const humanTask = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Human task',
+      });
+      await expect(
+        caller.update({
+          automationMode: 'schedule',
+          id: humanTask.data.id,
+          schedulePattern: '0 9 * * *',
+        }),
+      ).rejects.toThrow('An automated task cannot be assigned to a member');
+
+      // Clearing the human assignee in the same update makes scheduling legal.
+      const scheduled = await caller.update({
+        assigneeUserId: null,
+        automationMode: 'schedule',
+        id: humanTask.data.id,
+        schedulePattern: '0 9 * * *',
+      });
+      expect(scheduled.data.automationMode).toBe('schedule');
+      expect(scheduled.data.assigneeUserId).toBeNull();
+    });
+
+    it('should not persist the inbox fallback agent when running a human-assigned task', async () => {
+      // Seed the builtin inbox agent so the runner's fallback path can resolve it.
+      const inboxAgentId = await createTestAgent(serverDB, userId, 'inbox');
+
+      const humanTask = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Human-assigned task',
+      });
+      await caller.run({ id: humanTask.data.id });
+
+      const afterHumanRun = await caller.find({ id: humanTask.data.id });
+      expect(afterHumanRun.data.assigneeUserId).toBe(userId);
+      expect(afterHumanRun.data.assigneeAgentId).toBeNull();
+
+      // Control: a fully unassigned task still gets the fallback persisted.
+      const unassignedTask = await caller.create({ instruction: 'Unassigned task' });
+      await caller.run({ id: unassignedTask.data.id });
+
+      const afterUnassignedRun = await caller.find({ id: unassignedTask.data.id });
+      expect(afterUnassignedRun.data.assigneeAgentId).toBe(inboxAgentId);
+    });
+
+    it('should populate a user participant in list', async () => {
+      const { users } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(users)
+        .set({ avatar: 'user-avatar.png', fullName: 'User One' })
+        .where(eq(users.id, userId));
+
+      await caller.create({ assigneeUserId: userId, instruction: 'Human task' });
+
+      const list = await caller.list({});
+      const assigned = list.data.find((t) => t.assigneeUserId === userId)!;
+      expect(assigned.participants).toEqual([
+        {
+          avatar: 'user-avatar.png',
+          backgroundColor: null,
+          id: userId,
+          title: 'User One',
+          type: 'user',
+        },
+      ]);
+    });
+  });
 });

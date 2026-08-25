@@ -26,6 +26,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
@@ -132,6 +133,8 @@ export class TaskService {
    */
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
+    await this.assertAssigneeUserAssignable(input.assigneeUserId);
+    this.assertAutomationAssigneeCompat(input.automationMode, input.assigneeUserId);
 
     const { goal, ...taskInput } = input;
     const createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> } = {
@@ -186,6 +189,15 @@ export class TaskService {
     // caller passes `visibility='public'` while picking a private agent, so
     // we have to assert here even though the inference path can't.
     this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
+
+    // Invariant: a private task can only be assigned to its creator — the
+    // resolved visibility (explicit, inherited, or agent-derived) is what
+    // counts, so this must run after the precedence chain above.
+    this.assertAssigneeUserVisibilityCompat(
+      createData.visibility,
+      createData.assigneeUserId,
+      this.userId,
+    );
 
     // Invariant: a subtask can never be more public than its parent.
     // Otherwise workspace members see an orphaned child whose parent is
@@ -272,6 +284,49 @@ export class TaskService {
       code: 'BAD_REQUEST',
       message:
         'A public task cannot be assigned to a private agent. Either pick a workspace agent or make the task private first.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: a private task can only be assigned to its
+   * creator. A private task is visible to nobody else (ownership is
+   * creator-based), so assigning another member would hand them a task they
+   * can never see. Throws `BAD_REQUEST` on violation. Applies symmetrically
+   * to assigning on a private task and to demoting a member-assigned task to
+   * private.
+   */
+  assertAssigneeUserVisibilityCompat(
+    taskVisibility: 'private' | 'public' | undefined,
+    assigneeUserId: string | null | undefined,
+    creatorUserId: string,
+  ): void {
+    if (!assigneeUserId) return;
+    if (taskVisibility !== 'private') return;
+    if (assigneeUserId === creatorUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A private task can only be assigned to its creator. Unassign the member or keep the task visible to the workspace.',
+    });
+  }
+
+  /**
+   * Enforces the invariant: an automated task (heartbeat / schedule) cannot
+   * be assigned to a human. Automation ticks always execute through an agent
+   * (falling back to the inbox agent), so a member assignee would be pure
+   * decoration that the next tick contradicts. Throws `BAD_REQUEST` on
+   * violation. Callers pass the POST-update effective values.
+   */
+  assertAutomationAssigneeCompat(
+    automationMode: 'heartbeat' | 'schedule' | null | undefined,
+    assigneeUserId: string | null | undefined,
+  ): void {
+    if (!automationMode) return;
+    if (!assigneeUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'An automated task cannot be assigned to a member. Remove the schedule first, or assign an agent.',
     });
   }
 
@@ -622,6 +677,37 @@ export class TaskService {
     }
   }
 
+  /**
+   * A task can only be assigned to a human who can actually see it: an active
+   * member of the current workspace, or the caller themself in personal mode.
+   * NOT_FOUND (not FORBIDDEN) mirrors the agent-assignee path so membership of
+   * other workspaces is never leaked.
+   */
+  async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
+    if (!assigneeUserId) return;
+
+    if (!this.workspaceId) {
+      if (assigneeUserId !== this.userId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Assignee user not found',
+        });
+      }
+      return;
+    }
+
+    const member = await new WorkspaceMemberModel(this.db, this.userId).getMember(
+      this.workspaceId,
+      assigneeUserId,
+    );
+    if (!member) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user is not a member of this workspace',
+      });
+    }
+  }
+
   private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
@@ -775,8 +861,11 @@ export class TaskService {
                 },
               }
             : {}),
+          assigneeUserId: s.assigneeUserId,
           automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
+          createdByUserId: s.createdByUserId,
+          visibility: s.visibility,
           children: buildSubtaskTree(s.id),
           ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
           identifier: s.identifier,

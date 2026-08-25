@@ -26,6 +26,8 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
 
 export interface TaskGroupMeta {
   assigneeId?: string;
+  /** Human assignee (workspace member); mutually exclusive with `assigneeId`. */
+  assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
   groupBy: TaskGroupBy;
   key: string;
@@ -139,24 +141,37 @@ const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;
 const getTaskStatusGroup = (task: TaskListItem): NonNullable<TaskGroupMeta['status']> =>
   TASK_STATUS_TO_GROUP_MAP[task.status] ?? 'backlog';
 
-export const getTaskAssigneeGroupMeta = (agentId: string | null | undefined): TaskGroupMeta => {
-  if (!agentId) {
+export const getTaskAssigneeGroupMeta = (
+  agentId: string | null | undefined,
+  userId?: string | null,
+): TaskGroupMeta => {
+  if (agentId) {
     return {
+      assigneeId: agentId,
       groupBy: 'assignee',
-      key: 'assignee:unassigned',
-      label: t('taskList.unassigned', { ns: 'chat' }),
+      key: `assignee:${agentId}`,
+      label: agentId,
+    };
+  }
+
+  if (userId) {
+    return {
+      assigneeUserId: userId,
+      groupBy: 'assignee',
+      key: `assignee:user:${userId}`,
+      label: userId,
     };
   }
 
   return {
-    assigneeId: agentId,
     groupBy: 'assignee',
-    key: `assignee:${agentId}`,
-    label: agentId,
+    key: 'assignee:unassigned',
+    label: t('taskList.unassigned', { ns: 'chat' }),
   };
 };
 
-const getTaskAssigneeSortValue = (task: TaskListItem) => task.assigneeAgentId ?? '';
+const getTaskAssigneeSortValue = (task: TaskListItem) =>
+  task.assigneeAgentId ?? (task.assigneeUserId ? `user:${task.assigneeUserId}` : '');
 
 export const getTaskPriorityGroupMeta = (
   priorityValue: number | null | undefined,
@@ -249,7 +264,7 @@ export const compareTaskItems = (
 export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): TaskGroupMeta => {
   switch (groupBy) {
     case 'assignee': {
-      return getTaskAssigneeGroupMeta(task.assigneeAgentId);
+      return getTaskAssigneeGroupMeta(task.assigneeAgentId, task.assigneeUserId);
     }
     case 'automationMode': {
       // Automated tasks created before automationMode was introduced are schedules.

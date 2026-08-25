@@ -96,7 +96,12 @@ export class TaskRunnerService {
             message: 'Failed to resolve fallback inbox agent for task',
           });
         }
-        await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        // A human-assigned task still executes via the inbox agent, but the
+        // fallback must stay ephemeral — persisting it would silently replace
+        // the member assignment on the first run.
+        if (!task.assigneeUserId) {
+          await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+        }
         task.assigneeAgentId = inboxAgent.id;
       }
 
