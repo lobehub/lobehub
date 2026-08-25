@@ -147,6 +147,21 @@ describe('runChaosExperiment', () => {
     expect(inject).toHaveBeenCalledOnce();
   });
 
+  it('treats unknown production aliases conservatively', async () => {
+    const inject = vi.fn();
+    const registry = withHealthyOracle(
+      new ChaosRegistry().registerAdapter({ inject, name: 'test' }),
+    );
+    const result = await runChaosExperiment({
+      environment: 'live',
+      experiment: { ...experiment, safety: { allowedEnvironments: ['live'] } },
+      registry,
+    });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosApprovalError');
+    expect(inject).not.toHaveBeenCalled();
+  });
+
   it('fails when an adapter reports that its fault never activated', async () => {
     const cleanup = vi.fn(async () => {});
     const registry = withHealthyOracle(
@@ -231,7 +246,9 @@ describe('runChaosExperiment', () => {
 
   it('reports an unselected probabilistic trigger as inconclusive', async () => {
     const inject = vi.fn();
-    const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });
+    const registry = withHealthyOracle(
+      new ChaosRegistry().registerAdapter({ inject, name: 'test' }),
+    );
     const result = await runChaosExperiment({
       environment: 'test',
       experiment: { ...experiment, trigger: { probability: 0, when: 'immediate' } },
@@ -239,6 +256,16 @@ describe('runChaosExperiment', () => {
     });
     expect(result.status).toBe('inconclusive');
     expect(inject).not.toHaveBeenCalled();
+  });
+
+  it('reports broken registrations before probabilistic sampling', async () => {
+    const result = await runChaosExperiment({
+      environment: 'test',
+      experiment: { ...experiment, trigger: { probability: 0, when: 'immediate' } },
+      registry: new ChaosRegistry(),
+    });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosConfigError');
   });
 
   it('honors an after trigger by exercising the system before injection', async () => {

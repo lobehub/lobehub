@@ -67,6 +67,8 @@ const withTimeout = async <T>(
 export interface RunChaosExperimentOptions {
   approveProduction?: (context: ChaosRunContext) => Promise<boolean>;
   environment: string;
+  /** Explicit host classification. Unknown environment names default to production-safe handling. */
+  environmentTier?: 'non-production' | 'production';
   exercise?: ChaosExercise;
   experiment: ChaosExperiment;
   now?: () => Date;
@@ -77,6 +79,7 @@ export interface RunChaosExperimentOptions {
 export const runChaosExperiment = async ({
   approveProduction,
   environment,
+  environmentTier,
   exercise,
   experiment,
   now = () => new Date(),
@@ -136,7 +139,11 @@ export const runChaosExperiment = async ({
     };
   }
 
-  if (environment === 'production') {
+  const knownNonProductionEnvironments = new Set(['ci', 'development', 'local', 'staging', 'test']);
+  const resolvedEnvironmentTier =
+    environmentTier ??
+    (knownNonProductionEnvironments.has(environment) ? 'non-production' : 'production');
+  if (resolvedEnvironmentTier === 'production') {
     const approved = approveProduction
       ? await withTimeout(approveProduction(context), experiment.timeoutMs, controller).catch(
           () => false,
@@ -176,24 +183,6 @@ export const runChaosExperiment = async ({
       seed: experiment.seed,
       startedAt: started.toISOString(),
       status: 'aborted',
-      timeline,
-    };
-  }
-
-  const probability = experiment.trigger.probability ?? 1;
-  if (context.random() >= probability) {
-    const finishedAt = now();
-    record('run_completed', { reason: 'trigger_not_selected', status: 'inconclusive' });
-    controller.abort('chaos_run_skipped');
-    return {
-      durationMs: finishedAt.getTime() - started.getTime(),
-      experimentId: experiment.id,
-      finishedAt: finishedAt.toISOString(),
-      oracleResults,
-      runId,
-      seed: experiment.seed,
-      startedAt: started.toISOString(),
-      status: 'inconclusive',
       timeline,
     };
   }
@@ -255,6 +244,23 @@ export const runChaosExperiment = async ({
       seed: experiment.seed,
       startedAt: started.toISOString(),
       status: 'aborted',
+      timeline,
+    };
+  }
+  const probability = experiment.trigger.probability ?? 1;
+  if (context.random() >= probability) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'trigger_not_selected', status: 'inconclusive' });
+    controller.abort('chaos_run_skipped');
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'inconclusive',
       timeline,
     };
   }
