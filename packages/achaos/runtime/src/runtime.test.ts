@@ -37,7 +37,7 @@ describe('runtime chaos adapter', () => {
   it('injects deterministic result replacement through beforeToolCall', async () => {
     const controller = new RuntimeChaosController();
     const adapter = createRuntimeChaosAdapter(controller);
-    await adapter.inject(
+    const receipt = await adapter.inject(
       contextFor({ content: '{"ok":false}', type: 'replace_result' }, { apiName: 'search' }),
     );
     const mock = vi.fn();
@@ -52,6 +52,20 @@ describe('runtime chaos adapter', () => {
       content: '{"ok":false}',
       success: true,
     });
+    await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
+      true,
+    );
+  });
+
+  it('reports an armed but unmatched runtime fault as inactive', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor({ type: 'drop' }, { apiName: 'missing', phase: 'before_tool_call' }),
+    );
+    await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
+      false,
+    );
   });
 
   it('injects a retryable failure through the production retry helper', async () => {

@@ -45,6 +45,7 @@ const withTimeout = async <T>(
 };
 
 export interface RunChaosExperimentOptions {
+  approveProduction?: (context: ChaosRunContext) => Promise<boolean>;
   environment: string;
   exercise?: ChaosExercise;
   experiment: ChaosExperiment;
@@ -54,6 +55,7 @@ export interface RunChaosExperimentOptions {
 }
 
 export const runChaosExperiment = async ({
+  approveProduction,
   environment,
   exercise,
   experiment,
@@ -92,6 +94,31 @@ export const runChaosExperiment = async ({
       status: 'aborted',
       timeline,
     };
+  }
+
+  if (environment === 'production') {
+    const approved = approveProduction
+      ? await approveProduction(context).catch(() => false)
+      : false;
+    if (!approved) {
+      const finishedAt = now();
+      record('run_completed', { reason: 'production_approval_required' });
+      return {
+        durationMs: finishedAt.getTime() - started.getTime(),
+        error: {
+          message: 'Production chaos requires explicit external approval',
+          name: 'ChaosApprovalError',
+        },
+        experimentId: experiment.id,
+        finishedAt: finishedAt.toISOString(),
+        oracleResults,
+        runId,
+        seed: experiment.seed,
+        startedAt: started.toISOString(),
+        status: 'aborted',
+        timeline,
+      };
+    }
   }
 
   if (experiment.oracles.length === 0) {
@@ -146,6 +173,18 @@ export const runChaosExperiment = async ({
     record('fault_injected', { adapter: adapter.name, injectionId: injection.injectionId });
 
     if (experiment.trigger.when !== 'after') await runExercise();
+    if (
+      adapter.verifyInjection &&
+      !(await withTimeout(
+        adapter.verifyInjection(injection, context),
+        experiment.timeoutMs,
+        controller,
+      ))
+    ) {
+      const activationError = new Error('Injected chaos fault did not activate');
+      activationError.name = 'ChaosInjectionNotActivatedError';
+      throw activationError;
+    }
     for (const spec of experiment.oracles) {
       const result = await withTimeout(
         registry.resolveOracle(spec.name).evaluate(context),

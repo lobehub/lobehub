@@ -6,4 +6,5 @@ export const createRuntimeChaosAdapter = (controller: RuntimeChaosController): C
   cleanup: async (receipt) => controller.disarm(receipt),
   inject: async (context) => controller.arm(context),
   name: 'runtime',
+  verifyInjection: async (receipt) => controller.wasActivated(receipt),
 });

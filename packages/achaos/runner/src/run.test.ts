@@ -96,6 +96,51 @@ describe('runChaosExperiment', () => {
     expect(result.error?.name).toBe('ChaosSafetyError');
   });
 
+  it('requires explicit external approval for production', async () => {
+    const inject = vi.fn(async () => ({ adapter: 'test', injectionId: 'production' }));
+    const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' }).registerOracle({
+      evaluate: async () => ({ message: 'healthy', name: 'healthy', status: 'passed' }),
+      name: 'healthy',
+    });
+    const productionExperiment: ChaosExperiment = {
+      ...experiment,
+      safety: { allowedEnvironments: ['production'] },
+    };
+    const blocked = await runChaosExperiment({
+      environment: 'production',
+      experiment: productionExperiment,
+      registry,
+    });
+    expect(blocked.status).toBe('aborted');
+    expect(blocked.error?.name).toBe('ChaosApprovalError');
+    expect(inject).not.toHaveBeenCalled();
+
+    const approveProduction = vi.fn(async () => true);
+    const approved = await runChaosExperiment({
+      approveProduction,
+      environment: 'production',
+      experiment: productionExperiment,
+      registry,
+    });
+    expect(approved.status).toBe('passed');
+    expect(approveProduction).toHaveBeenCalledOnce();
+    expect(inject).toHaveBeenCalledOnce();
+  });
+
+  it('fails when an adapter reports that its fault never activated', async () => {
+    const cleanup = vi.fn(async () => {});
+    const registry = new ChaosRegistry().registerAdapter({
+      cleanup,
+      inject: async () => ({ adapter: 'test', injectionId: 'inactive' }),
+      name: 'test',
+      verifyInjection: async () => false,
+    });
+    const result = await runChaosExperiment({ environment: 'test', experiment, registry });
+    expect(result.status).toBe('failed');
+    expect(result.error?.name).toBe('ChaosInjectionNotActivatedError');
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it('rejects a programmatic experiment without an oracle', async () => {
     const registry = new ChaosRegistry().registerAdapter({ inject: vi.fn(), name: 'test' });
     const result = await runChaosExperiment({

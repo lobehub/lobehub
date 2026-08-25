@@ -57,6 +57,11 @@ export class RuntimeChaosController {
     this.#faults.delete(injectionId);
   }
 
+  wasActivated(receipt: ChaosInjectionReceipt) {
+    const injectionId = receipt.cleanupToken?.injectionId;
+    return typeof injectionId === 'string' && (this.#faults.get(injectionId)?.activations ?? 0) > 0;
+  }
+
   activationsFor(point: RuntimeChaosPoint): RuntimeChaosActivation[] {
     const activations: RuntimeChaosActivation[] = [];
     for (const fault of this.#faults.values()) {

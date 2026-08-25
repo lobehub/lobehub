@@ -115,6 +115,7 @@ export interface ChaosAdapter {
   cleanup?: (receipt: ChaosInjectionReceipt, context: ChaosRunContext) => Promise<void>;
   inject: (context: ChaosRunContext) => Promise<ChaosInjectionReceipt>;
   name: string;
+  verifyInjection?: (receipt: ChaosInjectionReceipt, context: ChaosRunContext) => Promise<boolean>;
 }
 
 export interface ChaosOracle {
