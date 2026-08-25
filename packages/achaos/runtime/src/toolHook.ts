@@ -1,5 +1,5 @@
 import type { ToolRunResult } from '@lobechat/agent-runtime/src/transport/tool';
-import type { ToolCallHookEvent } from '@lobechat/agent-runtime/src/types/hooks';
+import type { AgentHookEvent, ToolCallHookEvent } from '@lobechat/agent-runtime/src/types/hooks';
 
 import type { RuntimeChaosController } from './controller';
 import { delayWithAbort } from './effects';
@@ -10,10 +10,18 @@ export type MutableToolCallEvent = Pick<
 >;
 
 export interface RuntimeChaosHook {
-  handler: (event: MutableToolCallEvent) => Promise<void>;
+  handler: (event: AgentHookEvent) => Promise<void>;
   id: string;
   type: 'beforeToolCall';
 }
+
+const isMutableToolCallEvent = (
+  event: AgentHookEvent,
+): event is AgentHookEvent & MutableToolCallEvent =>
+  typeof (event as Partial<MutableToolCallEvent>).apiName === 'string' &&
+  typeof (event as Partial<MutableToolCallEvent>).callIndex === 'number' &&
+  typeof (event as Partial<MutableToolCallEvent>).mock === 'function' &&
+  typeof (event as Partial<MutableToolCallEvent>).stepIndex === 'number';
 
 const failedToolResult = (message: string, errorType: string): ToolRunResult => ({
   content: JSON.stringify({ error: message, errorType }),
@@ -56,7 +64,11 @@ export const createBeforeToolCallChaosHandler =
 /** Structurally compatible with AgentRuntimeService.execAgent({ hooks }). */
 export const createRuntimeChaosHooks = (controller: RuntimeChaosController): RuntimeChaosHook[] => [
   {
-    handler: createBeforeToolCallChaosHandler(controller),
+    handler: async (event) => {
+      if (!isMutableToolCallEvent(event))
+        throw new TypeError('beforeToolCall chaos hook received an incompatible event');
+      await createBeforeToolCallChaosHandler(controller)(event);
+    },
     id: 'agent-chaos-before-tool-call',
     type: 'beforeToolCall',
   },

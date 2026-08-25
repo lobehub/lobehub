@@ -300,4 +300,26 @@ describe('runChaosExperiment', () => {
     expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(cleanup).not.toHaveBeenCalled();
   });
+
+  it('preserves both a phase failure and a cleanup failure', async () => {
+    const registry = new ChaosRegistry().registerAdapter({
+      cleanup: async () => {
+        throw new Error('restore failed');
+      },
+      inject: async () => ({ adapter: 'test', injectionId: 'aggregate' }),
+      name: 'test',
+    });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      exercise: async () => {
+        throw new Error('exercise failed');
+      },
+      experiment,
+      registry,
+    });
+    expect(result.status).toBe('failed');
+    expect(result.error?.name).toBe('ChaosAggregateError');
+    expect(result.error?.message).toContain('exercise failed');
+    expect(result.error?.message).toContain('restore failed');
+  });
 });

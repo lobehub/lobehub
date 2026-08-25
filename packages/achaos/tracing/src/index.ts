@@ -5,10 +5,18 @@ export interface ChaosTraceSink {
   setAttribute: (name: string, value: boolean | number | string) => void;
 }
 
-const eventAttributes = (event: ChaosTimelineEvent) => ({
-  'chaos.event.at': event.at,
-  'chaos.event.type': event.type,
-});
+const eventAttributes = (event: ChaosTimelineEvent) => {
+  const attributes: Record<string, boolean | number | string> = {
+    'chaos.event.at': event.at,
+    'chaos.event.type': event.type,
+  };
+  for (const [key, value] of Object.entries(event.data ?? {})) {
+    if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+      attributes[`chaos.event.data.${key}`] = value;
+    }
+  }
+  return attributes;
+};
 
 /** Bridges portable chaos results to OpenTelemetry-like spans without depending on an SDK. */
 export const recordChaosResult = (sink: ChaosTraceSink, result: ChaosRunResult) => {

@@ -1,5 +1,6 @@
 import type { ChaosExperiment, ChaosRunContext } from '@achaos/core';
 import { createSeededRandom } from '@achaos/core';
+import type { AgentHookEvent, AgentHookType } from '@lobechat/agent-runtime/src/types/hooks';
 import { executeToolWithRetry } from '@lobechat/agent-runtime/src/utils/runtimeRetry';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -7,7 +8,7 @@ import { createRuntimeChaosAdapter } from './adapter';
 import { deliverCompletionWithChaos } from './completion';
 import { RuntimeChaosController } from './controller';
 import { executeToolAttemptWithChaos } from './toolAttempt';
-import { createBeforeToolCallChaosHandler } from './toolHook';
+import { createBeforeToolCallChaosHandler, createRuntimeChaosHooks } from './toolHook';
 
 const contextFor = (
   effect: ChaosExperiment['effect'],
@@ -34,6 +35,16 @@ const contextFor = (
 });
 
 describe('runtime chaos adapter', () => {
+  it('returns hooks assignable to the execAgent hook contract', () => {
+    type ExecAgentHook = {
+      handler: (event: AgentHookEvent) => Promise<void>;
+      id: string;
+      type: AgentHookType;
+    };
+    const hooks: ExecAgentHook[] = createRuntimeChaosHooks(new RuntimeChaosController());
+    expect(hooks[0]?.type).toBe('beforeToolCall');
+  });
+
   it('injects deterministic result replacement through beforeToolCall', async () => {
     const controller = new RuntimeChaosController();
     const adapter = createRuntimeChaosAdapter(controller);

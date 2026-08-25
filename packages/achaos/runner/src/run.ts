@@ -268,7 +268,17 @@ export const runChaosExperiment = async ({
         );
         record('cleanup_completed');
       } catch (cleanupError) {
-        error ??= cleanupError;
+        if (error) {
+          const phaseFailure = serializeError(error);
+          const cleanupFailure = serializeError(cleanupError);
+          const aggregateError = new Error(
+            `Chaos phase failed: ${phaseFailure.name}: ${phaseFailure.message}; cleanup also failed: ${cleanupFailure.name}: ${cleanupFailure.message}`,
+          );
+          aggregateError.name = 'ChaosAggregateError';
+          error = aggregateError;
+        } else {
+          error = cleanupError;
+        }
       }
     }
     controller.abort('chaos_run_completed');
