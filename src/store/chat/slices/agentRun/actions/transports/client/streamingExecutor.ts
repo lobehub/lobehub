@@ -40,6 +40,7 @@ import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
@@ -599,15 +600,21 @@ export class StreamingExecutorActionImpl {
     // (markTopicUnread / writeTopicStatus 'active'), with `cleanupStaleRunningTopics`
     // as the backstop if this tab dies mid-run.
     if (topicId && !isSubAgent) {
-      const runningWrite = this.#get().updateTopicStatus?.({
+      // Local optimistic dispatch only — persistence is routed through the
+      // ownership-guarded `claimRunningStatus`, not `updateTopicStatus`'s
+      // unconditional UPDATE. A delayed persist here could otherwise land
+      // AFTER the terminal lifecycle already correctly settled a fast run
+      // back to its terminal status, silently re-stranding surfaces that
+      // read the stored status — see `TopicModel.claimRunningStatus`.
+      this.#get().internal_pinTopicStatus?.({
         agentId,
         groupId,
         ...(scope === 'group' || scope === 'group_agent' ? { scope } : {}),
         status: 'running',
         topicId,
       });
-      void runningWrite?.catch((error) => {
-        console.error('[streamingExecutor] running status write failed:', error);
+      topicService.claimRunningStatus(topicId, operationId).catch((error) => {
+        console.error('[streamingExecutor] running status claim failed:', error);
       });
     }
 

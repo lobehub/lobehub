@@ -1047,6 +1047,20 @@ export const topicRouter = router({
 
       return ctx.topicModel.settleRunningOperation(input.id, input.operationId, input.status);
     }),
+
+  claimRunningStatus: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        operationId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+
+      return ctx.topicModel.claimRunningStatus(input.id, input.operationId);
+    }),
 });
 
 export type TopicRouter = typeof topicRouter;

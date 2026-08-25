@@ -759,6 +759,109 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('claimRunningStatus', () => {
+    it('claims running status when the operation is the current root marker', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' },
+        },
+        title: 'about to run',
+      });
+
+      const claimed = await topicModel.claimRunningStatus(topic.id, 'op-1');
+
+      expect(claimed).toBe(true);
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('running');
+    });
+
+    it('claims running status for a matching child operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'msg-parent',
+            childOperations: [{ assistantMessageId: 'msg-child', operationId: 'op-child' }],
+            operationId: 'op-parent',
+          },
+        },
+        title: 'child about to run',
+      });
+
+      const claimed = await topicModel.claimRunningStatus(topic.id, 'op-child');
+
+      expect(claimed).toBe(true);
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('running');
+    });
+
+    it('is a no-op when already running', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' },
+        },
+        title: 'already running',
+      });
+      await topicModel.update(topic.id, { status: 'running' });
+
+      const claimed = await topicModel.claimRunningStatus(topic.id, 'op-1');
+
+      expect(claimed).toBe(true);
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('running');
+    });
+
+    it('does not claim when no marker is present (never started, or already cleared)', async () => {
+      const topic = await topicModel.create({ title: 'no marker' });
+
+      const claimed = await topicModel.claimRunningStatus(topic.id, 'op-1');
+
+      expect(claimed).toBe(false);
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBeNull();
+    });
+
+    it('does not claim when the marker belongs to a different (newer) operation', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-new', operationId: 'op-new' },
+        },
+        title: 'superseded run',
+      });
+
+      const claimed = await topicModel.claimRunningStatus(topic.id, 'op-old');
+
+      expect(claimed).toBe(false);
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBeNull();
+    });
+
+    // The actual regression this method exists to close: a fast reply's
+    // terminal settle can land BEFORE the fire-and-forget run-start
+    // 'running' write does. Without this guard, the late write is a plain
+    // unconditional UPDATE and stamps 'running' back onto an
+    // already-completed topic with nothing left to ever correct it.
+    it('does not clobber a topic settle already resolved before the delayed run-start write lands', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' },
+        },
+        title: 'fast reply beats the running write',
+      });
+
+      // The terminal event arrives and settles the topic first...
+      const settled = await topicModel.settleRunningOperation(topic.id, 'op-1', 'active');
+      expect(settled.status).toBe('settled');
+
+      // ...then the run-start write, delayed behind other client work,
+      // finally lands.
+      const claimed = await topicModel.claimRunningStatus(topic.id, 'op-1');
+
+      expect(claimed).toBe(false);
+      const row = await topicModel.findById(topic.id);
+      expect(row?.status).toBe('active');
+    });
+  });
+
   describe('updateMetadata', () => {
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({
