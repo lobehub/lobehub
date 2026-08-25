@@ -23,7 +23,7 @@ import { AgentModel } from '@/database/models/agent';
 import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
 import { RbacModel } from '@/database/models/rbac';
-import { TaskModel } from '@/database/models/task';
+import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -135,7 +135,6 @@ export class TaskService {
    */
   async createTask(input: CreateTaskInput): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
-    await this.assertAssigneeUserAssignable(input.assigneeUserId);
     this.assertAutomationAssigneeCompat(input.automationMode, input.assigneeUserId);
 
     const { goal, ...taskInput } = input;
@@ -208,14 +207,14 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    const task = await this.taskModel.create(createData);
+    const task = await this.createTaskWithAssigneeLock(createData);
 
     if (goal) {
-      // Not a transaction on purpose: TaskModel.create's identifier-conflict
-      // retry loop relies on continuing after a 23505, which an enclosing
-      // transaction would abort. Compensate instead — a task committed without
-      // its promised goal is a ghost on goal surfaces (it never lists as a
-      // goal), and a retry would stack another one.
+      // Goal creation stays separate from the task write because the task's
+      // membership-locked transaction has already committed. Compensate on
+      // failure — a task committed without its promised goal is a ghost on
+      // goal surfaces (it never lists as a goal), and a retry would stack
+      // another one.
       let created: GoalItem;
       try {
         created = await new GoalModel(this.db, this.userId, this.workspaceId).create({
@@ -686,6 +685,14 @@ export class TaskService {
    * other workspaces is never leaked.
    */
   async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+  }
+
+  private async assertAssigneeUserAssignableWithDatabase(
+    db: LobeChatDatabase,
+    assigneeUserId?: string | null,
+    lockMember = false,
+  ): Promise<void> {
     if (!assigneeUserId) return;
 
     if (!this.workspaceId) {
@@ -698,10 +705,10 @@ export class TaskService {
       return;
     }
 
-    const member = await new WorkspaceMemberModel(this.db, this.userId).getMember(
-      this.workspaceId,
-      assigneeUserId,
-    );
+    const memberModel = new WorkspaceMemberModel(db, this.userId);
+    const member = lockMember
+      ? await memberModel.getMemberForUpdate(this.workspaceId, assigneeUserId)
+      : await memberModel.getMember(this.workspaceId, assigneeUserId);
     if (!member) {
       throw new TRPCError({
         code: 'NOT_FOUND',
@@ -709,7 +716,7 @@ export class TaskService {
       });
     }
 
-    const canManageTasks = await new RbacModel(this.db, assigneeUserId).hasAnyPermission(
+    const canManageTasks = await new RbacModel(db, assigneeUserId).hasAnyPermission(
       [...TASK_ASSIGNEE_PERMISSION_CODES],
       { userId: assigneeUserId, workspaceId: this.workspaceId },
     );
@@ -719,6 +726,56 @@ export class TaskService {
         message: 'Assignee user cannot manage tasks in this workspace',
       });
     }
+  }
+
+  private async withAssigneeUserLock<T>(
+    assigneeUserId: string | null | undefined,
+    write: (db: LobeChatDatabase) => Promise<T>,
+  ): Promise<T> {
+    if (!assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+      return write(this.db);
+    }
+
+    return this.db.transaction(async (tx) => {
+      await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
+      return write(tx);
+    });
+  }
+
+  private async createTaskWithAssigneeLock(
+    createData: Omit<CreateTaskInput, 'goal'> & { config?: Record<string, unknown> },
+  ): Promise<TaskItem> {
+    if (!createData.assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignable(createData.assigneeUserId);
+      return this.taskModel.create(createData);
+    }
+
+    // TaskModel's normal retry loop cannot continue after a unique violation
+    // inside an open Postgres transaction. Retry the whole lock + validation +
+    // insert transaction instead so concurrent identifier allocation remains
+    // safe while the membership row stays serialized with the write.
+    const maxRetries = 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await this.withAssigneeUserLock(createData.assigneeUserId, (db) =>
+          new TaskModel(db, this.userId, this.workspaceId).create(createData, { maxRetries: 1 }),
+        );
+      } catch (error) {
+        if (!isTaskIdentifierUniqueViolation(error) || attempt === maxRetries - 1) throw error;
+      }
+    }
+
+    throw new Error('Failed to create task after max retries');
+  }
+
+  async updateTaskWithAssigneeLock(
+    taskId: string,
+    data: Parameters<TaskModel['update']>[1],
+  ): Promise<TaskItem | null> {
+    return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
+      new TaskModel(db, this.userId, this.workspaceId).update(taskId, data),
+    );
   }
 
   private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {

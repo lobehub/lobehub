@@ -37,6 +37,23 @@ import { works } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
+export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  const code =
+    typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+  const cause = error instanceof Error ? error.cause : undefined;
+
+  return (
+    code === '23505' ||
+    message.includes('23505') ||
+    message.includes('duplicate') ||
+    message.includes('unique') ||
+    (!!cause && isTaskIdentifierUniqueViolation(cause))
+  );
+};
+
 /**
  * Ownership helpers in this model come in three flavors. Choose by USE CASE,
  * not by table — picking the wrong one led to a `seq` allocation hotfix
@@ -236,11 +253,12 @@ export class TaskModel {
     data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'> & {
       identifierPrefix?: string;
     },
+    options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
     const { identifierPrefix = 'T', ...rest } = data;
 
     // Retry loop to handle concurrent creates (parallel tool calls)
-    const maxRetries = 5;
+    const maxRetries = options.maxRetries ?? 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Seq is allocated per ownership scope: workspace-wide in team mode,
@@ -276,13 +294,7 @@ export class TaskModel {
       } catch (error: any) {
         // Retry on unique constraint violation (concurrent seq conflict)
         // Check error itself, cause, and stringified message for PG error code 23505
-        const errStr =
-          String(error?.message || '') +
-          String(error?.cause?.code || '') +
-          String(error?.code || '');
-        const isUniqueViolation =
-          errStr.includes('23505') || errStr.includes('unique') || errStr.includes('duplicate');
-        if (isUniqueViolation && attempt < maxRetries - 1) {
+        if (isTaskIdentifierUniqueViolation(error) && attempt < maxRetries - 1) {
           continue;
         }
         throw error;

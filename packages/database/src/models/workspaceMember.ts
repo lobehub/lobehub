@@ -52,6 +52,22 @@ export class WorkspaceMemberModel {
     });
   };
 
+  /** Lock an active membership row. Call only from an enclosing transaction. */
+  getMemberForUpdate = async (workspaceId: string, userId: string) => {
+    const [member] = await this.db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .for('update');
+    return member;
+  };
+
   listMembers = async (workspaceId: string, options: { includeDeleted?: boolean } = {}) => {
     return this.db.query.workspaceMembers.findMany({
       where: options.includeDeleted

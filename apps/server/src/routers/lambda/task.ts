@@ -1189,10 +1189,6 @@ export const taskRouter = router({
         { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
         data.assigneeAgentId,
       );
-      // `undefined` means "no change"; `null` clears the human assignee and is
-      // always safe. A real id must be an active member of this workspace (or
-      // the caller themself in personal mode).
-      await ctx.taskService.assertAssigneeUserAssignable(data.assigneeUserId);
       const resolved = await resolveOrThrow(model, id);
 
       // Collaborative edit lock: reject writes to a workspace task another member
@@ -1259,7 +1255,10 @@ export const taskRouter = router({
         updateData.instruction !== undefined && updateData.editorData === undefined
           ? { ...updateData, editorData: null }
           : updateData;
-      const task = await model.update(resolved.id, normalizedUpdateData);
+      const task = await ctx.taskService.updateTaskWithAssigneeLock(
+        resolved.id,
+        normalizedUpdateData,
+      );
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {

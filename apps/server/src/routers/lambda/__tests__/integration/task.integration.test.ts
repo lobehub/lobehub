@@ -1175,6 +1175,100 @@ describe('Task Router Integration', () => {
       }
     });
 
+    it('should serialize assignments against concurrent membership removal', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const memberId = otherUserId;
+      const workspaceId = 'task-assignee-removal-race-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { and, eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Assignee Removal Race Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: memberId, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const existingTask = await wsCaller.create({ instruction: 'Concurrent update target' });
+
+      let signalMemberLocked: () => void = () => {};
+      const memberLocked = new Promise<void>((resolve) => {
+        signalMemberLocked = resolve;
+      });
+      let releaseRemoval: () => void = () => {};
+      const removalReleased = new Promise<void>((resolve) => {
+        releaseRemoval = resolve;
+      });
+
+      const removal = serverDB.transaction(async (tx) => {
+        await tx
+          .update(workspaceMembers)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, workspaceId),
+              eq(workspaceMembers.userId, memberId),
+            ),
+          );
+        signalMemberLocked();
+        await removalReleased;
+      });
+      await memberLocked;
+
+      let updateSettled = false;
+      const update = wsCaller
+        .update({ assigneeUserId: memberId, id: existingTask.data.id })
+        .then(
+          (value) => ({ error: null, value }),
+          (error: Error) => ({ error, value: null }),
+        )
+        .finally(() => {
+          updateSettled = true;
+        });
+      let createSettled = false;
+      const create = wsCaller
+        .create({ assigneeUserId: memberId, instruction: 'Concurrent create target' })
+        .then(
+          (value) => ({ error: null, value }),
+          (error: Error) => ({ error, value: null }),
+        )
+        .finally(() => {
+          createSettled = true;
+        });
+
+      // Both writes have started while removal owns the membership row. They
+      // must wait for that row lock instead of committing from a stale read.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const updateWaitedForRemoval = !updateSettled;
+      const createWaitedForRemoval = !createSettled;
+
+      releaseRemoval();
+      await removal;
+      const [updateResult, createResult] = await Promise.all([update, create]);
+      expect(updateWaitedForRemoval).toBe(true);
+      expect(createWaitedForRemoval).toBe(true);
+      expect(updateResult.error?.message).toContain(
+        'Assignee user is not a member of this workspace',
+      );
+      expect(createResult.error?.message).toContain(
+        'Assignee user is not a member of this workspace',
+      );
+
+      const [afterUpdate] = await serverDB
+        .select({ assigneeUserId: tasks.assigneeUserId })
+        .from(tasks)
+        .where(eq(tasks.id, existingTask.data.id));
+      expect(afterUpdate.assigneeUserId).toBeNull();
+      const strandedCreate = await serverDB
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.instruction, 'Concurrent create target'));
+      expect(strandedCreate).toHaveLength(0);
+    });
+
     it('should keep private tasks creator-only for human assignees', async () => {
       otherUserId = await createTestUser(serverDB);
       const workspaceId = 'task-private-assignee-workspace';
@@ -1286,6 +1380,20 @@ describe('Task Router Integration', () => {
       const afterHumanRun = await caller.find({ id: humanTask.data.id });
       expect(afterHumanRun.data.assigneeUserId).toBe(userId);
       expect(afterHumanRun.data.assigneeAgentId).toBeNull();
+
+      // Released clients did not understand assigneeUserId and persisted the
+      // inbox fallback immediately before starting the run. The server must
+      // recognize and remove that legacy fallback without losing the member.
+      const legacyClientTask = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Legacy-client human-assigned task',
+      });
+      await caller.update({ assigneeAgentId: inboxAgentId, id: legacyClientTask.data.id });
+      await caller.run({ id: legacyClientTask.data.id });
+
+      const afterLegacyClientRun = await caller.find({ id: legacyClientTask.data.id });
+      expect(afterLegacyClientRun.data.assigneeUserId).toBe(userId);
+      expect(afterLegacyClientRun.data.assigneeAgentId).toBeNull();
 
       // Control: a fully unassigned task still gets the fallback persisted.
       const unassignedTask = await caller.create({ instruction: 'Unassigned task' });
