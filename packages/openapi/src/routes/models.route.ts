@@ -1,8 +1,8 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { ModelController } from '../controllers';
 import { requireAuth } from '../middleware';
 import { requireAnyPermission } from '../middleware/permission-check';
@@ -20,7 +20,10 @@ const ModelRoutes = new Hono();
 ModelRoutes.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_READ'), 'You do not have permission to view model list'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_MODEL_READ'),
+    'You do not have permission to view model list',
+  ),
   zValidator('query', ModelsListQuerySchema),
   (c) => {
     const controller = new ModelController();
@@ -32,7 +35,10 @@ ModelRoutes.get(
 ModelRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_CREATE'), 'You do not have permission to create a model'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_MODEL_CREATE'),
+    'You do not have permission to create a model',
+  ),
   zValidator('json', CreateModelRequestSchema),
   (c) => {
     const controller = new ModelController();
@@ -44,7 +50,10 @@ ModelRoutes.post(
 ModelRoutes.get(
   '/:providerId/:modelId',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_READ'), 'You do not have permission to view model details'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_MODEL_READ'),
+    'You do not have permission to view model details',
+  ),
   zValidator('param', ModelIdParamSchema),
   (c) => {
     const controller = new ModelController();
@@ -56,7 +65,10 @@ ModelRoutes.get(
 ModelRoutes.patch(
   '/:providerId/:modelId',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_UPDATE'), 'You do not have permission to update a model'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_MODEL_UPDATE'),
+    'You do not have permission to update a model',
+  ),
   zValidator('param', ModelIdParamSchema),
   zValidator('json', UpdateModelRequestSchema),
   (c) => {

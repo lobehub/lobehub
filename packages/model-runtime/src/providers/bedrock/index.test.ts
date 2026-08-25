@@ -244,7 +244,7 @@ describe('LobeBedrockAI', () => {
         ]);
       });
 
-      it('should drop ALL stacked trailing assistant messages (LOBE-12572)', async () => {
+      it('should drop ALL stacked trailing assistant messages', async () => {
         const mockStream = new ReadableStream({
           start(controller) {
             controller.enqueue('Hello, world!');
@@ -278,7 +278,7 @@ describe('LobeBedrockAI', () => {
 
       it('should drop assistant prefill when a logical id maps to a Claude 5 Bedrock id', async () => {
         // The channel modelIdMapping resolves the actually-sent Bedrock model
-        // id; the prefill guard must follow it, not the logical id (LOBE-12572).
+        // id; the prefill guard must follow it, not the logical id.
         const mappedInstance = new LobeBedrockAI({
           accessKeyId: 'test-access-key-id',
           accessKeySecret: 'test-access-key-secret',
@@ -1358,7 +1358,7 @@ describe('LobeBedrockAI', () => {
 
     it('should drop assistant prefill in generateObject when a logical id maps to Claude 5', async () => {
       // The prefill guard must follow the resolved Bedrock model id, not the
-      // logical alias the channel mapping hides it behind (LOBE-12572).
+      // logical alias the channel mapping hides it behind.
       const mappedInstance = new LobeBedrockAI({
         accessKeyId: 'test-access-key-id',
         accessKeySecret: 'test-access-key-secret',

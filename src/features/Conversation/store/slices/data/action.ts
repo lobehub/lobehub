@@ -13,9 +13,14 @@ import {
 } from '@/services/message/cache';
 import { getChatStoreState } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import {
+  isLocalOnlyMessage,
+  mergeLocalMessagesByCreatedAt,
+} from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Store as ConversationStore } from '../../action';
+import { isSameConversationContext } from '../../utils/contextGuard';
 import { type MessageDispatch } from './reducer';
 import { messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
@@ -26,23 +31,36 @@ const log = debug('lobe-render:features:Conversation');
 const mergeFetchedMessagesWithLocalState = (
   fetchedMessages: UIChatMessage[],
   localMessages: UIChatMessage[],
+  activeVoiceMessageIds: ReadonlySet<string>,
 ): UIChatMessage[] => {
-  if (localMessages.length === 0 || fetchedMessages.length === 0) return fetchedMessages;
+  if (localMessages.length === 0) return fetchedMessages;
 
   const localById = new Map(localMessages.map((message) => [message.id, message]));
+  const fetchedIds = new Set(fetchedMessages.map((message) => message.id));
   let changed = false;
 
   const mergedMessages = fetchedMessages.map((message) => {
     const localMessage = localById.get(message.id);
 
     if (!localMessage) return message;
+    // Once the server returns this id, its persisted row replaces the local-only preview.
+    if (isLocalOnlyMessage(localMessage)) return message;
     if (localMessage.updatedAt <= message.updatedAt) return message;
 
     changed = true;
     return localMessage;
   });
 
-  return changed ? mergedMessages : fetchedMessages;
+  const missingLocalOnlyMessages = localMessages.filter(
+    (message) =>
+      isLocalOnlyMessage(message) &&
+      activeVoiceMessageIds.has(message.id) &&
+      !fetchedIds.has(message.id),
+  );
+
+  if (missingLocalOnlyMessages.length === 0) return changed ? mergedMessages : fetchedMessages;
+
+  return mergeLocalMessagesByCreatedAt(mergedMessages, missingLocalOnlyMessages);
 };
 
 /**
@@ -62,6 +80,8 @@ export interface DataAction {
    * Used for syncing after database operations (optimistic update pattern)
    *
    * @param messages - New messages array from database
+   * @param options.expectedContext - Context captured when an async operation started.
+   *   The replacement is discarded if the shared store has since switched context.
    * @param options.skipOnMessagesChange - Set when the messages came FROM the
    *   external store (StoreUpdater prop sync). Echoing them back through
    *   `onMessagesChange` re-writes the SWR message cache with whatever the
@@ -72,7 +92,7 @@ export interface DataAction {
    */
   replaceMessages: (
     messages: UIChatMessage[],
-    options?: { skipOnMessagesChange?: boolean },
+    options?: { expectedContext?: ConversationContext; skipOnMessagesChange?: boolean },
   ) => void;
 
   /**
@@ -169,7 +189,20 @@ export const dataSlice: StateCreator<
   },
 
   replaceMessages: (messages, options) => {
-    const contextKey = messageMapKey(get().context);
+    const currentContext = get().context;
+    const contextKey = messageMapKey(currentContext);
+    if (
+      options?.expectedContext &&
+      !isSameConversationContext(options.expectedContext, currentContext)
+    ) {
+      log(
+        '[replaceMessages] dropped stale result | requestContextKey=%s | storeContextKey=%s',
+        messageMapKey(options.expectedContext),
+        contextKey,
+      );
+      return;
+    }
+
     const prevDbMessages = get().dbMessages;
 
     // Parse messages using conversation-flow
@@ -191,7 +224,9 @@ export const dataSlice: StateCreator<
     // Sync changes to external store (ChatStore) — skipped for external prop
     // sync, which would only echo the external store's own data back and
     // poison the SWR cache (see interface doc).
-    if (!options?.skipOnMessagesChange) get().onMessagesChange?.(messages, get().context);
+    if (!options?.skipOnMessagesChange) {
+      get().onMessagesChange?.(messages, options?.expectedContext ?? currentContext);
+    }
   },
 
   switchMessageBranch: async (messageId, branchIndex) => {
@@ -215,6 +250,8 @@ export const dataSlice: StateCreator<
     // only local optimistic updates. Fetching would return empty array and overwrite local data.
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
     const contextKey = messageMapKey(context);
+    const storeContextKeyAtRequest = messageMapKey(get().context);
+    const onMessagesChange = get().onMessagesChange;
 
     log(
       '[useFetchMessages] hook | contextKey=%s | shouldFetch=%s | skipFetch=%s | agentId=%s | topicId=%s',
@@ -239,6 +276,16 @@ export const dataSlice: StateCreator<
           if (!data) return;
           if (!context.topicId) return;
 
+          const storeContextKey = messageMapKey(get().context);
+          if (storeContextKeyAtRequest !== storeContextKey) {
+            log(
+              '[useFetchMessages] dropped stale result | requestStoreContextKey=%s | storeContextKey=%s',
+              storeContextKeyAtRequest,
+              storeContextKey,
+            );
+            return;
+          }
+
           // Defense-in-depth gate: drop any SWR onData while the
           // topic is streaming. DB fan-out for chunk writes is async and lags
           // the WS push by anywhere from 100ms to several seconds; an SWR
@@ -256,8 +303,14 @@ export const dataSlice: StateCreator<
             return;
 
           const prevDbMessages = get().dbMessages;
-          const mergedMessages = mergeFetchedMessagesWithLocalState(data, prevDbMessages);
-          const storeContextKey = messageMapKey(get().context);
+          const activeVoiceMessageIds = new Set(
+            Object.keys(getChatStoreState().voiceMessageUploadMap),
+          );
+          const mergedMessages = mergeFetchedMessagesWithLocalState(
+            data,
+            prevDbMessages,
+            activeVoiceMessageIds,
+          );
 
           // Parse messages using conversation-flow
           const { flatList } = parse(mergedMessages);
@@ -279,14 +332,15 @@ export const dataSlice: StateCreator<
             messagesInit: true,
           });
 
-          // Call onMessagesChange callback with the request context (not current context)
-          // This ensures data is stored to the correct topic even if user switched topics.
+          // Use the callback and context captured when this fetch was registered.
+          // The store-context guard above rejects results after a topic switch;
+          // capturing the callback also prevents routing through a later handler instance.
           // `source: 'fetch'` marks this as a server-snapshot echo: handlers must
           // NOT write it through the SWR cache — at mount, this fires with the
           // stale cached list while the revalidation is in flight, and a cache
           // mutate here trips SWR's mutation race guard, discarding the fresh
           // result (conversation locks on the stale/partial list).
-          get().onMessagesChange?.(mergedMessages, context, { source: 'fetch' });
+          onMessagesChange?.(mergedMessages, context, { source: 'fetch' });
         },
       },
     );

@@ -5,19 +5,25 @@ type TabContextMenuLabelKey =
   | 'tab.closeLeftTabs'
   | 'tab.closeOtherTabs'
   | 'tab.closeRightTabs'
+  | 'tab.closeSplitView'
+  | 'tab.openInSplitView'
   | 'tab.pin'
   | 'tab.unpin';
 
 interface TabContextMenuParams {
   id: string;
   index: number;
+  inSplitView: boolean;
   onClose: (id: string) => void;
   onCloseLeft: (id: string) => void;
   onCloseOthers: (id: string) => void;
   onCloseRight: (id: string) => void;
+  onCloseSplitView: () => void;
+  onOpenInSplitView: (id: string) => void;
   onTogglePin: (id: string) => void;
   pinned: boolean;
   pinnedCount: number;
+  splitViewEnabled: boolean;
   t: (key: TabContextMenuLabelKey) => string;
   totalCount: number;
 }
@@ -28,13 +34,17 @@ interface TabContextMenuParams {
 export const buildTabContextMenuItems = ({
   id,
   index,
+  inSplitView,
   onClose,
   onCloseLeft,
   onCloseOthers,
   onCloseRight,
+  onCloseSplitView,
+  onOpenInSplitView,
   onTogglePin,
   pinned,
   pinnedCount,
+  splitViewEnabled,
   t,
   totalCount,
 }: TabContextMenuParams): GenericItemType[] => {
@@ -48,6 +58,13 @@ export const buildTabContextMenuItems = ({
       label: pinned ? t('tab.unpin') : t('tab.pin'),
       onClick: () => onTogglePin(id),
     },
+    splitViewEnabled || inSplitView
+      ? {
+          key: inSplitView ? 'closeSplitView' : 'openInSplitView',
+          label: t(inSplitView ? 'tab.closeSplitView' : 'tab.openInSplitView'),
+          onClick: () => (inSplitView ? onCloseSplitView() : onOpenInSplitView(id)),
+        }
+      : null,
     { type: 'divider' },
     {
       disabled: totalCount === 1,

@@ -35,6 +35,10 @@ class ElectronSystemService {
     return this.ipc.system.setDesktopOnboardingCompleted(completed);
   }
 
+  async setLastWorkspaceSlug(slug: string | null): Promise<void> {
+    return this.ipc.system.setLastWorkspaceSlug(slug);
+  }
+
   async getSystemMonospaceFonts(): Promise<SystemMonospaceFont[]> {
     return this.ipc.system.getSystemMonospaceFonts();
   }

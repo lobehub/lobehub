@@ -5,7 +5,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useTopicCommentThreads } from '@/features/TopicComment/hooks';
 import { mutate } from '@/libs/swr';
 import { topicCommentKeys } from '@/libs/swr/keys';
@@ -56,7 +56,7 @@ const Body = memo(() => {
     <Flexbox className={styles.body}>
       <Flexbox className={styles.list}>
         {isLoadingInitial ? (
-          <Loading debugId="TopicCommentsPortal" />
+          <SurfaceSkeleton header={false} variant={'list'} />
         ) : items.length === 0 ? (
           <Center className={styles.empty}>
             <Empty description={t('topicComment.empty')} icon={MessageCircle} />

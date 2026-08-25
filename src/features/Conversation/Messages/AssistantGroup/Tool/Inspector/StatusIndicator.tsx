@@ -1,7 +1,16 @@
 import { type ToolIntervention } from '@lobechat/types';
 import { Block, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { AlertTriangle, Ban, Check, HandIcon, PauseIcon, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Ban,
+  Check,
+  CornerUpRight,
+  HandIcon,
+  type LucideIcon,
+  PauseIcon,
+  X,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,12 +25,18 @@ interface StatusIndicatorProps {
    */
   isToolExecuting?: boolean;
   result?: { content: string | null; error?: any; state?: any };
+  /**
+   * Glyph for the completed state (defaults to a checkmark). Lets tools whose
+   * point is not "an action succeeded" keep their own semantic — e.g.
+   * askUserQuestion completes as a question mark, not a task tick.
+   */
+  successIcon?: LucideIcon;
   /** Successful tool payload that should surface as warning (e.g. activateTools with only notFound). */
   successVariant?: 'default' | 'warning';
 }
 
 const StatusIndicator = memo<StatusIndicatorProps>(
-  ({ intervention, isToolExecuting, result, successVariant }) => {
+  ({ intervention, isToolExecuting, result, successIcon, successVariant }) => {
     const { t } = useTranslation('chat');
 
     const hasError = !!result?.error;
@@ -43,7 +58,13 @@ const StatusIndicator = memo<StatusIndicatorProps>(
         </Tooltip>
       );
     } else if (isReject) {
-      icon = (
+      // A user skip (e.g. AskUserQuestion) is a normal outcome, not a denial —
+      // keep the glyph and copy neutral instead of the rejection ban sign.
+      icon = intervention?.skipped ? (
+        <Tooltip title={t('tool.intervention.toolSkipped')}>
+          <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} />
+        </Tooltip>
+      ) : (
         <Tooltip title={t('tool.intervention.toolRejected')}>
           <Icon color={cssVar.colorTextTertiary} icon={Ban} />
         </Tooltip>
@@ -55,7 +76,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
     } else if (hasSuccessResult && !hasError && successVariant === 'warning') {
       icon = <Icon color={cssVar.colorWarning} icon={AlertTriangle} />;
     } else if (hasResult || isToolComplete) {
-      icon = <Icon color={cssVar.colorSuccess} icon={Check} />;
+      icon = <Icon color={cssVar.colorSuccess} icon={successIcon ?? Check} />;
     } else {
       icon = <NeuralNetworkLoading size={16} />;
     }

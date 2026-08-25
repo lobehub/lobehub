@@ -8,6 +8,7 @@ import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicKnowledgeBase } from '../helpers/public-fields';
 import type {
   CreateKnowledgeBaseRequest,
   CreateKnowledgeBaseResponse,
@@ -80,7 +81,7 @@ export class KnowledgeBaseService extends BaseService {
         const accessType: KnowledgeBaseAccessType = 'owner';
 
         return {
-          ...item,
+          ...projectPublicKnowledgeBase(item),
           accessType,
         } as KnowledgeBaseListItem;
       });
@@ -123,7 +124,7 @@ export class KnowledgeBaseService extends BaseService {
       this.log('info', 'Knowledge base detail retrieved successfully', { id });
 
       return {
-        knowledgeBase,
+        knowledgeBase: projectPublicKnowledgeBase(knowledgeBase),
       };
     } catch (error) {
       this.handleServiceError(error, '获取知识库详情');
@@ -164,7 +165,7 @@ export class KnowledgeBaseService extends BaseService {
       });
 
       return {
-        knowledgeBase,
+        knowledgeBase: projectPublicKnowledgeBase(knowledgeBase),
       };
     } catch (error) {
       this.handleServiceError(error, '创建知识库');
@@ -197,6 +198,17 @@ export class KnowledgeBaseService extends BaseService {
         throw this.createNotFoundError('Knowledge base not found or access denied');
       }
 
+      // `KNOWLEDGE_BASE_UPDATE:all` is a curation scope (restricted-KB
+      // visibility / permission management) that admins also hold, so it must
+      // not bypass the row gate. Mirror the lambda routers' creator/owner
+      // check — `KNOWLEDGE_BASE_DELETE:all` is owner-only in the role matrix.
+      if (
+        existingKb.userId !== this.userId &&
+        !(await this.hasGlobalPermission('KNOWLEDGE_BASE_DELETE'))
+      ) {
+        throw this.createAuthorizationError('仅创建者或工作区所有者可修改此知识库');
+      }
+
       // Update knowledge base
       await this.knowledgeBaseModel.update(id, request);
 
@@ -208,7 +220,7 @@ export class KnowledgeBaseService extends BaseService {
       this.log('info', 'Knowledge base updated successfully', { id });
 
       return {
-        knowledgeBase: updatedKb as KnowledgeBaseItem,
+        knowledgeBase: projectPublicKnowledgeBase(updatedKb as KnowledgeBaseItem),
       };
     } catch (error) {
       this.handleServiceError(error, '更新知识库');

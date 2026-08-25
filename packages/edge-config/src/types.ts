@@ -14,6 +14,17 @@ export interface BillboardItemLocaleFields {
  * Billboard carousel item (a single content entry for the operations card in the bottom-left of the Home sidebar)
  */
 export interface BillboardItem {
+  /**
+   * In-app action enum configured on the platform. When set to a value the app
+   * recognizes, the CTA runs the corresponding in-app logic instead of opening
+   * `linkUrl`. Allowed values (defined app-side in `src/features/Billboard/actions.ts`):
+   * `openChangelog` (open the changelog modal), `openFeedback` (open the feedback modal),
+   * `resetOnboarding` (reset onboarding and re-enter the flow; only resolved
+   * on official cloud — desktop must be synced to official cloud, web must be
+   * served from the official origin — otherwise the CTA falls back to `linkUrl`).
+   * Unrecognized values are ignored by the client and fall back to `linkUrl`.
+   */
+  action?: string | null;
   cover?: string | null;
   description: string;
   /**

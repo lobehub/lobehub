@@ -30,6 +30,7 @@ import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
   logTimingSink as logTiming,
+  readAudioDurationMs,
   runTimedSinkStage as runTimedStage,
 } from '@lobechat/utils';
 import { isPlainRecord } from '@lobechat/utils/object';
@@ -42,17 +43,17 @@ import {
   count,
   desc,
   eq,
-  getTableColumns,
+  gt,
   gte,
   inArray,
   isNotNull,
   isNull,
   lte,
+  ne,
   not,
   or,
   sql,
 } from 'drizzle-orm';
-import { unionAll } from 'drizzle-orm/pg-core';
 
 import { merge } from '@/utils/merge';
 import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
@@ -73,21 +74,14 @@ import {
   messagesFiles,
   messageTranslates,
   messageTTS,
-  sessions,
   threads,
-  topics,
   users,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
+import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
-import {
-  buildMessageChildScopeWhere,
-  buildMessageScopeJoinWhere,
-  buildMessageScopeWhere,
-  buildTopicAnchoredScopeWhere,
-} from '../utils/messageScope';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -164,10 +158,35 @@ interface MessageRelatedFile {
   fileType: string | null;
   id: string;
   messageId: string;
+  metadata: unknown;
   name: string | null;
   size: number | null;
   url: string;
 }
+
+const materializeChatAudioItem = ({
+  fileType,
+  id,
+  metadata,
+  name,
+  url,
+}: MessageRelatedFile): ChatAudioItem => {
+  const value = isPlainRecord(metadata) ? metadata : {};
+  const durationMs = readAudioDurationMs(metadata);
+
+  return {
+    alt: name!,
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : {}),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    id,
+    ...(typeof value.mimeType === 'string'
+      ? { mimeType: value.mimeType }
+      : fileType
+        ? { mimeType: fileType }
+        : {}),
+    url,
+  };
+};
 
 interface MessageChunkRelation {
   fileId: string;
@@ -380,34 +399,56 @@ export class MessageModel {
     this.workspaceId = workspaceId;
   }
 
-  // `messages.user_id` / `messages.workspace_id` are creation-time snapshots —
-  // scope is derived from the owning topic/session (see buildMessageScopeWhere),
-  // so transferring an agent never has to rewrite the messages table.
   private ownership = () =>
-    buildMessageScopeWhere({ userId: this.userId, workspaceId: this.workspaceId });
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
   private pluginsOwnership = () =>
-    buildMessageChildScopeWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      messagePlugins.id,
-    );
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
 
   private translatesOwnership = () =>
-    buildMessageChildScopeWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      messageTranslates.id,
-    );
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageTranslates);
 
   private ttsOwnership = () =>
-    buildMessageChildScopeWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      messageTTS.id,
-    );
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageTTS);
 
   private agentsToSessionsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
 
   // **************** Query *************** //
+
+  /**
+   * The newest user message of each given topic, keyed by topic id. Used to
+   * pre-inject recent same-channel history for IM platforms that can't read
+   * chat history at runtime (e.g. WeChat). Only `role = 'user'` rows with
+   * non-empty text are considered.
+   */
+  queryLastUserMessageByTopics = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([messages.topicId], {
+        content: messages.content,
+        topicId: messages.topicId,
+      })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'user'),
+          isNotNull(messages.content),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(messages.topicId, desc(messages.createdAt));
+
+    const result = new Map<string, string>();
+    for (const row of rows) {
+      const content = (row.content ?? '').trim();
+      if (row.topicId && content) result.set(row.topicId, content);
+    }
+    return result;
+  };
 
   /**
    * Query messages by params (high-level API)
@@ -468,6 +509,9 @@ export class MessageModel {
         () => this.buildThreadQueryCondition(threadId),
         { hasThreadId: true },
       );
+      // A topic thread may contain replies from delegated agents. When the topic is known,
+      // scope the complete thread to it instead of filtering those replies by the parent agent.
+      const threadScopeCondition = topicId ? this.matchTopic(topicId) : agentCondition;
       const messageItems = await this.queryWithWhere({
         current,
         includeFileWorks,
@@ -475,8 +519,8 @@ export class MessageModel {
         postProcessUrl: options.postProcessUrl,
         skipWorks,
         timing,
-        // Thread queries optionally add agent/session scope if provided
-        where: agentCondition ? and(agentCondition, threadCondition) : threadCondition,
+        topicId: topicId ?? undefined,
+        where: threadScopeCondition ? and(threadScopeCondition, threadCondition) : threadCondition,
       });
       logTiming(timing, 'db.message.query:done', {
         messageCount: messageItems.length,
@@ -685,9 +729,13 @@ export class MessageModel {
             targetId: messages.targetId,
 
             sender: {
+              // `id` MUST be the first selected field: drizzle decides whether a
+              // left-joined nested selection is null from its first column, so
+              // leading with a nullable column (avatar) collapsed every
+              // avatar-less sender to `sender: null`.
+              id: users.id,
               avatar: users.avatar,
               fullName: users.fullName,
-              id: users.id,
               username: users.username,
             },
 
@@ -913,8 +961,7 @@ export class MessageModel {
               works: worksByMessageId[item.id as string],
               audioList: audioList
                 .filter((relation) => relation.messageId === item.id)
-
-                .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+                .map<ChatAudioItem>(materializeChatAudioItem),
             } as unknown as UIChatMessage;
           },
         ),
@@ -1018,6 +1065,7 @@ export class MessageModel {
             fileType: files.fileType,
             id: messagesFiles.fileId,
             messageId: messagesFiles.messageId,
+            metadata: files.metadata,
             name: files.name,
             size: files.size,
             url: files.url,
@@ -1318,6 +1366,15 @@ export class MessageModel {
         agentId: messages.agentId,
         targetId: messages.targetId,
 
+        sender: {
+          // `id` MUST be the first selected field — see queryWithWhere's sender
+          // selection for why (drizzle left-join nested-object nullification).
+          id: users.id,
+          avatar: users.avatar,
+          fullName: users.fullName,
+          username: users.username,
+        },
+
         tools: messages.tools,
         tool_call_id: messagePlugins.toolCallId,
 
@@ -1347,6 +1404,7 @@ export class MessageModel {
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
+      .leftJoin(users, eq(users.id, messages.userId))
       .orderBy(asc(messages.createdAt));
 
     if (result.length === 0) return [];
@@ -1361,6 +1419,7 @@ export class MessageModel {
           fileType: files.fileType,
           id: messagesFiles.fileId,
           messageId: messagesFiles.messageId,
+          metadata: files.metadata,
           name: files.name,
           size: files.size,
           url: files.url,
@@ -1491,10 +1550,23 @@ export class MessageModel {
 
     // 6. Transform messages to UIChatMessage format
     return result.map(
-      ({ model, provider, translate, ttsId, ttsFile, ttsContentMd5, ttsVoice, ...item }) => {
+      ({
+        model,
+        provider,
+        translate,
+        ttsId,
+        ttsFile,
+        ttsContentMd5,
+        ttsVoice,
+        sender,
+        ...item
+      }) => {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
         return {
           ...item,
+          // Same presence contract as queryWithWhere: collapse a null-id sender
+          // (deleted account) to `null` so clients can rely on `sender?.id`.
+          sender: sender?.id ? sender : null,
           chunksList: chunksList
             .filter((relation) => relation.messageId === item.id)
             .map((c) => ({
@@ -1551,7 +1623,7 @@ export class MessageModel {
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
           audioList: audioList
             .filter((relation) => relation.messageId === item.id)
-            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+            .map<ChatAudioItem>(materializeChatAudioItem),
         } as unknown as UIChatMessage;
       },
     );
@@ -1576,10 +1648,7 @@ export class MessageModel {
   ): Promise<UIChatMessage[]> => {
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
-      buildTopicAnchoredScopeWhere(
-        { userId: this.userId, workspaceId: this.workspaceId },
-        messageGroups,
-      ),
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups),
       eq(messageGroups.topicId, topicId),
     ];
 
@@ -1901,30 +1970,11 @@ export class MessageModel {
     const { current = 0, pageSize = 100 } = params ?? {};
     const offset = current * pageSize;
 
-    // Whole-scope listing: the bare derived-scope predicate would be the only
-    // filter over the shared messages table (unbounded scan) — fan out over
-    // the three derivation arms instead, each bounded by its own index, and
-    // let the database order/page the union (same shape as count()).
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    const columns = getTableColumns(messages);
-    const scoped = unionAll(
-      this.db
-        .select(columns)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(topicOwned),
-      this.db
-        .select(columns)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(sessionOwned),
-      this.db.select(columns).from(messages).where(orphan),
-    ).as('scoped_messages');
-
     const result = await this.db
       .select()
-      .from(scoped)
-      .orderBy(desc(scoped.createdAt))
+      .from(messages)
+      .where(and(this.ownership()))
+      .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);
 
@@ -1944,53 +1994,22 @@ export class MessageModel {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
-    // Join-based scope derivation: ParadeDB can't plan the correlated-EXISTS
-    // predicate together with `@@@` ("Unsupported query shape").
     const result = await this.db
-      .select(getTableColumns(messages))
+      .select()
       .from(messages)
-      .leftJoin(topics, eq(topics.id, messages.topicId))
-      .leftJoin(sessions, eq(sessions.id, messages.sessionId))
-      .where(
-        and(
-          buildMessageScopeJoinWhere({ userId: this.userId, workspaceId: this.workspaceId }),
-          sql`${messages.content} @@@ ${bm25Query}`,
-        ),
-      )
+      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];
   };
 
   /**
-   * Whole-scope aggregates can't lean on the correlated derived-scope
-   * predicate alone — without another indexed filter it degenerates into a
-   * full scan of the shared messages table. Instead they fan out over the
-   * three derivation arms, each bounded by its own index, and merge results:
-   *
-   * 1. topic-owned rows    → inner join `topics` under the topic scope
-   * 2. session-owned rows  → `topic_id IS NULL` + inner join `sessions`
-   * 3. orphan legacy rows  → both anchors NULL + own snapshot columns
-   */
-  private scopeArms = () => {
-    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
-    return {
-      orphan: and(
-        isNull(messages.topicId),
-        isNull(messages.sessionId),
-        buildWorkspaceWhere(ctx, messages),
-      ) as SQL,
-      sessionOwned: and(isNull(messages.topicId), buildWorkspaceWhere(ctx, sessions)) as SQL,
-      topicOwned: buildWorkspaceWhere(ctx, topics),
-    };
-  };
-
-  /**
-   * Analytics filter conditions shared by count / countGroupByTopic /
-   * topicMessageStats. Scope is supplied by the caller via {@link scopeArms} —
-   * these are only the optional user-facing filters.
+   * Ownership-scoped analytics filter conditions, shared by count /
+   * countGroupByTopic / topicMessageStats. The first entry is always the
+   * `userId × workspace` ownership predicate; later entries are optional.
    */
   private analyticsConditions = (params?: MessageAnalyticsFilters) => [
+    this.ownership(),
     params?.agentId ? eq(messages.agentId, params.agentId) : undefined,
     params?.topicId ? eq(messages.topicId, params.topicId) : undefined,
     params?.role ? eq(messages.role, params.role) : undefined,
@@ -2006,28 +2025,14 @@ export class MessageModel {
   ];
 
   count = async (params?: MessageAnalyticsFilters): Promise<number> => {
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    const conditions = this.analyticsConditions(params);
-    const selection = { count: count(messages.id) };
+    const result = await this.db
+      .select({
+        count: count(messages.id),
+      })
+      .from(messages)
+      .where(genWhere(this.analyticsConditions(params)));
 
-    const results = await Promise.all([
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(genWhere([topicOwned, ...conditions])),
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(genWhere([sessionOwned, ...conditions])),
-      this.db
-        .select(selection)
-        .from(messages)
-        .where(genWhere([orphan, ...conditions])),
-    ]);
-
-    return results.reduce((total, rows) => total + rows[0].count, 0);
+    return result[0].count;
   };
 
   /**
@@ -2038,15 +2043,13 @@ export class MessageModel {
   countGroupByTopic = async (
     params?: MessageAnalyticsFilters,
   ): Promise<TopicMessageCountItem[]> => {
-    // Rows are keyed by topicId, so only the topic-owned arm can contribute.
     const rows = await this.db
       .select({
         count: count(messages.id),
         topicId: messages.topicId,
       })
       .from(messages)
-      .innerJoin(topics, eq(topics.id, messages.topicId))
-      .where(genWhere([this.scopeArms().topicOwned, ...this.analyticsConditions(params)]))
+      .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
       .groupBy(messages.topicId)
       .orderBy(desc(sql`count`), asc(messages.topicId));
 
@@ -2059,15 +2062,13 @@ export class MessageModel {
    * counts are aggregated in the DB; only the final summary is returned.
    */
   topicMessageStats = async (params?: MessageAnalyticsFilters): Promise<TopicMessageStats> => {
-    // Rows are keyed by topicId, so only the topic-owned arm can contribute.
     const rows = await this.db
       .select({
         count: count(messages.id),
         topicId: messages.topicId,
       })
       .from(messages)
-      .innerJoin(topics, eq(topics.id, messages.topicId))
-      .where(genWhere([this.scopeArms().topicOwned, ...this.analyticsConditions(params)]))
+      .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
       .groupBy(messages.topicId);
 
     return computeTopicMessageStats(rows.map((r) => r.count));
@@ -2099,116 +2100,74 @@ export class MessageModel {
     range?: [string, string];
     startDate?: string;
   }): Promise<number> => {
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    const conditions = [
-      params?.range
-        ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
-        : undefined,
-      params?.endDate
-        ? genEndDateWhere(params.endDate, messages.createdAt, (date) => date.toDate())
-        : undefined,
-      params?.startDate
-        ? genStartDateWhere(params.startDate, messages.createdAt, (date) => date.toDate())
-        : undefined,
-    ];
-    const selection = { count: sql<string>`sum(length(${messages.content}))`.as('total_length') };
+    const result = await this.db
+      .select({
+        count: sql<string>`sum(length(${messages.content}))`.as('total_length'),
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          this.ownership(),
+          params?.range
+            ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
+            : undefined,
+          params?.endDate
+            ? genEndDateWhere(params.endDate, messages.createdAt, (date) => date.toDate())
+            : undefined,
+          params?.startDate
+            ? genStartDateWhere(params.startDate, messages.createdAt, (date) => date.toDate())
+            : undefined,
+        ]),
+      );
 
-    const results = await Promise.all([
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(genWhere([topicOwned, ...conditions])),
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(genWhere([sessionOwned, ...conditions])),
-      this.db
-        .select(selection)
-        .from(messages)
-        .where(genWhere([orphan, ...conditions])),
-    ]);
-
-    return results.reduce((total, rows) => total + Number(rows[0].count ?? 0), 0);
+    return Number(result[0].count);
   };
 
   rankModels = async (limit: number = 10): Promise<ModelRankItem[]> => {
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    const selection = { count: count(messages.id).as('count'), id: messages.model };
-    const hasModel = isNotNull(messages.model);
-
-    const results = await Promise.all([
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(and(topicOwned, hasModel))
-        .groupBy(messages.model),
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(and(sessionOwned, hasModel))
-        .groupBy(messages.model),
-      this.db.select(selection).from(messages).where(and(orphan, hasModel)).groupBy(messages.model),
-    ]);
-
-    const merged = new Map<string | null, number>();
-    for (const row of results.flat()) merged.set(row.id, (merged.get(row.id) ?? 0) + row.count);
-
-    return [...merged.entries()]
-      .filter(([, cnt]) => cnt > 0)
-      .sort(([modelA, countA], [modelB, countB]) =>
-        countA === countB ? (modelA ?? '').localeCompare(modelB ?? '') : countB - countA,
-      )
-      .slice(0, limit)
-      .map(([id, cnt]) => ({ count: cnt, id }));
+    return this.db
+      .select({
+        count: count(messages.id).as('count'),
+        id: messages.model,
+      })
+      .from(messages)
+      .where(and(this.ownership(), isNotNull(messages.model), notCopiedTranscript()))
+      .having(({ count }) => gt(count, 0))
+      .groupBy(messages.model)
+      .orderBy(desc(sql`count`), asc(messages.model))
+      .limit(limit);
   };
 
   getHeatmaps = async (): Promise<HeatmapsProps['data']> => {
     const startDate = today().subtract(1, 'year').startOf('day');
     const endDate = today().endOf('day');
 
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    const selection = {
-      count: count(messages.id),
-      date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
-    };
-    const inRange = genRangeWhere(
-      [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
-      messages.createdAt,
-      (date) => date.toDate(),
-    );
-
-    const results = await Promise.all([
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(and(topicOwned, inRange))
-        .groupBy(sql`heatmaps_date`),
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(and(sessionOwned, inRange))
-        .groupBy(sql`heatmaps_date`),
-      this.db
-        .select(selection)
-        .from(messages)
-        .where(and(orphan, inRange))
-        .groupBy(sql`heatmaps_date`),
-    ]);
+    const result = await this.db
+      .select({
+        count: count(messages.id),
+        date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          this.ownership(),
+          genRangeWhere(
+            [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
+            messages.createdAt,
+            (date) => date.toDate(),
+          ),
+        ]),
+      )
+      .groupBy(sql`heatmaps_date`)
+      .orderBy(desc(sql`heatmaps_date`));
 
     const heatmapData: HeatmapsProps['data'] = [];
     let currentDate = startDate.clone();
 
     const dateCountMap = new Map<string, number>();
-    for (const item of results.flat()) {
+    for (const item of result) {
       if (item?.date) {
         const dateStr = dayjs(item.date as string).format('YYYY-MM-DD');
-        dateCountMap.set(dateStr, (dateCountMap.get(dateStr) ?? 0) + item.count);
+        dateCountMap.set(dateStr, item.count);
       }
     }
 
@@ -2246,49 +2205,36 @@ export class MessageModel {
     const startDate = today().subtract(1, 'year').startOf('day');
     const endDate = today().endOf('day');
 
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    const selection = {
-      date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
-      tokens:
-        sql<number>`COALESCE(SUM((COALESCE(${messages.usage}, ${messages.metadata}->'usage')->>'totalTokens')::numeric), 0)`.mapWith(
-          Number,
-        ),
-    };
-    const filters = and(
-      eq(messages.role, 'assistant'),
-      genRangeWhere(
-        [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
-        messages.createdAt,
-        (date) => date.toDate(),
-      ),
-    );
-
-    const results = await Promise.all([
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(topics, eq(topics.id, messages.topicId))
-        .where(and(topicOwned, filters))
-        .groupBy(sql`heatmaps_date`),
-      this.db
-        .select(selection)
-        .from(messages)
-        .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-        .where(and(sessionOwned, filters))
-        .groupBy(sql`heatmaps_date`),
-      this.db
-        .select(selection)
-        .from(messages)
-        .where(and(orphan, filters))
-        .groupBy(sql`heatmaps_date`),
-    ]);
+    const result = await this.db
+      .select({
+        date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
+        tokens:
+          sql<number>`COALESCE(SUM((COALESCE(${messages.usage}, ${messages.metadata}->'usage')->>'totalTokens')::numeric), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          this.ownership(),
+          eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
+          genRangeWhere(
+            [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
+            messages.createdAt,
+            (date) => date.toDate(),
+          ),
+        ]),
+      )
+      .groupBy(sql`heatmaps_date`)
+      .orderBy(desc(sql`heatmaps_date`));
 
     const dateTokenMap = new Map<string, number>();
     let maxTokens = 0;
-    for (const item of results.flat()) {
+    for (const item of result) {
       if (item?.date) {
         const dateStr = dayjs(item.date as string).format('YYYY-MM-DD');
-        const tokens = (dateTokenMap.get(dateStr) ?? 0) + (item.tokens || 0);
+        const tokens = item.tokens || 0;
         dateTokenMap.set(dateStr, tokens);
         if (tokens > maxTokens) maxTokens = tokens;
       }
@@ -2320,43 +2266,26 @@ export class MessageModel {
   };
 
   hasMoreThanN = async (n: number): Promise<boolean> => {
-    return (await this.countUpTo(n + 1)) > n;
+    const result = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(this.ownership()))
+      .limit(n + 1);
+
+    return result.length > n;
   };
 
   /**
-   * Count messages up to a limit, useful for avoiding full table scans.
-   * Walks the scope-derivation arms in order and stops as soon as `n` rows
-   * are found, so each probe stays index-bounded.
+   * Count messages up to a limit, useful for avoiding full table scans
    */
   countUpTo = async (n: number): Promise<number> => {
-    const { topicOwned, sessionOwned, orphan } = this.scopeArms();
-    let found = 0;
-
-    const byTopic = await this.db
+    const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .innerJoin(topics, eq(topics.id, messages.topicId))
-      .where(topicOwned)
+      .where(and(this.ownership()))
       .limit(n);
-    found += byTopic.length;
-    if (found >= n) return n;
 
-    const bySession = await this.db
-      .select({ id: messages.id })
-      .from(messages)
-      .innerJoin(sessions, eq(sessions.id, messages.sessionId))
-      .where(sessionOwned)
-      .limit(n - found);
-    found += bySession.length;
-    if (found >= n) return n;
-
-    const orphans = await this.db
-      .select({ id: messages.id })
-      .from(messages)
-      .where(orphan)
-      .limit(n - found);
-
-    return found + orphans.length;
+    return result.length;
   };
 
   // **************** Create *************** //
@@ -2780,13 +2709,9 @@ export class MessageModel {
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
-    // Plain select instead of RQB findFirst: RQB aliases the table, which
-    // breaks the correlated EXISTS inside pluginsOwnership().
-    const [item] = await this.db
-      .select()
-      .from(messagePlugins)
-      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
-      .limit(1);
+    const item = await this.db.query.messagePlugins.findFirst({
+      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
+    });
     if (!item) throw new Error('Plugin not found');
 
     await this.db
@@ -2796,11 +2721,9 @@ export class MessageModel {
   };
 
   updateMessagePlugin = async (id: string, value: Partial<MessagePluginItem>) => {
-    const [item] = await this.db
-      .select()
-      .from(messagePlugins)
-      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
-      .limit(1);
+    const item = await this.db.query.messagePlugins.findFirst({
+      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
+    });
     if (!item) throw new Error('Plugin not found');
 
     return this.db
@@ -2821,11 +2744,9 @@ export class MessageModel {
    * `undefined`.
    */
   findMessagePlugin = async (messageId: string): Promise<MessagePluginItem | undefined> => {
-    const [row] = await this.db
-      .select()
-      .from(messagePlugins)
-      .where(and(eq(messagePlugins.id, messageId), this.pluginsOwnership()))
-      .limit(1);
+    const row = await this.db.query.messagePlugins.findFirst({
+      where: and(eq(messagePlugins.id, messageId), this.pluginsOwnership()),
+    });
     if (!row) return undefined;
     return {
       apiName: row.apiName ?? undefined,
@@ -2923,32 +2844,77 @@ export class MessageModel {
       lte(messages.createdAt, completedAt),
     );
 
-    const heterogeneousMatch = sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`;
+    // The two branches are resolved SEPARATELY — never OR-ed into one WHERE (an
+    // `... AND (withinWindow OR heteroMatch)` is unindexable and seq-scans every
+    // plugin row the user owns). They are also SHAPED differently on purpose:
+    //
+    // - Time window: one index-friendly range scan joined to its plugin rows.
+    // - Heterogeneous match: resolved id-FIRST, not as a plugin JOIN. The
+    //   `metadata->>'heterogeneousToolStateOperationId'` predicate carries a 0.5%
+    //   default selectivity estimate, so joining it to `message_plugins` makes the
+    //   planner scan / nested-loop the user's ENTIRE plugin history (100k+ rows,
+    //   100s+ per call for heavy users — it returns ~0 rows but pays the full scan
+    //   every time, since most ops never stamp the key). Looking up the few
+    //   matching message ids in a JOIN-free query first, then fetching those rows
+    //   by primary key, leaves the planner no join to mis-order: the lookup is
+    //   single-table (index-served once the metadata expression is indexed; a
+    //   bounded scan otherwise) and the fetch is a pure PK access. Kept
+    //   topic-agnostic to preserve the prior behaviour exactly — a late CLI row
+    //   can land outside the op's window (and, rarely, its topic).
+    const projection = {
+      apiName: messagePlugins.apiName,
+      arguments: messagePlugins.arguments,
+      clientId: messagePlugins.clientId,
+      // The tool message's text body. Heterogeneous CLI adapters (claude-code
+      // Bash) persist the command's stdout here rather than in a structured
+      // `state` field, and the completion-time github Work scan reads the gh
+      // CLI's printed entity URL from it.
+      content: messages.content,
+      createdAt: messages.createdAt,
+      error: messagePlugins.error,
+      id: messagePlugins.id,
+      identifier: messagePlugins.identifier,
+      intervention: messagePlugins.intervention,
+      state: messagePlugins.state,
+      toolCallId: messagePlugins.toolCallId,
+      type: messagePlugins.type,
+      userId: messagePlugins.userId,
+    };
 
-    const rows = await this.db
-      .select({
-        apiName: messagePlugins.apiName,
-        arguments: messagePlugins.arguments,
-        clientId: messagePlugins.clientId,
-        // The tool message's text body. Heterogeneous CLI adapters (claude-code
-        // Bash) persist the command's stdout here rather than in a structured
-        // `state` field, and the completion-time github Work scan reads the gh
-        // CLI's printed entity URL from it.
-        content: messages.content,
-        createdAt: messages.createdAt,
-        error: messagePlugins.error,
-        id: messagePlugins.id,
-        identifier: messagePlugins.identifier,
-        intervention: messagePlugins.intervention,
-        state: messagePlugins.state,
-        toolCallId: messagePlugins.toolCallId,
-        type: messagePlugins.type,
-        userId: messagePlugins.userId,
-      })
-      .from(messagePlugins)
-      .innerJoin(messages, eq(messagePlugins.id, messages.id))
-      .where(and(this.ownership(), this.pluginsOwnership(), or(withinWindow, heterogeneousMatch)))
-      .orderBy(asc(messages.createdAt), asc(messages.id));
+    const scan = (condition: SQL | undefined) =>
+      this.db
+        .select(projection)
+        .from(messagePlugins)
+        .innerJoin(messages, eq(messagePlugins.id, messages.id))
+        .where(and(this.ownership(), this.pluginsOwnership(), condition));
+
+    const fetchHeterogeneous = async () => {
+      const idRows = await this.db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            this.ownership(),
+            sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`,
+          ),
+        );
+      const ids = idRows.map((row) => row.id);
+      if (ids.length === 0) return [];
+      return scan(inArray(messagePlugins.id, ids));
+    };
+
+    const [windowRows, heterogeneousRows] = await Promise.all([
+      scan(withinWindow),
+      fetchHeterogeneous(),
+    ]);
+
+    const byId = new Map<string, (typeof windowRows)[number]>();
+    for (const row of windowRows) byId.set(row.id, row);
+    for (const row of heterogeneousRows) if (!byId.has(row.id)) byId.set(row.id, row);
+
+    const rows = [...byId.values()].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
 
     return rows.map((row) => ({
       apiName: row.apiName ?? undefined,
@@ -2965,6 +2931,112 @@ export class MessageModel {
       type: row.type ?? 'default',
       userId: row.userId,
     }));
+  };
+
+  /**
+   * Load specific tool-call rows by their message ids, ownership-scoped and
+   * pinned to one topic. Serves the LOCAL hetero run work scan
+   * (`work.registerShellWorksForRun`): a desktop-local CLI run has no
+   * `agent_operations` row, so the client reports the exact tool message ids it
+   * persisted instead of the server reconstructing an operation window. The
+   * topic pin means a caller can never scan rows outside the conversation it
+   * claims to complete.
+   */
+  listMessagePluginsByIds = async (params: {
+    ids: string[];
+    topicId: string;
+  }): Promise<Array<MessagePluginItem & { content?: string; createdAt: Date }>> => {
+    if (params.ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        arguments: messagePlugins.arguments,
+        clientId: messagePlugins.clientId,
+        // The tool message's text body — claude-code Bash persists the
+        // command's stdout here (see listMessagePluginsForOperation).
+        content: messages.content,
+        createdAt: messages.createdAt,
+        error: messagePlugins.error,
+        id: messagePlugins.id,
+        identifier: messagePlugins.identifier,
+        intervention: messagePlugins.intervention,
+        state: messagePlugins.state,
+        toolCallId: messagePlugins.toolCallId,
+        type: messagePlugins.type,
+        userId: messagePlugins.userId,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          inArray(messagePlugins.id, params.ids),
+          eq(messages.topicId, params.topicId),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      );
+
+    const sorted = [...rows].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+
+    return sorted.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
+   * Resolve the tool result message id for a toolCallId — the stable identifier
+   * the model emitted for the call. Lets server-side services push async state
+   * onto a tool card when all they hold is the call id recorded at creation
+   * time (e.g. the goal loop updating the `createGoal` card via
+   * `task.context.origin.toolCallId`).
+   */
+  findToolMessageIdByToolCallId = async (
+    toolCallId: string,
+    /**
+     * Restrict the match to calls made by one assistant message.
+     *
+     * `tool_call_id` is provider-supplied and only unique in practice — the
+     * column carries a plain index, not a unique constraint. Callers that act
+     * on the row (rather than just reading it) should scope the match, or a
+     * reused id from another turn resolves to an unrelated historical result.
+     */
+    parentId?: string,
+  ): Promise<string | null> => {
+    const rows = parentId
+      ? await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .innerJoin(messages, eq(messages.id, messagePlugins.id))
+          .where(
+            and(
+              eq(messagePlugins.toolCallId, toolCallId),
+              eq(messages.parentId, parentId),
+              this.pluginsOwnership(),
+            ),
+          )
+          .limit(1)
+      : await this.db
+          .select({ id: messagePlugins.id })
+          .from(messagePlugins)
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.pluginsOwnership()))
+          .limit(1);
+
+    return rows[0]?.id ?? null;
   };
 
   /**
@@ -3063,11 +3135,9 @@ export class MessageModel {
 
         // Update messagePlugins table (pluginState, pluginError)
         if (pluginState !== undefined || pluginError !== undefined) {
-          const [pluginItem] = await trx
-            .select()
-            .from(messagePlugins)
-            .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()))
-            .limit(1);
+          const pluginItem = await trx.query.messagePlugins.findFirst({
+            where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
+          });
 
           // A plugin-only patch never touches `messages`, so the plugin row is
           // the only evidence the tool message exists.
@@ -3208,6 +3278,41 @@ export class MessageModel {
     this.getLatestSpineMessageId({ topicId, threadId: null });
 
   /**
+   * Whether `descendantId` belongs to the branch rooted at `ancestorId`.
+   *
+   * Used when reconciling a client-selected conversation tail with the latest
+   * server row: a newer row may be a sibling from a historical callback fork,
+   * not an advancement of the branch the user is viewing.
+   */
+  isMessageDescendantOf = async ({
+    ancestorId,
+    descendantId,
+    topicId,
+  }: {
+    ancestorId: string;
+    descendantId: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE ancestors(id, parent_id) AS (
+        SELECT id, parent_id
+        FROM messages
+        WHERE id = ${descendantId}
+          AND topic_id = ${topicId}
+          AND ${this.ownership()}
+        UNION
+        SELECT parent.id, parent.parent_id
+        FROM messages parent
+        JOIN ancestors child ON parent.id = child.parent_id
+        WHERE parent.topic_id = ${topicId}
+      )
+      SELECT 1 AS hit FROM ancestors WHERE id = ${ancestorId} LIMIT 1
+    `);
+
+    return result.rows.length > 0;
+  };
+
+  /**
    * Thread-aware variant of {@link getLastMainThreadSpineMessageId}: the id of
    * the latest "spine" message (the most recent message that is NOT a tool and
    * NOT a signal-tagged reactive turn) in a topic, scoped to the main thread
@@ -3308,11 +3413,9 @@ export class MessageModel {
   };
 
   updateTranslate = async (id: string, translate: Partial<ChatTranslate>) => {
-    const [result] = await this.db
-      .select()
-      .from(messageTranslates)
-      .where(and(eq(messageTranslates.id, id), this.translatesOwnership()))
-      .limit(1);
+    const result = await this.db.query.messageTranslates.findFirst({
+      where: and(eq(messageTranslates.id, id), this.translatesOwnership()),
+    });
 
     // If the message does not exist in the translate table, insert it
     if (!result) {
@@ -3336,11 +3439,9 @@ export class MessageModel {
     // Older clients sent an empty payload when starting TTS, so keep this backward-compatible.
     if ([contentMd5, file, voice].every((value) => value === undefined)) return;
 
-    const [result] = await this.db
-      .select()
-      .from(messageTTS)
-      .where(and(eq(messageTTS.id, id), this.ttsOwnership()))
-      .limit(1);
+    const result = await this.db.query.messageTTS.findFirst({
+      where: and(eq(messageTTS.id, id), this.ttsOwnership()),
+    });
 
     // If the message does not exist in the TTS table, insert it
     if (!result) {
@@ -3662,9 +3763,9 @@ export class MessageModel {
       .where(
         and(
           eq(messageQueries.id, id),
-          buildMessageChildScopeWhere(
+          buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
-            messageQueries.messageId,
+            messageQueries,
           ),
         ),
       );
@@ -3686,43 +3787,7 @@ export class MessageModel {
       );
 
   deleteAllMessages = async () => {
-    // Whole-scope delete: drive each derivation arm from its own index instead
-    // of filtering the shared messages table with the correlated predicate.
-    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
-
-    return this.db.transaction(async (tx) => {
-      await tx
-        .delete(messages)
-        .where(
-          inArray(
-            messages.topicId,
-            tx.select({ id: topics.id }).from(topics).where(buildWorkspaceWhere(ctx, topics)),
-          ),
-        );
-      await tx
-        .delete(messages)
-        .where(
-          and(
-            isNull(messages.topicId),
-            inArray(
-              messages.sessionId,
-              tx
-                .select({ id: sessions.id })
-                .from(sessions)
-                .where(buildWorkspaceWhere(ctx, sessions)),
-            ),
-          ),
-        );
-      await tx
-        .delete(messages)
-        .where(
-          and(
-            isNull(messages.topicId),
-            isNull(messages.sessionId),
-            buildWorkspaceWhere(ctx, messages),
-          ),
-        );
-    });
+    return this.db.delete(messages).where(and(this.ownership()));
   };
 
   /**

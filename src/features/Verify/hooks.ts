@@ -25,8 +25,21 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
   revalidateOnReconnect: true,
 } as const;
 
-export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) =>
-  acceptance ? 0 : 2000;
+/**
+ * Poll until the aggregate exists AND stops moving.
+ *
+ * Discovery was the only case handled before, so a task page left open during
+ * a goal loop kept rendering whatever state it first saw — "awaiting
+ * verification" straight through verifying, delivery and acceptance — until a
+ * focus or remount happened to refetch.
+ */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set(['accepted', 'closed']);
+
+export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
+  if (!acceptance) return 2000;
+  const status = (acceptance as { status?: string }).status;
+  return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
+};
 
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
 export const useVerifyState = (operationId: string | null) =>
@@ -48,13 +61,7 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
     VERIFY_REPORT_SWR_CONFIG,
   );
 
-/** Cross-round acceptance decision bundle by acceptance id. */
-export const useAcceptanceBundle = (acceptanceId: string | null) =>
-  useClientDataSWR(
-    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
-    () => verifyService.getAcceptanceBundle(acceptanceId!),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
-  );
+export { useAcceptanceBundle } from './Acceptance/useAcceptanceBundle';
 
 /** The optional acceptance aggregate attached to a task/topic/document subject. */
 export const useAcceptanceBySubject = (
@@ -73,12 +80,48 @@ export const useAcceptanceBySubject = (
     },
   );
 
-/** The caller's recent acceptance aggregates (with subject headers) — the list panel. */
-export const useAcceptanceList = (enabled: boolean) =>
+/**
+ * The caller's recent acceptance aggregates (with subject headers) — the list
+ * panel. `limit` widens the recency window for surfaces that must reach further
+ * back than the panel does (the merge target picker).
+ *
+ * A widened window is its own SWR key, and the list's invalidations
+ * (`mutate(verifyKeys.acceptances())`) target the panel's key — so a surface
+ * that opens on demand asks for `revalidateOnMount` rather than deciding from a
+ * cache nothing refreshes.
+ */
+export const useAcceptanceList = (
+  enabled: boolean,
+  options?: { limit?: number; revalidateOnMount?: boolean },
+) =>
   useClientDataSWR(
-    enabled ? verifyKeys.acceptances() : null,
-    () => verifyService.listAcceptances(),
-    VERIFY_REPORT_SWR_CONFIG,
+    enabled ? verifyKeys.acceptances(options?.limit) : null,
+    () => verifyService.listAcceptances({ limit: options?.limit }),
+    {
+      ...VERIFY_REPORT_SWR_CONFIG,
+      ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),
+    },
+  );
+
+/**
+ * Acceptance status for a known subject set — one read for a whole list.
+ *
+ * Not `useAcceptanceList`: that feed is capped at the newest rows across every
+ * subject type, so any subject pushed past the cap would read as having no
+ * acceptance at all. Revalidates on focus like the bundle, because a delivery
+ * that lands while the tab sits open has to show up without a reload.
+ */
+export const useAcceptanceStatuses = (
+  subjectType: AcceptanceSubjectType,
+  subjectIds: string[],
+  enabled = true,
+) =>
+  useClientDataSWR(
+    enabled && subjectIds.length > 0
+      ? verifyKeys.acceptanceStatuses(subjectType, subjectIds)
+      : null,
+    () => verifyService.listAcceptanceStatuses(subjectType, subjectIds),
+    ACCEPTANCE_BUNDLE_SWR_CONFIG,
   );
 
 /**

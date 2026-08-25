@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { defaultTaskRecommendationConfig } from '../config';
 import { createGmailTaskRecommendationProvider } from './gmail';
 
 /** @example Gmail evidence retains trusted subjects for source presentation. */
@@ -15,9 +14,7 @@ describe('createGmailTaskRecommendationProvider', () => {
       subject: 'Your receipt from Comfy Org',
     };
     const searchMessages = vi.fn(async () => [message]);
-    const provider = createGmailTaskRecommendationProvider(
-      defaultTaskRecommendationConfig.providers.gmail,
-    );
+    const provider = createGmailTaskRecommendationProvider();
 
     const result = await provider.collect({
       connectorData: {
@@ -32,5 +29,6 @@ describe('createGmailTaskRecommendationProvider', () => {
         url: 'gmail:thread:thread-1',
       },
     ]);
+    expect(provider.guide.examples.length).toBeGreaterThan(0);
   });
 });

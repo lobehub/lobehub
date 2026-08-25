@@ -147,12 +147,18 @@ const createHarness = (
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
-    getLastMainThreadSpineMessageId: vi.fn(async (_topicId: string) => {
-      const match = [...messages.values()].findLast(
-        (m) => m.role !== 'tool' && !m.threadId && !(m as any).metadata?.signal,
-      );
-      return match?.id;
-    }),
+    getLatestSpineMessageId: vi.fn(
+      async ({ threadId, topicId }: { threadId?: string | null; topicId: string }) => {
+        const match = [...messages.values()].findLast(
+          (m) =>
+            m.topicId === topicId &&
+            m.role !== 'tool' &&
+            m.threadId === (threadId ?? null) &&
+            !(m as any).metadata?.signal,
+        );
+        return match?.id;
+      },
+    ),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -746,6 +752,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       ['tool_end', { isSuccess: true, toolCallId: 'tc-1' }],
       ['stream_end', {}],
       ['agent_runtime_init', { state: 'idle' }],
+      ['step_complete', { phase: 'operation_heartbeat' }],
       ['tool_execute', { apiName: 'Read', toolCallId: 'tc-1' }],
       ['stream_retry', { attempt: 1 }],
     ])('drops %s without DB writes', async (type, data) => {

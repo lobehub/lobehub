@@ -70,7 +70,7 @@ describe('cloudSandboxRuntime', () => {
     });
 
     const { cloudSandboxRuntime } = await import('../cloudSandbox');
-    const runtime = cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+    const runtime = await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
 
     await runtime.runCommand({ command: 'lh agent edit agt_1 -t x', description: 'edit self' });
 
@@ -90,7 +90,7 @@ describe('cloudSandboxRuntime', () => {
 
   it('leaves non-shell tools untouched', async () => {
     const { cloudSandboxRuntime } = await import('../cloudSandbox');
-    const runtime = cloudSandboxRuntime.factory(buildContext());
+    const runtime = await cloudSandboxRuntime.factory(buildContext());
 
     await runtime.executeCode({ code: 'print(1)', language: 'python' });
 
@@ -110,7 +110,7 @@ describe('cloudSandboxRuntime', () => {
     });
 
     const { cloudSandboxRuntime } = await import('../cloudSandbox');
-    const runtime = cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+    const runtime = await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
 
     const result = await runtime.runCommand({ command: 'lh agent list', description: 'list' });
 
@@ -126,7 +126,7 @@ describe('cloudSandboxRuntime', () => {
     });
 
     const { cloudSandboxRuntime } = await import('../cloudSandbox');
-    const runtime = cloudSandboxRuntime.factory(buildContext());
+    const runtime = await cloudSandboxRuntime.factory(buildContext());
 
     await runtime.exportFile({ path: './out/result.csv' });
 

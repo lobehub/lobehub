@@ -3,6 +3,7 @@ import type {
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
 } from '@lobechat/electron-client-ipc';
+import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -25,6 +26,8 @@ class HeterogeneousAgentService {
     command: string;
     cwd?: string;
     env?: Record<string, string>;
+    initialModel?: string;
+    providerBinding?: HeterogeneousProviderBindingReference;
     resumeSessionId?: string;
     useClaudeCodeSdk?: boolean;
     useCodexAppServer?: boolean;

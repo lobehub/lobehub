@@ -1,4 +1,5 @@
-import type { ChatTopicStatus, TaskStatus } from '@lobechat/types';
+import type { ChatTopicStatus, ProjectStatus, TaskStatus } from '@lobechat/types';
+import { PROJECT_STATUSES } from '@lobechat/types';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -7,11 +8,11 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
-  CirclePause,
   CircleSlash,
   CircleX,
   Clock,
   HandIcon,
+  PauseCircle,
   StarIcon,
   TriangleAlert,
 } from 'lucide-react';
@@ -36,7 +37,6 @@ const VISUALS = {
   completed: { color: cssVar.colorSuccess, icon: CircleCheck },
   failed: { color: cssVar.colorError, icon: CircleX },
   idle: { color: cssVar.colorTextTertiary, icon: Circle },
-  paused: { color: cssVar.colorTextDescription, icon: CirclePause },
   running: { color: cssVar.colorWarning, icon: CircleDot },
   scheduled: { color: cssVar.colorWarning, icon: Clock },
   waitingForHuman: { color: cssVar.colorInfo, icon: HandIcon },
@@ -54,6 +54,22 @@ export const TASK_STATUS_VISUALS: Record<TaskStatus, ExecutionStatusVisual> = {
   scheduled: VISUALS.scheduled,
 };
 
+export const PROJECT_STATUS_VISUALS: Record<ProjectStatus, ExecutionStatusVisual> = {
+  active: VISUALS.running,
+  archived: VISUALS.archived,
+  backlog: VISUALS.backlog,
+  canceled: VISUALS.canceled,
+  completed: VISUALS.completed,
+  paused: { color: cssVar.colorTextSecondary, icon: PauseCircle },
+  reviewing: VISUALS.waitingForHuman,
+};
+
+const PROJECT_STATUS_SET = new Set<string>(PROJECT_STATUSES);
+
+/** Normalize untrusted persisted/API values before rendering a project status. */
+export const resolveProjectStatus = (status: null | string | undefined): ProjectStatus =>
+  status && PROJECT_STATUS_SET.has(status) ? (status as ProjectStatus) : 'backlog';
+
 export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual> = {
   active: VISUALS.idle,
   archived: VISUALS.archived,
@@ -64,7 +80,6 @@ export const TOPIC_STATUS_VISUALS: Record<ChatTopicStatus, ExecutionStatusVisual
   // like a failed task run — the warning triangle reads that way, the circled X
   // reads as "closed/rejected".
   failed: { ...VISUALS.failed, icon: TriangleAlert },
-  paused: VISUALS.paused,
   running: VISUALS.running,
   scheduled: VISUALS.scheduled,
   // `unread` rows render a custom ripple dot; this is the fallback glyph.

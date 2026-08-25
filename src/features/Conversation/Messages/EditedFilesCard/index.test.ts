@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import EditedFilesCard, {
+  AGGREGATE_EDITED_FILE_ICON_SIZE,
   getEditedFileIconName,
   getEditedFilesCardMode,
   SINGLE_EDITED_FILE_ICON_SIZE,
@@ -48,7 +49,16 @@ describe('getFilePathDisplayInfo', () => {
   it('keeps the parent directory and basename for long absolute paths', () => {
     expect(getFilePathDisplayInfo('/very/long/workspace/Acceptance/index.tsx')).toEqual({
       displayPath: 'Acceptance/index.tsx',
+      isImage: false,
       name: 'index.tsx',
+    });
+  });
+
+  it('marks image files so they render a lucide image icon instead of a file-type icon', () => {
+    expect(getFilePathDisplayInfo('/workspace/tmp/r24-studio-crop.PNG')).toEqual({
+      displayPath: 'tmp/r24-studio-crop.PNG',
+      isImage: true,
+      name: 'r24-studio-crop.PNG',
     });
   });
 });
@@ -56,6 +66,12 @@ describe('getFilePathDisplayInfo', () => {
 describe('SINGLE_EDITED_FILE_ICON_SIZE', () => {
   it('keeps the single-file icon container compact', () => {
     expect(SINGLE_EDITED_FILE_ICON_SIZE).toBe(40);
+  });
+});
+
+describe('AGGREGATE_EDITED_FILE_ICON_SIZE', () => {
+  it('keeps the multi-file summary as compact as the single-file card', () => {
+    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(40);
   });
 });
 

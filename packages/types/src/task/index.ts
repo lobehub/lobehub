@@ -1,4 +1,5 @@
 import type { BriefArtifacts } from '../brief';
+import type { GoalItem } from '../goal';
 import type { ChatFileItem } from '../message/ui/chat';
 
 // ── Task type aliases ──
@@ -23,8 +24,10 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  *                 scheduling state, nor count against the maxExecutions quota.
  * - `schedule`  — a cron `schedule` tick fired the run.
  * - `heartbeat` — a heartbeat interval tick fired the run.
+ * - `goal`      — the goal outer loop spawned this round after a failed verify.
+ *                 Like `manual`, it never counts against automation quotas.
  */
-export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat';
+export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
 
 // ── Config types ──
 
@@ -41,9 +44,10 @@ export interface CheckpointConfig {
 }
 
 /**
- * Task-level delivery-acceptance (verify) gate config, persisted under
- * `tasks.config.verify`. This is the authoritative source for a task run's
- * verify gate — it is *not* unioned with any agent-level mount
+ * Legacy Task-level delivery-acceptance gate config persisted under
+ * `tasks.config.verify`. New flows persist this policy on the Task's Acceptance;
+ * this shape remains for API compatibility and lazy migration. It is *not*
+ * unioned with any agent-level mount
  * (`agencyConfig.verifyRubricId`) — the task config is authoritative and never
  * field-level merged with the agent-level rubric.
  *
@@ -207,6 +211,11 @@ export interface TaskOriginContext {
 }
 
 export interface TaskContext {
+  completion?: {
+    /** The running operation that asked to complete its own task. The lifecycle
+     * finalizes the task only after that operation has finished cleanly. */
+    requestedByOperationId?: string;
+  };
   lifecycle?: TaskLifecycleAudit;
   origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
@@ -237,6 +246,12 @@ export interface TaskItem {
   description: string | null;
   editorData: unknown;
   error: string | null;
+  /**
+   * The goal entity bound to this task (`goals.subjectType='task'`), attached
+   * by list/detail reads. Presence marks a goal-driven task; the goal owns its
+   * budget, requirement and lifecycle status.
+   */
+  goal?: GoalItem | null;
   heartbeatInterval: number | null;
   heartbeatTimeout: number | null;
   id: string;
@@ -247,12 +262,15 @@ export interface TaskItem {
   name: string | null;
   parentTaskId: string | null;
   priority: number | null;
+  projectId: string | null;
   schedulePattern: string | null;
   scheduleTimezone: string | null;
   seq: number;
   sortOrder: number | null;
   startedAt: Date | null;
   status: string;
+  totalRunCost?: number | null;
+  totalRunDuration?: number | null;
   totalTopics: number | null;
   updatedAt: Date;
   // 'private' tasks are only visible to their creator in workspace mode.
@@ -291,6 +309,7 @@ export interface NewTask {
   name?: string | null;
   parentTaskId?: string | null;
   priority?: number | null;
+  projectId?: string | null;
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
   seq: number;
@@ -329,6 +348,7 @@ export interface TaskDetailSubtask {
   runningTopic?: TaskDetailSubtaskRunningTopic | null;
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
+  updatedAt?: string;
 }
 
 export interface TaskDetailWorkspaceNode {
@@ -378,6 +398,8 @@ export interface TaskDetailActivity {
    */
   completedAt?: string;
   content?: string;
+  /** Topic-only: denormalized total run cost in USD. */
+  cost?: number | null;
   createdAt?: string;
   cronJobId?: string | null;
   /** Comment-only: rich Lexical JSON state. When present, supersedes `content` for rendering. */
@@ -421,8 +443,28 @@ export interface TaskDetailActivity {
   time?: string;
   title?: string;
   topicId?: string | null;
+  /** Topic-only: what opened this round — `goal` marks a loop-spawned rerun. */
+  trigger?: TaskRunTrigger | null;
   type: TaskActivityType;
   userId?: string | null;
+  /**
+   * Topic-only: the verification bound to this run. Present as soon as a
+   * verify session exists — `status` is null while it is still being planned,
+   * so the row can say "verifying" before there is a verdict.
+   */
+  verify?: TaskRunVerifySummary | null;
+}
+
+export interface TaskRunVerifySummary {
+  /** The aggregate this round is chained onto — the link target. */
+  acceptanceId: string | null;
+  /** Checks that returned a passing verdict in this round. */
+  passed: number;
+  roundIndex: number | null;
+  runId: string;
+  status: string | null;
+  /** Checks this round produced a result for; 0 while the plan is unexecuted. */
+  total: number;
 }
 
 export interface TaskDetailData {
@@ -442,6 +484,8 @@ export interface TaskDetailData {
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
+  /** The goal entity carried by this task (`goals` row); null when not a goal task. */
+  goal?: GoalItem | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;
@@ -462,11 +506,14 @@ export interface TaskDetailData {
     pattern?: string | null;
     timezone?: string | null;
   };
+  /** When the current task execution started; drives live elapsed-time displays. */
+  startedAt?: string;
   status: string;
   subtasks?: TaskDetailSubtask[];
   topicCount?: number;
+  updatedAt?: string;
   userId?: string | null;
-  /** Task-level verify (delivery-acceptance) gate config; `tasks.config.verify`. */
+  /** Task Acceptance policy, exposed in the legacy TaskVerifyConfig API shape. */
   verify?: TaskVerifyConfig | null;
   /** Visibility within a workspace. 'public' is workspace-shared (default);
    *  'private' is only visible to the creator. Ignored in personal mode. */

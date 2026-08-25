@@ -40,6 +40,8 @@ import {
 } from '../Contexts/message-action-context';
 import EditedFilesCard from '../EditedFilesCard';
 import { useOperationEditedFiles } from '../EditedFilesCard/useOperationEditedFiles';
+import GoalWorkCard from '../GoalWorkCard';
+import { useOperationGoals } from '../GoalWorkCard/useOperationGoals';
 import MessageWorks from '../MessageWorks';
 import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
@@ -139,6 +141,7 @@ const GroupMessage = memo<GroupMessageProps>(
       // (the work anchor marks them); without it the card keeps every entry.
       !!workRootOperationId,
     );
+    const operationGoals = useOperationGoals(isGroupGenerating ? undefined : children);
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -260,13 +263,14 @@ const GroupMessage = memo<GroupMessageProps>(
           )
         }
         afterActions={
-          // Wrap in a Flexbox only when the edited-files card is present: the
-          // work anchor is stamped on every tool round while `MessageWorks`
-          // renders null when that round has no works, so the wrapper would
-          // otherwise mount as an empty container on plain tool-only turns.
-          editedFiles.length > 0 ? (
+          // Virtual round artifacts (edited files / Goal handoffs) are derived
+          // from the group's tool calls and stay visible after the tool steps
+          // collapse. Only mount the wrapper when one exists: a work anchor can
+          // be present while `MessageWorks` itself resolves to null.
+          editedFiles.length > 0 || operationGoals.length > 0 ? (
             <Flexbox gap={8}>
-              <EditedFilesCard entries={editedFiles} />
+              {editedFiles.length > 0 && <EditedFilesCard entries={editedFiles} />}
+              {operationGoals.length > 0 && <GoalWorkCard goals={operationGoals} />}
               {workRootOperationId && <MessageWorks rootOperationId={workRootOperationId} />}
             </Flexbox>
           ) : workRootOperationId ? (

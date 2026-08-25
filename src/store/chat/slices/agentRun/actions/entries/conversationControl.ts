@@ -989,7 +989,7 @@ export class ConversationControlActionImpl {
     // 1. Mark intervention as rejected (skipped) with reason
     await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
-      { intervention: { rejectedReason: reason, status: 'rejected' } },
+      { intervention: { rejectedReason: reason, skipped: true, status: 'rejected' } },
       optimisticContext,
     );
 
@@ -1226,7 +1226,13 @@ export class ConversationControlActionImpl {
       const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
       await this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
-        { intervention: { rejectedReason: reason, status: 'rejected' } },
+        {
+          intervention: {
+            rejectedReason: reason,
+            skipped: actionType === 'skip',
+            status: 'rejected',
+          },
+        },
         optimisticContext,
       );
       await this.#get().optimisticUpdateMessageContent(

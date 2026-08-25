@@ -38,6 +38,25 @@ describe('chatTopicMetadataUpdateSchema', () => {
     expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
   });
 
+  it('preserves orchestration roles on running operations', () => {
+    const metadata = {
+      runningOperation: {
+        assistantMessageId: 'assistant-supervisor',
+        childOperations: [
+          {
+            assistantMessageId: 'assistant-member',
+            operationId: 'operation-member',
+            orchestrationRole: 'member' as const,
+          },
+        ],
+        operationId: 'operation-supervisor',
+        orchestrationRole: 'supervisor' as const,
+      },
+    };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+  });
+
   it('rejects a delayed start with no user message — the persisted turn IS the prompt', () => {
     const result = chatTopicMetadataUpdateSchema.safeParse({
       scheduledRun: {

@@ -132,14 +132,19 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
        too. The button stays mounted at every tier and fades; unmounting it made it vanish
        mid-pin.
 
-       :has() carries the keyboard path — the button is focusable at these tiers, so
+       A lone tab never mounts the button (the last tab cannot close), so :has([data-
+       tab-close]) keeps the title margin from opening a hole for a control that is not
+       there — which otherwise still ran the mask gradient in as if a close affordance
+       were arriving.
+
+       :has() also carries the keyboard path — the button is focusable at these tiers, so
        without it a tabbing user would land on something invisible.
 
        Reservation is 20px button + 3px inset - the tab's own 6px end padding. Margin
        rather than padding: the mask applies to the padding box, so padding would put the
        gradient inside the reservation instead of at the text's edge. */
-    &[data-tier='full']:hover,
-    &[data-tier='compact']:hover,
+    &[data-tier='full']:hover:has([data-tab-close]),
+    &[data-tier='compact']:hover:has([data-tab-close]),
     &[data-tier='full']:has([data-tab-close]:focus-visible),
     &[data-tier='compact']:has([data-tab-close]:focus-visible) {
       [data-tab-close] {
@@ -173,6 +178,21 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       background-color: ${cssVar.colorFillTertiary};
+    }
+  `,
+  tabSplitVisible: css`
+    &::after {
+      content: '';
+
+      position: absolute;
+      inset-block-end: 1px;
+      inset-inline: 8px;
+
+      height: 1px;
+      border-radius: 1px;
+
+      opacity: 0.65;
+      background: ${cssVar.colorPrimary};
     }
   `,
   overflowButton: css`

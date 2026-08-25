@@ -65,4 +65,20 @@ describe('resolveBootAction', () => {
 
     expect(resolveBootAction(tabs, null, '/')).toEqual({ id: 'a', type: 'activate' });
   });
+
+  it('keeps the persisted active tab on a workspace scope-root launch', () => {
+    const tabs = [tab('a', '/acme/agent/x'), tab('b', '/acme')];
+
+    expect(resolveBootAction(tabs, 'a', '/acme')).toEqual({ type: 'keep' });
+  });
+
+  it('adds a workspace home tab on a scope-root launch with an empty scope store', () => {
+    expect(resolveBootAction([], null, '/acme')).toEqual({ type: 'add', url: '/acme' });
+  });
+
+  it('still treats a workspace deep link as a deep link, not a default launch', () => {
+    const tabs = [tab('a', '/acme'), tab('b', '/acme/image')];
+
+    expect(resolveBootAction(tabs, 'a', '/acme/image')).toEqual({ id: 'b', type: 'activate' });
+  });
 });

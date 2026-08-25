@@ -23,51 +23,38 @@ describe('UsageRecordService', () => {
   let mockDb: LobeChatDatabase;
   const userId = 'test-user-id';
 
-  // Helper function to setup query chain mock. The service fans out over the
-  // three derivation arms (topic / session / orphan); the mock returns rows
-  // from the topic arm (first innerJoin chain) and empties from the rest.
+  // Helper function to setup query chain mock
   const setupQueryChainMock = (mockMessages: any[]) => {
-    let joinCalls = 0;
-    mockDb.select = vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        innerJoin: vi.fn().mockImplementation(() => {
-          const isTopicArm = joinCalls++ === 0;
-          return { where: vi.fn().mockResolvedValue(isTopicArm ? mockMessages : []) };
-        }),
-        where: vi.fn().mockResolvedValue([]),
-      }),
-    });
+    const mockOrderBy = vi.fn().mockResolvedValue(mockMessages);
+    const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
+    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
   };
 
-  // Variant that also captures the args passed to `.where(...)` (topic arm
-  // first) so tests can assert what ended up in the composed WHERE clause.
+  // Variant that also captures the args passed to `.where(...)` so tests can
+  // assert what ended up in the composed WHERE clause.
   const setupCapturingMock = (mockMessages: any[]) => {
     const whereArgs: unknown[] = [];
-    let joinCalls = 0;
-    mockDb.select = vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        innerJoin: vi.fn().mockImplementation(() => {
-          const isTopicArm = joinCalls++ === 0;
-          return {
-            where: vi.fn().mockImplementation((arg: unknown) => {
-              whereArgs.push(arg);
-              return Promise.resolve(isTopicArm ? mockMessages : []);
-            }),
-          };
-        }),
-        where: vi.fn().mockImplementation((arg: unknown) => {
-          whereArgs.push(arg);
-          return Promise.resolve([]);
-        }),
-      }),
+    const mockOrderBy = vi.fn().mockResolvedValue(mockMessages);
+    const mockWhere = vi.fn().mockImplementation((arg: unknown) => {
+      whereArgs.push(arg);
+      return { orderBy: mockOrderBy };
     });
+    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
     return { whereArgs };
   };
 
   beforeEach(() => {
-    mockDb = {} as unknown as LobeChatDatabase;
-    // Default: every arm resolves empty
-    setupQueryChainMock([]);
+    // Create a fresh mock for each test
+    const mockOrderBy = vi.fn();
+    const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
+    const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+    const mockSelect = vi.fn().mockReturnValue({ from: mockFrom });
+
+    mockDb = {
+      select: mockSelect,
+    } as unknown as LobeChatDatabase;
 
     service = new UsageRecordService(mockDb, userId);
   });
@@ -420,6 +407,39 @@ describe('UsageRecordService', () => {
       result.forEach((log) => {
         expect(log.day).toMatch(/^2024-01/);
       });
+    });
+  });
+
+  describe('copied transcripts', () => {
+    // Duplicated history (agent copy / workspace import) consumed its tokens in
+    // the SOURCE scope. Counting it again here would inflate the target's
+    // spend, request counts and per-model rows, so every report filters it out.
+    it('excludes copied rows from the usage record query', async () => {
+      const { whereArgs } = setupCapturingMock([]);
+
+      await service.findByDateRange('2024-01-01', '2024-01-31');
+
+      expect(deepIncludes(whereArgs[0], `'copied'`)).toBe(true);
+      // COALESCE form only. Null-testing a jsonb arrow expression in a WHERE
+      // clause crashes the production engine before it reads a row, and no
+      // test against real Postgres can catch it — so the shape is asserted
+      // here, both ways round.
+      expect(deepIncludes(whereArgs[0], `coalesce`)).toBe(true);
+      expect(deepIncludes(whereArgs[0], `is distinct from`)).toBe(false);
+    });
+
+    it('excludes copied rows from the agent usage stats query', async () => {
+      const { whereArgs } = setupCapturingMock([]);
+
+      await service.getAgentUsageStats('agt_123', '2024-01-01', '2024-01-31', 'day');
+
+      expect(deepIncludes(whereArgs[0], `'copied'`)).toBe(true);
+      // COALESCE form only. Null-testing a jsonb arrow expression in a WHERE
+      // clause crashes the production engine before it reads a row, and no
+      // test against real Postgres can catch it — so the shape is asserted
+      // here, both ways round.
+      expect(deepIncludes(whereArgs[0], `coalesce`)).toBe(true);
+      expect(deepIncludes(whereArgs[0], `is distinct from`)).toBe(false);
     });
   });
 });

@@ -21,6 +21,8 @@ describe('buildWorkspaceAwarePath', () => {
       '/acme/community/agent/jailbreak',
     );
     expect(buildWorkspaceAwarePath('/group/group-1', 'acme')).toBe('/acme/group/group-1');
+    expect(buildWorkspaceAwarePath('/project/project-1', 'acme')).toBe('/acme/project/project-1');
+    expect(buildWorkspaceAwarePath('/projects', 'acme')).toBe('/acme/projects');
   });
 
   it('prefixes deep agent and evaluation paths used by cross-page navigation', () => {
@@ -64,6 +66,7 @@ describe('buildWorkspaceAwarePath', () => {
   });
 
   it('skips prefix for personal-only top-level paths', () => {
+    expect(buildWorkspaceAwarePath('/apps', 'acme')).toBe('/apps');
     expect(buildWorkspaceAwarePath('/onboarding/agent', 'acme')).toBe('/onboarding/agent');
     expect(buildWorkspaceAwarePath('/me/profile', 'acme')).toBe('/me/profile');
     expect(buildWorkspaceAwarePath('/share/t/foo', 'acme')).toBe('/share/t/foo');

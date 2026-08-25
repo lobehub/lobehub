@@ -72,6 +72,56 @@ describe('shouldShowHeteroModelSelector', () => {
     ).toBe(true);
   });
 
+  it('shows CodeBuddy models only on a concrete runtime that can query its CLI', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'codebuddy',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'codebuddy',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'none',
+        isDesktopClient: false,
+        providerType: 'codebuddy',
+      }),
+    ).toBe(false);
+  });
+
+  it('shows Cursor models only on a concrete runtime that can query its CLI', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'cursor',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'cursor',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'auto',
+        isDesktopClient: false,
+        providerType: 'cursor',
+      }),
+    ).toBe(false);
+  });
+
   it('shows Pi models for desktop-local execution and an explicit bound device', () => {
     expect(
       shouldShowHeteroModelSelector({
@@ -96,6 +146,31 @@ describe('shouldShowHeteroModelSelector', () => {
         executionTarget: 'auto',
         isDesktopClient: false,
         providerType: 'pi',
+      }),
+    ).toBe(false);
+  });
+
+  it('shows Qoder models only when a concrete catalog target is available', () => {
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'local',
+        isDesktopClient: true,
+        providerType: 'qoder',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        boundDeviceId: 'remote-device',
+        executionTarget: 'device',
+        isDesktopClient: false,
+        providerType: 'qoder',
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowHeteroModelSelector({
+        executionTarget: 'auto',
+        isDesktopClient: false,
+        providerType: 'qoder',
       }),
     ).toBe(false);
   });

@@ -8,8 +8,7 @@ import UserPanelWorkspaceSection from '@/business/client/features/User/UserPanel
 import Menu, { type MenuProps } from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
-import { navigateToDesktopOnboarding } from '@/routes/(desktop)/desktop-onboarding/navigation';
-import { DesktopOnboardingScreen } from '@/routes/(desktop)/desktop-onboarding/types';
+import { useSignOut } from '@/hooks/useSignOut';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -19,42 +18,20 @@ import { useMenu } from './useMenu';
 
 const PanelContent: FC<{ closePopover: () => void }> = ({ closePopover }) => {
   const isLoginWithAuth = useUserStore(authSelectors.isLoginWithAuth);
-  const [openSignIn, signOut] = useUserStore((s) => [s.openLogin, s.logout]);
+  const openSignIn = useUserStore((s) => s.openLogin);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { mainItems, logoutItems } = useMenu();
+  const signOut = useSignOut();
 
   const handleSignIn = () => {
     openSignIn();
     closePopover();
   };
 
-  const handleSignOut = async () => {
-    if (isDesktop) {
-      closePopover();
-
-      try {
-        const { remoteServerService } = await import('@/services/electron/remoteServer');
-        await remoteServerService.clearRemoteServerConfig();
-      } catch (error) {
-        console.error(error);
-      } finally {
-        signOut();
-        navigateToDesktopOnboarding(DesktopOnboardingScreen.Login);
-      }
-      return;
-    }
-
-    signOut();
-    closePopover();
-  };
-
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
-    if (key === 'logout') {
-      void handleSignOut();
-      return;
-    }
-
     closePopover();
+
+    if (key === 'logout') void signOut();
   };
 
   return (

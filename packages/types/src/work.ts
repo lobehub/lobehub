@@ -220,26 +220,29 @@ export type WorkVersionEventItem =
   | TaskWorkVersionEventItem;
 export type WorkVersionEventMap = Record<string, WorkVersionEventItem[]>;
 
+export type WorkSummaryVersionPreview = WorkVersionPreview &
+  Pick<WorkVersionItem, 'cumulativeUsage'>;
+
 export interface TaskWorkSummaryItem extends TaskWorkListItem {
-  event: WorkVersionPreview;
+  event: WorkSummaryVersionPreview;
   totalCost: number | null;
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
 export interface DocumentWorkSummaryItem extends DocumentWorkListItem {
-  event: WorkVersionPreview;
+  event: WorkSummaryVersionPreview;
   totalCost: number | null;
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
 export interface ExternalWorkSummaryItem extends ExternalWorkListItem {
-  event: WorkVersionPreview;
+  event: WorkSummaryVersionPreview;
   totalCost: number | null;
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
 export interface FileWorkSummaryItem extends FileWorkListItem {
-  event: WorkVersionPreview;
+  event: WorkSummaryVersionPreview;
   totalCost: number | null;
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }

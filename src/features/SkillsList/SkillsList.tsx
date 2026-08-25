@@ -306,29 +306,33 @@ const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggl
 TreeRow.displayName = 'SkillsListTreeRow';
 
 interface SkillRowProps {
-  actions: SkillRowAction[];
   expanded: boolean;
+  getRowActions?: (item: SkillListItem) => SkillRowAction[];
   item: SkillListItem;
-  onDragStart?: (event: React.DragEvent) => void;
-  onOpenFile?: (relativePath: string) => void;
-  onOpenSkill?: () => void;
-  onToggle: () => void;
+  onOpenFile?: (item: SkillListItem, relativePath: string) => void;
+  onOpenSkill?: (item: SkillListItem) => void;
+  onSkillDragStart?: (item: SkillListItem, event: React.DragEvent) => void;
+  onToggle: (id: string) => void;
   reserveChevronSlot: boolean;
 }
 
+// Rows receive the list-level handlers plus `item` (instead of pre-bound
+// closures) so a parent re-render with unchanged data keeps every row's props
+// referentially equal and the memo actually bails out.
 const SkillRow = memo<SkillRowProps>(
   ({
-    actions,
     expanded,
+    getRowActions,
     item,
-    onDragStart,
     onOpenFile,
     onOpenSkill,
+    onSkillDragStart,
     onToggle,
     reserveChevronSlot,
   }) => {
     const files = item.files ?? EMPTY_ARRAY;
     const hasFiles = files.length > 0;
+    const actions = useMemo(() => getRowActions?.(item) ?? EMPTY_ARRAY, [getRowActions, item]);
     const hasActions = actions.length > 0;
     const tree = useMemo(() => buildSkillTree(files), [files]);
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
@@ -341,6 +345,11 @@ const SkillRow = memo<SkillRowProps>(
         return next;
       });
     }, []);
+
+    const openFile = useCallback(
+      (relativePath: string) => onOpenFile?.(item, relativePath),
+      [item, onOpenFile],
+    );
 
     const contextMenuItems = useCallback(
       (): (GenericItemType & { sfSymbol?: SFSymbol })[] =>
@@ -361,7 +370,11 @@ const SkillRow = memo<SkillRowProps>(
     // a clean DOM-forwarding child. Nesting them (Tooltip around the trigger, or
     // vice versa) would drop `onContextMenu` / the ref on the way through.
     const nameNode = (
-      <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }} onClick={onOpenSkill}>
+      <Text
+        ellipsis
+        style={{ color: 'inherit', flex: 1, minWidth: 0 }}
+        onClick={onOpenSkill ? () => onOpenSkill(item) : undefined}
+      >
         {item.name}
       </Text>
     );
@@ -371,9 +384,9 @@ const SkillRow = memo<SkillRowProps>(
         horizontal
         align={'center'}
         className={styles.item}
-        draggable={!!onDragStart}
+        draggable={!!onSkillDragStart}
         gap={6}
-        onDragStart={onDragStart}
+        onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
       >
         {hasFiles ? (
           <Flexbox
@@ -382,7 +395,7 @@ const SkillRow = memo<SkillRowProps>(
             style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
             onClick={(e) => {
               e.stopPropagation();
-              onToggle();
+              onToggle(item.id);
             }}
           >
             <Icon
@@ -446,7 +459,7 @@ const SkillRow = memo<SkillRowProps>(
               expanded={expandedFolders}
               key={node.path}
               node={node}
-              onOpenFile={onOpenFile}
+              onOpenFile={openFile}
               onToggleFolder={toggleFolder}
             />
           ))}
@@ -479,15 +492,15 @@ const SkillsList = memo<SkillsListProps>(
       <Flexbox gap={2}>
         {items.map((item) => (
           <SkillRow
-            actions={getRowActions?.(item) ?? EMPTY_ARRAY}
             expanded={expanded.has(item.id)}
+            getRowActions={getRowActions}
             item={item}
             key={item.id}
             reserveChevronSlot={reserveChevronSlot}
-            onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
-            onOpenFile={onOpenFile ? (relativePath) => onOpenFile(item, relativePath) : undefined}
-            onOpenSkill={onOpenSkill ? () => onOpenSkill(item) : undefined}
-            onToggle={() => toggle(item.id)}
+            onOpenFile={onOpenFile}
+            onOpenSkill={onOpenSkill}
+            onSkillDragStart={onSkillDragStart}
+            onToggle={toggle}
           />
         ))}
       </Flexbox>

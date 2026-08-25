@@ -79,15 +79,27 @@ interface ModelOption {
 
 interface ModelSelectProps extends Pick<
   SelectProps,
-  'disabled' | 'loading' | 'size' | 'style' | 'variant'
+  | 'allowClear'
+  | 'disabled'
+  | 'labelRender'
+  | 'loading'
+  | 'placeholder'
+  | 'size'
+  | 'style'
+  | 'variant'
 > {
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
   modelType?: 'chat' | 'embedding';
   onChange?: (props: { model: string; provider: string }) => void;
+  /** Fired when the selection is cleared via `allowClear`. */
+  onClear?: () => void;
   popupWidth?: number;
+  /** Restrict selection to these provider ids. */
+  providerIds?: string[];
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
+  /** `undefined` renders the empty state (`placeholder`) instead of a selection. */
   value?: { model: string; provider?: string };
 }
 
@@ -95,24 +107,34 @@ const ModelSelect = memo<ModelSelectProps>(
   ({
     value,
     onChange,
+    onClear,
+    allowClear,
+    placeholder,
     showAbility: _showAbility = true,
     requiredAbilities,
     loading,
     disabled,
+    labelRender,
     size,
     style,
     variant,
     initialWidth = false,
     popupWidth,
     modelType = 'chat',
+    providerIds,
   }) => {
     const { t } = useTranslation('components');
     const [enabling, setEnabling] = useState(false);
-    const enabledList = useAiInfraStore((s) =>
+    const fullEnabledList = useAiInfraStore((s) =>
       modelType === 'embedding'
         ? aiProviderSelectors.enabledEmbeddingModelList(s)
         : s.enabledChatModelList || [],
     );
+    const enabledList = useMemo(() => {
+      if (!providerIds) return fullEnabledList;
+      const allowedProviderIds = new Set(providerIds);
+      return fullEnabledList.filter((provider) => allowedProviderIds.has(provider.id));
+    }, [fullEnabledList, providerIds]);
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
     const enabledAiProviders = useAiInfraStore((s) => s.enabledAiProviders);
@@ -133,6 +155,7 @@ const ModelSelect = memo<ModelSelectProps>(
           ...model,
           label: <ModelItemRender {...model} {...model.abilities} showInfoTag={false} />,
           provider: provider.id,
+          title: model.displayName || model.id,
           value: `${provider.id}/${model.id}`,
         }));
       };
@@ -330,15 +353,18 @@ const ModelSelect = memo<ModelSelectProps>(
     return (
       <TooltipGroup>
         <Select
+          allowClear={allowClear}
           className={styles.select}
-          defaultValue={`${value?.provider}/${value?.model}`}
+          defaultValue={value ? `${value.provider}/${value.model}` : null}
           disabled={disabled}
+          labelRender={labelRender}
           loading={loading || enabling}
           options={finalOptions}
+          placeholder={placeholder}
           popupClassName={styles.popup}
           popupMatchSelectWidth={popupWidth === undefined ? false : popupWidth}
           size={size}
-          value={`${value?.provider}/${value?.model}`}
+          value={value ? `${value.provider}/${value.model}` : null}
           variant={variant}
           optionRender={(option) => {
             if ((option as unknown as { __stale?: boolean }).__stale) return option.label;
@@ -357,6 +383,10 @@ const ModelSelect = memo<ModelSelectProps>(
             ...style,
           }}
           onChange={(next, option) => {
+            if (next == null) {
+              onClear?.();
+              return;
+            }
             if (next === STALE_ACTION_VALUE) {
               if (
                 staleState?.status === 'redirected' &&

@@ -12,6 +12,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     overflow-x: auto;
   `,
+  clickableRow: css`
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -2px;
+    }
+  `,
   container: css`
     container-type: inline-size;
   `,
@@ -146,6 +154,11 @@ export interface LiteTableProps<RecordType> {
   dataSource?: RecordType[];
   emptyText?: ReactNode;
   loading?: boolean;
+  /**
+   * Makes every data row clickable. Interactive cell content (buttons,
+   * switches, editable cells) must stopPropagation to keep working.
+   */
+  onRowClick?: (record: RecordType) => void;
   rowKey: (record: RecordType) => string;
 }
 
@@ -155,6 +168,7 @@ const LiteTableInner = <RecordType,>({
   dataSource,
   emptyText,
   loading,
+  onRowClick,
   rowKey,
 }: LiteTableProps<RecordType>) => {
   const items = dataSource ?? [];
@@ -203,7 +217,24 @@ const LiteTableInner = <RecordType,>({
                     </tr>
                   ))
                 : items.map((record, index) => (
-                    <tr key={rowKey(record)}>
+                    <tr
+                      className={onRowClick ? styles.clickableRow : undefined}
+                      key={rowKey(record)}
+                      tabIndex={onRowClick ? 0 : undefined}
+                      onClick={onRowClick ? () => onRowClick(record) : undefined}
+                      onKeyDown={
+                        onRowClick
+                          ? (event) => {
+                              // only the row itself — a key pressed inside a cell
+                              // control (switch, button, input) belongs to it
+                              if (event.target !== event.currentTarget) return;
+                              if (event.key !== 'Enter' && event.key !== ' ') return;
+                              event.preventDefault();
+                              onRowClick(record);
+                            }
+                          : undefined
+                      }
+                    >
                       {columns.map((column) => (
                         <td
                           data-label={listLabelOf(column)}

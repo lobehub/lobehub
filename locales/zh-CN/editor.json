@@ -64,6 +64,8 @@
   "skillFrontmatter.saveFailed": "元信息未保存。请重试，或继续编辑。",
   "skillFrontmatter.title": "技能元信息",
   "slash.compact": "压缩上下文",
+  "slash.goal": "目标",
+  "slash.goal.desc": "规划并启动带有可编辑验收标准的目标",
   "slash.h1": "一级标题",
   "slash.h2": "二级标题",
   "slash.h3": "三级标题",

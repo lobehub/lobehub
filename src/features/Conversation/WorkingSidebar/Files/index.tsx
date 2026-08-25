@@ -1,11 +1,19 @@
 'use client';
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { Center, copyToClipboard, Empty, Flexbox, SearchBar, stopPropagation } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Center,
+  copyToClipboard,
+  Empty,
+  Flexbox,
+  Icon,
+  stopPropagation,
+} from '@lobehub/ui';
+import { Input, toast } from '@lobehub/ui/base-ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import { createStaticStyles } from 'antd-style';
-import { FileIcon } from 'lucide-react';
+import { FileIcon, SearchIcon, XIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +28,7 @@ import {
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
+import { usePublishWorkspaceHtmlFromFile } from '@/features/Portal/LocalFile/usePublishWorkspaceHtmlFromFile';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { localFileService } from '@/services/electron/localFileService';
 import { projectFileService } from '@/services/projectFile';
@@ -125,6 +134,41 @@ const getAncestorIds = (filePath: string): string[] => {
   return ancestors;
 };
 
+interface FilesSearchBarProps {
+  onDebouncedChange: (query: string) => void;
+}
+
+// Keystrokes stay local to this component: only the debounced query reaches
+// the tree host, so typing never re-renders the ExplorerTree subtree.
+const FilesSearchBar = memo<FilesSearchBarProps>(({ onDebouncedChange }) => {
+  const { t } = useTranslation('chat');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => onDebouncedChange(searchQuery), FILE_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [onDebouncedChange, searchQuery]);
+
+  return (
+    <Input
+      placeholder={t('workingPanel.files.searchPlaceholder')}
+      prefix={<Icon icon={SearchIcon} size={13} />}
+      size={'small'}
+      style={{ width: '100%' }}
+      value={searchQuery}
+      suffix={
+        searchQuery ? (
+          <ActionIcon icon={XIcon} size={12} onClick={() => setSearchQuery('')} />
+        ) : undefined
+      }
+      onChange={(e) => setSearchQuery(e.target.value)}
+      onKeyDown={stopPropagation}
+    />
+  );
+});
+
+FilesSearchBar.displayName = 'FilesSearchBar';
+
 const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const isRemote = !!deviceId;
@@ -137,7 +181,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchEntries, setSearchEntries] = useState<ProjectFileIndexEntry[] | undefined>();
   const [isSearching, setIsSearching] = useState(false);
@@ -175,11 +218,6 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   );
 
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(searchQuery), FILE_SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
 
   useEffect(() => {
     if (!normalizedDebouncedQuery) {
@@ -253,6 +291,10 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   }, [revealRequest?.nonce, nodes]);
 
   const openLocalFile = useChatStore((s) => s.openLocalFile);
+  const { canOfferFile, publishFile } = usePublishWorkspaceHtmlFromFile({
+    deviceId,
+    workingDirectory: projectRoot,
+  });
 
   const openNode = useCallback(
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
@@ -299,40 +341,51 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
 
       const { path, relativePath } = node.data;
       const isDirty = dirtyFilePaths.has(relativePath);
+      const items: NativeContextMenuItem[] = [];
 
-      // OS-level actions (open in app / reveal in Finder) only work on the local
-      // machine — omit them for a remote device.
-      const localActions: NativeContextMenuItem[] = isRemote
-        ? []
-        : [
-            {
-              key: 'open',
-              label: t('workingPanel.files.open'),
-              onClick: () => openNode(node),
-            },
-            { key: 'divider-reveal', type: 'divider' as const },
-            {
-              key: 'show-in-system',
-              label: t('workingPanel.files.showInSystem'),
-              onClick: () => void localFileService.openFileFolder(path),
-            },
-          ];
+      if (!isRemote) {
+        items.push({
+          key: 'open',
+          label: t('workingPanel.files.open'),
+          onClick: () => openNode(node),
+        });
+      }
 
-      const reviewActions: NativeContextMenuItem[] = isDirty
-        ? [
-            {
-              key: 'show-in-review',
-              label: t('workingPanel.files.showInReview'),
-              onClick: () => setWorkingSidebarTab('review'),
-            },
-          ]
-        : [];
+      if (canOfferFile(path, !!node.isFolder)) {
+        items.push({
+          key: 'publish',
+          label: t('workingPanel.localFile.publish.action'),
+          sfSymbol: 'square.and.arrow.up',
+          onClick: () => {
+            void publishFile(path);
+          },
+        });
+      }
 
-      const before = [...localActions, ...reviewActions];
+      if (!isRemote) {
+        items.push(
+          { key: 'divider-reveal', type: 'divider' as const },
+          {
+            key: 'show-in-system',
+            label: t('workingPanel.files.showInSystem'),
+            onClick: () => void localFileService.openFileFolder(path),
+          },
+        );
+      }
 
-      return [
-        ...before,
-        ...(before.length > 0 ? [{ key: 'divider-copy', type: 'divider' as const }] : []),
+      if (isDirty) {
+        items.push({
+          key: 'show-in-review',
+          label: t('workingPanel.files.showInReview'),
+          onClick: () => setWorkingSidebarTab('review'),
+        });
+      }
+
+      if (items.length > 0) {
+        items.push({ key: 'divider-copy', type: 'divider' as const });
+      }
+
+      items.push(
         {
           key: 'copy-absolute-path',
           label: t('workingPanel.files.copyAbsolutePath'),
@@ -351,9 +404,11 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           },
           sfSymbol: 'doc.on.doc',
         },
-      ];
+      );
+
+      return items;
     },
-    [dirtyFilePaths, isRemote, openNode, setWorkingSidebarTab, t],
+    [canOfferFile, dirtyFilePaths, isRemote, openNode, publishFile, setWorkingSidebarTab, t],
   );
 
   const isEmpty = nodes.length === 0;
@@ -369,16 +424,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   return (
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
       <div className={styles.subheader}>
-        <SearchBar
-          allowClear
-          placeholder={t('workingPanel.files.searchPlaceholder')}
-          size={'small'}
-          style={{ width: '100%' }}
-          styles={{ input: { width: '100%' } }}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={stopPropagation}
-        />
+        <FilesSearchBar onDebouncedChange={setDebouncedQuery} />
       </div>
       {isEmpty && isFiltering && isSearching ? (
         <Center flex={1}>
@@ -389,9 +435,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
           <Empty
             icon={FileIcon}
             description={t(
-              isFiltering && debouncedQuery === searchQuery
-                ? 'workingPanel.files.noSearchResults'
-                : 'workingPanel.files.empty',
+              isFiltering ? 'workingPanel.files.noSearchResults' : 'workingPanel.files.empty',
             )}
           />
         </Center>

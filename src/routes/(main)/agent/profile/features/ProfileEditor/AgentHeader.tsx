@@ -1,26 +1,22 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PaletteIcon, PencilIcon, SparklesIcon } from 'lucide-react';
-import { memo, Suspense, useCallback, useState } from 'react';
+import { PencilIcon, SparklesIcon } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import EmojiPicker from '@/components/EmojiPicker';
 import { createAgentIdentityModal } from '@/features/AgentIdentityModal';
-import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
+import { AgentProfileArtwork } from '@/features/AgentProfileArtwork';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
 import { useAutoName } from './useAutoName';
-
-const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
 const AgentHeader = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
@@ -29,6 +25,7 @@ const AgentHeader = memo(() => {
 
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
   const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
   const { autoName, naming } = useAutoName(agentId);
@@ -36,126 +33,41 @@ const AgentHeader = memo(() => {
   // falls back to the plain label rather than showing an action nobody can take.
   const showNamePrompt = !meta.name?.trim() && canEdit;
 
-  // File upload
-  const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
-  const [uploading, setUploading] = useState(false);
-
-  // Handle avatar change (immediate save)
-  const handleAvatarChange = (emoji: string) => {
-    if (!canEdit) return;
-
-    updateMetaById(agentId, { avatar: emoji });
-  };
-
-  // Handle avatar upload
-  const handleAvatarUpload = useCallback(
-    async (file: File) => {
-      if (!canEdit) return;
-
-      if (file.size > MAX_AVATAR_SIZE) {
-        toast.error(t('settingAgent.avatar.sizeExceeded', { ns: 'setting' }));
-        return;
-      }
-
-      setUploading(true);
-      try {
-        const result = await uploadWithProgress({ file });
-        if (result?.url) {
-          updateMetaById(agentId, { avatar: result.url });
-        }
-      } finally {
-        setUploading(false);
-      }
-    },
-    [agentId, canEdit, uploadWithProgress, updateMetaById, t],
-  );
-
-  // Handle avatar delete
-  const handleAvatarDelete = useCallback(() => {
-    if (!canEdit) return;
-
-    updateMetaById(agentId, { avatar: null });
-  }, [agentId, canEdit, updateMetaById]);
-
-  // Handle background color change (immediate save)
-  const handleBackgroundColorChange = (color?: string) => {
-    if (!canEdit) return;
-
-    if (color !== undefined) {
-      updateMetaById(agentId, { backgroundColor: color });
-    }
-  };
-
   return (
     <Flexbox
       gap={16}
-      paddingBlock={16}
+      paddingBlock={'0 16px'}
       style={{
         cursor: 'default',
+        marginInline: -16,
+        width: 'calc(100% + 32px)',
       }}
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
       }}
     >
-      {/* Avatar Section */}
-      <EmojiPicker
-        allowModelAvatar
-        allowDelete={canEdit && !!meta.avatar}
-        allowUpload={canEdit}
-        loading={uploading}
+      <AgentProfileArtwork
+        agentId={agentId}
+        avatar={meta.avatar}
+        background={meta.backgroundColor}
+        canEdit={canEdit}
+        description={meta.description}
         locale={locale}
-        open={canEdit ? undefined : false}
-        shape={'square'}
-        size={72}
-        value={meta.avatar}
-        background={
-          meta.backgroundColor && meta.backgroundColor !== 'rgba(0,0,0,0)'
-            ? meta.backgroundColor
-            : undefined
-        }
-        customTabs={[
-          {
-            label: (
-              <Tooltip title={t('settingAgent.backgroundColor.title', { ns: 'setting' })}>
-                <Icon icon={PaletteIcon} size={{ size: 20, strokeWidth: 2.5 }} />
-              </Tooltip>
-            ),
-            render: () => (
-              <Flexbox padding={8} width={332}>
-                <Suspense
-                  fallback={
-                    <Flexbox gap={8}>
-                      <Skeleton.Button block style={{ height: 38 }} />
-                      <Skeleton.Button block style={{ height: 38 }} />
-                    </Flexbox>
-                  }
-                >
-                  <BackgroundSwatches
-                    disabled={!canEdit}
-                    gap={8}
-                    shape={'square'}
-                    size={38}
-                    value={meta.backgroundColor}
-                    onChange={handleBackgroundColorChange}
-                  />
-                </Suspense>
-              </Flexbox>
-            ),
-            value: 'background',
-          },
-        ]}
-        popupProps={{
-          placement: 'bottomLeft',
+        name={meta.name}
+        systemRole={config?.systemRole}
+        title={meta.title}
+        onAvatarChange={(avatar) => {
+          if (canEdit) void updateMetaById(agentId, { avatar });
         }}
-        onChange={handleAvatarChange}
-        onDelete={handleAvatarDelete}
-        onUpload={handleAvatarUpload}
+        onBackgroundChange={(backgroundColor) => {
+          if (canEdit) void updateMetaById(agentId, { backgroundColor });
+        }}
       />
       {/* Identity Section — display only. Editing all three fields happens in a
           form modal; inline inputs crowded the header and left no room for a
           per-field label or error. */}
-      <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+      <Flexbox flex={1} gap={8} paddingInline={24} style={{ minWidth: 0 }}>
         {/* The headline is the NAME slot. It does not borrow the role the way
             list surfaces do — the role has its own line right below, and falling
             back would print it twice (an agent titled "Lobe AI" read

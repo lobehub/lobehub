@@ -36,8 +36,10 @@ import opStatusTray from './opStatusTray';
 import pageShare from './pageShare';
 import plugin from './plugin';
 import portal from './portal';
+import project from './project';
 import providers from './providers';
 import ragEval from './ragEval';
+import selfLearning from './selfLearning';
 import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
@@ -90,7 +92,9 @@ const resources = {
   plugin,
   portal,
   providers,
+  project,
   ragEval,
+  selfLearning,
   setting,
   spend,
   subscription,

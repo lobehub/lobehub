@@ -7,8 +7,8 @@ import { Forward, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { messageStateSelectors, useConversationStore } from '../store';
-import ForwardModal from './ForwardModal';
+import { messageStateSelectors, useConversationStore, useConversationStoreApi } from '../store';
+import { openForwardModal } from './ForwardModal';
 
 const styles = createStaticStyles(({ css }) => ({
   // Full-width bar docked at the bottom in place of the composer (hidden by
@@ -42,6 +42,7 @@ const SelectionFooterBar = memo(() => {
   const { t } = useTranslation('chat');
 
   const [forwardOpen, setForwardOpen] = useState(false);
+  const storeApi = useConversationStoreApi();
   const selectedCount = useConversationStore(messageStateSelectors.selectedMessageCount);
   const selectedMessageIds = useConversationStore((s) => s.selectedMessageIds);
   const exitSelectionMode = useConversationStore((s) => s.exitSelectionMode);
@@ -75,37 +76,42 @@ const SelectionFooterBar = memo(() => {
     });
   };
 
+  const handleForward = () => {
+    setForwardOpen(true);
+    openForwardModal({
+      createConversationStore: () => storeApi,
+      onClosed: () => setForwardOpen(false),
+    });
+  };
+
   return (
-    <>
-      <Flexbox horizontal align={'center'} className={styles.bar} justify={'center'}>
-        <Text className={styles.count} type={'secondary'}>
-          {t('messageForward.bar.selected', { count: selectedCount })}
-        </Text>
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Button icon={<Icon icon={X} />} type={'text'} onClick={exitSelectionMode}>
-            {t('messageForward.bar.cancel')}
-          </Button>
-          <Button
-            danger
-            disabled={disabled}
-            icon={<Icon icon={Trash2} />}
-            type={'text'}
-            onClick={handleDelete}
-          >
-            {t('messageForward.bar.delete')}
-          </Button>
-          <Button
-            disabled={disabled}
-            icon={<Icon icon={Forward} />}
-            type={'text'}
-            onClick={() => setForwardOpen(true)}
-          >
-            {t('messageForward.bar.forward')}
-          </Button>
-        </Flexbox>
+    <Flexbox horizontal align={'center'} className={styles.bar} justify={'center'}>
+      <Text className={styles.count} type={'secondary'}>
+        {t('messageForward.bar.selected', { count: selectedCount })}
+      </Text>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <Button icon={<Icon icon={X} />} type={'text'} onClick={exitSelectionMode}>
+          {t('messageForward.bar.cancel')}
+        </Button>
+        <Button
+          danger
+          disabled={disabled}
+          icon={<Icon icon={Trash2} />}
+          type={'text'}
+          onClick={handleDelete}
+        >
+          {t('messageForward.bar.delete')}
+        </Button>
+        <Button
+          disabled={disabled}
+          icon={<Icon icon={Forward} />}
+          type={'text'}
+          onClick={handleForward}
+        >
+          {t('messageForward.bar.forward')}
+        </Button>
       </Flexbox>
-      <ForwardModal open={forwardOpen} onClose={() => setForwardOpen(false)} />
-    </>
+    </Flexbox>
   );
 });
 

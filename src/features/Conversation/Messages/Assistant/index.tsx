@@ -26,6 +26,7 @@ import {
 import MessageWorks from '../MessageWorks';
 import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
+import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
 
 const actionBarHolder = (
@@ -126,12 +127,12 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={null}
-        avatar={avatar}
-        belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
+        aboveMessage={<ThreadExecutionSummary messageId={id} />}
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
+        avatar={avatar}
+        belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
         editing={editing}
         error={errorContent && error ? errorContent : undefined}

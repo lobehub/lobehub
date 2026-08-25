@@ -1,3 +1,4 @@
+import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -7,7 +8,9 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
+import CustomizeButton from './CustomizeButton';
 import RailToggle from './RailToggle';
+import { canHostRail } from './railVisibility';
 
 // Floats over the dashboard instead of pushing it down: the controls live in
 // the page's top corners, where the content never reaches.
@@ -27,13 +30,19 @@ const HomeNavHeader = memo(() => {
     s.toggleHomeRail,
     systemStatusSelectors.isStatusInit(s),
   ]);
+  const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
 
   return (
     <NavHeader
       className={styles.header}
       right={
         isLogin && isStatusInit ? (
-          <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
+          <Flexbox horizontal align={'center'} gap={4}>
+            <CustomizeButton />
+            {canHostRail(hiddenWidgets) && (
+              <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
+            )}
+          </Flexbox>
         ) : undefined
       }
     />

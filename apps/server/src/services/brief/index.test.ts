@@ -37,7 +37,9 @@ describe('BriefService', () => {
 
   const mockBriefModel = {
     findById: vi.fn(),
+    hasNewsBefore: vi.fn(),
     list: vi.fn(),
+    listNewsEnriched: vi.fn(),
     listUnresolved: vi.fn(),
     listUnresolvedEnriched: vi.fn(),
     resolve: vi.fn(),
@@ -390,6 +392,42 @@ describe('BriefService', () => {
       expect(mockTaskModel.findByIds).not.toHaveBeenCalled();
       expect(mockTaskModel.getTreeAgentIdsForTaskIds).not.toHaveBeenCalled();
       expect(mockAgentModel.getAgentAvatarsByIds).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listNewsByDay', () => {
+    it('should pass the range to the model and report hasEarlier alongside mapped rows', async () => {
+      const service = new BriefService(db, userId);
+      const range = {
+        endAt: new Date('2026-08-06T00:00:00Z'),
+        startAt: new Date('2026-08-05T00:00:00Z'),
+      };
+
+      mockBriefModel.listNewsEnriched.mockResolvedValue([
+        {
+          agentAvatar: '🤖',
+          agentBackgroundColor: '#fff',
+          agentRowId: 'agent-a',
+          agentTitle: 'Agent A',
+          brief: { agentId: 'agent-a', id: 'b1', taskId: null, title: 'Report' },
+          taskStatus: null,
+        },
+      ]);
+      mockBriefModel.hasNewsBefore.mockResolvedValue(true);
+
+      const result = await service.listNewsByDay(range);
+
+      expect(mockBriefModel.listNewsEnriched).toHaveBeenCalledWith(range);
+      // `hasEarlier` must be measured against the day being viewed, not "now" —
+      // it drives the pager's "older" arrow while browsing history.
+      expect(mockBriefModel.hasNewsBefore).toHaveBeenCalledWith(range.startAt);
+      expect(result.hasEarlier).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({
+        agent: { avatar: '🤖', id: 'agent-a', title: 'Agent A' },
+        id: 'b1',
+        taskStatus: null,
+      });
     });
   });
 

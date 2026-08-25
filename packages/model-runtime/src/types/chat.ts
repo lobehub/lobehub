@@ -27,6 +27,10 @@ interface UserMessageContentPartThinking {
   thinking: string;
   type: 'thinking';
 }
+interface UserMessageContentPartRedactedThinking {
+  data: string;
+  type: 'redacted_thinking';
+}
 interface UserMessageContentPartText {
   text: string;
   type: 'text';
@@ -45,7 +49,12 @@ interface UserMessageContentPartVideo {
   video_url: { url: string };
 }
 interface UserMessageContentPartAudio {
-  audio_url: { url: string };
+  audio_url: {
+    codec?: string;
+    durationMs?: number;
+    mimeType?: string;
+    url: string;
+  };
   type: 'audio_url';
 }
 
@@ -54,7 +63,8 @@ export type UserMessageContentPart =
   | UserMessageContentPartImage
   | UserMessageContentPartVideo
   | UserMessageContentPartAudio
-  | UserMessageContentPartThinking;
+  | UserMessageContentPartThinking
+  | UserMessageContentPartRedactedThinking;
 
 export interface OpenAIChatMessage {
   content: string | UserMessageContentPart[];

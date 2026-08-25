@@ -1,6 +1,7 @@
 import type {
   ChatToolPayload,
   ModelUsage,
+  RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
   RuntimeStepContext,
 } from '@lobechat/types';
@@ -119,6 +120,7 @@ export interface Agent {
 // ── Payloads ──────────────────────────────────────────────
 
 export interface CallLLMPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
   isFirstMessage?: boolean;
   messages: any[];

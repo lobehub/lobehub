@@ -2,8 +2,6 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
-import { dockerCanvasTracingIncludes } from './dockerCanvasTracingIncludes';
-
 const LANDING_SITEMAP_URL = 'https://lobehub.com/sitemap.xml';
 
 interface CustomNextConfig {
@@ -45,24 +43,25 @@ export function defineConfig(config: CustomNextConfig) {
               'dist/mobile/**',
 
               'packages/database/migrations/**',
-
-              // Ensure native bindings are included in standalone output.
-              // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
-              // which may not be picked up by Next.js output tracing.
-              ...dockerCanvasTracingIncludes,
             ]
           : []),
       ],
     },
   };
 
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+  const assetPrefix = (process.env.ASSET_BASE_URL || process.env.NEXT_PUBLIC_ASSET_PREFIX)?.replace(
+    /\/+$/,
+    '',
+  );
 
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
     // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
     agentRules: false,
     assetPrefix,
+    // Gated, not unconditional: an asset host that omits Access-Control-Allow-Origin
+    // turns every tag into one the browser refuses to execute. Same-origin needs no opt-in.
+    crossOrigin: assetPrefix ? 'anonymous' : undefined,
 
     compiler: {
       emotion: true,
@@ -118,7 +117,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/app-icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -135,7 +134,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/images/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -353,11 +352,8 @@ export function defineConfig(config: CustomNextConfig) {
       ...(config.redirects ?? []),
     ],
     // when external packages in dev mode with turbopack, this config will lead to bundle error
-    // @napi-rs/canvas is a native module that can't be bundled by Turbopack
-    // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
-      '@napi-rs/canvas',
       '@lobehub/editor',
       'discord.js',
       'ffmpeg-static',

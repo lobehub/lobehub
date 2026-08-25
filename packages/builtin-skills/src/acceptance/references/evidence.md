@@ -9,14 +9,55 @@ instructions merely to learn how to submit an artifact.
 | Type           | Use when                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------- |
 | `text`         | Command output, logs, focused request/response data, or computed assertions prove the criterion   |
+| `markdown`     | Reviewer-facing prose (a reasoning write-up, structured findings) should render as body text      |
 | `dom_snapshot` | Structured content is stronger and smaller than pixels                                            |
 | `screenshot`   | A settled visual state, layout, or native rendering is the claim                                  |
 | `gif`          | A short temporal state should render inline, usually no more than about 10 seconds                |
 | `video`        | A longer animation, transition, gesture, or multi-step flow needs a player and better compression |
+| `audio`        | The deliverable is something the user **hears** — TTS output, a voice reply, an alert tone        |
 | `transcript`   | A conversation, event stream, or request log is itself the proof                                  |
 
 The declared `requiredEvidence` type is binding. Do not replace a required video
 with a final screenshot or a required DOM snapshot with prose.
+
+## Audio deliverables
+
+A sound cannot be verified in prose, and a waveform screenshot proves only that
+a file exists. Upload the clip itself with `--type audio` and the acceptance
+page gives the reviewer a player.
+
+```bash
+# The generated file is the evidence — attach the artifact the feature produced,
+# not a re-encode and not a screenshot of the player.
+lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type audio --file ./out/tts-zh-female.mp3 --by program \
+  --desc "TTS output for 「今天天气不错」, zh-CN female voice, 2.4s"
+```
+
+- `mp3` / `wav` / `m4a` / `aac` / `flac` / `ogg` / `opus` are recognized by
+  extension, so `acceptance run ingest` types them as `audio` automatically.
+- **Listen before citing it.** Confirm the clip is non-silent and is the right
+  content (duration + a transcription pass, or a spectral check) — an empty or
+  truncated file looks identical to a good one in the file list.
+- Pair the clip with a short `text` artifact when the claim is about _what was
+  said_ (the input text, the voice/model, the measured duration). The player
+  proves it plays; the text artifact makes it auditable.
+- Capture what the product produced. A screen recording with system audio is a
+  fallback for "the UI plays it at the right moment" — for "the output is
+  correct", attach the file itself.
+
+## Dual text evidence for non-visual behavior
+
+CLI, API, backend, policy, security, and migration claims normally need two
+separate `text` artifacts on the same check:
+
+1. A reasoning artifact: claim, setup or threat model, method, pass criteria,
+   interpretation, and limitations.
+2. An execution artifact: exact command or request, relevant raw observations,
+   exit/status values, and a short mapping back to the pass criteria.
+
+Keep both artifacts in the current immutable round. Do not ask a reviewer to
+join an explanation from an older round with fresh execution output.
 
 ## File versus inline content
 

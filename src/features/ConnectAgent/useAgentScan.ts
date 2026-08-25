@@ -1,10 +1,11 @@
 import type { HeterogeneousAgentScanMap } from '@lobechat/heterogeneous-agents';
-import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
 import type { DeviceListItem } from '@lobechat/types';
 import { useCallback, useRef, useState } from 'react';
 
 import { deviceService } from '@/services/device';
 import { binaryService } from '@/services/electron/binary';
+
+import { CONNECTABLE_PROVIDERS } from './providers';
 
 /**
  * Where the wizard scans for installed agents: the local desktop machine
@@ -21,22 +22,21 @@ export interface AgentScanState {
 const IDLE: AgentScanState = { agents: null, status: 'idle' };
 
 /**
- * Local scans probe the four CLI agents through the desktop binary detector
- * (which + login-shell PATH + well-known install paths). Platform agents
- * (openclaw / hermes) are device-bound by design, so a local target never
- * reports them — the inventory simply omits those rows.
+ * Local scans probe every connectable agent through the desktop binary detector.
+ * Although OpenClaw and Hermes use the gateway execution path, they are installed
+ * on and selected from this machine just like the coding-agent CLIs.
  */
-const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
+export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
   const entries = await Promise.all(
-    HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map(async (config) => {
+    CONNECTABLE_PROVIDERS.map(async (provider) => {
       try {
         const status = await binaryService.detectHeterogeneousAgentCommand({
-          agentType: config.type,
-          command: config.command,
+          agentType: provider.type,
+          command: provider.command ?? provider.type,
         });
-        return [config.type, { available: status.available, version: status.version }] as const;
+        return [provider.type, { available: status.available, version: status.version }] as const;
       } catch {
-        return [config.type, { available: false }] as const;
+        return [provider.type, { available: false }] as const;
       }
     }),
   );

@@ -35,6 +35,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
       ? new ServerLifecycleSink(ctx.hookDispatcher, ctx.operationId)
       : undefined,
     operation: {
+      abortSignal: ctx.abortSignal,
       allowEarlyFinalAnswerVisibleOutputEnd: ctx.allowEarlyFinalAnswerVisibleOutputEnd,
       operationId: ctx.operationId,
       stepIndex: ctx.stepIndex,
@@ -57,6 +58,7 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
         ctx.userId,
         ctx.workspaceId,
         ctx.topicId,
+        ctx.operationId,
         ctx.loadAgentState,
       ),
       stream: new ServerStreamSink(ctx.streamManager, ctx.operationId),

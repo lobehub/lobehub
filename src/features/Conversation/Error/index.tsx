@@ -1,11 +1,12 @@
+import { isDesktop } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
-import { type AlertProps } from '@lobehub/ui';
 import { Block, Highlighter, Skeleton } from '@lobehub/ui';
+import { type AlertProps } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -273,7 +274,6 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
   ({ error: alertError, data, onRegenerate, retryScopeId }) => {
     const error = data.error;
     const navigate = useWorkspaceAwareNavigate();
-    const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
     );
@@ -293,14 +293,27 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const delAndRegenerateMessage = useConversationStore((s) => s.delAndRegenerateMessage);
     const updateMessageError = useConversationStore((s) => s.updateMessageError);
     const resetHeteroOverloadRetry = useConversationStore((s) => s.resetHeteroOverloadRetry);
+    // `data.id`'s own parent user message. Only present when `data.id` is a
+    // top-level displayMessage that hangs off a user turn — which is exactly the
+    // condition for the self-contained retry below to be able to do anything.
+    const ownParentId = useConversationStore(
+      (s) => dataSelectors.getDisplayMessageById(data.id)(s)?.parentId,
+    );
     // Standalone surface: data.id is the top-level assistant message, so its
     // parentId is the user message. Group surface passes retryScopeId directly.
-    const resolvedScopeId = useConversationStore(
-      (s) => retryScopeId ?? dataSelectors.getDisplayMessageById(data.id)(s)?.parentId,
-    );
+    const resolvedScopeId = retryScopeId ?? ownParentId;
+
+    // The standalone surfaces (Assistant / Task / AgentCouncil) render this card
+    // through `customErrorRender` WITHOUT an `onRegenerate`, so gating the retry
+    // affordance on that prop left their error cards with no way to retry at all
+    // — while the very same error inside an assistantGroup offered one. Fall back
+    // to retrying this message on our own, but only advertise it when that can
+    // actually run: a block that isn't a top-level displayMessage, or one with no
+    // parent user turn, would delete itself and regenerate nothing.
+    const canRetry = canCreate && (!!onRegenerate || !!ownParentId);
 
     const handleRetryAgentMessage = useCallback(() => {
-      if (!canCreate) return;
+      if (!canRetry) return;
       if (onRegenerate) {
         onRegenerate();
         return;
@@ -310,7 +323,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       // branches. Regenerate-first would switch the branch away before the
       // delete, leaving the failed attempt behind on each retry.
       void delAndRegenerateMessage(data.id);
-    }, [canCreate, data.id, delAndRegenerateMessage, onRegenerate]);
+    }, [canRetry, data.id, delAndRegenerateMessage, onRegenerate]);
 
     // A human-initiated retry restarts the auto-retry budget so the user isn't
     // stuck on the manual card after the cap was reached automatically.
@@ -319,6 +332,13 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       handleRetryAgentMessage();
     }, [handleRetryAgentMessage, resetHeteroOverloadRetry, resolvedScopeId]);
 
+    // Business cards get the surface-resolved retry rather than deriving one
+    // from `data.id`: on the group surface that id is a nested content block,
+    // so message-level store actions can't resolve it and silently no-op.
+    const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id, {
+      onRetry: canRetry ? handleManualRetry : undefined,
+    });
+
     const autoRetry = useHeterogeneousAutoRetry({
       // Must be an actual heterogeneous-agent (CC / Codex) overloaded error —
       // not just any ChatMessageError whose body happens to carry
@@ -326,7 +346,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       // the guide render below, so without it a provider/tool error rendering
       // the normal card could be silently retried.
       enabled:
-        canCreate &&
+        canRetry &&
         isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
         sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.Overloaded,
       onRetry: handleRetryAgentMessage,
@@ -341,6 +361,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const activeTopicScheduled = useChatStore(
       (s) => topicSelectors.currentActiveTopic(s)?.status === 'scheduled',
     );
+    const activeAgentId = useChatStore((s) => s.activeAgentId);
     const scheduledResetsAt = useChatStore((s) => {
       const scheduledRun = topicSelectors.currentActiveTopic(s)?.metadata?.scheduledRun;
       return scheduledRun?.kind === 'resume_after_rate_limit'
@@ -360,7 +381,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       ? {
           isScheduled: activeTopicScheduled,
           onCancel: () => void cancelHeteroContinuation(),
-          onRunNow: () => void onRegenerate?.(),
+          // Same fallback as the retry button: `onRegenerate` is absent on the
+          // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
+          onRunNow: handleManualRetry,
           onSchedule: () =>
             void scheduleHeteroContinuation({
               failedAssistantMessageId: data.id,
@@ -381,8 +404,16 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
           error={sessionErrorBody}
           schedule={schedule}
           onDismiss={() => void updateMessageError(data.id, null)}
-          onOpenSystemTools={() => navigate('/settings/system-tools')}
           onRetry={handleManualRetry}
+          onOpenSystemTools={() =>
+            navigate(
+              isDesktop
+                ? '/settings/system-tools'
+                : activeAgentId
+                  ? `/agent/${activeAgentId}/profile`
+                  : '/settings/credential',
+            )
+          }
         />
       );
     }
@@ -416,7 +447,10 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
 
       case AgentRuntimeErrorType.QuotaLimitReached:
       case AgentRuntimeErrorType.RateLimitExceeded: {
-        if (enableBusinessFeatures) return <QuotaLimitError id={data.id} />;
+        if (enableBusinessFeatures)
+          return (
+            <QuotaLimitError id={data.id} onRetry={canRetry ? handleManualRetry : undefined} />
+          );
         break;
       }
 
@@ -456,7 +490,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         <TraceIdError
           id={data.id}
           traceId={traceId}
-          onRetry={canCreate && onRegenerate ? handleManualRetry : undefined}
+          onRetry={canRetry ? handleManualRetry : undefined}
         />
       );
     }
@@ -478,7 +512,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
             </Highlighter>
           ) : undefined,
         }}
-        onRegenerate={canCreate ? onRegenerate : undefined}
+        onRegenerate={canRetry ? handleManualRetry : undefined}
       />
     );
   },

@@ -19,6 +19,7 @@ describe('archiveToolResultIfNeeded', () => {
   const db = {} as LobeChatDatabase;
   const mockVfsService = {
     mkdir: vi.fn(),
+    read: vi.fn(),
     write: vi.fn(),
   };
   const mockTopicDocumentModel = {
@@ -31,6 +32,7 @@ describe('archiveToolResultIfNeeded', () => {
     vi.mocked(AgentDocumentVfsService).mockImplementation(() => mockVfsService as any);
     vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel as any);
     mockVfsService.mkdir.mockResolvedValue({});
+    mockVfsService.read.mockResolvedValue({ content: '0123456789' });
     mockVfsService.write.mockResolvedValue({ documentId: 'document-1', id: 'agent-doc-1' });
     mockTopicDocumentModel.isAssociated.mockResolvedValue(false);
     mockTopicDocumentModel.associate.mockResolvedValue({
@@ -74,7 +76,12 @@ describe('archiveToolResultIfNeeded', () => {
       './.tool-results/topic-1_call_1.txt',
       '0123456789',
       { agentId: 'agent-1', topicId: 'topic-1' },
+      { contentFormat: 'raw' },
     );
+    expect(mockVfsService.read).toHaveBeenCalledWith('./.tool-results/topic-1_call_1.txt', {
+      agentId: 'agent-1',
+      topicId: 'topic-1',
+    });
     expect(mockTopicDocumentModel.associate).toHaveBeenCalledWith({
       documentId: 'document-1',
       topicId: 'topic-1',
@@ -101,6 +108,25 @@ describe('archiveToolResultIfNeeded', () => {
       userId: 'user-1',
     });
 
+    expect(mockTopicDocumentModel.associate).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the persisted archive content does not match the tool result', async () => {
+    mockVfsService.read.mockResolvedValue({ content: 'corrupted' });
+
+    const result = await archiveToolResultIfNeeded({
+      agentId: 'agent-1',
+      content: '0123456789',
+      limit: 5,
+      serverDB: db,
+      toolCallId: 'call_1',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.archived).toBe(false);
+    expect(result.error).toBe('Archived content verification failed');
+    expect(result.content).toContain('Archive failed: Archived content verification failed');
     expect(mockTopicDocumentModel.associate).not.toHaveBeenCalled();
   });
 

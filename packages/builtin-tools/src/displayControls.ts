@@ -6,6 +6,8 @@ import { type RenderDisplayControl } from '@lobechat/types';
 
 import { CodexRenderDisplayControls } from './codex/displayControls';
 
+const QODER_IDENTIFIER = 'qoder';
+
 // Kept separate from `./renders` so consumers that only need display-control
 // fallbacks (e.g. the tool store selector) don't pull in every builtin tool's
 // render registry — that graph cycles back through `@/store/tool/selectors`.
@@ -28,6 +30,7 @@ const getDynamicRenderDisplayControlResolvers = (): Record<
 > => {
   return {
     [ClaudeCodeIdentifier]: resolveClaudeCodeRenderDisplayControl,
+    [QODER_IDENTIFIER]: resolveClaudeCodeRenderDisplayControl,
   };
 };
 

@@ -27,8 +27,6 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   const initializedRef = useRef(false);
 
   const [
-    activeTopicId,
-    activeThreadId,
     hasMore,
     isLoadingMore,
     loadMoreError,
@@ -37,8 +35,6 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
     activeAgentId,
     useSearchTopics,
   ] = useChatStore((s) => [
-    s.activeTopicId,
-    s.activeThreadId,
     topicSelectors.hasMoreTopics(s),
     topicSelectors.isLoadingMoreTopics(s),
     topicSelectors.loadMoreTopicsError(s),
@@ -184,12 +180,10 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
       {activeTopicList?.map((topic) => (
         <Flexbox gap={1} key={topic.id} paddingInline={4}>
           <TopicItem
-            active={activeTopicId === topic.id}
             fav={topic.favorite}
             id={topic.id}
             metadata={topic.metadata}
             status={topic.status}
-            threadId={activeThreadId}
             title={topic.title}
             userId={topic.userId}
           />

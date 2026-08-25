@@ -48,10 +48,9 @@ export const REACT_DEVTOOLS_BRIDGE_URL = 'http://localhost:8097';
 export const reactDevtoolsPlugin = (): PluginOption => ({
   apply: 'serve',
   name: 'lobe-desktop-react-devtools',
-  transformIndexHtml: () =>
-    process.env.DESKTOP_REACT_DEVTOOLS === '1'
-      ? [{ attrs: { src: REACT_DEVTOOLS_BRIDGE_URL }, injectTo: 'head-prepend', tag: 'script' }]
-      : [],
+  transformIndexHtml: () => [
+    { attrs: { src: REACT_DEVTOOLS_BRIDGE_URL }, injectTo: 'head-prepend', tag: 'script' },
+  ],
 });
 
 export const nodeExternals = [

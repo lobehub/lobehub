@@ -70,6 +70,14 @@ export interface ChatTopicState {
    */
   topicDataMap: Record<string, TopicData>;
   /**
+   * Per-id topic detail cache, filled by `useFetchTopicDetail` when the active
+   * topic is missing from the loaded list bucket — e.g. an archived
+   * (`completed`) topic that the sidebar fetch excludes via `excludeStatuses`.
+   * `currentActiveTopic` / `getTopicById` read it as a fallback so the header
+   * keeps the real title instead of degrading to the "new topic" placeholder.
+   */
+  topicDetailMap: Record<string, ChatTopic>;
+  /**
    * Internal ref-count for topic loading owners. A topic can be loading because
    * the agent is running and because title-summary is streaming at the same time.
    */
@@ -88,6 +96,7 @@ export const initialTopicState: ChatTopicState = {
   isSearchingTopic: false,
   searchTopics: [],
   topicDataMap: {},
+  topicDetailMap: {},
   topicLoadingIdCounts: {},
   topicLoadingIds: [],
   topicSearchKeywords: '',

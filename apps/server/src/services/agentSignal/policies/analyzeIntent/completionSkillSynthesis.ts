@@ -5,7 +5,7 @@ import { and, asc, eq, gte, isNull } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import type { LobeChatDatabase } from '@/database/type';
-import { buildMessageScopeWhere } from '@/database/utils/messageScope';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 import type { RuntimeProcessorContext } from '../../runtime/context';
 import { defineSourceHandler } from '../../runtime/middleware';
@@ -148,7 +148,7 @@ const assembleTrajectoryContext = async (input: {
     limit: MAX_TRAJECTORY_MESSAGES,
     orderBy: [asc(messages.createdAt)],
     where: and(
-      buildMessageScopeWhere({ userId: input.userId, workspaceId: input.workspaceId }),
+      buildWorkspaceWhere({ userId: input.userId, workspaceId: input.workspaceId }, messages),
       eq(messages.topicId, input.topicId),
       gte(messages.createdAt, input.turnStartAt),
       threadScopeFilter,

@@ -298,30 +298,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   getDeviceInfo() {
     return {
-      description: this.getDeviceDescription(),
       deviceId: this.getDeviceId(),
       hostname: os.hostname(),
-      name: this.getDeviceName(),
       platform: process.platform,
     };
-  }
-
-  // ─── Device Name & Description ───
-
-  getDeviceName(): string {
-    return (this.app.storeManager.get('gatewayDeviceName') as string) || os.hostname();
-  }
-
-  setDeviceName(name: string) {
-    this.app.storeManager.set('gatewayDeviceName', name);
-  }
-
-  getDeviceDescription(): string {
-    return (this.app.storeManager.get('gatewayDeviceDescription') as string) || '';
-  }
-
-  setDeviceDescription(description: string) {
-    this.app.storeManager.set('gatewayDeviceDescription', description);
   }
 
   // ─── Connection Logic ───
@@ -447,7 +427,7 @@ export default class GatewayConnectionService extends ServiceModule {
     });
 
     client.on('agent_run_request', (request) => {
-      this.handleAgentRunRequest(client, request);
+      this.handleAgentRunRequest(client, request, scope?.workspaceId);
     });
 
     client.on('auth_expired', () => {
@@ -742,6 +722,7 @@ export default class GatewayConnectionService extends ServiceModule {
   private handleAgentRunRequest = async (
     client: GatewayClient,
     request: AgentRunRequestMessage,
+    connectionWorkspaceId?: string,
   ) => {
     logger.info(
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
@@ -757,7 +738,14 @@ export default class GatewayConnectionService extends ServiceModule {
       return;
     }
 
-    const result = await this.agentRunHandler(request);
+    // Topic scope for heteroIngest/heteroFinish. Prefer the explicit ingest
+    // field, then a forwarded routing workspaceId, then the connection this
+    // request arrived on (workspace enrollments). Older gateways omit both
+    // payload fields; the workspace socket is still a reliable fallback.
+    const workspaceId = request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId;
+    const result = await this.agentRunHandler(
+      workspaceId && workspaceId !== request.workspaceId ? { ...request, workspaceId } : request,
+    );
     client.sendAgentRunAck({ operationId: request.operationId, ...result });
   };
 

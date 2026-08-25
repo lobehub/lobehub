@@ -1,12 +1,11 @@
 import { type AgentLabelListItem } from '@lobechat/types';
-import { type ModalProps } from '@lobehub/ui';
-import { Flexbox, Input, stopPropagation } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Input } from '@lobehub/ui';
+import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { memo, useEffect, useState } from 'react';
+import { t as translate } from 'i18next';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ImperativeModal from '@/components/ImperativeModal';
 import { useHomeStore } from '@/store/home';
 
 import { DEFAULT_LABEL_COLOR, isValidLabelColor, LABEL_COLOR_PRESETS } from './constants';
@@ -32,14 +31,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface LabelFormModalProps extends Pick<ModalProps, 'open' | 'onCancel'> {
-  /** Present when editing; absent when creating. */
+export interface LabelFormModalOptions {
   /**
    * When creating from an agent's Labels submenu, apply the new label to that
    * agent right away — creating "for" an agent and then having to reopen the
    * picker would be surprising.
    */
   assignTo?: { agentId: string; currentLabelIds: string[] };
+  /** Present when editing; absent when creating. */
   label?: AgentLabelListItem;
   /**
    * Opened from a failed restore: the label is archived and its old name is
@@ -49,133 +48,134 @@ interface LabelFormModalProps extends Pick<ModalProps, 'open' | 'onCancel'> {
   restoreOnSave?: boolean;
 }
 
-const LabelFormModal = memo<LabelFormModalProps>(
-  ({ assignTo, label, open, onCancel, restoreOnSave }) => {
-    const { t } = useTranslation(['setting', 'common']);
-    const [createAgentLabel, toggleAgentLabel, updateAgentLabel] = useHomeStore((s) => [
-      s.createAgentLabel,
-      s.toggleAgentLabel,
-      s.updateAgentLabel,
-    ]);
+const LabelFormContent = memo<LabelFormModalOptions>(({ assignTo, label, restoreOnSave }) => {
+  const { t } = useTranslation(['setting', 'common']);
+  const { close } = useModalContext();
+  const [createAgentLabel, toggleAgentLabel, updateAgentLabel] = useHomeStore((s) => [
+    s.createAgentLabel,
+    s.toggleAgentLabel,
+    s.updateAgentLabel,
+  ]);
 
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [color, setColor] = useState<string>(DEFAULT_LABEL_COLOR);
-    const [loading, setLoading] = useState(false);
+  const [name, setName] = useState(label?.name ?? '');
+  const [description, setDescription] = useState(label?.description ?? '');
+  const [color, setColor] = useState<string>(label?.color ?? DEFAULT_LABEL_COLOR);
+  const [loading, setLoading] = useState(false);
 
-    // Reset per open so the form reflects the target label (or a blank create).
-    useEffect(() => {
-      if (!open) return;
-      setName(label?.name ?? '');
-      setDescription(label?.description ?? '');
-      setColor(label?.color ?? DEFAULT_LABEL_COLOR);
-    }, [open, label]);
+  const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || loading) return;
 
-    return (
-      <div onClick={stopPropagation}>
-        <ImperativeModal
-          destroyOnHidden
-          okButtonProps={{ disabled: !name.trim() || !isValidLabelColor(color), loading }}
-          open={open}
-          width={420}
-          title={
-            restoreOnSave
-              ? t('workspaceSetting.labels.form.restoreTitle')
-              : label
-                ? t('workspaceSetting.labels.form.editTitle')
-                : t('workspaceSetting.labels.form.createTitle')
-          }
-          onCancel={onCancel}
-          onOk={async (e) => {
-            const trimmed = name.trim();
-            if (!trimmed) return;
+    setLoading(true);
+    try {
+      if (label) {
+        await updateAgentLabel(label.id, {
+          ...(restoreOnSave ? { archived: false } : {}),
+          color,
+          description: description.trim() || null,
+          name: trimmed,
+        });
+      } else {
+        const id = await createAgentLabel({
+          color,
+          description: description.trim() || undefined,
+          name: trimmed,
+        });
+        if (assignTo && id) {
+          // Delta, not `[...currentLabelIds, id]`: those ids were captured when
+          // the modal opened, so replaying them as a full set would delete
+          // anything another editor applied while the user was typing.
+          await toggleAgentLabel(assignTo.agentId, id, true);
+        }
+      }
+      close();
+    } catch (error) {
+      // Keep the modal open on a name clash — the user's next move is to edit
+      // the name they already typed, not to start over.
+      if (isDuplicateLabelNameError(error)) {
+        toast.error(t('workspaceSetting.labels.form.duplicateName'));
+        return;
+      }
+      console.error('Failed to save label:', error);
+      toast.error(t('operationFailed', { ns: 'common' }));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            setLoading(true);
-            try {
-              if (label) {
-                await updateAgentLabel(label.id, {
-                  ...(restoreOnSave ? { archived: false } : {}),
-                  color,
-                  description: description.trim() || null,
-                  name: trimmed,
-                });
-              } else {
-                const id = await createAgentLabel({
-                  color,
-                  description: description.trim() || undefined,
-                  name: trimmed,
-                });
-                if (assignTo && id) {
-                  // Delta, not `[...currentLabelIds, id]`: those ids were
-                  // captured when the modal opened, so replaying them as a full
-                  // set would delete anything another editor applied while the
-                  // user was typing.
-                  await toggleAgentLabel(assignTo.agentId, id, true);
-                }
-              }
-              onCancel?.(e as any);
-            } catch (error) {
-              // Keep the modal open on a name clash — the user's next move is to
-              // edit the name they already typed, not to start over.
-              if (isDuplicateLabelNameError(error)) {
-                toast.error(t('workspaceSetting.labels.form.duplicateName'));
-                return;
-              }
-              console.error('Failed to save label:', error);
-              toast.error(t('operationFailed', { ns: 'common' }));
-            } finally {
-              setLoading(false);
-            }
-          }}
-        >
-          <Flexbox gap={16} paddingBlock={8}>
-            <Flexbox gap={8}>
-              <span>{t('workspaceSetting.labels.form.name')}</span>
-              <Input
-                autoFocus
-                maxLength={40}
-                placeholder={t('workspaceSetting.labels.form.namePlaceholder')}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+  return (
+    <>
+      <Flexbox gap={16} paddingBlock={8} paddingInline={16}>
+        <Flexbox gap={8}>
+          <span>{t('workspaceSetting.labels.form.name')}</span>
+          <Input
+            autoFocus
+            maxLength={40}
+            placeholder={t('workspaceSetting.labels.form.namePlaceholder')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Flexbox>
+        <Flexbox gap={8}>
+          <span>{t('workspaceSetting.labels.form.description')}</span>
+          <Input
+            maxLength={200}
+            placeholder={t('workspaceSetting.labels.form.descriptionPlaceholder')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Flexbox>
+        <Flexbox gap={8}>
+          <span>{t('workspaceSetting.labels.form.color')}</span>
+          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            {LABEL_COLOR_PRESETS.map((preset) => (
+              <span
+                aria-label={preset}
+                className={cx(styles.swatch, color === preset && styles.swatchActive)}
+                key={preset}
+                role={'button'}
+                style={{ background: preset }}
+                onClick={() => setColor(preset)}
               />
-            </Flexbox>
-            <Flexbox gap={8}>
-              <span>{t('workspaceSetting.labels.form.description')}</span>
-              <Input
-                maxLength={200}
-                placeholder={t('workspaceSetting.labels.form.descriptionPlaceholder')}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </Flexbox>
-            <Flexbox gap={8}>
-              <span>{t('workspaceSetting.labels.form.color')}</span>
-              <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-                {LABEL_COLOR_PRESETS.map((preset) => (
-                  <span
-                    aria-label={preset}
-                    className={cx(styles.swatch, color === preset && styles.swatchActive)}
-                    key={preset}
-                    role={'button'}
-                    style={{ background: preset }}
-                    onClick={() => setColor(preset)}
-                  />
-                ))}
-                <Input
-                  placeholder={'#RRGGBB'}
-                  style={{ width: 100 }}
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                />
-              </Flexbox>
-            </Flexbox>
+            ))}
+            <Input
+              placeholder={'#RRGGBB'}
+              style={{ width: 100 }}
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+            />
           </Flexbox>
-        </ImperativeModal>
-      </div>
-    );
-  },
-);
+        </Flexbox>
+      </Flexbox>
+      <ModalFooter>
+        <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
+        <Button
+          disabled={!name.trim() || !isValidLabelColor(color)}
+          loading={loading}
+          type={'primary'}
+          onClick={handleSave}
+        >
+          {t('ok', { defaultValue: 'OK', ns: 'common' })}
+        </Button>
+      </ModalFooter>
+    </>
+  );
+});
 
-LabelFormModal.displayName = 'LabelFormModal';
+LabelFormContent.displayName = 'LabelFormContent';
 
-export default LabelFormModal;
+export const openLabelFormModal = (options: LabelFormModalOptions = {}) =>
+  createModal({
+    content: <LabelFormContent {...options} />,
+    footer: null,
+    styles: { content: { padding: 0 } },
+    title: translate(
+      options.restoreOnSave
+        ? 'workspaceSetting.labels.form.restoreTitle'
+        : options.label
+          ? 'workspaceSetting.labels.form.editTitle'
+          : 'workspaceSetting.labels.form.createTitle',
+      { ns: 'setting' },
+    ),
+    width: 420,
+  });

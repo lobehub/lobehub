@@ -11,6 +11,8 @@ export interface AgentAvatarInfo {
   avatar: string | null;
   backgroundColor: string | null;
   id: string;
+  /** Personal name; renderers resolve the label with `agentDisplayName(agent, fallback)`. */
+  name?: string | null;
   title: string | null;
 }
 
@@ -160,35 +162,53 @@ export class BriefService {
    */
   async listUnresolved(): Promise<BriefWithAgent[]> {
     const rows = await this.briefModel.listUnresolvedEnriched();
-    return rows.map(
-      ({
-        brief,
-        agentRowId,
-        agentAvatar,
-        agentBackgroundColor,
-        agentName,
-        agentTitle,
-        taskIdentifier,
-        taskName,
-        taskStatus,
-      }) => ({
-        ...brief,
-        agent: agentRowId
-          ? {
-              avatar: agentAvatar,
-              backgroundColor: agentBackgroundColor,
-              id: agentRowId,
-              name: agentName,
-              title: agentTitle,
-            }
-          : null,
-        agents: [],
-        taskIdentifier,
-        taskName,
-        taskStatus: (taskStatus as TaskStatus) ?? null,
-      }),
-    );
+    return rows.map((row) => this.mapEnrichedRow(row));
   }
+
+  /**
+   * Day-scoped "news" digest for the home inbox. Unlike {@link listUnresolved}
+   * this keeps resolved briefs — a day's digest is a record, not a queue — and
+   * reports whether any older news exists so the client's day pager knows when
+   * to stop.
+   */
+  async listNewsByDay(range: {
+    endAt: Date;
+    startAt: Date;
+  }): Promise<{ data: BriefWithAgent[]; hasEarlier: boolean }> {
+    const [rows, hasEarlier] = await Promise.all([
+      this.briefModel.listNewsEnriched(range),
+      this.briefModel.hasNewsBefore(range.startAt),
+    ]);
+
+    return { data: rows.map((row) => this.mapEnrichedRow(row)), hasEarlier };
+  }
+
+  private mapEnrichedRow = ({
+    brief,
+    agentRowId,
+    agentAvatar,
+    agentBackgroundColor,
+    agentName,
+    agentTitle,
+    taskIdentifier,
+    taskName,
+    taskStatus,
+  }: Awaited<ReturnType<BriefModel['listUnresolvedEnriched']>>[number]): BriefWithAgent => ({
+    ...brief,
+    agent: agentRowId
+      ? {
+          avatar: agentAvatar,
+          backgroundColor: agentBackgroundColor,
+          id: agentRowId,
+          name: agentName,
+          title: agentTitle,
+        }
+      : null,
+    agents: [],
+    taskIdentifier,
+    taskName,
+    taskStatus: (taskStatus as TaskStatus) ?? null,
+  });
 
   /**
    * Resolve a brief and propagate accept signals to the task lifecycle.

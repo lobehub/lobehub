@@ -10,6 +10,8 @@ import type {
 import type { AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import { createSourceEvent } from '@lobechat/agent-signal/source';
 
+import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
+
 import type {
   AgentSignalEmitOptions,
   AgentSignalExecutionContext,
@@ -103,9 +105,16 @@ const createPolicyOptions = (
 
   return {
     completion: {
-      onSelfIterationCompleted: createSelfIterationCompletionHandler(
-        options.receiptStore ? { receiptStore: options.receiptStore } : {},
-      ),
+      onSelfIterationCompleted: async (input) => {
+        await createSelfIterationCompletionHandler(
+          options.receiptStore ? { receiptStore: options.receiptStore } : {},
+        )(input);
+        await new ExpertiseIngestionService(
+          context.db,
+          context.userId,
+          context.workspaceId,
+        ).ingestSelfReview(input);
+      },
     },
     feedbackDomainJudge: {
       db: context.db,

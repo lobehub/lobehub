@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 
 import {
+  isCustomInteractionIdentifier,
   prepareCustomInteractionSubmit,
   recordCustomInteractionResolution,
 } from './customInteractionHandlers';
@@ -90,14 +91,22 @@ describe('customInteractionHandlers', () => {
     const payload = {
       'How broad should this pass be?': 'Focused',
       'Which surfaces?': ['Chat', 'Settings'],
+      '__supplement__': 'Keep the existing behavior.',
     };
 
     const result = await prepareCustomInteractionSubmit(identifier, payload, { apiName });
 
     expect(result).toEqual({
-      options: { pluginState: { askUserAnswers: payload } },
+      // createUserMessage must stay false: the completed tool card already
+      // renders the answers, so a synthetic user message would duplicate them
+      // in the client runtime.
+      options: { createUserMessage: false, pluginState: { askUserAnswers: payload } },
       payload,
     });
+  });
+
+  it('routes Qoder tools through the heterogeneous custom interaction flow', () => {
+    expect(isCustomInteractionIdentifier('qoder', 'askUserQuestion')).toBe(true);
   });
 
   it('persists skipped marketplace picks from the original tool arguments', async () => {

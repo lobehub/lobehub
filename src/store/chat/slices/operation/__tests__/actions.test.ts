@@ -258,8 +258,6 @@ describe('Operation Actions', () => {
         }).operationId;
       });
 
-      const startTime = result.current.operations[operationId!].metadata.startTime;
-
       act(() => {
         result.current.completeOperation(operationId!);
       });
@@ -1053,7 +1051,7 @@ describe('Operation Actions', () => {
       const { result } = renderHook(() => useChatStore());
 
       let operationId: string;
-      const asyncHandler = vi.fn(async ({ type }) => {
+      const asyncHandler = vi.fn(async () => {
         // Simulate async cleanup
         await new Promise((resolve) => setTimeout(resolve, 10));
         // Don't return anything (void)
@@ -1142,6 +1140,36 @@ describe('Operation Actions', () => {
   });
 
   describe('internal_getConversationContext', () => {
+    it('should prefer an explicit message context over the operation context', () => {
+      const { result } = renderHook(() => useChatStore());
+      const { operationId } = result.current.startOperation({
+        context: {
+          agentId: 'operation-agent',
+          isNew: true,
+          scope: 'main',
+          topicId: 'operation-topic',
+        },
+        type: 'execAgentRuntime',
+      });
+
+      const context = result.current.internal_getConversationContext({
+        context: {
+          agentId: 'projection-agent',
+          isNew: false,
+          scope: 'main',
+          topicId: 'persisted-topic',
+        },
+        operationId,
+      });
+
+      expect(context).toEqual({
+        agentId: 'projection-agent',
+        isNew: false,
+        scope: 'main',
+        topicId: 'persisted-topic',
+      });
+    });
+
     it('should return context from operationId when provided', () => {
       const { result } = renderHook(() => useChatStore());
 

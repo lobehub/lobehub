@@ -630,6 +630,51 @@ describe('MessageModel Statistics Tests', () => {
       expect(result.length).toBeGreaterThanOrEqual(366);
       expect(result.every((item) => item.count === 0 && item.level === 0)).toBe(true);
     });
+
+    it('counts everything except duplicated transcripts', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const dayKey = today.subtract(2, 'day').format('YYYY-MM-DD');
+      const createdAt = today.subtract(2, 'day').toDate();
+
+      await serverDB.insert(messages).values([
+        // no metadata at all — the shape the predicate must not drop
+        { createdAt, id: 'c1', role: 'assistant', usage: { totalTokens: 10 } as any, userId },
+        // metadata without the marker
+        {
+          createdAt,
+          id: 'c2',
+          metadata: { usage: { totalTokens: 20 } },
+          role: 'assistant',
+          userId,
+        },
+        // explicitly not a copy
+        {
+          createdAt,
+          id: 'c3',
+          metadata: { copied: false, usage: { totalTokens: 40 } },
+          role: 'assistant',
+          userId,
+        },
+        // a copy: its tokens were spent in the source scope
+        {
+          createdAt,
+          id: 'c4',
+          metadata: { copied: true, usage: { totalTokens: 8000 } },
+          role: 'assistant',
+          userId,
+        },
+      ]);
+
+      const result = await messageModel.getTokenHeatmaps();
+      const day = result.find((item) => item.date === dayKey);
+      expect(day?.count).toBe(70);
+
+      vi.useRealTimers();
+    });
   });
 
   describe('rankModels', () => {
@@ -877,10 +922,9 @@ describe('MessageModel Statistics Tests', () => {
     it('does not leak other users’ topics', async () => {
       const otherModel = new MessageModel(serverDB, otherUserId);
       const stats = await otherModel.topicMessageStats({ role: 'user' });
-      // Scope is derived from the owning topic: the message otherUser wrote
-      // into s-t1 belongs to the topic owner's scope, so otherUser sees nothing.
-      expect(stats.topics).toBe(0);
-      expect(stats.totalMessages).toBe(0);
+      // otherUser only has the single leaked message in s-t1
+      expect(stats.topics).toBe(1);
+      expect(stats.totalMessages).toBe(1);
     });
   });
 

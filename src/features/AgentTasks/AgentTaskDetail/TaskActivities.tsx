@@ -167,26 +167,37 @@ const TaskActivities = memo(() => {
         <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
           {activeTaskId && <CommentInput taskId={activeTaskId} />}
           {items.length > 0 ? (
-            items.map(({ activity, brief, key }) => {
-              if (brief) {
-                return (
-                  <TaskBriefCard
-                    brief={brief}
-                    key={key}
-                    onAfterAddComment={refreshActiveTask}
-                    onAfterDelete={refreshActiveTask}
-                    onAfterResolve={refreshActiveTask}
-                  />
-                );
-              }
-              if (activity.type === 'topic') {
-                return <TopicCard activity={activity} key={key} />;
-              }
-              if (activity.type === 'comment') {
-                return <CommentCard activity={activity} key={key} />;
-              }
-              return <ActivityRow activity={activity} key={key} />;
-            })
+            // A goal loop can produce many rounds; only the newest run opens by
+            // default so the latest result is not buried under older ones.
+            (() => {
+              const firstTopicKey = items.find(({ activity }) => activity.type === 'topic')?.key;
+              return items.map(({ activity, brief, key }) => {
+                if (brief) {
+                  return (
+                    <TaskBriefCard
+                      brief={brief}
+                      key={key}
+                      onAfterAddComment={refreshActiveTask}
+                      onAfterDelete={refreshActiveTask}
+                      onAfterResolve={refreshActiveTask}
+                    />
+                  );
+                }
+                if (activity.type === 'topic') {
+                  return (
+                    <TopicCard
+                      activity={activity}
+                      defaultExpanded={key === firstTopicKey}
+                      key={key}
+                    />
+                  );
+                }
+                if (activity.type === 'comment') {
+                  return <CommentCard activity={activity} key={key} />;
+                }
+                return <ActivityRow activity={activity} key={key} />;
+              });
+            })()
           ) : (
             <Empty
               description={t('taskDetail.activitiesEmpty')}

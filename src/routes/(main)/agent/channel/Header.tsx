@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { useAgentStore } from '@/store/agent';
@@ -271,21 +272,7 @@ const Header = memo<HeaderProps>(
           onChange={handleFileChange}
         />
         <NavHeader
-          left={
-            <AgentBreadcrumb
-              agentId={agentId}
-              extraItems={platformDef ? [platformDef.name] : undefined}
-              title={
-                platformDef ? (
-                  <Link relative="path" to="..">
-                    {t('tab.integration', { ns: 'chat' })}
-                  </Link>
-                ) : (
-                  t('tab.integration', { ns: 'chat' })
-                )
-              }
-            />
-          }
+          style={{ position: 'relative' }}
           right={
             <Flexbox horizontal align="center" gap={8}>
               {platformDef?.comingSoon && <Tag size={'small'}>{t('channel.comingSoon')}</Tag>}
@@ -327,10 +314,36 @@ const Header = memo<HeaderProps>(
               </DropdownMenu>
             </Flexbox>
           }
+          // `relative` anchors the absolutely-centered switcher below.
+          left={
+            // On the platform list the Segmented already names the section, so
+            // repeating it here would print the same word twice. A platform
+            // detail still needs it: the active segment is inert, so this link
+            // is the only way back to the list.
+            <AgentBreadcrumb
+              agentId={agentId}
+              extraItems={platformDef ? [platformDef.name] : undefined}
+              title={
+                platformDef ? (
+                  <Link relative="path" to="..">
+                    {t('tab.integration', { ns: 'chat' })}
+                  </Link>
+                ) : undefined
+              }
+            />
+          }
           styles={{
+            // Center on the header midpoint (equal gaps), not the leftover track.
+            center: AGENT_PROFILE_TABS_CENTER_STYLE,
             left: { minWidth: 0, paddingInlineStart: 8 },
           }}
-        />
+        >
+          {/* The switcher belongs to the section's index (the platform list).
+              On a platform detail (`/channel/:platform`) it is one level too
+              deep, so drop it there and let the breadcrumb's Channels link be
+              the way back. */}
+          {!platformDef && <AgentProfileTabs active={'channel'} agentId={agentId} />}
+        </NavHeader>
       </>
     );
   },

@@ -32,7 +32,7 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         </Center>
         <Flexbox horizontal align={'center'} justify={'space-between'} padding={16} width={'100%'}>
           <Flexbox horizontal align={'center'}>
-            <AuthLangButton size={18} />
+            <AuthLangButton />
             <Divider className={styles.divider} orientation={'vertical'} />
             <AuthThemeButton size={18} />
           </Flexbox>

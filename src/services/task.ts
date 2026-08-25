@@ -1,4 +1,9 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  CreateTaskGoalInput,
+  TaskAutomationMode,
+  TaskStatus,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -11,24 +16,33 @@ class TaskService {
 
   list = async (params: {
     assigneeAgentId?: string;
+    automated?: boolean;
+    hasGoal?: boolean;
+    orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
     parentIdentifier?: string;
     parentTaskId?: string | null;
     priorities?: number[];
+    projectId?: string;
     statuses?: TaskStatus[];
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.list.query(params);
 
   groupList = async (params: {
     assigneeAgentId?: string;
-    groups: Array<{
+    automated?: boolean;
+    excludeStatuses?: TaskStatus[];
+    groupBy?: 'assignee' | 'priority';
+    groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;
       statuses: string[];
     }>;
+    hasGoal?: boolean;
     parentTaskId?: string | null;
+    projectId?: string;
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.groupList.query(params);
 
@@ -54,14 +68,18 @@ class TaskService {
     assigneeAgentId?: string;
     assigneeUserId?: string;
     automationMode?: TaskAutomationMode;
+    config?: Record<string, unknown>;
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
+    /** Bind a goal entity (`goals` row) to the created task. */
+    goal?: CreateTaskGoalInput;
     identifierPrefix?: string;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    projectId?: string;
     schedulePattern?: string;
     scheduleTimezone?: string;
     visibility?: 'private' | 'public';
@@ -97,6 +115,8 @@ class TaskService {
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
+
+  deleteGoal = async (id: string) => lambdaClient.task.deleteGoal.mutate({ id });
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 

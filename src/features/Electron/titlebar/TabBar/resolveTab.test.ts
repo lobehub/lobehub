@@ -14,7 +14,7 @@ const fixtureRoutes: RouteObject[] = [
     children: [
       {
         handle: {
-          meta: { tabTitleKey: 'navigation.newChat', titleKey: 'navigation.home' },
+          meta: { tabTitleKey: 'navigation.home', titleKey: 'navigation.home' },
         },
         index: true,
       },
@@ -100,9 +100,9 @@ describe('resolveTab', () => {
     expect(resolved.meta.title).toBe('navigation.chat');
   });
 
-  it('prefers the Electron tab title over the document title', () => {
+  it('uses Home as the Electron tab title for the Home route', () => {
     const resolved = resolveTab(fixtureRoutes, tab('/'), false, t);
-    expect(resolved.meta.title).toBe('navigation.newChat');
+    expect(resolved.meta.title).toBe('navigation.home');
   });
 
   it('uses the generic fallback when neither snapshot nor static meta exists', () => {

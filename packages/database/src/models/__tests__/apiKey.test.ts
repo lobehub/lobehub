@@ -1,11 +1,12 @@
 // @vitest-environment node
+import { API_KEY_PREFIX, validateApiKeyFormat } from '@lobechat/utils/apiKey';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { hashApiKey } from '@/utils/server/apiKeyHash';
 
 import { getTestDB } from '../../core/getTestDB';
-import { apiKeys, users } from '../../schemas';
+import { apiKeys, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ApiKeyModel } from '../apiKey';
 
@@ -45,7 +46,7 @@ describe('ApiKeyModel', () => {
       expect(result.name).toBe(params.name);
       expect(result.enabled).toBe(params.enabled);
       expect(result.key).toBeDefined();
-      expect(result.key).not.toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(validateApiKeyFormat(result.key)).toBe(false);
       expect(result.userId).toBe(userId);
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
@@ -67,6 +68,17 @@ describe('ApiKeyModel', () => {
       const result = await apiKeyModel.create(params);
 
       expect(result.expiresAt).toEqual(expiresAt);
+    });
+
+    it('reveals plaintext only through the explicit one-time create method', async () => {
+      const created = await apiKeyModel.createWithPlaintext({ name: 'One-time Key' });
+
+      expect(created.key.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(created.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+
+      const stored = await apiKeyModel.findById(created.id);
+      expect(stored?.key).not.toBe(created.key);
+      expect(stored?.key).toContain(':');
     });
   });
 
@@ -145,7 +157,16 @@ describe('ApiKeyModel', () => {
 
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
-      expect(keys[0].key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(keys[0].key.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(keys[0].key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+    });
+
+    it('keeps metadata queries free of decrypted plaintext', async () => {
+      const created = await apiKeyModel.createWithPlaintext({ name: 'Metadata Key' });
+      const [metadata] = await apiKeyModel.queryMetadata();
+
+      expect(metadata.key).not.toBe(created.key);
+      expect(metadata.key).toContain(':');
     });
 
     it('should query API keys ordered by updatedAt desc', async () => {
@@ -185,14 +206,64 @@ describe('ApiKeyModel', () => {
       expect(keys).toHaveLength(2);
       expect(staleResult).toMatchObject({ key: '', keyDecryptionFailed: true });
       expect(freshResult).toMatchObject({ keyDecryptionFailed: false });
-      expect(freshResult?.key).toMatch(/^sk-lh-[\da-z]{16}$/);
+      expect(freshResult?.key.startsWith(API_KEY_PREFIX)).toBe(true);
+      expect(freshResult?.key.slice(API_KEY_PREFIX.length)).toMatch(/^[\da-z]{16}$/);
+    });
+
+    it('lets workspace admins list all keys while members only see their own', async () => {
+      const workspaceId = 'api-key-model-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'API Key Test Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      const adminModel = new ApiKeyModel(serverDB, userId, workspaceId, { canManageAll: true });
+      const memberModel = new ApiKeyModel(serverDB, 'user2', workspaceId, {
+        canManageAll: false,
+      });
+      await adminModel.create({ enabled: true, name: 'Admin Key' });
+      await memberModel.create({ enabled: true, name: 'Member Key' });
+
+      const memberKeys = await memberModel.query();
+      const adminKeys = await adminModel.query();
+
+      expect(memberKeys.map(({ name }) => name)).toEqual(['Member Key']);
+      expect(adminKeys.map(({ name }) => name).sort()).toEqual(['Admin Key', 'Member Key']);
+      expect(adminKeys.find(({ name }) => name === 'Member Key')).toMatchObject({
+        isMine: false,
+        key: '',
+      });
+    });
+
+    it('prevents workspace members from reading, updating, or deleting another member key', async () => {
+      const workspaceId = 'api-key-model-ownership-workspace';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'API Key Ownership Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      const adminModel = new ApiKeyModel(serverDB, userId, workspaceId, { canManageAll: true });
+      const memberModel = new ApiKeyModel(serverDB, 'user2', workspaceId, {
+        canManageAll: false,
+      });
+      const adminKey = await adminModel.create({ enabled: true, name: 'Admin Key' });
+
+      expect(await memberModel.findById(adminKey.id)).toBeUndefined();
+      await memberModel.update(adminKey.id, { name: 'Hijacked' });
+      await memberModel.delete(adminKey.id);
+
+      expect(await adminModel.findById(adminKey.id)).toMatchObject({ name: 'Admin Key' });
     });
   });
 
   describe('findByKey', () => {
     it('should find API key by key value without custom hasher', async () => {
       // Use a valid hex format key since validateApiKeyFormat checks for hex pattern
-      const validKey = 'sk-lh-abcdef0123456789';
+      const validKey = `${API_KEY_PREFIX}abcdef0123456789`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         key: validKey,
@@ -215,7 +286,7 @@ describe('ApiKeyModel', () => {
     });
 
     it('should return undefined for non-existent key', async () => {
-      const found = await apiKeyModel.findByKey('sk-lh-0123456789abcdef');
+      const found = await apiKeyModel.findByKey(`${API_KEY_PREFIX}0123456789abcdef`);
 
       expect(found).toBeUndefined();
     });
@@ -227,7 +298,7 @@ describe('ApiKeyModel', () => {
       futureDate.setFullYear(futureDate.getFullYear() + 1);
 
       // Use a valid hex format key
-      const validKey = 'sk-lh-0123456789abcdef';
+      const validKey = `${API_KEY_PREFIX}0123456789abcdef`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         expiresAt: futureDate,
@@ -244,7 +315,7 @@ describe('ApiKeyModel', () => {
 
     it('should validate enabled key without expiration with valid hex format', async () => {
       // Use a valid hex format key
-      const validKey = 'sk-lh-fedcba9876543210';
+      const validKey = `${API_KEY_PREFIX}fedcba9876543210`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         key: validKey,
@@ -259,13 +330,13 @@ describe('ApiKeyModel', () => {
     });
 
     it('should reject non-existent key', async () => {
-      const isValid = await apiKeyModel.validateKey('sk-lh-0123456789abcdef');
+      const isValid = await apiKeyModel.validateKey(`${API_KEY_PREFIX}0123456789abcdef`);
 
       expect(isValid).toBe(false);
     });
 
     it('should reject disabled key', async () => {
-      const validKey = 'sk-lh-1111111111111111';
+      const validKey = `${API_KEY_PREFIX}1111111111111111`;
       await serverDB.insert(apiKeys).values({
         enabled: false,
         key: validKey,
@@ -283,7 +354,7 @@ describe('ApiKeyModel', () => {
       const pastDate = new Date();
       pastDate.setFullYear(pastDate.getFullYear() - 1);
 
-      const validKey = 'sk-lh-2222222222222222';
+      const validKey = `${API_KEY_PREFIX}2222222222222222`;
       await serverDB.insert(apiKeys).values({
         enabled: true,
         expiresAt: pastDate,
@@ -335,7 +406,7 @@ describe('ApiKeyModel', () => {
     });
 
     it('should only update API keys for the current user', async () => {
-      const { id: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
+      await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
 
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
       const { id: key2 } = await anotherApiKeyModel.create({

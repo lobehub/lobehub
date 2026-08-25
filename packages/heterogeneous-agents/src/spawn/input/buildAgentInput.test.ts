@@ -9,6 +9,17 @@ import { buildAgentInput } from './buildAgentInput';
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x10]);
 
 describe('buildAgentInput', () => {
+  it('puts Kimi Code text in argv and rejects images', async () => {
+    await expect(buildAgentInput('kimi-code', 'hello')).resolves.toEqual({
+      args: ['--prompt', 'hello'],
+      stdin: '',
+    });
+    await expect(
+      buildAgentInput('kimi-code', [
+        { source: { type: 'url', url: 'https://example.com/a.png' }, type: 'image' },
+      ]),
+    ).rejects.toThrow(/Kimi Code does not support image attachments/);
+  });
   let tmp: string;
 
   beforeEach(async () => {
@@ -297,6 +308,45 @@ describe('buildAgentInput', () => {
       );
       expect(plan.args).toHaveLength(1);
       expect(plan.args[0]).toMatch(/^@.*\.png$/);
+    });
+  });
+
+  describe('qoder', () => {
+    it('uses Qoder stream-json stdin and path-based --attachment flags', async () => {
+      const filePath = path.join(tmp, 'qoder input.png');
+      await writeFile(filePath, PNG_BYTES);
+      const plan = await buildAgentInput('qoder', [
+        { text: 'first', type: 'text' },
+        { source: { path: filePath, type: 'path' }, type: 'image' },
+        { text: 'second', type: 'text' },
+      ]);
+
+      expect(plan.args).toEqual(['--attachment', filePath]);
+      expect(JSON.parse(plan.stdin.trim())).toEqual({
+        message: {
+          content: [{ text: 'first\n\nsecond', type: 'text' }],
+          role: 'user',
+        },
+        parent_tool_use_id: null,
+        type: 'user',
+      });
+    });
+
+    it('materializes base64 images instead of embedding Claude-style image blocks', async () => {
+      const plan = await buildAgentInput(
+        'qoder',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.args[0]).toBe('--attachment');
+      expect(plan.args[1]).toMatch(/\.png$/);
+      expect(JSON.parse(plan.stdin.trim()).message.content).toEqual([]);
     });
   });
 

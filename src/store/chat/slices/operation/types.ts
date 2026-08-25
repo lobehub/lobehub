@@ -16,6 +16,7 @@ import type {
 export type OperationType =
   // === Message sending ===
   | 'sendMessage' // Send message to server
+  | 'uploadVoiceMessage' // Upload a local voice recording before dispatching its turn
   | 'createTopic' // Auto create topic
   | 'regenerate' // Regenerate message
   | 'continue' // Continue generation
@@ -88,7 +89,8 @@ export type OperationStatus =
 /**
  * Operation context - business entity associations
  * Extends ConversationContext with operation-specific fields
- * Captured when Operation is created, never changes afterwards
+ * Captured when an operation is created. A temporary `_new` conversation may be rekeyed once
+ * the server resolves its persisted topic/thread id; all other context changes create a new op.
  */
 export interface OperationContext extends Partial<ConversationContext> {
   agentId?: string; // Associated agent ID (specific agent in Group Chat)
@@ -223,10 +225,11 @@ export interface Operation {
 /**
  * Per-file preview metadata snapshotted at enqueue time so the queue tray can
  * render thumbnails and the resumed sendMessage can rebuild the optimistic
- * imageList/videoList without relying on the global chat upload store (which
+ * audioList/imageList/videoList without relying on the global chat upload store (which
  * is cleared as soon as the user submits).
  */
 export interface QueuedFile {
+  audioMetadata?: UploadFileItem['audioMetadata'];
   id: string;
   /** MIME type, e.g. `image/png`, `video/mp4`, `application/pdf` */
   mimeType: string;
@@ -237,7 +240,7 @@ export interface QueuedFile {
 
 /**
  * Rebuild `UploadFileItem`-shaped objects from queued previews so the resumed
- * `sendMessage` can derive imageList/videoList AND so we can repopulate
+ * `sendMessage` can derive audioList/imageList/videoList AND so we can repopulate
  * `chatUploadFileList` when the user edits a queued message. The synthesized
  * `File` carries only `name` + `type` (zero bytes) — the consumers we hit only
  * read `file.name`, `file.type`, plus the URL fields we set below.
@@ -248,6 +251,7 @@ export interface QueuedFile {
  */
 export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
   files.map((f) => ({
+    audioMetadata: f.audioMetadata,
     id: f.id,
     file: new File([], f.name, { type: f.mimeType }),
     fileUrl: f.url || undefined,
@@ -477,11 +481,14 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
   //
   // Known limitation (accepted): this also makes Stop appear during the pre-
-  // generation window. Because these gateway branches don't forward
-  // `parentOperationId` to `executeGatewayAgent`, hitting Stop in that narrow
-  // window doesn't actually abort the in-flight request (loading briefly
-  // flickers, generation proceeds). No stuck state; wiring the abort handoff
-  // through these branches is deferred.
+  // generation window. The approve/submit/skip gateway branches don't forward
+  // `parentOperationId` to `executeGatewayAgent`, so hitting Stop in that
+  // narrow window doesn't actually abort the in-flight request (loading
+  // briefly flickers, generation proceeds). No stuck state; wiring the abort
+  // handoff through those branches is deferred. The `regenerate` branch DOES
+  // forward it — an unsettled regenerate wrapper is what the retry guard
+  // reads, so it must never outlive phase-1 (a WS drop before session end
+  // would otherwise brick retry for that turn permanently).
   ...INTERIM_LOADING_OPERATION_TYPES,
 ];
 
@@ -498,5 +505,55 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
 export const QUEUE_BLOCKING_OPERATION_TYPES: OperationType[] = [
   ...AI_RUNTIME_OPERATION_TYPES,
   'sendMessage',
+  // A voice turn becomes visible before its binary upload finishes. Keep later composer sends in
+  // the normal queue so the model observes the same order as the optimistic transcript. This is
+  // intentionally not an INPUT_LOADING operation: recording upload must not lock the composer.
+  'uploadVoiceMessage',
   ...INTERIM_LOADING_OPERATION_TYPES,
 ];
+
+const QUEUE_BLOCKING_OPERATION_TYPE_SET = new Set<OperationType>(QUEUE_BLOCKING_OPERATION_TYPES);
+
+/**
+ * Single source of truth for "a fresh send must queue behind this op instead of
+ * starting a concurrent run" — shared by the enqueue check
+ * (`conversationLifecycle`) and the QueueTray "Send now" cancel path, so both
+ * agree on what a follow-up is queued behind.
+ *
+ * Deliberately mirrors what the composer shows rather than a bare
+ * `status === 'running'`: the Send button comes back on `isAborting` /
+ * `visibleLoadingDone`, and when the enqueue check disagreed, an idle-looking
+ * composer silently swallowed messages into the tray — permanently when the
+ * terminal event never landed, since the queue only drains on success.
+ */
+export const isQueueBlockingOperation = (
+  operation: Operation,
+  options?: {
+    /**
+     * Whether this run's bucket already holds queued follow-ups. See below —
+     * order beats latency once a queue exists.
+     */
+    hasQueuedMessages?: boolean;
+  },
+): boolean => {
+  if (!QUEUE_BLOCKING_OPERATION_TYPE_SET.has(operation.type)) return false;
+  if (operation.status !== 'running') return false;
+
+  // Stop was pressed. With no older queue, this run cannot absorb a follow-up,
+  // so let the next send start fresh. When older items already exist, keep the
+  // operation blocking until cancellation completes; the send lifecycle then
+  // restarts that orphaned FIFO as one ordered batch.
+  if (operation.metadata.isAborting && !options?.hasQueuedMessages) return false;
+
+  // Visible output is done and the op is only finishing terminal bookkeeping
+  // (DB reconciliation, title, drain). The answer is complete on screen and the
+  // composer says Send, so honor that: start a fresh turn instead of parking the
+  // message in a tray the user has no reason to expect.
+  //
+  // Unless this run already has follow-ups queued behind it: the terminal drain
+  // will send those, so jumping ahead of them would both reorder the
+  // conversation and run two turns at once. Order beats latency there.
+  if (operation.metadata.visibleLoadingDone && !options?.hasQueuedMessages) return false;
+
+  return true;
+};

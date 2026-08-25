@@ -8,6 +8,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBusinessConversationAnalytics';
 import AgentHome from '@/features/AgentHome';
+import {
+  TopicMigrationPlaceholder,
+  useTopicMigrationPending,
+} from '@/features/AgentTransferMigration';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
@@ -16,6 +20,7 @@ import {
   ForwardMessageDispatcher,
   MessageForwardFooter,
 } from '@/features/Conversation/MessageForward';
+import SplitDropZone from '@/features/Conversation/SplitDropZone';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
@@ -95,7 +100,7 @@ const Conversation = memo(() => {
       ? topicSelectors.getTopicById(context.topicId)(s)?.metadata?.runningOperation
       : undefined,
   );
-  useGatewayReconnect(context.topicId, runningOperation);
+  useGatewayReconnect(context.topicId, runningOperation, context.agentId);
 
   // While the topic is parked as `scheduled`, pull the cron dispatch into the
   // store when `runAt` passes — nothing pushes it, and the reconnect above
@@ -110,6 +115,15 @@ const Conversation = memo(() => {
     topicId: context.topicId ?? undefined,
   });
   const businessAnalyticsHooks = useBusinessConversationAnalytics(context);
+
+  // A topic still awaiting its transfer backfill shows a placeholder instead
+  // of an empty (not-yet-migrated) history, and blocks sending — the server
+  // could not assemble the missing context anyway. Opening it jumps it to the
+  // front of the backfill queue, so the wait is typically a few seconds.
+  const { job: migrationJob, topicPending } = useTopicMigrationPending(
+    { agentId: context.agentId },
+    context.topicId,
+  );
 
   const hooks = useMemo(
     () => mergeConversationHooks(businessAnalyticsHooks, chatFollowUpHooks),
@@ -128,55 +142,78 @@ const Conversation = memo(() => {
         replaceMessages(messages, { context: ctx, source: meta?.source });
       }}
     >
-      <Flexbox
-        flex={1}
-        width={'100%'}
-        style={{
-          overflowX: 'hidden',
-          overflowY: 'auto',
-          position: 'relative',
-        }}
-      >
-        <ChatList
-          defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
-          headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
-          welcome={<AgentHome />}
-          footerSlot={
-            isSubagentThread ? (
-              <Flexbox
-                horizontal
-                align={'center'}
-                justify={'center'}
-                paddingBlock={6}
-                paddingInline={16}
-              >
-                <span
-                  style={{
-                    color: cssVar.colorTextDescription,
-                    fontSize: 12,
-                    textAlign: 'center',
-                  }}
-                >
-                  {t('thread.subagentReadOnlyHint')}
-                </span>
-              </Flexbox>
-            ) : undefined
-          }
-        />
-      </Flexbox>
-      {!isSubagentThread && (
+      <SplitDropZone>
+        <Flexbox
+          flex={1}
+          width={'100%'}
+          style={{
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            position: 'relative',
+          }}
+        >
+          {topicPending ? (
+            <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
+          ) : (
+            <ChatList
+              defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
+              headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
+              welcome={<AgentHome />}
+              footerSlot={
+                isSubagentThread ? (
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    justify={'center'}
+                    paddingBlock={6}
+                    paddingInline={16}
+                  >
+                    <span
+                      style={{
+                        color: cssVar.colorTextDescription,
+                        fontSize: 12,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {t('thread.subagentReadOnlyHint')}
+                    </span>
+                  </Flexbox>
+                ) : undefined
+              }
+            />
+          )}
+        </Flexbox>
+      </SplitDropZone>
+      {!isSubagentThread && !topicPending && (
         <MessageForwardFooter>
           {isHeterogeneousAgent ? <HeterogeneousChatInput /> : <MainChatInput />}
         </MessageForwardFooter>
+      )}
+      {topicPending && (
+        <Flexbox horizontal align={'center'} justify={'center'} paddingBlock={6} paddingInline={16}>
+          <span style={{ color: cssVar.colorTextDescription, fontSize: 12, textAlign: 'center' }}>
+            {t(
+              migrationJob?.type === 'copy'
+                ? 'transferMigration.inputDisabledHintCopy'
+                : 'transferMigration.inputDisabledHint',
+            )}
+          </span>
+        </Flexbox>
       )}
       <ExposeMainEditor />
       <ComposerDraftReceiver />
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />
-      <Suspense>
-        <MessageFromUrl />
-      </Suspense>
+      {/* Held back while the topic is still migrating: the composer above is
+          already disabled, and letting `?message=` through would send into the
+          not-yet-migrated history this screen is waiting for. The param stays
+          in the URL, so the send fires once the backfill lands. */}
+      {!topicPending && (
+        <Suspense>
+          <MessageFromUrl />
+        </Suspense>
+      )}
     </ConversationProvider>
   );
 });

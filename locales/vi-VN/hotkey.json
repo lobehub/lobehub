@@ -44,5 +44,7 @@
   "toggleLeftPanel.desc": "Hiện hoặc ẩn bảng bên trái",
   "toggleLeftPanel.title": "Bật/Tắt Bảng Bên Trái",
   "toggleRightPanel.desc": "Hiện hoặc ẩn bảng bên phải",
-  "toggleRightPanel.title": "Bật/Tắt Bảng Bên Phải"
+  "toggleRightPanel.title": "Bật/Tắt Bảng Bên Phải",
+  "toggleTerminalPanel.desc": "Hiển thị hoặc ẩn bảng điều khiển terminal ở dưới cùng",
+  "toggleTerminalPanel.title": "Chuyển đổi Bảng Điều Khiển Terminal"
 }

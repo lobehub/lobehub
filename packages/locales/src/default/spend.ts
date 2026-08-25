@@ -1,5 +1,5 @@
 export default {
-  'duration.TPS': 'TPS (Token per Second): Token output per second',
+  'duration.TPS': 'tok/s (Token per Second): Token output per second',
   'duration.TTFT': 'TTFT (Time To First Token): First token latency',
   'duration.completion': 'Output completion time',
   'duration.latency': 'Duration',
@@ -29,7 +29,7 @@ export default {
   'table.columns.trigger.enums.semantic_search': 'Knowledge Search',
   'table.columns.trigger.enums.signup_email_llm_review': 'Signup Email Review',
   'table.columns.trigger.enums.topic': 'Topic Summary',
-  'table.columns.trigger.enums.visual_analysis': 'Visual Analysis',
+  'table.columns.trigger.enums.multimodal_analysis': 'Multimodal Analysis',
   'table.columns.trigger.enums.video': 'Video Generation',
   'table.columns.trigger.title': 'Trigger',
   'table.columns.type.enums.chat': 'Text Generation',

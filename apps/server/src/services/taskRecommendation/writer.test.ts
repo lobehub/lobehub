@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -43,7 +44,7 @@ describe('TaskRecommendationWriter', () => {
 
     const recommendations = await writer.generate({
       context: '{"pullRequest":1}',
-      guide: defaultTaskRecommendationConfig.providers.github,
+      guide: DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG.providers.github,
       limit: 3,
       providerId: 'github',
       responseLanguage: 'en-US',
@@ -58,7 +59,14 @@ describe('TaskRecommendationWriter', () => {
     expect(generatedCall.input).toEqual(
       expect.objectContaining({ model: 'model-1', provider: 'provider-1' }),
     );
-    expect(generatedCall.options).toEqual({ metadata: { trigger: RequestTrigger.Onboarding } });
+    expect(generatedCall.options).toEqual({
+      metadata: { trigger: RequestTrigger.Onboarding },
+      tracing: {
+        promptVersion: 'v1',
+        scenario: 'onboarding_task_recommendation',
+        schemaName: 'onboarding_task_recommendations',
+      },
+    });
     expect(generatedCall.input.messages.at(1)?.content).toContain(
       '<connector-evidence provider="github">',
     );

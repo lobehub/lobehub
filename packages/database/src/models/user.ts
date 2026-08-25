@@ -15,9 +15,9 @@ import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { messages, nextauthAccounts, topics, users, userSettings, workspaces } from '../schemas';
+import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { resnapshotTransferredMessagesBeforeOwnerDelete } from '../utils/messageScope';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
@@ -344,25 +344,16 @@ export class UserModel {
   };
 
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
-    return db.transaction(async (tx) => {
-      // Deleting a user also cascades every workspace they primary-own, and
-      // those cascade further through messages.workspace_id — so each owned
-      // workspace needs its own scrub (rows transferred away can carry the
-      // old workspace snapshot under a DIFFERENT author user_id).
-      const ownedWorkspaces = await tx
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(eq(workspaces.primaryOwnerId, id));
-      for (const workspace of ownedWorkspaces) {
-        await resnapshotTransferredMessagesBeforeOwnerDelete(tx, { workspaceId: workspace.id });
-      }
-
-      // Messages transferred out of this user's scope still carry the user in
-      // their snapshot user_id (cascade FK) — re-snapshot them from their
-      // anchor first, or the delete below would destroy transferred history.
-      await resnapshotTransferredMessagesBeforeOwnerDelete(tx, { userId: id });
-      return tx.delete(users).where(eq(users.id, id));
-    });
+    // A pending agent-TRANSFER backfill means message rows moved to (or from)
+    // this user still carry the other side's scope snapshot; cascading the
+    // delete now would destroy history the transfer already re-homed. Transfer
+    // is admin-initiated and drains in minutes — the delete can simply be
+    // retried afterwards. Pending `copy` jobs do not block: they duplicate
+    // rather than move, and both sides self-heal (see `isPendingTransfer`).
+    if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
+    return db.delete(users).where(eq(users.id, id));
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {

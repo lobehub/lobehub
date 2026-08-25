@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "plugins": [],
+    "types": ["vite/client"]
+  },
+  "exclude": ["node_modules"],
+  "extends": "../../tsconfig.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "workers/**/*.ts",
+    "vite.config.ts",
+    "vite.config.rr.mts",
+    "react-router.config.ts",
+    "../../src/types/global.d.ts"
+  ]
+}

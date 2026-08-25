@@ -130,6 +130,14 @@ export class AgentStreamPipeline {
     ]);
   }
 
+  /**
+   * Validate provider-specific terminal contracts after a successful process
+   * exit. Call only after {@link flush} has drained the full stdout stream.
+   */
+  validateCompletion(): AgentStreamEvent[] {
+    return this.toStreamEvents(this.adapter.validateCompletion?.() ?? []);
+  }
+
   private async processPayloads(payloads: unknown[]): Promise<AgentStreamEvent[]> {
     const out: AgentStreamEvent[] = this.drainQueuedEvents();
 

@@ -3,7 +3,7 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
+import MemorySkeleton from '@/components/Skeleton/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -31,7 +31,7 @@ const Home: FC = () => {
   } = useFetchPersona();
   // const { EditorModalElement, openEditor } = usePersonaEditor();
 
-  if (isTagsLoading || isPersonaLoading) return <Loading debugId={'Home'} />;
+  if (isTagsLoading || isPersonaLoading) return <MemorySkeleton />;
 
   // Persona / tags feed the store, so a failed fetch left the render falling
   // through to the "analyze to get started" onboarding — telling the user they

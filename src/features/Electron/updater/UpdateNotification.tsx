@@ -9,6 +9,7 @@ import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { rendererOtaService } from '@/services/electron/rendererOta';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -144,6 +145,7 @@ export const UpdateNotification: React.FC = () => {
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
+  const [rendererUpdateReady, setRendererUpdateReady] = useState(false);
 
   useWatchBroadcast('updateDownloaded', (info: UpdateInfo) => {
     setUpdateInfo(info);
@@ -157,6 +159,35 @@ export const UpdateNotification: React.FC = () => {
 
     setTimeout(() => setInstallConfirmMode(null), 5000);
   });
+
+  useWatchBroadcast('rendererUpdateReady', () => {
+    setRendererUpdateReady(true);
+  });
+
+  if (rendererUpdateReady && !updateDownloaded && !updateAvailable) {
+    return (
+      <div className={styles.installLaterToast}>
+        {tElectron('updater.rendererUpdateReady')}
+        <BaseButton
+          size={'small'}
+          type={'primary'}
+          onClick={() => {
+            rendererOtaService.applyNow().catch(() => {});
+          }}
+        >
+          {tElectron('updater.refreshToApply')}
+        </BaseButton>
+        <button
+          aria-label="Close"
+          className={styles.installLaterCloseButton}
+          type="button"
+          onClick={() => setRendererUpdateReady(false)}
+        >
+          <Icon icon={X} style={{ fontSize: 14 }} />
+        </button>
+      </div>
+    );
+  }
 
   if (!updateDownloaded && !updateAvailable) return null;
 

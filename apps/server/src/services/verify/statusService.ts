@@ -92,6 +92,29 @@ export class VerifyStatusService {
     return status;
   }
 
+  /**
+   * Claim the verification of an Agent Run and enter `verifying`, exactly once.
+   *
+   * This is the re-entrant form of {@link markVerifying}: the completion-time
+   * gate uses it so a redelivered completion cannot start a second judge pass,
+   * while an attempt that entered `verifying` and then died (its post-response
+   * work stopped being scheduled) can still be picked up by a later one.
+   *
+   * @returns false when someone else holds the verification.
+   */
+  async claimVerifying(operationId: string, staleBefore: Date): Promise<boolean> {
+    const run = await this.runModel.findByOperation(operationId);
+    if (!run) return false;
+
+    const claimed = await this.runModel.claimVerifying(run.id, staleBefore);
+    if (claimed && run.acceptanceId) {
+      await new AcceptanceService(this.db, this.userId, this.workspaceId).recomputeStatus(
+        run.acceptanceId,
+      );
+    }
+    return claimed;
+  }
+
   /** Explicit transitions that aren't derivable from results alone. */
   async markVerifying(operationId: string) {
     await this.setStatus(operationId, 'verifying');

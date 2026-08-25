@@ -134,8 +134,25 @@ export default {
   'messenger.push.placeholder': 'Write a message to send to {{platform}}…',
   'messenger.push.queued':
     '{{count}} queued message(s) will be delivered after you message the bot in {{platform}}.',
+  'messenger.push.queuedBusyToast':
+    'Another message is still being delivered — yours is queued behind it. Message the bot in {{platform}} to receive it.',
+  'messenger.push.queuedQuotaToast':
+    'No sends left in this window — your message is queued. Message the bot in {{platform}} to reset the window and receive it.',
+  'messenger.push.queuedRetryToast':
+    'Part of your message could not be delivered — the rest is queued and will be retried after you message the bot in {{platform}}.',
   'messenger.push.queuedToast':
     'The send window is closed — your message is queued. Message the bot in {{platform}} to receive it.',
+  'messenger.push.resource.description':
+    'The file will be sent as an attachment to your linked {{platform}} account.',
+  'messenger.push.resource.oversizeFileConsequence': 'Sent as a download link.',
+  'messenger.push.resource.oversizeImageCompress': 'Compress it',
+  'messenger.push.resource.oversizeImageCompressHint':
+    'Re-encoded as a JPEG under {{limit}} so it shows up inline. Some quality is lost, and an animated image cannot be compressed — it is sent as a link instead.',
+  'messenger.push.resource.oversizeImageLink': 'Send a link',
+  'messenger.push.resource.oversizeImageLinkHint':
+    'The original file is sent as a download link — full quality, but not shown inline in the chat.',
+  'messenger.push.resource.oversizeMeta': 'over the {{limit}} {{platform}} limit',
+  'messenger.push.resource.placeholder': 'Add a message (optional)…',
   'messenger.push.retry': 'Try again',
   'messenger.push.sectionTitle': 'Message Push',
   'messenger.push.send': 'Send to {{platform}}',

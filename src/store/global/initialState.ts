@@ -138,6 +138,8 @@ export const MODEL_DETAIL_PANEL_EXPANDABLE_KEYS = [
   'config',
 ] as const satisfies readonly ModelDetailPanelExpandedKey[];
 
+export type TaskViewMode = 'kanban' | 'list';
+
 export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent', 'private'];
 
 export interface SystemStatus {
@@ -206,6 +208,7 @@ export interface SystemStatus {
    * Group Agent Builder panel width
    */
   groupAgentBuilderPanelWidth?: number;
+  hiddenHomeWidgets?: string[];
   /**
    * Hidden sidebar sections
    */
@@ -214,10 +217,18 @@ export interface SystemStatus {
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
   /**
+   * Home rail: the goals card folded to its title. Persisted, because a card
+   * you deliberately put away must stay away across reloads — otherwise the
+   * affordance is only a scroll trick.
+   */
+  homeGoalsCollapsed?: boolean;
+  homeRecentsCount?: number;
+  /**
    * Agent picked from the home AgentSelect dropdown. When unset the home page
    * falls back to the inbox agent. Persisted so the choice survives reloads.
    */
   homeSelectedAgentId?: string;
+  homeTaskCount?: number;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
@@ -298,6 +309,7 @@ export interface SystemStatus {
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
+  showHomePortrait?: boolean;
   /**
    * Visibility of the Home dashboard's activity and recommendations rail.
    * Independent from `showRightPanel` so Home preferences do not affect chat pages.
@@ -355,12 +367,19 @@ export interface SystemStatus {
    * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
    */
   taskKanbanHiddenPanelCollapsed?: boolean;
+  /**
+   * Display mode for the tasks page. Persisted so a manually selected board or
+   * list view survives navigation and page reloads.
+   */
+  taskListViewMode?: TaskViewMode;
   taskListViewOptions?: {
     groupBy: 'assignee' | 'none' | 'priority' | 'status';
     hideCompleted: boolean;
+    nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
+    showSubTasks: boolean;
     subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
   };
   /**
@@ -498,11 +517,14 @@ export const INITIAL_STATUS = {
   taskListViewOptions: {
     groupBy: 'status',
     hideCompleted: true,
+    nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',
+    showSubTasks: false,
     subGroupBy: 'none',
   },
+  taskListViewMode: 'list' as const,
   taskKanbanHiddenColumns: ['done', 'canceled'],
   taskKanbanHiddenPanelCollapsed: false,
   disabledModelProvidersSortType: 'default',
@@ -513,9 +535,13 @@ export const INITIAL_STATUS = {
   fileManagerViewMode: 'list' as const,
   filePanelWidth: 320,
   groupAgentBuilderPanelWidth: 360,
+  hiddenHomeWidgets: [],
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
   hideTopicSharePrivacyWarning: false,
+  homeGoalsCollapsed: false,
+  homeRecentsCount: 8,
+  homeTaskCount: 8,
   imagePanelWidth: 320,
   imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
@@ -534,6 +560,7 @@ export const INITIAL_STATUS = {
   resourceManagerColumnWidths: DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   showCommandMenu: false,
   showFilePanel: true,
+  showHomePortrait: true,
   showHotkeyHelper: false,
   showHomeRail: true,
   showImagePanel: true,
@@ -575,10 +602,17 @@ export const createInitialSystemStatus = (): SystemStatus => {
 
   return {
     ...INITIAL_STATUS,
+    hiddenHomeWidgets: Array.isArray(persistedStatus.hiddenHomeWidgets)
+      ? persistedStatus.hiddenHomeWidgets
+      : INITIAL_STATUS.hiddenHomeWidgets,
     leftPanelWidth:
       typeof persistedStatus.leftPanelWidth === 'number'
         ? persistedStatus.leftPanelWidth
         : INITIAL_STATUS.leftPanelWidth,
+    showHomePortrait:
+      typeof persistedStatus.showHomePortrait === 'boolean'
+        ? persistedStatus.showHomePortrait
+        : INITIAL_STATUS.showHomePortrait,
     showHomeRail:
       typeof persistedStatus.showHomeRail === 'boolean'
         ? persistedStatus.showHomeRail

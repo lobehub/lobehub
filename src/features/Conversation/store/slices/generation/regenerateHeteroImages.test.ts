@@ -22,9 +22,13 @@ vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => (
   selectRuntimeType: () => 'hetero',
 }));
 
-vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
-  resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
-}));
+vi.mock(
+  '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
+  }),
+);
 
 vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
   mergeAgentRuntimeInitialContexts: () => undefined,
@@ -35,6 +39,7 @@ vi.mock('@/store/chat/slices/operation/selectors', () => ({
   operationSelectors: {
     getOperationById: () => () => undefined,
     isMessageProcessing: () => () => false,
+    isMessageRegenerating: () => () => false,
   },
 }));
 
@@ -84,7 +89,6 @@ vi.mock('@/store/chat', () => ({
       associateMessageWithOperation: noop,
       completeOperation: noop,
       failOperation: noop,
-      internal_updateTopicLoading: noop,
       isGatewayModeEnabled: () => false,
       refreshMessages: vi.fn(async () => {}),
       startOperation: vi.fn(() => ({ operationId: 'hetero-op-id' })),

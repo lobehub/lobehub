@@ -131,16 +131,13 @@ describe('MessageModel.queryTopicTranscript', () => {
     const model = new MessageModel(serverDB, userId);
     const full = await model.queryTopicTranscript({ limit: 10, offset: 0, topicId });
 
-    // Scope is derived from the owning topic, so the message another user
-    // wrote into this topic is part of the topic owner's transcript.
-    expect(full.total).toBe(6);
+    expect(full.total).toBe(5);
     expect(full.items.map(({ id }) => id)).toEqual([
       'topic-transcript-m-a',
       'topic-transcript-m-b',
       'topic-transcript-m-c',
       'topic-transcript-m-d',
       'topic-transcript-m-e',
-      'topic-transcript-other-owner-message',
     ]);
     expect(full.items[1]).toMatchObject({ content: 'legacy session message' });
     expect(full.items[2]).toMatchObject({ content: 'group message', role: 'supervisor' });
@@ -154,14 +151,12 @@ describe('MessageModel.queryTopicTranscript', () => {
     });
 
     const page = await model.queryTopicTranscript({ limit: 2, offset: 1, topicId });
-    expect(page.total).toBe(6);
+    expect(page.total).toBe(5);
     expect(page.items.map(({ id }) => id)).toEqual([
       'topic-transcript-m-b',
       'topic-transcript-m-c',
     ]);
 
-    // The author of the cuckoo message does NOT see the topic owner's
-    // transcript — derived scope follows the topic, not the row snapshot.
     await expect(
       new MessageModel(serverDB, otherUserId).queryTopicTranscript({
         limit: 10,
@@ -169,8 +164,8 @@ describe('MessageModel.queryTopicTranscript', () => {
         topicId,
       }),
     ).resolves.toEqual({
-      items: [],
-      total: 0,
+      items: [expect.objectContaining({ id: 'topic-transcript-other-owner-message' })],
+      total: 1,
     });
   });
 

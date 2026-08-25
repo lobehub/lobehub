@@ -1,6 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
-import type { SliderSingleProps } from 'antd/es/slider';
+import { Slider } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { CSSProperties, ReactNode } from 'react';
 import { memo, useMemo } from 'react';
@@ -48,41 +47,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   slider: css`
     width: 100%;
     padding-inline: 6px;
-
-    .ant-slider {
-      margin-block: 2px 0;
-      margin-inline: 0;
-    }
-
-    .ant-slider-rail {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    .ant-slider-track {
-      background: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-dot {
-      border-color: ${cssVar.colorTextTertiary};
-      background: ${cssVar.colorBgElevated};
-    }
-
-    .ant-slider-dot-active {
-      border-color: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-handle::after {
-      background: ${cssVar.colorBgElevated};
-      box-shadow: 0 0 0 2px ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-handle:hover::after,
-    .ant-slider-handle:focus::after,
-    .ant-slider-handle:active::after {
-      box-shadow: 0 0 0 3px ${cssVar.colorTextSecondary};
-    }
   `,
 }));
+
+export type LevelSliderMark = ReactNode | { label?: ReactNode; style?: CSSProperties };
 
 export interface LevelSliderProps<T extends string = string> {
   /**
@@ -97,7 +65,7 @@ export interface LevelSliderProps<T extends string = string> {
   /**
    * Optional custom marks. If not provided, uses level values as marks.
    */
-  marks?: SliderSingleProps['marks'];
+  marks?: Record<number, LevelSliderMark>;
   /**
    * Callback when value changes
    */
@@ -129,7 +97,7 @@ const getMinimumWidth = (levelCount: number, customMinWidth: CSSProperties['minW
 };
 
 const resolveMark = (
-  mark: NonNullable<SliderSingleProps['marks']>[number] | undefined,
+  mark: LevelSliderMark | undefined,
   fallback: string,
 ): { label: ReactNode; style?: CSSProperties } => {
   if (!mark) return { label: fallback };
@@ -209,12 +177,10 @@ function LevelSlider<T extends string = string>({
     >
       <div className={styles.slider}>
         <Slider
-          dots
           disabled={disabled}
           max={levels.length - 1}
           min={0}
           step={1}
-          tooltip={{ open: false }}
           value={sliderValue}
           onChange={handleChange}
         />

@@ -67,10 +67,14 @@ const getManifestLoadingStatus = (id: string) => (s: ToolStoreState) => {
 
   if (s.pluginInstallLoading[id]) return 'loading';
 
+  if (s.pluginInstallErrors[id]) return 'error';
+
   if (!manifest) return 'error';
 
   if (!!manifest) return 'success';
 };
+
+const getPluginInstallError = (id: string) => (s: ToolStoreState) => s.pluginInstallErrors[id];
 
 const isToolHasUI = (id: string) => (s: ToolStoreState) => {
   const manifest = getManifestById(id)(s);
@@ -192,6 +196,7 @@ export const toolSelectors = {
   discoverableMetaList,
   getManifestById,
   getManifestLoadingStatus,
+  getPluginInstallError,
   getMetaById,
   getRenderDisplayControl,
   isToolHasUI,

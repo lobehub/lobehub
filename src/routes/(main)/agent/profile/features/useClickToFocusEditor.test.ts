@@ -36,7 +36,7 @@ describe('useClickToFocusEditor', () => {
     // Lexical's focus() selects the document end when no selection exists, so
     // focusing the display:none visual editor leaves a dirty end-of-document
     // selection that scrolls the page to the bottom once the editor becomes
-    // visible again. See LOBE-12593.
+    // visible again.
     getRootElement.mockReturnValue({ offsetParent: null });
     const { result } = renderHook(() => useClickToFocusEditor(editor, true));
 

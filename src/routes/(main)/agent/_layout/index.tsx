@@ -6,7 +6,6 @@ import { isDesktop } from '@/const/version';
 import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import AgentSidebar from '@/features/AgentSidebar';
 import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
-import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import AgentIdSync from '@/routes/(main)/agent/_layout/AgentIdSync';
 
 import PortalAutoCollapse from './PortalAutoCollapse';
@@ -14,8 +13,6 @@ import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
 const Layout: FC = () => {
-  useInitAgentConfig();
-
   return (
     <>
       <AgentSidebar />

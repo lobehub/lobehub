@@ -1,8 +1,8 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { ActionIcon, Avatar, Checkbox, Flexbox, List, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { Button, Switch } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, Flexbox, List, SearchBar, Text, Tooltip } from '@lobehub/ui';
+import { Button, Checkbox, Switch } from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
 import { List as AntdList } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';

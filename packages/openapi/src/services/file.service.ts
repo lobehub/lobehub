@@ -29,6 +29,7 @@ import { nanoid } from '@/utils/uuid';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicFile, projectPublicUser } from '../helpers/public-fields';
 import type {
   AsyncTaskErrorResponse,
   BatchFileUploadRequest,
@@ -108,7 +109,7 @@ export class FileUploadService extends BaseService {
     const fullUrl = await this.ensureFullUrl(file.url);
 
     return {
-      ...file,
+      ...projectPublicFile(file),
       url: fullUrl || file.url,
     };
   }
@@ -133,6 +134,18 @@ export class FileUploadService extends BaseService {
 
     if (!knowledgeBase) {
       throw this.createNotFoundError('知识库不存在或无权访问');
+    }
+
+    // `KNOWLEDGE_BASE_UPDATE:all` is a curation scope (restricted-KB
+    // visibility / permission management) that admins also hold, so it must
+    // not bypass the row gate. Mirror the lambda routers' creator/owner
+    // check — `KNOWLEDGE_BASE_DELETE:all` is owner-only in the role matrix.
+    if (
+      this.workspaceId &&
+      knowledgeBase.userId !== this.userId &&
+      !(await this.hasGlobalPermission('KNOWLEDGE_BASE_DELETE'))
+    ) {
+      throw this.createAuthorizationError('仅创建者或工作区所有者可修改此知识库');
     }
 
     return knowledgeBase;
@@ -1058,6 +1071,7 @@ export class FileUploadService extends BaseService {
         '.xml',
         '.csv',
         '.tsv',
+        '.ipynb',
         '.pdf',
         '.doc',
         '.docx',
@@ -1376,7 +1390,7 @@ export class FileUploadService extends BaseService {
           // Avoid adding the same user twice
           const existingUsers = hashUsersMap.get(file.fileHash)!;
           if (!existingUsers.some((u) => u.id === user.id)) {
-            existingUsers.push(user);
+            existingUsers.push(projectPublicUser(user as Parameters<typeof projectPublicUser>[0]));
           }
         }
       }
@@ -1453,7 +1467,7 @@ export class FileUploadService extends BaseService {
             ? usersData.find((u) => u.id === file.userId) || null
             : file.user || null;
           if (currentUser) {
-            fileUsers = [currentUser];
+            fileUsers = [projectPublicUser(currentUser as Parameters<typeof projectPublicUser>[0])];
           }
         }
 
@@ -1506,14 +1520,13 @@ export class FileUploadService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '无权更新文件');
       }
 
-      // 2. Query file
-      const file = await this.findFileByIdWithPermission(fileId, permissionResult);
+      // 2. Verify the file exists and is writable by the caller.
+      await this.findFileByIdWithPermission(fileId, permissionResult);
 
       // 3. Handle knowledge base association
       if ('knowledgeBaseId' in updateData) {
         await this.db.transaction(async (trx) => {
-          // Delete existing knowledge base association (for global permission users, use the file's actual userId)
-          const targetUserId = file.userId;
+          // Delete the existing knowledge base association within the active workspace scope.
           await trx
             .delete(knowledgeBaseFiles)
             .where(

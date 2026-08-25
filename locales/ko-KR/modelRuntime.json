@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "이 요청에 대한 대화 컨텍스트를 조립하지 못했습니다. 다시 시도하세요. 문제가 지속되면 지원팀에 문의하세요.",
   "DatabasePersistError": "이 대화를 저장하거나 로드하는 동안 데이터베이스 작업에 실패했습니다. 다시 시도하세요. 문제가 지속되면 지원팀에 문의하세요.",
   "ExceededContextWindow": "현재 요청 내용이 모델이 처리할 수 있는 길이를 초과했습니다. 내용을 줄이고 다시 시도하세요.",
+  "HarnessJsonParseError": "내부 페이로드를 다시 읽을 수 없어 이 작업이 중단되었습니다. 동일한 요청을 다시 시도하면 동일한 오류가 발생하므로 새 메시지를 시작하십시오. 문제가 계속되면 지원팀에 문의하십시오.",
   "InsufficientQuota": "죄송합니다. 이 키의 할당량이 초과되었습니다. 계정 잔액이 충분한지 확인하거나 키의 할당량을 늘린 후 다시 시도하세요.",
   "InvalidBedrockCredentials": "Bedrock 인증에 실패했습니다. AccessKeyId/SecretAccessKey를 확인하고 다시 시도하세요.",
   "InvalidComfyUIArgs": "ComfyUI 구성이 잘못되었습니다. 설정을 확인하고 다시 시도하세요.",

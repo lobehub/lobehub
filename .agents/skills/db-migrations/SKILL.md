@@ -6,6 +6,25 @@ user-invocable: false
 
 # Database Migrations Guide
 
+## Schema conventions
+
+Apply these before generating any migration — they change what the schema file looks like, not just the SQL.
+
+- **No pg enums (and no fixed value sets) for growing domains.** For columns whose value set will keep expanding (resource types, statuses, providers, …), use a plain `text` column typed via `.$type<UnionType>()`. `pgEnum` requires an `ALTER TYPE ... ADD VALUE` migration for every new literal, and even the Drizzle `text('col', { enum: [...] })` option hardwires the value list into the schema file. With `.$type<>()`, onboarding a new value is a type-only change — no migration at all.
+
+  ```ts
+  // ✅ Good — type lives in @lobechat/types, column stays plain text
+  resourceType: text('resource_type').$type<TransferResourceType>().notNull(),
+
+  // ❌ Bad — pg enum, needs ALTER TYPE per new value
+  resourceType: resourceTypeEnum('resource_type').notNull(),
+
+  // ❌ Avoid — value list hardwired into the schema file
+  resourceType: text('resource_type', { enum: TRANSFER_RESOURCE_TYPES }).notNull(),
+  ```
+
+- **Keep domain constants out of schema files.** In new or modified schema files under `packages/database/src/schemas/`, shared domain literal arrays, union types, and option interfaces belong in `@lobechat/types` (one module per domain, re-exported from its `index.ts`); both the schema (`.$type<>()`) and consumers (routers via `z.enum(...)`, services, UI) import from there. This rule targets domain constants only — table objects, inferred row types, Drizzle relation objects, and zod insert/select schemas (`insertAgentSchema`, …) are the schema file's job and stay put. Existing schema files that already export such constants (e.g. `resourcePermission.ts`) are grandfathered; migrate them opportunistically when the file is next touched, not in bulk.
+
 ## Choose the rollout strategy
 
 Classify every database change into one of these three rollout paths before generating or editing a migration.

@@ -1,4 +1,4 @@
-import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import { Tag } from '@lobehub/ui';
 import type { CSSProperties } from 'react';
 import { memo } from 'react';
@@ -14,13 +14,11 @@ interface HeterogeneousTagProps {
 
 /**
  * Small pill that labels a heterogeneous agent by its runtime (Claude Code,
- * Codex, …). Single source of truth for the badge so every agent listing — the
- * home sidebar, the assignee picker, the task assignee chip — stays consistent.
+ * Codex, …) using the shared runtime label resolver.
  */
 const HeterogeneousTag = memo<HeterogeneousTagProps>(({ type, style }) => {
-  if (!type) return null;
-
-  const label = HETEROGENEOUS_TYPE_LABELS[type] ?? type;
+  const label = getHeterogeneousTypeLabel(type);
+  if (!label) return null;
 
   return (
     <Tag size={'small'} style={{ flexShrink: 0, ...style }}>

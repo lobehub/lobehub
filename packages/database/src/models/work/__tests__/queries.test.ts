@@ -271,6 +271,11 @@ describe('WorkModel · queries', () => {
 
     await workModel.registerExternal({
       changeType: 'created',
+      cumulativeUsage: {
+        capturedAt: '2026-08-08T06:30:00.000Z',
+        cost: { total: 0.012 },
+        usage: { llm: { tokens: { input: 900, output: 300, total: 1200 } } },
+      },
       identifier: 'lobehub/lobehub#7',
       patchFields: ['identifier', 'title'],
       resourceId: 'lobehub/lobehub#7',
@@ -298,6 +303,11 @@ describe('WorkModel · queries', () => {
     const byResource = new Map(workspace.items.map((item) => [item.resourceId, item]));
 
     expect(byResource.get('lobehub/lobehub#7')).toMatchObject({
+      event: {
+        cumulativeUsage: {
+          usage: { llm: { tokens: { total: 1200 } } },
+        },
+      },
       originTopicId: titledTopicId,
       originTopicTitle: 'Origin topic',
     });
