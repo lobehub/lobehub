@@ -51,7 +51,7 @@ export const getMemoryWorkflowTrigger = (): MemoryWorkflowTriggerService => {
     }
   }
 
-  return _impl;
+  return _impl!;
 };
 
 /**

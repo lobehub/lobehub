@@ -2,7 +2,7 @@ import type {
   MemoryExtractionHourlyWorkflowPayload,
   MemoryExtractionPayloadInput,
   UserTopicWorkflowPayload,
-} from '../extract';
+} from '../../extract';
 import type { MemoryWorkflowTriggerResult, MemoryWorkflowTriggerService } from '../types';
 import { getQueues } from '../workers/queues';
 
@@ -58,8 +58,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
 
     const queues = getQueues();
     const job = await queues.processTopics.add('process-topics', payload, {
-      // Per-user group key for BullMQ rate limiter (configured on worker)
-      opts: { jobId: `topics-${userId}-${Date.now()}` },
+      jobId: `topics-${userId}-${Date.now()}`,
     });
     return { workflowRunId: `bullmq-${job.id}` };
   }
@@ -72,8 +71,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
 
     const queues = getQueues();
     const job = await queues.processTopic.add('process-topic', payload, {
-      // Per-user group key for BullMQ rate limiter (configured on worker)
-      opts: { jobId: `topic-${userId}-${payload.topicIds?.[0] ?? Date.now()}` },
+      jobId: `topic-${userId}-${payload.topicIds?.[0] ?? Date.now()}`,
     });
     return { workflowRunId: `bullmq-${job.id}` };
   }
@@ -89,9 +87,7 @@ export class BullMQWorkflowTrigger implements MemoryWorkflowTriggerService {
     const job = await queues.personaUpdate.add(
       'persona-update',
       { hourlyTaskId: options?.hourlyTaskId, userIds: [userId] },
-      {
-        opts: { jobId: `persona-${userId}-${Date.now()}` },
-      },
+      { jobId: `persona-${userId}-${Date.now()}` },
     );
     return { workflowRunId: `bullmq-${job.id}` };
   }

@@ -8,7 +8,7 @@ import type {
   MemoryExtractionHourlyWorkflowPayload,
   MemoryExtractionPayloadInput,
   UserTopicWorkflowPayload,
-} from '../extract';
+} from '../../extract';
 import type { MemoryWorkflowTriggerResult, MemoryWorkflowTriggerService } from '../types';
 
 const WORKFLOW_PATHS = {

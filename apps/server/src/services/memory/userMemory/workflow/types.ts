@@ -33,8 +33,8 @@ export interface MemoryWorkflowTriggerOptions {
  */
 export interface UserTopicWorkflowTriggerPayload extends MemoryExtractionPayloadInput {
   topicCursor?: { createdAt: string; id: string; userId: string };
-  userId: string;
-  userIds: string[];
+  userId?: string;
+  userIds?: string[];
 }
 
 /**
@@ -47,13 +47,8 @@ export interface UserTopicWorkflowTriggerPayload extends MemoryExtractionPayload
 export interface MemoryWorkflowTriggerService {
   triggerHourly: (
     payload: MemoryExtractionHourlyWorkflowPayload,
-    options?: MemoryWorkflowTriggerOptions,
+    options?: MemoryWorkflowTriggerOptions & { workflowRunId?: string },
   ) => Promise<MemoryWorkflowTriggerResult>;
-
-  triggerHourlyTracked: (
-    payload: MemoryExtractionHourlyWorkflowPayload,
-    options?: MemoryWorkflowTriggerOptions,
-  ) => Promise<{ taskId: string; workflowRunId: string }>;
 
   triggerPersonaUpdate: (
     userId: string,

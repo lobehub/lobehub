@@ -2,7 +2,7 @@ import type {
   MemoryExtractionHourlyWorkflowPayload,
   MemoryExtractionPayloadInput,
   UserTopicWorkflowPayload,
-} from '../extract';
+} from '../../extract';
 import type { MemoryWorkflowTriggerResult, MemoryWorkflowTriggerService } from '../types';
 import { createDirectWorkflowContext } from '../workers/context';
 
