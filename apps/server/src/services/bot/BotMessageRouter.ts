@@ -1,6 +1,7 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
 import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
-import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
+import type { AdapterPostableMessage, Message, MessageContext, Thread } from 'chat';
+import { Chat, ConsoleLogger } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
@@ -388,6 +389,7 @@ export class BotMessageRouter {
       applicationId,
       platform,
       settings,
+      supportsReplyThreading: entry.supportsReplyThreading,
       userId,
       workspaceId: workspaceId ?? undefined,
     });
@@ -561,9 +563,10 @@ export class BotMessageRouter {
       applicationId: string;
       platform: string;
       settings?: Record<string, any>;
+      supportsReplyThreading?: boolean;
     },
   ): void {
-    const { agentId, applicationId, platform, userId, workspaceId } = info;
+    const { agentId, applicationId, platform, supportsReplyThreading, userId, workspaceId } = info;
     const bridge = new AgentBridgeService(serverDB, userId, workspaceId);
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls === true;
@@ -630,6 +633,22 @@ export class BotMessageRouter {
         ? (info.settings.userId as string).trim() || undefined
         : undefined;
     const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
+
+    const bindReplyTarget = (thread: Thread, message: Message) => ({
+      get id() {
+        return thread.id;
+      },
+      get isDM() {
+        return thread.isDM;
+      },
+      post: (content: AdapterPostableMessage) =>
+        supportsReplyThreading ? thread.reply(message, content) : thread.post(content),
+      setState: (state: Record<string, any>, options?: { replace?: boolean }) =>
+        thread.setState(state, options),
+      get state() {
+        return thread.state;
+      },
+    });
 
     /**
      * Resolve the reply locale for a single inbound event. Prefer the
@@ -1079,6 +1098,7 @@ export class BotMessageRouter {
 
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
       const replyLocale = detectReplyLocale(message);
+      const replyThread = bindReplyTarget(thread, message);
       // Record the original @mentioner so the first follow-up in
       // `onSubscribedMessage` recognises them as participant #1 instead of
       // a "newcomer" — otherwise count would be 0 at that moment and the
@@ -1087,11 +1107,11 @@ export class BotMessageRouter {
 
       // Gate first — must run before tryDispatch so a /command from a
       // non-allowlisted sender can't slip through and side-effect.
-      if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onNewMention'))) {
+      if (!(await passGatesOrNotify(replyThread, message.author, replyLocale, 'onNewMention'))) {
         return;
       }
 
-      if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
+      if (await tryDispatch(replyThread, message.text, message.author, replyLocale)) return;
 
       log(
         'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -1168,7 +1188,7 @@ export class BotMessageRouter {
           error,
         );
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await replyThread.post({ markdown: renderError(operationId, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -1178,6 +1198,7 @@ export class BotMessageRouter {
     bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
       if (message.author.isBot === true) return;
       const replyLocale = detectReplyLocale(message);
+      const replyThread = bindReplyTarget(thread, message);
 
       // Group / channel / thread policy: only respond when the bot is @-mentioned.
       // DMs are 1:1 conversations, so every message is implicitly addressed to the bot.
@@ -1230,7 +1251,7 @@ export class BotMessageRouter {
               .getState()
               .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
             if (fresh) {
-              await thread.post(
+              await replyThread.post(
                 "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
               );
             }
@@ -1255,11 +1276,13 @@ export class BotMessageRouter {
 
       // Gate before tryDispatch so a /command from a non-allowlisted sender
       // (or in a disabled DM/group scope) cannot side-effect.
-      if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onSubscribedMessage'))) {
+      if (
+        !(await passGatesOrNotify(replyThread, message.author, replyLocale, 'onSubscribedMessage'))
+      ) {
         return;
       }
 
-      if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
+      if (await tryDispatch(replyThread, message.text, message.author, replyLocale)) return;
 
       log(
         'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -1357,7 +1380,7 @@ export class BotMessageRouter {
           error,
         );
         try {
-          await thread.post({ markdown: renderError(operationId, replyLocale) });
+          await replyThread.post({ markdown: renderError(operationId, replyLocale) });
         } catch {
           // best-effort notification
         }
@@ -1377,6 +1400,7 @@ export class BotMessageRouter {
         fallback: fallbackReplyLocale,
       },
       passGatesOrNotify,
+      supportsReplyThreading,
     );
 
     // DM / keyword-wake catch-all: registered when either DM is enabled OR at
@@ -1441,10 +1465,11 @@ export class BotMessageRouter {
         }
 
         const replyLocale = detectReplyLocale(message);
+        const replyThread = bindReplyTarget(thread, message);
 
         if (
           !(await passGatesOrNotify(
-            thread,
+            replyThread,
             message.author,
             replyLocale,
             `onNewMessage (${platform} catch-all)`,
@@ -1577,7 +1602,7 @@ export class BotMessageRouter {
           log('onNewMessage: unhandled error from handleMention: %O', error);
           try {
             const errMsg = error instanceof Error ? error.message : String(error);
-            await thread.post({ markdown: renderInlineError(errMsg, replyLocale) });
+            await replyThread.post({ markdown: renderInlineError(errMsg, replyLocale) });
           } catch {
             // best-effort notification
           }
@@ -1637,15 +1662,22 @@ export class BotMessageRouter {
           // reliably cleared — a merged `undefined` is dropped by the JSON
           // round-trip). Carry the `/mode` choice over: it's a conversation
           // preference, and starting a new topic shouldn't silently revert it.
+          // The group-history watermark restarts at "now" too: the new topic
+          // must not inherit the pre-/new discussion — history pre-injection
+          // only picks up messages sent AFTER the reset.
           let toolMode: unknown;
           try {
             toolMode = (await ctx.getState())?.toolMode;
           } catch (error) {
             log('command /new: getState failed (mode not preserved): %O', error);
           }
-          await ctx.setState(toolMode ? { toolMode, topicId: undefined } : { topicId: undefined }, {
-            replace: true,
-          });
+          await ctx.setState(
+            {
+              lastGroupHistorySync: Math.floor(Date.now() / 1000),
+              ...(toolMode ? { toolMode } : {}),
+            },
+            { replace: true },
+          );
           await ctx.post(renderCommandReply('cmdNewReset', ctx.replyLocale));
         },
         name: 'new',
@@ -1962,6 +1994,7 @@ export class BotMessageRouter {
       replyLocale: BotReplyLocale,
       caller: string,
     ) => Promise<boolean>,
+    supportsReplyThreading?: boolean,
   ): void {
     // --- Native slash commands (Slack, Discord) ---
     for (const cmd of commands) {
@@ -2023,8 +2056,20 @@ export class BotMessageRouter {
       const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return;
       const replyLocale = locale.detectFromMessage(message);
+      const post = (text: string) =>
+        supportsReplyThreading ? thread.reply(message, text) : thread.post(text);
+      const threadLike = {
+        id: thread.id,
+        isDM: thread.isDM,
+        post,
+      };
       if (
-        !(await gate(thread, message.author, replyLocale, `onNewMessage /${result.command.name}`))
+        !(await gate(
+          threadLike,
+          message.author,
+          replyLocale,
+          `onNewMessage /${result.command.name}`,
+        ))
       ) {
         return;
       }
@@ -2033,7 +2078,7 @@ export class BotMessageRouter {
         authorUserId: message.author?.userId,
         authorUserName: message.author?.userName,
         getState: () => thread.state,
-        post: (text) => thread.post(text),
+        post,
         replyLocale,
         setState: (state, opts) => thread.setState(state, opts),
         threadId: thread.id,

@@ -16,7 +16,6 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 
 import { RECEIVED_REACTION_EMOJI, THINKING_REACTION_EMOJI, WORKING_REACTION_EMOJI } from '../const';
-import { stripMarkdown } from '../stripMarkdown';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -190,10 +189,10 @@ async function downloadApiItemMedia(api: LarkApiClient, m: { msg_type?: string }
  * oldest-first; when the window holds more than `limit` messages only the
  * newest `limit` survive. Non-text content is skipped.
  *
- * `startTime` is mandatory in practice: the list API paginates ascending from
- * the container's OLDEST message (probe-verified on real chats), so an
- * unbounded call returns the chat's first page — 2024-era messages on an
- * active group — never the recent discussion.
+ * Fetches with `sort_type=ByCreateTimeDesc` so page 1 IS the latest
+ * `pageSize` messages (thread containers ignore `start_time`, so without desc
+ * ordering an old topic would serve its 2024-era head instead of the recent
+ * tail). Results are reversed back to chronological before returning.
  */
 async function readRecentGroupMessages(
   api: LarkApiClient,
@@ -206,11 +205,16 @@ async function readRecentGroupMessages(
   const containerType = threadId ? 'thread' : 'chat';
   const sinceSec =
     options?.sinceSec ?? Math.floor(Date.now() / 1000) - GROUP_HISTORY_DEFAULT_WINDOW_SEC;
-  const { items } = await api.listMessages(containerId, {
+  // Fetch the API maximum newest-first; bot and pre-watermark messages are
+  // filtered below, and thread containers ignore start_time.
+  const res = await api.listMessages(containerId, {
     containerType,
-    pageSize: Math.max(limit * 2, 50),
-    startTime: String(sinceSec),
+    pageSize: 50,
+    sortOrder: 'desc',
+    startTime: containerType === 'chat' ? String(sinceSec) : undefined,
   });
+  // API returns newest-first; reverse into chronological order for injection.
+  const items = [...res.items].reverse();
 
   // The list API's `start_time` is IGNORED by the thread container (probed
   // 2026-08-20: identical result set with and without it) — filter by
@@ -244,8 +248,8 @@ async function readRecentGroupMessages(
     }
   };
 
-  // API returns ascending (oldest-first); keep the tail so the injected block
-  // ends at the newest message while still reading chronologically. Media in
+  // `items` was reversed to chronological (oldest-first); keep the tail so the
+  // injected block ends at the newest message. Media in
   // the window (image/file/… sent without @-mentioning the bot) is downloaded
   // (bounded) so the agent can actually read the content — text-only context
   // would leave "看看这个文件" unanswerable.
@@ -331,6 +335,11 @@ async function resolveFeishuReference(
   let surrounding: { author: string; text: string }[] | undefined;
   if (parent.thread_id) {
     try {
+      // Exclude the triggering message (delivered below as the run's own user
+      // prompt — injecting it here duplicates the current turn) and the quoted
+      // parent itself (already rendered as the <referenced_message> block).
+      const triggerMessageId = (message as any).raw?.message_id as string | undefined;
+      const exclude = new Set([triggerMessageId, parentId].filter((id): id is string => !!id));
       const nameCache = new Map<string, string>();
       const resolveName = async (openId: string): Promise<string> => {
         const cached = nameCache.get(openId);
@@ -361,7 +370,7 @@ async function resolveFeishuReference(
       // re-injecting them duplicates every prior turn.
       const speakers = await Promise.all(
         items
-          .filter((m) => m.sender?.sender_type === 'user')
+          .filter((m) => m.sender?.sender_type === 'user' && !exclude.has(m.message_id))
           .map(async (m) => ({
             author: await resolveName(m.sender?.id ?? 'unknown'),
             text: apiItemText(m, botOpenId).trim(),
@@ -407,19 +416,22 @@ function createMessenger(
       // reply as its progress-message handle for later edits.
       let lastMessageId: string | undefined;
       if (text.trim()) {
+        // Card-only transport (lark_md): markdown renders natively; URL
+        // images are downgraded to links because Feishu requires image_key.
         const sent = replyTo
-          ? await api.replyMessage(replyTo, text)
-          : await api.sendMessage(chatId, text);
+          ? await api.replyCard(replyTo, text)
+          : await api.sendCard(chatId, text);
         lastMessageId = sent.messageId;
       }
       if (attachments?.length) {
         const sentIds = await sendFeishuAttachments(api, chatId, attachments, replyTo);
-        if (sentIds.length > 0) lastMessageId = sentIds.at(-1);
+        if (sentIds.length === 0) throw new Error('Feishu delivered no attachments');
+        lastMessageId = sentIds.at(-1);
       }
       return lastMessageId ? { messageId: lastMessageId } : undefined;
     },
     editMessage: (messageId, content) =>
-      api.editMessage(messageId, messengerContentText(content)).then(() => {}),
+      api.editCard(messageId, messengerContentText(content)).then(() => {}),
     // Feishu / Lark currently expose no authenticated removeReaction endpoint.
     // Callers should treat this as a best-effort no-op — step swaps will stack
     // additions rather than clear the previous emoji.
@@ -611,7 +623,11 @@ class FeishuWebhookClient implements PlatformClient {
   }
 
   formatMarkdown(markdown: string): string {
-    return stripMarkdown(markdown);
+    // Pass-through: outbound is an interactive card whose `markdown` element
+    // renders lark_md natively — stripping would corrupt links (e.g.
+    // `![alt](url)` → `alt (url)` text, trailing paren glued to the URL).
+    // Only the card size cap (30 KB) applies.
+    return markdown;
   }
 
   formatReply(body: string, stats?: UsageStats): string {
@@ -819,7 +835,11 @@ class FeishuWSClientImpl implements PlatformClient {
   }
 
   formatMarkdown(markdown: string): string {
-    return stripMarkdown(markdown);
+    // Pass-through: outbound is an interactive card whose `markdown` element
+    // renders lark_md natively — stripping would corrupt links (e.g.
+    // `![alt](url)` → `alt (url)` text, trailing paren glued to the URL).
+    // Only the card size cap (30 KB) applies.
+    return markdown;
   }
 
   formatReply(body: string, stats?: UsageStats): string {

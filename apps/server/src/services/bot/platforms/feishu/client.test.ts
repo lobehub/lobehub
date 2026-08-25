@@ -6,8 +6,9 @@ const mockGetTenantAccessToken = vi.hoisted(() => vi.fn().mockResolvedValue('tok
 const mockListMessages = vi.hoisted(() => vi.fn());
 const mockGetMessage = vi.hoisted(() => vi.fn());
 const mockGetUserInfo = vi.hoisted(() => vi.fn());
-const mockSendMessage = vi.hoisted(() => vi.fn());
 const mockReplyMessage = vi.hoisted(() => vi.fn());
+const mockReplyCard = vi.hoisted(() => vi.fn());
+const mockSendCard = vi.hoisted(() => vi.fn());
 const mockEditMessage = vi.hoisted(() => vi.fn());
 const mockUploadImage = vi.hoisted(() => vi.fn());
 const mockSendMessageWithMsgType = vi.hoisted(() => vi.fn());
@@ -22,13 +23,14 @@ vi.mock('@lobechat/chat-adapter-feishu', async (importOriginal) => {
     downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
     LarkApiClient: vi.fn().mockImplementation(() => ({
       editMessage: mockEditMessage,
+      editCard: mockEditMessage,
       getMessage: mockGetMessage,
+      replyCard: mockReplyCard,
       getTenantAccessToken: mockGetTenantAccessToken,
       getUserInfo: mockGetUserInfo,
       listMessages: mockListMessages,
       replyMessage: mockReplyMessage,
       replyMessageWithMsgType: mockReplyMessageWithMsgType,
-      sendMessage: mockSendMessage,
       sendMessageWithMsgType: mockSendMessageWithMsgType,
       uploadImage: mockUploadImage,
     })),
@@ -295,15 +297,13 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-20T12:00:00Z'));
     const nowSec = Math.floor(Date.now() / 1000);
-    // API returns ascending (oldest-first) — without startTime it serves the
-    // chat's OLDEST page (probe-thread-container-findings), so the caller
-    // window must ride on startTime.
+    // API returns descending (newest-first) under sortOrder 'desc'.
     mockListMessages.mockResolvedValue({
       hasMore: false,
       items: [
-        msg('om_1', 'ou_a', '线上数据有问题？'),
-        msg('om_2', 'ou_x', 'bot 中间发言', 'bot'),
         msg('om_3', 'ou_b', '应该是 dmflow-list 接口问题'),
+        msg('om_2', 'ou_x', 'bot 中间发言', 'bot'),
+        msg('om_1', 'ou_a', '线上数据有问题？'),
       ],
     });
 
@@ -312,6 +312,7 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
     expect(mockListMessages).toHaveBeenCalledWith('oc_g', {
       containerType: 'chat',
       pageSize: 50,
+      sortOrder: 'desc',
       startTime: String(nowSec - 24 * 60 * 60),
     });
     expect(result).toEqual([
@@ -323,7 +324,6 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
   it('reads thread container for topic threadIds with the same startTime window', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-20T12:00:00Z'));
-    const nowSec = Math.floor(Date.now() / 1000);
     mockListMessages.mockResolvedValue({ hasMore: false, items: [msg('om_1', 'ou_a', 'hello')] });
 
     await createClient().readRecentMessages!('feishu:group:oc_g:omt_t1', 20);
@@ -331,7 +331,8 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
     expect(mockListMessages).toHaveBeenCalledWith('omt_t1', {
       containerType: 'thread',
       pageSize: 50,
-      startTime: String(nowSec - 24 * 60 * 60),
+      sortOrder: 'desc',
+      startTime: undefined,
     });
   });
 
@@ -343,6 +344,7 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
     expect(mockListMessages).toHaveBeenCalledWith('oc_g', {
       containerType: 'chat',
       pageSize: 50,
+      sortOrder: 'desc',
       startTime: '1755000000',
     });
   });
@@ -418,11 +420,12 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
   it('keeps only the newest `limit` messages when the window has more', async () => {
     mockListMessages.mockResolvedValue({
       hasMore: false,
+      // desc: newest first
       items: [
-        msg('om_1', 'ou_a', 'first'),
-        msg('om_2', 'ou_b', 'second'),
-        msg('om_3', 'ou_a', 'third'),
         msg('om_4', 'ou_b', 'fourth'),
+        msg('om_3', 'ou_a', 'third'),
+        msg('om_2', 'ou_b', 'second'),
+        msg('om_1', 'ou_a', 'first'),
       ],
     });
 
@@ -436,16 +439,43 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
     ]);
   });
 
+  it('fetches only ONE page (desc) even for old topics — no pagination loop', async () => {
+    // sort_type=ByCreateTimeDesc makes page 1 the latest N messages, so an
+    // old topic with thousands of messages needs no walk to reach its tail.
+    mockListMessages.mockResolvedValue({
+      hasMore: true, // more (older) pages exist — must NOT be fetched
+      items: [msg('om_new2', 'ou_b', 'recent2'), msg('om_new1', 'ou_a', 'recent1')],
+      pageToken: 'tok_2',
+    });
+
+    const result = await createClient().readRecentMessages!('feishu:group:oc_g:omt_t1', 20, {
+      sinceSec: 1755000000,
+    });
+
+    expect(mockListMessages).toHaveBeenCalledTimes(1);
+    expect(mockListMessages).toHaveBeenCalledWith('omt_t1', {
+      containerType: 'thread',
+      pageSize: 50,
+      sortOrder: 'desc',
+      startTime: undefined,
+    });
+    expect(result).toEqual([
+      { author: 'marin', text: 'recent1' },
+      { author: 'grimm', text: 'recent2' },
+    ]);
+  });
+
   it('restores @-mention placeholders to real display names via mentions array', async () => {
     mockListMessages.mockResolvedValue({
       hasMore: false,
+      // desc: newest first
       items: [
         {
-          ...msg('om_1', 'ou_a', '@_user_1 你怎么不在工位'),
+          ...msg('om_2', 'ou_a', '谁摸鱼去了 @_user_1 @_all'),
           mentions: [{ key: '@_user_1', name: 'marun' }],
         },
         {
-          ...msg('om_2', 'ou_a', '谁摸鱼去了 @_user_1 @_all'),
+          ...msg('om_1', 'ou_a', '@_user_1 你怎么不在工位'),
           mentions: [{ key: '@_user_1', name: 'marun' }],
         },
       ],
@@ -464,18 +494,19 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
   it('renders non-text history messages as labeled placeholders', async () => {
     mockListMessages.mockResolvedValue({
       hasMore: false,
+      // desc: newest first
       items: [
-        {
-          ...msg('om_1', 'ou_a', ''),
-          body: { content: JSON.stringify({ image_key: 'img_v2_1' }) },
-          msg_type: 'image',
-        },
+        msg('om_3', 'ou_a', '看完说下结论'),
         {
           ...msg('om_2', 'ou_b', ''),
           body: { content: JSON.stringify({ file_key: 'file_v2_1', file_name: '工资表.xlsx' }) },
           msg_type: 'file',
         },
-        msg('om_3', 'ou_a', '看完说下结论'),
+        {
+          ...msg('om_1', 'ou_a', ''),
+          body: { content: JSON.stringify({ image_key: 'img_v2_1' }) },
+          msg_type: 'image',
+        },
       ],
     });
 
@@ -493,13 +524,14 @@ describe('FeishuWebhookClient.readRecentMessages', () => {
   it('downloads window media as attachments (file sent before the separate @mention)', async () => {
     mockListMessages.mockResolvedValue({
       hasMore: false,
+      // desc: newest first
       items: [
+        msg('om_2', 'ou_a', '@bot 看下这个文件'),
         {
           ...msg('om_1', 'ou_a', ''),
           body: { content: JSON.stringify({ file_key: 'file_v2_1', file_name: 'doc.md' }) },
           msg_type: 'file',
         },
-        msg('om_2', 'ou_a', '@bot 看下这个文件'),
       ],
     });
     mockDownloadMediaFromRawMessage.mockResolvedValue([
@@ -629,10 +661,7 @@ describe('FeishuWebhookClient.resolveReference', () => {
       pageSize: 50,
       pageToken: undefined,
     });
-    expect(result?.surrounding).toEqual([
-      { author: 'marin', text: '话题起始' },
-      { author: 'grimm', text: '话题回复' },
-    ]);
+    expect(result?.surrounding).toEqual([{ author: 'grimm', text: '话题回复' }]);
   });
 
   it('degrades to undefined when the parent fetch fails', async () => {
@@ -695,10 +724,7 @@ describe('FeishuWebhookClient.resolveReference', () => {
       replyMessage({ message_id: 'om_1', parent_id: 'om_parent' }),
     );
 
-    expect(result?.surrounding).toEqual([
-      { author: 'marin', text: '话题起始' },
-      { author: 'grimm', text: '话题回复' },
-    ]);
+    expect(result?.surrounding).toEqual([{ author: 'grimm', text: '话题回复' }]);
   });
 });
 
@@ -728,17 +754,20 @@ describe('FeishuWebhookClient.getMessenger reply routing', () => {
       () =>
         ({
           editMessage: mockEditMessage,
+          editCard: mockEditMessage,
           getTenantAccessToken: mockGetTenantAccessToken,
           getUserInfo: mockGetUserInfo,
           listMessages: mockListMessages,
+          replyCard: mockReplyCard,
+          sendCard: mockSendCard,
           replyMessage: mockReplyMessage,
           replyMessageWithMsgType: mockReplyMessageWithMsgType,
-          sendMessage: mockSendMessage,
           sendMessageWithMsgType: mockSendMessageWithMsgType,
           uploadImage: mockUploadImage,
         }) as any,
     );
-    mockSendMessage.mockResolvedValue({ messageId: 'om_sent_1', raw: {} });
+    mockReplyCard.mockResolvedValue({ messageId: 'om_card_1', raw: {} });
+    mockSendCard.mockResolvedValue({ messageId: 'om_card_send_1', raw: {} });
     mockReplyMessage.mockResolvedValue({ messageId: 'om_reply_1', raw: {} });
     mockReplyMessageWithMsgType.mockResolvedValue({ messageId: 'om_reply_img', raw: {} });
     mockEditMessage.mockResolvedValue({ raw: {} });
@@ -750,11 +779,27 @@ describe('FeishuWebhookClient.getMessenger reply routing', () => {
       replyToMessageId: 'om_trigger',
     });
 
-    const result = await messenger.createMessage('hello');
+    const result = await messenger.createMessage('**hello**');
 
-    expect(mockReplyMessage).toHaveBeenCalledWith('om_trigger', 'hello');
-    expect(mockSendMessage).not.toHaveBeenCalled();
-    expect(result).toEqual({ messageId: 'om_reply_1' });
+    // Card is the primary reply transport (lark_md rendering); the plain-text
+    // reply is only the fallback.
+    expect(mockReplyCard).toHaveBeenCalledWith('om_trigger', '**hello**');
+    expect(result).toEqual({ messageId: 'om_card_1' });
+  });
+
+  it('formatMarkdown is a pass-through so card markdown (image links) survives intact', () => {
+    const client = createClient();
+    const md = '![Generated image 1](https://s3.example/img.png?sig=abc)';
+    expect(client.formatMarkdown!(md)).toBe(md);
+  });
+
+  it('propagates card reply failures (card-only transport, no text fallback)', async () => {
+    mockReplyCard.mockRejectedValueOnce(new Error('card rejected'));
+    const messenger = createClient().getMessenger('feishu:group:oc_g', {
+      replyToMessageId: 'om_trigger',
+    });
+
+    await expect(messenger.createMessage('hello')).rejects.toThrow('card rejected');
   });
 
   it('maps status emojis to feishu emoji_type identifiers on replaceReaction', async () => {
@@ -777,14 +822,14 @@ describe('FeishuWebhookClient.getMessenger reply routing', () => {
     expect(mockAddReaction).toHaveBeenNthCalledWith(2, 'om_1', 'OnIt');
   });
 
-  it('falls back to a direct chat send when no replyToMessageId is given', async () => {
+  it('sends a direct card to the chat when no replyToMessageId is given', async () => {
     const messenger = createClient().getMessenger('feishu:group:oc_g');
 
     const result = await messenger.createMessage('hi');
 
-    expect(mockSendMessage).toHaveBeenCalledWith('oc_g', 'hi');
-    expect(mockReplyMessage).not.toHaveBeenCalled();
-    expect(result).toEqual({ messageId: 'om_sent_1' });
+    expect(mockSendCard).toHaveBeenCalledWith('oc_g', 'hi');
+    expect(mockReplyCard).not.toHaveBeenCalled();
+    expect(result).toEqual({ messageId: 'om_card_send_1' });
   });
 
   it('routes attachment legs through the reply API too', async () => {
@@ -804,9 +849,8 @@ describe('FeishuWebhookClient.getMessenger reply routing', () => {
       content: 'see this',
     });
 
-    // Text leg rides the reply API...
-    expect(mockReplyMessage).toHaveBeenCalledWith('om_trigger', 'see this');
-    expect(mockSendMessage).not.toHaveBeenCalled();
+    // Text leg rides the reply API (card transport)...
+    expect(mockReplyCard).toHaveBeenCalledWith('om_trigger', 'see this');
     // ...and so does the image leg (upload + reply-with-msg_type, never a
     // direct send into the main timeline).
     expect(mockUploadImage).toHaveBeenCalledTimes(1);
@@ -818,6 +862,20 @@ describe('FeishuWebhookClient.getMessenger reply routing', () => {
     expect(mockSendMessageWithMsgType).not.toHaveBeenCalled();
     // The returned id is the LAST message sent — here the attachment reply.
     expect(result).toEqual({ messageId: 'om_reply_img' });
+  });
+
+  it('rejects when every requested attachment fails to deliver', async () => {
+    mockUploadImage.mockRejectedValue(new Error('upload failed'));
+    const messenger = createClient().getMessenger('feishu:group:oc_g', {
+      replyToMessageId: 'om_trigger',
+    });
+
+    await expect(
+      messenger.createMessage({
+        attachments: [{ data: 'aGk=', name: 'img.png', type: 'image' }],
+        content: '',
+      }),
+    ).rejects.toThrow('delivered no attachments');
   });
 
   it('keeps editMessage targeting the given message id (reply id flows through unchanged)', async () => {

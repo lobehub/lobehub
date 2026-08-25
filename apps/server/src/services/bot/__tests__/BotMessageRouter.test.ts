@@ -126,7 +126,17 @@ const mockCreateAdapter = vi.hoisted(() =>
   vi.fn().mockReturnValue({ testplatform: { type: 'mock-adapter' } }),
 );
 const mockMergeWithDefaults = vi.hoisted(() =>
-  vi.fn((_: unknown, settings?: Record<string, unknown>) => settings ?? {}),
+  vi.fn((schema: unknown, settings?: Record<string, unknown>) => {
+    const merged = { ...settings };
+    const fields = Array.isArray(schema) ? schema : [];
+    for (const field of fields.find((item) => item.key === 'settings')?.properties ?? []) {
+      const value = merged[field.key];
+      if (typeof value === 'number' && field.maximum !== undefined) {
+        merged[field.key] = Math.min(value, field.maximum);
+      }
+    }
+    return merged;
+  }),
 );
 const mockResolveBotProviderConfig = vi.hoisted(() =>
   vi.fn(
@@ -192,6 +202,17 @@ const mockGetPlatform = vi.hoisted(() =>
       credentials: [],
       id: platform,
       name: platform,
+      schema:
+        platform === 'feishu' || platform === 'lark'
+          ? [
+              {
+                key: 'settings',
+                properties: [{ key: 'charLimit', maximum: 4000, type: 'number' }],
+                type: 'object',
+              },
+            ]
+          : [],
+      supportsReplyThreading: platform === 'feishu' || platform === 'lark',
     };
   }),
 );
@@ -1010,7 +1031,10 @@ describe('BotMessageRouter', () => {
   });
 
   describe('onNewMention DM policy', () => {
-    async function loadMentionHandler(settings?: Record<string, unknown>) {
+    async function loadMentionHandler(
+      settings?: Record<string, unknown>,
+      platform: string = 'telegram',
+    ) {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-1',
@@ -1018,7 +1042,7 @@ describe('BotMessageRouter', () => {
         }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -1043,6 +1067,26 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    });
+
+    it('clamps persisted Feishu charLimit values to the card-safe limit', async () => {
+      const handler = await loadMentionHandler({ charLimit: 30_000 }, 'feishu');
+      const thread = {
+        id: 'feishu:group:oc_group:omt_topic',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        reply: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        id: 'om_trigger',
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention.mock.calls[0][2].charLimit).toBe(4000);
     });
 
     it('should block @-mentions inside DMs when DM is disabled and notify the sender', async () => {
@@ -2292,12 +2336,15 @@ describe('BotMessageRouter', () => {
      * rejected. Lock in: every command-dispatch path applies the same
      * access stack as the message handlers.
      */
-    async function loadAllHandlers(settings: Record<string, unknown>) {
+    async function loadAllHandlers(
+      settings: Record<string, unknown>,
+      platform: string = 'telegram',
+    ) {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({ applicationId: 'app-1', settings }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -2475,10 +2522,36 @@ describe('BotMessageRouter', () => {
 
       await cmdRegexHandler(thread, message);
 
-      // /new resets the topic (replace=true) and posts a confirmation.
-      expect(thread.setState).toHaveBeenCalledWith({ topicId: undefined }, { replace: true });
+      // /new resets the topic (replace=true), restarts the group-history
+      // watermark at "now" (the new topic inherits no pre-/new discussion),
+      // and posts a confirmation.
+      expect(thread.setState).toHaveBeenCalledWith(
+        { lastGroupHistorySync: expect.any(Number) },
+        { replace: true },
+      );
       expect(thread.post).toHaveBeenCalledTimes(1);
       expect(thread.post.mock.calls[0][0]).not.toContain("aren't authorized");
+    });
+
+    it('replies to the triggering Feishu message for text commands', async () => {
+      const { cmdRegexHandler } = await loadAllHandlers({}, 'feishu');
+      const thread = {
+        id: 'feishu:group:oc_group:omt_topic',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        reply: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'alice-id', userName: 'alice' },
+        id: 'om_trigger',
+        text: '/new',
+      };
+
+      await cmdRegexHandler(thread, message);
+
+      expect(thread.reply).toHaveBeenCalledWith(message, expect.any(String));
+      expect(thread.post).not.toHaveBeenCalled();
     });
   });
 
@@ -2915,10 +2988,11 @@ describe('BotMessageRouter', () => {
 
       await cmdRegexHandler(thread, makeMessage('/new'));
 
-      // topicId cleared via replace, toolMode carried over, channelContext
-      // intentionally dropped (same as before this feature).
+      // topicId cleared via replace, toolMode carried over, group-history
+      // watermark restarted at "now", channelContext intentionally dropped
+      // (same as before this feature).
       expect(thread.setState).toHaveBeenCalledWith(
-        { toolMode: 'chat', topicId: undefined },
+        { lastGroupHistorySync: expect.any(Number), toolMode: 'chat' },
         { replace: true },
       );
     });
