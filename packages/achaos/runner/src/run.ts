@@ -126,10 +126,11 @@ export const runChaosExperiment = async ({
   } catch (caught) {
     error = caught;
   } finally {
+    const oraclesPassed = oracleResults.every(({ status }) => status === 'passed');
     const shouldCleanup =
       injection &&
       adapter.cleanup &&
-      (cleanupPolicy === 'always' || (cleanupPolicy === 'on_success' && !error));
+      (cleanupPolicy === 'always' || (cleanupPolicy === 'on_success' && !error && oraclesPassed));
     if (shouldCleanup) {
       record('cleanup_started');
       try {

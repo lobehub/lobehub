@@ -1,5 +1,6 @@
 import type { ChaosExperiment, ChaosRunContext } from '@achaos/core';
 import { createSeededRandom } from '@achaos/core';
+import { executeToolWithRetry } from '@lobechat/agent-runtime/src/utils/runtimeRetry';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createRuntimeChaosAdapter } from './adapter';
@@ -49,10 +50,11 @@ describe('runtime chaos adapter', () => {
     });
     expect(mock).toHaveBeenCalledWith({
       content: '{"ok":false}',
+      success: true,
     });
   });
 
-  it('injects one failure inside the retry attempt and honors maxInjections', async () => {
+  it('injects a retryable failure through the production retry helper', async () => {
     const controller = new RuntimeChaosController();
     await createRuntimeChaosAdapter(controller).inject(
       contextFor(
@@ -61,13 +63,44 @@ describe('runtime chaos adapter', () => {
         { maxInjections: 1 },
       ),
     );
-    const execute = vi.fn(async () => 'success');
+    const execute = vi.fn(async () => ({ content: 'success', success: true }));
     const point = { apiName: 'search', callIndex: 0, operationId: 'op-1', stepIndex: 1 };
-    await expect(executeToolAttemptWithChaos(controller, point, execute)).rejects.toThrow(
-      'RateLimited',
+    const result = await executeToolWithRetry(
+      () => executeToolAttemptWithChaos(controller, point, execute),
+      { maxRetries: 1 },
     );
-    await expect(executeToolAttemptWithChaos(controller, point, execute)).resolves.toBe('success');
+    expect(result).toEqual({
+      attempts: 2,
+      result: { content: 'success', success: true },
+    });
     expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('mocks a canceled result when a beforeToolCall delay is disarmed', async () => {
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor(
+        { durationMs: 60_000, type: 'delay' },
+        { apiName: 'search', phase: 'before_tool_call' },
+      ),
+    );
+    const mock = vi.fn();
+    const pending = createBeforeToolCallChaosHandler(controller)({
+      apiName: 'search',
+      callIndex: 0,
+      mock,
+      operationId: 'op-1',
+      stepIndex: 1,
+    });
+    await adapter.cleanup!(receipt, contextFor({ type: 'drop' }, {}));
+    await expect(pending).resolves.toBeUndefined();
+    expect(mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ errorType: 'Canceled', kind: 'stop' }),
+        success: false,
+      }),
+    );
   });
 
   it('duplicates a completion delivery exactly as configured', async () => {
