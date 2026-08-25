@@ -3,6 +3,7 @@ import {
   MAX_ANALYSIS_DESCRIPTION_LENGTH,
   MAX_ANALYSIS_SHORT_TEXT_LENGTH,
   MAX_PERSONA_CONTENT_LENGTH,
+  type OpenAIChatMessage,
   type UnderstandingAnalysis,
   type UnderstandingFeedbackTurn,
 } from '@lobechat/types';
@@ -13,6 +14,7 @@ type SafeCollectionDiagnostics = Pick<
 >;
 
 interface UnderstandingPersonaPromptInput {
+  context: string;
   diagnostics: SafeCollectionDiagnostics;
   feedback?: UnderstandingFeedbackTurn[];
   providers: string[];
@@ -21,6 +23,7 @@ interface UnderstandingPersonaPromptInput {
 
 interface UnderstandingDetailedPersonaPromptInput {
   analysis: UnderstandingAnalysis;
+  context: string;
   responseLanguage: string;
 }
 
@@ -37,6 +40,9 @@ interface UnderstandingAnalysisJsonSchema {
 }
 
 const PROVIDER_ID_MAX_LENGTH = 64;
+
+export const UNDERSTANDING_ANALYSIS_PROMPT_VERSION = 'v1';
+export const UNDERSTANDING_DETAILED_PERSONA_PROMPT_VERSION = 'v1';
 
 const displayStringJsonConstraints = (maxLength: number) => ({
   maxLength,
@@ -250,11 +256,12 @@ const outputContract = [
 ].join('\n');
 
 export const chainUnderstandingPersona = ({
+  context,
   diagnostics,
   feedback = [],
   providers,
   responseLanguage,
-}: UnderstandingPersonaPromptInput): string => {
+}: UnderstandingPersonaPromptInput): { messages: OpenAIChatMessage[] } => {
   const feedbackSection =
     feedback.length > 0
       ? [
@@ -269,7 +276,7 @@ export const chainUnderstandingPersona = ({
         ]
       : [];
 
-  return [
+  const system = [
     'Write one coherent onboarding persona from all available provider-delimited Markdown and XML contexts.',
     `Write every user-visible string value in ${boundUntrustedMetadata(responseLanguage, 64)}. Keep JSON property names unchanged and preserve proper names when translation would make them inaccurate.`,
     'Analyze the original provider contexts directly, not prior generated analyses.',
@@ -287,6 +294,18 @@ export const chainUnderstandingPersona = ({
     ...sharedAnalysisRules,
     outputContract,
   ].join('\n\n');
+
+  return {
+    messages: [
+      { content: system, role: 'system' },
+      {
+        content: ['Write onboarding persona from collected provider contexts.', context].join(
+          '\n\n',
+        ),
+        role: 'user',
+      },
+    ],
+  };
 };
 
 /**
@@ -304,9 +323,10 @@ export const chainUnderstandingPersona = ({
  */
 export const chainUnderstandingDetailedPersona = ({
   analysis,
+  context,
   responseLanguage,
-}: UnderstandingDetailedPersonaPromptInput): string =>
-  [
+}: UnderstandingDetailedPersonaPromptInput): { messages: OpenAIChatMessage[] } => {
+  const system = [
     'Write the complete user persona that follows an already-published quick onboarding analysis.',
     `Write every user-visible value in ${boundUntrustedMetadata(responseLanguage, 64)}. Preserve proper names when translation would make them inaccurate.`,
     'Use the supplied quick analysis as an editorial outline, especially every supported composition item, but verify and enrich it against the original provider contexts in the user message.',
@@ -327,3 +347,17 @@ export const chainUnderstandingDetailedPersona = ({
     'Required JSON Schema:',
     JSON.stringify(UNDERSTANDING_DETAILED_PERSONA_JSON_SCHEMA.schema),
   ].join('\n\n');
+
+  return {
+    messages: [
+      { content: system, role: 'system' },
+      {
+        content: [
+          'Write the complete persona from the original collected provider contexts.',
+          context,
+        ].join('\n\n'),
+        role: 'user',
+      },
+    ],
+  };
+};

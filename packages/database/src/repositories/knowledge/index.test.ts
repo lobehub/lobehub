@@ -424,6 +424,50 @@ describe('KnowledgeRepo', () => {
       expect(names).toContain('public-doc.pdf');
       expect(names).not.toContain('other-private-doc.pdf');
     });
+
+    it('should separate recent pages and files by the Resources visibility mode', async () => {
+      await serverDB.insert(files).values([
+        {
+          fileType: 'text/plain',
+          name: 'public-file.txt',
+          size: 100,
+          url: 'public-file-url',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          fileType: 'text/plain',
+          name: 'caller-private-file.txt',
+          size: 100,
+          url: 'caller-private-file-url',
+          userId,
+          visibility: 'private',
+          workspaceId,
+        },
+        {
+          fileType: 'text/plain',
+          name: 'other-private-file.txt',
+          size: 100,
+          url: 'other-private-file-url',
+          userId: otherUserId,
+          visibility: 'private',
+          workspaceId,
+        },
+      ]);
+
+      const repo = new KnowledgeRepo(serverDB, userId, workspaceId);
+
+      const privatePages = await repo.queryRecent(10, 'page', 'private');
+      const publicPages = await repo.queryRecent(10, 'page', 'public');
+      const privateFiles = await repo.queryRecent(10, 'file', 'private');
+      const publicFiles = await repo.queryRecent(10, 'file', 'public');
+
+      expect(privatePages.map((item) => item.name)).toEqual(['caller-private-doc.pdf']);
+      expect(publicPages.map((item) => item.name)).toEqual(['public-doc.pdf']);
+      expect(privateFiles.map((item) => item.name)).toEqual(['caller-private-file.txt']);
+      expect(publicFiles.map((item) => item.name)).toEqual(['public-file.txt']);
+    });
   });
 
   describe('query - search filtering', () => {
@@ -719,6 +763,14 @@ describe('KnowledgeRepo', () => {
 
       const otherUserItem = results.find((item) => item.name === 'other-recent.pdf');
       expect(otherUserItem).toBeUndefined();
+    });
+
+    it('should ignore Resources visibility narrowing in personal mode', async () => {
+      const privateMode = await knowledgeRepo.queryRecent(10, 'file', 'private');
+      const publicMode = await knowledgeRepo.queryRecent(10, 'file', 'public');
+
+      expect(privateMode.map((item) => item.name)).toEqual(['recent-1.pdf', 'recent-2.pdf']);
+      expect(publicMode.map((item) => item.name)).toEqual(['recent-1.pdf', 'recent-2.pdf']);
     });
 
     it('should still return pages when newer files would fill the limit', async () => {

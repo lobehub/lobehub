@@ -1,4 +1,4 @@
-import type { HeterogeneousProviderConfig } from '@lobechat/types';
+import type { HeterogeneousProviderConfig, HeteroSelectorCapability } from '@lobechat/types';
 import { applyHeteroSelection, getHeteroSelectorCapability } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
@@ -12,22 +12,31 @@ import {
 
 const t = ((key: string) => key) as unknown as TFunction<'chat'>;
 
-const capabilityOf = (type: string): ModelCapability => {
+const selectorCapabilityOf = (type: string): HeteroSelectorCapability => {
   const capability = getHeteroSelectorCapability(type);
-  if (!capability?.model) throw new Error(`no selector capability for ${type}`);
+  if (!capability || Object.keys(capability).length === 0) {
+    throw new Error(`no selector capability for ${type}`);
+  }
+
+  return capability;
+};
+
+const capabilityOf = (type: string): ModelCapability => {
+  const capability = selectorCapabilityOf(type);
+  if (!capability.model) throw new Error(`no model capability for ${type}`);
 
   return { ...capability, model: capability.model };
 };
 
 const viewOf = (provider: HeterogeneousProviderConfig) =>
-  buildSelectorView({ capability: capabilityOf(provider.type), provider, t });
+  buildSelectorView({ capability: selectorCapabilityOf(provider.type), provider, t });
 
 const dimensionKeys = (provider: HeterogeneousProviderConfig) =>
   viewOf(provider).dimensions.map((dimension) => dimension.key);
 
 describe('resolveSelectorShape', () => {
   it('renders nothing for providers with no selector', () => {
-    expect(resolveSelectorShape({ type: 'amp' }, true).kind).toBe('none');
+    expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('none');
     expect(resolveSelectorShape(undefined, true).kind).toBe('none');
   });
 
@@ -46,12 +55,27 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives static providers the full menu', () => {
+    expect(resolveSelectorShape({ type: 'amp' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'claude-code' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
   });
 });
 
 describe('dimensions per provider', () => {
+  it('offers Amp mode without inventing a model dimension', () => {
+    const dimensions = viewOf({ type: 'amp' }).dimensions;
+
+    expect(dimensions.map((dimension) => dimension.key)).toEqual(['mode']);
+    expect(dimensions[0].label).toBe('heteroAgent.modelSelector.mode.label');
+    expect(dimensions[0].options.map((option) => option.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'ultra',
+    ]);
+  });
+
   it('offers model, reasoning and speed for a fast-capable codex model', () => {
     expect(dimensionKeys({ model: 'gpt-5.6-sol', type: 'codex' })).toEqual([
       'model',
@@ -102,6 +126,19 @@ describe('dimensions per provider', () => {
 });
 
 describe('current value surfaced on each dimension', () => {
+  it('reflects a hand-authored Amp mode and gives it precedence over the persisted field', () => {
+    const view = viewOf({ args: ['--mode=ultra'], mode: 'low', type: 'amp' });
+
+    expect(view.dimensions[0].current).toBe('ultra');
+    expect(view.dimensions[0].valueLabel).toBe('heteroAgent.modelSelector.mode.ultra');
+    expect(view.ariaLabel).toBe('heteroAgent.modelSelector.mode.ariaLabel');
+    expect(view.triggerText).toBe('heteroAgent.modelSelector.mode.ultra');
+  });
+
+  it('shows Default config when Amp does not override its native mode', () => {
+    expect(viewOf({ type: 'amp' }).triggerText).toBe('heteroAgent.modelSelector.defaultConfig');
+  });
+
   it('shows the resolved model and effort labels', () => {
     const view = viewOf({ effort: 'high', model: 'opus', type: 'claude-code' });
 

@@ -1,9 +1,14 @@
 'use client';
 
 import { LoadingOutlined } from '@ant-design/icons';
-import { Alert, Flexbox, Icon } from '@lobehub/ui';
-import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import {
+  Alert,
+  createModal,
+  type ModalInstance,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { Spin, Typography, Upload } from 'antd';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';

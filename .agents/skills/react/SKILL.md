@@ -28,6 +28,7 @@ If unsure about available components, search existing code or check `node_module
 
 | Component                                  | Import                                                                                                  |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `Alert` (+ `AlertProps`)                   | `import { Alert, type AlertProps } from '@lobehub/ui/base-ui';`                                         |
 | `Select` (+ `SelectProps`, `SelectOption`) | `import { Select } from '@lobehub/ui/base-ui';`                                                         |
 | `Modal` (imperative API)                   | `import { createModal, confirmModal, useModalContext, type ModalInstance } from '@lobehub/ui/base-ui';` |
 | `DropdownMenu`                             | `import { DropdownMenu } from '@lobehub/ui/base-ui';`                                                   |
@@ -50,7 +51,6 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 | General      | ActionIcon, ActionIconGroup, Block, Button, Icon                                      |
 | Data Display | Avatar, Collapse, Empty, Highlighter, Markdown, Tag, Tooltip                          |
 | Data Entry   | CodeEditor, CopyButton, EditableText, Form, Input, InputPassword, SearchBar, TextArea |
-| Feedback     | Alert                                                                                 |
 | Layout       | Center, DraggablePanel, Flexbox, Grid, Header, MaskShadow                             |
 | Navigation   | Burger, Menu, SideNav, Tabs                                                           |
 
@@ -58,7 +58,7 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 
 Keep transient state in its smallest useful owner. Extract a custom hook when state transitions and handlers obscure rendering or form a reusable unit; do not extract solely because a component has a particular number of hooks.
 
-Split a component only to establish a real state, reuse, or render-update boundary. Do not split solely to make files smaller.
+Split a component only to establish a real state, reuse, render-update, or mountable-capability boundary. Do not split solely to make files smaller. Decomposing a heavy domain feature into host-assembled atoms is owned by **`compose-atoms`**.
 
 ## Render Performance and Memoization
 
@@ -85,4 +85,5 @@ Use `Flexbox` and `Center` from `@lobehub/ui`. See `references/layout-kit.md` fo
 - **`ux`**: loading visuals and user-facing interaction design. Do not use antd `Spin` / `<Spin />`.
 - **`modal`**: imperative base-ui modal patterns.
 - **`spa-routes`**: SPA navigation, route ownership, router configuration, and `.desktop` variants.
+- **`compose-atoms`**: split a heavy domain feature into mountable capability atoms; each host imports only what it mounts.
 - **`zustand`**: store structure and selector conventions.

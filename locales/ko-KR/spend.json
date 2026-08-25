@@ -1,5 +1,5 @@
 {
-  "duration.TPS": "TPS (초당 토큰 수): 초당 생성되는 토큰 수",
+  "duration.TPS": "tok/s (초당 토큰 수): 초당 생성되는 토큰 수",
   "duration.TTFT": "TTFT (첫 토큰까지의 시간): 첫 토큰 생성 지연 시간",
   "duration.completion": "출력 완료 시간",
   "duration.latency": "지연 시간",

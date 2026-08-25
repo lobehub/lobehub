@@ -48,7 +48,7 @@ const RelatedItem = memo<DiscoverProviderItem>(({ description, identifier, name 
             rows: 2,
           }}
         >
-          {t(`${identifier}.description`, { defaultValue: description })}
+          {description && t(`${identifier}.description`, { defaultValue: description })}
         </Text>
       </Flexbox>
     </Block>

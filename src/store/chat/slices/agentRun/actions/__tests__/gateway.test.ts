@@ -27,6 +27,7 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
+    settleRunningOperation: vi.fn().mockResolvedValue(undefined),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -167,6 +168,7 @@ function createTestAction() {
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
+    vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
     mockToolInterventionConfig.approvalMode = 'manual';
@@ -1345,12 +1347,13 @@ describe('GatewayActionImpl', () => {
       });
     });
 
-    // A late close of a finished op must NOT wipe the marker of a NEWER operation
-    // that a racing retry/send already wrote — that would break reconnect-after-reload
-    // for the live run. Only a marker matching the completed op's id gets cleared.
-    it('does not clear the local marker when it already belongs to a newer operation', async () => {
+    // A late close may observe a stale local marker even after another tab has
+    // started a newer operation. Send the completing operation id to the server
+    // so its row-locked compare-and-set can reject the stale clear.
+    it('settles by operation id without retiring a newer local operation', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
+      const updateTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
@@ -1385,7 +1388,7 @@ describe('GatewayActionImpl', () => {
         moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
         startOperation,
-        updateTopicStatus: vi.fn(),
+        updateTopicStatus,
       })) as any;
 
       (globalThis as any).window = {
@@ -1418,13 +1421,21 @@ describe('GatewayActionImpl', () => {
       });
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
-      // Ignore any dispatches from the optimistic-update path during setup.
+      // Ignore any dispatches / writes from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
-      vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
+      updateTopicStatus.mockClear();
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
 
       expect(internalDispatchTopic).not.toHaveBeenCalled();
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
+      expect(updateTopicStatus).not.toHaveBeenCalled();
     });
 
     // When the desktop runs against 本机 (effective runtime mode 'local'), the

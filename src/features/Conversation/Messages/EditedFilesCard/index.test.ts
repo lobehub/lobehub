@@ -49,7 +49,16 @@ describe('getFilePathDisplayInfo', () => {
   it('keeps the parent directory and basename for long absolute paths', () => {
     expect(getFilePathDisplayInfo('/very/long/workspace/Acceptance/index.tsx')).toEqual({
       displayPath: 'Acceptance/index.tsx',
+      isImage: false,
       name: 'index.tsx',
+    });
+  });
+
+  it('marks image files so they render a lucide image icon instead of a file-type icon', () => {
+    expect(getFilePathDisplayInfo('/workspace/tmp/r24-studio-crop.PNG')).toEqual({
+      displayPath: 'tmp/r24-studio-crop.PNG',
+      isImage: true,
+      name: 'r24-studio-crop.PNG',
     });
   });
 });

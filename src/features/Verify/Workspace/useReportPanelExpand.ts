@@ -46,9 +46,19 @@ export const useReportPanelExpand = (): ReportPanelExpand => {
   // Not memoized on purpose: it closes over `isNarrow`, and a stale closure here
   // would route a wide-layout toggle into the transient overlay state, silently
   // dropping the user's preference.
+  const isStatusInit = useGlobalStore((s) => s.isStatusInit);
   const setExpand = (next: boolean) => {
-    if (isNarrow) setFloatOpen(next);
-    else updateSystemStatus({ showVerifyReportPanel: next });
+    if (isNarrow) {
+      setFloatOpen(next);
+      return;
+    }
+    if (isStatusInit) {
+      updateSystemStatus({ showVerifyReportPanel: next });
+      return;
+    }
+    useGlobalStore.setState((s) => ({
+      status: { ...s.status, showVerifyReportPanel: next },
+    }));
   };
 
   return { expand: isNarrow ? floatOpen : showPanel, isNarrow, setExpand };

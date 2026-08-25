@@ -75,6 +75,7 @@ export {
   getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
+  platformFromThreadId,
   resolveBotProviderConfig,
   resolveConnectionMode,
 } from './utils';

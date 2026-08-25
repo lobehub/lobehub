@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
   canCreate: true,
   canEdit: true,
   canEditResource: false,
+  canManageResource: false,
   canManage: false,
+  confirmModal: vi.fn(),
+  toastError: vi.fn(),
   activeWorkspaceId: 'workspace-1' as string | null,
   home: {
     duplicateAgent: vi.fn(),
@@ -42,6 +45,11 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: mocks.confirmModal,
+  toast: { error: mocks.toastError, success: vi.fn() },
+}));
+
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
@@ -55,6 +63,7 @@ vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({
     canEditResource: mocks.canEditResource,
+    canManageResource: mocks.canManageResource,
     isAccessResolved: true,
   }),
 }));
@@ -139,6 +148,7 @@ describe('useAgentDropdownMenu', () => {
     mocks.canCreate = true;
     mocks.canEdit = true;
     mocks.canEditResource = false;
+    mocks.canManageResource = false;
     mocks.canManage = false;
     mocks.transferMenuItems = null;
   });
@@ -275,6 +285,43 @@ describe('useAgentDropdownMenu', () => {
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
   });
 
+  it('tells the user to wait when delete is refused by a pending history migration', async () => {
+    // Regression: a 409 TRANSFER_IN_PROGRESS used to fall through to the
+    // generic "operation failed, please try again", which invited immediate
+    // retries that could never succeed until the backfill drained.
+    mocks.canEditResource = true;
+    mocks.canManage = true;
+    mocks.home.removeAgent.mockRejectedValueOnce(
+      Object.assign(new Error('migrating'), {
+        data: { code: 'CONFLICT', errorData: { code: 'TRANSFER_IN_PROGRESS' }, httpStatus: 409 },
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    const deleteItem = (result.current() ?? []).find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
+    ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
+    if (!deleteItem) throw new Error('Expected delete menu item');
+
+    deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
+    const { onOk } = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
+    await onOk();
+
+    expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
+  });
+
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
     mocks.canEditResource = true;
 
@@ -297,6 +344,7 @@ describe('useAgentDropdownMenu', () => {
   it('groups display, organization, access, and destructive actions by intent', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
+    mocks.canManageResource = true;
     mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
 
     const { result } = renderHook(() =>
@@ -329,8 +377,28 @@ describe('useAgentDropdownMenu', () => {
     ]);
   });
 
-  it('offers the Permission shortcut to a member who can configure the agent', () => {
+  it('hides the Permission shortcut from a non-author member who can configure the agent', () => {
     mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    expect(getMenuKeys(result.current())).not.toContain('permission');
+  });
+
+  it('offers the Permission shortcut to the creator or a workspace owner', () => {
+    mocks.canEditResource = true;
+    mocks.canManageResource = true;
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({

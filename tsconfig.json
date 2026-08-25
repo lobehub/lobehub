@@ -40,6 +40,8 @@
     "node_modules",
     "apps/desktop/**",
     "apps/mobile/**",
+    "apps/share/**",
+    "apps/workbench/**",
     "scripts/**",
     "tmp",
     "temp",

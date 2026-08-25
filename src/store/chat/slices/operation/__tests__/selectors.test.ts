@@ -55,6 +55,99 @@ describe('Operation Selectors', () => {
       expect(ids).toEqual(expect.arrayContaining([outerId, innerId]));
     });
 
+    // Regression: the enqueue check used a bare `status === 'running'` while every
+    // loading UI used `isRunningOperation` (which excludes isAborting) and
+    // `isVisiblyRunningOperation` (which also excludes visibleLoadingDone). The two
+    // definitions of "finished" differed by exactly those two fields, so a composer
+    // showing Send would silently drop the next message into the tray — forever when
+    // the terminal never landed, since the queue only drains on success.
+    it('excludes an aborting op — Stop means the next send starts a fresh turn', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let opId = '';
+
+      act(() => {
+        opId = result.current.startOperation({ type: 'execAgentRuntime', context }).operationId;
+        result.current.updateOperationMetadata(opId, { isAborting: true });
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([]);
+    });
+
+    it('keeps an aborting op blocking while older follow-ups are queued', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let opId = '';
+
+      act(() => {
+        opId = result.current.startOperation({ type: 'execAgentRuntime', context }).operationId;
+        result.current.updateOperationMetadata(opId, { isAborting: true });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'queued first',
+          createdAt: Date.now(),
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([opId]);
+    });
+
+    it('stops blocking once visible output ends — the composer already shows Send', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let opId = '';
+
+      act(() => {
+        opId = result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context,
+        }).operationId;
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([opId]);
+
+      act(() => {
+        result.current.updateOperationMetadata(opId, { visibleLoadingDone: true });
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([]);
+    });
+
+    it('keeps blocking past visible output end while follow-ups are already queued', () => {
+      // The terminal drain owns those queued items; letting a newer send jump ahead
+      // would reorder the conversation and run two turns at once.
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent1', topicId: 'topic1' };
+      let opId = '';
+
+      act(() => {
+        opId = result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context,
+        }).operationId;
+        result.current.updateOperationMetadata(opId, { visibleLoadingDone: true });
+        result.current.enqueueMessage(messageMapKey(context), {
+          content: 'queued before the visible end',
+          createdAt: Date.now(),
+          id: 'queued-1',
+          interruptMode: 'soft',
+        });
+      });
+
+      expect(
+        operationSelectors.getRunningQueueBlockingOperationIds(context)(result.current),
+      ).toEqual([opId]);
+    });
+
     it('excludes non-running and non-blocking ops', () => {
       const { result } = renderHook(() => useChatStore());
       const context = { agentId: 'agent1', topicId: 'topic1' };

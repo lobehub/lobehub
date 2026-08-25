@@ -60,7 +60,7 @@ describe('workspaceUserSettingsRouter.updatePreference', () => {
     mockChatGroupUpdate.mockResolvedValue({ id: 'cg_1' });
   });
 
-  describe('legacy sidebarGroupAssignments compat (LOBE-12860)', () => {
+  describe('legacy sidebarGroupAssignments compat for "Move to Category"', () => {
     it('translates a pre-shared-sidebar move into the shared sessionGroupId write', async () => {
       // A client from before the shared-sidebar change still sends its
       // "Move to Category" through this per-member map, which the sidebar no

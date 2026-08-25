@@ -9,7 +9,7 @@ import {
   createGitHubOAuthConnectorClient,
 } from '@lobechat/connector-data/github';
 import type { GmailConnectorClient } from '@lobechat/connector-data/gmail';
-import { createGmailConnectorClient } from '@lobechat/connector-data/gmail';
+import { createGmailConnectorClient, hasGmailReadPermission } from '@lobechat/connector-data/gmail';
 import type { NotionConnectorClient } from '@lobechat/connector-data/notion';
 import { createNotionConnectorClient } from '@lobechat/connector-data/notion';
 import type { TwitterConnectorClient } from '@lobechat/connector-data/twitter';
@@ -117,7 +117,11 @@ export class ConnectorDataService {
         if (!isConnectorDataProvider(providerId)) return;
 
         try {
-          await this.resolveProviderClient(providerId);
+          const client = await this.resolveProviderClient(providerId);
+          if (providerId === 'gmail') {
+            const account = await (client as GmailConnectorClient).getAccount();
+            if (!hasGmailReadPermission(account.scopes)) return;
+          }
           return providerId;
         } catch (error) {
           if (isConfirmedProviderUnavailableError(error, providerId)) return;

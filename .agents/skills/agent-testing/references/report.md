@@ -54,6 +54,25 @@ table — those double up on the page. It carries only the non-duplicate narrati
 
 2. **Collect evidence as you test** — every asserted behavior gets one evidence
    item in `$DIR/assets/`:
+
+   - Structured data (metrics, time series, before/after model or benchmark
+     comparisons, distributions, matrices, and tables): **use native Acceptance
+     visualizations by default.** Put review-sized values in the case's
+     `datasets[]`, declare their presentation in `visualizations[]`, and attach
+     the raw CSV/JSON, benchmark output, trace, profile, or vectors as
+     `evidence`. The structured view is the reviewer-facing decision aid; the raw
+     artifact is the audit trail.
+
+     Do **not** generate a PNG/GIF of data that `metric-comparison`, `line-chart`,
+     `bar-chart`, `scatter-plot`, `heatmap`, or `table` can faithfully express.
+     A static chart discards machine-readable values, accessibility, theme
+     adaptation, and consistent comparison semantics. Generate a static chart
+     only when no supported renderer can represent the result, and state that
+     limitation in the case observation. Do not merely upload a CSV and expect
+     the page to infer a chart: define both `datasets[]` and
+     `visualizations[]` explicitly. See
+     [Structured visualizations](#structured-visualizations) for the schema.
+
    - UI (static state): `agent-browser screenshot` or `capture-app-window.sh`, then
      **verify the screenshot with the Read tool before citing it** — never cite an
      image you haven't looked at.
@@ -72,7 +91,11 @@ table — those double up on the page. It carries only the non-duplicate narrati
      wait $GIF_PID
      ```
 
-     Verify at least the first/last frames visually (Read the GIF) before citing.
+     Keep source resolution unless file size requires an explicit `GIF_WIDTH`.
+     The recorder uses per-frame palettes without dithering so neutral loading
+     surfaces do not acquire colored noise. Verify the first, middle, and final
+     frames visually at readable size before citing; reject blurred text, noisy
+     grays, or lost one-pixel borders.
 
    - UI (before/after comparison): capture and visually verify both original
      screenshots. Do not compose them into a new image. In the case's `evidence`
@@ -511,6 +534,100 @@ For comparable metrics, only publish before/after values produced by the same
 harness, fixture, environment, warm-up policy, statistic, and sample window. If
 those differ, use separate series or mark the case uncertain instead of presenting
 a misleading delta.
+
+Every visualization requires unique non-empty `id`, `type`, `dataset`, and
+`version: 1`; `dataset` must reference a declared dataset id. `title` and
+`context` are optional non-empty strings. Every encoding field name below must
+reference a field declared by that dataset.
+
+| Renderer            | Required encoding                                              | Optional encoding                                                                         |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `metric-comparison` | `label`, `before`, `after`                                     | `beforeSamples`, `afterSamples`, `direction`, `statistic`, `target`, `unit`               |
+| `line-chart`        | `x`, non-empty `series[]`; each series requires `field`        | series `label`, series `style` (`muted` \| `primary` \| `accent`), `xLabel`, `yLabel`     |
+| `bar-chart`         | `category`, non-empty `series[]`; each series requires `field` | series `label`, `valueLabel`                                                              |
+| `scatter-plot`      | `x`, `y`                                                       | `color`, `label`, `xLabel`, `yLabel`                                                      |
+| `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
+| `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
+
+Minimal valid encoding examples (replace every field-name string with a key
+declared in the referenced dataset):
+
+```json
+[
+  {
+    "id": "quality-delta",
+    "type": "metric-comparison",
+    "version": 1,
+    "dataset": "metrics",
+    "encoding": { "label": "metric", "before": "baseline", "after": "candidate" }
+  },
+  {
+    "id": "loss-over-time",
+    "type": "line-chart",
+    "version": 1,
+    "dataset": "training",
+    "encoding": {
+      "x": "step",
+      "series": [
+        { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
+        { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
+      ],
+      "xLabel": "Step",
+      "yLabel": "Loss"
+    }
+  },
+  {
+    "id": "scores-by-model",
+    "type": "bar-chart",
+    "version": 1,
+    "dataset": "scores",
+    "encoding": {
+      "category": "model",
+      "series": [{ "field": "score", "label": "Score" }],
+      "valueLabel": "Accuracy"
+    }
+  },
+  {
+    "id": "latency-quality",
+    "type": "scatter-plot",
+    "version": 1,
+    "dataset": "runs",
+    "encoding": {
+      "x": "latency",
+      "y": "quality",
+      "color": "model",
+      "label": "run",
+      "xLabel": "Latency (ms)",
+      "yLabel": "Quality"
+    }
+  },
+  {
+    "id": "error-matrix",
+    "type": "heatmap",
+    "version": 1,
+    "dataset": "errors",
+    "encoding": { "x": "predicted", "y": "actual", "value": "count" }
+  },
+  {
+    "id": "benchmark-table",
+    "type": "table",
+    "version": 1,
+    "dataset": "benchmarks",
+    "encoding": {
+      "columns": ["model", "latency", "score"],
+      "highlights": [
+        { "field": "latency", "mode": "min" },
+        { "field": "score", "mode": "max" }
+      ]
+    }
+  }
+]
+```
+
+Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
+`temporal`; field keys and dataset/view ids must be unique. Rows may contain only
+declared keys with string, number, boolean, or null values. The combined inline
+row limit is 10,000.
 
 `pullRequest` is optional: when absent, the ingest asks `gh` for the PR of `branch`
 and fills it in. Write it explicitly only when the report verifies a PR that isn't

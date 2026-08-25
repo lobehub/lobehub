@@ -61,7 +61,7 @@ const assertWindowsCommandLineFits = ({ args, command }: CliSpawnPlan): void => 
   );
 };
 
-const isPathLikeCommand = (command: string) =>
+export const isPathLikeCommand = (command: string) =>
   path.win32.isAbsolute(command) || path.posix.isAbsolute(command) || /[\\/]/.test(command);
 
 const fileExists = async (filePath: string): Promise<boolean> => {
@@ -89,9 +89,6 @@ const execFileString = async (command: string, args: string[]): Promise<string> 
     );
   });
 
-const pickWindowsExecutable = (candidates: string[]): string | undefined =>
-  candidates.find((candidate) => WINDOWS_EXE_EXT_PATTERN.test(candidate));
-
 const pickWindowsNodeExecutable = (candidates: string[]): string | undefined =>
   candidates.find(
     (candidate) =>
@@ -115,8 +112,16 @@ const resolveShimPathToken = (shimPath: string, token: string): string | undefin
     );
   }
 
-  if (lowerToken.startsWith('%dp0%')) {
-    return joinShimRelativePath(shimPath, trimmedToken.slice('%dp0%'.length).replace(/^[\\/]/, ''));
+  const shimDirectoryPrefix = lowerToken.startsWith('%~dp0')
+    ? '%~dp0'
+    : lowerToken.startsWith('%dp0%')
+      ? '%dp0%'
+      : undefined;
+  if (shimDirectoryPrefix) {
+    return joinShimRelativePath(
+      shimPath,
+      trimmedToken.slice(shimDirectoryPrefix.length).replace(/^[\\/]/, ''),
+    );
   }
 
   if (path.win32.isAbsolute(trimmedToken)) return trimmedToken;
@@ -183,7 +188,7 @@ const inferWindowsNodeScriptFromShim = async (
   const patterns: Array<RegExp | [RegExp, string]> = [
     /exec\s+"(\$basedir[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
     /exec\s+(node(?:\.exe)?)\s+"([^"]+)"/i,
-    /"(%dp0%[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
+    /"(%(?:~dp0|dp0%)[^"]*node(?:\.exe)?)"\s+"([^"]+)"/i,
     /"(%_prog%)"\s+"([^"]+)"/i,
     [/(?:^|\r?\n)\s*(node(?:\.exe)?)\s+"([^"]+)"/i, 'node'],
   ];
@@ -208,7 +213,7 @@ const inferWindowsExecutableFromShim = async (
 ): Promise<WindowsShimTarget | undefined> => {
   const matches = [
     ...source.matchAll(/\$basedir[\\/]([^"\s]+?\.exe)/gi),
-    ...source.matchAll(/%dp0%\\([^"\r\n]+?\.exe)/gi),
+    ...source.matchAll(/%(?:~dp0|dp0%)[\\/]?([^"\r\n]+?\.exe)/gi),
   ];
 
   for (const match of matches) {
@@ -247,9 +252,16 @@ const resolveWindowsBareCommand = async (
       .map((line) => line.trim())
       .filter(Boolean);
 
-    const executable = pickWindowsExecutable(candidates);
-    if (executable) return { command: executable };
-
+    // Walk candidates in PATH order — `inferWindowsNpmShimTarget` already
+    // returns a bare `.exe` as-is and unwraps a `.cmd`/`.bat`/extensionless
+    // shim via static parsing. Do NOT pre-scan for any `.exe` first: an
+    // earlier `.cmd` shim that resolves to a real target must win over a
+    // later bare `.exe`, e.g. a WinGet-installed `codex.cmd` ahead of the
+    // `WindowsApps\...` App Execution Alias stub some MSIX-packaged tools
+    // (e.g. the Codex desktop app) also add to PATH — Node's execFile/spawn
+    // throws EPERM on that stub, so picking it over an earlier working shim
+    // breaks CLI launch. Same PATH-order rule already applied to detection
+    // candidates in resolveCliCommand.ts (see #17376).
     for (const candidate of candidates) {
       const target = await inferWindowsNpmShimTarget(candidate);
       if (target) return target;

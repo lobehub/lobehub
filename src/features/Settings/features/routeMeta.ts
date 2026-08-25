@@ -1,6 +1,7 @@
 import { Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -26,5 +27,6 @@ const SettingsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 export const settingsRouteMeta = routeMeta({
   DynamicMeta: SettingsDynamicMeta,
   icon: Settings,
+  Skeleton: SettingsPageSkeleton,
   titleKey: 'navigation.settings',
 });

@@ -1,4 +1,9 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  CreateTaskGoalInput,
+  TaskAutomationMode,
+  TaskStatus,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -19,13 +24,17 @@ class TaskService {
     parentIdentifier?: string;
     parentTaskId?: string | null;
     priorities?: number[];
+    projectId?: string;
     statuses?: TaskStatus[];
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.list.query(params);
 
   groupList = async (params: {
     assigneeAgentId?: string;
-    groups: Array<{
+    automated?: boolean;
+    excludeStatuses?: TaskStatus[];
+    groupBy?: 'assignee' | 'priority';
+    groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;
@@ -33,6 +42,7 @@ class TaskService {
     }>;
     hasGoal?: boolean;
     parentTaskId?: string | null;
+    projectId?: string;
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.groupList.query(params);
 
@@ -62,11 +72,14 @@ class TaskService {
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
+    /** Bind a goal entity (`goals` row) to the created task. */
+    goal?: CreateTaskGoalInput;
     identifierPrefix?: string;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    projectId?: string;
     schedulePattern?: string;
     scheduleTimezone?: string;
     visibility?: 'private' | 'public';

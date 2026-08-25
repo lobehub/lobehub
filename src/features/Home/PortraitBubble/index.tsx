@@ -2,12 +2,10 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 
 import GreetingLine from '../GreetingLine';
 import { parseGreetingLine } from '../welcomeText';
-import { resolveBubbleLine } from './bubbleLine';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Prose, not a row of chips: a flex container would make the brief's entity
@@ -65,30 +63,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   `,
-  promo: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
 }));
 
 const PortraitBubble = memo(() => {
   const { t } = useTranslation('home');
-  const promo = useHomePromoLine();
   const { currentPair } = useHomeDailyBrief();
 
   const parsed = currentPair?.welcome ? parseGreetingLine(currentPair.welcome) : undefined;
-  const kind = resolveBubbleLine({ hasBrief: Boolean(parsed?.plain), hasPromo: Boolean(promo) });
 
   return (
     <div className={styles.bubble}>
-      {kind === 'promo' && <div className={styles.promo}>{promo}</div>}
-      {kind === 'brief' && parsed && (
-        <div className={styles.line}>
-          <GreetingLine parsed={parsed} />
-        </div>
-      )}
-      {kind === 'fallback' && <div className={styles.line}>{t('dashboard.greeting.subtitle')}</div>}
+      <div className={styles.line}>
+        {parsed?.plain ? <GreetingLine parsed={parsed} /> : t('dashboard.greeting.subtitle')}
+      </div>
     </div>
   );
 });

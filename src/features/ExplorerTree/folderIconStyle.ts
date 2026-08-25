@@ -6,20 +6,15 @@ import type { CSSProperties } from 'react';
 // the file-icon offset through a CSS custom property the wrapper sets — custom
 // properties cascade through shadow DOM, so toggling it on the host reflows
 // the offset live (see `getExplorerTreeStyleVars`).
-const FILE_ICON_OFFSET_VAR = '--explorer-file-icon-offset';
+export const FILE_ICON_OFFSET_VAR = '--explorer-file-icon-offset';
 const FOLDER_ICON_SIZE = '18px';
 const FILE_ICON_SIZE = '16px';
 
-// Chevron column width + row gap at default density (16 + 6). We standardised
-// consumers on default density, so this matches `--trees-icon-width` +
-// `--trees-item-row-gap` exactly.
-const RESERVED_FILE_ICON_OFFSET = '22px';
-
-// Lucide `file-text` glyph (v1.17.0), matched to the Pages (文稿) list item icon
-// so document rows read as manuscripts rather than generic files. Painted as a
-// CSS mask (not a background-image) so the slot inherits the themed tree
-// foreground color instead of the colored material `file.svg`.
-const FILE_TEXT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>`;
+// The file-icon slot has to clear the folder chevron column, i.e.
+// `--trees-icon-width` + `--trees-item-row-gap`. These are pierre's defaults at
+// default density; trees that widen either (the document tree) pass their own.
+const DEFAULT_ICON_WIDTH = 16;
+const DEFAULT_ITEM_ROW_GAP = 6;
 
 const MATERIAL_FILE_ICON_ASSETS_URL = genCdnUrl({
   path: 'assets',
@@ -120,7 +115,7 @@ const cssString = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('
 
 const cssUrl = (url: string) => `url("${cssString(url)}")`;
 
-const svgMaskUrl = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+export const svgMaskUrl = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 
 const iconUrl = (iconsUrl: string, iconName: string, open = false) =>
   `${iconsUrl}/${iconName}${open ? '-open' : ''}.svg`;
@@ -213,7 +208,7 @@ ${MATERIAL_FILE_PREFIX_RULES.map(({ iconName, prefixes }) =>
 
 // pierre renders its own <svg> in the file icon slot; we paint the material /
 // 文稿 glyph over it, so hide the built-in one.
-const HIDE_FILE_SLOT_SVG_CSS = `
+export const HIDE_FILE_SLOT_SVG_CSS = `
   [data-item-type="file"] > [data-item-section="icon"] > svg {
     visibility: hidden;
   }
@@ -254,38 +249,12 @@ ${HIDE_FILE_SLOT_SVG_CSS}
 ${getFileIconRules(iconsUrl)}
 `;
 
-// Every row in the agent documents tree is a manuscript, so paint the file slot
-// with the shared 文稿 glyph (themed, monochrome) instead of extension-specific
-// material icons.
-const DOCUMENT_FILE_ICON_CSS = `
-  [data-item-type="file"] > [data-item-section="icon"] {
-    margin-inline-start: var(${FILE_ICON_OFFSET_VAR}, 0px);
-    background-color: var(--trees-fg-override, currentColor);
-    -webkit-mask-image: ${svgMaskUrl(FILE_TEXT_ICON_SVG)};
-    -webkit-mask-position: center;
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
-    mask-image: ${svgMaskUrl(FILE_TEXT_ICON_SVG)};
-    mask-position: center;
-    mask-repeat: no-repeat;
-    mask-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
-  }
-${HIDE_FILE_SLOT_SVG_CSS}
-`;
-
 export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL) => `
 ${getFolderIconCSS(iconsUrl)}
 ${getMaterialFileIconCSS(iconsUrl)}
 `;
 
 export const FOLDER_ICON_CSS = getExplorerTreeIconCSS();
-
-// Folder rows keep their material icons; file rows use the 文稿 glyph. Used by
-// the agent documents tree only — the project Files tree keeps FOLDER_ICON_CSS.
-export const DOCUMENT_TREE_ICON_CSS = `
-${getFolderIconCSS(MATERIAL_FILE_ICON_ASSETS_URL)}
-${DOCUMENT_FILE_ICON_CSS}
-`;
 
 // Tree rows are pointer targets, not prose: allowing text selection lets a
 // drag-select swallow the row so a subsequent right-click hits the browser's
@@ -316,10 +285,14 @@ export const HIDE_POINTER_FOCUS_RING_CSS = `
 `;
 
 export const getExplorerTreeStyleVars = ({
+  iconWidth = DEFAULT_ICON_WIDTH,
   reserveChevronSlot,
+  rowGap = DEFAULT_ITEM_ROW_GAP,
 }: {
+  iconWidth?: number;
   reserveChevronSlot: boolean;
+  rowGap?: number;
 }): CSSProperties =>
   ({
-    [FILE_ICON_OFFSET_VAR]: reserveChevronSlot ? RESERVED_FILE_ICON_OFFSET : '0px',
+    [FILE_ICON_OFFSET_VAR]: reserveChevronSlot ? `${iconWidth + rowGap}px` : '0px',
   }) as CSSProperties;

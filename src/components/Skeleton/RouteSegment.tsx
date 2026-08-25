@@ -2,13 +2,17 @@
 
 import { useLocation } from 'react-router';
 
+import { useRouteSkeleton } from '@/spa/router/useRouteSkeleton';
+
+import AppsSkeleton from './Apps';
 import ConversationLayoutSkeleton from './Conversation/Layout';
+import MemorySkeleton from './Memory';
 import SettingsPageSkeleton from './Settings/Page';
 import SurfaceSkeleton, { type SurfaceSkeletonVariant } from './Surface';
 
 const FORM_SEGMENTS = new Set(['permission', 'profile']);
 const GRID_SEGMENTS = new Set(['channel', 'statistics']);
-const LIST_SEGMENTS = new Set(['history', 'memory', 'topics']);
+const LIST_SEGMENTS = new Set(['history', 'memory']);
 
 const getSurfaceVariant = (pathname: string): SurfaceSkeletonVariant => {
   const segments = pathname.split('/').filter(Boolean);
@@ -31,18 +35,16 @@ const isConversationPath = (pathname: string) => {
   return segments.length === 3 && segments[2].startsWith('tpc_');
 };
 
-/**
- * Structural fallback shared by nested route boundaries.
- *
- * It deliberately maps URLs to settled surface families instead of drawing one
- * universal placeholder. This keeps parent and leaf Suspense boundaries on the
- * same visual structure while their chunks resolve at different times.
- */
 const RouteSegmentSkeleton = () => {
+  const Skeleton = useRouteSkeleton();
   const { pathname } = useLocation();
+  const segments = pathname.split('/').filter(Boolean);
 
+  if (Skeleton) return <Skeleton />;
   if (pathname.startsWith('/settings/')) return <SettingsPageSkeleton />;
+  if (segments[0] === 'apps') return <AppsSkeleton />;
   if (isConversationPath(pathname)) return <ConversationLayoutSkeleton />;
+  if (segments[0] === 'memory' && segments.length === 1) return <MemorySkeleton />;
 
   return <SurfaceSkeleton variant={getSurfaceVariant(pathname)} />;
 };

@@ -49,6 +49,7 @@
   "home.recentPages": "الصفحات الحديثة",
   "home.uploadEntries.library.title": "إنشاء مكتبة جديدة",
   "home.viewAll": "عرض الكل",
+  "library.backToResources": "العودة إلى الموارد",
   "library.hierarchy.empty.desc": "أضف ملفات أو أنشئ مجلدًا للبدء",
   "library.hierarchy.empty.title": "لا يوجد شيء هنا بعد",
   "library.import.action": "استيراد إلى مساحة العمل...",

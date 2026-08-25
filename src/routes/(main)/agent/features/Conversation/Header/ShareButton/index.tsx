@@ -23,7 +23,7 @@ interface ShareButtonProps {
 const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const { openShareModal } = useShareModal({ open, setOpen });
   const { t } = useTranslation('common');
-  const { topicId } = useAgentContext();
+  const { agentId, topicId } = useAgentContext();
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
 
@@ -48,7 +48,9 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   return (
     <>
       {enableTopicLinkShare ? (
-        <SharePopover onOpenModal={openShareModal}>{iconButton}</SharePopover>
+        <SharePopover agentId={agentId} onOpenModal={openShareModal}>
+          {iconButton}
+        </SharePopover>
       ) : (
         iconButton
       )}

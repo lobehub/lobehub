@@ -158,7 +158,14 @@ describe('feedbackSatisfactionJudge', () => {
         ],
         model: 'gpt-test',
       }),
-      { metadata: { trigger: RequestTrigger.AgentSignal } },
+      expect.objectContaining({
+        metadata: { trigger: RequestTrigger.AgentSignal },
+        tracing: {
+          promptVersion: 'v1',
+          scenario: 'signal_feedback_satisfaction',
+          schemaName: 'agent_signal_feedback_satisfaction',
+        },
+      }),
     );
     expect(result).toEqual(
       expect.objectContaining({

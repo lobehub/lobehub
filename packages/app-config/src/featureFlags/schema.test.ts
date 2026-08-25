@@ -129,6 +129,12 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableStorageOverage).toBe(true);
   });
 
+  it('should keep realtime voice dictation disabled by default', () => {
+    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
+
+    expect(mappedState.enableVoiceDictation).toBe(false);
+  });
+
   it('should keep onboarding v2 off by default outside development', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
@@ -181,6 +187,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       auth_captcha: true,
       market: true,
       speech_to_text: true,
+      voice_dictation: true,
       changelog: false,
       api_key_manage: false,
       cloud_promotion: true,
@@ -209,6 +216,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       enableStorageOverage: false,
       showMarket: true,
       enableSTT: true,
+      enableVoiceDictation: true,
       showCloudPromotion: true,
       hideGitHub: false,
       hideDocs: true,

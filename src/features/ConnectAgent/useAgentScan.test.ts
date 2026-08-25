@@ -74,4 +74,22 @@ describe('buildConnectAgentConfig', () => {
       title: 'default',
     });
   });
+
+  it('stamps the runtime type as the agent provider for platform agents', () => {
+    expect(
+      buildConnectAgentConfig({
+        provider: getConnectableProvider('hermes')!,
+        target: { kind: 'local' },
+      }),
+    ).toMatchObject({ provider: 'hermes' });
+  });
+
+  it('stamps the runtime type as the agent provider for CLI agents', () => {
+    expect(
+      buildConnectAgentConfig({
+        provider: getConnectableProvider('claude-code')!,
+        target: { deviceId: 'device-1', kind: 'device' },
+      }),
+    ).toMatchObject({ provider: 'claude-code' });
+  });
 });

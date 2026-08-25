@@ -1,15 +1,20 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRightIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import RingLoadingIcon from '@/components/RingLoading';
 import { useChatStore } from '@/store/chat';
 
 import type { OperationGoal } from './deriveOperationGoals';
+import GoalElapsedTime from './GoalElapsedTime';
 import GoalStatusLine from './GoalStatusLine';
+import type { GoalWorkPhase } from './goalWorkProgress';
 import { useGoalWorkStatus } from './useGoalWorkStatus';
+
+const ACTIVE_PHASES = new Set<GoalWorkPhase>(['repairing', 'running', 'verifying']);
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -42,12 +47,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
-  identifier: css`
-    flex-shrink: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   title: css`
     min-width: 0;
     font-size: 14px;
@@ -57,13 +56,14 @@ const styles = createStaticStyles(({ css }) => ({
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
-  const { progress } = useGoalWorkStatus({
+  const { progress, startedAt } = useGoalWorkStatus({
     criteriaCount: goal.criteriaCount,
     goalKnown: true,
     identifier: goal.identifier,
     maxRounds: goal.maxRounds,
     taskId: goal.taskId,
   });
+  const isActive = ACTIVE_PHASES.has(progress.phase);
 
   return (
     <Flexbox
@@ -81,15 +81,26 @@ const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {
       }}
     >
       <Center className={styles.icon}>
-        <Icon icon={TargetIcon} size={20} />
+        {isActive ? (
+          <RingLoadingIcon
+            ringColor={cssVar.colorBorder}
+            size={18}
+            style={{ color: cssVar.colorWarning }}
+          />
+        ) : (
+          <Icon icon={TargetIcon} size={20} />
+        )}
       </Center>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-        <Text ellipsis className={styles.title}>
-          {goal.name}
-        </Text>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Text ellipsis className={styles.title}>
+            {goal.name}
+          </Text>
+          <Tag size={'small'}>{goal.identifier}</Tag>
+        </Flexbox>
         <GoalStatusLine {...progress} />
       </Flexbox>
-      <Text className={styles.identifier}>{goal.identifier}</Text>
+      {isActive && <GoalElapsedTime startedAt={startedAt} />}
       <ChevronRightIcon className={styles.chevron} size={16} />
     </Flexbox>
   );

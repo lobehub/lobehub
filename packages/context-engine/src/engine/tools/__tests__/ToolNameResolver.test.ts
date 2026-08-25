@@ -897,6 +897,88 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
+      it('should drop explicitly namespaced tools that were not offered this turn', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____submitEvidence' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-acceptance-evidence': {
+            api: [{ description: '', name: 'submitEvidence', parameters: {} }],
+            identifier: 'lobe-acceptance-evidence',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-local-system': {
+            api: [{ description: '', name: 'runCommand', parameters: {} }],
+            identifier: 'lobe-local-system',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, [
+          'lobe-acceptance-evidence____submitEvidence',
+        ]);
+
+        expect(result).toEqual([]);
+      });
+
+      it('should drop valid explicitly namespaced tools that were not offered this turn', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____runCommand' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-acceptance-evidence': {
+            api: [{ description: '', name: 'submitEvidence', parameters: {} }],
+            identifier: 'lobe-acceptance-evidence',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-local-system': {
+            api: [{ description: '', name: 'runCommand', parameters: {} }],
+            identifier: 'lobe-local-system',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, [
+          'lobe-acceptance-evidence____submitEvidence',
+        ]);
+
+        expect(result).toEqual([]);
+      });
+
+      it('should accept an explicitly offered tool when no prompt manifest is available', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'workspace____search' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const result = resolver.resolve(toolCalls, {}, ['workspace____search']);
+
+        expect(result).toEqual([
+          expect.objectContaining({
+            apiName: 'search',
+            id: 'call_1',
+            identifier: 'workspace',
+          }),
+        ]);
+      });
+
       it('should treat an enabled call as unique when a disabled duplicate would have made it ambiguous', () => {
         const toolCalls = [
           {

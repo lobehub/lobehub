@@ -129,7 +129,7 @@ describe('AgentPickerStep', () => {
     const continueButton = screen.getByRole('button', { name: 'agentPicker.continue (1)' });
     fireEvent.click(continueButton);
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/?onboarding=task'));
     expect(installMarketplaceAgents).toHaveBeenCalledWith(['t1']);
     expect(finishOnboarding).toHaveBeenCalledTimes(1);
     expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
@@ -142,7 +142,7 @@ describe('AgentPickerStep', () => {
     });
     expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
       flow: 'classic',
-      targetUrl: '/',
+      targetUrl: '/?onboarding=task',
     });
   });
 
@@ -151,7 +151,7 @@ describe('AgentPickerStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/?onboarding=task'));
     expect(finishOnboarding).toHaveBeenCalledTimes(1);
     expect(installMarketplaceAgents).not.toHaveBeenCalled();
     expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
@@ -164,7 +164,7 @@ describe('AgentPickerStep', () => {
     });
     expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
       flow: 'classic',
-      targetUrl: '/',
+      targetUrl: '/?onboarding=task',
     });
   });
 
@@ -203,7 +203,7 @@ describe('AgentPickerStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/?onboarding=task'));
     expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
       action: 'skip',
       entry: 'agent_skip',
@@ -214,7 +214,7 @@ describe('AgentPickerStep', () => {
     });
     expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
       flow: 'agent',
-      targetUrl: '/',
+      targetUrl: '/?onboarding=task',
     });
   });
 });

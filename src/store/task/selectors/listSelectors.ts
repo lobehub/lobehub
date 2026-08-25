@@ -7,14 +7,6 @@ const taskListTotal = (s: TaskStoreState) => s.tasksTotal;
 
 const isTaskListInit = (s: TaskStoreState) => s.isTaskListInit;
 
-const scheduledTaskList = (s: TaskStoreState): TaskListItem[] => s.scheduledTasks;
-
-const scheduledTaskListTotal = (s: TaskStoreState) => s.scheduledTasksTotal;
-
-const isScheduledTaskListInit = (s: TaskStoreState) => s.isScheduledTaskListInit;
-
-const viewMode = (s: TaskStoreState) => s.viewMode;
-
 const listVisibility = (s: TaskStoreState) => s.listVisibility;
 
 const statusDisplayMap: Record<string, string> = {
@@ -53,17 +45,13 @@ export const taskListSelectors = {
   doneTasks,
   getDisplayStatus,
   isListEmpty,
-  isScheduledTaskListInit,
   isTaskGroupListInit,
   isTaskListInit,
   listVisibility,
   needsInputTasks,
   runningTasks,
-  scheduledTaskList,
-  scheduledTaskListTotal,
   taskGroupByKey,
   taskGroups,
   taskList,
   taskListTotal,
-  viewMode,
 };

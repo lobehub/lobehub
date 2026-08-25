@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { ReasoningGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types';
 import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
@@ -21,12 +21,12 @@ import { registerAgentSpaceFsCommand } from './agent/spaceFs';
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
   const content = await readFile(graphFile, 'utf8');
   const graph = JSON.parse(content);
-  const result = ReasoningGraphSchema.safeParse(graph);
+  const result = AgentGraphSchema.safeParse(graph);
 
   if (!result.success) {
     const issue = result.error.issues[0];
     const path = issue?.path.length ? `${issue.path.join('.')}: ` : '';
-    throw new Error(`Invalid ReasoningGraph: ${path}${issue?.message ?? 'unknown error'}`);
+    throw new Error(`Invalid AgentGraph: ${path}${issue?.message ?? 'unknown error'}`);
   }
 
   return result.data;
@@ -186,7 +186,7 @@ export function registerAgentCommand(program: Command) {
     .option('-m, --model <model>', 'New model ID')
     .option('-p, --provider <provider>', 'New provider ID')
     .option('-s, --system-role <role>', 'New system role prompt')
-    .option('--graph-file <path>', 'ReasoningGraph JSON file')
+    .option('--graph-file <path>', 'AgentGraph JSON file')
     .option('--enable-graph', 'Enable graph runtime')
     .option('--disable-graph', 'Disable graph runtime')
     .option(
@@ -242,24 +242,6 @@ export function registerAgentCommand(program: Command) {
           return;
         }
 
-        const chatConfig: Record<string, any> = {};
-        if (options.enableGraph) chatConfig.enableGraphMode = true;
-        if (options.disableGraph) chatConfig.enableGraphMode = false;
-        if (options.graphFile) {
-          try {
-            chatConfig.graph = await readGraphConfig(options.graphFile);
-          } catch (error) {
-            log.error(`Failed to read graph JSON: ${(error as Error).message}`);
-            process.exit(1);
-            return;
-          }
-        }
-        // Merged, not replaced: `--config-file` may carry other chatConfig keys
-        // and the graph flags should only override the ones they own.
-        if (Object.keys(chatConfig).length > 0) {
-          value.chatConfig = { ...(value.chatConfig as object | undefined), ...chatConfig };
-        }
-
         // agencyConfig is deep-merged server-side, so a nested key is removed by
         // sending it as `null` (e.g. `{ "heterogeneousProvider": null }`); omitted keys are kept.
         if (options.agencyConfigFile) {
@@ -270,6 +252,29 @@ export function registerAgentCommand(program: Command) {
             process.exit(1);
             return;
           }
+        }
+
+        // Graph Agent flags live on the agency config (the agent's behavior
+        // body), not the chat config. Merged, not replaced: `--config-file` /
+        // `--agency-config-file` may carry other agencyConfig keys and the
+        // graph flags should only override the ones they own.
+        const graphAgencyConfig: Record<string, any> = {};
+        if (options.enableGraph) graphAgencyConfig.enableGraphMode = true;
+        if (options.disableGraph) graphAgencyConfig.enableGraphMode = false;
+        if (options.graphFile) {
+          try {
+            graphAgencyConfig.graph = await readGraphConfig(options.graphFile);
+          } catch (error) {
+            log.error(`Failed to read graph JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+        if (Object.keys(graphAgencyConfig).length > 0) {
+          value.agencyConfig = {
+            ...(value.agencyConfig as object | undefined),
+            ...graphAgencyConfig,
+          };
         }
 
         if (Object.keys(value).length === 0) {

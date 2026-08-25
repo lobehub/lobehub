@@ -321,7 +321,16 @@ const Settings = ({
                       name={'command'}
                       rules={[{ message: t('settings.rules.commandRequired'), required: true }]}
                     >
-                      <MCPStdioCommandInput placeholder="npx, uv, python..." />
+                      <MCPStdioCommandInput
+                        placeholder="npx, uv, python..."
+                        onParsedArgs={(args) => {
+                          const existing: string[] = connectionForm.getFieldValue('args') ?? [];
+                          connectionForm.setFieldValue('args', [
+                            ...args,
+                            ...existing.filter(Boolean),
+                          ]);
+                        }}
+                      />
                     </AForm.Item>
 
                     <AForm.Item

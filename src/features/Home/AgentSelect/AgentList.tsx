@@ -1,12 +1,13 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { PinIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import Avatar from '@/components/Avatar';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeStore } from '@/store/home';
@@ -78,6 +79,7 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
         <Avatar
           avatar={row.avatar || DEFAULT_AVATAR}
           background={row.backgroundColor}
+          name={row.title}
           shape={'square'}
           size={24}
         />

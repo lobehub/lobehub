@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 
 import { getTrpcClient } from '../api/client';
+import { CLI_PRODUCT_NAME, resolveCliDirName } from '../constants/identity';
 import { getTask, listTasks, removeTask, saveTask } from '../daemon/taskRegistry';
 import { log } from '../utils/logger';
 
@@ -13,7 +14,7 @@ import { log } from '../utils/logger';
 // Maps topicId → hermes session_id so multi-turn conversations can resume
 // the same session across separate `runHeteroTask` invocations.
 
-const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
+const LOBEHUB_DIR_NAME = resolveCliDirName();
 const HERMES_SESSIONS_FILE = path.join(os.homedir(), LOBEHUB_DIR_NAME, 'hermes-sessions.json');
 
 function parseHermesSessionId(stderr: string): string | undefined {
@@ -63,6 +64,7 @@ export interface RunHeteroTaskParams {
   agentType: RemoteHeterogeneousAgentType;
   cwd?: string;
   operationId: string;
+  parentOperationId?: string;
   platformAgentId?: string;
   prompt: string;
   taskId: string;
@@ -86,6 +88,7 @@ async function sendAutoNotify(
   taskId: string,
   text: string,
   agentId?: string,
+  operationId?: string,
   workspaceId?: string,
 ): Promise<void> {
   try {
@@ -93,6 +96,7 @@ async function sendAutoNotify(
     await client.agentNotify.notify.mutate({
       agentId,
       content: text,
+      operationId,
       role: 'assistant',
       topicId,
     });
@@ -106,15 +110,17 @@ async function sendAutoNotify(
  * `agent_runtime_end`, close the frontend subscription, and fire the run's
  * lifecycle hooks (task lifecycle + IM bot callback).
  *
- * Pass `error` to finalize the run as FAILED (non-zero process exit) — the
- * server marks the owning task failed and renders the error. Omit it for a
- * clean completion (the agent already sent its final message via `lh notify`).
+ * Pass `error` to finalize the run as FAILED (non-zero process exit), or
+ * `cancelled` to finalize it as INTERRUPTED (signal exit). Omit both for a clean
+ * completion (the agent already sent its final message via `lh notify`).
  */
 async function sendTerminalSignal(
   topicId: string,
   agentId?: string,
+  operationId?: string,
   workspaceId?: string,
   error?: { message: string; type?: string },
+  cancelled = false,
 ): Promise<void> {
   try {
     const client = await getTrpcClient(workspaceId);
@@ -122,6 +128,8 @@ async function sendTerminalSignal(
       agentId,
       content: '',
       done: true,
+      operationId,
+      ...(cancelled ? { cancelled: true } : {}),
       ...(error ? { error } : {}),
       role: 'assistant',
       topicId,
@@ -137,8 +145,8 @@ async function sendTerminalSignal(
  */
 function buildNotifyProtocol(lhPath: string, topicId: string): string {
   return (
-    `## Context: This task was dispatched by LobeHub\n\n` +
-    `This conversation / task was sent to you by the **LobeHub platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the LobeHub chat interface.\n\n` +
+    `## Context: This task was dispatched by ${CLI_PRODUCT_NAME}\n\n` +
+    `This conversation / task was sent to you by the **${CLI_PRODUCT_NAME} platform** on behalf of a user. You are running as a background agent; the user is waiting for your response inside the ${CLI_PRODUCT_NAME} chat interface.\n\n` +
     `**When to call notify**: any time you have something meaningful to tell the user — a key finding, a decision you made, a result, a question, or your final answer. Think of it as speaking directly to the user in the chat window.\n\n` +
     `**What to hide**: internal work details such as tool call sequences, file reads, intermediate command output, retries, or low-level reasoning steps. The user cares about outcomes and insights, not your step-by-step mechanics.\n\n` +
     `## Sending messages back to the user\n\n` +
@@ -169,6 +177,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     agentType,
     cwd,
     operationId,
+    parentOperationId,
     platformAgentId,
     prompt,
     taskId,
@@ -180,9 +189,12 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   // Propagate workspace scope into the spawned child so its own `lh notify`
   // invocations (and any grandchildren it shells out) inherit the same scope
   // via getTrpcClient → resolveWorkspaceId.
-  const childEnv: NodeJS.ProcessEnv = workspaceId
-    ? { ...process.env, LOBEHUB_WORKSPACE_ID: workspaceId }
-    : { ...process.env };
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    LOBEHUB_OPERATION_ID: operationId,
+    ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
+  };
+  const sessionKey = parentOperationId ? operationId : topicId;
 
   if (agentType === 'openclaw') {
     // openclaw agent --local is one-shot: each invocation processes one message and exits.
@@ -195,11 +207,16 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     // history was not cleanly committed.
     const enrichedPrompt = `${prompt}\n\n${buildNotifyProtocol(lhPath, topicId)}`;
 
-    // Kill any existing openclaw process for this topicId before spawning a new one.
+    // Top-level turns reuse one topic session and replace an older process. Group
+    // members intentionally share a topic, so isolate them by operation instead.
     // openclaw serialises session writes; a concurrent process holding the session
     // lock will cause the new one to exit with code 1.
     for (const existing of listTasks()) {
-      if (existing.topicId === topicId && existing.agentType === 'openclaw') {
+      if (
+        existing.agentType === 'openclaw' &&
+        (existing.taskId === taskId ||
+          (!parentOperationId && !existing.parentOperationId && existing.topicId === topicId))
+      ) {
         try {
           process.kill(existing.pid, 'SIGTERM');
         } catch {
@@ -216,7 +233,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         '--agent',
         openclawAgent,
         '--session-id',
-        topicId,
+        sessionKey,
         '--message',
         enrichedPrompt,
         '--local',
@@ -239,6 +256,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       agentId,
       agentType,
       operationId,
+      parentOperationId,
       pid,
       startedAt: new Date().toISOString(),
       taskId,
@@ -255,6 +273,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     // - Clean exit (code=0, no signal): openclaw already sent its final message via
     //   `lh notify`; just send a terminal signal to publish `agent_runtime_end`.
     child.on('close', (code, signal) => {
+      if (getTask(taskId)?.pid !== pid) return;
       removeTask(taskId);
       if (code !== 0 || signal !== null) {
         const cancelled = signal !== null;
@@ -263,17 +282,19 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
           : `Task failed (exit code: ${code})`;
         // Write the notice bubble first, THEN signal terminal (sequential).
         // Fire-and-forget both, but ensure the terminal signal is always sent.
-        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+        void sendAutoNotify(topicId, taskId, text, agentId, operationId, workspaceId).finally(() =>
           sendTerminalSignal(
             topicId,
             agentId,
+            operationId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
+            cancelled,
           ),
         );
       } else {
         // Clean exit — openclaw already sent its final message; just signal done.
-        void sendTerminalSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, agentId, operationId, workspaceId);
       }
     });
 
@@ -281,9 +302,14 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
   }
 
   if (agentType === 'hermes') {
-    // Kill any existing hermes process for this topicId before spawning a new one.
+    // Preserve parallel group members; only top-level turns replace the previous
+    // topic process, while an exact task retry replaces itself.
     for (const existing of listTasks()) {
-      if (existing.topicId === topicId && existing.agentType === 'hermes') {
+      if (
+        existing.agentType === 'hermes' &&
+        (existing.taskId === taskId ||
+          (!parentOperationId && !existing.parentOperationId && existing.topicId === topicId))
+      ) {
         try {
           process.kill(existing.pid, 'SIGTERM');
         } catch {
@@ -294,7 +320,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     }
 
     // Resume the previous session for this topic if one exists.
-    const existingSessionId = getHermesSessionId(topicId);
+    const existingSessionId = getHermesSessionId(sessionKey);
     const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
     if (existingSessionId) {
       hermesArgs.push('--resume', existingSessionId);
@@ -317,6 +343,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       agentId,
       agentType,
       operationId,
+      parentOperationId,
       pid,
       startedAt: new Date().toISOString(),
       taskId,
@@ -335,6 +362,7 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     });
 
     child.on('close', (code, signal) => {
+      if (getTask(taskId)?.pid !== pid) return;
       removeTask(taskId);
 
       if (code !== 0 || signal !== null) {
@@ -342,12 +370,14 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
         const text = cancelled
           ? `Task cancelled (signal: ${signal})`
           : `Task failed (exit code: ${code})`;
-        void sendAutoNotify(topicId, taskId, text, agentId, workspaceId).finally(() =>
+        void sendAutoNotify(topicId, taskId, text, agentId, operationId, workspaceId).finally(() =>
           sendTerminalSignal(
             topicId,
             agentId,
+            operationId,
             workspaceId,
             cancelled ? undefined : { message: text, type: 'HeteroProcessError' },
+            cancelled,
           ),
         );
         return;
@@ -358,14 +388,14 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
       const sessionId = parseHermesSessionId(stderr);
       const response = stdout.trim();
 
-      if (sessionId) saveHermesSessionId(topicId, sessionId);
+      if (sessionId) saveHermesSessionId(sessionKey, sessionId);
 
       if (response) {
-        void sendAutoNotify(topicId, taskId, response, agentId, workspaceId).finally(() =>
-          sendTerminalSignal(topicId, agentId, workspaceId),
+        void sendAutoNotify(topicId, taskId, response, agentId, operationId, workspaceId).finally(
+          () => sendTerminalSignal(topicId, agentId, operationId, workspaceId),
         );
       } else {
-        void sendTerminalSignal(topicId, agentId, workspaceId);
+        void sendTerminalSignal(topicId, agentId, operationId, workspaceId);
       }
     });
 
@@ -397,6 +427,7 @@ export async function cancelHeteroTask(params: CancelHeteroTaskParams): Promise<
       taskId,
       'Task already completed or cancelled',
       entry.agentId,
+      entry.operationId,
       entry.workspaceId,
     );
   }

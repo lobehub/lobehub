@@ -112,7 +112,7 @@ describe('useBuilderSuggestions', () => {
     expect(result.current.suggestions[0]?.title).toBe('second title');
   });
 
-  // Regression for LOBE-12895: suggestions are persisted via the tiered SWR
+  // Regression: suggestions are persisted via the tiered SWR
   // cache provider. A cache hit (e.g. hydrated from localStorage on a revisit)
   // must render directly without paying another LLM generation.
   it('serves a persisted cache hit without regenerating', async () => {

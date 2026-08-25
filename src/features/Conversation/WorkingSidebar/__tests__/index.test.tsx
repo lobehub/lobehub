@@ -969,6 +969,48 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.setWorkingSidebarTab).toHaveBeenCalledWith('overview');
   });
 
+  it('collapses the panel when the last remaining tab is closed', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+    globalStore.status.workingSidebarTab = 'review';
+
+    render(<AgentWorkingSidebar />);
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.tabs.closePanel' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'workingPanel.tabs.closePanel' }));
+
+    expect(globalStore.toggleRightPanel).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps the last tab closable from its context menu', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'workingPanel.overview.title' }));
+    fireEvent.click(screen.getByText('workingPanel.tabs.closePanel'));
+
+    expect(globalStore.toggleRightPanel).toHaveBeenCalledWith(false);
+  });
+
+  it('leaves a pinned tab standing instead of collapsing the panel', () => {
+    agentStore.activeAgentId = 'agent';
+    localStorageState.openTabsByContext = {};
+    localStorageState.pinnedTabsByAgent = { agent: ['works'] };
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.tabs.closePanel' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('reopens a closed tab when the same external target is requested again', async () => {
     agentStore.activeAgentId = 'agent';
     reviewState.repoType = undefined;

@@ -49,6 +49,7 @@
   "home.recentPages": "最近のドキュメント",
   "home.uploadEntries.library.title": "新しいライブラリを作成",
   "home.viewAll": "すべて表示",
+  "library.backToResources": "リソースに戻る",
   "library.hierarchy.empty.desc": "ファイルを追加するか、フォルダーを作成して始めましょう",
   "library.hierarchy.empty.title": "まだ何もありません",
   "library.import.action": "ワークスペースにインポート…",

@@ -4,6 +4,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { listTraeAcpModelsMock } = vi.hoisted(() => ({
+  listTraeAcpModelsMock: vi.fn(),
+}));
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
   return { ...actual, platform: vi.fn(() => 'darwin') };
@@ -12,6 +16,10 @@ vi.mock('node:os', async () => {
 vi.mock('node:child_process', () => ({
   exec: vi.fn(),
   execFile: vi.fn(),
+}));
+
+vi.mock('../spawn/traeAcpSession', () => ({
+  listTraeAcpModels: listTraeAcpModelsMock,
 }));
 
 const execFileMock = vi.mocked(childProcess.execFile);
@@ -35,6 +43,7 @@ const importModule = () => import('./listHeterogeneousAgentModels');
 describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    listTraeAcpModelsMock.mockReset();
   });
 
   afterEach(() => {
@@ -197,6 +206,112 @@ describe('heterogeneous agent model discovery', () => {
 
     expect(parseCodeBuddyModelCatalog(stdout)).toEqual([]);
     expect(performance.now() - startedAt).toBeLessThan(100);
+  });
+
+  it('parses and discovers Cursor model slugs and labels', async () => {
+    const stdout = [
+      'Available models',
+      '',
+      'auto (default) - Auto',
+      'claude-sonnet-4-6-thinking - Claude 4.6 Sonnet Thinking',
+      'gpt-5.5-medium-fast (current) - GPT-5.5 Medium Fast',
+      'claude-sonnet-4-6-thinking - Duplicate label',
+      'diagnostic-without-a-label',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseCursorModelCatalog } = await importModule();
+
+    expect(parseCursorModelCatalog(stdout)).toEqual([
+      { id: 'auto', label: 'Auto', modelId: 'auto', providerId: 'cursor' },
+      {
+        id: 'claude-sonnet-4-6-thinking',
+        label: 'Claude 4.6 Sonnet Thinking',
+        modelId: 'claude-sonnet-4-6-thinking',
+        providerId: 'cursor',
+      },
+      {
+        id: 'gpt-5.5-medium-fast',
+        label: 'GPT-5.5 Medium Fast',
+        modelId: 'gpt-5.5-medium-fast',
+        providerId: 'cursor',
+      },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/agent',
+        cwd: '/repo',
+        env: { CURSOR_API_KEY: 'test-key' },
+        type: 'cursor',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'auto', label: 'Auto', modelId: 'auto', providerId: 'cursor' },
+        {
+          id: 'claude-sonnet-4-6-thinking',
+          label: 'Claude 4.6 Sonnet Thinking',
+          modelId: 'claude-sonnet-4-6-thinking',
+          providerId: 'cursor',
+        },
+        {
+          id: 'gpt-5.5-medium-fast',
+          label: 'GPT-5.5 Medium Fast',
+          modelId: 'gpt-5.5-medium-fast',
+          providerId: 'cursor',
+        },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/agent',
+      ['--list-models'],
+      expect.objectContaining({
+        cwd: '/repo',
+        env: { CURSOR_API_KEY: 'test-key' },
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it('parses and discovers Grok Build models', async () => {
+    const stdout = [
+      'You are not authenticated.',
+      '',
+      'Default model: grok-4.6',
+      '',
+      'Available models:',
+      '  * grok-4.6 (default)',
+      '  - grok-4.5',
+      '  - grok-4.6',
+    ].join('\n');
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseGrokBuildModelCatalog } = await importModule();
+
+    expect(parseGrokBuildModelCatalog(stdout)).toEqual([
+      { id: 'grok-4.6', modelId: 'grok-4.6', providerId: 'grok-build' },
+      { id: 'grok-4.5', modelId: 'grok-4.5', providerId: 'grok-build' },
+    ]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/grok',
+        cwd: '/repo',
+        env: { XAI_API_KEY: 'test-key' },
+        type: 'grok-build',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'grok-4.6', modelId: 'grok-4.6', providerId: 'grok-build' },
+        { id: 'grok-4.5', modelId: 'grok-4.5', providerId: 'grok-build' },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/grok',
+      ['models'],
+      expect.objectContaining({ cwd: '/repo', env: { XAI_API_KEY: 'test-key' } }),
+      expect.any(Function),
+    );
   });
 
   it('runs the configured binary with plugins enabled and forwards cwd/env', async () => {
@@ -404,5 +519,34 @@ describe('heterogeneous agent model discovery', () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it('discovers TRAE models through ACP and forwards provider arguments', async () => {
+    listTraeAcpModelsMock.mockResolvedValue([
+      { id: 'seed-2.0-code', modelId: 'seed-2.0-code', providerId: 'trae' },
+    ]);
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--feature=test'],
+        command: '/custom/traecli',
+        cwd: '/repo',
+        env: { TRAE_CONFIG_DIR: '/config' },
+        type: 'trae',
+      }),
+    ).resolves.toMatchObject({
+      models: [{ id: 'seed-2.0-code', modelId: 'seed-2.0-code', providerId: 'trae' }],
+      status: 'success',
+    });
+    expect(listTraeAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--feature=test'],
+        commandPath: '/custom/traecli',
+        cwd: '/repo',
+        env: { TRAE_CONFIG_DIR: '/config' },
+      }),
+    );
+    expect(execFileMock).not.toHaveBeenCalled();
   });
 });

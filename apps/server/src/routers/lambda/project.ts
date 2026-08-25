@@ -19,11 +19,13 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
 const projectWriteProcedure = projectProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
+const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 const projectIdentifierInput = z
   .string()
   .trim()
   .transform((value) => value.toUpperCase())
   .pipe(z.string().regex(PROJECT_IDENTIFIER_REGEX, 'Invalid project identifier'));
+const projectSlugInput = z.string().max(100).regex(PROJECT_SLUG_REGEX, 'Invalid project slug');
 
 function requireResult<T>(result: T | null, message = 'Project not found'): T {
   if (!result) throw new TRPCError({ code: 'NOT_FOUND', message });
@@ -96,6 +98,20 @@ export const projectRouter = router({
       }
     }),
 
+  addWork: projectWriteProcedure
+    .input(idInput.extend({ sortOrder: z.number().int().optional(), workId: z.string() }))
+    .mutation(async ({ ctx, input: { id, ...input } }) => {
+      try {
+        return {
+          data: requireResult(await ctx.projectModel.addWork(id, input)),
+          message: 'Work added to project',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'addWork');
+      }
+    }),
+
   create: projectWriteProcedure
     .input(
       z.object({
@@ -103,7 +119,7 @@ export const projectRouter = router({
         description: z.string().optional(),
         identifier: projectIdentifierInput,
         name: z.string().min(1).max(255),
-        slug: z.string().max(100).optional(),
+        slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
       }),
     )
@@ -133,15 +149,16 @@ export const projectRouter = router({
 
   detail: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
-      const project = requireResult(await ctx.projectModel.findById(input.id));
-      const [agents, completionReviews, knowledgeBases, tasks] = await Promise.all([
+      const project = requireResult(await ctx.projectModel.findByIdOrSlug(input.id));
+      const [agents, completionReviews, knowledgeBases, tasks, works] = await Promise.all([
         ctx.projectModel.listAgents(project.id),
         ctx.projectModel.listCompletionReviews(project.id),
         ctx.projectModel.listKnowledgeBases(project.id),
         ctx.projectModel.listTasks(project.id),
+        ctx.projectModel.listWorks(project.id),
       ]);
       return {
-        data: { agents, completionReviews, knowledgeBases, project, tasks },
+        data: { agents, completionReviews, knowledgeBases, project, tasks, works },
         success: true,
       };
     } catch (error) {
@@ -151,7 +168,10 @@ export const projectRouter = router({
 
   find: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
-      return { data: requireResult(await ctx.projectModel.findById(input.id)), success: true };
+      return {
+        data: requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+        success: true,
+      };
     } catch (error) {
       mapProjectError(error, 'find');
     }
@@ -235,6 +255,18 @@ export const projectRouter = router({
       }
     }),
 
+  removeWork: projectWriteProcedure
+    .input(idInput.extend({ workId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const removed = await ctx.projectModel.removeWork(input.id, input.workId);
+        if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Binding not found' });
+        return { message: 'Work removed from project', success: true };
+      } catch (error) {
+        mapProjectError(error, 'removeWork');
+      }
+    }),
+
   reopen: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
@@ -265,7 +297,7 @@ export const projectRouter = router({
         avatar: z.string().nullish(),
         description: z.string().nullish(),
         name: z.string().min(1).max(255).optional(),
-        slug: z.string().max(100).nullish(),
+        slug: projectSlugInput.nullish(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
       }),
     )

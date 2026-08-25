@@ -1,4 +1,4 @@
-import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { CreateTaskGoalInput, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -187,10 +187,13 @@ export class TaskDetailSliceActionImpl {
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
+    /** Bind a goal entity (`goals` row) to the created task. */
+    goal?: CreateTaskGoalInput;
     instruction: string;
     name?: string;
     parentTaskId?: string;
     priority?: number;
+    projectId?: string;
     schedulePattern?: string;
     scheduleTimezone?: string;
     visibility?: 'private' | 'public';
@@ -403,7 +406,11 @@ export class TaskDetailSliceActionImpl {
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
     });
 
-    if (assigneeAgentId !== undefined || data.parentTaskId !== undefined) {
+    if (
+      assigneeAgentId !== undefined ||
+      data.parentTaskId !== undefined ||
+      data.priority !== undefined
+    ) {
       await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
     }
   };

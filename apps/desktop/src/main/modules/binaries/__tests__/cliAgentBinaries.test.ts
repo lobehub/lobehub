@@ -50,6 +50,9 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const TRAE_ACP_HELP = `Start the ACP server
+Usage: trae-cli acp serve [flags]
+  -y, --yolo   Enable YOLO mode`;
 const callExecFile = (stdout: string, stderr = '') => {
   execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
     // promisify-wrapped: the callback is always the last positional arg.
@@ -321,6 +324,19 @@ describe('cliAgentBinaries', () => {
         available: true,
         path: '/Users/test/.local/bin/qodercli',
         version: '1.1.15',
+      });
+    });
+
+    it('detects the official TRAE CLI by its ACP capability', async () => {
+      callExecFile('/Users/test/.local/bin/traecli\n');
+      callExecFile('trae-cli version 0.120.52');
+      callExecFile(TRAE_ACP_HELP);
+
+      const { traeBinary } = await import('../cliAgentBinaries');
+      await expect(traeBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/traecli',
+        version: '0.120.52',
       });
     });
 

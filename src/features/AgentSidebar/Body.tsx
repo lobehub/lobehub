@@ -5,18 +5,13 @@ import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import TaskList from './Task';
 import Topic from './Topic';
 
 export enum ChatSidebarKey {
-  Tasks = 'tasks',
   Topic = 'topic',
 }
 
-// Topic expanded, Tasks collapsed — the resting state for an agent with no
-// saved preference (matches the prior `defaultExpandedKeys={[Topic]}`).
 const DEFAULT_EXPANDED: Record<string, boolean> = {
-  [ChatSidebarKey.Tasks]: false,
   [ChatSidebarKey.Topic]: true,
 };
 
@@ -38,7 +33,6 @@ const Body = memo(() => {
       updateSystemStatus({
         expandAgentSidebarSectionsByAgent: {
           [agentId]: {
-            [ChatSidebarKey.Tasks]: keys.includes(ChatSidebarKey.Tasks),
             [ChatSidebarKey.Topic]: keys.includes(ChatSidebarKey.Topic),
           },
         },
@@ -50,7 +44,6 @@ const Body = memo(() => {
   return (
     <Flexbox paddingInline={4}>
       <Accordion expandedKeys={expandedKeys} gap={8} onExpandedChange={handleExpandedChange}>
-        <TaskList itemKey={ChatSidebarKey.Tasks} />
         <Topic
           expanded={expandedKeys.includes(ChatSidebarKey.Topic)}
           itemKey={ChatSidebarKey.Topic}

@@ -1,4 +1,5 @@
-import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useId, useMemo, useState } from 'react';
@@ -86,7 +87,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       padding 0.2s ${cssVar.motionEaseInOut};
   `,
   listInner: css`
+    /* Blockify the inline-flex Base UI Checkbox labels — without this the todo
+       rows flow inline and wrap several per line. */
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
   `,
   processingRow: css`

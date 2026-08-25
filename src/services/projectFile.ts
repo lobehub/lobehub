@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import type {
   LocalFilePreviewUrlParams,
   LocalMoveFilesResultItem,
@@ -113,6 +114,24 @@ class ProjectFileService {
     }
 
     return localFileService.getLocalFilePreview(params);
+  }
+
+  /**
+   * Raw bytes for a file in a project working directory. Only the local desktop
+   * transport can serve bytes today — remote devices have no byte-read RPC yet,
+   * so device-backed calls resolve to `undefined`.
+   */
+  async readProjectFileBytes({
+    deviceId,
+    path,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    path: string;
+    workingDirectory: string;
+  }): Promise<{ bytes: Uint8Array; contentType: string } | undefined> {
+    if (deviceId || !isDesktop) return undefined;
+    return localFileService.readLocalFileBytes({ path, workingDirectory });
   }
 
   /**

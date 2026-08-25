@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_ARTWORK_STYLES, buildAgentArtworkPrompt } from './index';
+import {
+  AGENT_ARTWORK_STYLES,
+  buildAgentArtworkPrompt,
+  buildWorkspaceArtworkPrompt,
+} from './index';
 
 describe('buildAgentArtworkPrompt', () => {
   it('injects escaped Agent identity and description into the avatar prompt', () => {
@@ -17,7 +21,7 @@ describe('buildAgentArtworkPrompt', () => {
     );
     expect(prompt).toContain('<description>Helps with TypeScript &amp; React</description>');
     expect(prompt).toContain('full-bleed composition');
-    expect(prompt).toContain('square profile icon');
+    expect(prompt).toContain('square character image');
   });
 
   it('includes the system role in a wide background prompt', () => {
@@ -110,21 +114,148 @@ describe('buildAgentArtworkPrompt', () => {
     );
 
     expect(new Set(prompts).size).toBe(AGENT_ARTWORK_STYLES.length);
-    expect(prompts.find((p) => p.includes('watercolor'))).toBeTruthy();
-    expect(prompts.find((p) => p.includes('pixel art'))).toBeTruthy();
-    expect(prompts.find((p) => p.includes('die-cut sticker'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('Japanese anime'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('minimalist hand-drawn line art'))).toBeTruthy();
+    expect(prompts.find((p) => p.includes('64 x 64 pixel grid'))).toBeTruthy();
   });
 
   it('applies the chosen style to both avatar and background prompts', () => {
-    const avatar = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar', style: 'clay' });
+    const avatar = buildAgentArtworkPrompt({ id: 'agent-1', kind: 'avatar', style: 'painterly' });
     const background = buildAgentArtworkPrompt({
       id: 'agent-1',
       kind: 'background',
-      style: 'clay',
+      style: 'painterly',
     });
 
-    expect(avatar).toContain('clay-style figure');
-    expect(background).toContain('clay-style figure');
+    expect(avatar).toContain('hand-painted texture');
+    expect(background).toContain('hand-painted texture');
+  });
+
+  it('supports a full-body character composition', () => {
+    const prompt = buildAgentArtworkPrompt({
+      composition: 'fullBody',
+      id: 'agent-1',
+      kind: 'avatar',
+      style: 'anime',
+    });
+
+    expect(prompt).toContain('complete head-to-toe character image');
+    expect(prompt).toContain('entire body clearly');
+    expect(prompt).toContain('distinctive portrait character image');
+    expect(prompt).toContain('entire portrait canvas');
+    expect(prompt).not.toContain('distinctive square character image');
+    expect(prompt).not.toContain('head fills most of the frame');
+  });
+
+  it('asks every full-body style for one flat keyable backdrop', () => {
+    for (const style of AGENT_ARTWORK_STYLES) {
+      const prompt = buildAgentArtworkPrompt({
+        composition: 'fullBody',
+        id: 'agent-1',
+        kind: 'avatar',
+        style,
+      });
+
+      expect(prompt).toContain('completely flat, uniform background color that contrasts');
+      expect(prompt).toContain('keyed out cleanly');
+      // The per-style backdrop clauses would compete with the contrast requirement.
+      expect(prompt).not.toContain('matching solid-color background');
+      expect(prompt).not.toContain('vivid contrasting solid background color');
+      expect(prompt).not.toContain('pure white background');
+    }
+  });
+
+  it('bans the painted checkerboard that "transparent background" wording produces', () => {
+    const prompt = buildAgentArtworkPrompt({
+      composition: 'fullBody',
+      id: 'agent-1',
+      kind: 'avatar',
+      style: 'anime',
+    });
+
+    expect(prompt).toContain('Never draw a checkerboard');
+    expect(prompt).not.toContain('transparent background');
+  });
+
+  it('keeps the avatar composition on its solid background', () => {
+    const prompt = buildAgentArtworkPrompt({
+      composition: 'avatar',
+      id: 'agent-1',
+      kind: 'avatar',
+    });
+
+    expect(prompt).toContain('one vivid contrasting solid background color');
+    expect(prompt).not.toContain('keyed out cleanly');
+  });
+
+  it('keeps the mascot character wording when the lobe backdrop clause is dropped', () => {
+    const prompt = buildAgentArtworkPrompt({
+      composition: 'fullBody',
+      id: 'agent-1',
+      kind: 'avatar',
+      style: 'lobe',
+    });
+
+    expect(prompt).toContain('mascot-style 3D emoji character');
+    expect(prompt).toContain('soft studio lighting. Express the identity');
+  });
+
+  it('keeps style references compatible with a full-body composition', () => {
+    const prompt = buildAgentArtworkPrompt({
+      composition: 'fullBody',
+      id: 'agent-1',
+      kind: 'avatar',
+      style: 'lineArt',
+      styleReferenceImageUrls: ['https://example.com/line-art.webp'],
+    });
+
+    expect(prompt).toContain('character design, line quality');
+    expect(prompt).not.toContain('mascot-like head-dominant look');
+  });
+
+  it('uses an existing avatar as the exact character reference for a full-body image', () => {
+    const prompt = buildAgentArtworkPrompt({
+      composition: 'fullBody',
+      id: 'agent-1',
+      kind: 'avatar',
+      referenceImageUrl: 'https://example.com/avatar.webp',
+      style: 'anime',
+    });
+
+    expect(prompt).toContain('existing avatar as the exact character source of truth');
+    expect(prompt).toContain('same identity, face, hair, outfit');
+    expect(prompt).toContain('Do not redesign or reinterpret the character');
+    expect(prompt).toContain("ignore the avatar's background entirely");
+    expect(prompt).not.toContain('existing profile background');
+  });
+
+  it('appends the user direction last so it outweighs the derived concept', () => {
+    const prompt = buildAgentArtworkPrompt({
+      direction: '戴眼镜的少年 & 机械风',
+      id: 'agent-1',
+      kind: 'avatar',
+    });
+
+    expect(prompt).toContain('The user asked for this specifically:');
+    expect(prompt).toContain('戴眼镜的少年 &amp; 机械风');
+    expect(prompt).toContain('does not conflict with the canvas, composition, and no-text rules');
+    expect(prompt.trimEnd().endsWith('rules above.')).toBe(true);
+  });
+
+  it('ignores a blank user direction', () => {
+    const prompt = buildAgentArtworkPrompt({ direction: '   ', id: 'agent-1', kind: 'avatar' });
+
+    expect(prompt).not.toContain('The user asked for this specifically');
+  });
+
+  it('carries the user direction into a cover prompt too', () => {
+    const prompt = buildAgentArtworkPrompt({
+      direction: 'deep sea',
+      id: 'agent-1',
+      kind: 'background',
+    });
+
+    expect(prompt).toContain('The user asked for this specifically: deep sea');
   });
 
   it('steers the motif away from generic technology clichés in every prompt', () => {
@@ -140,10 +271,60 @@ describe('buildAgentArtworkPrompt', () => {
       id: 'designer',
       kind: 'background',
       referenceImageUrl: 'https://example.com/avatar.png',
-      style: 'watercolor',
+      style: 'lineArt',
     });
 
-    expect(prompt).toContain('hand-painted watercolor');
+    expect(prompt).toContain('minimalist hand-drawn line art');
     expect(prompt).not.toContain('illustration style');
+  });
+});
+
+describe('buildWorkspaceArtworkPrompt', () => {
+  it('injects escaped workspace identity and description', () => {
+    const prompt = buildWorkspaceArtworkPrompt({
+      description: 'Design & research for climate tooling',
+      id: 'ws-1',
+      name: 'Acme "Labs"',
+    });
+
+    expect(prompt).toContain('<workspace id="ws-1" name="Acme &quot;Labs&quot;">');
+    expect(prompt).toContain(
+      '<description>Design &amp; research for climate tooling</description>',
+    );
+    expect(prompt).toContain('square profile icon for the team workspace');
+    expect(prompt).toContain('full-bleed composition');
+  });
+
+  it('re-points the mascot direction from the agent to the team', () => {
+    const prompt = buildWorkspaceArtworkPrompt({ id: 'ws-1' });
+
+    expect(prompt).toContain('mascot-style 3D emoji character');
+    expect(prompt).toContain("the team's character");
+    expect(prompt).not.toContain("the agent's personality");
+  });
+
+  it('steers the motif toward the team instead of AI clichés', () => {
+    const prompt = buildWorkspaceArtworkPrompt({ id: 'ws-1' });
+
+    expect(prompt).toContain('Avoid generic AI and technology clichés');
+    expect(prompt).toContain('what this team actually works on');
+  });
+
+  it('asks style references to inspire a new character for the team', () => {
+    const prompt = buildWorkspaceArtworkPrompt({
+      id: 'ws-1',
+      styleReferenceImageUrls: ['https://example.com/ref-a.webp', 'https://example.com/ref-b.webp'],
+    });
+
+    expect(prompt).toContain('as the target character style');
+    expect(prompt).toContain('invent a new character for the team described above');
+  });
+
+  it('renders a distinct direction for every style preset', () => {
+    const prompts = AGENT_ARTWORK_STYLES.map((style) =>
+      buildWorkspaceArtworkPrompt({ id: 'ws-1', style }),
+    );
+
+    expect(new Set(prompts).size).toBe(AGENT_ARTWORK_STYLES.length);
   });
 });

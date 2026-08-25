@@ -1,5 +1,5 @@
-import { Alert, Flexbox, TextArea } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
 import { type FormInstance } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

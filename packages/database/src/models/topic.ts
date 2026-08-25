@@ -64,6 +64,32 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
+/**
+ * How long an operation that still claims `running` / `idle` may hold the topic
+ * against a background start before it is treated as abandoned.
+ *
+ * Only a backstop for the case the operation row cannot describe: a process
+ * killed mid-run leaves its row at `running` forever, and every marker clear
+ * site is best-effort (`ServerOperationStore.clearRunningMark` swallows
+ * failures; the gateway client clears it from `onSessionComplete`, which never
+ * runs if the tab closed). Runs parked on a human or an async tool are exempt —
+ * those legitimately last days — so this only has to be longer than a plausible
+ * uninterrupted generation. The real reaper remains the gateway watchdog's
+ * `finalize-abandoned` call.
+ */
+const ABANDONED_OPERATION_TTL_MS = 6 * 60 * 60 * 1000;
+/**
+ * Operation statuses that mean "this run is still the topic's owner". Parked
+ * states are included on purpose: a run waiting for approval is not stuck.
+ */
+const LIVE_OPERATION_STATUSES = new Set([
+  'idle',
+  'running',
+  'waiting_for_human',
+  'waiting_for_async_tool',
+]);
+/** Parked states are exempt from the abandoned-age backstop — see above. */
+const UNBOUNDED_OPERATION_STATUSES = new Set(['waiting_for_human', 'waiting_for_async_tool']);
 
 export interface TopicListItem extends TopicItem {
   /** The topic's last non-empty assistant reply, truncated with a trailing `…`. Only set when `queryTopics` is called with `withLastMessage`. */
@@ -1298,6 +1324,82 @@ export class TopicModel {
   };
 
   /**
+   * Atomically clear and settle the operation that still owns a topic.
+   * A row lock keeps a stale terminal callback from clearing a newer operation
+   * between the ownership check and update. Missing markers are intentionally
+   * not settled because a client-side run can set `status = 'running'` without
+   * an operation marker, so there is no proof that the terminal callback owns it.
+   *
+   * The result distinguishes a missing marker from a conflicting operation:
+   * some legitimate hetero callbacks arrive after another terminal path has
+   * already cleared their marker, while a callback that observes a newer
+   * operation must stop before dispatching lifecycle hooks for the wrong run.
+   */
+  settleRunningOperation = async (
+    id: string,
+    operationId: string,
+    status: TopicItem['status'] = 'unread',
+  ) => {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!runningOperation) {
+        const currentMessage = existing?.metadata?.heteroCurrentMsgId;
+        return {
+          assistantMessageId:
+            currentMessage?.operationId === operationId ? currentMessage.msgId : undefined,
+          status: 'missing' as const,
+        };
+      }
+      const isRoot = runningOperation.operationId === operationId;
+      const operation = isRoot
+        ? runningOperation
+        : runningOperation.childOperations?.find((child) => child.operationId === operationId);
+      if (!operation) {
+        return { activeOperationId: runningOperation.operationId, status: 'conflict' as const };
+      }
+
+      const metadata = {
+        ...existing.metadata,
+        runningOperation: isRoot
+          ? null
+          : {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.filter(
+                (child) => child.operationId !== operationId,
+              ),
+            },
+      } as ChatTopicMetadata;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata,
+          ...(isRoot && existing.status === 'running' ? { status } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      const currentMessage = existing.metadata?.heteroCurrentMsgId;
+      return {
+        assistantMessageId:
+          currentMessage?.operationId === operationId
+            ? currentMessage.msgId
+            : operation.assistantMessageId,
+        hooks: operation.hooks,
+        orchestrationRole: operation.orchestrationRole,
+        status: 'settled' as const,
+        threadId: operation.threadId ?? undefined,
+      };
+    });
+  };
+
+  /**
    * Move multiple topics (and all their messages) to another agent.
    *
    * Reassigns ownership purely through the `agentId` foreign key (the new data
@@ -1417,6 +1519,206 @@ export class TopicModel {
     });
   };
 
+  appendRunningOperationChild = async (
+    id: string,
+    parentOperationId: string,
+    child: NonNullable<ChatTopicMetadata['runningOperation']>,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || runningOperation?.operationId !== parentOperationId) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: [
+                ...(runningOperation.childOperations ?? []).filter(
+                  (operation) => operation.operationId !== child.operationId,
+                ),
+                child,
+              ],
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  removeRunningOperationChild = async (id: string, operationId: string): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation?.childOperations) return false;
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations.filter(
+                (child) => child.operationId !== operationId,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  updateRunningOperationAssistantMessage = async (
+    id: string,
+    operationId: string,
+    assistantMessageId: string,
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return false;
+
+      if (runningOperation.operationId === operationId) {
+        await tx
+          .update(topics)
+          .set({
+            metadata: {
+              ...existing.metadata,
+              heteroCurrentMsgId: { msgId: assistantMessageId, operationId },
+              runningOperation: { ...runningOperation, assistantMessageId },
+            },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return true;
+      }
+
+      const childOperations = runningOperation.childOperations?.map((child) =>
+        child.operationId === operationId ? { ...child, assistantMessageId } : child,
+      );
+      if (!childOperations?.some((child) => child.operationId === operationId)) return false;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            heteroCurrentMsgId: { msgId: assistantMessageId, operationId },
+            runningOperation: { ...runningOperation, childOperations },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return true;
+    });
+
+  takeRunningOperation = async (
+    id: string,
+    operationId: string,
+  ): Promise<
+    | {
+        isRoot: boolean;
+        operation: NonNullable<ChatTopicMetadata['runningOperation']>;
+      }
+    | undefined
+  > =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      const runningOperation = existing?.metadata?.runningOperation;
+      if (!existing || !runningOperation) return undefined;
+
+      if (runningOperation.operationId === operationId) {
+        await tx
+          .update(topics)
+          .set({
+            metadata: { ...existing.metadata, runningOperation: null },
+          })
+          .where(and(eq(topics.id, id), this.ownership()));
+        return { isRoot: true, operation: runningOperation };
+      }
+
+      const child = runningOperation.childOperations?.find(
+        (candidate) => candidate.operationId === operationId,
+      );
+      if (!child) return undefined;
+
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation: {
+              ...runningOperation,
+              childOperations: runningOperation.childOperations?.filter(
+                (candidate) => candidate.operationId !== operationId,
+              ),
+            },
+          },
+        })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return { isRoot: false, operation: child };
+    });
+
+  /**
+   * Whether the run a `runningOperation` marker points at is still the topic's
+   * legitimate owner.
+   *
+   * The marker itself cannot answer this — it carries no heartbeat and is
+   * cleared best-effort — so the authority is the operation row, which both the
+   * in-process runtime (`createOperation`) and the heterogeneous path
+   * (`CompletionLifecycle.recordStart`) write before publishing the marker.
+   *
+   * Falls back to the marker's own `startedAt` only when no row exists: hetero's
+   * `recordStart` is deliberately non-fatal, so a DB hiccup can leave a live run
+   * with a marker and no row. A marker with neither a row nor a stamp cannot be
+   * proven live and must not keep an already-stuck topic stuck.
+   */
+  private isRunningOperationAlive = async (
+    tx: Pick<LobeChatDatabase, 'select'>,
+    runningOperation: NonNullable<ChatTopicMetadata['runningOperation']>,
+  ): Promise<boolean> => {
+    const [operation] = await tx
+      .select({ createdAt: agentOperations.createdAt, status: agentOperations.status })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, runningOperation.operationId))
+      .limit(1);
+
+    if (!operation) {
+      const markerStartedAt = runningOperation.startedAt
+        ? Date.parse(runningOperation.startedAt)
+        : Number.NaN;
+      return (
+        Number.isFinite(markerStartedAt) &&
+        Date.now() - markerStartedAt < ABANDONED_OPERATION_TTL_MS
+      );
+    }
+
+    if (!LIVE_OPERATION_STATUSES.has(operation.status)) return false;
+    if (UNBOUNDED_OPERATION_STATUSES.has(operation.status)) return true;
+
+    // Claims `running`/`idle`, but a killed process never writes a terminal
+    // status — age it out so the topic is not held forever.
+    const startedAt = operation.createdAt ? new Date(operation.createdAt).getTime() : Number.NaN;
+    return !Number.isFinite(startedAt) || Date.now() - startedAt < ABANDONED_OPERATION_TTL_MS;
+  };
+
   /**
    * Atomically reserve an idle topic for one task-callback delivery.
    *
@@ -1426,7 +1728,30 @@ export class TopicModel {
    * callback can claim the topic, so the callback always re-anchors on the
    * completed turn's latest spine.
    */
-  tryReserveTaskCallback = async (id: string, messageId: string): Promise<boolean | null> =>
+  tryReserveTaskCallback = async (
+    id: string,
+    messageId: string,
+    options?: {
+      /**
+       * Permit a start that runs *under* this marker (a group member starting
+       * beneath its supervisor). A pure permission check — it never takes the
+       * reservation.
+       */
+      allowRunningOperationId?: string;
+      /**
+       * Skip the `runningOperation` check entirely and serialize only on the
+       * short reservation. Set by interactive sends: "don't run two foreground
+       * turns at once" is a UX policy the client already owns end to end (queue
+       * tray, "Send now", FIFO drain), and it is the only layer that can show
+       * the user anything. A second, blind copy of that policy here can only
+       * fail worse — it used to destroy the message before it was ever
+       * persisted. Background starts (task callbacks, cron, bots) have no such
+       * queue and keep the check.
+       */
+      ignoreRunningOperation?: boolean;
+      replacesOperationId?: string;
+    },
+  ): Promise<boolean | null> =>
     this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata })
@@ -1444,13 +1769,35 @@ export class TopicModel {
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
       if (reservation?.messageId === messageId && hasLiveReservation) return true;
-      if (existing.metadata?.runningOperation || hasLiveReservation) return false;
+
+      const runningOperation = existing.metadata?.runningOperation;
+      const ownedRunningOperation =
+        !!options?.allowRunningOperationId &&
+        runningOperation?.operationId === options.allowRunningOperationId;
+      if (options?.allowRunningOperationId) return ownedRunningOperation;
+
+      const canReplaceRunningOperation =
+        !!options?.replacesOperationId &&
+        runningOperation?.operationId === options.replacesOperationId;
+
+      // Only a run that can prove it is still alive may hold the topic. Ask the
+      // operation row rather than the marker's age: the marker is never
+      // refreshed, so age alone declares a legitimately long run (an approval
+      // wait can last days) dead and lets a competing continuation start.
+      const hasLiveRunningOperation =
+        !!runningOperation &&
+        !canReplaceRunningOperation &&
+        !options?.ignoreRunningOperation &&
+        (await this.isRunningOperationAlive(tx, runningOperation));
+
+      if (hasLiveRunningOperation || hasLiveReservation) return false;
 
       await tx
         .update(topics)
         .set({
           metadata: {
             ...existing.metadata,
+            ...(canReplaceRunningOperation && { runningOperation: null }),
             taskCallbackReservation: {
               messageId,
               reservedAt: new Date().toISOString(),
@@ -1654,6 +2001,32 @@ export class TopicModel {
       );
 
     return result[0]?.total ?? 0;
+  };
+
+  /**
+   * Resets the memory-extraction state of all the caller's topics back to
+   * `pending`, clearing any previous run summary. Used by "purge all
+   * memories": after memories are deleted, topics keep `userMemoryExtractStatus =
+   * 'completed'`, so `isTopicExtracted()` skips them forever and nothing can
+   * ever be re-extracted. Resetting to `pending` makes the next memory
+   * analysis re-process them. Fixes #18498.
+   *
+   * Scoped by `userId` only (not `mine()`): `deleteAll` removes every memory
+   * belonging to the caller regardless of workspace scope, so the reset must
+   * cover topics across personal and all workspace scopes alike, otherwise
+   * topics in the other scope keep `completed` and stay stuck behind the
+   * extraction skip gate.
+   */
+  resetMemoryExtractStatus = async () => {
+    return this.db
+      .update(topics)
+      .set({
+        metadata: sql`jsonb_set(
+          jsonb_set(${topics.metadata}, '{userMemoryExtractStatus}', to_jsonb('pending'::text), true),
+          '{userMemoryExtractRunState}', '{}'::jsonb, true
+        )`,
+      })
+      .where(eq(topics.userId, this.userId));
   };
 
   // **************** Scheduled run (backend cron) *************** //

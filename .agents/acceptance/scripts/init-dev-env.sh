@@ -102,6 +102,7 @@ REDIS_CONTAINER="${REDIS_CONTAINER:-lobehub-agent-testing-redis}"
 REDIS_URL="${REDIS_URL:-redis://localhost:${REDIS_PORT}}"
 ENV_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-dev.env"
 CLI_ENV_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-cli.env"
+JWKS_FILE_DEFAULT="$WORKSPACE_ROOT/.records/env/agent-testing-jwks.json"
 AGENT_TESTING_API_KEY="${AGENT_TESTING_API_KEY:-sk-lh-agenttesting0001}"
 QSTASH_DEV_PORT="${QSTASH_DEV_PORT:-8080}"
 QSTASH_LOCAL_TOKEN="${QSTASH_LOCAL_TOKEN:-eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=}"
@@ -109,6 +110,21 @@ QSTASH_LOCAL_CURRENT_SIGNING_KEY="${QSTASH_LOCAL_CURRENT_SIGNING_KEY:-sig_7kYjw4
 QSTASH_LOCAL_NEXT_SIGNING_KEY="${QSTASH_LOCAL_NEXT_SIGNING_KEY:-sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs}"
 S3_DEV_PORT="${S3_DEV_PORT:-29000}"
 S3_DATA_DIR="${S3_DATA_DIR:-$WORKSPACE_ROOT/.records/data/agent-testing-s3}"
+
+# Any async task the server dispatches (image generation, hetero agent runs) signs
+# an internal JWT, so a missing JWKS_KEY kills the feature before it reaches its
+# own code — and it surfaces as a generic UI error. Generate one once and reuse it.
+_load_or_gen_jwks() {
+  [[ -n "${JWKS_KEY:-}" ]] && return 0
+  if [[ ! -s "$JWKS_FILE_DEFAULT" ]]; then
+    mkdir -p "$(dirname "$JWKS_FILE_DEFAULT")"
+    node "$REPO_ROOT/scripts/generate-oidc-jwk.mjs" 2> /dev/null > "$JWKS_FILE_DEFAULT" || {
+      rm -f "$JWKS_FILE_DEFAULT"
+      return 0
+    }
+  fi
+  JWKS_KEY="$(cat "$JWKS_FILE_DEFAULT")"
+}
 
 ok() { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad() { printf '  \033[31m✘\033[0m %s\n' "$1"; }
@@ -181,6 +197,13 @@ apply_env() {
   export S3_SET_ACL="${S3_SET_ACL:-0}"
   export SPA_PORT
   export VITE_DEV_PORT="${VITE_DEV_PORT:-$SPA_PORT}"
+  _load_or_gen_jwks
+  export JWKS_KEY
+  # Reference images (style presets, uploaded artwork) live in the local s3rver on
+  # 127.0.0.1, and the server fetches them itself before calling a model. Without
+  # this the fetch is refused as a private-IP SSRF target. Local-only: the bootstrap
+  # never runs against a deployed server (guard_no_root_env).
+  export SSRF_ALLOW_PRIVATE_IP_ADDRESS="${SSRF_ALLOW_PRIVATE_IP_ADDRESS:-1}"
   # Bypass cloud chat-security UA/headless fingerprint checks for local e2e only.
   # Guarded by NODE_ENV !== 'production' inside detectSuspiciousRequest(), so it
   # can never weaken production. Lets headless agent-browser drive real chats.
@@ -218,6 +241,8 @@ env_keys() {
     S3_SET_ACL \
     SPA_PORT \
     VITE_DEV_PORT \
+    JWKS_KEY \
+    SSRF_ALLOW_PRIVATE_IP_ADDRESS \
     AGENT_TESTING_DISABLE_CHAT_SECURITY
 }
 

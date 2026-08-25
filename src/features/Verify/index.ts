@@ -6,9 +6,24 @@ export {
   groupChecks,
   shouldGroupChecks,
 } from './Acceptance/CheckList';
+export {
+  OriginConversationProvider,
+  type OriginConversationSlot,
+  type OriginTopicPanelProps,
+} from './Acceptance/originConversation';
 export { default as AcceptanceWorkspace } from './Acceptance/Workspace';
 export { default as AcceptanceEmptyDetail } from './Acceptance/Workspace/EmptyDetail';
 export { default as CheckerDock } from './CheckerDock';
+export {
+  CriterionEditor,
+  type CriterionEditorProps,
+  CriterionList,
+  CriterionRequiredChip,
+  CriterionRow,
+  type CriterionRowProps,
+  openCriterionEditModal,
+  type OpenCriterionEditModalProps,
+} from './CriterionList';
 export {
   useAcceptanceBundle,
   useAcceptanceBySubject,

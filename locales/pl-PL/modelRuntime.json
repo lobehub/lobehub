@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Nie udało się złożyć kontekstu rozmowy dla tego żądania. Proszę spróbować ponownie; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
   "DatabasePersistError": "Operacja na bazie danych nie powiodła się podczas zapisywania lub ładowania tej rozmowy. Proszę spróbować ponownie; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
   "ExceededContextWindow": "Treść bieżącego żądania przekracza długość, którą model może obsłużyć. Proszę zmniejszyć ilość treści i spróbować ponownie.",
+  "HarnessJsonParseError": "Nie można odczytać wewnętrznego ładunku, więc operacja została przerwana. Ponowienie tego samego żądania spowoduje ten sam błąd — proszę rozpocząć nową wiadomość; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
   "InsufficientQuota": "Przepraszamy, osiągnięto limit przydziału dla tego klucza. Proszę sprawdzić, czy saldo konta jest wystarczające, lub spróbować ponownie po zwiększeniu przydziału klucza.",
   "InvalidBedrockCredentials": "Uwierzytelnianie Bedrock nie powiodło się. Proszę sprawdzić AccessKeyId/SecretAccessKey i spróbować ponownie.",
   "InvalidComfyUIArgs": "Nieprawidłowa konfiguracja ComfyUI. Proszę sprawdzić ustawienia i spróbować ponownie.",
