@@ -5,6 +5,7 @@ import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
 import { gatewayCron } from './handlers/gatewayCron';
+import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections';
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
 import { messengerInstall } from './handlers/messengerInstall';
@@ -66,6 +67,11 @@ app.post(
 // POST /api/agent/gateway/callback — message gateway state-change callbacks
 // (auth is inline so the disabled-feature 204 short-circuits before auth)
 app.post('/gateway/callback', gatewayCallback);
+
+// POST /api/agent/gateway/desired-connections — a gateway pulls the connect
+// payloads it should hold, so it can rebuild itself after a restart.
+// (auth is inline for the same reason as the callback above)
+app.post('/gateway/desired-connections', gatewayDesiredConnections);
 
 // POST /api/agent/webhooks/bot-callback — agent step/completion webhooks (QStash)
 app.post('/webhooks/bot-callback', qstashAuth(), botCallback);

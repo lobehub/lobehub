@@ -1540,4 +1540,168 @@ describe('GatewayService', () => {
       expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
     });
   });
+
+  // ─── listDesiredConnectionsForHost (restart recovery, pull side) ───
+
+  describe('listDesiredConnectionsForHost', () => {
+    beforeEach(() => {
+      mockGatewayClient.isEnabled = true;
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              {
+                applicationId: 'app-1',
+                credentials: { token: 'x' },
+                id: 'prov-1',
+                settings: { watchKeywords: [{ keyword: 'hi' }] },
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+    });
+
+    // The whole point of sharing one builder: whichever side establishes a
+    // connection, the gateway ends up holding the same config. A drifting
+    // second builder would show up here and nowhere else.
+    it('hands back exactly the payload the reconcile would have pushed', async () => {
+      mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+
+      await service.ensureRunning();
+      const pushed = mockGatewayClient.connect.mock.calls[0][0];
+
+      const { connections } = await service.listDesiredConnectionsForHost('default');
+
+      expect(connections).toHaveLength(1);
+      expect(connections[0]).toEqual({ config: pushed, ensure: true });
+    });
+
+    // A pull must not wake anything: it is a read of the desired set, so a
+    // gateway can retry it freely without dragging dormant connections up.
+    it('never calls a gateway', async () => {
+      await service.listDesiredConnectionsForHost('default');
+
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.disconnect).not.toHaveBeenCalled();
+      expect(mockGatewayClient.disconnectAll).not.toHaveBeenCalled();
+      expect(mockGatewayClient.getStats).not.toHaveBeenCalled();
+      expect(mockGatewayClient.getRegisteredIds).not.toHaveBeenCalled();
+      expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
+    });
+
+    it('returns only the requested host slice', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'wechat'
+          ? [
+              {
+                applicationId: 'wx-app',
+                credentials: { token: 'w' },
+                id: 'prov-wechat',
+                settings: {},
+                userId: 'u-wx',
+              },
+            ]
+          : [
+              {
+                applicationId: 'dc-app',
+                credentials: { token: 'd' },
+                id: `prov-${platform}`,
+                settings: {},
+                userId: 'u-dc',
+              },
+            ],
+      );
+
+      const node = await service.listDesiredConnectionsForHost('node');
+      const def = await service.listDesiredConnectionsForHost('default');
+
+      expect(node.connections.map((entry) => entry.config.connectionId)).toEqual(['prov-wechat']);
+      expect(def.connections.map((entry) => entry.config.connectionId)).not.toContain(
+        'prov-wechat',
+      );
+    });
+
+    // One unreadable row used to be able to fail the whole recovery. A row
+    // that can never connect is data we exclude, not a reason to leave a
+    // gateway empty.
+    it('excludes an undecryptable row without failing the call', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
+              {
+                applicationId: 'app-2',
+                credentials: { token: 'x' },
+                id: 'prov-2',
+                settings: {},
+                userId: 'u2',
+              },
+            ]
+          : [],
+      );
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.complete).toBe(true);
+      expect(result.excluded).toBe(1);
+      expect(result.connections.map((entry) => entry.config.connectionId)).toEqual(['prov-2']);
+    });
+
+    it('reports complete:false when a platform fails to load', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) => {
+        if (platform === 'telegram') throw new Error('key vault unavailable');
+        return [];
+      });
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.complete).toBe(false);
+    });
+
+    it('includes messenger polling links and excludes ones with no usable token', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+        { applicationId: 'wx-app', credentials: {}, tenantId: 't2', userId: 'u2' },
+      ]);
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.excluded).toBe(1);
+      expect(result.connections).toHaveLength(1);
+      expect(result.connections[0].config).toMatchObject({
+        connectionId: 'messenger:wechat:t1:user-u1',
+        connectionMode: 'polling',
+        credentials: {
+          baseUrl: 'https://ilink',
+          botId: 'bot-1',
+          botToken: 'tok-1',
+          webhookToken: 'gateway-service-token',
+        },
+        webhookPath: '/api/agent/messenger/webhooks/wechat',
+      });
+    });
+
+    it('reports complete:false when messenger links fail to load', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockRejectedValue(new Error('link listing failed'));
+
+      const result = await service.listDesiredConnectionsForHost('default');
+
+      expect(result.complete).toBe(false);
+    });
+  });
 });
