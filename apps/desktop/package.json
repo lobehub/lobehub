@@ -136,6 +136,7 @@
       "node-mac-permissions"
     ],
     "overrides": {
+      "@lobehub/ui": "5.32.5",
       "node-gyp": "^12.4.0",
       "react": "19.2.7",
       "react-dom": "19.2.7",
