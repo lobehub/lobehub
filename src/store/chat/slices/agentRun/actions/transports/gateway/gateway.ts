@@ -1202,11 +1202,17 @@ export class GatewayActionImpl {
       groupId,
       id: topicId,
       type: 'updateTopic',
-      value: {
-        metadata: { ...existingTopic.metadata, runningOperation: null },
-        ...(status ? { status } : {}),
-      },
+      value: { metadata: { ...existingTopic.metadata, runningOperation: null } },
     });
+
+    // Routed through `internal_pinTopicStatus`, not a bare dispatch: it also
+    // registers the pending-write pin so a topic-list refetch racing in
+    // behind this (e.g. within the 15s window of the 'running' pin set at
+    // run start) reconciles to this status instead of reapplying the stale
+    // 'running' one and stranding the spinner again.
+    if (status) {
+      state.internal_pinTopicStatus?.({ agentId, groupId, status, topicId });
+    }
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {

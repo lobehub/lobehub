@@ -1175,6 +1175,7 @@ describe('GatewayActionImpl', () => {
     it('clears the local runningOperation marker when the gateway session completes with an error', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
@@ -1204,6 +1205,7 @@ describe('GatewayActionImpl', () => {
         completeOperation: vi.fn(),
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages: vi.fn(),
         moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
@@ -1243,6 +1245,7 @@ describe('GatewayActionImpl', () => {
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       // Ignore any dispatches from the optimistic-update path during setup.
       internalDispatchTopic.mockClear();
+      internalPinTopicStatus.mockClear();
       vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
 
       onSessionComplete({ succeeded: false, terminalReceived: true });
@@ -1252,7 +1255,13 @@ describe('GatewayActionImpl', () => {
         groupId: undefined,
         id: 'topic-1',
         type: 'updateTopic',
-        value: { metadata: { model: 'gpt-4', runningOperation: null }, status: 'active' },
+        value: { metadata: { model: 'gpt-4', runningOperation: null } },
+      });
+      expect(internalPinTopicStatus).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        status: 'active',
+        topicId: 'topic-1',
       });
     });
 
@@ -1262,6 +1271,7 @@ describe('GatewayActionImpl', () => {
     it('clears the owning bucket marker even after the user switched agents', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
@@ -1292,6 +1302,7 @@ describe('GatewayActionImpl', () => {
         completeOperation: vi.fn(),
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages: vi.fn(),
         moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
@@ -1330,6 +1341,7 @@ describe('GatewayActionImpl', () => {
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       internalDispatchTopic.mockClear();
+      internalPinTopicStatus.mockClear();
       vi.mocked(topicService.updateTopicMetadata).mockResolvedValue(undefined as never);
 
       // The user switched away before the run finished in the background.
@@ -1343,7 +1355,13 @@ describe('GatewayActionImpl', () => {
         groupId: undefined,
         id: 'topic-1',
         type: 'updateTopic',
-        value: { metadata: { model: 'gpt-4', runningOperation: null }, status: 'active' },
+        value: { metadata: { model: 'gpt-4', runningOperation: null } },
+      });
+      expect(internalPinTopicStatus).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        status: 'active',
+        topicId: 'topic-1',
       });
     });
 
@@ -1448,6 +1466,7 @@ describe('GatewayActionImpl', () => {
     it('resets the local topic status to active when a watched run completes successfully', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
@@ -1478,6 +1497,7 @@ describe('GatewayActionImpl', () => {
         completeOperation: vi.fn(),
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages: vi.fn(),
         moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
@@ -1516,6 +1536,7 @@ describe('GatewayActionImpl', () => {
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       internalDispatchTopic.mockClear();
+      internalPinTopicStatus.mockClear();
       vi.mocked(topicService.settleRunningOperation).mockClear();
       vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
 
@@ -1532,7 +1553,15 @@ describe('GatewayActionImpl', () => {
         groupId: undefined,
         id: 'topic-1',
         type: 'updateTopic',
-        value: { metadata: { model: 'gpt-4', runningOperation: null }, status: 'active' },
+        value: { metadata: { model: 'gpt-4', runningOperation: null } },
+      });
+      // Routed through the pin-aware setter, not a bare dispatch — see
+      // `internal_pinTopicStatus`'s doc comment for why that matters.
+      expect(internalPinTopicStatus).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        groupId: undefined,
+        status: 'active',
+        topicId: 'topic-1',
       });
     });
 
@@ -1542,6 +1571,7 @@ describe('GatewayActionImpl', () => {
     it('does not touch the local topic status for a clean completion the user is not watching', async () => {
       const connectToGateway = vi.fn();
       const internalDispatchTopic = vi.fn();
+      const internalPinTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
@@ -1572,6 +1602,7 @@ describe('GatewayActionImpl', () => {
         completeOperation: vi.fn(),
         connectToGateway,
         internal_dispatchTopic: internalDispatchTopic,
+        internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages: vi.fn(),
         moveVoiceMessages: vi.fn(),
         onOperationCancel: vi.fn(),
@@ -1610,6 +1641,7 @@ describe('GatewayActionImpl', () => {
 
       const { onSessionComplete } = connectToGateway.mock.calls[0][0];
       internalDispatchTopic.mockClear();
+      internalPinTopicStatus.mockClear();
       vi.mocked(topicService.settleRunningOperation).mockClear();
       vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
 
@@ -1628,6 +1660,7 @@ describe('GatewayActionImpl', () => {
         type: 'updateTopic',
         value: { metadata: { model: 'gpt-4', runningOperation: null } },
       });
+      expect(internalPinTopicStatus).not.toHaveBeenCalled();
     });
 
     // When the desktop runs against 本机 (effective runtime mode 'local'), the
