@@ -519,6 +519,7 @@ export class GatewayService {
     // more availability than the duplicate window it would avoid — and that
     // window only opens if the outage overlaps an actual migration.
     const elsewhere = new Set<string>();
+    let sawPartialView = false;
     for (const other of getConfiguredMessageGatewayHosts()) {
       if (other === host) continue;
       const snapshot = await this.fetchActualConnections(getMessageGatewayClientForHost(other));
@@ -529,6 +530,19 @@ export class GatewayService {
           other,
         );
         continue;
+      }
+      // A stats-only snapshot omits dormant registrations, so an id missing
+      // from it is not proof that host released it. Withhold what it does
+      // show, and say the answer is partial rather than letting absence read
+      // as absence — the caller keeps asking and the reconcile, which owns the
+      // hand-off, finishes it.
+      if (!snapshot.complete) {
+        sawPartialView = true;
+        log(
+          'Gateway pull[%s]: %s host view is incomplete, its missing ids prove nothing',
+          host,
+          other,
+        );
       }
       snapshot.connections.forEach((_status, id) => elsewhere.add(id));
     }
@@ -602,7 +616,7 @@ export class GatewayService {
     // instead of settling for the set it got. It will run out of attempts long
     // before a hand-off finishes — that is fine: finishing one is the periodic
     // reconcile's job, not this call's.
-    if (deferred > 0) complete = false;
+    if (deferred > 0 || sawPartialView) complete = false;
 
     log(
       'Gateway pull[%s]: %d connection(s), excluded=%d, deferred=%d, complete=%s',

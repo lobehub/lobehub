@@ -1885,6 +1885,33 @@ describe('GatewayService', () => {
       expect(result.complete).toBe(false);
     });
 
+    // A stats-only snapshot omits dormant registrations, so an id missing from
+    // it proves nothing about whether the other host released it. Saying the
+    // answer is complete on that basis is the "reported success without it
+    // being true" shape this project keeps producing.
+    it('does not call the answer complete when the other host view is partial', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      // Stats answered, registered-ids did not: a live host we can only half see.
+      mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+      mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registry unavailable'));
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.complete).toBe(false);
+    });
+
     it('hands the connection over once the previous host has released it', async () => {
       mockNodeGateway.configured = true;
       mockNodeGateway.platforms = ['wechat'];
