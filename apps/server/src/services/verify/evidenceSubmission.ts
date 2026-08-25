@@ -29,6 +29,7 @@ export const startEvidenceSubmission = async (params: {
   }
 
   const parentOperationId = operation.id;
+  const evidencePrompt = buildEvidencePrompt(plan);
   const hooks: AgentHook[] = [
     {
       handler: async () => {
@@ -65,11 +66,15 @@ export const startEvidenceSubmission = async (params: {
     agentId: operation.agentId,
     appContext: { taskId: operation.taskId, topicId: operation.topicId },
     autoStart: true,
-    ephemeralUserMessage: buildEvidencePrompt(plan),
+    ephemeralUserMessage: evidencePrompt,
     exclusivePluginIds: [AcceptanceEvidenceIdentifier],
     hooks,
     parentOperationId,
-    prompt: '',
+    // Heterogeneous CLI adapters execute `prompt` directly, while the native
+    // runtime also renders the ephemeral user message in the existing topic.
+    // Keep both populated so this evidence-only continuation has an
+    // instruction on every execution target.
+    prompt: evidencePrompt,
     suppressUserMessage: true,
     userInterventionConfig: { approvalMode: 'headless' },
   });

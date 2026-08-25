@@ -14,7 +14,7 @@ describe('chainGoalCriteriaDraft', () => {
       maxCriteria: 6,
     });
 
-    expect(GOAL_CRITERIA_DRAFT_PROMPT_VERSION).toBe('v2');
+    expect(GOAL_CRITERIA_DRAFT_PROMPT_VERSION).toBe('v3');
     expect(GOAL_CRITERIA_DRAFT_JSON_SCHEMA.name).toBe('goal_criteria_draft');
     expect(chain.messages[0].content).toContain('persistent autonomous goal');
     expect(chain.messages[0].content).toContain('at most 6 criteria');
@@ -23,6 +23,11 @@ describe('chainGoalCriteriaDraft', () => {
     );
     expect(chain.messages[0].content).toContain(
       'criteria[].instruction is the exact, detailed judging rubric',
+    );
+    expect(chain.messages[0].content).toContain('Preserve every explicit numeric threshold');
+    expect(chain.messages[0].content).toContain('do not invent an arbitrary one');
+    expect(chain.messages[0].content).toContain(
+      'distinguish the stopping condition from the safety budget',
     );
     expect(GOAL_CRITERIA_DRAFT_JSON_SCHEMA.schema.required).toEqual([
       'title',

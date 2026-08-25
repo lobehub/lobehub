@@ -151,6 +151,9 @@ describe('GoalService', () => {
       message: 'Created Goal-level acceptance Work for the remaining contract',
       outcome: 'advanced',
     });
+    const acceptanceWork = (await service.graph(graph.goal.id)).nodes.find(
+      (node) => node.id === goalAcceptanceCreated.nodeId,
+    );
 
     const acceptanceTaskCreated = await service.tick(graph.goal.id);
     expect(acceptanceTaskCreated).toMatchObject({ outcome: 'advanced' });
@@ -167,6 +170,8 @@ describe('GoalService', () => {
       'An accurate gap analysis, a report that the Goal is not accepted',
     );
     expect(acceptance?.requirement).toContain('the verdict MUST be failed');
+    expect(acceptanceWork?.description).toContain('Do not repeat expensive or destructive work');
+    expect(acceptanceWork?.description).toContain('Run only the missing or stale checks');
 
     await taskModel.updateStatus(acceptanceTaskCreated.taskId!, 'completed');
     expect((await service.tick(graph.goal.id)).outcome).toBe('advanced');

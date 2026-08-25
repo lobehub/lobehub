@@ -52,6 +52,8 @@ describe('startEvidenceSubmission', () => {
     );
     const call = execAgent.mock.calls[0][0];
     expect(call.ephemeralUserMessage).toContain('criterion-1: Model artifact exists');
+    expect(call.prompt).toBe(call.ephemeralUserMessage);
+    expect(call.prompt.trim()).not.toBe('');
     expect(call.userInterventionConfig).toEqual({ approvalMode: 'headless' });
     expect(call.hooks[0].webhook.body).toMatchObject({
       deliverable: 'artifact summary',

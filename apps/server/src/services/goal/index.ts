@@ -253,7 +253,8 @@ export class GoalService {
           const result = await this.graphModel.createNodeOnce(goalId, {
             description: [
               `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
-              'Use the existing Goal findings as prior evidence. Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved.',
+              'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
+              'Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
               'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
             ].join('\n\n'),
             kind: 'work',
