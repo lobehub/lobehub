@@ -62,7 +62,7 @@ describe('mainHash', () => {
     }
   });
 
-  it('shares a lineage across release versions but not verification keys', () => {
+  it('starts a new lineage for each release version and verification key', () => {
     const packagePath = path.join(desktopRoot, 'package.json');
     const originalPackage = readFileSync(packagePath, 'utf8');
     const originalPublicKey = process.env.RENDERER_OTA_PUBLIC_KEY;
@@ -70,14 +70,13 @@ describe('mainHash', () => {
       process.env.RENDERER_OTA_PUBLIC_KEY = 'key-a';
       const before = computeMainHash();
       const packageJson = JSON.parse(originalPackage);
-      packageJson.name = 'lobehub-desktop-beta';
-      packageJson.productName = 'LobeHub-Beta';
       packageJson.version = '99.0.0-beta.1';
       writeFileSync(packagePath, JSON.stringify(packageJson, null, 2));
-      expect(computeMainHash()).toBe(before);
+      const nextRelease = computeMainHash();
+      expect(nextRelease).not.toBe(before);
 
       process.env.RENDERER_OTA_PUBLIC_KEY = 'key-b';
-      expect(computeMainHash()).not.toBe(before);
+      expect(computeMainHash()).not.toBe(nextRelease);
     } finally {
       writeFileSync(packagePath, originalPackage);
       if (originalPublicKey === undefined) delete process.env.RENDERER_OTA_PUBLIC_KEY;

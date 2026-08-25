@@ -142,18 +142,6 @@ export async function buildDelta({ fromFiles, fromVersion, resolveFromPath, toDi
   };
 }
 
-export async function hydrateTreeFromManifest(manifest, casBaseUrl, outDir) {
-  await mkdir(outDir, { recursive: true });
-  const resolve = createCasResolver(casBaseUrl, outDir);
-  for (const file of manifest.files) {
-    const cached = await resolve(file);
-    const target = path.join(outDir, file.path);
-    if (cached === target) continue;
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, readFileSync(cached));
-  }
-}
-
 const fetchJson = async (url) => {
   const res = await fetch(url, { cache: 'no-store' });
   if (res.status === 404) return null;
@@ -189,11 +177,7 @@ export async function loadDeltaBases({
     return {
       bases: [
         {
-          files: readTreeEntries(fromDir).map(({ path: filePath, sha256, size }) => ({
-            path: filePath,
-            sha256,
-            size,
-          })),
+          files: readTreeEntries(fromDir),
           resolveFromPath: async (file) => path.join(fromDir, file.path),
           version: fromVersion ?? 'r0',
         },
@@ -218,6 +202,7 @@ export async function loadDeltaBases({
     const feed = feedUrl.replace(/\/$/, '');
     add(await fetchJson(`${feed}/latest.json`));
     for (const target of candidateDeltaVersions(version)) {
+      if (seen.has(target)) continue;
       add(await fetchJson(`${feed}/versions/${target}.json`));
     }
   }

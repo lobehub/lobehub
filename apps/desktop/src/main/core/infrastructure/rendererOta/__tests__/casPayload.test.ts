@@ -1,12 +1,13 @@
+import { gzipSync } from 'node:zlib';
+
 import { describe, expect, it } from 'vitest';
 
-import { decodeCasPayload, encodeCasPayload, isGzipPayload } from '../casPayload';
+import { decodeCasPayload } from '../casPayload';
 
 describe('casPayload', () => {
-  it('gzip-encodes CAS objects and decodes them back to the raw hash input', async () => {
+  it('decodes gzip CAS objects back to the raw hash input', async () => {
     const raw = Buffer.from('export const x = 1;\n'.repeat(200));
-    const encoded = await encodeCasPayload(raw);
-    expect(isGzipPayload(encoded)).toBe(true);
+    const encoded = gzipSync(raw, { level: 9 });
     expect(encoded.byteLength).toBeLessThan(raw.byteLength);
     await expect(decodeCasPayload(encoded)).resolves.toEqual(raw);
   });

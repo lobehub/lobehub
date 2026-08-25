@@ -11,7 +11,6 @@ import {
   logicalKey,
   MIN_PATCH_BYTES,
   pairRendererFiles,
-  selectDeltaFromVersions,
 } from '../rendererDelta.mjs';
 
 const file = (filePath, sha256, size) => ({ path: filePath, sha256, size });
@@ -21,21 +20,6 @@ describe('logicalKey', () => {
     expect(logicalKey('assets/es-DswPNUym.js')).toBe('assets/es.js');
     expect(logicalKey('i18n/i18n-zh-CN-BnM26YwX.js')).toBe('i18n/i18n-zh-CN.js');
     expect(logicalKey('apps/desktop/index.html')).toBe('apps/desktop/index.html');
-  });
-});
-
-describe('selectDeltaFromVersions', () => {
-  it('keeps r0 plus the last two previous versions', () => {
-    expect(selectDeltaFromVersions(['r0', 'r1', 'r2', 'r3', 'r4'], 'r5')).toEqual([
-      'r0',
-      'r3',
-      'r4',
-    ]);
-  });
-
-  it('dedupes r0 when it is also a recent version', () => {
-    expect(selectDeltaFromVersions(['r0'], 'r1')).toEqual(['r0']);
-    expect(selectDeltaFromVersions(['r0', 'r1'], 'r2')).toEqual(['r0', 'r1']);
   });
 });
 

@@ -7,26 +7,14 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export const MIN_PATCH_BYTES = 16 * 1024;
-export const MAX_PATCH_RATIO = 0.5;
-export const RECENT_DELTA_KEEP = 2;
+const MAX_PATCH_RATIO = 0.5;
+const RECENT_DELTA_KEEP = 2;
 
 const VITE_CONTENT_HASH = /-[\w-]{8}(?=\.[^./]+$)/;
 
 export const logicalKey = (filePath) => filePath.replace(VITE_CONTENT_HASH, '');
 
 const versionNumber = (version) => Number(String(version).replace(/^r/, ''));
-
-export const selectDeltaFromVersions = (availableVersions, currentVersion) => {
-  const current = versionNumber(currentVersion);
-  const nums = [...new Set(availableVersions.map(versionNumber))].filter(
-    (n) => Number.isFinite(n) && n >= 0 && n < current,
-  );
-  const selected = new Set();
-  if (nums.includes(0)) selected.add(0);
-  const recent = nums.filter((n) => n !== 0).sort((a, b) => a - b);
-  for (const n of recent.slice(-RECENT_DELTA_KEEP)) selected.add(n);
-  return [...selected].sort((a, b) => a - b).map((n) => `r${n}`);
-};
 
 export const candidateDeltaVersions = (currentVersion) => {
   const current = versionNumber(currentVersion);
