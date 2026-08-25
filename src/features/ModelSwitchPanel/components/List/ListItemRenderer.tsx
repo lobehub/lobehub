@@ -1,4 +1,4 @@
-import {
+import { 
   ActionIcon,
   Block,
   DropdownMenuPopup,
@@ -9,7 +9,7 @@ import {
   Flexbox,
   Icon,
   menuSharedStyles,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

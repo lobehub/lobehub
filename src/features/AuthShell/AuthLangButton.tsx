@@ -5,7 +5,7 @@ import {
   type DropdownMenuCheckboxItem,
   Flexbox,
   Text,
-} from '@lobehub/ui';
+} from '@lobehub/ui/base-ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { GlobeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';

@@ -6,7 +6,7 @@ import {
   DERIVED_DOCUMENT_SOURCE_TYPE,
 } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
-import { type DropdownItem } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui/base-ui';
 import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';

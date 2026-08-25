@@ -1,4 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
+import {  Flexbox, Popover  } from '@lobehub/ui/base-ui';
 import { type PropsWithChildren } from 'react';
 import React, { memo, Suspense } from 'react';
 

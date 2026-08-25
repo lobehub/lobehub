@@ -1,6 +1,6 @@
 'use client';
 
-import {
+import { 
   ActionIcon,
   Avatar,
   Block,
@@ -8,7 +8,7 @@ import {
   Flexbox,
   Icon,
   stopPropagation,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';

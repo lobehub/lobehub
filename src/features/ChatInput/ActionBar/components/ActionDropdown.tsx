@@ -1,6 +1,6 @@
 'use client';
 
-import {
+import { 
   type BaseMenuItemType,
   type DropdownMenuPopupProps,
   type DropdownMenuProps,
@@ -8,15 +8,15 @@ import {
   type MenuItemType,
   type MenuProps,
   type PopoverTrigger,
-} from '@lobehub/ui';
-import {
+ } from '@lobehub/ui/base-ui';
+import { 
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
   renderDropdownMenuItems,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { createGlobalStyle, createStaticStyles, cssVar, cx } from 'antd-style';
 import { type CSSProperties, type ReactNode } from 'react';
 import {

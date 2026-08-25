@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Popover } from '@lobehub/ui';
+import {  Flexbox, Popover  } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';

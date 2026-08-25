@@ -1,4 +1,4 @@
-import { DropdownMenu, Icon } from '@lobehub/ui';
+import {  DropdownMenu, Icon  } from '@lobehub/ui/base-ui';
 import { Check, Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

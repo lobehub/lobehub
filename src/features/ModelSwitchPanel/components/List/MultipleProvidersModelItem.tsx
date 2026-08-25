@@ -1,4 +1,4 @@
-import {
+import { 
   DropdownMenuGroup,
   DropdownMenuGroupLabel,
   DropdownMenuItem,
@@ -12,7 +12,7 @@ import {
   Flexbox,
   menuSharedStyles,
   Tag,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import { memo, useState } from 'react';

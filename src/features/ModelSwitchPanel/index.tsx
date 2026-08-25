@@ -1,4 +1,4 @@
-import {
+import { 
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
   stopPropagation,
   TooltipGroup,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 
 import { PanelContent } from './components/PanelContent';

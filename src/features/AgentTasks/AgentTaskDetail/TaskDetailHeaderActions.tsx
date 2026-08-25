@@ -1,4 +1,4 @@
-import { ActionIcon, copyToClipboard, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon, copyToClipboard, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui/base-ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon, EyeOffIcon, LinkIcon, MoreHorizontal, Trash, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';

@@ -1,4 +1,4 @@
-import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
+import { type DropdownMenuCheckboxItem } from '@lobehub/ui/base-ui';
 import { ActionIcon, DropdownMenu, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Clock3Icon, PlusIcon } from 'lucide-react';

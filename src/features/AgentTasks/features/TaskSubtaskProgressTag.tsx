@@ -1,6 +1,6 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { type DropdownMenuProps } from '@lobehub/ui';
-import { Block, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import {  type DropdownMenuProps  } from '@lobehub/ui/base-ui';
+import {  Block, DropdownMenu, Flexbox, Text  } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';

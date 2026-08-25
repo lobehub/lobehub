@@ -1,5 +1,5 @@
 import type { TaskDetailWorkspaceNode } from '@lobechat/types';
-import {
+import { 
   ActionIcon,
   Block,
   type DropdownItem,
@@ -8,7 +8,7 @@ import {
   Icon,
   Tag,
   Text,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileLock2Icon, FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';

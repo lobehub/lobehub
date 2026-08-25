@@ -1,4 +1,4 @@
-import { type MenuProps } from '@lobehub/ui';
+import { type MenuProps } from '@lobehub/ui/base-ui';
 import { Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';

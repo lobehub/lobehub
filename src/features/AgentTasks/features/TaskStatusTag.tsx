@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
+import {  type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip  } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { Loader2Icon } from 'lucide-react';

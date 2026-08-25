@@ -1,4 +1,4 @@
-import { type DropdownMenuProps, type MenuProps } from '@lobehub/ui';
+import { type DropdownMenuProps, type MenuProps } from '@lobehub/ui/base-ui';
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { confirmModal, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';

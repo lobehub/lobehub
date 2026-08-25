@@ -1,7 +1,7 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui/base-ui';
 import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';

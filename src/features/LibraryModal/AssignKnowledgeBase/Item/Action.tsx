@@ -1,4 +1,4 @@
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui/base-ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';

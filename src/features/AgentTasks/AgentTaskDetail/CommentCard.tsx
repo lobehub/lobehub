@@ -11,7 +11,7 @@ import {
   Icon,
   Markdown,
   Text,
-} from '@lobehub/ui';
+} from '@lobehub/ui/base-ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';

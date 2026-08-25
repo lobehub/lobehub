@@ -1,6 +1,6 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { Microsoft } from '@lobehub/icons';
-import {
+import { 
   ActionIcon,
   Block,
   Collapse,
@@ -10,7 +10,7 @@ import {
   Popover,
   Snippet,
   Tag,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { Divider, Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';

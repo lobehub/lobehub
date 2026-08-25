@@ -8,7 +8,7 @@ import {
   Icon,
   Text,
   Tooltip,
-} from '@lobehub/ui';
+} from '@lobehub/ui/base-ui';
 import { confirmModal, Tabs, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {

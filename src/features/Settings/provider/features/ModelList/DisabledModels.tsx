@@ -1,4 +1,4 @@
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
+import {  ActionIcon, DropdownMenu, Flexbox, Icon, Text, TooltipGroup  } from '@lobehub/ui/base-ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon, LucideCheck } from 'lucide-react';

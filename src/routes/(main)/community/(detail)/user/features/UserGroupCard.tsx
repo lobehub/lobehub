@@ -1,6 +1,6 @@
 'use client';
 
-import {
+import { 
   Avatar,
   Block,
   DropdownMenu,
@@ -12,7 +12,7 @@ import {
   Text,
   Tooltip,
   TooltipGroup,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import {
   AlertTriangle,

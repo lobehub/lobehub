@@ -1,7 +1,7 @@
 'use client';
 
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { Block, Flexbox, Icon, Popover, Tag, Text } from '@lobehub/ui';
+import {  Block, Flexbox, Icon, Popover, Tag, Text  } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';

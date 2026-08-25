@@ -1,5 +1,5 @@
 import { type MenuProps } from '@lobehub/ui';
-import {
+import { 
   AccordionItem,
   ActionIcon,
   ContextMenuTrigger,
@@ -7,7 +7,7 @@ import {
   Flexbox,
   Icon,
   Text,
-} from '@lobehub/ui';
+ } from '@lobehub/ui/base-ui';
 import {
   ArrowDownIcon,
   ArrowUpIcon,

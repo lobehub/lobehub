@@ -1,6 +1,6 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Popover, Skeleton, Text, usePopoverContext } from '@lobehub/ui';
+import { copyToClipboard, Flexbox, Popover, Skeleton, Text, usePopoverContext } from '@lobehub/ui/base-ui';
 import { Button, Checkbox, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import {

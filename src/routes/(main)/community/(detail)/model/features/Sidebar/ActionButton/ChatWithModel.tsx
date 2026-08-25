@@ -1,7 +1,7 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { DropdownMenu } from '@lobehub/ui';
+import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { Button, SplitButton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';

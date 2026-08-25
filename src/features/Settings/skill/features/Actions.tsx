@@ -1,4 +1,4 @@
-import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui/base-ui';
 import { Button, confirmModal } from '@lobehub/ui/base-ui';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';

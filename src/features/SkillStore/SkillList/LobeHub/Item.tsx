@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import {  ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation  } from '@lobehub/ui/base-ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
