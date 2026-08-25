@@ -79,6 +79,32 @@ describe('runtime chaos adapter', () => {
     );
   });
 
+  it('does not apply a non-delay fault after its parent run is aborted', async () => {
+    const parent = new AbortController();
+    const controller = new RuntimeChaosController();
+    const adapter = createRuntimeChaosAdapter(controller);
+    const receipt = await adapter.inject(
+      contextFor(
+        { type: 'drop' },
+        { apiName: 'search', phase: 'before_tool_call' },
+        { signal: parent.signal },
+      ),
+    );
+    parent.abort('run completed');
+    const mock = vi.fn();
+    await createBeforeToolCallChaosHandler(controller)({
+      apiName: 'search',
+      callIndex: 0,
+      mock,
+      operationId: 'op-later',
+      stepIndex: 2,
+    });
+    expect(mock).not.toHaveBeenCalled();
+    await expect(adapter.verifyInjection!(receipt, contextFor({ type: 'drop' }, {}))).resolves.toBe(
+      false,
+    );
+  });
+
   it('does not activate an effect unsupported by the matched phase', async () => {
     const controller = new RuntimeChaosController();
     const adapter = createRuntimeChaosAdapter(controller);

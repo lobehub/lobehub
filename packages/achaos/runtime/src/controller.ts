@@ -48,7 +48,10 @@ export class RuntimeChaosController {
   arm(context: ChaosRunContext): ChaosInjectionReceipt {
     const injectionId = `${context.runId}:runtime`;
     const abort = new AbortController();
-    const onParentAbort = () => abort.abort(context.signal.reason);
+    const onParentAbort = () => {
+      abort.abort(context.signal.reason);
+      this.#faults.delete(injectionId);
+    };
     context.signal.addEventListener('abort', onParentAbort, { once: true });
     this.#faults.set(injectionId, {
       abort,
@@ -90,7 +93,12 @@ export class RuntimeChaosController {
 
   activationsFor(point: RuntimeChaosPoint): RuntimeChaosActivation[] {
     const activations: RuntimeChaosActivation[] = [];
-    for (const fault of this.#faults.values()) {
+    for (const [injectionId, fault] of this.#faults) {
+      if (fault.abort.signal.aborted) {
+        fault.detachParentAbort();
+        this.#faults.delete(injectionId);
+        continue;
+      }
       if (
         !matches(point, fault.selector) ||
         !supports(point.phase, fault.effect) ||
