@@ -554,7 +554,7 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
   ): Promise<RawMessage<LarkRawMessage>> {
     const { chatId } = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
-    const { messageId, raw } = await this.api.sendMessage(chatId, text);
+    const { messageId, raw } = await this.api.sendCard(chatId, text);
 
     return {
       id: messageId,
@@ -563,13 +563,23 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
     };
   }
 
+  async reply(
+    threadId: string,
+    messageId: string,
+    message: AdapterPostableMessage,
+  ): Promise<RawMessage<LarkRawMessage>> {
+    const text = this.formatConverter.renderPostable(message);
+    const { messageId: replyMessageId, raw } = await this.api.replyCard(messageId, text);
+    return { id: replyMessageId, raw: raw as LarkRawMessage, threadId };
+  }
+
   async editMessage(
     threadId: string,
     messageId: string,
     message: AdapterPostableMessage,
   ): Promise<RawMessage<LarkRawMessage>> {
     const text = this.formatConverter.renderPostable(message);
-    const { raw } = await this.api.editMessage(messageId, text);
+    const { raw } = await this.api.editCard(messageId, text);
 
     return {
       id: messageId,

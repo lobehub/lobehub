@@ -59,8 +59,12 @@ describe('stripMarkdown', () => {
     );
   });
 
-  it('should convert images to alt text', () => {
-    expect(stripMarkdown('![alt text](https://img.png)')).toBe('alt text');
+  it('should convert images to alt text + url (the link must survive)', () => {
+    expect(stripMarkdown('![alt text](https://img.png)')).toBe('alt text (https://img.png)');
+    // Generated-image replies: empty alt must still surface the URL alone.
+    expect(stripMarkdown('![](https://s3.example/img.png?sig=abc)')).toBe(
+      'https://s3.example/img.png?sig=abc',
+    );
   });
 
   it('should convert blockquotes to vertical bar', () => {
