@@ -1415,6 +1415,50 @@ export class TopicModel {
   };
 
   /**
+   * Claim `status = 'running'` for a topic on behalf of the operation that's
+   * about to start it — but only if that operation's marker (root or child)
+   * is still the current `metadata.runningOperation` when this write lands.
+   *
+   * The client's run-start status write is fire-and-forget and, on the
+   * new-topic path, queued behind other awaited client work — it can be
+   * significantly delayed. Without this guard it is a plain unconditional
+   * `UPDATE`, so for a fast reply it can land AFTER `settleRunningOperation`
+   * already correctly resolved the run back to its terminal status,
+   * silently re-stamping `'running'` with nothing left to ever correct it
+   * (the marker is already cleared, so no future settle call has anything
+   * to match against). This is the run-start mirror of the ownership check
+   * `settleRunningOperation` already does on the run-end side.
+   *
+   * A row lock keeps a concurrent settle from clearing the marker between
+   * the read and the write. Returns `true` when the write happened (or the
+   * topic was already `'running'`), `false` when the guard didn't match.
+   */
+  claimRunningStatus = async (id: string, operationId: string): Promise<boolean> => {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+
+      const runningOperation = existing?.metadata?.runningOperation;
+      const isCurrent =
+        runningOperation?.operationId === operationId ||
+        runningOperation?.childOperations?.some((child) => child.operationId === operationId);
+
+      if (!isCurrent) return false;
+      if (existing?.status === 'running') return true;
+
+      await tx
+        .update(topics)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(and(eq(topics.id, id), this.ownership()));
+
+      return true;
+    });
+  };
+
+  /**
    * Move multiple topics (and all their messages) to another agent.
    *
    * Reassigns ownership purely through the `agentId` foreign key (the new data
