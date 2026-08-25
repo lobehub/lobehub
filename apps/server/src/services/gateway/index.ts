@@ -592,7 +592,17 @@ export class GatewayService {
 
           // Registered ids are the gateway's authoritative existence set. Use
           // the status already present in live stats to recover an explicitly
-          // disconnected connection. Registered-only ids (status null — pruned
+          // disconnected connection.
+          //
+          // `error` deliberately counts as present rather than as something to
+          // rebuild. A connection in that state exists — the gateway is
+          // holding it — and the usual cause is a credential the owner has to
+          // renew, which no amount of reconnecting fixes. Rebuilding it would
+          // recreate a doomed connection on every round, and on a gateway that
+          // parks such connections the ensure-connect answers 409, which
+          // surfaces as a failure. So restart recovery reports success once the
+          // connections are back, not once every remote side is healthy: those
+          // are different questions, and only the first one is ours. Registered-only ids (status null — pruned
           // from stats) get a capped ensure-connect wake instead of a skip:
           // see GATEWAY_SYNC_REGISTERED_ONLY_WAKE_LIMIT. Never probe per-DO
           // status here.
@@ -893,6 +903,9 @@ export class GatewayService {
           // Live and healthy → nothing to do. Registered-only (null) gets an
           // ensure-connect wake (parked connections answer 409 and keep their
           // park); missing from a complete snapshot gets a real connect.
+          // `error` counts as present for the same reason as the bot-provider
+          // pass above: the poller exists, and an expired session is the
+          // owner's to renew.
           if (exists && status !== null && status !== 'disconnected') {
             skipped++;
             return;

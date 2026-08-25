@@ -1542,6 +1542,47 @@ describe('GatewayService', () => {
         expect(outcome.ok).toBe(false);
       });
 
+      it('counts an existing connection in error state as present, not as work to redo', async () => {
+        // The connection exists — the gateway is holding it — and the usual
+        // cause is a credential its owner has to renew. Rebuilding it would
+        // recreate a doomed connection every round, and on a gateway that
+        // parks these the ensure-connect answers 409, which reads as failure.
+        // Restart recovery answers "are the connections back", not "is every
+        // remote side healthy".
+        mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+          platform === 'wechat'
+            ? [
+                {
+                  applicationId: 'wechat-app',
+                  credentials: { botToken: 'token' },
+                  id: 'wechat-provider',
+                  settings: {},
+                  userId: 'u1',
+                },
+              ]
+            : [],
+        );
+        mockResolveConnectionMode.mockReturnValue('polling');
+        mockNodeGatewayClient.getStats.mockResolvedValue({
+          byPlatform: { wechat: 1 },
+          connections: [
+            {
+              connectionId: 'wechat-provider',
+              platform: 'wechat',
+              state: { status: 'error' },
+              userId: 'u1',
+            },
+          ],
+          total: 1,
+        });
+        mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+
+        const outcome = await service.reconcileHost('node');
+
+        expect(mockNodeGatewayClient.connect).not.toHaveBeenCalled();
+        expect(outcome.ok).toBe(true);
+      });
+
       it('reports success for a host that legitimately owns nothing', async () => {
         // The pre-cutover shape: node configured, no platform routed to it.
         // Nothing to rebuild is not a failure, and must not make the gateway
