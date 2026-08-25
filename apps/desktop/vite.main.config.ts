@@ -121,6 +121,12 @@ export default defineConfig(async (env) => {
       // packaged manifest Electron resolves `app.getName()` from — so the app
       // has to set its own name, and needs the value baked in to do it.
       'process.env.DESKTOP_PRODUCT_NAME': JSON.stringify(process.env.DESKTOP_PRODUCT_NAME),
+      // `electron-builder.mjs` reads this too, for the OS-level protocol-client
+      // registration — but `getProtocolScheme()` in the main process never saw
+      // it and always fell back to a channel-derived `lobehub`-prefixed scheme,
+      // so a white-label build registered as (and fought the official app for)
+      // `lobehub://` instead of its own deep-link/OAuth-handoff scheme.
+      'process.env.DESKTOP_PROTOCOL_SCHEME': JSON.stringify(process.env.DESKTOP_PROTOCOL_SCHEME),
       // Same trap as the two below. This one also has to reach the main process
       // because `electron-builder.mjs` reads it independently: dropping the
       // publish config alone leaves the updater free to call setFeedURL with the

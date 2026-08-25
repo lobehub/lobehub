@@ -1,10 +1,18 @@
 import { app } from 'electron';
 
+import { getDesktopEnv } from '../env';
 import type { McpSchema, ProtocolUrlParsed } from '../types/protocol';
 
 export type AppChannel = 'stable' | 'beta' | 'nightly';
 
 export const getProtocolScheme = (): string => {
+  // A white-label build owns its scheme explicitly — falling through to the
+  // channel heuristics below would register it as `lobehub://`, colliding
+  // with an official LobeHub install on the same machine instead of getting
+  // its own deep-link/OAuth-handoff handler.
+  const override = getDesktopEnv().DESKTOP_PROTOCOL_SCHEME;
+  if (override) return override;
+
   // In Electron environment, version can be determined in multiple ways
   const bundleId = app.name;
   const appPath = app.getPath('exe');

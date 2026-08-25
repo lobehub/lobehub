@@ -28,6 +28,15 @@ import * as electronIs from '@/utils/platform';
 const distributionName = process.env.DESKTOP_PRODUCT_NAME?.trim();
 if (distributionName && !electronIs.dev()) {
   app.setName(distributionName);
+  // `setName` alone changes `app.getPath('userData')`'s *default*, which only
+  // takes if nothing has read that path yet — and something in this bundle's
+  // require graph reliably does before this line runs, observed shipping a
+  // real build's users straight into `~/Library/.../lobehub-desktop-dev`: the
+  // same directory (and, on a machine that has ever run this repo's own dev
+  // build, the same login session and self-hosted server URL) as the
+  // unbranded dev app. `setPath` overrides the internal path table directly,
+  // so it isn't subject to that ordering race the way the implicit default is.
+  app.setPath('userData', path.join(app.getPath('appData'), distributionName));
 }
 
 // Dev uses the same `app://renderer/` origin as prod, so localStorage / cookies /

@@ -60,6 +60,7 @@ const getRuntimeEnv = () => ({
   DESKTOP_APP_ID: process.env.DESKTOP_APP_ID,
   DESKTOP_CLI_BIN_NAMES: process.env.DESKTOP_CLI_BIN_NAMES,
   DESKTOP_PRODUCT_NAME: process.env.DESKTOP_PRODUCT_NAME,
+  DESKTOP_PROTOCOL_SCHEME: process.env.DESKTOP_PROTOCOL_SCHEME,
   DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: process.env.DESKTOP_BACKEND_PROXY_RETHROW_ERRORS,
   DESKTOP_DISABLE_UPDATES: process.env.DESKTOP_DISABLE_UPDATES,
   DESKTOP_EXTERNAL_NAVIGATION_HOSTS: process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS,
@@ -112,6 +113,17 @@ export const getDesktopEnv = memoize(() =>
        * manifest — this repository's package name.
        */
       DESKTOP_PRODUCT_NAME: z.string().optional(),
+
+      /**
+       * Overrides the OS-registered deep-link/OAuth-handoff scheme
+       * (`getProtocolScheme()`'s default is channel-derived and always
+       * `lobehub`-prefixed). Must match `electron-builder.mjs`'s own
+       * `DESKTOP_PROTOCOL_SCHEME` read, which sets the OS-level registration —
+       * a mismatch here leaves the app registering as a scheme the OS never
+       * points at it for, or worse, still fighting the official app for
+       * `lobehub://`.
+       */
+      DESKTOP_PROTOCOL_SCHEME: z.string().optional(),
 
       DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: envBoolean(false),
 
