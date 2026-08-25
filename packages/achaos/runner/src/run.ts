@@ -98,7 +98,9 @@ export const runChaosExperiment = async ({
 
   if (environment === 'production') {
     const approved = approveProduction
-      ? await approveProduction(context).catch(() => false)
+      ? await withTimeout(approveProduction(context), experiment.timeoutMs, controller).catch(
+          () => false,
+        )
       : false;
     if (!approved) {
       const finishedAt = now();

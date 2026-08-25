@@ -2,7 +2,12 @@ import type { ChaosExperiment } from '@achaos/core';
 import { ChaosRegistry, runChaosExperiment } from '@achaos/runner';
 import { describe, expect, it } from 'vitest';
 
-import { createAgentChaosTestState, createStateAdapter, createStateOracle } from './state';
+import {
+  createAgentChaosTestState,
+  createStateAdapter,
+  createStateOracle,
+  reclaimStaleOperation,
+} from './state';
 
 describe('first-phase deterministic scenarios', () => {
   it('reclaims a stale operation and verifies the invariant independently', async () => {
@@ -22,12 +27,18 @@ describe('first-phase deterministic scenarios', () => {
       oracles: [{ name: 'operation-reclaimed' }],
       safety: { allowedEnvironments: ['test'] },
       seed: 'operation-reclaim-v1',
-      target: { adapter: 'state', selector: { operationStatus: 'stale' } },
+      target: { adapter: 'state', selector: { operationStatus: 'running' } },
       timeoutMs: 1000,
       trigger: { when: 'immediate' },
     };
-    const result = await runChaosExperiment({ environment: 'test', experiment, registry });
+    const result = await runChaosExperiment({
+      environment: 'test',
+      exercise: async () => reclaimStaleOperation(state),
+      experiment,
+      registry,
+    });
     expect(result.status).toBe('passed');
+    expect(state.operationLease).toBe('stale');
     expect(state.operationStatus).toBe('abandoned');
   });
 });

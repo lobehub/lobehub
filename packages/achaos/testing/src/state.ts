@@ -2,33 +2,50 @@ import type { ChaosAdapter, ChaosOracle } from '@achaos/core';
 
 export interface AgentChaosTestState {
   completionDeliveries: number;
+  operationLease: 'active' | 'stale';
   operationStatus: 'running' | 'abandoned' | 'done';
   toolResult?: string;
 }
 
 export const createAgentChaosTestState = (): AgentChaosTestState => ({
   completionDeliveries: 0,
+  operationLease: 'active',
   operationStatus: 'running',
 });
 
+/** Test exercise that represents the production coordinator's reclaim behavior. */
+export const reclaimStaleOperation = (state: AgentChaosTestState) => {
+  if (state.operationLease === 'stale' && state.operationStatus === 'running') {
+    state.operationStatus = 'abandoned';
+  }
+};
+
 export const createStateAdapter = (state: AgentChaosTestState): ChaosAdapter => ({
   cleanup: async (receipt) => {
+    const previousLease = receipt.cleanupToken?.operationLease;
     const previous = receipt.cleanupToken?.operationStatus;
+    if (previousLease === 'active' || previousLease === 'stale') {
+      state.operationLease = previousLease;
+    }
     if (previous === 'running' || previous === 'abandoned' || previous === 'done') {
       state.operationStatus = previous;
     }
   },
   inject: async (context) => {
+    const previousLease = state.operationLease;
     const previous = state.operationStatus;
     if (context.experiment.effect.type === 'throw') {
       state.toolResult = JSON.stringify({ errorType: context.experiment.effect.errorType });
     }
-    if (context.experiment.target.selector.operationStatus === 'stale') {
-      state.operationStatus = 'abandoned';
+    if (
+      context.experiment.target.selector.operationStatus === 'running' &&
+      context.experiment.effect.type === 'delay'
+    ) {
+      state.operationLease = 'stale';
     }
     return {
       adapter: 'state',
-      cleanupToken: { operationStatus: previous },
+      cleanupToken: { operationLease: previousLease, operationStatus: previous },
       injectionId: `${context.runId}:state`,
     };
   },

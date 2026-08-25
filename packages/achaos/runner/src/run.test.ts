@@ -125,6 +125,17 @@ describe('runChaosExperiment', () => {
     expect(approved.status).toBe('passed');
     expect(approveProduction).toHaveBeenCalledOnce();
     expect(inject).toHaveBeenCalledOnce();
+
+    const startedAt = Date.now();
+    const timedOut = await runChaosExperiment({
+      approveProduction: async () => new Promise<boolean>(() => {}),
+      environment: 'production',
+      experiment: { ...productionExperiment, timeoutMs: 5 },
+      registry,
+    });
+    expect(timedOut.status).toBe('aborted');
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(inject).toHaveBeenCalledOnce();
   });
 
   it('fails when an adapter reports that its fault never activated', async () => {

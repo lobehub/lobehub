@@ -11,7 +11,7 @@ safety:
 target:
   adapter: state
   selector:
-    operationStatus: stale
+    operationStatus: running
 trigger:
   when: immediate
 effect:
