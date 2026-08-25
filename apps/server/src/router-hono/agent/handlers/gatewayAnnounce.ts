@@ -49,7 +49,7 @@ const lockKey = (host: MessageGatewayHost) => `lobehub:gateway:announce:lock:${h
  * holder.
  */
 const releaseLock = (
-  redis: { eval: (...args: unknown[]) => Promise<unknown> },
+  redis: NonNullable<ReturnType<typeof getAgentRuntimeRedisClient>>,
   host: MessageGatewayHost,
   token: string,
 ) =>
