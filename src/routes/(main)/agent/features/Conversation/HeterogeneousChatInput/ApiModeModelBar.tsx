@@ -71,6 +71,9 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     heterogeneousProvider,
     topicModel,
   );
+  const effectiveApiConfig = effectiveProvider.apiConfig;
+  const effectiveProviderApiConfig =
+    effectiveApiConfig?.source !== 'server-default' ? effectiveApiConfig : undefined;
 
   const persist = async (apiConfig: HeterogeneousApiConfig) => {
     if (activeTopicId && apiConfig.source !== 'server-default' && apiConfig.providerId) {
@@ -119,10 +122,10 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
       style={COMPACT_MODEL_PICKER_STYLE}
       variant="borderless"
       value={
-        effectiveProvider.apiConfig
+        effectiveProviderApiConfig
           ? {
-              model: effectiveProvider.apiConfig.model,
-              provider: effectiveProvider.apiConfig.providerId,
+              model: effectiveProviderApiConfig.model,
+              provider: effectiveProviderApiConfig.providerId,
             }
           : undefined
       }

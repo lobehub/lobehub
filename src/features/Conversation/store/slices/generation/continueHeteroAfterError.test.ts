@@ -33,6 +33,7 @@ let mockAgentVisibility: 'private' | 'public' = 'public';
 let mockIsWorkspaceAgent = false;
 let mockSharedExecutionTarget: 'device' | 'local' = 'local';
 let mockWorkspaceOverride: { boundDeviceId: string; executionTarget: 'local' } | undefined;
+let mockTopic: { id: string; model?: string; provider?: string } | undefined;
 vi.mock(
   '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
   async (importOriginal) => ({
@@ -92,7 +93,11 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: {
+    getTopicById: () => () => mockTopic,
+    getTopicModelById: () => () =>
+      mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
+  },
 }));
 
 vi.mock('@/store/electron', () => ({
@@ -171,6 +176,7 @@ describe('continueHeteroAfterError', () => {
     mockResumeSessionId = 'sess-1';
     mockIsWorkspaceAgent = false;
     mockSharedExecutionTarget = 'local';
+    mockTopic = undefined;
     mockWorkspaceOverride = undefined;
   });
 
@@ -200,6 +206,23 @@ describe('continueHeteroAfterError', () => {
     });
     expect(executorParams().message).toContain('Continue the task from where it stopped');
     expect(executorParams().message).not.toBe(USER_MESSAGE.content);
+  });
+
+  it('continues with the topic-pinned heterogeneous model', async () => {
+    mockTopic = { id: 'topic-1', model: 'opus', provider: 'claude-code' };
+    const store = buildGroupStore([
+      { content: 'looking', id: 'step-1', tools: [{ id: 'call-1' }] },
+      { content: '', error: HETERO_RATE_LIMIT, id: 'step-2', tools: [{ id: 'call-2' }] },
+    ]);
+
+    await act(async () => {
+      await store.getState().continueHeteroAfterError('step-1');
+    });
+
+    expect(executorParams().heterogeneousProvider).toMatchObject({
+      model: 'opus',
+      type: 'claude-code',
+    });
   });
 
   it('drops an error-only tail step and chains the continuation onto its parent', async () => {

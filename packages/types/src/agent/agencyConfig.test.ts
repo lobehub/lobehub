@@ -133,6 +133,22 @@ describe('heterogeneous topic models', () => {
     });
   });
 
+  it('keeps server-default API models Agent-scoped and ignores stale topic bindings', () => {
+    const config = {
+      apiConfig: { model: 'server-model', source: 'server-default' },
+      authMode: 'api',
+      type: 'claude-code',
+    } as const;
+
+    expect(resolveHeterogeneousProviderTopicModel(config)).toBeUndefined();
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'stale-topic-model',
+        provider: 'anthropic',
+      }),
+    ).toBe(config);
+  });
+
   it('overrides a CLI model without retaining a conflicting global flag', () => {
     const effective = applyTopicModelToHeterogeneousProvider(
       {

@@ -223,6 +223,14 @@ export interface HeterogeneousTopicModel {
   provider: string;
 }
 
+/**
+ * Resolve the topic-level model snapshot for a heterogeneous provider.
+ *
+ * Server-default API models intentionally remain Agent-scoped: unlike a user-provider
+ * binding, their deployment-owned provider identity cannot be represented by the topic's
+ * model/provider pair. Their topic execution therefore ignores any stale pin from another
+ * auth mode and follows the current Agent config.
+ */
 export const resolveHeterogeneousProviderTopicModel = (
   config: HeterogeneousProviderConfig,
 ): HeterogeneousTopicModel | undefined => {
@@ -242,14 +250,18 @@ export const applyTopicModelToHeterogeneousProvider = (
   if (!topicModel?.model) return config;
 
   if (config.authMode === 'api') {
+    const apiConfig = config.apiConfig;
+    // Server-default is Agent-scoped. In particular, do not turn it back into a
+    // user-provider binding when this topic retains a pin from an earlier auth mode.
+    if (apiConfig?.source === 'server-default') return config;
     if (!topicModel.provider || topicModel.provider === config.type) return config;
     return {
       ...config,
       apiConfig: {
         model: topicModel.model,
         providerId: topicModel.provider,
-        ...(config.apiConfig?.providerId === topicModel.provider
-          ? { smallFastModel: config.apiConfig.smallFastModel }
+        ...(apiConfig?.providerId === topicModel.provider
+          ? { smallFastModel: apiConfig.smallFastModel }
           : {}),
       },
     };

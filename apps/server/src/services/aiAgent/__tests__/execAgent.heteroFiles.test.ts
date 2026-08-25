@@ -313,15 +313,54 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(userCall![0].files).toEqual(['file-1', 'file-2']);
   });
 
-  it('should pin the runtime type — not the agent chat model — on a server-created topic', async () => {
-    // regression: the topic-scoped model snapshot pinned the agent's chat
-    // model/provider, so a Gateway-created hetero topic came back from the
-    // server tagged with the default chat provider instead of the CLI runtime.
+  it('should pin the CLI default selection and runtime type on a server-created topic', async () => {
     await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
 
     expect(topicMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({ model: undefined, provider: 'claude-code' }),
+      expect.objectContaining({ model: 'default', provider: 'claude-code' }),
       undefined,
+    );
+  });
+
+  it('should snapshot and execute a selected heterogeneous model on a server-created topic', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'opus',
+      type: 'claude-code',
+    } as any;
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Run with Opus' });
+
+    expect(topicMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'opus', provider: 'claude-code' }),
+      undefined,
+    );
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--model', 'opus'] }),
+    );
+  });
+
+  it('should execute an existing topic with its pinned heterogeneous model', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      args: ['--model', 'stale-arg-model'],
+      model: 'agent-model',
+      type: 'claude-code',
+    } as any;
+    topicMock.findById.mockResolvedValue({
+      id: 'topic-existing',
+      metadata: undefined,
+      model: 'topic-model',
+      provider: 'claude-code',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-existing' },
+      prompt: 'Continue with the topic model',
+    } as any);
+
+    expect(topicMock.create).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--model', 'topic-model'] }),
     );
   });
 
@@ -457,6 +496,13 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           status: 'error',
           success: false,
         }),
+      );
+      expect(topicMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: type === 'codex' ? 'gpt-test' : 'claude-test',
+          provider: type === 'codex' ? 'openai' : 'anthropic',
+        }),
+        undefined,
       );
       expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
       expect(mockDispatchAgentRun).not.toHaveBeenCalled();
