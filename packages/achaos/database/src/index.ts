@@ -6,12 +6,14 @@ export interface DatabaseMutationReceipt {
 }
 
 export interface DatabaseChaosPort {
+  cancel?: (context: ChaosRunContext) => Promise<void>;
   mutate: (context: ChaosRunContext) => Promise<DatabaseMutationReceipt>;
   restore?: (snapshot: Record<string, unknown>, context: ChaosRunContext) => Promise<void>;
 }
 
 /** Database adapter owns no schema; applications supply scoped mutate/restore ports. */
 export const createDatabaseChaosAdapter = (port: DatabaseChaosPort): ChaosAdapter => ({
+  cancelInjection: port.cancel,
   cleanup: port.restore
     ? async (receipt, context) => {
         if (!receipt.cleanupToken) throw new Error('Database cleanup requires a mutation snapshot');

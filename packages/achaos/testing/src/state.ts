@@ -21,6 +21,7 @@ export const reclaimStaleOperation = (state: AgentChaosTestState) => {
 };
 
 export const createStateAdapter = (state: AgentChaosTestState): ChaosAdapter => ({
+  cancelInjection: async () => {},
   cleanup: async (receipt) => {
     const previousLease = receipt.cleanupToken?.operationLease;
     const previous = receipt.cleanupToken?.operationStatus;

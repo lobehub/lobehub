@@ -112,6 +112,11 @@ export interface ChaosRunContext {
 }
 
 export interface ChaosAdapter {
+  /**
+   * Cancels an in-flight injection before it yields a receipt. Required whenever cleanup is
+   * provided; resolving guarantees that the pending injection cannot commit later.
+   */
+  cancelInjection?: (context: ChaosRunContext) => Promise<void>;
   cleanup?: (receipt: ChaosInjectionReceipt, context: ChaosRunContext) => Promise<void>;
   inject: (context: ChaosRunContext) => Promise<ChaosInjectionReceipt>;
   name: string;

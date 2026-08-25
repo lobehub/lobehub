@@ -19,6 +19,16 @@ const serializeError = (error: unknown) => {
   return { message: String(error), name: 'Error' };
 };
 
+const combineErrors = (primary: unknown, secondary: unknown, secondaryLabel: string) => {
+  const primaryFailure = serializeError(primary);
+  const secondaryFailure = serializeError(secondary);
+  const aggregateError = new Error(
+    `Chaos phase failed: ${primaryFailure.name}: ${primaryFailure.message}; ${secondaryLabel} also failed: ${secondaryFailure.name}: ${secondaryFailure.message}`,
+  );
+  aggregateError.name = 'ChaosAggregateError';
+  return aggregateError;
+};
+
 const withTimeout = async <T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -198,6 +208,25 @@ export const runChaosExperiment = async ({
       timeline,
     };
   }
+  if (adapter.cleanup && !adapter.cancelInjection) {
+    const finishedAt = now();
+    record('run_completed', { reason: 'cancellable_injection_required' });
+    return {
+      durationMs: finishedAt.getTime() - started.getTime(),
+      error: {
+        message: `Adapter ${adapter.name} provides cleanup but no cancellable injection contract`,
+        name: 'ChaosConfigError',
+      },
+      experimentId: experiment.id,
+      finishedAt: finishedAt.toISOString(),
+      oracleResults,
+      runId,
+      seed: experiment.seed,
+      startedAt: started.toISOString(),
+      status: 'aborted',
+      timeline,
+    };
+  }
   const cleanupPolicy = experiment.cleanup ?? 'always';
   let injection;
   let injectionPromise: ReturnType<typeof adapter.inject> | undefined;
@@ -240,16 +269,18 @@ export const runChaosExperiment = async ({
   } catch (caught) {
     error = caught;
   } finally {
-    if (!injection && injectionPromise && cleanupPolicy === 'always' && adapter.cleanup) {
+    if (!injection && injectionPromise && adapter.cancelInjection) {
       try {
-        const reconciliationController = new AbortController();
-        injection = await withTimeout(
-          injectionPromise,
+        const cancellationController = new AbortController();
+        await withTimeout(
+          adapter.cancelInjection({ ...context, signal: cancellationController.signal }),
           experiment.timeoutMs,
-          reconciliationController,
+          cancellationController,
         );
-      } catch {
-        // A rejected or still-stuck injection produced no bounded receipt to reconcile.
+      } catch (cancellationError) {
+        error = error
+          ? combineErrors(error, cancellationError, 'injection cancellation')
+          : cancellationError;
       }
     }
     const oraclesPassed = oracleResults.every(({ status }) => status === 'passed');
@@ -268,17 +299,7 @@ export const runChaosExperiment = async ({
         );
         record('cleanup_completed');
       } catch (cleanupError) {
-        if (error) {
-          const phaseFailure = serializeError(error);
-          const cleanupFailure = serializeError(cleanupError);
-          const aggregateError = new Error(
-            `Chaos phase failed: ${phaseFailure.name}: ${phaseFailure.message}; cleanup also failed: ${cleanupFailure.name}: ${cleanupFailure.message}`,
-          );
-          aggregateError.name = 'ChaosAggregateError';
-          error = aggregateError;
-        } else {
-          error = cleanupError;
-        }
+        error = error ? combineErrors(error, cleanupError, 'cleanup') : cleanupError;
       }
     }
     controller.abort('chaos_run_completed');

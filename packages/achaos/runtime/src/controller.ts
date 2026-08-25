@@ -73,6 +73,16 @@ export class RuntimeChaosController {
     this.#faults.delete(injectionId);
   }
 
+  cancelRun(runId: string) {
+    const fault = this.#faults.get(`${runId}:runtime`);
+    if (!fault) return;
+    this.disarm({
+      adapter: 'runtime',
+      cleanupToken: { injectionId: fault.injectionId },
+      injectionId: fault.injectionId,
+    });
+  }
+
   wasActivated(receipt: ChaosInjectionReceipt) {
     const injectionId = receipt.cleanupToken?.injectionId;
     return typeof injectionId === 'string' && (this.#faults.get(injectionId)?.activations ?? 0) > 0;

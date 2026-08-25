@@ -23,6 +23,7 @@ describe('runChaosExperiment', () => {
     const cleanup = vi.fn(async () => {});
     const registry = new ChaosRegistry()
       .registerAdapter({
+        cancelInjection: async () => {},
         cleanup,
         inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
         name: 'test',
@@ -55,6 +56,7 @@ describe('runChaosExperiment', () => {
     const cleanup = vi.fn(async () => {});
     const registry = new ChaosRegistry()
       .registerAdapter({
+        cancelInjection: async () => {},
         cleanup,
         inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
         name: 'test',
@@ -72,6 +74,7 @@ describe('runChaosExperiment', () => {
     const cleanup = vi.fn(async () => {});
     const registry = new ChaosRegistry()
       .registerAdapter({
+        cancelInjection: async () => {},
         cleanup,
         inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
         name: 'test',
@@ -141,6 +144,7 @@ describe('runChaosExperiment', () => {
   it('fails when an adapter reports that its fault never activated', async () => {
     const cleanup = vi.fn(async () => {});
     const registry = new ChaosRegistry().registerAdapter({
+      cancelInjection: async () => {},
       cleanup,
       inject: async () => ({ adapter: 'test', injectionId: 'inactive' }),
       name: 'test',
@@ -195,6 +199,19 @@ describe('runChaosExperiment', () => {
     );
   });
 
+  it('rejects cleanup adapters without a cancellable injection contract', async () => {
+    const inject = vi.fn();
+    const registry = new ChaosRegistry().registerAdapter({
+      cleanup: async () => {},
+      inject,
+      name: 'test',
+    });
+    const result = await runChaosExperiment({ environment: 'test', experiment, registry });
+    expect(result.status).toBe('aborted');
+    expect(result.error?.name).toBe('ChaosConfigError');
+    expect(inject).not.toHaveBeenCalled();
+  });
+
   it('reports an unselected probabilistic trigger as inconclusive', async () => {
     const inject = vi.fn();
     const registry = new ChaosRegistry().registerAdapter({ inject, name: 'test' });
@@ -236,6 +253,7 @@ describe('runChaosExperiment', () => {
     let phaseWasAborted = false;
     let cleanupWasAborted = true;
     const registry = new ChaosRegistry().registerAdapter({
+      cancelInjection: async () => {},
       cleanup: async (_receipt, context) => {
         cleanupWasAborted = context.signal.aborted;
       },
@@ -263,12 +281,19 @@ describe('runChaosExperiment', () => {
     expect(cleanupWasAborted).toBe(false);
   });
 
-  it('reconciles and cleans up an injection that resolves after its timeout', async () => {
+  it('cancels an injection that would otherwise commit after its timeout', async () => {
+    let canceled = false;
+    let mutationCommitted = false;
     const cleanup = vi.fn(async () => {});
     const registry = new ChaosRegistry().registerAdapter({
+      cancelInjection: async () => {
+        canceled = true;
+      },
       cleanup,
       inject: async (context) => {
         await new Promise((resolve) => setTimeout(resolve, 15));
+        if (canceled) throw new Error('mutation canceled');
+        mutationCommitted = true;
         return { adapter: 'test', injectionId: context.runId };
       },
       name: 'test',
@@ -279,13 +304,18 @@ describe('runChaosExperiment', () => {
       registry,
     });
     expect(result.status).toBe('failed');
-    expect(cleanup).toHaveBeenCalledOnce();
-    expect(result.injection?.adapter).toBe('test');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(canceled).toBe(true);
+    expect(mutationCommitted).toBe(false);
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(result.injection).toBeUndefined();
   });
 
-  it('bounds reconciliation when a timed-out injection never settles', async () => {
+  it('bounds cancellation when a timed-out injection never settles', async () => {
+    const cancelInjection = vi.fn(async () => {});
     const cleanup = vi.fn(async () => {});
     const registry = new ChaosRegistry().registerAdapter({
+      cancelInjection,
       cleanup,
       inject: async () => new Promise<never>(() => {}),
       name: 'test',
@@ -298,11 +328,13 @@ describe('runChaosExperiment', () => {
     });
     expect(result.status).toBe('failed');
     expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(cancelInjection).toHaveBeenCalledOnce();
     expect(cleanup).not.toHaveBeenCalled();
   });
 
   it('preserves both a phase failure and a cleanup failure', async () => {
     const registry = new ChaosRegistry().registerAdapter({
+      cancelInjection: async () => {},
       cleanup: async () => {
         throw new Error('restore failed');
       },
