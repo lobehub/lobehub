@@ -17,6 +17,7 @@ export * from './betterAuth';
 export * from './chatGroup';
 export * from './connector';
 export * from './device';
+export * from './documentComment';
 export * from './documentHistory';
 export * from './documentShare';
 export * from './expertise';

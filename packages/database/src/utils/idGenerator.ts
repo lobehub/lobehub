@@ -15,6 +15,7 @@ const prefixes = {
   agents: 'agt',
   budget: 'bgt',
   chatGroups: 'cg',
+  documentComments: 'dcm',
   documents: 'docs',
   evalBenchmarks: 'evb',
   evalDatasets: 'ds',
