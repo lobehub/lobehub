@@ -75,6 +75,7 @@ vi.mock('@/database/server', () => ({
 }));
 
 vi.mock('@/database/models/message');
+vi.mock('@/database/models/rbac');
 vi.mock('@/database/models/session');
 vi.mock('@/database/models/user');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
@@ -995,6 +996,100 @@ describe('userRouter', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('updateToolIntervention', () => {
+    it('merges approvalMode into the stored tool column, preserving sibling keys', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      const getUserSettings = vi.fn().mockResolvedValue({
+        tool: {
+          humanIntervention: { allowList: ['bash/bash'], approvalMode: 'manual' },
+          uninstalledBuiltinTools: ['dalle'],
+        },
+      });
+
+      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
+
+      await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
+        approvalMode: 'auto-run',
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith({
+        tool: {
+          humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' },
+          uninstalledBuiltinTools: ['dalle'],
+        },
+      });
+    });
+
+    it('unions appendAllowList with the stored list, preserving approvalMode', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      const getUserSettings = vi.fn().mockResolvedValue({
+        tool: { humanIntervention: { allowList: ['bash/bash'], approvalMode: 'auto-run' } },
+      });
+
+      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
+
+      await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
+        appendAllowList: ['bash/bash', 'search/search'],
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith({
+        tool: {
+          humanIntervention: {
+            allowList: ['bash/bash', 'search/search'],
+            approvalMode: 'auto-run',
+          },
+        },
+      });
+    });
+
+    it('works when no settings row exists yet', async () => {
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      const getUserSettings = vi.fn().mockResolvedValue(undefined);
+
+      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
+
+      await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
+        approvalMode: 'allow-list',
+      });
+
+      expect(updateSetting).toHaveBeenCalledWith({
+        tool: { humanIntervention: { approvalMode: 'allow-list' } },
+      });
+    });
+
+    it('rejects workspace members without content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
+      );
+
+      await expect(
+        userRouter
+          .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+          .updateToolIntervention({ approvalMode: 'auto-run' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('allows workspace members holding content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(
+        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(true) }) as any,
+      );
+
+      const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      const getUserSettings = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(UserModel).mockImplementation(() => ({ getUserSettings, updateSetting }) as any);
+
+      await userRouter
+        .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+        .updateToolIntervention({ approvalMode: 'auto-run' });
+
+      expect(updateSetting).toHaveBeenCalledWith({
+        tool: { humanIntervention: { approvalMode: 'auto-run' } },
+      });
     });
   });
 });

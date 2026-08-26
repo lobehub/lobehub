@@ -131,6 +131,13 @@ export class UserService {
     return lambdaClient.user.updateGuide.mutate(guide);
   };
 
+  updateToolIntervention = async (value: {
+    appendAllowList?: string[];
+    approvalMode?: 'auto-run' | 'allow-list' | 'manual';
+  }) => {
+    return lambdaClient.user.updateToolIntervention.mutate(value);
+  };
+
   updateUserSettings = async (value: PartialDeep<UserSettings>, signal?: AbortSignal) => {
     return lambdaClient.user.updateSettings.mutate(value, { signal });
   };
