@@ -4,6 +4,7 @@ import type {
   ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
+  ChatMessageExtra,
   ChatToolPayload,
   ChatTranslate,
   ChatTTS,
@@ -448,40 +449,231 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
 };
 
 /**
+ * Fields on {@link UIChatMessage} that are safe to forward to an agent-share
+ * visitor verbatim: the message's OWN presentational content (text,
+ * attachments, tool activity, RAG citations) and structural links WITHIN the
+ * same shared topic (thread/group/parent ids). None of these describe the
+ * creator's account, billing, or model/provider choice.
+ *
+ * This is an ALLOWLIST, not a denylist, and that direction is deliberate:
+ * `UIChatMessage` is a ~40-field DTO shared with the normal (non-share) chat
+ * read path, so new fields land on it regularly as chat features ship. A
+ * denylist fails OPEN on every such addition — a new field reaches visitors
+ * by default until someone remembers to also strip it here, which is
+ * exactly how `model`/`provider` (this file's own top-level columns) leaked
+ * despite this function's other redactions and its regression test. An
+ * allowlist fails CLOSED: a new field is absent from the visitor DTO until a
+ * human deliberately adds it below. `VISITOR_MESSAGE_KEYS_GUARD.test.ts`
+ * (co-located with this model's tests) parses the `UIChatMessage` interface
+ * source and fails the build if it grows a key that isn't classified as
+ * either allowed here or explicitly denied/specially-handled below — so the
+ * "silently reaches visitors" failure mode is closed at the type level, not
+ * just documented in this comment.
+ *
+ * Deliberately included despite being an id: `agentId` (the visitor already
+ * knows which agent they are talking to — that's the whole premise of the
+ * share link), `sessionId`/`traceId`/`observationId` (opaque ids scoped to
+ * THIS execution of the visitor's OWN turn, reused by client actions such as
+ * translate/regenerate that the share UI shares with normal chat — not a
+ * cross-conversation or account-identifying value).
+ */
+const VISITOR_MESSAGE_ALLOWED_KEYS = [
+  'id',
+  'role',
+  'content',
+  'createdAt',
+  'updatedAt',
+  'editorData',
+  'error',
+  'fileList',
+  'files',
+  'imageList',
+  'videoList',
+  'audioList',
+  'chunksList',
+  'plugin',
+  'pluginError',
+  'pluginIntervention',
+  'pluginState',
+  'tool_call_id',
+  'tools',
+  'reasoning',
+  'search',
+  'ragQuery',
+  'ragQueryId',
+  'ragRawQuery',
+  'parentId',
+  'threadId',
+  'topicId',
+  'groupId',
+  'targetId',
+  'agentId',
+  'sessionId',
+  'quotaId',
+  'branch',
+  'signalCallbacks',
+  'taskCompletions',
+  'tasks',
+  'performance',
+  'observationId',
+  'traceId',
+] as const satisfies readonly (keyof UIChatMessage)[];
+
+/**
+ * Fields that must NEVER reach a visitor, listed explicitly (rather than left
+ * as "everything not allowed") so the classification guard test below has a
+ * concrete set to check every `UIChatMessage` key against, and so a reviewer
+ * reading this file sees WHY each one is excluded instead of having to infer
+ * it from absence.
+ *
+ * - `sender` / `usage`: the creator's account identity and spend/token
+ *   snapshot for this message.
+ * - `model` / `provider`: the creator's exact model/provider choice — the
+ *   original leak this file's regression test claimed (incorrectly) to
+ *   cover. Omitted here rather than nulled: `pickAllowedKeys` never copies
+ *   them, so they are simply absent from the visitor object.
+ * - `works`: joins live task/version state under the CREATOR's account.
+ *   `queryForVisitor`'s only caller already passes `skipWorks: true` (see
+ *   `shareChat.ts`), but this list makes that a structural guarantee instead
+ *   of relying on every future caller remembering the flag.
+ */
+const VISITOR_MESSAGE_DENIED_KEYS = ['sender', 'usage', 'model', 'provider', 'works'] as const;
+
+/**
+ * Fields that reach a visitor but need transformation rather than a plain
+ * allow/deny: nested full messages (recursively sanitized by
+ * {@link toVisitorMessage} itself), narrow model-snapshot projections
+ * (`pinnedMessages`, `children`), and payloads carrying creator cost data
+ * that isn't the top-level `usage` field.
+ */
+const VISITOR_MESSAGE_SPECIAL_KEYS = [
+  'extra',
+  'compressedMessages',
+  'members',
+  'pinnedMessages',
+  'children',
+  'taskDetail',
+  'metadata',
+] as const;
+
+export const VISITOR_MESSAGE_CLASSIFIED_KEYS: readonly string[] = [
+  ...VISITOR_MESSAGE_ALLOWED_KEYS,
+  ...VISITOR_MESSAGE_DENIED_KEYS,
+  ...VISITOR_MESSAGE_SPECIAL_KEYS,
+];
+
+type VisitorAllowedKey = (typeof VISITOR_MESSAGE_ALLOWED_KEYS)[number];
+
+const pickAllowedKeys = (message: UIChatMessage): Pick<UIChatMessage, VisitorAllowedKey> => {
+  const picked = {} as Pick<UIChatMessage, VisitorAllowedKey>;
+  for (const key of VISITOR_MESSAGE_ALLOWED_KEYS) {
+    if (key in message) (picked as Record<string, unknown>)[key] = message[key];
+  }
+  return picked;
+};
+
+/** Keep translate/TTS (visitor-facing rendering), drop the model snapshot. */
+const sanitizeVisitorExtra = (extra: ChatMessageExtra | undefined): ChatMessageExtra | undefined =>
+  extra ? { translate: extra.translate, tts: extra.tts } : extra;
+
+/**
+ * Shape shared by `pinnedMessages` entries and `compareGroup.children`
+ * entries (`queryMessageGroupNodes` builds `children` with this exact
+ * narrow projection, then casts the whole node `as unknown as
+ * UIChatMessage` — see that function — so `UIChatMessage['children']`'s
+ * declared `AssistantContentBlock[]` type does not describe it at runtime).
+ * Neither carries `sender`/`usage`, only the model snapshot needs stripping.
+ */
+interface VisitorGroupSnapshotProjection {
+  content: string | null;
+  createdAt: Date | number;
+  id: string;
+  model: string | null;
+  provider: string | null;
+  role: string;
+}
+
+const sanitizeVisitorGroupSnapshots = (
+  items: VisitorGroupSnapshotProjection[],
+): VisitorGroupSnapshotProjection[] =>
+  items.map((item) => ({ ...item, model: null, provider: null }));
+
+/** Cost/token figures are the same class of creator spend data as `usage`. */
+const sanitizeVisitorTaskDetail = (taskDetail: TaskDetail | undefined): TaskDetail | undefined => {
+  if (!taskDetail) return taskDetail;
+  const {
+    totalCost: _totalCost,
+    totalTokens: _totalTokens,
+    totalToolCalls: _totalToolCalls,
+    ...rest
+  } = taskDetail;
+  return rest;
+};
+
+/**
+ * `metadata.usage` / `metadata.cost` are the pre-migration duplicates of the
+ * (denied) top-level `usage` field — kept on the type only so legacy rows
+ * written before the dedicated `usage` column still type-check (see
+ * `MessageMetadata`'s JSDoc). `queryWithWhere` itself falls back to
+ * `metadata.usage` for those rows (`item.usage ?? metadata?.usage`), so
+ * leaving `metadata` unsanitized would let the exact spend snapshot this
+ * function denies at the top level back in through a legacy row's `metadata`
+ * blob. Every other `metadata` field (collapsed state, context selections,
+ * work/verify/taskCallback pointers, …) is this message's own presentational
+ * state, not creator account data, and passes through untouched.
+ */
+const sanitizeVisitorMetadata = (
+  metadata: MessageMetadata | null | undefined,
+): MessageMetadata | null | undefined => {
+  if (!metadata) return metadata;
+  const { usage: _usage, cost: _cost, ...rest } = metadata;
+  return rest;
+};
+
+/**
  * Strip creator-only fields from a message row before it reaches an
  * agent-share visitor. Visitor-facing message DTO: creator account identity
- * never crosses the share boundary — only role/content and the message's
- * own presentational payload (files, tool results, translation, TTS) do.
+ * — and the creator's model/provider/spend choices — never cross the share
+ * boundary; only role/content and the message's own presentational payload
+ * (files, tool results, translation, TTS) do.
  *
- * Nulls the fields out rather than omitting the keys so the result stays
- * assignable to {@link UIChatMessage} for every existing consumer.
+ * Built from {@link VISITOR_MESSAGE_ALLOWED_KEYS} (see that constant for why
+ * this is allowlist-, not denylist-, shaped) plus explicit handling for the
+ * fields that need transformation rather than a plain allow/deny.
  */
-export const toVisitorMessage = (message: UIChatMessage): UIChatMessage => ({
-  ...message,
-  // A compacted topic nests raw rows under the group node, and group chat
-  // nests member messages, so a shallow spread would sanitize only the outer
-  // node and leave the creator's identity on everything inside it.
-  ...(message.compressedMessages && {
-    compressedMessages: message.compressedMessages.map((nested) => toVisitorMessage(nested)),
-  }),
-  ...(message.members && {
-    members: message.members.map((nested) => toVisitorMessage(nested)),
-  }),
-  // `pinnedMessages` is a narrow projection rather than a full message, so it
-  // carries no `sender`/`usage` — only the model snapshot needs stripping.
-  ...(message.pinnedMessages && {
-    pinnedMessages: message.pinnedMessages.map((pinned) => ({
-      ...pinned,
-      model: null,
-      provider: null,
-    })),
-  }),
-  extra: message.extra
-    ? { ...message.extra, model: undefined, provider: undefined }
-    : message.extra,
-  sender: null,
-  usage: undefined,
-});
+export const toVisitorMessage = (message: UIChatMessage): UIChatMessage =>
+  ({
+    ...pickAllowedKeys(message),
+    extra: sanitizeVisitorExtra(message.extra),
+    metadata: sanitizeVisitorMetadata(message.metadata),
+    sender: null,
+    taskDetail: sanitizeVisitorTaskDetail(message.taskDetail),
+    usage: undefined,
+    works: undefined,
+    // A compacted topic nests raw rows under the group node, and group chat
+    // nests member messages, so anything less than a full recursive sanitize
+    // would leave the creator's identity on everything inside it.
+    ...(message.compressedMessages && {
+      compressedMessages: message.compressedMessages.map((nested) => toVisitorMessage(nested)),
+    }),
+    ...(message.members && {
+      members: message.members.map((nested) => toVisitorMessage(nested)),
+    }),
+    ...(message.pinnedMessages && {
+      pinnedMessages: sanitizeVisitorGroupSnapshots(
+        message.pinnedMessages as unknown as VisitorGroupSnapshotProjection[],
+      ) as unknown as UIChatMessage['pinnedMessages'],
+    }),
+    // `compareGroup` nodes carry the same bare model/provider snapshot under
+    // `children` (see `queryMessageGroupNodes`) — previously left untouched
+    // by this function even though it is structurally identical to the
+    // `pinnedMessages` leak.
+    ...(message.children && {
+      children: sanitizeVisitorGroupSnapshots(
+        message.children as unknown as VisitorGroupSnapshotProjection[],
+      ) as unknown as UIChatMessage['children'],
+    }),
+  }) as UIChatMessage;
 
 export class MessageModel {
   private userId: string;
