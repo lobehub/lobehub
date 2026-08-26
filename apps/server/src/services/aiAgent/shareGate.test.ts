@@ -3,7 +3,11 @@ import {
   AgentDocumentsIdentifier,
   AgentDocumentsManifest,
 } from '@lobechat/builtin-tool-agent-documents';
-import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import {
+  AgentManagementApiName,
+  AgentManagementIdentifier,
+  AgentManagementManifest,
+} from '@lobechat/builtin-tool-agent-management';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -170,26 +174,26 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.tools).toBeUndefined();
   });
 
-  it('strips sub-agent dispatch APIs even when the tool is explicitly whitelisted', () => {
+  it('strips sub-agent dispatch API (callSubAgent) from lobe-agent even when explicitly whitelisted', () => {
     // Sub-agent dispatch is not available in shared visitor runs, regardless
     // of whether the manifest passed to `applyShareGateToToolSet` was already
     // context-aware trimmed or not — this reproduces the untrimmed shape by
-    // using the REAL exported builtin manifests (not a hand-written fixture),
-    // so the regression also catches a future edit to either systemRole that
-    // reintroduces a callAgent/callSubAgent reference.
-    const gate = buildGate({ enabledToolIds: ['lobe-agent-management', 'lobe-agent'] });
+    // using the REAL exported builtin manifest (not a hand-written fixture),
+    // so the regression also catches a future edit to the systemRole that
+    // reintroduces a callSubAgent reference. `lobe-agent`'s non-dispatch APIs
+    // (createPlan, etc.) stay available — they are genuinely self-scoped to
+    // the current agent, unlike `lobe-agent-management` (see the dedicated
+    // "lobe-agent-management is fully blocked" suite below).
+    const gate = buildGate({ enabledToolIds: ['lobe-agent'] });
     const toolSet: ShareGateToolSet = {
-      activatableToolIds: ['lobe-agent-management', 'lobe-agent'],
-      enabledToolIds: ['lobe-agent-management', 'lobe-agent'],
+      activatableToolIds: ['lobe-agent'],
+      enabledToolIds: ['lobe-agent'],
       executorMap: {},
       manifestMap: {
         'lobe-agent': LobeAgentManifest,
-        'lobe-agent-management': AgentManagementManifest,
       },
       sourceMap: {},
       tools: [
-        { function: { name: 'lobe-agent-management____callAgent' }, type: 'function' },
-        { function: { name: 'lobe-agent-management____searchAgent' }, type: 'function' },
         { function: { name: 'lobe-agent____callSubAgent' }, type: 'function' },
         { function: { name: 'lobe-agent____createPlan' }, type: 'function' },
       ],
@@ -197,37 +201,60 @@ describe('applyShareGateToToolSet', () => {
 
     applyShareGateToToolSet(toolSet, gate);
 
-    // Both identifiers stay allowed (they were explicitly whitelisted)...
-    expect(Object.keys(toolSet.manifestMap)).toEqual(
-      expect.arrayContaining(['lobe-agent-management', 'lobe-agent']),
-    );
-    // ...but their sub-agent dispatch API is gone from every surface,
-    const managementApiNames = toolSet.manifestMap['lobe-agent-management'].api.map(
-      (api) => api.name,
-    );
+    expect(Object.keys(toolSet.manifestMap)).toEqual(['lobe-agent']);
     const lobeAgentApiNames = toolSet.manifestMap['lobe-agent'].api.map((api) => api.name);
-    expect(managementApiNames).not.toContain('callAgent');
-    expect(managementApiNames).toContain('searchAgent');
     expect(lobeAgentApiNames).not.toContain('callSubAgent');
     expect(lobeAgentApiNames).toContain('createPlan');
     expect(toolSet.tools).toEqual([
-      { function: { name: 'lobe-agent-management____searchAgent' }, type: 'function' },
       { function: { name: 'lobe-agent____createPlan' }, type: 'function' },
     ]);
 
-    // ...and the systemRole no longer instructs the model to call either
+    // ...and the systemRole no longer instructs the model to call the
     // dispatch tool (the exact leak this test guards against: a stale
-    // systemRole prompting a call to a tool that was just removed).
-    expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(/callAgent/);
+    // systemRole prompting a call to a tool that was just removed) —
+    // including semantic phrasings that suggest dispatching without naming
+    // the API.
     expect(toolSet.manifestMap['lobe-agent'].systemRole).not.toMatch(/callSubAgent/);
-    // ...including semantic phrasings that suggest dispatching to an agent
-    // without naming the API.
-    expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(
-      /Before calling an agent/,
-    );
-    expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(
-      /whether to call it/,
-    );
+  });
+
+  describe('lobe-agent-management is fully blocked for share visitors', () => {
+    // Every API on `lobe-agent-management` — not just `callAgent` — operates
+    // against the CREATOR's private agent collection with a visitor-
+    // suppliable `agentId` argument that is never checked against the shared
+    // agent itself (`searchAgent` enumerates the creator's whole workspace,
+    // `getAgentDetail` returns any creator-owned agent's config/system
+    // prompt, `createAgent`/`updateAgent`/`updatePrompt`/`duplicateAgent`/
+    // `installPlugin` mutate the creator's collection — see
+    // `agentManagementRuntime`). This reproduces the full untrimmed manifest
+    // (as if it had been whitelisted and NOT already trimmed by
+    // `resolveAgentManagementManifest`) to prove the identifier-level strip
+    // in `applyShareGateToToolSet` is unconditional, independent of that
+    // upstream context-aware path.
+    const buildManagementToolSet = (): ShareGateToolSet => ({
+      activatableToolIds: [AgentManagementIdentifier],
+      enabledToolIds: [AgentManagementIdentifier],
+      executorMap: { [AgentManagementIdentifier]: 'server' as any },
+      manifestMap: { [AgentManagementIdentifier]: AgentManagementManifest },
+      sourceMap: { [AgentManagementIdentifier]: 'builtin' } as any,
+      tools: AgentManagementManifest.api.map((api) => ({
+        function: { name: `${AgentManagementIdentifier}____${api.name}` },
+        type: 'function',
+      })),
+    });
+
+    it('removes the identifier entirely from every surface, even when explicitly whitelisted', () => {
+      const gate = buildGate({ enabledToolIds: [AgentManagementIdentifier] });
+      const toolSet = buildManagementToolSet();
+
+      applyShareGateToToolSet(toolSet, gate);
+
+      expect(toolSet.manifestMap[AgentManagementIdentifier]).toBeUndefined();
+      expect(toolSet.sourceMap[AgentManagementIdentifier]).toBeUndefined();
+      expect(toolSet.executorMap[AgentManagementIdentifier]).toBeUndefined();
+      expect(toolSet.enabledToolIds).not.toContain(AgentManagementIdentifier);
+      expect(toolSet.activatableToolIds).not.toContain(AgentManagementIdentifier);
+      expect(toolSet.tools).toEqual([]);
+    });
   });
 
   describe('data-tool access (memory / knowledge base / agent documents)', () => {
@@ -473,6 +500,42 @@ describe('isShareBlockedDataToolCall', () => {
 
   it('never blocks tools outside the data-tool registry', () => {
     expect(isShareBlockedDataToolCall({}, 'web-search', 'search')).toBe(false);
+  });
+
+  describe('lobe-agent-management is fully blocked at dispatch time', () => {
+    // This is the unbypassable enforcement layer: `BuiltinToolsExecutor.execute`
+    // (builtin.ts) routes strictly by `payload.apiName` and never re-consults
+    // the (possibly already-trimmed) manifest, so a model that still emits a
+    // `lobe-agent-management` call — hallucinated, replayed, or injected via a
+    // crafted prompt — must be blocked here regardless of what permissions
+    // the share otherwise grants (memory/knowledge-base read, etc.).
+    //
+    // Built from the REAL exported `AgentManagementApiName` enum, not a
+    // hand-picked subset, so adding a new API to the tool is covered by this
+    // test automatically instead of silently reopening the hole.
+    it.each(Object.values(AgentManagementApiName))('blocks %s unconditionally', (apiName) => {
+      expect(
+        isShareBlockedDataToolCall(
+          {
+            allowReadMemory: true,
+            filePermissionConfig: { agentFiles: 'read', knowledgeBase: 'read' },
+          },
+          AgentManagementIdentifier,
+          apiName,
+          { agentId: 'creator-agent-id' },
+        ),
+      ).toBe(true);
+    });
+
+    it('blocks even with no args at all', () => {
+      expect(
+        isShareBlockedDataToolCall(
+          {},
+          AgentManagementIdentifier,
+          AgentManagementApiName.searchAgent,
+        ),
+      ).toBe(true);
+    });
   });
 
   describe('lobe-knowledge-base creator-scoped reads', () => {

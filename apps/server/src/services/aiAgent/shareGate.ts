@@ -2,11 +2,7 @@ import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
-import {
-  AgentManagementApiName,
-  AgentManagementIdentifier,
-  systemPromptWithoutCallAgent,
-} from '@lobechat/builtin-tool-agent-management';
+import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -224,17 +220,18 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
 /**
  * Whether a specific `identifier`/`apiName` tool call must be blocked for a
  * share visitor run. This is the enforcement counterpart of
- * `applyShareGateToDataToolAccess` below, reusable from the actual dispatch
- * chokepoint (`BuiltinToolsExecutor.execute`, which invokes
- * `runtime[apiName](...)` directly and never consults the manifest that
- * `applyShareGateToDataToolAccess` trims — the trimmed manifest only changes
- * what the model is OFFERED via function-calling schema, not what the
- * executor is willing to run if the model calls it anyway).
+ * `applyShareGateToDataToolAccess` / `stripAlwaysBlockedIdentifiers` below,
+ * reusable from the actual dispatch chokepoint (`BuiltinToolsExecutor.execute`,
+ * which invokes `runtime[apiName](...)` directly and never consults the
+ * manifest that those trim — the trimmed manifest only changes what the model
+ * is OFFERED via function-calling schema, not what the executor is willing to
+ * run if the model calls it anyway).
  *
- * Fails closed: an identifier with no rule is unaffected (ordinary plugins,
- * gated only by the C1 allowlist); an identifier WITH a rule but no
- * `permissions` (a non-share run never reaches here) is not this function's
- * concern — callers only invoke it when `agentShare` is set.
+ * Fails closed: an identifier with no rule and not in
+ * `SHARE_VISITOR_BLOCKED_IDENTIFIERS` is unaffected (ordinary plugins, gated
+ * only by the C1 allowlist); an identifier WITH a rule but no `permissions`
+ * (a non-share run never reaches here) is not this function's concern —
+ * callers only invoke it when `agentShare` is set.
  *
  * `args` is the tool call's parsed arguments, needed only for
  * `isArgsOutOfScope` rules (e.g. `viewKnowledgeBase`'s `id`). Omit it for
@@ -248,6 +245,11 @@ export const isShareBlockedDataToolCall = (
   apiName: string,
   args?: any,
 ): boolean => {
+  // Whole-identifier block (e.g. `lobe-agent-management`, see
+  // `SHARE_VISITOR_BLOCKED_IDENTIFIERS`) — every API on the tool is unsafe
+  // for a share visitor, so no `apiName`-level distinction is needed here.
+  if (SHARE_VISITOR_BLOCKED_IDENTIFIERS.has(identifier)) return true;
+
   const rule = DATA_TOOL_ACCESS_RULES[identifier];
   if (!rule) return false;
 
@@ -375,28 +377,71 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   }
 
   stripSubAgentDispatchApis(toolSet);
+  stripAlwaysBlockedIdentifiers(toolSet);
   applyShareGateToDataToolAccess(toolSet, gate);
 };
 
 /**
+ * Builtin tool identifiers whose ENTIRE API surface must never reach a share
+ * visitor's model or tool set — as opposed to `DATA_TOOL_ACCESS_RULES`, which
+ * trims a tool down to a scoped subset, or `SUB_AGENT_DISPATCH_APIS`, which
+ * hides only one dispatch API. These tools have no honest per-API scoping to
+ * keep at all: every API runs against the CREATOR's private data with a
+ * visitor-suppliable id argument that is never checked against the shared
+ * agent itself.
+ *
+ * - `lobe-agent-management`: executes in `agentManagementRuntime`
+ *   (`apps/server/src/services/toolExecution/serverRuntimes/agentManagement.ts`)
+ *   scoped by `userId` (the creator — the run executes as the creator, see
+ *   `AgentShareGate`), but `agentId` is a free-form model argument on nearly
+ *   every API. `searchAgent` (source: 'user') enumerates the creator's whole
+ *   workspace; `getAgentDetail` returns any creator-owned agent's full
+ *   config (system prompt included) for an arbitrary id; `createAgent` /
+ *   `updateAgent` / `updatePrompt` / `duplicateAgent` / `installPlugin`
+ *   persistently mutate the creator's agent collection. `callAgent` is
+ *   already covered by `SUB_AGENT_DISPATCH_APIS`, but the rest of the tool
+ *   has no API worth keeping, so the whole identifier is removed — fail
+ *   closed rather than allowlist API-by-API. Mirrored by `resolveAgentManagementManifest`
+ *   returning `null` for `isShareVisitor` (defense in depth: this strip is
+ *   unconditional here too, independent of whether that context-aware path
+ *   ran) and by the dispatch-time block in `isShareBlockedDataToolCall`.
+ */
+const SHARE_VISITOR_BLOCKED_IDENTIFIERS = new Set<string>([AgentManagementIdentifier]);
+
+const stripAlwaysBlockedIdentifiers = (toolSet: ShareGateToolSet): void => {
+  for (const identifier of SHARE_VISITOR_BLOCKED_IDENTIFIERS) {
+    delete toolSet.manifestMap[identifier];
+    delete toolSet.sourceMap[identifier];
+    delete toolSet.executorMap[identifier];
+    pruneArrayInPlace(toolSet.enabledToolIds, (id) => id !== identifier);
+    pruneArrayInPlace(toolSet.activatableToolIds, (id) => id !== identifier);
+    if (toolSet.tools) {
+      pruneArrayInPlace(toolSet.tools, (tool) => {
+        const toolIdentifier = tool?.function?.name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0];
+        return toolIdentifier !== identifier;
+      });
+    }
+  }
+};
+
+/**
  * Sub-agent dispatch is not available in shared visitor runs. This strip runs
- * unconditionally on `lobe-agent-management` / `lobe-agent`, independent of
- * whether the manifest was resolved through the normal context-aware path, so
- * a whitelisted entry can never surface `callAgent` / `callSubAgent` — nor a
- * `systemRole` that instructs the model to call them — to a share visitor's
- * model or the activator. `lobe-agent` already ships a precise systemRole
- * variant without the dispatch section (`systemPromptWithoutSubAgent`, also
- * used by its own context-aware `resolveManifest`); `lobe-agent-management`'s
- * equivalent (`systemPromptWithoutCallAgent`) mirrors that.
+ * unconditionally on `lobe-agent`, independent of whether the manifest was
+ * resolved through the normal context-aware path, so a whitelisted entry can
+ * never surface `callSubAgent` — nor a `systemRole` that instructs the model
+ * to call it — to a share visitor's model or the activator. `lobe-agent`
+ * already ships a precise systemRole variant without the dispatch section
+ * (`systemPromptWithoutSubAgent`, also used by its own context-aware
+ * `resolveManifest`).
+ *
+ * `lobe-agent-management`'s dispatch API (`callAgent`) does NOT need an entry
+ * here: the whole tool — dispatch included — is removed by
+ * `SHARE_VISITOR_BLOCKED_IDENTIFIERS` above.
  */
 const SUB_AGENT_DISPATCH_APIS: Record<
   string,
   { apiName: string; systemRoleWithoutDispatch: string }
 > = {
-  [AgentManagementIdentifier]: {
-    apiName: AgentManagementApiName.callAgent,
-    systemRoleWithoutDispatch: systemPromptWithoutCallAgent,
-  },
   [LobeAgentIdentifier]: {
     apiName: LobeAgentApiName.callSubAgent,
     systemRoleWithoutDispatch: systemPromptWithoutSubAgent,
