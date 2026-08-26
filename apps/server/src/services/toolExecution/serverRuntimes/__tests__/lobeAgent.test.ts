@@ -102,15 +102,19 @@ vi.mock('sharp', async (importOriginal) => {
 // message-history path the tool context is supposed to supply.
 const mockFindPlanByTopic = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 const mockUpdatePlanMetadata = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockCreateServerPlanRuntimeService = vi.hoisted(() => vi.fn());
 
 vi.mock('../lobeAgentPlan', () => ({
-  createServerPlanRuntimeService: () => ({
-    createPlan: vi.fn(),
-    findPlanById: vi.fn(),
-    findPlanByTopic: mockFindPlanByTopic,
-    updatePlan: vi.fn(),
-    updatePlanMetadata: mockUpdatePlanMetadata,
-  }),
+  createServerPlanRuntimeService: (...args: any[]) => {
+    mockCreateServerPlanRuntimeService(...args);
+    return {
+      createPlan: vi.fn(),
+      findPlanById: vi.fn(),
+      findPlanByTopic: mockFindPlanByTopic,
+      updatePlan: vi.fn(),
+      updatePlanMetadata: mockUpdatePlanMetadata,
+    };
+  },
 }));
 
 const { lobeAgentRuntime } = await import('../lobeAgent');
@@ -268,6 +272,60 @@ describe('lobeAgentRuntime', () => {
         userId: 'user-1',
       }),
     ).toThrow('messageId is required for LobeAgent execution');
+  });
+
+  describe('plan runtime scoping (Codex P1 — share-visitor cross-topic plan access)', () => {
+    it('does not restrict the plan runtime to a topic for an ordinary (non-share) run', () => {
+      lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
+
+      // 5th arg is `restrictToTopicId` — `undefined` means unrestricted,
+      // which is correct for a normal creator-owned run.
+      expect(mockCreateServerPlanRuntimeService).toHaveBeenCalledWith(
+        baseContext.serverDB,
+        'user-1',
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+
+    it("threads the visitor's own topicId as restrictToTopicId for a share-visitor run", () => {
+      lobeAgentRuntime.factory({
+        ...baseContext,
+        agentShare: {
+          agentId: 'agent-1',
+          visitorUserId: 'visitor-1',
+        } as any,
+        topicId: 'visitor-topic-1',
+      });
+
+      expect(mockCreateServerPlanRuntimeService).toHaveBeenCalledWith(
+        baseContext.serverDB,
+        'user-1',
+        undefined,
+        undefined,
+        'visitor-topic-1',
+      );
+    });
+
+    it('fails closed to a never-matching topic id when a share-visitor run somehow carries no topicId', () => {
+      lobeAgentRuntime.factory({
+        ...baseContext,
+        agentShare: {
+          agentId: 'agent-1',
+          visitorUserId: 'visitor-1',
+        } as any,
+        topicId: undefined,
+      });
+
+      expect(mockCreateServerPlanRuntimeService).toHaveBeenCalledWith(
+        baseContext.serverDB,
+        'user-1',
+        undefined,
+        undefined,
+        '',
+      );
+    });
   });
 
   it('should return a configuration error when multimodal model env is missing', async () => {

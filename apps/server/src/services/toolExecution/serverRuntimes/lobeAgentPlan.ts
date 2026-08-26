@@ -17,6 +17,34 @@ export const createServerPlanRuntimeService = (
   userId: string,
   workspaceId?: string,
   callerAgentVisibility?: 'private' | 'public' | null,
+  /**
+   * Share-visitor scoping (Codex P1, `lobe-agent`'s `updatePlan`): when set,
+   * `findPlanById` only resolves a plan document that is actually associated
+   * with THIS topic, via `topicDocumentModel.isAssociated`.
+   *
+   * `updatePlan` takes `planId` straight from the model's tool-call
+   * arguments and, without this guard, resolves it purely by creator
+   * ownership (`DocumentModel.findById`'s `ownership()` checks `userId` /
+   * `workspaceId`, not which topic created the document). A share visitor's
+   * run always executes under the CREATOR's DB credentials
+   * (`AgentShareGate.visitorUserId` only labels who is driving it — see
+   * `shareGate.ts`), so a visitor who supplies any other `docs_xxx` plan id
+   * owned by the creator — from a different topic, or a different shared
+   * agent entirely — could read it back and, via the immediately following
+   * `service.updatePlan` call, silently overwrite its goal/description/
+   * content. `shareGate.ts` cannot enforce this itself: unlike the static
+   * `knowledgeBaseIds` allowlist, a topic's plan id is often created mid-run
+   * (`createPlan`) and has no DB access from that module to verify
+   * membership. Enforcing it here, at the one place that already resolves
+   * `planId` against the database, is the fail-closed equivalent — see
+   * `apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts`,
+   * which threads this from `ToolExecutionContext.agentShare`/`topicId`.
+   *
+   * `undefined` (the default) means "no restriction" — used for ordinary,
+   * non-share runs, where a plan may legitimately be looked up by id outside
+   * the topic that originally created it.
+   */
+  restrictToTopicId?: string,
 ): PlanRuntimeService => {
   const documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
   const topicDocumentModel = new TopicDocumentModel(serverDB, userId, workspaceId);
@@ -73,6 +101,16 @@ export const createServerPlanRuntimeService = (
     findPlanById: async (id) => {
       const doc = await documentModel.findById(id);
       if (!doc || doc.fileType !== AGENT_PLAN_FILE_TYPE) return null;
+
+      // Fail closed: an id that isn't associated with the restricted topic
+      // is treated exactly like "not found" — see `restrictToTopicId` above.
+      if (
+        restrictToTopicId !== undefined &&
+        !(await topicDocumentModel.isAssociated(id, restrictToTopicId))
+      ) {
+        return null;
+      }
+
       return toPlanDocument(doc);
     },
 

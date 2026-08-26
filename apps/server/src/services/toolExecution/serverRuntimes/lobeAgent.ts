@@ -42,6 +42,15 @@ interface LobeAgentRuntimeContext {
    */
   agentVisibility?: 'private' | 'public' | null;
   groupId?: string | null;
+  /**
+   * Set (mirroring `ToolExecutionContext.agentShare`) when this run is a
+   * shared-agent visitor run. Forwarded to `createServerPlanRuntimeService`
+   * as `restrictToTopicId` so `updatePlan`'s model-suppliable `planId` is
+   * resolved only within the visitor's own topic — see the Codex P1 note on
+   * `createServerPlanRuntimeService`'s `restrictToTopicId` param in
+   * `lobeAgentPlan.ts`.
+   */
+  isShareVisitor?: boolean;
   messageId: string;
   /** The current Agent Run (`agent_operations.id`). */
   operationId?: string;
@@ -153,6 +162,10 @@ class LobeAgentExecutionRuntime {
         context.userId,
         context.workspaceId,
         context.agentVisibility,
+        // Fail closed even when a share-visitor run somehow carries no
+        // `topicId`: an empty string never matches a real topic id, so
+        // `isAssociated` — and therefore `findPlanById` — returns nothing.
+        context.isShareVisitor ? (context.topicId ?? '') : undefined,
       ),
     );
   }
@@ -497,6 +510,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
       agentId: context.agentId,
       agentVisibility: context.agentVisibility,
       groupId: context.groupId,
+      isShareVisitor: !!context.agentShare,
       messageId: context.messageId,
       operationId: context.operationId,
       serverDB: context.serverDB,
