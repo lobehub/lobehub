@@ -4,6 +4,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { sql } from 'drizzle-orm';
 
+import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel } from '@/database/models/message';
 import type { CreateTopicParams } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
@@ -32,17 +33,30 @@ import type { TopicItem } from '@/database/schemas';
  * inside that one locked transaction, so whichever of two concurrent callers
  * loses the lock re-reads the FIRST caller's already-committed topic and
  * correctly rejects instead of also inserting.
+ *
+ * The cap itself is read via `AgentShareModel.readCurrentVisitorCaps` from
+ * INSIDE this same locked transaction — deliberately NOT accepted as a
+ * caller-supplied number. `shareChat.ts` resolves `shareConfig` exactly ONCE,
+ * at `findByShareIdWithAccessCheck`, long before `AiAgentService` reaches this
+ * function (thousands of lines of agent-config/tool/knowledge-base
+ * resolution in between). A caller-supplied cap would therefore be that
+ * stale snapshot: an owner lowering `maxTopicsPerVisitor` mid-flood would
+ * never affect requests already past the initial read, since the locked
+ * recount would keep enforcing the OLD, higher number it was handed. Reading
+ * fresh here means the recount always compares against whatever the owner
+ * has configured right now. See `readCurrentVisitorCaps`'s JSDoc and
+ * `isConfigTightening`'s JSDoc (`AgentShareModel`) for why this fix, not a
+ * generation bump, is the correct one for these two fields.
  */
 export const reserveShareVisitorTopicOrThrow = async (params: {
   agentId: string;
   create: (topicModel: TopicModel) => Promise<TopicItem>;
   db: LobeChatDatabase;
-  maxTopicsPerVisitor: number;
   ownerId: string;
   visitorUserId: string;
   workspaceId?: string;
 }): Promise<TopicItem> => {
-  const { agentId, create, db, maxTopicsPerVisitor, ownerId, visitorUserId, workspaceId } = params;
+  const { agentId, create, db, ownerId, visitorUserId, workspaceId } = params;
 
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
@@ -51,6 +65,10 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`agent-share-topic:${agentId}:${visitorUserId}`})::bigint)`,
     );
+
+    // Fresh read under the lock, not a caller-supplied value — see this
+    // function's JSDoc for the stale-cap flood this closes.
+    const { maxTopicsPerVisitor } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);
 
     const txTopicModel = new TopicModel(tx, ownerId, workspaceId);
     const currentCount = await txTopicModel.countBySender({ agentId, senderId: visitorUserId });
@@ -73,7 +91,6 @@ export const reserveShareVisitorTopic = (
   params: {
     agentId: string;
     db: LobeChatDatabase;
-    maxTopicsPerVisitor: number;
     ownerId: string;
     visitorUserId: string;
     workspaceId?: string;
@@ -104,16 +121,23 @@ export const reserveShareVisitorTopic = (
  * cast-to-bigint idiom as every other advisory-lock call site in this
  * codebase (`onboarding/index.ts`, `goalGraph.ts`, `taskResultBridge/index.ts`,
  * `document/index.ts`).
+ *
+ * Same stale-snapshot fix as {@link reserveShareVisitorTopicOrThrow}: the cap
+ * is read fresh via `AgentShareModel.readCurrentVisitorCaps` from inside this
+ * locked transaction (hence `agentId` is now a required param) rather than
+ * accepted as a caller-supplied number carried forward from `shareChat.ts`'s
+ * one-time share resolution. See that function's JSDoc for the flood this
+ * closes.
  */
 export const reserveShareVisitorTurnOrThrow = async (params: {
+  agentId: string;
   create: (messageModel: MessageModel) => Promise<DBMessageItem | undefined>;
   db: LobeChatDatabase;
-  maxTurnsPerTopic: number;
   ownerId: string;
   topicId: string;
   workspaceId?: string;
 }): Promise<DBMessageItem | undefined> => {
-  const { create, db, maxTurnsPerTopic, ownerId, topicId, workspaceId } = params;
+  const { agentId, create, db, ownerId, topicId, workspaceId } = params;
 
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
@@ -121,6 +145,10 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`agent-share-turn:${topicId}`})::bigint)`,
     );
+
+    // Fresh read under the lock, not a caller-supplied value — see this
+    // function's JSDoc for the stale-cap flood this closes.
+    const { maxTurnsPerTopic } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);
 
     const txMessageModel = new MessageModel(tx, ownerId, workspaceId);
     const turnCount = await txMessageModel.countByTopic({ role: 'user', topicId });
@@ -139,8 +167,8 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
 /** Convenience wrapper so callers can pass `MessageModel.create`'s own params directly. */
 export const reserveShareVisitorTurn = (
   params: {
+    agentId: string;
     db: LobeChatDatabase;
-    maxTurnsPerTopic: number;
     ownerId: string;
     topicId: string;
     workspaceId?: string;

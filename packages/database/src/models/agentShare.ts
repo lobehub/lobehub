@@ -85,14 +85,36 @@ const normalizeAgentShareConfig = (config: AgentShareConfig | null): AgentShareC
  * visitor's in-flight run could otherwise keep reading data the owner just
  * tried to lock down.
  *
- * Deliberately excludes fields whose enforcement point is NOT "snapshotted
- * for the lifetime of a run": `maxTopicsPerVisitor` / `maxTurnsPerTopic` are
- * re-read fresh on every new `execAgent` call (`shareChat.ts`, before any
- * row is created) and never gate access to creator data mid-run — lowering
- * them only affects topics/turns that don't exist yet. `uploadAllowed` has no
- * runtime enforcement point at all today (`SettingsContent.tsx` ships it
- * disabled, "coming soon") — nothing to invalidate. If either is wired into a
- * run-duration grant later, add it here.
+ * Deliberately excludes `maxTopicsPerVisitor` / `maxTurnsPerTopic` and
+ * `uploadAllowed`, but for two DIFFERENT reasons — do not conflate them:
+ *
+ * - `maxTopicsPerVisitor` / `maxTurnsPerTopic` gate a NEW resource being
+ *   created (a topic/turn that does not exist yet), never access to data an
+ *   ALREADY-STANDING run is holding — so there is no in-flight run whose
+ *   grants need invalidating. This is NOT the same as "re-read fresh
+ *   per-call and therefore safe to ignore here": an earlier version of this
+ *   comment claimed `shareChat.ts` re-reads them fresh on every call, but the
+ *   value it read was still `AgentShareGate.shareConfig` — a snapshot taken
+ *   ONCE at `findByShareIdWithAccessCheck`, long before
+ *   `reserveShareVisitorTopicOrThrow` / `reserveShareVisitorTurnOrThrow`
+ *   actually take their advisory lock and recount (thousands of lines of
+ *   agent-config/tool/knowledge-base resolution later — see those functions'
+ *   JSDoc). A concurrent flood already past that initial read would keep
+ *   inserting against the OLD, higher cap even after the owner lowered it.
+ *   The actual fix for that gap is `AgentShareModel.readCurrentVisitorCaps`,
+ *   called by those guard functions from INSIDE their locked transaction
+ *   instead of trusting a caller-supplied number — see its JSDoc. With that
+ *   fix, "re-read fresh" is literally true, which is what makes it safe to
+ *   leave these two fields OUT of a mechanism (generation bump + whole-run
+ *   invalidation) designed for a different problem: they were never a
+ *   run-duration grant to invalidate, only a per-write cap to enforce
+ *   correctly at write time. Raising either cap is symmetric and needs no
+ *   special handling either: a request that already inserted/rejected
+ *   against the OLD, lower value just now has nothing to reconcile against a
+ *   LATER increase.
+ * - `uploadAllowed` has no runtime enforcement point at all today
+ *   (`SettingsContent.tsx` ships it disabled, "coming soon") — nothing to
+ *   invalidate. If it is wired into a run-duration grant later, add it here.
  */
 const isConfigTightening = (previous: AgentShareConfig, patch: AgentShareConfigPatch): boolean => {
   if (patch.allowReadMemory === false && previous.allowReadMemory === true) return true;
@@ -379,6 +401,61 @@ export class AgentShareModel {
    * committed" — fail closed instead of running with stale, over-broad
    * grants. See `agentShareGenerations`'s JSDoc.
    */
+  /**
+   * Read the CURRENT `maxTopicsPerVisitor` / `maxTurnsPerTopic` caps for an
+   * agent's share, bypassing any snapshot the caller might already be
+   * holding.
+   *
+   * WHY this must be a fresh read and not a value threaded through from
+   * earlier in the request: `reserveShareVisitorTopicOrThrow` /
+   * `reserveShareVisitorTurnOrThrow`
+   * (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`) take an
+   * advisory lock and recount existing topics/messages immediately before
+   * the real INSERT — but `shareChat.ts`'s `execAgent` resolves the share
+   * (and therefore these caps) exactly ONCE, at `findByShareIdWithAccessCheck`,
+   * long before that lock is taken. `AiAgentService.execAgentWithReservation`
+   * does thousands of lines of agent-config/tool/knowledge-base resolution in
+   * between (real I/O, not instant). A caller that passed the SNAPSHOTTED cap
+   * into those guard functions would let an owner's cap REDUCTION lose to
+   * every request already past that initial read: the locked recount would
+   * only ever enforce whatever number it was TOLD, not the number the owner
+   * currently has configured — during an active flood, lowering 50 topics to
+   * 1 would still let every already-in-flight request reach 50. Calling this
+   * method from INSIDE the SAME locked transaction those guard functions hold
+   * closes that gap: the recount always compares against the cap as of RIGHT
+   * NOW, not as of request entry.
+   *
+   * This is deliberately a much lighter fix than the generation-bump +
+   * whole-run invalidation `isConfigTightening` drives for `allowReadMemory` /
+   * `enabledToolIds` / `filePermissionConfig`: those fields gate ongoing
+   * access an ALREADY-RUNNING operation is holding, so a stale snapshot must
+   * tear the whole run down. `maxTopicsPerVisitor` / `maxTurnsPerTopic` only
+   * gate whether a NEW topic/turn may be created — there is no in-flight run
+   * to invalidate, only a single upcoming write to check against the right
+   * number. See `isConfigTightening`'s JSDoc for why these two fields stay
+   * OUT of that mechanism even after this fix.
+   *
+   * Falls back to `normalizeAgentShareConfig`'s defaults exactly like every
+   * other reader of `agentShares.shareConfig`, so a legacy row missing these
+   * keys still enforces the same baseline (5 topics / 20 turns) instead of
+   * `undefined >= count` silently passing.
+   */
+  static readCurrentVisitorCaps = async (
+    db: LobeChatDatabase,
+    agentId: string,
+  ): Promise<Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic'>> => {
+    const [row] = await db
+      .select({ shareConfig: agentShares.shareConfig })
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agentId));
+
+    const normalized = normalizeAgentShareConfig(row?.shareConfig ?? null);
+    return {
+      maxTopicsPerVisitor: normalized.maxTopicsPerVisitor,
+      maxTurnsPerTopic: normalized.maxTurnsPerTopic,
+    };
+  };
+
   assertRunnableForVisitor = async (params: {
     agentId: string;
     expectedGeneration: number;
@@ -514,13 +591,26 @@ export class AgentShareModel {
    * survive it — see `agentShareGenerations`'s JSDoc for the republish
    * scenario this closes.
    *
-   * A single `UPDATE ... WHERE revoked_at IS NULL`, not a query loop: for any
+   * A single `DELETE ... WHERE revoked_at IS NULL`, not a query loop: for any
    * reservation whose run is concurrently inside `confirmReservation`, this
    * statement blocks on that row until the confirm transaction commits or
    * rolls back (ordinary Postgres row locking — see `confirmReservation`'s
    * JSDoc), so by the time this call returns, every reservation it could
    * possibly race against has already been resolved one way or the other.
    * No fixed retry window, no missed operations.
+   *
+   * DELETE, not the soft `revoked_at` UPDATE this used before: nothing in the
+   * repository ever reads a row once it is revoked (`confirmReservation`'s
+   * `WHERE revoked_at IS NULL` already treats it as gone, and no admin/audit
+   * view queries revoked rows), so leaving it in place only grew the table
+   * forever — the exact orphan-accumulation class flagged for abandoned
+   * `agent_operations` rows, but with no cleanup path at all here. Deleting
+   * outright keeps `confirmReservation`'s existing "missing row → fail
+   * closed" behavior (it only ever checked `WHERE id = operationId`, not
+   * whether the row still physically exists) while actually bounding table
+   * growth. See `sweepAbandonedReservations` for the complementary case this
+   * does NOT cover: a reservation nobody ever revokes because the owner never
+   * touches the share again.
    *
    * Returns the reservations this call itself revoked (i.e. runs that were
    * still standing up) so the caller can proactively interrupt them —
@@ -534,8 +624,7 @@ export class AgentShareModel {
     revocationGeneration: number,
   ): Promise<Array<{ operationId: string; topicId: string }>> => {
     const rows = await this.db
-      .update(agentShareRunReservations)
-      .set({ revokedAt: new Date() })
+      .delete(agentShareRunReservations)
       .where(
         and(
           eq(agentShareRunReservations.agentId, agentId),
@@ -543,6 +632,65 @@ export class AgentShareModel {
           lt(agentShareRunReservations.generation, revocationGeneration),
         ),
       )
+      .returning({
+        operationId: agentShareRunReservations.id,
+        topicId: agentShareRunReservations.topicId,
+      });
+
+    return rows;
+  };
+
+  /**
+   * Durable backstop for a reservation whose owning request died before
+   * reaching EITHER `confirmReservation` or the catch-path
+   * `releaseReservation` (e.g. the process was killed between
+   * `assertRunnableForVisitor` inserting the row and `createOperation`
+   * returning). Nothing else in this table's lifecycle ever cleans such a row
+   * up: `revokeReservations` only fires when the OWNER makes a NEW
+   * revoking/tightening write, which may never happen again for an agent
+   * whose share config the owner otherwise leaves untouched — so
+   * deleting-on-revoke alone does not bound growth from THIS case. Every
+   * long-lived shared agent that ever has one abandoned startup (deploy
+   * mid-request, OOM, crashed pod) would otherwise accumulate one indexed row
+   * per incident forever, same class as the abandoned-`agent_operations`
+   * problem `AbandonOperationService` exists for — but that service is
+   * triggered per-operation-id by a watchdog and has nothing to key a sweep
+   * of THIS table off of, so this is its own minimal age-based sweep rather
+   * than a hook into that one.
+   *
+   * Deletes by age alone (`createdAt < now - maxAgeMs`), not by status: after
+   * the `revokeReservations` DELETE fix above, every row that still exists IS
+   * pending by definition (a revoked or confirmed row no longer exists), so
+   * there is no separate "pending vs revoked" branch to write — one filter
+   * covers both the case this method exists for (abandoned pending rows) and,
+   * as a harmless backstop, any row from before that fix that predates this
+   * deploy.
+   *
+   * Safe to run on a row whose run is still genuinely standing up, however
+   * unlikely at `maxAgeMs`'s default: deleting it just makes that run's own
+   * `confirmReservation` return `false` and fail closed (interrupted, never
+   * billed under the creator's budget) — the exact same outcome as an owner
+   * revoking mid-startup, see that method's JSDoc. This is why `maxAgeMs`
+   * must stay comfortably above any realistic `createOperation` duration
+   * (gateway registration + state persistence + queue scheduling): the
+   * default mirrors `VERIFY_ABANDONED_MS`
+   * (`apps/server/src/services/verify/staleness.ts`), this codebase's
+   * existing bar for "this durable claim has been outstanding far longer than
+   * any real workload, so treat it as dead."
+   *
+   * A plain module function, not an `AgentShareModel` instance method: the
+   * sweep is agent/owner-agnostic (it scans the whole table), so there is no
+   * single `userId` to construct an instance around.
+   */
+  static sweepAbandonedReservations = async (
+    db: LobeChatDatabase,
+    maxAgeMs: number = 30 * 60 * 1000,
+  ): Promise<Array<{ operationId: string; topicId: string }>> => {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+
+    const rows = await db
+      .delete(agentShareRunReservations)
+      .where(lt(agentShareRunReservations.createdAt, cutoff))
       .returning({
         operationId: agentShareRunReservations.id,
         topicId: agentShareRunReservations.topicId,
