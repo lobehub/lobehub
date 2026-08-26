@@ -81,3 +81,59 @@ describe('useDebouncedLimitPatch', () => {
     expect(onCommitError).toHaveBeenCalledWith({ maxTurnsPerTopic: 40 });
   });
 });
+
+describe('useDebouncedLimitPatch — agent switching', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('commits a pending patch to the agent it was typed for, not the newly mounted one', () => {
+    const commitAgentA = vi.fn();
+    const commitAgentB = vi.fn();
+    const { result, rerender } = renderHook(({ onCommit }) => useDebouncedLimitPatch(onCommit), {
+      initialProps: { onCommit: commitAgentA },
+    });
+
+    act(() => {
+      result.current('maxTurnsPerTopic', 30);
+    });
+
+    // The settings surface is reused: the route swaps in agent B's callback
+    // while agent A's patch is still inside the debounce window.
+    rerender({ onCommit: commitAgentB });
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(commitAgentA).toHaveBeenCalledWith({ maxTurnsPerTopic: 30 });
+    expect(commitAgentB).not.toHaveBeenCalled();
+  });
+
+  it('routes the error callback to the same agent as the commit', async () => {
+    const commitAgentA = vi.fn().mockRejectedValue(new Error('nope'));
+    const errorAgentA = vi.fn();
+    const commitAgentB = vi.fn();
+    const errorAgentB = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ onCommit, onCommitError }) => useDebouncedLimitPatch(onCommit, onCommitError),
+      { initialProps: { onCommit: commitAgentA, onCommitError: errorAgentA } },
+    );
+
+    act(() => {
+      result.current('maxTopicsPerVisitor', 5);
+    });
+    rerender({ onCommit: commitAgentB, onCommitError: errorAgentB });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    await vi.waitFor(() => expect(errorAgentA).toHaveBeenCalled());
+
+    expect(errorAgentB).not.toHaveBeenCalled();
+  });
+});

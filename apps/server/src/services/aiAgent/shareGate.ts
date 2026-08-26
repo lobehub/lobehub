@@ -1,13 +1,22 @@
 import {
+  AgentDocumentsApiName,
+  AgentDocumentsIdentifier,
+} from '@lobechat/builtin-tool-agent-documents';
+import {
   AgentManagementApiName,
   AgentManagementIdentifier,
   systemPromptWithoutCallAgent,
 } from '@lobechat/builtin-tool-agent-management';
 import {
+  KnowledgeBaseApiName,
+  KnowledgeBaseIdentifier,
+} from '@lobechat/builtin-tool-knowledge-base';
+import {
   LobeAgentApiName,
   LobeAgentIdentifier,
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
@@ -67,6 +76,168 @@ export const applyShareGateToAgentConfig = (
 };
 
 /**
+ * Minimal shape a `DataToolAccessRule.grant` needs — either the full share
+ * gate's `shareConfig`, or the trimmed `agentShare` marker threaded through
+ * `RuntimeExecutorContext` / `ToolExecutionContext` for tool calls resolved
+ * outside this module (see `isShareBlockedDataToolCall`).
+ */
+interface ShareDataToolPermissions {
+  allowReadMemory?: boolean;
+  filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+}
+
+type DataToolGrant = 'none' | 'read';
+
+/**
+ * Read/write surface of a builtin tool whose APIs act directly on the
+ * creator's private data store (memory, knowledge bases, agent documents).
+ *
+ * Unlike ordinary plugins, these tools are gated by two independent axes:
+ * whether the share grants ANY access at all (`grant`), and — since v1 share
+ * grants are `none` | `read` only, there is no write grant to honor — whether
+ * a given API is a write regardless of grant (`writeApiNames`).
+ */
+interface DataToolAccessRule {
+  /** Resolve this share's grant for the tool from its permission fields. */
+  grant: (permissions: ShareDataToolPermissions) => DataToolGrant;
+  /** API names that mutate creator data; stripped/blocked unconditionally. */
+  writeApiNames: string[];
+}
+
+/**
+ * Registry of data-bearing builtin tools a share visitor can be whitelisted
+ * into (`shareConfig.enabledToolIds`) without the whitelist itself implying
+ * read OR write access to the underlying store. `filterPluginsByShareGate` /
+ * `applyShareGateToToolSet`'s allowlist intersection only answers "is this
+ * tool id enabled for the share" — it says nothing about `allowReadMemory` or
+ * `filePermissionConfig`, which is why a whitelisted memory/knowledge-base/
+ * agent-documents tool previously executed read-write under the creator's
+ * own permissions no matter what the share granted.
+ *
+ * Adding a new write API to one of these packages must add it here too —
+ * `shareGate.test.ts` asserts against the REAL exported manifests, so a
+ * rename or omission fails that test instead of silently reopening the hole.
+ */
+const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
+  [AgentDocumentsIdentifier]: {
+    grant: (permissions) =>
+      permissions.filePermissionConfig?.agentFiles === 'read' ? 'read' : 'none',
+    writeApiNames: [
+      AgentDocumentsApiName.createDocument,
+      AgentDocumentsApiName.copyDocument,
+      AgentDocumentsApiName.modifyNodes,
+      AgentDocumentsApiName.removeDocument,
+      AgentDocumentsApiName.renameDocument,
+      AgentDocumentsApiName.replaceDocumentContent,
+      AgentDocumentsApiName.updateLoadRule,
+    ],
+  },
+  [KnowledgeBaseIdentifier]: {
+    grant: (permissions) =>
+      permissions.filePermissionConfig?.knowledgeBase === 'read' ? 'read' : 'none',
+    writeApiNames: [
+      KnowledgeBaseApiName.createKnowledgeBase,
+      KnowledgeBaseApiName.deleteKnowledgeBase,
+      KnowledgeBaseApiName.createDocument,
+      KnowledgeBaseApiName.addFiles,
+      KnowledgeBaseApiName.removeFiles,
+    ],
+  },
+  [MemoryIdentifier]: {
+    grant: (permissions) => (permissions.allowReadMemory ? 'read' : 'none'),
+    writeApiNames: [
+      MemoryApiName.addActivityMemory,
+      MemoryApiName.addContextMemory,
+      MemoryApiName.addExperienceMemory,
+      MemoryApiName.addIdentityMemory,
+      MemoryApiName.addPreferenceMemory,
+      MemoryApiName.removeIdentityMemory,
+      MemoryApiName.updateIdentityMemory,
+    ],
+  },
+};
+
+/**
+ * Whether a specific `identifier`/`apiName` tool call must be blocked for a
+ * share visitor run. This is the enforcement counterpart of
+ * `applyShareGateToDataToolAccess` below, reusable from the actual dispatch
+ * chokepoint (`BuiltinToolsExecutor.execute`, which invokes
+ * `runtime[apiName](...)` directly and never consults the manifest that
+ * `applyShareGateToDataToolAccess` trims — the trimmed manifest only changes
+ * what the model is OFFERED via function-calling schema, not what the
+ * executor is willing to run if the model calls it anyway).
+ *
+ * Fails closed: an identifier with no rule is unaffected (ordinary plugins,
+ * gated only by the C1 allowlist); an identifier WITH a rule but no
+ * `permissions` (a non-share run never reaches here) is not this function's
+ * concern — callers only invoke it when `agentShare` is set.
+ */
+export const isShareBlockedDataToolCall = (
+  permissions: ShareDataToolPermissions,
+  identifier: string,
+  apiName: string,
+): boolean => {
+  const rule = DATA_TOOL_ACCESS_RULES[identifier];
+  if (!rule) return false;
+
+  const grant = rule.grant(permissions);
+  if (grant === 'none') return true;
+
+  return rule.writeApiNames.includes(apiName);
+};
+
+/**
+ * Apply `DATA_TOOL_ACCESS_RULES` to the assembled tool set: drop a data tool
+ * entirely when its grant is `none`, or strip its write APIs (from both the
+ * manifest and the function-calling `tools` schema) when the grant is
+ * `read`. Runs as part of `applyShareGateToToolSet` — after that pass's
+ * allowlist intersection has already decided which identifiers survive at
+ * all — so this only needs to further restrict, never re-add.
+ *
+ * This is UX/defense-in-depth (the model is never offered the disallowed
+ * function); the actual unbypassable enforcement is
+ * `isShareBlockedDataToolCall` at the `BuiltinToolsExecutor` dispatch site.
+ */
+const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
+  for (const [identifier, rule] of Object.entries(DATA_TOOL_ACCESS_RULES)) {
+    if (!toolSet.manifestMap[identifier]) continue;
+
+    const grant = rule.grant(gate.shareConfig);
+
+    if (grant === 'none') {
+      delete toolSet.manifestMap[identifier];
+      delete toolSet.sourceMap[identifier];
+      delete toolSet.executorMap[identifier];
+      pruneArrayInPlace(toolSet.enabledToolIds, (id) => id !== identifier);
+      pruneArrayInPlace(toolSet.activatableToolIds, (id) => id !== identifier);
+      if (toolSet.tools) {
+        pruneArrayInPlace(toolSet.tools, (tool) => {
+          const toolIdentifier = tool?.function?.name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0];
+          return toolIdentifier !== identifier;
+        });
+      }
+      continue;
+    }
+
+    const manifest = toolSet.manifestMap[identifier];
+    toolSet.manifestMap[identifier] = {
+      ...manifest,
+      api: manifest.api.filter((api) => !rule.writeApiNames.includes(api.name)),
+    };
+
+    if (toolSet.tools) {
+      pruneArrayInPlace(toolSet.tools, (tool) => {
+        const name: string | undefined = tool?.function?.name;
+        if (!name?.startsWith(`${identifier}${PLUGIN_SCHEMA_SEPARATOR}`)) return true;
+
+        const apiName = name.slice(identifier.length + PLUGIN_SCHEMA_SEPARATOR.length);
+        return !rule.writeApiNames.includes(apiName);
+      });
+    }
+  }
+};
+
+/**
  * The assembled operation-level tool set, right before it is handed to
  * `AgentRuntimeService.createOperation` as `toolSet`.
  */
@@ -119,6 +290,7 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   }
 
   stripSubAgentDispatchApis(toolSet);
+  applyShareGateToDataToolAccess(toolSet, gate);
 };
 
 /**

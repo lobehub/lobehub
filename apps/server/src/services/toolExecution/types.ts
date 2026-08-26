@@ -9,6 +9,8 @@ import {
   type WorkRegistrationIntent,
 } from '@lobechat/types';
 
+import type { AgentShareConfig } from '@/database/schemas';
+
 export interface ToolExecutionMemoryEmbeddingRuntime {
   /** Embedding model id used by the memory search runtime. */
   model: string;
@@ -163,12 +165,25 @@ export interface ToolExecutionContext {
    * the same allowlist/ownership rule here that the assembled tool set and
    * per-step context builder already enforce elsewhere. Undefined for
    * non-share runs.
+   *
+   * `allowReadMemory` / `filePermissionConfig` carry the memory / knowledge-
+   * base / agent-documents grants so `BuiltinToolsExecutor.execute` can call
+   * `isShareBlockedDataToolCall` (`shareGate.ts`) right before dispatching
+   * `runtime[apiName](...)` — the manifest-level trim
+   * (`applyShareGateToDataToolAccess`) only changes what the model is offered
+   * via function-calling schema, so this per-call check is the actual
+   * enforcement that a whitelisted-but-under-granted data tool cannot read
+   * beyond, or ever write to, the creator's data.
    */
   agentShare?: {
     /** Id of the shared agent this run belongs to. */
     agentId: string;
+    /** Mirrors `shareConfig.allowReadMemory`; gates the memory tool. */
+    allowReadMemory?: boolean;
     /** Share whitelist; an empty/missing list allows nothing. */
     enabledToolIds?: string[];
+    /** Mirrors `shareConfig.filePermissionConfig`; gates knowledge-base / agent-documents tools. */
+    filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     /** The signed-in visitor driving this run. */
     visitorUserId: string;
   };

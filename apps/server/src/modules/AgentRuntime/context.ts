@@ -41,9 +41,15 @@ export interface RuntimeExecutorContext {
    * that resolve their target outside `toolManifestMap` (e.g. `activateSkill`,
    * `lobe-topic-reference`) can apply the same allowlist/ownership rule the
    * assembled tool set already enforces.
+   *
+   * `allowReadMemory` mirrors `shareConfig.allowReadMemory`, forwarded (via
+   * `ServerToolTransport`) into `ToolExecutionContext.agentShare` so
+   * `BuiltinToolsExecutor.execute` can re-check the memory tool's grant right
+   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate.ts`.
    */
   agentShare?: {
     agentId: string;
+    allowReadMemory?: boolean;
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     visitorUserId: string;

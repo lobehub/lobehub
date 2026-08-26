@@ -8,6 +8,7 @@ import type { NewAgent } from '../../schemas';
 import {
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   agentsToSessions,
   devices,
@@ -1550,6 +1551,60 @@ describe('AgentModel', () => {
       });
 
       expect(result?.model).toBe('claude-code');
+    });
+
+    it('should reset an already link-shared agent to private when its config becomes heterogeneous', async () => {
+      // Regression for the P2 gap: `assertShareableAgent` in `agentShare.ts`
+      // only blocks *enabling* a share for a heterogeneous agent — it never
+      // re-runs when a config write later makes an already-shared agent
+      // heterogeneous. Without this reset, existing visitors keep hitting a
+      // live-looking link whose every send fails with
+      // `ShareHeterogeneousAgentUnsupported`.
+      const agent = await serverDB
+        .insert(agents)
+        .values({ userId, model: 'gpt-4' })
+        .returning()
+        .then((res) => res[0]);
+
+      await serverDB.insert(agentShares).values({
+        agentId: agent.id,
+        shareConfig: {},
+        visibility: 'link',
+      });
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: {
+          heterogeneousProvider: { command: 'claude', type: 'claude-code' },
+        },
+      } as any);
+
+      const share = await serverDB.query.agentShares.findFirst({
+        where: eq(agentShares.agentId, agent.id),
+      });
+
+      expect(share?.visibility).toBe('private');
+    });
+
+    it('should leave a normal agent share untouched on an unrelated config update', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ userId, model: 'gpt-4' })
+        .returning()
+        .then((res) => res[0]);
+
+      await serverDB.insert(agentShares).values({
+        agentId: agent.id,
+        shareConfig: {},
+        visibility: 'link',
+      });
+
+      await agentModel.updateConfig(agent.id, { title: 'Updated Title' });
+
+      const share = await serverDB.query.agentShares.findFirst({
+        where: eq(agentShares.agentId, agent.id),
+      });
+
+      expect(share?.visibility).toBe('link');
     });
   });
 

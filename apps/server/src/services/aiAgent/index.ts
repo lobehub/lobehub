@@ -5384,13 +5384,20 @@ export class AiAgentService {
         agentShare: shareGate
           ? {
               agentId: shareGate.agentId,
+              // Mirrors `shareConfig.allowReadMemory` so `BuiltinToolsExecutor`
+              // can re-check the memory tool's grant at dispatch time (the
+              // actual chokepoint) via `isShareBlockedDataToolCall` — see
+              // `shareGate.ts`.
+              allowReadMemory: shareGate.shareConfig.allowReadMemory,
               // Mirrors `shareConfig.enabledToolIds` so tool runtimes resolved
               // outside `toolManifestMap` (e.g. `activateSkill`, which queries
               // builtin/DB skills by name) can enforce the same allowlist.
               enabledToolIds: shareGate.shareConfig.enabledToolIds,
               // Threaded through so per-step context building can re-apply the
               // same fail-closed file gate as `applyShareGateToAgentConfig` to
-              // sources fetched independently of `agentConfig`.
+              // sources fetched independently of `agentConfig`, and so
+              // `BuiltinToolsExecutor` can re-check the knowledge-base /
+              // agent-documents tools' grant at dispatch time.
               filePermissionConfig: shareGate.shareConfig.filePermissionConfig,
               visitorUserId: shareGate.visitorUserId,
             }

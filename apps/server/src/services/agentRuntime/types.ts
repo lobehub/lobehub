@@ -372,9 +372,16 @@ export interface OperationCreationParams {
    * that resolve their target outside `toolManifestMap` (e.g. `activateSkill`,
    * `lobe-topic-reference`) can apply the same allowlist/ownership rule the
    * assembled tool set already enforces.
+   *
+   * `allowReadMemory` mirrors `shareConfig.allowReadMemory` so the memory
+   * tool's dispatch-time gate (`isShareBlockedDataToolCall` in `shareGate.ts`)
+   * can be re-applied at `BuiltinToolsExecutor.execute`, which is the actual
+   * unbypassable chokepoint — the whitelist above only decides whether the
+   * memory tool id is enabled, not whether it may read or write.
    */
   agentShare?: {
     agentId: string;
+    allowReadMemory?: boolean;
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     visitorUserId: string;

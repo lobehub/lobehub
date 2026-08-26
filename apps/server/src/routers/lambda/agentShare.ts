@@ -1,4 +1,4 @@
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isHeterogeneousAgentConfig } from '@lobechat/const';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -67,10 +67,8 @@ const requireShare = <T>(share: T | null): T => {
  */
 const assertShareableAgent = async (agentModel: AgentModel, agentId: string) => {
   const agent = await agentModel.getAgentConfigById(agentId);
-  const isHeterogeneous =
-    !!agent?.agencyConfig?.heterogeneousProvider?.type || isHeterogeneousAgentModelId(agent?.model);
 
-  if (isHeterogeneous) {
+  if (isHeterogeneousAgentConfig(agent)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
