@@ -30,7 +30,7 @@ const messageResult: MessageSearchResult = {
 };
 
 describe('SearchRepo backend boundary', () => {
-  it('forwards query, entity, scope, filters, and pagination without changing items', async () => {
+  it('forwards the supported request contract without exposing the legacy ignored offset', async () => {
     const search = vi.fn<SearchBackend['search']>().mockResolvedValue({
       candidates: [{ id: messageResult.id, score: 7.25 }],
       items: [messageResult],
@@ -51,7 +51,7 @@ describe('SearchRepo backend boundary', () => {
     expect(search).toHaveBeenCalledWith({
       entity: 'messages',
       filters: { agentId: 'agent-1' },
-      pagination: { limit: 7, offset: 4 },
+      pagination: { limit: 7 },
       query: { text: 'search text' },
       scope: {
         callerAgentVisibility: 'public',
@@ -66,7 +66,10 @@ describe('SearchRepo backend boundary', () => {
     const backend: SearchBackend = {
       key: 'candidate',
       search: vi.fn().mockResolvedValue({
-        candidates: [{ id: messageResult.id, score: 9.75 }],
+        candidates: [
+          { id: messageResult.id, score: 9.75 },
+          { id: 'message-2', score: 8.5 },
+        ],
         items: [messageResult],
       }),
     };
@@ -75,14 +78,25 @@ describe('SearchRepo backend boundary', () => {
       onMeasurement: (measurement) => measurements.push(measurement),
     });
 
-    await repo.search({ query: 'message', type: 'message' });
+    await repo.search({ agentId: 'agent-1', query: 'message', type: 'message' });
 
     expect(measurements).toHaveLength(1);
     expect(measurements[0]).toMatchObject({
-      candidates: [{ id: messageResult.id, score: 9.75 }],
+      candidateCount: 2,
+      itemCount: 1,
       provider: 'candidate',
+      request: {
+        entity: 'messages',
+        filterKeys: ['agentId'],
+        limit: 5,
+        queryLength: 7,
+        scope: 'personal',
+      },
       status: 'success',
     });
+    expect(measurements[0]).not.toHaveProperty('candidates');
+    expect(measurements[0]?.request).not.toHaveProperty('query');
+    expect(measurements[0]?.request).not.toHaveProperty('userId');
   });
 
   it('keeps measurement hook failures outside product behavior', async () => {
@@ -111,6 +125,35 @@ describe('SearchRepo backend boundary', () => {
     consoleError.mockRestore();
   });
 
+  it('keeps asynchronous measurement rejections outside product behavior', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const measurementError = new Error('async measurement failed');
+    const backend: SearchBackend = {
+      key: 'candidate',
+      search: vi.fn().mockResolvedValue({
+        candidates: [{ id: messageResult.id, score: 9.75 }],
+        items: [messageResult],
+      }),
+    };
+    const repo = new SearchRepo(db, 'user-1', undefined, undefined, {
+      backend,
+      onMeasurement: async () => {
+        throw measurementError;
+      },
+    });
+
+    await expect(repo.search({ query: 'message', type: 'message' })).resolves.toEqual([
+      messageResult,
+    ]);
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        '[SearchRepo] measurement hook failed',
+        measurementError,
+      );
+    });
+    consoleError.mockRestore();
+  });
+
   it('forwards KB scope and caller visibility through the same backend contract', async () => {
     const document: KnowledgeBaseDocumentHit = {
       documentId: 'document-1',
@@ -134,7 +177,7 @@ describe('SearchRepo backend boundary', () => {
     expect(search).toHaveBeenCalledWith({
       entity: 'documents',
       filters: { documentKind: 'knowledgeBaseDocument', knowledgeBaseIds: ['kb-1'] },
-      pagination: { limit: 12, offset: 0 },
+      pagination: { limit: 12 },
       query: { text: 'knowledge' },
       scope: {
         callerAgentVisibility: 'public',
@@ -153,12 +196,21 @@ describe('SearchRepo backend boundary', () => {
       onMeasurement: (measurement) => measurements.push(measurement),
     });
 
-    await expect(repo.search({ query: 'message', type: 'message' })).rejects.toBe(providerError);
+    await expect(
+      repo.search({ agentId: 'agent-1', query: 'message', type: 'message' }),
+    ).rejects.toBe(providerError);
     expect(search).toHaveBeenCalledTimes(1);
     expect(measurements).toHaveLength(1);
     expect(measurements[0]).toMatchObject({
-      error: providerError,
+      errorType: 'Error',
       provider: 'candidate',
+      request: {
+        entity: 'messages',
+        filterKeys: ['agentId'],
+        limit: 5,
+        queryLength: 7,
+        scope: 'personal',
+      },
       status: 'error',
     });
   });

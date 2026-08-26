@@ -128,14 +128,14 @@ export const searchRouter = router({
         // this debounced search-as-you-type path.
         const needsKbExclusion =
           !type || ['file', 'folder', 'knowledgeBase', 'page'].includes(type);
-        const excludeKnowledgeBaseIds = needsKbExclusion
-          ? await getRestrictedKnowledgeBaseIds(ctx)
-          : [];
-        const searchRepo = await createSearchRepo({
-          db: ctx.serverDB,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
+        const [excludeKnowledgeBaseIds, searchRepo] = await Promise.all([
+          needsKbExclusion ? getRestrictedKnowledgeBaseIds(ctx) : [],
+          createSearchRepo({
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          }),
+        ]);
         searchPromises.push(searchRepo.search({ ...input, excludeKnowledgeBaseIds }));
       }
 

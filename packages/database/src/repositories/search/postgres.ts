@@ -226,7 +226,6 @@ export class PostgresSearchBackend implements SearchBackend {
     if (!query) return { candidates: [], items: [] };
 
     const { entity, filters, pagination } = request;
-    /** Preserve the public repository's existing behavior: its offset was accepted but not applied. */
     const limit = pagination.limit;
 
     if (entity === 'agents') return this.searchAgents(query, limit);

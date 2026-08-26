@@ -167,20 +167,14 @@ export interface SearchOptions {
   type?: SearchResultType;
 }
 
-/** Canonical searchable projections shared by PostgreSQL and external indexes. */
+/** Entities implemented by the current product search repository contract. */
 export type SearchBackendEntity =
   | 'agents'
   | 'chatGroups'
   | 'documents'
   | 'files'
   | 'knowledgeBases'
-  | 'memoryActivities'
-  | 'memoryContexts'
-  | 'memoryExperiences'
-  | 'memoryIdentities'
-  | 'memoryPreferences'
   | 'messages'
-  | 'personaDocuments'
   | 'topics'
   | 'userMemories';
 
@@ -200,7 +194,6 @@ export interface SearchBackendFilters {
 
 export interface SearchBackendPagination {
   limit: number;
-  offset: number;
 }
 
 export interface SearchBackendQuery {
@@ -215,7 +208,7 @@ export interface SearchBackendRequest {
   scope: SearchBackendScope;
 }
 
-/** Raw provider ranking evidence retained alongside the existing hydrated item. */
+/** Raw provider candidate before authorization hydration and product-specific post-ranking. */
 export interface SearchBackendCandidate {
   id: string;
   /** Provider-native score where higher is better; legacy pg_search can emit null. */
@@ -225,6 +218,10 @@ export interface SearchBackendCandidate {
 export type SearchBackendItem = DatabaseSearchResult | KnowledgeBaseDocumentHit;
 
 export interface SearchBackendResponse<TItem extends SearchBackendItem = SearchBackendItem> {
+  /**
+   * Provider-native retrieval pool. It can be larger than and ordered differently from `items`
+   * when the product applies a secondary display ranking, such as topic/message recency.
+   */
   candidates: SearchBackendCandidate[];
   /** Hydrated, authorization-checked product items in display order. */
   items: TItem[];
@@ -236,23 +233,33 @@ export interface SearchBackend {
   search: (request: SearchBackendRequest) => Promise<SearchBackendResponse>;
 }
 
+export interface SearchBackendMeasurementRequest {
+  entity: SearchBackendEntity;
+  filterKeys: (keyof SearchBackendFilters)[];
+  limit: number;
+  queryLength: number;
+  scope: 'personal' | 'workspace';
+}
+
 interface SearchBackendMeasurementBase {
   durationMs: number;
   provider: string;
-  request: SearchBackendRequest;
+  /** Privacy-safe request shape that excludes identifiers and user-entered text. */
+  request: SearchBackendMeasurementRequest;
 }
 
 export type SearchBackendMeasurement =
   | (SearchBackendMeasurementBase & {
-      candidates: SearchBackendCandidate[];
+      candidateCount: number;
+      itemCount: number;
       status: 'success';
     })
   | (SearchBackendMeasurementBase & {
-      error: unknown;
+      errorType: string;
       status: 'error';
     });
 
 export interface SearchRepoOptions {
   backend?: SearchBackend;
-  onMeasurement?: (measurement: SearchBackendMeasurement) => void;
+  onMeasurement?: (measurement: SearchBackendMeasurement) => Promise<void> | void;
 }

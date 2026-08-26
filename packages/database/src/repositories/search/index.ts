@@ -56,14 +56,28 @@ export class SearchRepo {
     query: string,
     limit: number,
     filters: SearchBackendFilters = {},
-    offset: number = 0,
   ): SearchBackendRequest {
     return {
       entity,
       filters,
-      pagination: { limit, offset },
+      pagination: { limit },
       query: { text: query },
       scope: this.scope,
+    };
+  }
+
+  private createMeasurementRequest(
+    request: SearchBackendRequest,
+  ): SearchBackendMeasurement['request'] {
+    return {
+      entity: request.entity,
+      filterKeys: Object.entries(request.filters)
+        .filter(([, value]) => value !== undefined && (!Array.isArray(value) || value.length > 0))
+        .map(([key]) => key)
+        .sort() as (keyof SearchBackendFilters)[],
+      limit: request.pagination.limit,
+      queryLength: request.query.text.length,
+      scope: request.scope.workspaceId ? 'workspace' : 'personal',
     };
   }
 
@@ -73,19 +87,20 @@ export class SearchRepo {
     try {
       const response = await this.backend.search(request);
       this.recordMeasurement({
-        candidates: response.candidates,
+        candidateCount: response.candidates.length,
         durationMs: Date.now() - startedAt,
+        itemCount: response.items.length,
         provider: this.backend.key,
-        request,
+        request: this.createMeasurementRequest(request),
         status: 'success',
       });
       return response;
     } catch (error) {
       this.recordMeasurement({
         durationMs: Date.now() - startedAt,
-        error,
+        errorType: error instanceof Error ? error.name : typeof error,
         provider: this.backend.key,
-        request,
+        request: this.createMeasurementRequest(request),
         status: 'error',
       });
       throw error;
@@ -95,7 +110,12 @@ export class SearchRepo {
   /** Measurement failures must never change the selected provider's result or error. */
   private recordMeasurement(measurement: SearchBackendMeasurement) {
     try {
-      this.onMeasurement?.(measurement);
+      const hookResult = this.onMeasurement?.(measurement);
+      if (hookResult) {
+        void hookResult.catch((error) => {
+          console.error('[SearchRepo] measurement hook failed', error);
+        });
+      }
     } catch (error) {
       console.error('[SearchRepo] measurement hook failed', error);
     }
@@ -103,7 +123,7 @@ export class SearchRepo {
 
   /** Search across the database-backed product result types. */
   async search(options: SearchOptions): Promise<SearchResult[]> {
-    const { query, type, limitPerType = 5, agentId, contextType, offset = 0 } = options;
+    const { query, type, limitPerType = 5, agentId, contextType } = options;
     if (!query || query.trim() === '') return [];
 
     const trimmedQuery = query.trim();
@@ -112,81 +132,57 @@ export class SearchRepo {
     const searches: Promise<SearchBackendResponse>[] = [];
 
     if ((!type || type === 'agent') && limits.agent > 0) {
-      searches.push(
-        this.execute(this.createRequest('agents', trimmedQuery, limits.agent, {}, offset)),
-      );
+      searches.push(this.execute(this.createRequest('agents', trimmedQuery, limits.agent)));
     }
     if ((!type || type === 'chatGroup') && limits.chatGroup > 0) {
-      searches.push(
-        this.execute(this.createRequest('chatGroups', trimmedQuery, limits.chatGroup, {}, offset)),
-      );
+      searches.push(this.execute(this.createRequest('chatGroups', trimmedQuery, limits.chatGroup)));
     }
     if ((!type || type === 'topic') && limits.topic > 0) {
       searches.push(
-        this.execute(this.createRequest('topics', trimmedQuery, limits.topic, { agentId }, offset)),
+        this.execute(this.createRequest('topics', trimmedQuery, limits.topic, { agentId })),
       );
     }
     if ((!type || type === 'message') && limits.message > 0) {
       searches.push(
-        this.execute(
-          this.createRequest('messages', trimmedQuery, limits.message, { agentId }, offset),
-        ),
+        this.execute(this.createRequest('messages', trimmedQuery, limits.message, { agentId })),
       );
     }
     if ((!type || type === 'file') && limits.file > 0) {
       searches.push(
         this.execute(
-          this.createRequest(
-            'files',
-            trimmedQuery,
-            limits.file,
-            { excludeKnowledgeBaseIds },
-            offset,
-          ),
+          this.createRequest('files', trimmedQuery, limits.file, { excludeKnowledgeBaseIds }),
         ),
       );
     }
     if ((!type || type === 'folder') && limits.folder > 0) {
       searches.push(
         this.execute(
-          this.createRequest(
-            'documents',
-            trimmedQuery,
-            limits.folder,
-            { documentKind: 'folder', excludeKnowledgeBaseIds },
-            offset,
-          ),
+          this.createRequest('documents', trimmedQuery, limits.folder, {
+            documentKind: 'folder',
+            excludeKnowledgeBaseIds,
+          }),
         ),
       );
     }
     if ((!type || type === 'page') && limits.page > 0) {
       searches.push(
         this.execute(
-          this.createRequest(
-            'documents',
-            trimmedQuery,
-            limits.page,
-            { documentKind: 'page', excludeKnowledgeBaseIds },
-            offset,
-          ),
+          this.createRequest('documents', trimmedQuery, limits.page, {
+            documentKind: 'page',
+            excludeKnowledgeBaseIds,
+          }),
         ),
       );
     }
     if ((!type || type === 'memory') && limits.memory > 0) {
-      searches.push(
-        this.execute(this.createRequest('userMemories', trimmedQuery, limits.memory, {}, offset)),
-      );
+      searches.push(this.execute(this.createRequest('userMemories', trimmedQuery, limits.memory)));
     }
     if ((!type || type === 'knowledgeBase') && limits.knowledgeBase > 0) {
       searches.push(
         this.execute(
-          this.createRequest(
-            'knowledgeBases',
-            trimmedQuery,
-            limits.knowledgeBase,
-            { excludeKnowledgeBaseIds },
-            offset,
-          ),
+          this.createRequest('knowledgeBases', trimmedQuery, limits.knowledgeBase, {
+            excludeKnowledgeBaseIds,
+          }),
         ),
       );
     }
