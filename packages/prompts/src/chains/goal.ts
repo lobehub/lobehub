@@ -9,7 +9,7 @@ import {
 } from './verify';
 
 /** Bump when the create-goal criteria drafting prompt meaningfully changes. */
-export const GOAL_CRITERIA_DRAFT_PROMPT_VERSION = 'v2';
+export const GOAL_CRITERIA_DRAFT_PROMPT_VERSION = 'v3';
 
 export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
   name: 'goal_criteria_draft',
@@ -87,6 +87,8 @@ export const chainGoalCriteriaDraft = ({
         `- Return at most ${maxCriteria} criteria. Prefer fewer independent criteria that together define success.`,
         '- Describe outcomes and delivered artifacts, not implementation steps or one particular execution plan.',
         '- Criteria must remain valid across multiple attempts. Do not mention the current round, temporary progress, or how the agent should work.',
+        '- Preserve every explicit numeric threshold, comparison operator, unit, time window, and stopping condition from the user exactly; never weaken or omit them.',
+        '- When the user did not provide a numeric threshold, do not invent an arbitrary one. Define a measurable, domain-appropriate success condition from the stated outcome and make any assumption explicit for user review.',
         '- Never use unit tests, test suites, coverage, type-checks, lint, or a clean build as user-facing acceptance criteria.',
         '- List the evidence needed to judge each criterion. Use [] only when the final text answer alone is sufficient.',
         '- Use verifierType="agent" when judging requires active investigation, opening files, or multiple evidence types; use "llm" only for inline text or a directly inspectable image; use "program" only for deterministic command checks.',

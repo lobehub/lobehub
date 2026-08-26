@@ -252,13 +252,26 @@ export class AgentOperationModel {
    * Atomically retire an operation whose liveness lease has expired. A concurrent
    * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
    */
-  async settleStaleRunning(operationId: string, staleBefore: Date): Promise<boolean> {
+  async settleStaleRunning(
+    operationId: string,
+    staleBefore: Date,
+    latestTotalCost?: number,
+  ): Promise<boolean> {
+    const totalCost =
+      latestTotalCost !== undefined && Number.isFinite(latestTotalCost)
+        ? Math.max(0, latestTotalCost)
+        : undefined;
     const [row] = await this.db
       .update(agentOperations)
       .set({
         completedAt: new Date(),
         completionReason: 'lease_expired',
         status: 'abandoned',
+        ...(totalCost === undefined
+          ? {}
+          : {
+              totalCost: sql`greatest(coalesce(${agentOperations.totalCost}, 0), ${totalCost})`,
+            }),
       })
       .where(
         and(

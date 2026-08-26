@@ -12,6 +12,7 @@ import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
@@ -782,9 +783,17 @@ export const taskRouter = router({
       const assigneeIds = [
         ...new Set(result.tasks.map((t) => t.assigneeAgentId).filter((id): id is string => !!id)),
       ];
-      const agents =
-        assigneeIds.length > 0 ? await ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [];
+      const assigneeUserIds = [
+        ...new Set(result.tasks.map((t) => t.assigneeUserId).filter((id): id is string => !!id)),
+      ];
+      const [agents, users] = await Promise.all([
+        assigneeIds.length > 0 ? ctx.agentModel.getAgentAvatarsByIds(assigneeIds) : [],
+        assigneeUserIds.length > 0
+          ? UserModel.getDisplayInfoByIds(ctx.serverDB, assigneeUserIds)
+          : [],
+      ]);
       const agentMap = new Map(agents.map((a) => [a.id, a]));
+      const userMap = new Map(users.map((u) => [u.id, u]));
 
       const data: TaskListItem[] = result.tasks.map((task) => {
         const participants: TaskParticipant[] = [];
@@ -797,6 +806,18 @@ export const taskRouter = router({
               id: agent.id,
               title: agent.title ?? '',
               type: 'agent',
+            });
+          }
+        }
+        if (task.assigneeUserId) {
+          const user = userMap.get(task.assigneeUserId);
+          if (user) {
+            participants.push({
+              avatar: user.avatar,
+              backgroundColor: null,
+              id: user.id,
+              title: user.fullName ?? user.username ?? '',
+              type: 'user',
             });
           }
         }
@@ -1192,6 +1213,22 @@ export const taskRouter = router({
         ctx.taskService.assertAgentVisibilityCompat(resolved.visibility, agentVisibility);
       }
 
+      // A private task can only be assigned to its creator — the assignee
+      // would otherwise never see the task. `null` clears and is always safe.
+      ctx.taskService.assertAssigneeUserVisibilityCompat(
+        resolved.visibility,
+        data.assigneeUserId,
+        resolved.createdByUserId,
+      );
+
+      // Automation and a human assignee are mutually exclusive. Judge the
+      // POST-update effective pair so both directions are caught: assigning a
+      // member to an automated task, and scheduling a member-assigned task.
+      ctx.taskService.assertAutomationAssigneeCompat(
+        data.automationMode !== undefined ? data.automationMode : resolved.automationMode,
+        data.assigneeUserId !== undefined ? data.assigneeUserId : resolved.assigneeUserId,
+      );
+
       const resolvedParentTaskId =
         parentTaskId === undefined
           ? undefined
@@ -1218,7 +1255,10 @@ export const taskRouter = router({
         updateData.instruction !== undefined && updateData.editorData === undefined
           ? { ...updateData, editorData: null }
           : updateData;
-      const task = await model.update(resolved.id, normalizedUpdateData);
+      const task = await ctx.taskService.updateTaskWithAssigneeLock(
+        resolved.id,
+        normalizedUpdateData,
+      );
       if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       return { data: task, message: 'Task updated', success: true };
     } catch (error) {
@@ -1298,6 +1338,17 @@ export const taskRouter = router({
                 'Cannot make this task private while it has subtasks created by other members. Reassign or remove those subtasks first.',
             });
           }
+        }
+
+        // Demoting a member-assigned task to private would strand the
+        // assignee: the task disappears from their view while still carrying
+        // their name. Reject early — unassign first, then demote.
+        if (input.visibility === 'private') {
+          ctx.taskService.assertAssigneeUserVisibilityCompat(
+            input.visibility,
+            resolved.assigneeUserId,
+            resolved.createdByUserId,
+          );
         }
 
         // Promoting a task to public while a private agent is its assignee

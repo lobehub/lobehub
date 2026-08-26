@@ -17,14 +17,19 @@ import {
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import type { TaskAssigneePayload } from '../features/AssigneeAgentSelector';
 import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 
 export interface CreateTaskContentProps {
   agentId?: string;
@@ -57,9 +62,11 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(0);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
-    // Default to private in workspace mode so the user has to opt in to share.
-    // In personal mode the field is irrelevant and the chip is hidden anyway.
-    const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+    const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+    // Default to workspace-visible: workspace tasks are team work by default,
+    // and going private stays one click away. In personal mode the field is
+    // irrelevant and the chip is hidden anyway.
+    const [visibility, setVisibility] = useState<'private' | 'public'>('public');
 
     // A private agent can only run a private task. When the selected agent
     // is private we force visibility back to private and lock the chip so
@@ -70,10 +77,26 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       if (isPrivateAgent && visibility === 'public') setVisibility('private');
     }, [isPrivateAgent, visibility]);
 
+    // The mirror constraint: a task assigned to another member must stay
+    // visible to the workspace — a private task is creator-only, so the
+    // assignee could never see it. Selecting a member flips visibility to
+    // workspace and locks the chip.
+    const selfUserId = useUserStore(userProfileSelectors.userId);
+    const isOtherMemberAssignee = Boolean(assigneeUserId) && assigneeUserId !== selfUserId;
+    useEffect(() => {
+      if (isOtherMemberAssignee && visibility === 'private') setVisibility('public');
+    }, [isOtherMemberAssignee, visibility]);
+
     const editor = useEditor();
     const instructionRef = useRef('');
 
     const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
+    const memberMeta = useUserDisplayMeta(assigneeAgentId ? undefined : assigneeUserId);
+
+    const handleAssigneeChange = useCallback((assignee: TaskAssigneePayload) => {
+      setAssigneeAgentId(assignee.assigneeAgentId ?? undefined);
+      setAssigneeUserId(assignee.assigneeUserId ?? undefined);
+    }, []);
 
     const handleInline = useCallback(() => {
       updateSystemStatus({ taskCreateInlineCollapsed: false }, 'expandTaskCreateInline');
@@ -103,6 +126,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       try {
         const result = await createTask({
           assigneeAgentId,
+          assigneeUserId,
           editorData: editorJson,
           instruction: instruction || title.trim(),
           name: title.trim() || undefined,
@@ -125,6 +149,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     }, [
       activeWorkspaceId,
       assigneeAgentId,
+      assigneeUserId,
       canCreateTask,
       close,
       createTask,
@@ -238,6 +263,11 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                       <AssigneeAvatar agentId={assigneeAgentId} size={18} />
                       <Text fontSize={12}>{assigneeMeta?.title}</Text>
                     </>
+                  ) : assigneeUserId ? (
+                    <>
+                      <AssigneeUserAvatar size={18} userId={assigneeUserId} />
+                      <Text fontSize={12}>{memberMeta?.title}</Text>
+                    </>
                   ) : (
                     <>
                       <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
@@ -254,7 +284,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               ) : (
                 <AssigneeAgentSelector
                   currentAgentId={assigneeAgentId}
-                  onChange={setAssigneeAgentId}
+                  currentUserId={assigneeUserId}
+                  onChange={handleAssigneeChange}
                 >
                   {assigneeChip}
                 </AssigneeAgentSelector>
@@ -269,7 +300,12 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                     ? t('createTask.visibility.privateAgentLocked', {
                         defaultValue: 'Private agents can only run private tasks.',
                       })
-                    : undefined
+                    : isOtherMemberAssignee
+                      ? t('createTask.visibility.memberAssigneeLocked', {
+                          defaultValue:
+                            'A task assigned to a member stays visible to the workspace.',
+                        })
+                      : undefined
                 }
                 onChange={setVisibility}
               >

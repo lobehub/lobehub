@@ -19,6 +19,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
+import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
@@ -253,7 +254,8 @@ export class GoalService {
           const result = await this.graphModel.createNodeOnce(goalId, {
             description: [
               `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
-              'Use the existing Goal findings as prior evidence. Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved.',
+              'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
+              'Explicitly close every remaining acceptance gap instead of treating completed upstream Work as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
               'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
             ].join('\n\n'),
             kind: 'work',
@@ -545,12 +547,13 @@ export class GoalService {
     if (!operationId || !topicId) return undefined;
 
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
+    const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
     const reclaimed = await this.db.transaction(async (tx) => {
       const settled = await new AgentOperationModel(
         tx,
         this.userId,
         this.workspaceId,
-      ).settleStaleRunning(operationId, staleBefore);
+      ).settleStaleRunning(operationId, staleBefore, latestUsage?.totalCost);
       if (!settled) return false;
 
       await new TaskTopicModel(tx, this.userId, this.workspaceId).updateStatus(
@@ -619,6 +622,7 @@ export class GoalService {
       'Execute only the Current Work contract. Do not implement, validate, or pre-empt any sibling or downstream Work node, even when the overall goal context describes it.',
       'The complete requirements for this Work are included here. Do not inspect unrelated agent documents to recover requirements. Do not invoke Acceptance skills or Acceptance CLI commands during the main Work; a dedicated post-run phase will ask you to submit your evidence before an independent verifier judges it.',
       'Create implementation-level subtasks when useful. Finish the operation once the Current Work deliverable and its concrete evidence are ready; Acceptance verification will decide whether this Task is complete.',
+      'Make the final delivery self-contained for an independent verifier that may not have workspace access. Include the relevant artifact contents or exact excerpts and the raw outputs of decisive verification commands; file paths and claims that checks passed are not sufficient evidence by themselves.',
       'Return the produced artifacts, evidence, key findings, and the recommended next action. Do not mark the overall Goal complete.',
     ]
       .filter(Boolean)

@@ -851,11 +851,16 @@ export class GatewayActionImpl {
         // terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
-          // A clean completion the user isn't watching is owned by
-          // `markTopicUnread` (status: 'unread'). Every other case (viewing,
-          // error, abort) settles the running state back to 'active'. The server
-          // compares the operation id under the topic row lock so a late close
-          // from another tab cannot clear or settle a newer run.
+          // The server already settled this topic: the runtime's `finish`
+          // executor settles to 'unread' before it publishes the terminal event
+          // this callback rides on, so by now the mark is legitimately gone and
+          // a settle from here would only ever return 'missing'.
+          //
+          // What the server could NOT know is whether the user is watching. The
+          // settle below performs that correction with the completed operation
+          // id: after the marker is gone, the model only accepts unread → active
+          // when `lastSettledOperationId` still matches. It also remains the
+          // backstop when `clearRunningMark` failed and left the marker in place.
           const viewing = this.#get().activeTopicId === result.topicId;
           topicService
             .settleRunningOperation(
@@ -1053,32 +1058,54 @@ export class GatewayActionImpl {
         if (authFailed) this.#get().completeOperation(gatewayOpId);
 
         // Same supersede guard as executeGatewayAgent's onSessionComplete: a
-        // newer run may own this topic by now, and both writes below are
-        // unconditional stomps that would retire it mid-flight.
+        // newer run may own this topic by now, and the settle below would
+        // retire it mid-flight.
         const superseded = this.#isSupersededRunningOperation({
           agentId: context.agentId,
           operationId,
           topicId,
         });
 
-        // See executeGatewayAgent's onSessionComplete: a clean background
-        // completion is left to markTopicUnread (status: 'unread').
+        // Settle through the server exactly as executeGatewayAgent's
+        // onSessionComplete does: ONE call that clears the marker and writes the
+        // terminal status inside the topic row lock, comparing the operation id
+        // so a late close from another tab cannot settle a newer run.
+        //
+        // This was hand-rolled here as two independent fire-and-forget writes: an
+        // UNCONDITIONAL `updateTopicMetadata({ runningOperation: null })` plus an
+        // `updateTopicStatus('active')` that was SKIPPED whenever the run finished
+        // cleanly while the user was on another topic. That case delegated the
+        // status write to `markTopicUnread` — a separate call, on a separate
+        // guard — and when it did not land the topic stayed `running` forever:
+        // the marker was already gone, so every later `settleRunningOperation`
+        // returned `missing` and nothing on the server could repair it. Observed
+        // on a self-hosted deployment as 7 topics stuck `running` whose
+        // `metadata.runningOperation` was present-and-JSON-null (the signature of
+        // that unconditional clear) with their operation rows already terminal.
+        //
+        // Reconnect is the path a page refresh takes, which is why the symptom
+        // was always "still spinning after a reload" — refreshing is what moved
+        // the run off the primary path and onto this one.
         const viewing = this.#get().activeTopicId === topicId;
-        if (!superseded && (viewing || !succeeded)) {
-          void this.#get().updateTopicStatus?.({
-            agentId: context.agentId,
-            status: 'active',
-            topicId,
-          });
-        }
-        // Clear the persisted marker useGatewayReconnect keys off so a dead op
-        // doesn't get reconnected on every reload / task-drawer open.
         if (!superseded) {
-          topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
+          topicService
+            .settleRunningOperation(
+              topicId,
+              operationId,
+              viewing || !succeeded ? 'active' : 'unread',
+            )
+            .catch(console.error);
         }
-        // Mirror the clear into the local store — the server clear above leaves the
-        // Zustand topic map stale, which useGatewayReconnect keys off.
-        this.clearLocalRunningOperation({ agentId: context.agentId, operationId, topicId });
+        // Mirror into the local store — the server settle does NOT touch the
+        // Zustand topic map that useGatewayReconnect (and the sidebar spinner)
+        // read. Status omitted for the unwatched-clean case, which
+        // `markTopicUnread` owns locally; same split as the primary path.
+        this.clearLocalRunningOperation({
+          agentId: context.agentId,
+          operationId,
+          status: viewing || !succeeded ? 'active' : undefined,
+          topicId,
+        });
       },
       operationId,
       resumeOnConnect: true,
@@ -1125,8 +1152,8 @@ export class GatewayActionImpl {
   /**
    * Clear the client-store copy of `topic.metadata.runningOperation`.
    *
-   * The server-side clear (`topicService.updateTopicMetadata(topicId, { runningOperation: null })`)
-   * alone leaves the Zustand store stale: `useGatewayReconnect` keys off the LOCAL
+   * The server-side clear (`topicService.settleRunningOperation`, which nulls the
+   * marker inside the topic row lock) alone leaves the Zustand store stale: `useGatewayReconnect` keys off the LOCAL
    * copy, so after an error run (e.g. insufficient credits) the stale marker keeps
    * firing `aiAgentService.refreshGatewayToken(topicId)`, which the server now answers
    * with NOT_FOUND (404 — the server-side marker is already null). Raw SWR retries the

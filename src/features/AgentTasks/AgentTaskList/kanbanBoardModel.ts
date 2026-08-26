@@ -20,6 +20,11 @@ export interface KanbanColumnDefinition {
   targetStatus: 'backlog' | 'canceled' | 'completed' | null;
 }
 
+export interface KanbanAssigneeUpdate {
+  assigneeAgentId: string | null;
+  assigneeUserId: string | null;
+}
+
 export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
   { droppable: true, key: 'backlog', targetStatus: 'backlog' },
   { droppable: false, key: 'running', targetStatus: null },
@@ -40,7 +45,7 @@ export const buildKanbanColumns = (
   const groupEntries = taskGroups.map((group) => {
     const meta =
       groupBy === 'assignee'
-        ? getTaskAssigneeGroupMeta(group.assigneeAgentId)
+        ? getTaskAssigneeGroupMeta(group.assigneeAgentId, group.assigneeUserId)
         : getTaskPriorityGroupMeta(group.priority);
     return [meta, group.tasks as TaskListItem[]] as [TaskGroupMeta, TaskListItem[]];
   });
@@ -53,12 +58,34 @@ export const buildKanbanColumns = (
   }));
 };
 
+export const getKanbanAssigneeUpdate = (
+  task: TaskListItem,
+  patch: Partial<TaskListItem>,
+): KanbanAssigneeUpdate | undefined => {
+  const update = {
+    assigneeAgentId: patch.assigneeAgentId ?? null,
+    assigneeUserId: patch.assigneeUserId ?? null,
+  };
+
+  if (
+    (task.assigneeAgentId ?? null) === update.assigneeAgentId &&
+    (task.assigneeUserId ?? null) === update.assigneeUserId
+  ) {
+    return;
+  }
+
+  return update;
+};
+
 export const getKanbanTaskPatch = (
   groupBy: TaskKanbanGroupBy,
   column: KanbanColumnDefinition,
 ): Partial<TaskListItem> | undefined => {
   if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
-    return { assigneeAgentId: column.groupMeta.assigneeId ?? null };
+    return {
+      assigneeAgentId: column.groupMeta.assigneeId ?? null,
+      assigneeUserId: column.groupMeta.assigneeUserId ?? null,
+    };
   }
   if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
     return { priority: column.groupMeta.priority ?? 0 };
@@ -66,6 +93,21 @@ export const getKanbanTaskPatch = (
   if (groupBy === 'status' && column.targetStatus) {
     return { status: column.targetStatus as TaskStatus };
   }
+};
+
+export const canDropTaskIntoKanbanColumn = (
+  task: TaskListItem,
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): boolean => {
+  if (!column.droppable) return false;
+  if (groupBy !== 'assignee' || column.groupMeta?.groupBy !== 'assignee') return true;
+
+  const targetAssigneeUserId = column.groupMeta.assigneeUserId;
+  if (!targetAssigneeUserId) return true;
+  if (task.automationMode) return false;
+
+  return task.visibility !== 'private' || task.createdByUserId === targetAssigneeUserId;
 };
 
 export const moveTaskBetweenKanbanGroups = (

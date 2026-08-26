@@ -16,16 +16,21 @@ import {
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../../App';
+import { decodeCasPayload } from './casPayload';
+import { canApplyDelta, indexLocalByHash, pickDelta } from './deltaFeed';
 import {
   diffManifest,
   findMissingEntryAssets,
   isValidManifestShape,
   patchNumber,
+  type RendererDelta,
   type RendererManifest,
+  type RendererManifestFile,
   sha256File,
   verifyManifestSignature,
 } from './manifest';
 import { emptyPointer, type OtaPointer, readPointer, writePointer } from './pointer';
+import { applyZstdPatch } from './zstdPatch';
 
 const logger = createLogger('core:RendererUpdateManager');
 
@@ -256,28 +261,20 @@ export class RendererUpdateManager {
     const stagingDir = path.join(stagingRoot, manifest.version);
     mkdirSync(stagingDir, { recursive: true });
 
-    const { missing, reusable } = diffManifest(manifest, await this.hashLocalTree(otaDir, pointer));
-    logger.info(
-      `Renderer ${manifest.version}: ${reusable.length} files reused, ${missing.length} to download`,
-    );
+    const localHashes = await this.hashLocalTree(otaDir, pointer);
+    const byHash = indexLocalByHash(localHashes);
+    const localVersion = pointer.current ?? 'r0';
+    const delta = pickDelta(manifest, localVersion);
 
-    for (const { file, localPath } of reusable) {
-      const target = path.join(stagingDir, file.path);
-      await mkdir(path.dirname(target), { recursive: true });
-      try {
-        await link(localPath, target);
-      } catch {
-        await copyFile(localPath, target);
-      }
-    }
-
-    for (const file of missing) {
-      const res = await fetch(this.fileUrl(file.sha256));
-      if (!res.ok) throw new Error(`Asset fetch failed (${res.status}): ${file.path}`);
-      const content = Buffer.from(await res.arrayBuffer());
-      const target = path.join(stagingDir, file.path);
-      await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, content);
+    if (delta && canApplyDelta(delta, byHash)) {
+      logger.info(`Renderer ${manifest.version}: applying delta from ${delta.fromVersion}`);
+      await this.stageDelta(delta, stagingDir, byHash);
+    } else {
+      const { missing, reusable } = diffManifest(manifest, localHashes);
+      logger.info(
+        `Renderer ${manifest.version}: ${reusable.length} files reused, ${missing.length} to download`,
+      );
+      await this.stageCas(stagingDir, missing, reusable);
     }
 
     for (const file of manifest.files) {
@@ -301,6 +298,62 @@ export class RendererUpdateManager {
     rmSync(finalDir, { force: true, recursive: true });
     renameSync(stagingDir, finalDir);
     rmSync(stagingRoot, { force: true, recursive: true });
+  }
+
+  private async stageCas(
+    stagingDir: string,
+    missing: RendererManifestFile[],
+    reusable: Array<{ file: RendererManifestFile; localPath: string }>,
+  ) {
+    for (const { file, localPath } of reusable) {
+      await this.placeLocalFile(localPath, path.join(stagingDir, file.path));
+    }
+    for (const file of missing) {
+      await this.writeStaged(stagingDir, file.path, await this.fetchCas(file.sha256, file.path));
+    }
+  }
+
+  private async stageDelta(delta: RendererDelta, stagingDir: string, byHash: Map<string, string>) {
+    for (const op of delta.ops) {
+      const target = path.join(stagingDir, op.path);
+      if (op.op === 'copy') {
+        const localPath = byHash.get(op.sha256);
+        if (!localPath) throw new Error(`Delta copy missing local ${op.sha256}`);
+        await this.placeLocalFile(localPath, target);
+        continue;
+      }
+      if (op.op === 'full') {
+        await this.writeStaged(stagingDir, op.path, await this.fetchCas(op.sha256, op.path));
+        continue;
+      }
+      const localPath = byHash.get(op.fromSha256);
+      if (!localPath) throw new Error(`Delta patch missing base ${op.fromSha256}`);
+      const oldContent = await readFile(localPath);
+      const patch = await this.fetchCas(op.patchSha256, op.path);
+      const next = await applyZstdPatch(oldContent, patch);
+      await this.writeStaged(stagingDir, op.path, next);
+    }
+  }
+
+  private async placeLocalFile(localPath: string, target: string) {
+    await mkdir(path.dirname(target), { recursive: true });
+    try {
+      await link(localPath, target);
+    } catch {
+      await copyFile(localPath, target);
+    }
+  }
+
+  private async writeStaged(stagingDir: string, relPath: string, content: Buffer) {
+    const target = path.join(stagingDir, relPath);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, content);
+  }
+
+  private async fetchCas(sha256: string, label: string) {
+    const res = await fetch(this.fileUrl(sha256));
+    if (!res.ok) throw new Error(`Asset fetch failed (${res.status}): ${label}`);
+    return decodeCasPayload(Buffer.from(await res.arrayBuffer()));
   }
 
   private async hashLocalTree(otaDir: string, pointer: OtaPointer): Promise<Map<string, string>> {

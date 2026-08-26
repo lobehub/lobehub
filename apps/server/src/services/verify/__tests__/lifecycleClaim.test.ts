@@ -11,6 +11,7 @@ const {
   findByOperation,
   operationFindById,
   finalizeVerifyRun,
+  recordHeterogeneousDeliverableEvidence,
   startEvidenceSubmission,
   updateStatus,
 } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const {
   finalizeVerifyRun: vi.fn(),
   findByOperation: vi.fn(),
   operationFindById: vi.fn(),
+  recordHeterogeneousDeliverableEvidence: vi.fn(),
   startEvidenceSubmission: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -50,7 +52,10 @@ vi.mock('../modelConfig', () => ({
   resolveVerifyModelConfig: vi.fn().mockResolvedValue({ model: 'm', provider: 'p' }),
 }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
-vi.mock('../evidenceSubmission', () => ({ startEvidenceSubmission }));
+vi.mock('../evidenceSubmission', () => ({
+  recordHeterogeneousDeliverableEvidence,
+  startEvidenceSubmission,
+}));
 vi.mock('../taskAcceptance', () => ({
   resolveTaskAcceptance: vi.fn().mockResolvedValue({ config: { enabled: true } }),
 }));
@@ -74,6 +79,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
       finalizeVerifyRun,
       findByOperation,
       operationFindById,
+      recordHeterogeneousDeliverableEvidence,
       startEvidenceSubmission,
       updateStatus,
     ].forEach((m) => m.mockReset());
@@ -100,6 +106,30 @@ describe('runVerifyOnCompletion — verification claim', () => {
     );
     expect(claimVerifying).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('records a heterogeneous builder handoff directly and continues to verification', async () => {
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: null,
+      provider: 'kimi-code',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    claimEvidenceCollection.mockResolvedValue(true);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(recordHeterogeneousDeliverableEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliverable: 'done',
+        operation: expect.objectContaining({ id: 'op-1' }),
+      }),
+    );
+    expect(startEvidenceSubmission).not.toHaveBeenCalled();
+    expect(claimVerifying).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('does not let a redelivered task completion bypass active evidence collection', async () => {

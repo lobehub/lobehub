@@ -975,6 +975,21 @@ describe('ClaudeCodeQuotaMenu', () => {
 });
 
 describe('CodexQuotaMenu', () => {
+  it.each([
+    [
+      'failed to fetch codex rate limits: error sending request for url (https://chatgpt.com/backend-api/wham/usage)',
+      'heteroAgent.codexQuota.errorConnection',
+    ],
+    ['unexpected RPC failure', 'heteroAgent.codexQuota.errorGeneric'],
+  ])('shows a friendly error instead of exposing %s', async (error, expectedMessage) => {
+    mockService.getCodexQuota.mockResolvedValue(codexSnapshot({ error, status: 'error' }));
+
+    render(<CodexQuotaMenu command="codex" />);
+
+    expect(await screen.findByText(expectedMessage)).toBeTruthy();
+    expect(screen.queryByText(error)).toBeNull();
+  });
+
   it('renders windows and the reset-credits footer', async () => {
     const resetsAt = Date.now() + 60 * 60_000;
     mockService.getCodexQuota.mockResolvedValue(

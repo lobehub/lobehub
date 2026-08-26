@@ -773,3 +773,18 @@ because it installs from scratch.
 expectations, delete the hidden `node_modules/.pnpm/lock.yaml` (or the whole
 node\_modules) in the affected workspace root and reinstall, then re-verify the
 actual resolved version via the importing package's symlink.
+
+### L-S16 — Treating a listening dev-server process as a healthy long-run probe
+
+**Wrong approach:** use process existence, an open TCP connection, or an unbounded
+`curl` as the health signal for an unattended LobeHub soak.
+
+**Why it fails:** Next dev can remain alive and accept a TCP connection while never
+returning an HTTP response. An unbounded probe then blocks the monitor itself, so the
+log stops exactly when the failure begins and makes the run look shorter rather than
+recording an unhealthy interval.
+
+**Correct approach:** give every HTTP and CLI probe explicit connect and total
+timeouts, record timeout/`000` as an observation, and keep the monitor advancing.
+Prove recovery with a successful application request after restarting the owned
+server; neither a PID nor a listening socket is sufficient.

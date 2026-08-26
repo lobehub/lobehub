@@ -313,9 +313,18 @@ export const agentNotifyRouter = router({
           // Claim the marker before publishing. A retry after a successful
           // lifecycle can then publish the missing stream event without firing
           // completion hooks a second time.
+          // Settle rather than take, for the same reason as
+          // `ServerOperationStore.clearRunningMark`: dropping the marker on its
+          // own leaves `topics.status` on 'running' with nothing left to match.
+          // `status === 'settled'` carries exactly the claim this used to read
+          // off `takeRunningOperation`'s return.
           if (!terminalRetry) {
-            const claimed = await ctx.topicModel.takeRunningOperation(topicId, remoteOperationId);
-            if (!claimed) return;
+            const settled = await ctx.topicModel.settleRunningOperation(
+              topicId,
+              remoteOperationId,
+              completionReason === 'done' ? 'unread' : 'active',
+            );
+            if (settled.status !== 'settled') return;
           }
 
           const streamReason = completionReason === 'done' ? 'success' : completionReason;

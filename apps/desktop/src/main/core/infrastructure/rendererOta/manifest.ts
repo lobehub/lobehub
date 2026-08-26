@@ -2,14 +2,52 @@ import { createHash, verify as cryptoVerify } from 'node:crypto';
 
 import { z } from 'zod';
 
+const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+const relativePathSchema = z.string().refine((p) => !p.includes('..') && !p.startsWith('/'));
+
 export const rendererManifestFileSchema = z.object({
-  path: z.string().refine((p) => !p.includes('..') && !p.startsWith('/')),
-  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  path: relativePathSchema,
+  sha256: sha256Schema,
   size: z.number(),
+});
+
+export const rendererDeltaCopyOpSchema = z.object({
+  op: z.literal('copy'),
+  path: relativePathSchema,
+  sha256: sha256Schema,
+});
+
+export const rendererDeltaPatchOpSchema = z.object({
+  fromSha256: sha256Schema,
+  op: z.literal('patch'),
+  patchSha256: sha256Schema,
+  patchSize: z.number(),
+  path: relativePathSchema,
+  sha256: sha256Schema,
+  size: z.number(),
+});
+
+export const rendererDeltaFullOpSchema = z.object({
+  op: z.literal('full'),
+  path: relativePathSchema,
+  sha256: sha256Schema,
+  size: z.number(),
+});
+
+export const rendererDeltaOpSchema = z.discriminatedUnion('op', [
+  rendererDeltaCopyOpSchema,
+  rendererDeltaPatchOpSchema,
+  rendererDeltaFullOpSchema,
+]);
+
+export const rendererDeltaSchema = z.object({
+  fromVersion: z.string().regex(/^r\d+$/),
+  ops: z.array(rendererDeltaOpSchema),
 });
 
 export const rendererManifestSchema = z.object({
   appVersion: z.string(),
+  deltas: z.array(rendererDeltaSchema).optional(),
   files: z.array(rendererManifestFileSchema),
   mainHash: z.string(),
   signature: z.string(),
@@ -17,6 +55,8 @@ export const rendererManifestSchema = z.object({
 });
 
 export type RendererManifestFile = z.infer<typeof rendererManifestFileSchema>;
+export type RendererDeltaOp = z.infer<typeof rendererDeltaOpSchema>;
+export type RendererDelta = z.infer<typeof rendererDeltaSchema>;
 export type RendererManifest = z.infer<typeof rendererManifestSchema>;
 
 export const canonicalJson = (value: unknown): string => {

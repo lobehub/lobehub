@@ -37,6 +37,23 @@ import { works } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
+export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  const code =
+    typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+  const cause = error instanceof Error ? error.cause : undefined;
+
+  return (
+    code === '23505' ||
+    message.includes('23505') ||
+    message.includes('duplicate') ||
+    message.includes('unique') ||
+    (!!cause && isTaskIdentifierUniqueViolation(cause))
+  );
+};
+
 /**
  * Ownership helpers in this model come in three flavors. Choose by USE CASE,
  * not by table — picking the wrong one led to a `seq` allocation hotfix
@@ -236,11 +253,12 @@ export class TaskModel {
     data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'> & {
       identifierPrefix?: string;
     },
+    options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
     const { identifierPrefix = 'T', ...rest } = data;
 
     // Retry loop to handle concurrent creates (parallel tool calls)
-    const maxRetries = 5;
+    const maxRetries = options.maxRetries ?? 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Seq is allocated per ownership scope: workspace-wide in team mode,
@@ -276,13 +294,7 @@ export class TaskModel {
       } catch (error: any) {
         // Retry on unique constraint violation (concurrent seq conflict)
         // Check error itself, cause, and stringified message for PG error code 23505
-        const errStr =
-          String(error?.message || '') +
-          String(error?.cause?.code || '') +
-          String(error?.code || '');
-        const isUniqueViolation =
-          errStr.includes('23505') || errStr.includes('unique') || errStr.includes('duplicate');
-        if (isUniqueViolation && attempt < maxRetries - 1) {
+        if (isTaskIdentifierUniqueViolation(error) && attempt < maxRetries - 1) {
           continue;
         }
         throw error;
@@ -604,6 +616,7 @@ export class TaskModel {
   ): Promise<
     Array<{
       assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
       hasMore: boolean;
       key: string;
       limit: number;
@@ -626,6 +639,7 @@ export class TaskModel {
 
     interface GroupQuery {
       assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
       conditions: SQL[];
       key: string;
       limit: number;
@@ -639,11 +653,17 @@ export class TaskModel {
 
     if (groupBy === 'assignee') {
       const limit = 50;
+      const assigneeGroupKey = sql<string>`case
+        when ${tasks.assigneeAgentId} is not null then 'assignee:' || ${tasks.assigneeAgentId}
+        when ${tasks.assigneeUserId} is not null then 'assignee:user:' || ${tasks.assigneeUserId}
+        else 'assignee:unassigned'
+      end`;
       const rankedTasks = this.db
         .select({
           ...getTableColumns(tasks),
+          assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
           groupRank:
-            sql<number>`row_number() over (partition by ${tasks.assigneeAgentId} order by ${tasks.createdAt} desc)`.as(
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc)`.as(
               'group_rank',
             ),
         })
@@ -652,46 +672,69 @@ export class TaskModel {
         .as('ranked_assignee_tasks');
       const [countResult, rankedTaskRows] = await Promise.all([
         this.db
-          .select({ assigneeAgentId: tasks.assigneeAgentId, count: sql<number>`count(*)` })
+          .select({
+            assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+            count: sql<number>`count(*)`,
+          })
           .from(tasks)
           .where(and(...baseConditions))
-          .groupBy(tasks.assigneeAgentId),
+          .groupBy(assigneeGroupKey),
         this.db
           .select()
           .from(rankedTasks)
           .where(sql`${rankedTasks.groupRank} <= ${limit}`)
-          .orderBy(rankedTasks.assigneeAgentId, rankedTasks.groupRank),
+          .orderBy(rankedTasks.assigneeGroupKey, rankedTasks.groupRank),
       ]);
       const assigneeCounts = new Map(
-        countResult.map((row) => [row.assigneeAgentId, Number(row.count)]),
+        countResult.map((row) => [row.assigneeGroupKey, Number(row.count)]),
       );
-      const tasksByAssignee = new Map<string | null, TaskItem[]>();
+      const tasksByAssignee = new Map<string, TaskItem[]>();
       for (const row of rankedTaskRows) {
-        const { groupRank: _groupRank, ...task } = row;
-        const groupTasks = tasksByAssignee.get(task.assigneeAgentId) ?? [];
+        const { assigneeGroupKey: groupKey, groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(groupKey) ?? [];
         groupTasks.push(task);
-        tasksByAssignee.set(task.assigneeAgentId, groupTasks);
+        tasksByAssignee.set(groupKey, groupTasks);
       }
 
       // Keep an empty Unassigned column as a stable drop target even when every
       // current task already has an owner. Other assignees are data-derived;
       // showing every agent as an empty column would make large workspaces
       // unusable without a separate "show empty columns" control.
-      if (!assigneeAgentId && !assigneeCounts.has(null)) assigneeCounts.set(null, 0);
+      if (!assigneeAgentId && !assigneeCounts.has('assignee:unassigned')) {
+        assigneeCounts.set('assignee:unassigned', 0);
+      }
 
-      groupQueries = [...assigneeCounts.entries()].map(([groupAssigneeAgentId, total]) => ({
-        assigneeAgentId: groupAssigneeAgentId,
-        conditions: [
-          groupAssigneeAgentId
-            ? eq(tasks.assigneeAgentId, groupAssigneeAgentId)
-            : isNull(tasks.assigneeAgentId),
-        ],
-        key: groupAssigneeAgentId ? `assignee:${groupAssigneeAgentId}` : 'assignee:unassigned',
-        limit,
-        offset: 0,
-        prefetchedTasks: tasksByAssignee.get(groupAssigneeAgentId) ?? [],
-        total,
-      }));
+      groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
+        const isUnassigned = key === 'assignee:unassigned';
+        const isUser = key.startsWith('assignee:user:');
+        const groupAssigneeAgentId =
+          isUnassigned || isUser
+            ? isUnassigned
+              ? null
+              : undefined
+            : key.slice('assignee:'.length);
+        const groupAssigneeUserId = isUser
+          ? key.slice('assignee:user:'.length)
+          : isUnassigned
+            ? null
+            : undefined;
+        const conditions = isUser
+          ? [and(isNull(tasks.assigneeAgentId), eq(tasks.assigneeUserId, groupAssigneeUserId!))!]
+          : isUnassigned
+            ? [and(isNull(tasks.assigneeAgentId), isNull(tasks.assigneeUserId))!]
+            : [eq(tasks.assigneeAgentId, groupAssigneeAgentId!)];
+
+        return {
+          assigneeAgentId: groupAssigneeAgentId,
+          assigneeUserId: groupAssigneeUserId,
+          conditions,
+          key,
+          limit,
+          offset: 0,
+          prefetchedTasks: tasksByAssignee.get(key) ?? [],
+          total,
+        };
+      });
     } else if (groupBy === 'priority') {
       const priorities = [1, 2, 3, 4, 0];
       const countQuery = this.db
@@ -802,6 +845,7 @@ export class TaskModel {
           ...(group.assigneeAgentId !== undefined
             ? { assigneeAgentId: group.assigneeAgentId }
             : {}),
+          ...(group.assigneeUserId !== undefined ? { assigneeUserId: group.assigneeUserId } : {}),
           hasMore: group.offset + groupTasks.length < group.total,
           key: group.key,
           limit: group.limit,

@@ -199,5 +199,24 @@ runs:
           --arg version "$VERSION" \
           '{ cloudRef: $cloudRef, mainHash: $mainHash, version: $version }' \
           > /tmp/renderer-ota-base.json
+
+        LATEST=$(find release/renderer-ota -name latest.json | head -n 1)
+        SNAPSHOT=$(find release/renderer-ota -path '*/versions/r0.json' | head -n 1)
+        if [ ! -d release/renderer-ota/files ] || [ -z "$LATEST" ] || [ -z "$SNAPSHOT" ]; then
+          echo "Renderer OTA r0 artifacts are incomplete"
+          exit 1
+        fi
+
+        aws s3 sync release/renderer-ota/files "s3://$S3_BUCKET/renderer/files" \
+          --size-only \
+          --content-encoding gzip \
+          --content-type application/octet-stream \
+          --cache-control public,max-age=31536000,immutable \
+          $ENDPOINT_ARG
+        aws s3 cp "$SNAPSHOT" "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/versions/r0.json" \
+          --cache-control no-store $ENDPOINT_ARG
+        aws s3 cp "$LATEST" "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/latest.json" \
+          --cache-control no-store $ENDPOINT_ARG
         aws s3 cp /tmp/renderer-ota-base.json "s3://$S3_BUCKET/renderer/$CHANNEL/base.json" \
           --cache-control no-store $ENDPOINT_ARG
+        echo "Published renderer OTA r0 for $CHANNEL/$MAIN_HASH"

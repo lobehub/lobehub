@@ -118,8 +118,6 @@ export interface ChatTopicMetadata {
     summarizedAt: string;
     version: number;
   };
-  /** Restored-history tail used as the source message for eval attempt threads. */
-  evalHistoryTailMessageId?: string;
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -145,6 +143,8 @@ export interface ChatTopicMetadata {
    * written without it can never be attributed afterwards.
    */
   editingGroupId?: string;
+  /** Restored-history tail used as the source message for eval attempt threads. */
+  evalHistoryTailMessageId?: string;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -195,6 +195,12 @@ export interface ChatTopicMetadata {
   heteroSourceEndAt?: string;
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
+  /**
+   * Root operation that most recently consumed `runningOperation`.
+   * Used to scope a post-terminal `unread` → `active` correction when the
+   * watching client receives the terminal event after the server cleared the marker.
+   */
+  lastSettledOperationId?: string;
   /**
    * Measured dominant model by token volume, written by the usage roll-up
    * (`topicUsage.recompute`). This is an analytics projection of "what actually
@@ -506,6 +512,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .optional(),
   provider: z.string().optional(),
+  lastSettledOperationId: z.string().optional(),
   repos: z.array(z.string()).optional(),
   runningOperation: z
     .object({

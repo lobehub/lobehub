@@ -1973,14 +1973,14 @@ describe('GatewayActionImpl', () => {
 
     // Captures the onSessionComplete handed to connectToGateway so we can drive
     // both close paths directly. Provides the methods that callback reaches.
-    function createOnSessionCompleteHarness() {
+    function createOnSessionCompleteHarness({ activeTopicId = 'topic-1' } = {}) {
       const captured: { onSessionComplete?: (p: any) => void } = {};
       const completeOperation = vi.fn();
       const updateTopicStatus = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-reconnect' }));
       const state: Record<string, any> = {
         activeAgentId: 'agent-1',
-        activeTopicId: 'topic-1',
+        activeTopicId,
         gatewayConnections: {},
         messagesMap: { 'agent-1_topic-1': [{ createdAt: 1, id: 'ast-1' }] },
         topicDataMap: {},
@@ -2052,7 +2052,7 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
+      vi.mocked(topicService.settleRunningOperation)
         .mockClear()
         .mockResolvedValue(undefined as never);
       captured.onSessionComplete!({ authFailed: false, succeeded: true, terminalReceived: true });
@@ -2060,9 +2060,13 @@ describe('GatewayActionImpl', () => {
       // The run lifecycle owns completion when a terminal event arrives, so the
       // reconnect path must not double-complete its local op here.
       expect(completeOperation).not.toHaveBeenCalled();
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        runningOperation: null,
-      });
+      // Watching the topic, so the terminal status is 'active' — written by the
+      // same server call that clears the marker.
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
     });
 
     // auth_failed (or a failed token refresh) is authoritative that the op is
@@ -2078,15 +2082,61 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      vi.mocked(topicService.updateTopicMetadata)
+      vi.mocked(topicService.settleRunningOperation)
         .mockClear()
         .mockResolvedValue(undefined as never);
       captured.onSessionComplete!({ authFailed: true, succeeded: false, terminalReceived: false });
 
       expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-      expect(topicService.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        runningOperation: null,
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
+    });
+
+    // The case that stranded 7 topics on a self-hosted deployment: a run that
+    // finishes cleanly while the user is on a DIFFERENT topic.
+    //
+    // This path used to clear `runningOperation` unconditionally via
+    // `updateTopicMetadata` and skip the status write entirely, delegating it to
+    // `markTopicUnread` — a separate call on a separate guard. When that one did
+    // not land, the topic kept `status: 'running'` forever AND had already lost
+    // the marker, so every later `settleRunningOperation` returned 'missing' and
+    // no server-side path could repair it. The stuck rows all carried
+    // `metadata.runningOperation` present-and-JSON-null, which is what that
+    // unconditional clear leaves behind.
+    //
+    // Reconnect is the path a page refresh takes — hence the symptom always
+    // being "still spinning after a reload".
+    it('settles to unread (not a bare marker clear) when a clean run ends off-topic', async () => {
+      const { action, captured } = createOnSessionCompleteHarness({
+        activeTopicId: 'some-other-topic',
       });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      vi.mocked(topicService.settleRunningOperation)
+        .mockClear()
+        .mockResolvedValue(undefined as never);
+      vi.mocked(topicService.updateTopicMetadata)
+        .mockClear()
+        .mockResolvedValue(undefined as never);
+      captured.onSessionComplete!({ authFailed: false, succeeded: true, terminalReceived: true });
+
+      // One atomic server call carries BOTH the marker clear and the terminal
+      // status, under the topic row lock and compared by operation id.
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'unread',
+      );
+      // ...and never the unguarded two-step that dropped the status.
+      expect(topicService.updateTopicMetadata).not.toHaveBeenCalled();
     });
 
     // Seeds a topic whose local metadata still carries a runningOperation, wires up

@@ -103,7 +103,7 @@ export function computeMainHash() {
       const packageJson = JSON.parse(content.toString());
       delete packageJson.name;
       delete packageJson.productName;
-      delete packageJson.version;
+      // Keep version: every full release must start a fresh renderer OTA lineage.
       content = Buffer.from(JSON.stringify(packageJson));
     }
     hash.update(path.relative(repoRoot, file).replaceAll('\\', '/'));

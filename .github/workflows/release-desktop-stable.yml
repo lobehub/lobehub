@@ -283,7 +283,9 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.name }}
+          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          update-channel: stable
 
   # ============================================
   # 合并 macOS 多架构文件

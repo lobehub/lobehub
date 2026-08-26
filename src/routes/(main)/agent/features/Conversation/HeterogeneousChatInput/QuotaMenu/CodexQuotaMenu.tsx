@@ -23,6 +23,11 @@ const WEEKLY_WINDOW_MINUTES = 7 * 24 * 60;
 const MONTHLY_WINDOW_MIN_MINUTES = 28 * 24 * 60;
 const MONTHLY_WINDOW_MAX_MINUTES = 31 * 24 * 60;
 
+const isConnectionError = (quota: CodexQuotaSnapshot) =>
+  /error sending request for url|fetch failed|\b(?:ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(
+    quota.error ?? '',
+  );
+
 const styles = createStaticStyles(({ css }) => ({
   credit: css`
     min-width: 0;
@@ -213,6 +218,14 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   const hasExtraData = useCallback(
     (quota: CodexQuotaSnapshot) => !!quota.rateLimitResetCredits,
     [],
+  );
+
+  const getErrorText = useCallback(
+    (quota: CodexQuotaSnapshot) =>
+      isConnectionError(quota)
+        ? t('heteroAgent.codexQuota.errorConnection')
+        : t('heteroAgent.codexQuota.errorGeneric'),
+    [t],
   );
 
   const consumeReset = useCallback(
@@ -442,6 +455,8 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
       contentWidth={360}
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
+      getErrorText={getErrorText}
+      getRefreshErrorText={getErrorText}
       getWindows={getWindows}
       hasExtraData={hasExtraData}
       renderFooter={renderFooter}
