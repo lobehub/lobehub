@@ -15,7 +15,16 @@ describe('agentShareService', () => {
     await agentShareService.getSharedAgent('share-id');
 
     expect(getSharedAgentQuery).toHaveBeenCalledWith(
-      { shareId: 'share-id' },
+      { shareId: 'share-id', trackView: true },
+      { context: { showNotification: false } },
+    );
+  });
+
+  it('lets a status re-check opt out of counting another page view', async () => {
+    await agentShareService.getSharedAgent('share-id', false);
+
+    expect(getSharedAgentQuery).toHaveBeenCalledWith(
+      { shareId: 'share-id', trackView: false },
       { context: { showNotification: false } },
     );
   });

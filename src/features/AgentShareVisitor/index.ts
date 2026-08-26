@@ -1,2 +1,2 @@
 export { default as AgentShareVisitorPage } from './Page';
-export { useSharedAgent } from './useSharedAgent';
+export { refreshSharedAgentStatus, useSharedAgent } from './useSharedAgent';

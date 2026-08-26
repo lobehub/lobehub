@@ -202,7 +202,11 @@ export const shareChatRouter = router({
     const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
     const fileService = new FileService(ctx.serverDB, share.ownerId);
 
-    return messageModel.query(
+    // queryForVisitor strips the creator's `sender`/spend/model-snapshot
+    // fields — share messages persist under the CREATOR's account (see the
+    // module doc above), so the raw `query()` result would otherwise leak
+    // the creator's account identity to the visitor.
+    return messageModel.queryForVisitor(
       // skipWorks: Work summaries join live task/version state of the
       // CREATOR's account — never serve them to a visitor surface.
       { skipWorks: true, topicId: input.topicId },

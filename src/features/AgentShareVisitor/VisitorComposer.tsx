@@ -2,6 +2,7 @@
 
 import { ChatErrorType } from '@lobechat/types';
 import { ActionIcon, Flexbox, TextArea } from '@lobehub/ui';
+import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { SendHorizonal } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,6 +13,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
 import { shouldSubmitOnEnter } from './composerEnterGuard';
+import { refreshSharedAgentStatus } from './useSharedAgent';
 
 interface VisitorComposerProps {
   agentId: string;
@@ -55,6 +57,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
     const [value, setValue] = useState('');
     const [errorKey, setErrorKey] = useState<string>();
     const [sending, setSending] = useState(false);
+    const [checkingBlock, setCheckingBlock] = useState(false);
     const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
     const isStreaming = useChatStore(
@@ -97,12 +100,37 @@ const VisitorComposer = memo<VisitorComposerProps>(
       }
     };
 
+    // Re-check the share's status (e.g. budget) without counting another page
+    // view, so a visitor blocked by an exhausted budget can find out the
+    // owner topped up without reloading the whole page.
+    const retryBlockedCheck = async () => {
+      if (!blockedKey || checkingBlock) return;
+      setCheckingBlock(true);
+      try {
+        await refreshSharedAgentStatus(shareId);
+      } finally {
+        setCheckingBlock(false);
+      }
+    };
+
     return (
       <Flexbox gap={4} paddingBlock={8} paddingInline={12}>
         {displayedErrorKey && (
-          <span style={{ color: cssVar.colorError, fontSize: 12 }}>
-            {t(displayedErrorKey as any)}
-          </span>
+          <Flexbox horizontal align="center" gap={8}>
+            <span style={{ color: cssVar.colorError, fontSize: 12 }}>
+              {t(displayedErrorKey as any)}
+            </span>
+            {blockedKey && (
+              <Button
+                loading={checkingBlock}
+                size="small"
+                type="text"
+                onClick={() => void retryBlockedCheck()}
+              >
+                {t('share.visitor.errors.retry')}
+              </Button>
+            )}
+          </Flexbox>
         )}
         <Flexbox
           horizontal

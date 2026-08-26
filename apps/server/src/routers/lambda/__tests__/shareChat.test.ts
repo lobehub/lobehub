@@ -31,8 +31,13 @@ vi.mock('@/database/models/topic', () => ({
 
 const mockMessageCountByTopic = vi.fn();
 const mockMessageQuery = vi.fn();
+const mockMessageQueryForVisitor = vi.fn();
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({ countByTopic: mockMessageCountByTopic, query: mockMessageQuery })),
+  MessageModel: vi.fn(() => ({
+    countByTopic: mockMessageCountByTopic,
+    query: mockMessageQuery,
+    queryForVisitor: mockMessageQueryForVisitor,
+  })),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -261,17 +266,27 @@ describe('shareChatRouter', () => {
       await expect(
         caller.getMessages({ shareId: 'share-1', topicId: 'tpc_visitor' }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-      expect(mockMessageQuery).not.toHaveBeenCalled();
+      expect(mockMessageQueryForVisitor).not.toHaveBeenCalled();
     });
 
     it('serves messages without Work summaries', async () => {
       const caller = await createCaller();
       await caller.getMessages({ shareId: 'share-1', topicId: 'tpc_visitor' });
 
-      expect(mockMessageQuery).toHaveBeenCalledWith(
+      expect(mockMessageQueryForVisitor).toHaveBeenCalledWith(
         { skipWorks: true, topicId: 'tpc_visitor' },
         expect.any(Object),
       );
+    });
+
+    it('uses the visitor-redacted read path, never the raw creator-scoped query()', async () => {
+      // Regression: getMessages must call `queryForVisitor` (which strips the
+      // creator's sender/spend fields), not `query()` — see message.ts
+      // `toVisitorMessage` for what that redaction guards against.
+      const caller = await createCaller();
+      await caller.getMessages({ shareId: 'share-1', topicId: 'tpc_visitor' });
+
+      expect(mockMessageQuery).not.toHaveBeenCalled();
     });
   });
 

@@ -14,11 +14,16 @@ class AgentShareService {
     return lambdaClient.agentShare.getShareStatus.query({ agentId });
   }
 
-  async getSharedAgent(shareId: string) {
+  /**
+   * `trackView` defaults to `true` (a real page visit). Pass `false` for a
+   * status-only re-check (e.g. re-validating budget after the owner tops up)
+   * so it does not inflate the share's page-view count.
+   */
+  async getSharedAgent(shareId: string, trackView = true) {
     // The visitor page renders its own login prompt on UNAUTHORIZED; opt out of
     // the global 401 handler so it does not hard-redirect visitors to /signin.
     return lambdaClient.share.getSharedAgent.query(
-      { shareId },
+      { shareId, trackView },
       { context: { showNotification: false } },
     );
   }

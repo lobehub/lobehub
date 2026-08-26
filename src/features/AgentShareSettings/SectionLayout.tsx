@@ -4,12 +4,21 @@ import { Block, Flexbox, Text } from '@lobehub/ui';
 
 interface SettingRowProps {
   children: React.ReactNode;
+  /** Secondary line under the label, e.g. a "coming soon" note for a disabled control. */
+  desc?: string;
   label: string;
 }
 
-export const SettingRow = ({ children, label }: SettingRowProps) => (
+export const SettingRow = ({ children, desc, label }: SettingRowProps) => (
   <Flexbox horizontal align="center" gap={16} justify="space-between">
-    <Text>{label}</Text>
+    <Flexbox gap={2}>
+      <Text>{label}</Text>
+      {desc && (
+        <Text fontSize={12} type="secondary">
+          {desc}
+        </Text>
+      )}
+    </Flexbox>
     {children}
   </Flexbox>
 );
