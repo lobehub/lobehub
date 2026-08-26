@@ -336,7 +336,7 @@ export const STEPS: Step[] = [
   {
     t: 35,
     label: '训练中',
-    note: '20 分钟过去。你回来看：还在动（2 分钟前写了新 checkpoint），val loss 已到 1.52。「写复现说明」排在后面——coordinator 一次只派一项。没有需要你做的。',
+    note: '20 分钟过去。你回来看：还在动（2 分钟前写了新 checkpoint），val loss 已到 1.52。「写复现说明」没有依赖，可以并行开始，只是 coordinator 一次只派一项、还没轮到它——你也可以在它的详情里直接开始。没有需要你做的。',
     fresh: [],
     apply: (s) => {
       const w = N(s, 'W2');

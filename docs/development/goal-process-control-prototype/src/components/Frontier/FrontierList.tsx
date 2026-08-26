@@ -127,7 +127,7 @@ const tagOf = (state: GoalState, item: FrontierItem): { text: string; color?: st
         ? { text: '已停止' }
         : { text: `进行中 · 第 ${(n.attempts?.length ?? 0) + 1} 次`, color: 'processing' };
     default:
-      return { text: goal.status === 'planning' ? '排队中' : `排队第 ${item.queue}` };
+      return { text: goal.status === 'planning' ? '待开始' : '可以开始' };
   }
 };
 

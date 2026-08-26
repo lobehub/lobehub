@@ -19,8 +19,8 @@ export interface FrontierItem {
   node: GoalNode;
   /** 0 = needs you, 1 = running, 2 = ready */
   rank: number;
-  /** For ready items: position in the serial dispatch queue (1-based). */
-  queue?: number;
+  /** Ready items: 1-based order the coordinator would pick them in (it dispatches one per tick). */
+  order?: number;
 }
 
 export interface BlockedItem {
@@ -77,7 +77,7 @@ export const computeFrontier = (state: GoalState): Frontier => {
   }
   items.sort((a, b) => a.rank - b.rank || (b.node.priority ?? 0) - (a.node.priority ?? 0));
   let q = 0;
-  for (const it of items) if (it.kind === 'ready') it.queue = ++q;
+  for (const it of items) if (it.kind === 'ready') it.order = ++q;
   return { items, blocked, needsYou: items.filter((i) => i.rank === 0).length };
 };
 
@@ -136,8 +136,7 @@ export const nodeStateText = (goal: GoalInfo, n: GoalNode, frontier: Frontier) =
     case 'proposed': {
       const b = frontier.blocked.find((x) => x.node.id === n.id);
       if (b) return `等待「${b.blockers[0].title}」`;
-      const it = frontier.items.find((x) => x.node.id === n.id);
-      return goal.status === 'planning' ? '排队中' : it?.queue ? `排队第 ${it.queue}` : '可以开始';
+      return goal.status === 'planning' ? '待开始' : '可以开始';
     }
     default:
       return n.status;

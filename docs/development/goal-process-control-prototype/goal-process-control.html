@@ -6,6 +6,14 @@
     <title>Goal · 流程管控原型（时序回放）</title>
     <style>body{margin:0} #boot{font:13px/1.6 ui-monospace,monospace;color:#888;padding:24px}</style>
     <script src="./lobe-prototype-runtime.js"></script>
+    <script>
+      // @xyflow/react is bundled separately (external react) — hand it the runtime's React.
+      const __rfReact = __PROTO_DEPS_NS__.default['react'];
+      window.React = __rfReact.default ?? __rfReact;
+      window.ReactDOM = __PROTO_DEPS_NS__.default['react-dom'] ?? {};
+    </script>
+    <link rel="stylesheet" href="./xyflow.css" />
+    <script src="./rf-runtime.js"></script>
     <script src="./babel.min.js"></script>
   </head>
   <body>
@@ -292,7 +300,7 @@ export const App = memo(() => {
 <script type="text/plain" data-module="src/GoalDetailPage.tsx">
 import { Drawer, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Lightbulb } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
 import { Activity } from './components/Activity';
@@ -302,6 +310,7 @@ import { FrontierList } from './components/Frontier/FrontierList';
 import { GoalHeader } from './components/GoalHeader';
 import { Graph, type GraphView } from './components/Graph/Graph';
 import { NodeDetail, NodeDetailTitle } from './components/Graph/NodeDetail';
+import { SectionHeader } from './components/SectionHeader';
 import { useSharedStyles } from './components/shared';
 import { STEPS, buildStep } from './data/steps';
 import { clock, usd } from './model/format';
@@ -323,25 +332,6 @@ const useStyles = createStyles(({ css }) => ({
   `,
 }));
 
-const Section = memo<{ title: string; count?: number; defaultOpen?: boolean; children: React.ReactNode }>(({ title, count, defaultOpen = false, children }) => {
-  const { styles } = useSharedStyles();
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Flexbox gap={8}>
-      <Flexbox horizontal gap={6} align="center" className={styles.sectionHead} onClick={() => setOpen(!open)}>
-        <Icon icon={open ? ChevronDown : ChevronRight} size={14} />
-        <Text weight={600}>{title}</Text>
-        {count !== undefined && (
-          <Text fontSize={12} className={styles.muted}>
-            {count}
-          </Text>
-        )}
-      </Flexbox>
-      {open && children}
-    </Flexbox>
-  );
-});
-
 export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   const { styles } = useStyles();
   const [state, setState] = useState<GoalState>(() => buildStep(step));
@@ -349,17 +339,37 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   const [selected, setSelected] = useState<{ id: string; edit?: boolean } | null>(null);
   const [graphView, setGraphView] = useState<GraphView>('stage');
   const [fullscreen, setFullscreen] = useState(false);
+  const [findingsOpen, setFindingsOpen] = useState(true);
   const frontier = useMemo(() => computeFrontier(state), [state]);
   const freshIds = useMemo(() => new Set(STEPS[step].fresh), [step]);
   const now = clock.now;
   const select = (id: string, edit?: boolean) => setSelected({ id, edit });
   const push = (e: GoalState['log'][number]) => setState((s) => ({ ...s, log: [...s.log, e] }));
-  const patch = (id: string, p: Partial<GoalState['nodes'][number]>) => setState((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }));
-  const touch = (n: GoalState['nodes'][number], kind: NonNullable<GoalState['nodes'][number]['humanTouches']>[number]['kind'], text: string) => ({ ...n, humanTouches: [...(n.humanTouches ?? []), { t: now, kind, text }] });
+  const patch = (id: string, p: Partial<GoalState['nodes'][number]>) =>
+    setState((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }));
+  const touch = (
+    n: GoalState['nodes'][number],
+    kind: NonNullable<GoalState['nodes'][number]['humanTouches']>[number]['kind'],
+    text: string,
+  ) => ({ ...n, humanTouches: [...(n.humanTouches ?? []), { t: now, kind, text }] });
 
   const actions = {
     start: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', startedAt: now, lastActivity: now }, nodes: s.nodes.map((n) => (n.id === 'W1' ? { ...n, status: 'active', lastActivity: now, task: { id: 'T-90', agent: 'Kimi Code' }, lastLine: '正在准备工作目录…' } : n)) }));
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'running', startedAt: now, lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          n.id === 'W1'
+            ? {
+                ...n,
+                status: 'active',
+                lastActivity: now,
+                task: { id: 'T-90', agent: 'Kimi Code' },
+                lastLine: '正在准备工作目录…',
+              }
+            : n,
+        ),
+      }));
       push({ t: now, kind: 'resume', who: '你', text: '开始执行' });
     },
     pause: () => {
@@ -367,12 +377,36 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
       push({ t: now, kind: 'pause', who: '你', text: '暂停：不再开始新的尝试' });
     },
     resume: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: s.decision ? 'review' : 'running', pauseCause: undefined, lastActivity: now } }));
+      setState((s) => ({
+        ...s,
+        goal: {
+          ...s.goal,
+          status: s.decision ? 'review' : 'running',
+          pauseCause: undefined,
+          lastActivity: now,
+        },
+      }));
       push({ t: now, kind: 'resume', who: '你', text: '继续' });
     },
-    setBudget: ({ rounds, cost, perWork }: { rounds: number | null; cost: number | null; perWork: number }) => {
-      setState((s) => ({ ...s, goal: { ...s.goal, maxRounds: rounds, maxTotalCost: cost, maxAttemptsPerWork: perWork } }));
-      push({ t: now, kind: 'budget', who: '你', text: `更新预算：费用 ${cost != null ? usd(cost) : '不限'} · 尝试 ${rounds ?? '不限'} · 单项 ${perWork}` });
+    setBudget: ({
+      rounds,
+      cost,
+      perWork,
+    }: {
+      rounds: number | null;
+      cost: number | null;
+      perWork: number;
+    }) => {
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, maxRounds: rounds, maxTotalCost: cost, maxAttemptsPerWork: perWork },
+      }));
+      push({
+        t: now,
+        kind: 'budget',
+        who: '你',
+        text: `更新预算：费用 ${cost != null ? usd(cost) : '不限'} · 尝试 ${rounds ?? '不限'} · 单项 ${perWork}`,
+      });
     },
     decide: (optionId: string, reason?: string) => {
       const d = state.decision;
@@ -382,37 +416,133 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         goal: { ...s.goal, status: 'running', lastActivity: now },
         decision: null,
         nodes: s.nodes.map((n) => {
-          if (n.id === d.nodeId) return { ...n, status: 'resolved', title: optionId === 'retry' ? '训练两次未通过 → 再试一次' : '训练两次未通过 → 放弃', body: reason ? `你的说明：${reason}` : undefined, at: now };
+          if (n.id === d.nodeId)
+            return {
+              ...n,
+              status: 'resolved',
+              title: optionId === 'retry' ? '训练两次未通过 → 再试一次' : '训练两次未通过 → 放弃',
+              body: reason ? `你的说明：${reason}` : undefined,
+              at: now,
+            };
           if (n.id === d.workId)
             return optionId === 'retry'
-              ? touch({ ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…' }, 'retry', `决策门：再试一次${reason ? ` — ${reason}` : ''}`)
+              ? touch(
+                  { ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…' },
+                  'retry',
+                  `决策门：再试一次${reason ? ` — ${reason}` : ''}`,
+                )
               : touch({ ...n, status: 'retired' }, 'retire', '决策门：放弃这项任务');
           return n;
         }),
       }));
-      push({ t: now, kind: 'decision', who: '你', text: optionId === 'retry' ? '决定：再试一次' : '决定：放弃这项任务', nodeId: d.nodeId });
+      push({
+        t: now,
+        kind: 'decision',
+        who: '你',
+        text: optionId === 'retry' ? '决定：再试一次' : '决定：放弃这项任务',
+        nodeId: d.nodeId,
+      });
     },
     accept: () => {
       const target = state.nodes.find((n) => n.delivered);
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'achieved', completedAt: now }, nodes: s.nodes.map((n) => (n.delivered ? touch({ ...n, delivered: false, status: 'resolved' }, 'accept', '确认验收：目标达成') : n)) }));
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'achieved', completedAt: now },
+        nodes: s.nodes.map((n) =>
+          n.delivered
+            ? touch({ ...n, delivered: false, status: 'resolved' }, 'accept', '确认验收：目标达成')
+            : n,
+        ),
+      }));
       push({ t: now, kind: 'achieved', who: '你', text: '确认完成：目标达成', nodeId: target?.id });
     },
     reject: (comment: string) => {
       const target = state.nodes.find((n) => n.delivered);
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', lastActivity: now }, nodes: s.nodes.map((n) => (n.delivered ? touch({ ...n, delivered: false, status: 'active', lastActivity: now, lastLine: `按你的反馈重新验收：${comment}` }, 'reject', `还不够，再来一轮：${comment}`) : n)) }));
-      push({ t: now, kind: 'decision', who: '你', text: `退回并带反馈再来一轮：${comment}`, nodeId: target?.id });
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'running', lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          n.delivered
+            ? touch(
+                {
+                  ...n,
+                  delivered: false,
+                  status: 'active',
+                  lastActivity: now,
+                  lastLine: `按你的反馈重新验收：${comment}`,
+                },
+                'reject',
+                `还不够，再来一轮：${comment}`,
+              )
+            : n,
+        ),
+      }));
+      push({
+        t: now,
+        kind: 'decision',
+        who: '你',
+        text: `退回并带反馈再来一轮：${comment}`,
+        nodeId: target?.id,
+      });
     },
     addBudget: (cap: number) => {
       const target = state.nodes.find((n) => n.kind === 'work' && n.status === 'active');
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', pauseCause: undefined, maxTotalCost: cap, lastActivity: now }, nodes: s.nodes.map((n) => (n.id === target?.id ? touch(n, 'budget', `预算 → ${usd(cap)}，继续`) : n)) }));
-      push({ t: now, kind: 'budget', who: '你', text: `费用上限调整为 ${usd(cap)}，继续`, nodeId: target?.id });
+      setState((s) => ({
+        ...s,
+        goal: {
+          ...s.goal,
+          status: 'running',
+          pauseCause: undefined,
+          maxTotalCost: cap,
+          lastActivity: now,
+        },
+        nodes: s.nodes.map((n) =>
+          n.id === target?.id ? touch(n, 'budget', `预算 → ${usd(cap)}，继续`) : n,
+        ),
+      }));
+      push({
+        t: now,
+        kind: 'budget',
+        who: '你',
+        text: `费用上限调整为 ${usd(cap)}，继续`,
+        nodeId: target?.id,
+      });
     },
     reclaim: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, lastActivity: now }, nodes: s.nodes.map((n) => (isStale(s.goal, n) ? { ...n, attempts: [...(n.attempts ?? []), { n: (n.attempts?.length ?? 0) + 1, started: (n.lastActivity ?? now) - 20 * 60_000, ended: now, outcome: 'abandoned' as const, cost: 0.3, reason: '执行 Agent 失联，由系统回收；不计入失败次数', taskId: n.task?.id }], lastActivity: now, lastLine: '正在重新启动这次尝试…' } : n)) }));
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          isStale(s.goal, n)
+            ? {
+                ...n,
+                attempts: [
+                  ...(n.attempts ?? []),
+                  {
+                    n: (n.attempts?.length ?? 0) + 1,
+                    started: (n.lastActivity ?? now) - 20 * 60_000,
+                    ended: now,
+                    outcome: 'abandoned' as const,
+                    cost: 0.3,
+                    reason: '执行 Agent 失联，由系统回收；不计入失败次数',
+                    taskId: n.task?.id,
+                  },
+                ],
+                lastActivity: now,
+                lastLine: '正在重新启动这次尝试…',
+              }
+            : n,
+        ),
+      }));
       push({ t: now, kind: 'abandon', who: '系统', text: '回收失联的尝试并重开', nodeId: 'W2' });
     },
     startNode: (id: string) => {
-      patch(id, { status: 'active', lastActivity: now, task: { id: 'T-97', agent: 'Kimi Code' }, lastLine: '正在启动第 1 次尝试…' });
+      patch(id, {
+        status: 'active',
+        lastActivity: now,
+        task: { id: 'T-97', agent: 'Kimi Code' },
+        lastLine: '正在启动第 1 次尝试…',
+      });
       push({ t: now, kind: 'start', who: '你', text: '现在开始（与当前尝试并行）', nodeId: id });
       setSelected(null);
     },
@@ -424,8 +554,22 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   return (
     <div className={styles.column}>
       <Flexbox gap={28}>
-        <GoalHeader state={state} frontier={frontier} onStart={actions.start} onPause={actions.pause} onResume={actions.resume} onSetBudget={actions.setBudget} />
-        <FrontierList state={state} frontier={frontier} hotId={hotId} onHover={setHotId} onSelect={select} actions={actions} />
+        <GoalHeader
+          state={state}
+          frontier={frontier}
+          onStart={actions.start}
+          onPause={actions.pause}
+          onResume={actions.resume}
+          onSetBudget={actions.setBudget}
+        />
+        <FrontierList
+          state={state}
+          frontier={frontier}
+          hotId={hotId}
+          onHover={setHotId}
+          onSelect={select}
+          actions={actions}
+        />
         <Graph
           state={state}
           frontier={frontier}
@@ -440,15 +584,27 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           onFullscreen={setFullscreen}
           isDraft={state.goal.status === 'planning'}
         />
-        <Section title="结论" count={findingsCount} defaultOpen={findingsCount > 0}>
-          <Findings state={state} hotId={hotId} onHover={setHotId} onSelect={(id) => select(id)} />
-        </Section>
-        <Section title="目标与验收标准">
-          <Contract goal={state.goal} />
-        </Section>
-        <Section title="活动" count={state.log.length} defaultOpen>
-          <Activity state={state} onHover={setHotId} onSelect={(id) => select(id)} onComment={actions.comment} />
-        </Section>
+        <Flexbox gap={8}>
+          <SectionHeader
+            icon={Lightbulb}
+            title="结论"
+            count={findingsCount}
+            isOpen={findingsOpen}
+            onToggle={() => setFindingsOpen(!findingsOpen)}
+          />
+          {findingsOpen && (
+            <Flexbox paddingInline={12}>
+              <Findings state={state} hotId={hotId} onHover={setHotId} onSelect={(id) => select(id)} />
+            </Flexbox>
+          )}
+        </Flexbox>
+        <Contract goal={state.goal} />
+          <Activity
+            state={state}
+            onHover={setHotId}
+            onSelect={(id) => select(id)}
+            onComment={actions.comment}
+          />
       </Flexbox>
       <Drawer
         open={!!selected}
@@ -456,9 +612,21 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         placement="right"
         width={480}
         mask={false}
-        title={selected ? <NodeDetailTitle state={state} frontier={frontier} id={selected.id} /> : null}
+        title={
+          selected ? <NodeDetailTitle state={state} frontier={frontier} id={selected.id} /> : null
+        }
       >
-        {selected && <NodeDetail key={selected.id} state={state} frontier={frontier} id={selected.id} editing={selected.edit} onSelect={(id) => setSelected({ id })} onStart={actions.startNode} />}
+        {selected && (
+          <NodeDetail
+            key={selected.id}
+            state={state}
+            frontier={frontier}
+            id={selected.id}
+            editing={selected.edit}
+            onSelect={(id) => setSelected({ id })}
+            onStart={actions.startNode}
+          />
+        )}
       </Drawer>
     </div>
   );
@@ -466,86 +634,94 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
 
 </script>
 <script type="text/plain" data-module="src/components/Activity.tsx">
-import { Button, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { Block, Button, Empty, Flexbox, Icon, Tag, Text, TextArea } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
+import { BotMessageSquare } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { ACTIVITY_META } from '../model/activity';
-import { ago, clock } from '../model/format';
+import { ago, clock, hhmm } from '../model/format';
 import type { ActivityEvent, GoalState } from '../types';
+import { SectionHeader } from './SectionHeader';
 import { ActorAvatar, KindDot, useSharedStyles } from './shared';
 
-// Linear-style activity feed, driven entirely by ActivityEvent.kind (see model/activity.ts):
-// kind → icon + tone; who → avatar; nodeId → chip that highlights the graph. Comment box on top,
-// like TaskActivities.
+// Mirrors TaskActivities: section header (BotMessageSquare · 活动) → body gap 12 / padding 12 with
+// the comment input on top, then newest-first rows. A row is the inline ActivityRow shape:
+// avatar · author · agent Tag · text (ellipsis, flex 1) · "· 相对时间" appended in quaternary.
+// The event kind decides the fallback avatar icon (model/activity.ts).
+// (src/features/AgentTasks/AgentTaskDetail/TaskActivities.tsx + shared/style.ts)
 
 const useStyles = createStyles(({ css, token }) => ({
-  feed: css`
-    position: relative;
+  row: css`
     padding-block: 4px;
-    padding-inline: 4px 0;
-    &::before {
-      content: '';
-      position: absolute;
-      top: 16px;
-      bottom: 16px;
-      left: 15px;
-      width: 1px;
-      background: ${token.colorBorderSecondary};
+    padding-inline: 9px;
+    border-radius: ${token.borderRadiusSM}px;
+    &:hover {
+      background: ${token.colorFillQuaternary};
     }
   `,
-  row: css`
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    padding-block: 6px;
-  `,
-  icon: css`
-    position: relative;
+  avatar: css`
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
     width: 24px;
     height: 24px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 12px;
-    background: ${token.colorBgContainer};
+    border-radius: 50%;
+    color: ${token.colorTextQuaternary};
+    background: ${token.colorFillTertiary};
   `,
-  iconWarn: css`
-    border-color: ${token.colorWarningBorder};
-    background: ${token.colorWarningBg};
+  text: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    color: ${token.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
-  iconOk: css`
-    border-color: ${token.colorSuccessBorder};
-    background: ${token.colorSuccessBg};
-  `,
-  iconBad: css`
-    border-color: ${token.colorErrorBorder};
-    background: ${token.colorErrorBg};
+  time: css`
+    margin-inline-start: 4px;
+    color: ${token.colorTextQuaternary};
   `,
   chip: css`
     cursor: pointer;
     display: inline-flex;
     gap: 5px;
     align-items: center;
-    max-width: 320px;
+    max-width: 260px;
     height: 20px;
+    margin-inline-start: 6px;
     padding-inline: 6px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusXS}px;
     font-size: 12px;
     color: ${token.colorTextSecondary};
+    vertical-align: middle;
     &:hover {
       background: ${token.colorFillTertiary};
     }
   `,
   chipText: css`
     overflow: hidden;
+    max-width: 180px;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  inputCard: css`
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: ${token.borderRadiusLG}px;
+    background: ${token.colorFillTertiary};
+    &:focus-within {
+      border-color: ${token.colorBorder};
+    }
+  `,
   detail: css`
+    padding-inline-start: 33px;
     font-size: 12px;
     color: ${token.colorTextTertiary};
   `,
@@ -559,115 +735,206 @@ interface ActivityProps {
 }
 
 export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComment }) => {
-  const { styles, cx } = useStyles();
+  const { styles } = useStyles();
   const { styles: shared } = useSharedStyles();
+  const [open, setOpen] = useState(true);
   const [comment, setComment] = useState('');
   const events = [...state.log].sort((a, b) => b.t - a.t);
   const nodeOf = (e: ActivityEvent) => (e.nodeId ? state.nodes.find((n) => n.id === e.nodeId) : undefined);
+  const isAgent = (who: string) => who !== '你' && who !== '系统';
 
   return (
-    <Flexbox gap={12}>
-      <Flexbox horizontal gap={8} align="flex-start">
-        <TextArea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="给这个目标留一条说明（进入活动记录，并作为后续尝试的上下文）" autoSize={{ minRows: 1, maxRows: 3 }} style={{ flex: 1 }} />
-        <Button size="small" disabled={!comment.trim()} onClick={() => { onComment(comment); setComment(''); }}>
-          发送
-        </Button>
-      </Flexbox>
-      <div className={styles.feed}>
-        {events.length === 0 && (
-          <Text fontSize={13} className={shared.muted} style={{ paddingLeft: 36 }}>
-            还没有任何活动。
-          </Text>
-        )}
-        {events.map((e, i) => {
-          const meta = ACTIVITY_META[e.kind];
-          const node = nodeOf(e);
-          return (
-            <div key={i} className={styles.row}>
-              <div className={cx(styles.icon, meta.tone === 'ok' && styles.iconOk, meta.tone === 'bad' && styles.iconBad, meta.tone === 'warn' && styles.iconWarn)} title={meta.label}>
-                <Icon icon={meta.icon} size={12} />
-              </div>
-              <Flexbox gap={2} flex={1} style={{ minWidth: 0, paddingTop: 2 }}>
-                <Flexbox horizontal gap={6} align="center" wrap="wrap">
-                  <ActorAvatar name={e.who} size={16} />
-                  <Text fontSize={13} weight={500}>
-                    {e.who}
-                  </Text>
-                  <Text fontSize={13}>{e.text}</Text>
-                  {node && (
-                    <span className={styles.chip} onMouseEnter={() => onHover(node.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(node.id)}>
-                      <KindDot kind={node.kind} />
-                      <span className={styles.chipText}>{node.title}</span>
+    <Flexbox gap={8}>
+      <SectionHeader icon={BotMessageSquare} title="活动" count={events.length} isOpen={open} onToggle={() => setOpen(!open)} />
+      {open && (
+        <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
+          <div className={styles.inputCard}>
+            <ActorAvatar name="你" size={24} />
+            <TextArea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="留下反馈来引导 Agent —— 你的说明会影响下一次尝试…" autoSize={{ minRows: 1, maxRows: 4 }} variant="borderless" style={{ flex: 1, background: 'transparent' }} />
+            <Button size="small" shape="round" type="text" disabled={!comment.trim()} onClick={() => { onComment(comment); setComment(''); }}>
+              发送
+            </Button>
+          </div>
+          {events.length === 0 ? (
+            <Empty description="暂无活动" icon={BotMessageSquare} style={{ marginTop: 8 }} />
+          ) : (
+            events.map((e, i) => {
+              const meta = ACTIVITY_META[e.kind];
+              const node = nodeOf(e);
+              return (
+                <Flexbox key={i} gap={2}>
+                  <Flexbox horizontal align="center" gap={8} className={styles.row}>
+                    {isAgent(e.who) ? (
+                      <ActorAvatar name={e.who} size={24} />
+                    ) : (
+                      <div className={styles.avatar}>
+                        <Icon icon={meta.icon} size={12} />
+                      </div>
+                    )}
+                    <Text fontSize={14} weight={500} style={{ flexShrink: 0 }}>
+                      {e.who}
+                    </Text>
+                    {isAgent(e.who) && <Tag size="small">Agent</Tag>}
+                    <span className={styles.text}>
+                      {e.text}
+                      {node && (
+                        <span className={styles.chip} onMouseEnter={() => onHover(node.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(node.id)}>
+                          <KindDot kind={node.kind} />
+                          <span className={styles.chipText}>{node.title}</span>
+                        </span>
+                      )}
+                      <span className={styles.time} title={hhmm(e.t)}>
+                        · {ago(clock.now - e.t)}
+                      </span>
                     </span>
-                  )}
+                  </Flexbox>
+                  {e.detail && <span className={styles.detail}>{e.detail}</span>}
                 </Flexbox>
-                {e.detail && <span className={styles.detail}>{e.detail}</span>}
-              </Flexbox>
-              <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ flexShrink: 0, paddingTop: 4 }}>
-                {ago(clock.now - e.t)}
-              </Text>
-            </div>
-          );
-        })}
-      </div>
+              );
+            })
+          )}
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });
 
 </script>
 <script type="text/plain" data-module="src/components/Contract.tsx">
-import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Check, CircleDashed } from 'lucide-react';
-import { memo } from 'react';
+import { Block, Button, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { createStyles } from 'antd-style';
+import { Check, ChevronRight, CircleDashed, ExternalLink, HelpCircle, ShieldCheck, XCircle } from 'lucide-react';
+import { memo, useState } from 'react';
 
 import { usd } from '../model/format';
-import type { GoalInfo } from '../types';
+import type { GoalCheck, GoalInfo } from '../types';
+import { SectionHeader } from './SectionHeader';
 import { NewTag, useSharedStyles } from './shared';
 
-/** Requirement + goal-level checks + budget/recovery values (the TaskAcceptance analogue). */
+// Mirrors TaskAcceptance: section header → body (padding-inline 12, gap 14) → 验收目标 text →
+// checklist as CriterionList (Block variant="outlined", rows separated by adjacency, leading status
+// icon + C{seq} + title + Required chip). Verdict is a colored icon, never a Tag.
+// (src/features/AgentTasks/AgentTaskDetail/TaskAcceptance.tsx + src/features/Verify/CriterionList)
+
+const useStyles = createStyles(({ css, token }) => ({
+  body: css`
+    padding-inline: 12px;
+  `,
+  list: css`
+    overflow: hidden;
+    width: 100%;
+    padding: 0;
+  `,
+  row: css`
+    padding-block: 10px;
+    padding-inline: 12px;
+    & + & {
+      border-block-start: 1px solid ${token.colorBorderSecondary};
+    }
+  `,
+  seq: css`
+    flex: none;
+    font-size: 12px;
+    color: ${token.colorTextTertiary};
+  `,
+  label: css`
+    font-size: 12px;
+    color: ${token.colorTextSecondary};
+  `,
+  budget: css`
+    padding-block: 10px;
+    padding-inline: 12px;
+    border-block-start: 1px solid ${token.colorBorderSecondary};
+  `,
+}));
+
+/** checkHeadMeta — the same state → icon/color table the acceptance checklist uses. */
+const checkHeadMeta = (state: GoalCheck['state']) => {
+  switch (state) {
+    case 'passed':
+      return { icon: Check, color: 'var(--ant-color-success)' };
+    case 'failed':
+      return { icon: XCircle, color: 'var(--ant-color-error)' };
+    case 'uncertain':
+      return { icon: HelpCircle, color: 'var(--ant-color-warning)' };
+    default:
+      return { icon: CircleDashed, color: 'var(--ant-color-text-quaternary)' };
+  }
+};
+
 export const Contract = memo<{ goal: GoalInfo }>(({ goal }) => {
-  const { styles } = useSharedStyles();
+  const { styles, cx } = useStyles();
+  const { styles: shared } = useSharedStyles();
+  const [open, setOpen] = useState(false);
+  const passed = goal.checks.filter((c) => c.state === 'passed').length;
+
   return (
-    <Block variant="outlined" padding={16} gap={12}>
-      <Flexbox horizontal justify="space-between" align="flex-start" gap={16}>
-        <Text fontSize={13}>{goal.requirement}</Text>
-        <Button size="small" type="text">
-          编辑{' '}
-          <NewTag title="Graph 型目标的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
-        </Button>
-      </Flexbox>
-      <Flexbox gap={6}>
-        <Text fontSize={12} weight={600} type="secondary">
-          整体验收项（独立 verifier 判定，最终由你确认）
-        </Text>
-        {goal.checks.map((c) => (
-          <Flexbox key={c.label} horizontal gap={8} align="center">
-            <Icon
-              icon={c.state === 'passed' ? Check : CircleDashed}
-              size={14}
-              color={c.state === 'passed' ? 'var(--ant-color-success)' : undefined}
-            />
-            <Text fontSize={13} type={c.state === 'passed' ? undefined : 'secondary'}>
-              {c.label}
-            </Text>
+    <Flexbox gap={8}>
+      <SectionHeader
+        icon={ShieldCheck}
+        title="目标验收"
+        count={goal.checks.length}
+        isOpen={open}
+        onToggle={() => setOpen(!open)}
+        extra={
+          <>
+            <Button icon={<Icon icon={ExternalLink} />} size="small" type="text">
+              验收报告
+            </Button>
+            <Button size="small" type="text">
+              编辑 <NewTag title="Graph 型目标的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
+            </Button>
+          </>
+        }
+      />
+      {open && (
+        <Flexbox className={styles.body} gap={14}>
+          <Flexbox gap={6}>
+            <span className={styles.label}>验收目标</span>
+            <Text fontSize={13}>{goal.requirement}</Text>
           </Flexbox>
-        ))}
-      </Flexbox>
-      <Flexbox horizontal gap={16} className={styles.mono} wrap="wrap">
-        <Text fontSize={12} type="secondary">
-          费用上限 {goal.maxTotalCost != null ? usd(goal.maxTotalCost) : '不限'}
-        </Text>
-        <Text fontSize={12} type="secondary">
-          总尝试 {goal.maxRounds ?? '不限'}
-        </Text>
-        <Text fontSize={12} type="secondary">
-          单项最多 {goal.maxAttemptsPerWork} 次
-        </Text>
-        <Text fontSize={12} type="secondary">
-          失联判定 {goal.leaseTimeoutMin} 分钟
-        </Text>
-      </Flexbox>
-    </Block>
+          <Flexbox gap={7}>
+            <Flexbox horizontal align="center" gap={8}>
+              <span className={styles.label}>验收清单</span>
+              <Text fontSize={11} type="secondary">
+                {passed} / {goal.checks.length} 通过
+              </Text>
+            </Flexbox>
+            <Block variant="outlined" className={styles.list}>
+              {goal.checks.map((c, i) => {
+                const meta = checkHeadMeta(c.state);
+                return (
+                  <Flexbox key={c.label} horizontal align="center" gap={10} className={styles.row}>
+                    <Icon color={meta.color} icon={meta.icon} size={16} style={{ flex: 'none' }} />
+                    <span className={styles.seq}>C{i + 1}</span>
+                    <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                      {c.label}
+                    </Text>
+                    <Tag color="info" size="small" variant="filled">
+                      必需
+                    </Tag>
+                  </Flexbox>
+                );
+              })}
+              <Flexbox horizontal gap={16} wrap="wrap" className={cx(styles.budget, shared.mono)}>
+                <Text fontSize={12} type="secondary">
+                  费用上限 {goal.maxTotalCost == null ? '不限' : usd(goal.maxTotalCost)}
+                </Text>
+                <Text fontSize={12} type="secondary">
+                  总尝试 {goal.maxRounds ?? '不限'}
+                </Text>
+                <Text fontSize={12} type="secondary">
+                  单项最多 {goal.maxAttemptsPerWork} 次
+                </Text>
+                <Text fontSize={12} type="secondary">
+                  失联判定 {goal.leaseTimeoutMin} 分钟
+                </Text>
+              </Flexbox>
+            </Block>
+          </Flexbox>
+        </Flexbox>
+      )}
+    </Flexbox>
   );
 });
 
@@ -751,7 +1018,18 @@ export const Findings = memo<{
 
 </script>
 <script type="text/plain" data-module="src/components/Frontier/FrontierList.tsx">
-import { ActionIcon, Block, Button, Flexbox, Icon, InputNumber, Tag, Text, TextArea, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Tag,
+  Text,
+  TextArea,
+  Tooltip,
+} from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStyles } from 'antd-style';
 import { ChevronDown, ChevronRight, Pencil, Plus, RotateCcw } from 'lucide-react';
@@ -778,7 +1056,9 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   num: css`
     flex: none;
+
     min-width: 22px;
+
     font-family: ${token.fontFamilyCode};
     font-size: 12px;
     color: ${token.colorTextQuaternary};
@@ -786,22 +1066,28 @@ const useStyles = createStyles(({ css, token }) => ({
   live: css`
     overflow: hidden;
     flex: 1;
+
     min-width: 0;
+
     font-size: 12px;
     color: ${token.colorTextTertiary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   blockedHead: css`
+    cursor: pointer;
+    user-select: none;
+
     display: flex;
     gap: 6px;
     align-items: center;
+
     padding-block: 8px;
     padding-inline: 12px;
+
     font-size: 12px;
     color: ${token.colorTextTertiary};
-    cursor: pointer;
-    user-select: none;
+
     &:hover {
       color: ${token.colorTextSecondary};
     }
@@ -857,15 +1143,18 @@ const tagOf = (state: GoalState, item: FrontierItem): { text: string; color?: st
     case 'stale':
       return { text: '失联', color: 'error' };
     case 'running':
-      return goal.status === 'paused' ? { text: '已停止' } : { text: `进行中 · 第 ${(n.attempts?.length ?? 0) + 1} 次` , color: 'processing' };
+      return goal.status === 'paused'
+        ? { text: '已停止' }
+        : { text: `进行中 · 第 ${(n.attempts?.length ?? 0) + 1} 次`, color: 'processing' };
     default:
-      return { text: goal.status === 'planning' ? '排队中' : `排队第 ${item.queue}` };
+      return { text: goal.status === 'planning' ? '待开始' : '可以开始' };
   }
 };
 
 const titleOf = (state: GoalState, item: FrontierItem) => {
   const { goal } = state;
-  if (item.kind === 'budget') return `费用预算用完了（${usd(goal.spent)} / ${usd(goal.maxTotalCost ?? 0)}）`;
+  if (item.kind === 'budget')
+    return `费用预算用完了（${usd(goal.spent)} / ${usd(goal.maxTotalCost ?? 0)}）`;
   if (item.kind === 'acceptance') {
     const passed = goal.checks.filter((c) => c.state === 'passed').length;
     return `验收通过 ${passed}/${goal.checks.length}，这个目标算完成了吗？`;
@@ -894,205 +1183,307 @@ const liveOf = (state: GoalState, item: FrontierItem) => {
   }
 };
 
-export const FrontierList = memo<FrontierListProps>(({ state, frontier, hotId, onHover, onSelect, actions }) => {
-  const { styles, cx } = useStyles();
-  const { styles: shared } = useSharedStyles();
-  const { goal } = state;
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [comment, setComment] = useState('');
-  const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
-  const [showBlocked, setShowBlocked] = useState(false);
-  const paused = goal.status === 'paused';
+export const FrontierList = memo<FrontierListProps>(
+  ({ state, frontier, hotId, onHover, onSelect, actions }) => {
+    const { styles, cx } = useStyles();
+    const { styles: shared } = useSharedStyles();
+    const { goal } = state;
+    const [rejectOpen, setRejectOpen] = useState(false);
+    const [comment, setComment] = useState('');
+    const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
+    const [showBlocked, setShowBlocked] = useState(false);
+    const paused = goal.status === 'paused';
 
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
+    const stop = (e: React.MouseEvent) => e.stopPropagation();
 
-  const rightCluster = (item: FrontierItem) => {
-    const n = item.node;
-    switch (item.kind) {
-      case 'gate': {
-        const d = state.decision!;
-        const rec = d.options.find((o) => o.id === d.recommended)!;
-        return (
-          <>
-            {d.options
-              .filter((o) => o.id !== rec.id)
-              .map((o) => (
-                <Tooltip key={o.id} title={o.consequence}>
-                  <Button size="small" onClick={(e) => { stop(e); actions.decide(o.id); }}>
-                    {o.label}
-                  </Button>
-                </Tooltip>
-              ))}
-            <Tooltip title={`推荐 · ${rec.consequence}`}>
-              <Button type="primary" size="small" onClick={(e) => { stop(e); actions.decide(rec.id); }}>
-                {rec.label}
+    const rightCluster = (item: FrontierItem) => {
+      const n = item.node;
+      switch (item.kind) {
+        case 'gate': {
+          const d = state.decision!;
+          const rec = d.options.find((o) => o.id === d.recommended)!;
+          return (
+            <>
+              {d.options
+                .filter((o) => o.id !== rec.id)
+                .map((o) => (
+                  <Tooltip key={o.id} title={o.consequence}>
+                    <Button
+                      size="small"
+                      onClick={(e) => {
+                        stop(e);
+                        actions.decide(o.id);
+                      }}
+                    >
+                      {o.label}
+                    </Button>
+                  </Tooltip>
+                ))}
+              <Tooltip title={`推荐 · ${rec.consequence}`}>
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={(e) => {
+                    stop(e);
+                    actions.decide(rec.id);
+                  }}
+                >
+                  {rec.label}
+                </Button>
+              </Tooltip>
+            </>
+          );
+        }
+        case 'acceptance':
+          return (
+            <>
+              <Button
+                size="small"
+                onClick={(e) => {
+                  stop(e);
+                  setRejectOpen(true);
+                }}
+              >
+                还不够
               </Button>
-            </Tooltip>
-          </>
-        );
+              <Button
+                type="primary"
+                size="small"
+                onClick={(e) => {
+                  stop(e);
+                  actions.accept();
+                }}
+              >
+                确认完成
+              </Button>
+            </>
+          );
+        case 'budget':
+          return (
+            <>
+              <InputNumber
+                size="small"
+                value={budget}
+                min={goal.spent}
+                step={1}
+                prefix="$"
+                onChange={(v) => setBudget(Number(v ?? 0))}
+                style={{ width: 96 }}
+                onClick={stop}
+              />
+              <Button
+                type="primary"
+                size="small"
+                onClick={(e) => {
+                  stop(e);
+                  actions.addBudget(budget);
+                }}
+              >
+                追加并继续
+              </Button>
+            </>
+          );
+        case 'stale':
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<Icon icon={RotateCcw} />}
+              onClick={(e) => {
+                stop(e);
+                actions.reclaim();
+              }}
+            >
+              立即重开
+            </Button>
+          );
+        case 'running':
+          return (
+            <>
+              <ActorAvatar name={n.task?.agent ?? ''} />
+              <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
+                {short(clock.now - (n.lastActivity ?? clock.now))}
+              </Text>
+            </>
+          );
+        default:
+          return (
+            <ActionIcon
+              icon={Pencil}
+              size="small"
+              title="编辑这项任务"
+              className={cx('row-actions', styles.hoverActions)}
+              onClick={(e) => {
+                stop(e);
+                onSelect(n.id, true);
+              }}
+            />
+          );
       }
-      case 'acceptance':
-        return (
-          <>
-            <Button size="small" onClick={(e) => { stop(e); setRejectOpen(true); }}>
-              还不够
-            </Button>
-            <Button type="primary" size="small" onClick={(e) => { stop(e); actions.accept(); }}>
-              确认完成
-            </Button>
-          </>
-        );
-      case 'budget':
-        return (
-          <>
-            <InputNumber size="small" value={budget} min={goal.spent} step={1} prefix="$" onChange={(v) => setBudget(Number(v ?? 0))} style={{ width: 96 }} onClick={stop} />
-            <Button type="primary" size="small" onClick={(e) => { stop(e); actions.addBudget(budget); }}>
-              追加并继续
-            </Button>
-          </>
-        );
-      case 'stale':
-        return (
-          <Button type="primary" size="small" icon={<Icon icon={RotateCcw} />} onClick={(e) => { stop(e); actions.reclaim(); }}>
-            立即重开
-          </Button>
-        );
-      case 'running':
-        return (
-          <>
-            <ActorAvatar name={n.task?.agent ?? ''} />
-            <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
-              {short(clock.now - (n.lastActivity ?? clock.now))}
-            </Text>
-          </>
-        );
-      default:
-        return (
-          <ActionIcon icon={Pencil} size="small" title="编辑这项任务" className={cx('row-actions', styles.hoverActions)} onClick={(e) => { stop(e); onSelect(n.id, true); }} />
-        );
-    }
-  };
+    };
 
-  const Row = ({ item, index, dim }: { item: FrontierItem; index: number; dim?: boolean }) => {
-    const n = item.node;
-    const g = glyphOf(item, paused);
-    const tag = tagOf(state, item);
-    const live = liveOf(state, item);
-    return (
-      <Block
-        clickable
-        variant="borderless"
-        padding={12}
-        className={cx(styles.row, dim && styles.dim)}
-        onClick={() => onSelect(n.id)}
-        onMouseEnter={() => onHover(n.id)}
-        onMouseLeave={() => onHover(null)}
-      >
-        <Flexbox horizontal gap={10} align="center">
-          <span className={styles.num}>#{index}</span>
-          <StatusGlyph status={g.status} live={g.live} />
-          <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0, maxWidth: '60%' }}>
-            {titleOf(state, item)}
-          </Text>
-          <Tag size="small" color={tag.color as any}>
-            {tag.text}
-          </Tag>
-          <span className={styles.live}>{live}</span>
-          <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
-            {rightCluster(item)}
-          </Flexbox>
-        </Flexbox>
-        {item.kind === 'acceptance' && rejectOpen && (
-          <Flexbox gap={8} style={{ marginTop: 10, paddingLeft: 48 }} onClick={stop}>
-            <TextArea autoFocus placeholder="哪里不够？会作为下一轮的输入" value={comment} onChange={(e) => setComment(e.target.value)} autoSize={{ minRows: 2, maxRows: 4 }} />
-            <Flexbox horizontal gap={8} justify="flex-end">
-              <Button size="small" onClick={() => setRejectOpen(false)}>
-                取消
-              </Button>
-              <Button size="small" type="primary" disabled={!comment.trim()} onClick={() => { actions.reject(comment); setRejectOpen(false); }}>
-                带反馈再来一轮
-              </Button>
+    const Row = ({ item, index, dim }: { item: FrontierItem; index: number; dim?: boolean }) => {
+      const n = item.node;
+      const g = glyphOf(item, paused);
+      const tag = tagOf(state, item);
+      const live = liveOf(state, item);
+      return (
+        <Block
+          clickable
+          variant="borderless"
+          padding={12}
+          className={cx(styles.row, dim && styles.dim)}
+          onClick={() => onSelect(n.id)}
+          onMouseEnter={() => onHover(n.id)}
+          onMouseLeave={() => onHover(null)}
+        >
+          <Flexbox horizontal gap={10} align="center">
+            <span className={styles.num}>#{index}</span>
+            <StatusGlyph status={g.status} live={g.live} />
+            <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0, maxWidth: '60%' }}>
+              {titleOf(state, item)}
+            </Text>
+            <Tag size="small" color={tag.color as any}>
+              {tag.text}
+            </Tag>
+            <span className={styles.live}>{live}</span>
+            <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
+              {rightCluster(item)}
             </Flexbox>
           </Flexbox>
-        )}
-      </Block>
-    );
-  };
-
-  return (
-    <Flexbox gap={8}>
-      <Flexbox horizontal justify="space-between" align="baseline">
-        <Flexbox horizontal gap={8} align="baseline">
-          <Text fontSize={16} weight={600}>
-            当前任务
-          </Text>
-          <Text fontSize={12} className={shared.muted}>
-            {goal.status === 'planning'
-              ? '开始后 Agent 按优先级逐项领取'
-              : `${frontier.needsYou > 0 ? `${frontier.needsYou} 项需要你 · ` : ''}${frontier.items.length} 项能推进`}
-          </Text>
-        </Flexbox>
-        <Button size="small" type="text" icon={<Icon icon={Plus} />}>
-          添加任务
-        </Button>
-      </Flexbox>
-
-      <div className={shared.list}>
-        <Block variant="borderless" gap={0} padding={2}>
-          {frontier.items.length === 0 && (
-            <Flexbox padding={12} gap={2}>
-              <Text weight={500}>{goal.status === 'achieved' ? '没有需要推进的了，目标已达成' : '当前没有可推进的任务'}</Text>
-              <Text fontSize={12} type="secondary">
-                {goal.status === 'achieved' ? '结论都在下面的图里；可以基于任何结论再开一条新任务。' : '所有任务都在等待或已终态。'}
-              </Text>
+          {item.kind === 'acceptance' && rejectOpen && (
+            <Flexbox gap={8} style={{ marginTop: 10, paddingLeft: 48 }} onClick={stop}>
+              <TextArea
+                autoFocus
+                placeholder="哪里不够？会作为下一轮的输入"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                autoSize={{ minRows: 2, maxRows: 4 }}
+              />
+              <Flexbox horizontal gap={8} justify="flex-end">
+                <Button size="small" onClick={() => setRejectOpen(false)}>
+                  取消
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  disabled={!comment.trim()}
+                  onClick={() => {
+                    actions.reject(comment);
+                    setRejectOpen(false);
+                  }}
+                >
+                  带反馈再来一轮
+                </Button>
+              </Flexbox>
             </Flexbox>
           )}
-          {frontier.items.map((item, i) => (
-            <Fragment key={item.key}>
-              {i > 0 && <Divider dashed style={{ margin: 0 }} />}
-              <Row item={item} index={i + 1} />
-            </Fragment>
-          ))}
         </Block>
-        {frontier.blocked.length > 0 && (
-          <>
-            <Divider dashed style={{ margin: 0 }} />
-            <div className={styles.blockedHead} onClick={() => setShowBlocked(!showBlocked)}>
-              <Icon icon={showBlocked ? ChevronDown : ChevronRight} size={12} />
-              <span>还有 {frontier.blocked.length} 项在等依赖</span>
-              {!showBlocked && (
-                <span className={styles.live} style={{ marginLeft: 4 }}>
-                  {frontier.blocked.map((b) => b.node.title).join(' · ')}
-                </span>
-              )}
-            </div>
-            {showBlocked && (
-              <Block variant="borderless" gap={0} padding={2}>
-                {frontier.blocked.map((b, i) => (
-                  <Fragment key={b.key}>
-                    {i > 0 && <Divider dashed style={{ margin: 0 }} />}
-                    <Block clickable variant="borderless" padding={12} className={cx(styles.row, styles.dim)} onClick={() => onSelect(b.node.id, true)} onMouseEnter={() => onHover(b.node.id)} onMouseLeave={() => onHover(null)}>
-                      <Flexbox horizontal gap={10} align="center">
-                        <span className={styles.num}>#{frontier.items.length + i + 1}</span>
-                        <StatusGlyph status="backlog" />
-                        <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
-                          {b.node.title}
-                        </Text>
-                        <Tag size="small">等「{b.blockers[0].title.slice(0, 12)}{b.blockers[0].title.length > 12 ? '…' : ''}」{b.blockers.length > 1 ? ` 等 ${b.blockers.length} 项` : ''}</Tag>
-                        <span className={styles.live} />
-                        <ActionIcon icon={Pencil} size="small" title="编辑这项任务" className={cx('row-actions', styles.hoverActions)} onClick={(e) => { stop(e); onSelect(b.node.id, true); }} />
-                      </Flexbox>
-                    </Block>
-                  </Fragment>
-                ))}
-              </Block>
+      );
+    };
+
+    return (
+      <Flexbox gap={8}>
+        <Flexbox horizontal justify="space-between" align="baseline">
+          <Flexbox horizontal gap={8} align="baseline">
+            <Text fontSize={16} weight={600}>
+              当前任务
+            </Text>
+            <Text fontSize={12} className={shared.muted}>
+              {goal.status === 'planning'
+                ? '开始后 Agent 按优先级逐项领取'
+                : `${frontier.needsYou > 0 ? `${frontier.needsYou} 项需要你 · ` : ''}${frontier.items.length} 项能推进`}
+            </Text>
+          </Flexbox>
+          <Button size="small" type="text" icon={<Icon icon={Plus} />}>
+            添加任务
+          </Button>
+        </Flexbox>
+
+        <div className={shared.list}>
+          <Block variant="borderless" gap={0} padding={2}>
+            {frontier.items.length === 0 && (
+              <Flexbox padding={12} gap={2}>
+                <Text weight={500}>
+                  {goal.status === 'achieved'
+                    ? '没有需要推进的了，目标已达成'
+                    : '当前没有可推进的任务'}
+                </Text>
+                <Text fontSize={12} type="secondary">
+                  {goal.status === 'achieved'
+                    ? '结论都在下面的图里；可以基于任何结论再开一条新任务。'
+                    : '所有任务都在等待或已终态。'}
+                </Text>
+              </Flexbox>
             )}
-          </>
-        )}
-      </div>
-    </Flexbox>
-  );
-});
+            {frontier.items.map((item, i) => (
+              <Fragment key={item.key}>
+                {i > 0 && <Divider dashed style={{ margin: 0 }} />}
+                <Row item={item} index={i + 1} />
+              </Fragment>
+            ))}
+          </Block>
+          {frontier.blocked.length > 0 && (
+            <>
+              <Divider dashed style={{ margin: 0 }} />
+              <div className={styles.blockedHead} onClick={() => setShowBlocked(!showBlocked)}>
+                <Icon icon={showBlocked ? ChevronDown : ChevronRight} size={12} />
+                <span>还有 {frontier.blocked.length} 项在等依赖</span>
+                {!showBlocked && (
+                  <span className={styles.live} style={{ marginLeft: 4 }}>
+                    {frontier.blocked.map((b) => b.node.title).join(' · ')}
+                  </span>
+                )}
+              </div>
+              {showBlocked && (
+                <Block variant="borderless" gap={0} padding={2}>
+                  {frontier.blocked.map((b, i) => (
+                    <Fragment key={b.key}>
+                      {i > 0 && <Divider dashed style={{ margin: 0 }} />}
+                      <Block
+                        clickable
+                        variant="borderless"
+                        padding={12}
+                        className={cx(styles.row, styles.dim)}
+                        onClick={() => onSelect(b.node.id, true)}
+                        onMouseEnter={() => onHover(b.node.id)}
+                        onMouseLeave={() => onHover(null)}
+                      >
+                        <Flexbox horizontal gap={10} align="center">
+                          <span className={styles.num}>#{frontier.items.length + i + 1}</span>
+                          <StatusGlyph status="backlog" />
+                          <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
+                            {b.node.title}
+                          </Text>
+                          <Tag size="small">
+                            等「{b.blockers[0].title.slice(0, 12)}
+                            {b.blockers[0].title.length > 12 ? '…' : ''}」
+                            {b.blockers.length > 1 ? ` 等 ${b.blockers.length} 项` : ''}
+                          </Tag>
+                          <span className={styles.live} />
+                          <ActionIcon
+                            icon={Pencil}
+                            size="small"
+                            title="编辑这项任务"
+                            className={cx('row-actions', styles.hoverActions)}
+                            onClick={(e) => {
+                              stop(e);
+                              onSelect(b.node.id, true);
+                            }}
+                          />
+                        </Flexbox>
+                      </Block>
+                    </Fragment>
+                  ))}
+                </Block>
+              )}
+            </>
+          )}
+        </div>
+      </Flexbox>
+    );
+  },
+);
 
 </script>
 <script type="text/plain" data-module="src/components/GoalHeader.tsx">
@@ -1358,20 +1749,20 @@ export const GoalHeader = memo<GoalHeaderProps>(
 </script>
 <script type="text/plain" data-module="src/components/Graph/Graph.tsx">
 import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { Background, BackgroundVariant, Controls, type Edge as RFEdge, MarkerType, type Node as RFNode, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { createStyles } from 'antd-style';
 import { Maximize2, X } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 
-import { ago, clock } from '../../model/format';
 import { type Frontier, isStale } from '../../model/frontier';
-import type { GoalNode, GoalState, NodeKind } from '../../types';
+import type { GoalState, NodeKind } from '../../types';
 import { KIND_CN, KindDot, useKindColors } from '../shared';
-import { POS, VIEW_W, edgePath } from './layout';
+import { GraphNodeView } from './GraphNode';
+import { POS } from './layout';
 
-// Exploration graph. No chrome around it; two views:
-//   stage — what got us here, what is moving now, and what the next advance can unlock (default)
-//   all   — the whole graph
-// Fullscreen is a real overlay, not a wider column. Kinds are told apart by shape + color only.
+// Exploration graph on react-flow: custom nodes (kind = shape + color), pan/zoom/fit, minimap-free.
+// Two views: 当前阶段 (what got us here + what the next advance can unlock) and 全图.
+// Fullscreen is a real overlay. No card border around the canvas.
 
 const useStyles = createStyles(({ css, token }) => ({
   head: css`
@@ -1381,114 +1772,47 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 12px;
     color: ${token.colorTextTertiary};
   `,
+  canvas: css`
+    width: 100%;
+    height: 460px;
+    .react-flow__attribution {
+      display: none;
+    }
+    .react-flow__edge-path {
+      stroke: ${token.colorBorder};
+      stroke-width: 1.5;
+    }
+    .react-flow__edge.dep .react-flow__edge-path {
+      stroke-dasharray: 4 4;
+    }
+    .react-flow__edge.hot .react-flow__edge-path {
+      stroke: ${token.colorText};
+      stroke-width: 2;
+    }
+    .react-flow__edge.dimmed .react-flow__edge-path {
+      opacity: 0.25;
+    }
+    .react-flow__controls-button {
+      border-color: ${token.colorBorderSecondary};
+      background: ${token.colorBgContainer};
+      fill: ${token.colorTextSecondary};
+      &:hover {
+        background: ${token.colorFillTertiary};
+      }
+    }
+  `,
+  full: css`
+    height: 100%;
+  `,
   overlay: css`
     position: fixed;
     inset: 0;
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    padding-block: 12px 24px;
+    padding-block: 12px 16px;
     padding-inline: 24px;
     background: ${token.colorBgContainer};
-  `,
-  overlayBody: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  svg: css`
-    display: block;
-    width: 100%;
-    height: auto;
-    .edge {
-      fill: none;
-      stroke: ${token.colorBorder};
-      stroke-width: 1.5;
-      transition:
-        opacity 0.2s,
-        stroke 0.2s;
-    }
-    .edge.dep {
-      stroke-dasharray: 4 4;
-    }
-    .edge.dim {
-      opacity: 0.3;
-    }
-    .edge.hot {
-      stroke: ${token.colorText};
-      stroke-width: 2;
-      opacity: 1;
-    }
-    .node {
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .node .main {
-      stroke-width: 1.5;
-      transition:
-        stroke-width 0.15s,
-        filter 0.15s;
-    }
-    .node.dim {
-      opacity: 0.45;
-    }
-    .node.frontier .main {
-      stroke-width: 3;
-    }
-    .node.gate .main {
-      stroke-dasharray: 6 4;
-      stroke-width: 3;
-    }
-    .node.proposed .main {
-      stroke-dasharray: 4 4;
-    }
-    .node.stale .main {
-      stroke-dasharray: 2 4;
-    }
-    .node.selected .main {
-      filter: drop-shadow(0 0 4px ${token.colorPrimaryBorder});
-    }
-    .node.hot .main {
-      stroke-width: 3.5;
-    }
-    .node.fresh .main {
-      filter: drop-shadow(0 0 6px ${token.colorPrimaryBorder});
-    }
-    .node text {
-      fill: ${token.colorText};
-      font-size: 13px;
-      pointer-events: none;
-    }
-    .node text.task {
-      fill: ${token.colorTextSecondary};
-      font-size: 11px;
-      font-family: ${token.fontFamilyCode};
-    }
-    .node text.badge {
-      fill: ${token.colorBgContainer};
-      font-size: 9px;
-      font-weight: 600;
-    }
-    .node line.sep {
-      stroke: ${token.colorBorderSecondary};
-    }
-    .pulse {
-      animation: goal-pulse 1.6s ease-in-out infinite;
-    }
-    @keyframes goal-pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.25;
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .pulse {
-        animation: none;
-      }
-    }
   `,
 }));
 
@@ -1506,21 +1830,14 @@ interface GraphProps {
   onViewChange: (v: GraphView) => void;
   fullscreen: boolean;
   onFullscreen: (v: boolean) => void;
-  /** Step 1: the graph is the Agent's initial plan, editable before start. */
   isDraft?: boolean;
 }
 
-const ellipsize = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
-
-/**
- * Stage view: nodes that are done / moving / waiting on you, plus the nodes the next advance can
- * unlock (blocked only by things that are moving or ready). Deeper future is hidden.
- */
+/** Stage view: done / moving / needs-you nodes plus whatever the next advance can unlock. */
 const stageNodes = (state: GoalState, frontier: Frontier) => {
   const active = new Set<string>();
   state.nodes.forEach((n) => {
-    if (n.kind === 'goal') active.add(n.id);
-    if (n.status !== 'proposed') active.add(n.id);
+    if (n.kind === 'goal' || n.status !== 'proposed') active.add(n.id);
   });
   frontier.items.forEach((i) => active.add(i.node.id));
   const visible = new Set(active);
@@ -1530,16 +1847,101 @@ const stageNodes = (state: GoalState, frontier: Frontier) => {
   return visible;
 };
 
-export const Graph = memo<GraphProps>(({ state, frontier, hotId, selectedId, freshIds, onHover, onSelect, view, onViewChange, fullscreen, onFullscreen, isDraft }) => {
-  const { styles, cx } = useStyles();
+const Canvas = memo<GraphProps & { className: string }>(({ state, frontier, hotId, selectedId, freshIds, onHover, onSelect, view, className }) => {
   const colors = useKindColors();
+  const { fitView } = useReactFlow();
   const { goal } = state;
   const visibleIds = useMemo(() => (view === 'all' ? new Set(state.nodes.map((n) => n.id)) : stageNodes(state, frontier)), [state, frontier, view]);
-  const nodes = state.nodes.filter((n) => visibleIds.has(n.id));
-  const frontierIds = new Set(frontier.items.map((i) => i.node.id));
-  const maxY = Math.max(...nodes.map((n) => POS[n.id].y + POS[n.id].h)) + 24;
+  const frontierIds = useMemo(() => new Set(frontier.items.map((i) => i.node.id)), [frontier]);
   const focus = hotId || selectedId || null;
-  const hiddenCount = state.nodes.length - nodes.length;
+
+  const nodes: RFNode[] = useMemo(
+    () =>
+      state.nodes
+        .filter((n) => visibleIds.has(n.id))
+        .map((n) => {
+          const p = POS[n.id];
+          const isGate = n.kind === 'decision' && n.status === 'waiting';
+          const stale = isStale(goal, n);
+          const running = n.kind === 'work' && n.status === 'active' && !n.delivered && goal.status !== 'paused' && !stale && !!n.task && !!n.lastActivity;
+          const related = state.edges.some(([a, b]) => (a === focus && b === n.id) || (b === focus && a === n.id));
+          return {
+            id: n.id,
+            type: 'goalNode',
+            position: { x: p.x, y: p.y },
+            width: p.w,
+            draggable: false,
+            data: {
+              node: n,
+              isFrontier: frontierIds.has(n.id),
+              isGate,
+              stale,
+              fresh: freshIds.has(n.id),
+              dim: focus ? !(n.id === focus || related) : n.status === 'resolved' && n.kind === 'work' && !frontierIds.has(n.id),
+              selected: selectedId === n.id,
+              running,
+            },
+          } satisfies RFNode;
+        }),
+    [state, visibleIds, frontierIds, freshIds, focus, selectedId, goal],
+  );
+
+  const edges: RFEdge[] = useMemo(
+    () =>
+      state.edges
+        .filter(([a, b]) => visibleIds.has(a) && visibleIds.has(b))
+        .map(([a, b, kind]) => {
+          // depends_on points from the blocker to the blocked node so the graph always reads downward.
+          const [source, target] = kind === 'depends_on' ? [b, a] : [a, b];
+          const hot = !!focus && (a === focus || b === focus);
+          return {
+            id: `${a}-${b}-${kind}`,
+            source,
+            target,
+            type: 'smoothstep',
+            className: [kind === 'depends_on' && 'dep', hot && 'hot', focus && !hot && 'dimmed'].filter(Boolean).join(' '),
+            markerEnd: kind === 'depends_on' ? undefined : { type: MarkerType.ArrowClosed, color: 'var(--ant-color-border)', width: 14, height: 14 },
+          } satisfies RFEdge;
+        }),
+    [state, visibleIds, focus],
+  );
+
+  useEffect(() => {
+    const id = setTimeout(() => fitView({ duration: 200, padding: 0.12 }), 30);
+    return () => clearTimeout(id);
+  }, [view, nodes.length, fitView]);
+
+  const nodeTypes = useMemo(() => ({ goalNode: GraphNodeView }), []);
+  const handleNodeClick = useCallback((_: unknown, n: RFNode) => onSelect(n.id), [onSelect]);
+
+  return (
+    <div className={className}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodeClick={handleNodeClick}
+        onNodeMouseEnter={(_, n) => onHover(n.id)}
+        onNodeMouseLeave={() => onHover(null)}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable
+        proOptions={{ hideAttribution: true }}
+        minZoom={0.2}
+        maxZoom={1.6}
+        fitView
+      >
+        <Background color={colors.goal.line} gap={20} size={1} variant={BackgroundVariant.Dots} />
+        <Controls showInteractive={false} position="bottom-right" />
+      </ReactFlow>
+    </div>
+  );
+});
+
+export const Graph = memo<GraphProps>((props) => {
+  const { styles, cx } = useStyles();
+  const { state, frontier, view, onViewChange, fullscreen, onFullscreen, isDraft } = props;
+  const hiddenCount = view === 'stage' ? state.nodes.length - stageNodes(state, frontier).size : 0;
 
   const head = (
     <Flexbox horizontal justify="space-between" align="center" className={styles.head}>
@@ -1561,7 +1963,7 @@ export const Graph = memo<GraphProps>(({ state, frontier, hotId, selectedId, fre
             初始方案 · Agent 根据目标生成 · 开始前可以调整
           </Text>
         )}
-        {view === 'stage' && hiddenCount > 0 && (
+        {hiddenCount > 0 && (
           <Text fontSize={12} type="secondary">
             还有 {hiddenCount} 个节点在更后面的阶段
           </Text>
@@ -1581,104 +1983,214 @@ export const Graph = memo<GraphProps>(({ state, frontier, hotId, selectedId, fre
     </Flexbox>
   );
 
-  const renderNode = (n: GoalNode) => {
-    const p = POS[n.id];
-    const c = colors[n.kind];
-    const isFrontier = frontierIds.has(n.id);
-    const isGate = n.kind === 'decision' && n.status === 'waiting';
-    const stale = isStale(goal, n);
-    const fresh = freshIds.has(n.id);
-    const related = state.edges.some(([a, b]) => (a === focus && b === n.id) || (b === focus && a === n.id));
-    const dim = focus ? !(n.id === focus || related) : n.status === 'resolved' && n.kind === 'work' && !isFrontier;
-    const cls = cx(
-      'node',
-      isFrontier && !isGate && 'frontier',
-      isGate && 'gate',
-      n.status === 'proposed' && 'proposed',
-      stale && 'stale',
-      dim && !fresh && 'dim',
-      selectedId === n.id && 'selected',
-      (hotId === n.id || fresh) && 'hot',
-      fresh && 'fresh',
-    );
-    const stroke = isGate ? 'var(--ant-color-warning)' : stale ? 'var(--ant-color-error)' : c.line;
-    const fill = n.status === 'proposed' ? 'var(--ant-color-bg-container)' : c.soft;
-    const running = n.kind === 'work' && n.status === 'active' && !n.delivered && goal.status !== 'paused' && !stale && n.task && n.lastActivity;
-    const h = running ? 78 : p.h;
-    const badge = n.kind === 'decision' ? (n.authority === 'agent' ? 'AI' : '你') : null;
-    const touches = n.kind === 'work' ? (n.humanTouches ?? []) : [];
-    return (
-      <g key={n.id} className={cls} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(n.id)}>
-        {n.kind === 'decision' ? (
-          <path className="main" d={`M ${p.x + 16} ${p.y} H ${p.x + p.w - 16} L ${p.x + p.w} ${p.y + p.h / 2} L ${p.x + p.w - 16} ${p.y + p.h} H ${p.x + 16} L ${p.x} ${p.y + p.h / 2} Z`} fill={fill} stroke={stroke} />
-        ) : (
-          <rect className="main" x={p.x} y={p.y} width={p.w} height={h} rx={n.kind === 'problem' ? 28 : n.kind === 'finding' ? 6 : 10} fill={fill} stroke={stroke} />
-        )}
-        <text x={p.x + p.w / 2} y={p.y + (running ? 26 : h / 2 + 5)} textAnchor="middle">
-          {ellipsize(n.title, n.kind === 'decision' ? 20 : 24)}
-        </text>
-        {running && (
-          <g>
-            <line className="sep" x1={p.x + 16} y1={p.y + 42} x2={p.x + p.w - 16} y2={p.y + 42} />
-            <circle className="pulse" cx={p.x + 26} cy={p.y + 60} r={3.5} fill="var(--ant-color-warning)" />
-            <text className="task" x={p.x + 36} y={p.y + 64}>
-              {n.task!.agent} · 第 {(n.attempts?.length ?? 0) + 1} 次 · {ago(clock.now - n.lastActivity!)}
-            </text>
-          </g>
-        )}
-        {badge && (
-          <g>
-            <circle cx={p.x + p.w - 10} cy={p.y + 2} r={9} fill={isGate ? 'var(--ant-color-warning)' : n.authority === 'agent' ? c.line : 'var(--ant-color-text)'} />
-            <text className="badge" x={p.x + p.w - 10} y={p.y + 5.5} textAnchor="middle">
-              {badge}
-            </text>
-          </g>
-        )}
-        {touches.length > 0 && (
-          <g>
-            <title>{touches.map((t) => t.text).join('\n')}</title>
-            <circle cx={p.x + 10} cy={p.y + 2} r={9} fill="var(--ant-color-text)" />
-            <text className="badge" x={p.x + 10} y={p.y + 5.5} textAnchor="middle">
-              你
-            </text>
-          </g>
-        )}
-        {n.delivered && <circle cx={p.x + p.w - 8} cy={p.y + 8} r={5} fill="var(--ant-color-warning)" />}
-      </g>
-    );
-  };
-
-  const svg = (
-    <svg className={styles.svg} viewBox={`0 0 ${VIEW_W} ${maxY}`} role="img" aria-label="Goal Graph" style={fullscreen ? { maxWidth: 1400, margin: '0 auto' } : undefined}>
-      <defs>
-        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-          <path d="M0,0 L0,6 L7,3 z" fill="context-stroke" />
-        </marker>
-      </defs>
-      {state.edges
-        .filter(([a, b]) => visibleIds.has(a) && visibleIds.has(b))
-        .map(([a, b, kind]) => {
-          const hot = !!focus && (a === focus || b === focus);
-          const dim = !!focus && !hot;
-          return <path key={`${a}-${b}-${kind}`} className={cx('edge', kind === 'depends_on' && 'dep', hot && 'hot', dim && 'dim')} d={edgePath(a, b, kind)} markerEnd={kind === 'depends_on' ? undefined : 'url(#arrow)'} />;
-        })}
-      {nodes.map(renderNode)}
-    </svg>
-  );
-
   if (fullscreen)
     return (
       <div className={styles.overlay}>
         {head}
-        <div className={styles.overlayBody}>{svg}</div>
+        <ReactFlowProvider>
+          <Canvas {...props} className={cx(styles.canvas, styles.full)} />
+        </ReactFlowProvider>
       </div>
     );
 
   return (
     <Flexbox gap={4}>
       {head}
-      {svg}
+      <ReactFlowProvider>
+        <Canvas {...props} className={styles.canvas} />
+      </ReactFlowProvider>
     </Flexbox>
+  );
+});
+
+</script>
+<script type="text/plain" data-module="src/components/Graph/GraphNode.tsx">
+import { Flexbox, Text } from '@lobehub/ui';
+import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { createStyles } from 'antd-style';
+import { memo } from 'react';
+
+import { ago, clock } from '../../model/format';
+import type { GoalNode } from '../../types';
+import { useKindColors, useSharedStyles } from '../shared';
+
+// One react-flow custom node per graph node. Kind = shape + color (no type label inside);
+// state = stroke (thick when on the frontier, dashed when not started / gate, dotted red when stale).
+
+export interface GraphNodeData extends Record<string, unknown> {
+  node: GoalNode;
+  isFrontier: boolean;
+  isGate: boolean;
+  stale: boolean;
+  fresh: boolean;
+  dim: boolean;
+  selected: boolean;
+  running: boolean;
+}
+
+const useStyles = createStyles(({ css, token }) => ({
+  base: css`
+    position: relative;
+    box-sizing: border-box;
+    padding-block: 10px;
+    padding-inline: 14px;
+    border: 1.5px solid;
+    font-size: 13px;
+    color: ${token.colorText};
+    transition:
+      opacity 0.2s,
+      box-shadow 0.15s,
+      border-width 0.15s;
+  `,
+  work: css`
+    border-radius: 10px;
+  `,
+  goal: css`
+    border-radius: 10px;
+    font-weight: 600;
+  `,
+  problem: css`
+    border-radius: 28px;
+  `,
+  finding: css`
+    border-radius: 6px;
+  `,
+  decision: css`
+    border-radius: 6px;
+    /* hexagon-ish: the clip keeps the kind readable at a glance */
+    clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+    padding-inline: 24px;
+  `,
+  frontier: css`
+    border-width: 3px;
+  `,
+  notStarted: css`
+    border-style: dashed;
+  `,
+  stale: css`
+    border-style: dotted;
+    border-color: ${token.colorError} !important;
+  `,
+  gate: css`
+    border-style: dashed;
+    border-width: 3px;
+    border-color: ${token.colorWarning} !important;
+  `,
+  dim: css`
+    opacity: 0.45;
+  `,
+  fresh: css`
+    box-shadow: 0 0 0 4px ${token.colorPrimaryBorder};
+  `,
+  selected: css`
+    box-shadow: 0 0 0 2px ${token.colorPrimary};
+  `,
+  task: css`
+    margin-block-start: 8px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid ${token.colorBorderSecondary};
+    font-family: ${token.fontFamilyCode};
+    font-size: 11px;
+    color: ${token.colorTextSecondary};
+  `,
+  dot: css`
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${token.colorWarning};
+    animation: goal-node-pulse 1.6s ease-in-out infinite;
+    @keyframes goal-node-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.25;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  `,
+  badge: css`
+    position: absolute;
+    top: -8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 600;
+    color: ${token.colorBgContainer};
+  `,
+  badgeLeft: css`
+    left: 8px;
+    background: ${token.colorText};
+  `,
+  badgeRight: css`
+    right: 8px;
+  `,
+  handle: css`
+    width: 1px;
+    height: 1px;
+    min-width: 0;
+    min-height: 0;
+    border: none;
+    opacity: 0;
+  `,
+}));
+
+export const GraphNodeView = memo<NodeProps>(({ data }) => {
+  const { node, isFrontier, isGate, stale, fresh, dim, selected, running } = data as GraphNodeData;
+  const { styles, cx } = useStyles();
+  const { styles: shared } = useSharedStyles();
+  const colors = useKindColors();
+  const c = colors[node.kind];
+  const notStarted = node.status === 'proposed';
+  const touches = node.kind === 'work' ? (node.humanTouches ?? []) : [];
+  const badge = node.kind === 'decision' ? (node.authority === 'agent' ? 'AI' : '你') : null;
+
+  return (
+    <div
+      className={cx(
+        styles.base,
+        styles[node.kind],
+        isFrontier && !isGate && styles.frontier,
+        notStarted && styles.notStarted,
+        isGate && styles.gate,
+        stale && styles.stale,
+        dim && !fresh && styles.dim,
+        fresh && styles.fresh,
+        selected && styles.selected,
+      )}
+      style={{ borderColor: c.line, background: notStarted ? 'var(--ant-color-bg-container)' : c.soft, width: '100%' }}
+    >
+      <Handle className={styles.handle} type="target" position={Position.Top} isConnectable={false} />
+      <Text ellipsis={{ rows: 2 }} style={{ fontSize: 13, lineHeight: 1.4 }}>
+        {node.title}
+      </Text>
+      {running && node.task && (
+        <Flexbox horizontal align="center" gap={6} className={styles.task}>
+          <span className={styles.dot} />
+          <span className={shared.mono}>
+            {node.task.agent} · 第 {(node.attempts?.length ?? 0) + 1} 次 · {ago(clock.now - (node.lastActivity ?? clock.now))}
+          </span>
+        </Flexbox>
+      )}
+      {touches.length > 0 && (
+        <span className={cx(styles.badge, styles.badgeLeft)} title={touches.map((t) => t.text).join('\n')}>
+          你
+        </span>
+      )}
+      {badge && (
+        <span className={cx(styles.badge, styles.badgeRight)} style={{ background: isGate ? 'var(--ant-color-warning)' : node.authority === 'agent' ? c.line : 'var(--ant-color-text)' }}>
+          {badge}
+        </span>
+      )}
+      <Handle className={styles.handle} type="source" position={Position.Bottom} isConnectable={false} />
+    </div>
   );
 });
 
@@ -1702,6 +2214,7 @@ const useStyles = createStyles(({ css, token }) => ({
   ledgerLine: css`
     padding-block: 6px;
     border-block-start: 1px dashed ${token.colorBorderSecondary};
+
     &:first-of-type {
       border-block-start: none;
     }
@@ -1732,205 +2245,260 @@ interface NodeDetailProps {
   onStart?: (id: string) => void;
 }
 
-export const NodeDetailTitle = memo<{ state: GoalState; frontier: Frontier; id: string }>(({ state, frontier, id }) => {
-  const { styles: shared } = useSharedStyles();
-  const n = state.nodes.find((x) => x.id === id);
-  if (!n) return null;
-  return (
-    <Flexbox horizontal gap={8} align="center" style={{ minWidth: 0 }}>
-      <KindDot kind={n.kind} />
-      <Text fontSize={12} className={shared.muted}>
-        {KIND_CN[n.kind]}
-      </Text>
-      <Text weight={600} ellipsis style={{ minWidth: 0 }}>
-        {n.title}
-      </Text>
-      <Text fontSize={12} type="secondary" style={{ flexShrink: 0 }}>
-        {nodeStateText(state.goal, n, frontier)}
-        {n.cost ? ` · ${usd(n.cost)}` : ''}
-      </Text>
-    </Flexbox>
-  );
-});
-
-export const NodeDetail = memo<NodeDetailProps>(({ state, frontier, id, editing, onSelect, onStart }) => {
-  const { styles, cx } = useStyles();
-  const { styles: shared } = useSharedStyles();
-  const n = state.nodes.find((x) => x.id === id);
-  const [title, setTitle] = useState(n?.title ?? '');
-  const [desc, setDesc] = useState(n?.description ?? '');
-  const [prio, setPrio] = useState(n?.priority ?? 0);
-  const [deps, setDeps] = useState<string[]>(n?.dependsOn ?? []);
-  if (!n) return null;
-  const { goal } = state;
-  const byId = (x: string) => state.nodes.find((m) => m.id === x);
-  const editable = n.kind === 'work' && n.status === 'proposed';
-  const producer = n.kind === 'finding' && n.from ? byId(n.from) : undefined;
-  const producingAttempt = producer?.attempts?.find((a) => a.outcome === 'passed');
-  const otherWorks = state.nodes.filter((w) => w.kind === 'work' && w.id !== n.id && !w.terminal);
-
-  return (
-    <Flexbox gap={16}>
-      {editable && (
-        <Flexbox gap={10}>
-          <Flexbox gap={4}>
-            <span className={styles.label}>标题</span>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </Flexbox>
-          <Flexbox gap={4}>
-            <span className={styles.label}>要做什么 · 交付什么</span>
-            <TextArea value={desc} onChange={(e) => setDesc(e.target.value)} autoSize={{ minRows: 3, maxRows: 8 }} placeholder="写清允许的产出与完成标准，会进入负责人 Task 的指令" />
-          </Flexbox>
-          <Flexbox gap={4}>
-            <span className={styles.label}>优先级</span>
-            <InputNumber value={prio} onChange={(v) => setPrio(Number(v ?? 0))} style={{ width: 120 }} />
-          </Flexbox>
-          <Flexbox gap={4}>
-            <span className={styles.label}>先等这些完成（依赖）</span>
-            <Flexbox gap={2}>
-              {otherWorks.map((w) => (
-                <Checkbox key={w.id} checked={deps.includes(w.id)} onChange={(e) => setDeps(e.target.checked ? [...deps, w.id] : deps.filter((d) => d !== w.id))}>
-                  <Text fontSize={13}>{w.title}</Text>
-                </Checkbox>
-              ))}
-            </Flexbox>
-          </Flexbox>
-          <Flexbox horizontal gap={8} align="center" wrap="wrap">
-            <Button type="primary" size="small">
-              保存 <NewTag title="没有 goal.updateNode；今天只能 addNode / addEdge" />
-            </Button>
-            <Button size="small" icon={<Icon icon={ArrowUp} />}>
-              先做这个 <NewTag title="调优先级 = updateNode，未建模" />
-            </Button>
-            {goal.status !== 'planning' && onStart && (
-              <Button size="small" icon={<Icon icon={Play} />} onClick={() => onStart(n.id)}>
-                现在开始 <NewTag title="并行派发：coordinator 每次 tick 只派一个节点（串行）" />
-              </Button>
-            )}
-            <Button size="small" danger icon={<Icon icon={Trash2} />}>
-              移除 <NewTag title="retire 一个未开始的任务：未建模" />
-            </Button>
-          </Flexbox>
-        </Flexbox>
-      )}
-
-      {!editable && n.description && <Text fontSize={13}>{n.description}</Text>}
-      {n.body && <Text fontSize={13}>{n.body}</Text>}
-
-      {n.kind === 'finding' && producer && (
-        <Flexbox gap={4}>
-          <span className={styles.label}>来源</span>
-          <Flexbox horizontal gap={8} align="center" wrap="wrap">
-            <KindDot kind={producer.kind} />
-            <Text fontSize={13} style={{ cursor: 'pointer' }} onClick={() => onSelect(producer.id)}>
-              {producer.title}
-            </Text>
-            {producingAttempt && (
-              <>
-                <Text fontSize={12} type="secondary">
-                  第 {producingAttempt.n} 次尝试 · {producingAttempt.taskId} · {ago(clock.now - producingAttempt.ended)}
-                </Text>
-                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
-                  打开这次运行
-                </Button>
-                <Tag size="small">证据版本 #1</Tag>
-              </>
-            )}
-          </Flexbox>
-        </Flexbox>
-      )}
-
-      {!!n.humanTouches?.length && (
-        <Flexbox gap={4}>
-          <span className={styles.label}>人工参与</span>
-          {n.humanTouches.map((t, i) => (
-            <Flexbox key={i} horizontal gap={8} align="baseline">
-              <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ flexShrink: 0 }}>
-                {ago(clock.now - t.t)}
-              </Text>
-              <Text fontSize={13}>{t.text}</Text>
-            </Flexbox>
-          ))}
-        </Flexbox>
-      )}
-
-      {n.kind === 'work' && n.task && (
-        <Flexbox gap={4}>
-          <span className={styles.label}>负责人 Task</span>
-          <Flexbox horizontal gap={8} align="center">
-            <Text fontSize={13} className={shared.mono}>
-              {n.task.id}
-            </Text>
-            <Text fontSize={13}>{n.task.agent}</Text>
-            <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
-              打开会话
-            </Button>
-          </Flexbox>
-          {n.lastLine && <div className={shared.evidence}>{n.lastLine}</div>}
-        </Flexbox>
-      )}
-
-      {n.kind === 'work' && !!n.attempts?.length && (
-        <Flexbox gap={2}>
-          <span className={styles.label}>尝试记录</span>
-          {n.attempts.map((a) => (
-            <Flexbox key={a.n} gap={2} className={styles.ledgerLine}>
-              <Flexbox horizontal gap={8} align="center">
-                <Text fontSize={12} weight={600} style={{ flexShrink: 0 }}>
-                  第 {a.n} 次
-                </Text>
-                <Text fontSize={12} type={a.outcome === 'passed' ? 'success' : a.outcome === 'failed' ? 'danger' : 'secondary'} style={{ flexShrink: 0 }}>
-                  {a.outcome === 'passed' ? '通过' : a.outcome === 'failed' ? '未通过' : '失联'}
-                </Text>
-                <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ flexShrink: 0 }}>
-                  {Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}
-                </Text>
-                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />} style={{ marginLeft: 'auto' }} />
-              </Flexbox>
-              <Text fontSize={12} type="secondary">
-                {a.reason}
-              </Text>
-            </Flexbox>
-          ))}
-        </Flexbox>
-      )}
-
-      <Flexbox gap={4}>
-        <span className={styles.label}>在图里的位置</span>
-        {state.edges
-          .filter(([a, b]) => a === id || b === id)
-          .map(([a, b, kind]) => {
-            const other = a === id ? b : a;
-            const o = byId(other);
-            if (!o) return null;
-            return (
-              <Flexbox key={`${a}${b}${kind}`} horizontal gap={6} align="center" style={{ cursor: 'pointer' }} onClick={() => onSelect(other)}>
-                <KindDot kind={o.kind} />
-                <Text fontSize={12} type="secondary">
-                  {a === id ? `${REL[kind]} → ${o.title}` : `${o.title} → ${REL[kind]}这里`}
-                </Text>
-              </Flexbox>
-            );
-          })}
+export const NodeDetailTitle = memo<{ state: GoalState; frontier: Frontier; id: string }>(
+  ({ state, frontier, id }) => {
+    const { styles: shared } = useSharedStyles();
+    const n = state.nodes.find((x) => x.id === id);
+    if (!n) return null;
+    return (
+      <Flexbox horizontal gap={8} align="center" style={{ minWidth: 0 }}>
+        <KindDot kind={n.kind} />
+        <Text fontSize={12} className={shared.muted}>
+          {KIND_CN[n.kind]}
+        </Text>
+        <Text weight={600} ellipsis style={{ minWidth: 0 }}>
+          {n.title}
+        </Text>
+        <Text fontSize={12} type="secondary" style={{ flexShrink: 0 }}>
+          {nodeStateText(state.goal, n, frontier)}
+          {n.cost ? ` · ${usd(n.cost)}` : ''}
+        </Text>
       </Flexbox>
+    );
+  },
+);
 
-      {n.kind === 'finding' && (
-        <Flexbox horizontal gap={8} align="center">
-          <Button size="small" icon={<Icon icon={Lightbulb} />}>
-            基于这个结论开一条任务
-          </Button>
-          <Text fontSize={12} className={shared.muted}>
-            = addNode + leads_to
-          </Text>
+export const NodeDetail = memo<NodeDetailProps>(
+  ({ state, frontier, id, editing, onSelect, onStart }) => {
+    const { styles, cx } = useStyles();
+    const { styles: shared } = useSharedStyles();
+    const n = state.nodes.find((x) => x.id === id);
+    const [title, setTitle] = useState(n?.title ?? '');
+    const [desc, setDesc] = useState(n?.description ?? '');
+    const [prio, setPrio] = useState(n?.priority ?? 0);
+    const [deps, setDeps] = useState<string[]>(n?.dependsOn ?? []);
+    if (!n) return null;
+    const { goal } = state;
+    const byId = (x: string) => state.nodes.find((m) => m.id === x);
+    const editable = n.kind === 'work' && n.status === 'proposed';
+    const producer = n.kind === 'finding' && n.from ? byId(n.from) : undefined;
+    const producingAttempt = producer?.attempts?.find((a) => a.outcome === 'passed');
+    const otherWorks = state.nodes.filter((w) => w.kind === 'work' && w.id !== n.id && !w.terminal);
+
+    return (
+      <Flexbox gap={16}>
+        {editable && (
+          <Flexbox gap={10}>
+            <Flexbox gap={4}>
+              <span className={styles.label}>标题</span>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            </Flexbox>
+            <Flexbox gap={4}>
+              <span className={styles.label}>要做什么 · 交付什么</span>
+              <TextArea
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                autoSize={{ minRows: 3, maxRows: 8 }}
+                placeholder="写清允许的产出与完成标准，会进入负责人 Task 的指令"
+              />
+            </Flexbox>
+            <Flexbox gap={4}>
+              <span className={styles.label}>优先级</span>
+              <InputNumber
+                value={prio}
+                onChange={(v) => setPrio(Number(v ?? 0))}
+                style={{ width: 120 }}
+              />
+            </Flexbox>
+            <Flexbox gap={4}>
+              <span className={styles.label}>先等这些完成（依赖）</span>
+              <Flexbox gap={2}>
+                {otherWorks.map((w) => (
+                  <Checkbox
+                    key={w.id}
+                    checked={deps.includes(w.id)}
+                    onChange={(e) =>
+                      setDeps(e.target.checked ? [...deps, w.id] : deps.filter((d) => d !== w.id))
+                    }
+                  >
+                    <Text fontSize={13}>{w.title}</Text>
+                  </Checkbox>
+                ))}
+              </Flexbox>
+            </Flexbox>
+            <Flexbox horizontal gap={8} align="center" wrap="wrap">
+              <Button type="primary" size="small">
+                保存 <NewTag title="没有 goal.updateNode；今天只能 addNode / addEdge" />
+              </Button>
+              <Button size="small" icon={<Icon icon={ArrowUp} />}>
+                先做这个 <NewTag title="调优先级 = updateNode，未建模" />
+              </Button>
+              {goal.status !== 'planning' && onStart && (
+                <Button size="small" icon={<Icon icon={Play} />} onClick={() => onStart(n.id)}>
+                  现在开始 <NewTag title="并行派发：coordinator 每次 tick 只派一个节点（串行）" />
+                </Button>
+              )}
+              <Button size="small" danger icon={<Icon icon={Trash2} />}>
+                移除 <NewTag title="retire 一个未开始的任务：未建模" />
+              </Button>
+            </Flexbox>
+          </Flexbox>
+        )}
+
+        {!editable && n.description && <Text fontSize={13}>{n.description}</Text>}
+        {n.body && <Text fontSize={13}>{n.body}</Text>}
+
+        {n.kind === 'finding' && producer && (
+          <Flexbox gap={4}>
+            <span className={styles.label}>来源</span>
+            <Flexbox horizontal gap={8} align="center" wrap="wrap">
+              <KindDot kind={producer.kind} />
+              <Text
+                fontSize={13}
+                style={{ cursor: 'pointer' }}
+                onClick={() => onSelect(producer.id)}
+              >
+                {producer.title}
+              </Text>
+              {producingAttempt && (
+                <>
+                  <Text fontSize={12} type="secondary">
+                    第 {producingAttempt.n} 次尝试 · {producingAttempt.taskId} ·{' '}
+                    {ago(clock.now - producingAttempt.ended)}
+                  </Text>
+                  <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
+                    打开这次运行
+                  </Button>
+                  <Tag size="small">证据版本 #1</Tag>
+                </>
+              )}
+            </Flexbox>
+          </Flexbox>
+        )}
+
+        {!!n.humanTouches?.length && (
+          <Flexbox gap={4}>
+            <span className={styles.label}>人工参与</span>
+            {n.humanTouches.map((t, i) => (
+              <Flexbox key={i} horizontal gap={8} align="baseline">
+                <Text
+                  fontSize={12}
+                  className={cx(shared.muted, shared.mono)}
+                  style={{ flexShrink: 0 }}
+                >
+                  {ago(clock.now - t.t)}
+                </Text>
+                <Text fontSize={13}>{t.text}</Text>
+              </Flexbox>
+            ))}
+          </Flexbox>
+        )}
+
+        {n.kind === 'work' && n.task && (
+          <Flexbox gap={4}>
+            <span className={styles.label}>负责人 Task</span>
+            <Flexbox horizontal gap={8} align="center">
+              <Text fontSize={13} className={shared.mono}>
+                {n.task.id}
+              </Text>
+              <Text fontSize={13}>{n.task.agent}</Text>
+              <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
+                打开会话
+              </Button>
+            </Flexbox>
+            {n.lastLine && <div className={shared.evidence}>{n.lastLine}</div>}
+          </Flexbox>
+        )}
+
+        {n.kind === 'work' && !!n.attempts?.length && (
+          <Flexbox gap={2}>
+            <span className={styles.label}>尝试记录</span>
+            {n.attempts.map((a) => (
+              <Flexbox key={a.n} gap={2} className={styles.ledgerLine}>
+                <Flexbox horizontal gap={8} align="center">
+                  <Text fontSize={12} weight={600} style={{ flexShrink: 0 }}>
+                    第 {a.n} 次
+                  </Text>
+                  <Text
+                    fontSize={12}
+                    type={
+                      a.outcome === 'passed'
+                        ? 'success'
+                        : a.outcome === 'failed'
+                          ? 'danger'
+                          : 'secondary'
+                    }
+                    style={{ flexShrink: 0 }}
+                  >
+                    {a.outcome === 'passed' ? '通过' : a.outcome === 'failed' ? '未通过' : '失联'}
+                  </Text>
+                  <Text
+                    fontSize={12}
+                    className={cx(shared.muted, shared.mono)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}
+                  </Text>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<Icon icon={ExternalLink} />}
+                    style={{ marginLeft: 'auto' }}
+                  />
+                </Flexbox>
+                <Text fontSize={12} type="secondary">
+                  {a.reason}
+                </Text>
+              </Flexbox>
+            ))}
+          </Flexbox>
+        )}
+
+        <Flexbox gap={4}>
+          <span className={styles.label}>在图里的位置</span>
+          {state.edges
+            .filter(([a, b]) => a === id || b === id)
+            .map(([a, b, kind]) => {
+              const other = a === id ? b : a;
+              const o = byId(other);
+              if (!o) return null;
+              return (
+                <Flexbox
+                  key={`${a}${b}${kind}`}
+                  horizontal
+                  gap={6}
+                  align="center"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelect(other)}
+                >
+                  <KindDot kind={o.kind} />
+                  <Text fontSize={12} type="secondary">
+                    {a === id ? `${REL[kind]} → ${o.title}` : `${o.title} → ${REL[kind]}这里`}
+                  </Text>
+                </Flexbox>
+              );
+            })}
         </Flexbox>
-      )}
-    </Flexbox>
-  );
-});
+
+        {n.kind === 'finding' && (
+          <Flexbox horizontal gap={8} align="center">
+            <Button size="small" icon={<Icon icon={Lightbulb} />}>
+              基于这个结论开一条任务
+            </Button>
+            <Text fontSize={12} className={shared.muted}>
+              = addNode + leads_to
+            </Text>
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+  },
+);
 
 </script>
 <script type="text/plain" data-module="src/components/Graph/layout.ts">
-// Hand-placed layered layout for the prototype. Production uses a layered DAG layout engine.
+// Hand-placed layered layout: node positions fed to react-flow. Production computes them with a
+// layered DAG layout (e.g. dagre/elk) over the goal graph snapshot.
 
 import type { EdgeKind } from '../../types';
 
@@ -1996,6 +2564,70 @@ export const edgePath = (a: string, b: string, kind: EdgeKind) => {
   const mx = (x1 + x2) / 2;
   return `M ${x1} ${fc.cy} C ${mx} ${fc.cy}, ${mx} ${tc.cy}, ${x2} ${tc.cy}`;
 };
+
+</script>
+<script type="text/plain" data-module="src/components/SectionHeader.tsx">
+import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { createStyles } from 'antd-style';
+import type { LucideIcon } from 'lucide-react';
+import { memo } from 'react';
+
+// The section-header contract used by TaskAcceptance / TaskActivities:
+// Block clickable borderless · paddingBlock 4 / paddingInline 8 · 16px description-colored icon ·
+// 13px/500 secondary text · optional count Tag · rotating chevron. `extra` sits on the far right and
+// stops propagation. (src/features/AgentTasks/AgentTaskDetail/TaskAcceptanceHeader.tsx)
+
+const useStyles = createStyles(({ css, token }) => ({
+  arrow: css`
+    flex: none;
+    color: ${token.colorTextDescription};
+    transition: transform 0.2s;
+  `,
+  arrowOpen: css`
+    transform: rotate(90deg);
+  `,
+}));
+
+/** Same 16×16 chevron the Task accordions use (shared/AccordionArrowIcon.tsx). */
+const ArrowIcon = memo<{ isOpen?: boolean }>(({ isOpen }) => {
+  const { styles, cx } = useStyles();
+  return (
+    <svg className={cx(styles.arrow, isOpen && styles.arrowOpen)} width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+});
+
+interface SectionHeaderProps {
+  icon: LucideIcon;
+  title: string;
+  count?: number;
+  isOpen?: boolean;
+  extra?: React.ReactNode;
+  onToggle: () => void;
+}
+
+export const SectionHeader = memo<SectionHeaderProps>(({ icon, title, count, isOpen, extra, onToggle }) => {
+  const toggle = (
+    <Block clickable horizontal align="center" gap={8} paddingBlock={4} paddingInline={8} style={{ cursor: 'pointer', width: 'fit-content' }} variant="borderless" onClick={onToggle}>
+      <Icon color="var(--ant-color-text-description)" icon={icon} size={16} />
+      <Text color="var(--ant-color-text-secondary)" fontSize={13} weight={500}>
+        {title}
+      </Text>
+      {!!count && <Tag size="small">{count}</Tag>}
+      <ArrowIcon isOpen={isOpen} />
+    </Block>
+  );
+  if (!extra) return toggle;
+  return (
+    <Flexbox horizontal align="center" justify="space-between">
+      {toggle}
+      <Flexbox horizontal gap={4} align="center" onClick={(e) => e.stopPropagation()}>
+        {extra}
+      </Flexbox>
+    </Flexbox>
+  );
+});
 
 </script>
 <script type="text/plain" data-module="src/components/shared.tsx">
@@ -2159,19 +2791,44 @@ const RingSpinner = memo<{ size: number }>(({ size }) => {
   const { styles } = useSharedStyles();
   const r = (size - 2) / 2;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={styles.ring} style={{ display: 'block' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ant-color-warning)" strokeOpacity={0.35} strokeWidth={2} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ant-color-warning)" strokeWidth={2} strokeLinecap="round" strokeDasharray={`${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`} />
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={styles.ring}
+      style={{ display: 'block' }}
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--ant-color-warning)"
+        strokeOpacity={0.35}
+        strokeWidth={2}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--ant-color-warning)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray={`${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`}
+      />
     </svg>
   );
 });
 
 /** One glyph per execution semantic; `live` swaps the static running dot for the ring spinner. */
-export const StatusGlyph = memo<{ status: ExecStatus; live?: boolean; size?: number }>(({ status, live, size = 16 }) => {
-  if (status === 'running' && live) return <RingSpinner size={size} />;
-  const meta = STATUS_VISUALS[status];
-  return <Icon icon={meta.icon} size={size} color={meta.color} />;
-});
+export const StatusGlyph = memo<{ status: ExecStatus; live?: boolean; size?: number }>(
+  ({ status, live, size = 16 }) => {
+    if (status === 'running' && live) return <RingSpinner size={size} />;
+    const meta = STATUS_VISUALS[status];
+    return <Icon icon={meta.icon} size={size} color={meta.color} />;
+  },
+);
 
 const AGENT_AVATAR: Record<string, string> = {
   'Kimi Code': '🌙',
@@ -2527,7 +3184,7 @@ export const STEPS: Step[] = [
   {
     t: 35,
     label: '训练中',
-    note: '20 分钟过去。你回来看：还在动（2 分钟前写了新 checkpoint），val loss 已到 1.52。「写复现说明」排在后面——coordinator 一次只派一项。没有需要你做的。',
+    note: '20 分钟过去。你回来看：还在动（2 分钟前写了新 checkpoint），val loss 已到 1.52。「写复现说明」没有依赖，可以并行开始，只是 coordinator 一次只派一项、还没轮到它——你也可以在它的详情里直接开始。没有需要你做的。',
     fresh: [],
     apply: (s) => {
       const w = N(s, 'W2');
@@ -3164,8 +3821,8 @@ export interface FrontierItem {
   node: GoalNode;
   /** 0 = needs you, 1 = running, 2 = ready */
   rank: number;
-  /** For ready items: position in the serial dispatch queue (1-based). */
-  queue?: number;
+  /** Ready items: 1-based order the coordinator would pick them in (it dispatches one per tick). */
+  order?: number;
 }
 
 export interface BlockedItem {
@@ -3222,7 +3879,7 @@ export const computeFrontier = (state: GoalState): Frontier => {
   }
   items.sort((a, b) => a.rank - b.rank || (b.node.priority ?? 0) - (a.node.priority ?? 0));
   let q = 0;
-  for (const it of items) if (it.kind === 'ready') it.queue = ++q;
+  for (const it of items) if (it.kind === 'ready') it.order = ++q;
   return { items, blocked, needsYou: items.filter((i) => i.rank === 0).length };
 };
 
@@ -3281,8 +3938,7 @@ export const nodeStateText = (goal: GoalInfo, n: GoalNode, frontier: Frontier) =
     case 'proposed': {
       const b = frontier.blocked.find((x) => x.node.id === n.id);
       if (b) return `等待「${b.blockers[0].title}」`;
-      const it = frontier.items.find((x) => x.node.id === n.id);
-      return goal.status === 'planning' ? '排队中' : it?.queue ? `排队第 ${it.queue}` : '可以开始';
+      return goal.status === 'planning' ? '待开始' : '可以开始';
     }
     default:
       return n.status;
@@ -3467,6 +4123,7 @@ export interface GoalState {
         const makeRequire = (from) => (spec) => {
           const path = resolve(from, spec);
           if (!path) {
+            if (spec === '@xyflow/react') return __RF_NS__.default['@xyflow/react'];
             const m = __PROTO_DEPS_NS__.default[spec];
             if (!m) throw new Error('prototype runtime is missing module: ' + spec + ' — add it to entry.mjs and rebuild');
             return m;

@@ -1,6 +1,6 @@
 import { Drawer, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Lightbulb } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
 import { Activity } from './components/Activity';
@@ -10,6 +10,7 @@ import { FrontierList } from './components/Frontier/FrontierList';
 import { GoalHeader } from './components/GoalHeader';
 import { Graph, type GraphView } from './components/Graph/Graph';
 import { NodeDetail, NodeDetailTitle } from './components/Graph/NodeDetail';
+import { SectionHeader } from './components/SectionHeader';
 import { useSharedStyles } from './components/shared';
 import { STEPS, buildStep } from './data/steps';
 import { clock, usd } from './model/format';
@@ -31,36 +32,6 @@ const useStyles = createStyles(({ css }) => ({
   `,
 }));
 
-const Section = memo<{
-  title: string;
-  count?: number;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}>(({ title, count, defaultOpen = false, children }) => {
-  const { styles } = useSharedStyles();
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Flexbox gap={8}>
-      <Flexbox
-        horizontal
-        gap={6}
-        align="center"
-        className={styles.sectionHead}
-        onClick={() => setOpen(!open)}
-      >
-        <Icon icon={open ? ChevronDown : ChevronRight} size={14} />
-        <Text weight={600}>{title}</Text>
-        {count !== undefined && (
-          <Text fontSize={12} className={styles.muted}>
-            {count}
-          </Text>
-        )}
-      </Flexbox>
-      {open && children}
-    </Flexbox>
-  );
-});
-
 export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   const { styles } = useStyles();
   const [state, setState] = useState<GoalState>(() => buildStep(step));
@@ -68,6 +39,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   const [selected, setSelected] = useState<{ id: string; edit?: boolean } | null>(null);
   const [graphView, setGraphView] = useState<GraphView>('stage');
   const [fullscreen, setFullscreen] = useState(false);
+  const [findingsOpen, setFindingsOpen] = useState(true);
   const frontier = useMemo(() => computeFrontier(state), [state]);
   const freshIds = useMemo(() => new Set(STEPS[step].fresh), [step]);
   const now = clock.now;
@@ -312,20 +284,32 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           onFullscreen={setFullscreen}
           isDraft={state.goal.status === 'planning'}
         />
-        <Section title="结论" count={findingsCount} defaultOpen={findingsCount > 0}>
-          <Findings state={state} hotId={hotId} onHover={setHotId} onSelect={(id) => select(id)} />
-        </Section>
-        <Section title="目标与验收标准">
-          <Contract goal={state.goal} />
-        </Section>
-        <Section title="活动" count={state.log.length} defaultOpen>
-          <Activity
-            state={state}
-            onHover={setHotId}
-            onSelect={(id) => select(id)}
-            onComment={actions.comment}
+        <Flexbox gap={8}>
+          <SectionHeader
+            icon={Lightbulb}
+            title="结论"
+            count={findingsCount}
+            isOpen={findingsOpen}
+            onToggle={() => setFindingsOpen(!findingsOpen)}
           />
-        </Section>
+          {findingsOpen && (
+            <Flexbox paddingInline={12}>
+              <Findings
+                state={state}
+                hotId={hotId}
+                onHover={setHotId}
+                onSelect={(id) => select(id)}
+              />
+            </Flexbox>
+          )}
+        </Flexbox>
+        <Contract goal={state.goal} />
+        <Activity
+          state={state}
+          onHover={setHotId}
+          onSelect={(id) => select(id)}
+          onComment={actions.comment}
+        />
       </Flexbox>
       <Drawer
         open={!!selected}

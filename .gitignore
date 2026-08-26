@@ -166,3 +166,7 @@ docs/superpowers/
 # design-prototype generated runtime (see .claude/skills/design-prototype)
 lobe-prototype-runtime.js
 babel.min.js
+
+# design-prototype: react-flow bundle + vendored css (generated)
+rf-runtime.js
+xyflow.css

@@ -1,4 +1,5 @@
-// Hand-placed layered layout for the prototype. Production uses a layered DAG layout engine.
+// Hand-placed layered layout: node positions fed to react-flow. Production computes them with a
+// layered DAG layout (e.g. dagre/elk) over the goal graph snapshot.
 
 import type { EdgeKind } from '../../types';
 
