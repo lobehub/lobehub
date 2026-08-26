@@ -937,6 +937,56 @@ describe('SessionModel', () => {
       expect(otherUserSessions).toHaveLength(2);
     });
 
+    // Regression for LOBE-11930: `deleteAll` cascades every one of this
+    // user's agents away via a raw `trx.delete(agents)` that bypasses both
+    // `AgentModel.delete` and this class's own `clearOrphanAgent` — the same
+    // bypass `delete()` / `batchDelete()` already close. Any in-flight Agent
+    // Share visitor run on one of those agents must still be snapshotted
+    // BEFORE the cascade and reported through `onShareRunsInterrupted`.
+    it('reports in-flight Agent Share visitor runs on every deleted agent', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new SessionModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(sessions).values({ id: '1', userId });
+      await serverDB.insert(agents).values({ id: 'delete-all-share-agent', userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values([{ agentId: 'delete-all-share-agent', sessionId: '1', userId }]);
+      await serverDB.insert(topics).values({
+        id: 'delete-all-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId: 'delete-all-share-agent',
+        senderId: 'visitor-delete-all',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      await modelWithCallback.deleteAll();
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'delete-all-visitor-topic' },
+      ]);
+    });
+
+    it('does not call onShareRunsInterrupted when no agent has an in-flight visitor run', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new SessionModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(sessions).values({ id: '1', userId });
+      await serverDB.insert(agents).values({ id: 'quiet-delete-all-agent', userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values([{ agentId: 'quiet-delete-all-agent', sessionId: '1', userId }]);
+
+      await modelWithCallback.deleteAll();
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
+    });
+
     it('should delete associated data when deleting all sessions', async () => {
       // Create test data with associated records
       await serverDB.transaction(async (trx) => {

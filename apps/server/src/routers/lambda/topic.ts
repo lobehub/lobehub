@@ -33,6 +33,7 @@ import { chatGroups } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import { FileService } from '@/server/services/file';
 import { after } from '@/server/utils/scheduleAfterResponse';
 import { type BatchTaskResult } from '@/types/service';
@@ -75,7 +76,16 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       heteroSessionImporterRepo: new HeteroSessionImporterRepo(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
+      // `onShareRunsInterrupted` covers every bulk/batch topic sweep below
+      // (`removeAllTopics`, `batchDelete`, `batchDeleteByAgentId`,
+      // `batchDeleteByGroupId`, `batchDeleteBySessionId`) and `removeTopic`'s
+      // single delete — each snapshots in-flight Agent Share visitor runs
+      // itself, BEFORE its own delete, and hands the snapshot here once its
+      // transaction has committed. See `TopicModelOptions
+      // .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId, {
+        onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
+      }),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
     },
   });

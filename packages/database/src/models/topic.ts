@@ -333,15 +333,45 @@ export type ActiveShareRun = {
   topicId: string;
 };
 
+export interface TopicModelOptions {
+  /**
+   * Called with the snapshot of Agent Share visitor runs that were still
+   * in-flight on a creator-initiated bulk topic sweep (`deleteAll` /
+   * `batchDelete` / `batchDeleteByAgentId` / `batchDeleteByGroupId` /
+   * `batchDeleteBySessionId`) — AFTER the deleting transaction has committed.
+   *
+   * WHY every one of those sweeps needs this: a share-visitor topic is owned
+   * by the creator (`topics.userId` = creator, `topics.senderId` = visitor —
+   * see `notShareVisitorTopic`), so `this.mine()` matches it exactly like any
+   * other topic the creator owns. Before this option existed, `deleteAll()`
+   * (the checked `topic.removeAllTopics` router path) deleted a visitor's
+   * running topic without ever interrupting the run: the operation row
+   * survived with `topicId` set to null, the visitor's `shareChat
+   * .interruptTask` could no longer find the topic to authorize the stop, and
+   * the run kept consuming the creator's tools/budget until it finished on
+   * its own. Same shape as `AgentModelOptions.onShareRunsInterrupted` /
+   * `SessionModelOptions.onShareRunsInterrupted` — kept in sync. See
+   * LOBE-11930.
+   */
+  onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
+}
+
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: TopicModelOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
   }
 
   private ownership = () =>
@@ -1140,6 +1170,42 @@ export class TopicModel {
   };
 
   /**
+   * Scope-generic sibling of `findActiveVisitorRunTopics`, for bulk creator
+   * sweeps (`deleteAll` / `batchDelete*`) that are not scoped to one agent —
+   * `findActiveVisitorRunTopics` requires an `agentId` and cannot see a
+   * visitor run on a DIFFERENT agent that a user-wide `deleteAll()` (or an
+   * arbitrary-id `batchDelete()`) is about to delete out from under.
+   *
+   * `extraMatch` mirrors the exact predicate of the destructive sweep this
+   * snapshot guards (e.g. `inArray(topics.id, ids)`, `matchSession(...)`,
+   * `matchGroup(...)`, or omitted entirely for `deleteAll`) so the snapshot
+   * and the delete never drift apart. See `TopicModelOptions
+   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   */
+  private findActiveVisitorRunTopicsMatching = async (
+    extraMatch?: SQL,
+  ): Promise<ActiveShareRun[]> => {
+    const rows = await this.db
+      .select({ id: topics.id, metadata: topics.metadata })
+      .from(topics)
+      .where(
+        and(
+          this.mine(),
+          isNotNull(topics.senderId),
+          sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+          extraMatch,
+        ),
+      );
+
+    return rows
+      .map((row) => ({
+        operationId: row.metadata?.runningOperation?.operationId,
+        topicId: row.id,
+      }))
+      .filter((row): row is ActiveShareRun => Boolean(row.operationId));
+  };
+
+  /**
    * Every share-visitor topic on this agent with a still-open
    * `runningOperation` marker — the set of in-flight visitor runs a share
    * revocation (visibility flipped off `link`, or the share row deleted) must
@@ -1489,70 +1555,195 @@ export class TopicModel {
 
   /**
    * Delete a session, also delete all messages and topics associated with it.
+   *
+   * Snapshots any in-flight Agent Share visitor run on this exact topic
+   * BEFORE the delete, same as the bulk sweeps below — a single-topic delete
+   * has the identical bug shape (see `TopicModelOptions
+   * .onShareRunsInterrupted`'s JSDoc) even though the creator's own topic
+   * list never surfaces a visitor topic to click delete on (`notShareVisitor`
+   * filters every read path). Fail closed rather than rely on that UI gap.
    */
   delete = async (id: string) => {
-    return this.db.delete(topics).where(and(eq(topics.id, id), this.ownership()));
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findActiveVisitorRunTopicsMatching(eq(topics.id, id));
+
+      return trx.delete(topics).where(and(eq(topics.id, id), this.ownership()));
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   /**
    * Deletes multiple topics based on the sessionId.
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
+   *
+   * Snapshots in-flight Agent Share visitor runs matching this exact session
+   * scope BEFORE the delete — see `TopicModelOptions
+   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
    */
   batchDeleteBySessionId = async (
     sessionId?: string | null,
     options?: { restrictToCreator?: boolean },
   ) => {
-    return this.db
-      .delete(topics)
-      .where(
-        and(
-          this.matchSession(sessionId),
-          options?.restrictToCreator ? this.mine() : this.ownership(),
-        ),
-      );
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findActiveVisitorRunTopicsMatching(this.matchSession(sessionId));
+
+      return trx
+        .delete(topics)
+        .where(
+          and(
+            this.matchSession(sessionId),
+            options?.restrictToCreator ? this.mine() : this.ownership(),
+          ),
+        );
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   /**
    * Deletes multiple topics based on the groupId.
    * `restrictToCreator` limits the sweep to the caller's own rows in workspace mode.
+   *
+   * Snapshots in-flight Agent Share visitor runs matching this exact group
+   * scope BEFORE the delete — see `TopicModelOptions
+   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
    */
   batchDeleteByGroupId = async (
     groupId?: string | null,
     options?: { restrictToCreator?: boolean },
   ) => {
-    return this.db
-      .delete(topics)
-      .where(
-        and(this.matchGroup(groupId), options?.restrictToCreator ? this.mine() : this.ownership()),
-      );
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findActiveVisitorRunTopicsMatching(this.matchGroup(groupId));
+
+      return trx
+        .delete(topics)
+        .where(
+          and(
+            this.matchGroup(groupId),
+            options?.restrictToCreator ? this.mine() : this.ownership(),
+          ),
+        );
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   /**
    * Deletes all topics matching the given agentId (`topics.agentId`).
    * `restrictToCreator` limits the sweep to the caller's own rows (workspace
    * non-owner members must not clear teammates' topics).
+   *
+   * Snapshots in-flight Agent Share visitor runs on this agent BEFORE the
+   * delete via the same `findActiveVisitorRunTopics` every other agent-scoped
+   * deletion path uses — see `TopicModelOptions.onShareRunsInterrupted`'s
+   * JSDoc and LOBE-11930.
    */
   batchDeleteByAgentId = async (agentId: string, options?: { restrictToCreator?: boolean }) => {
-    return this.db
-      .delete(topics)
-      .where(
-        and(
-          options?.restrictToCreator ? this.mine() : this.ownership(),
-          eq(topics.agentId, agentId),
-        ),
-      );
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findActiveVisitorRunTopics(agentId);
+
+      return trx
+        .delete(topics)
+        .where(
+          and(
+            options?.restrictToCreator ? this.mine() : this.ownership(),
+            eq(topics.agentId, agentId),
+          ),
+        );
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   /**
    * Deletes multiple topics and all messages associated with them in a transaction.
+   *
+   * Snapshots in-flight Agent Share visitor runs among this exact id set
+   * BEFORE the delete — see `TopicModelOptions.onShareRunsInterrupted`'s
+   * JSDoc and LOBE-11930.
    */
   batchDelete = async (ids: string[]) => {
-    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findActiveVisitorRunTopicsMatching(inArray(topics.id, ids));
+
+      return trx.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
+  /**
+   * Deletes every topic this user owns — the checked `topic.removeAllTopics`
+   * router path.
+   *
+   * Snapshots EVERY in-flight Agent Share visitor run across every agent
+   * BEFORE the delete, not just one agent's: unlike `batchDeleteByAgentId`,
+   * this sweep is not scoped to a single agent, so it uses the scope-generic
+   * `findActiveVisitorRunTopicsMatching` with no extra predicate — the exact
+   * bug this method previously had (LOBE-11930's "bulk topic deletion"
+   * report): a visitor's running topic was deleted with no interrupt, the
+   * operation row survived with `topicId` set to null, and the visitor's
+   * `shareChat.interruptTask` could no longer find the topic to authorize the
+   * stop. See `TopicModelOptions.onShareRunsInterrupted`'s JSDoc.
+   */
   deleteAll = async () => {
-    return this.db.delete(topics).where(this.mine());
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      activeShareRuns = await new TopicModel(
+        trx as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).findActiveVisitorRunTopicsMatching();
+
+      return trx.delete(topics).where(this.mine());
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   // **************** Update *************** //
