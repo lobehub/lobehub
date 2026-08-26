@@ -69,6 +69,15 @@ jobs:
           fi
           echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
 
+  renderer-ota:
+    name: Publish Renderer OTA
+    needs: [check-beta]
+    if: needs.check-beta.outputs.is_beta == 'true'
+    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    with:
+      channel: beta
+    secrets: inherit
+
   test:
     name: Code quality check
     needs: [check-beta]

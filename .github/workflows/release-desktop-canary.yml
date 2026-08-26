@@ -198,6 +198,15 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
+  renderer-ota:
+    name: Publish Renderer OTA
+    needs: [calculate-version]
+    if: needs.calculate-version.outputs.should_build == 'true'
+    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    with:
+      channel: canary
+    secrets: inherit
+
   # ============================================
   # 代码质量检查
   # ============================================

@@ -13,6 +13,12 @@ name: Release Desktop Renderer OTA
 # ============================================
 
 on:
+  workflow_call:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       channel:
@@ -26,7 +32,7 @@ on:
         default: canary
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.channel }}
+  group: desktop-renderer-ota-${{ inputs.channel }}
   cancel-in-progress: true
 
 permissions: read-all
