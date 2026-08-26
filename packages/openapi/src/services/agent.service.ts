@@ -125,9 +125,19 @@ export class AgentService extends BaseService {
   /**
    * Update an agent
    * @param request Update request parameters
+   * @param options.onShareReset Invoked when this write actually flips a
+   *   `link` share back to `private` (see `writeAgentConfigWithShareReset`'s
+   *   `onShareReset`). `packages/openapi` cannot import `AiAgentService`
+   *   (apps/server) to schedule the visitor-run interrupt itself — this
+   *   package must not depend on an app — so the caller (the controller,
+   *   which forwards it to the HTTP boundary that CAN reach apps/server) has
+   *   to supply the hook. See LOBE-11930 hole 2.
    * @returns Updated Agent info
    */
-  async updateAgent(request: UpdateAgentRequest): ServiceResult<AgentDetailResponse> {
+  async updateAgent(
+    request: UpdateAgentRequest,
+    options?: { onShareReset?: (params: { agentId: string; ownerId: string }) => void },
+  ): ServiceResult<AgentDetailResponse> {
     this.log('info', 'update agent', { id: request.id, title: request.title });
 
     try {
@@ -221,6 +231,8 @@ export class AgentService extends BaseService {
       // See `writeAgentConfigWithShareReset`'s JSDoc and LOBE-11930.
       const updatedAgent = await writeAgentConfigWithShareReset(this.db, {
         agentId: request.id,
+        onShareReset: (agentId) =>
+          options?.onShareReset?.({ agentId, ownerId: existingAgent.userId }),
         // `updateData` may legitimately carry an explicit `null` for either
         // field (a caller-requested clear), so branch on key presence rather
         // than `??` — a `??` fallback would silently undo an intentional

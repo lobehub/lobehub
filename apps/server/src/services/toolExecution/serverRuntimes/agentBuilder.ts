@@ -16,6 +16,7 @@ import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
+import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
@@ -36,7 +37,13 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     }
     const userId = context.userId;
 
-    const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
+    // `updateAgentConfig`/`updatePrompt` below can set `model`/`agencyConfig`
+    // via `agentModel.updateConfig`/`update` — the Agent Builder tool is one
+    // of the three surfaces LOBE-11930 hole 2 names explicitly. Wiring the
+    // interrupt here closes it for THIS surface.
+    const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId, {
+      onShareReset: scheduleShareRunInterruptOnReset(context.serverDB, userId),
+    });
     const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
     const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
     const discoverService = new DiscoverService();

@@ -21,6 +21,7 @@ import {
   RedisKeys,
 } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
+import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 
 import { type UpdateAgentResult } from './type';
 
@@ -62,7 +63,15 @@ export class AgentService {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
-    this.agentModel = new AgentModel(db, userId, workspaceId);
+    // `updateAgentConfig` below routes `model`/`agencyConfig` writes through
+    // `AgentModel.updateConfig` → `writeAgentConfigWithShareReset`. Wiring the
+    // interrupt here (instead of only at the `agentModel` constructed
+    // directly in `agent.ts`'s router middleware) is what actually closes
+    // LOBE-11930 hole 2 for the mainstream "edit agent settings" UI path,
+    // which calls this service, not `ctx.agentModel` directly.
+    this.agentModel = new AgentModel(db, userId, workspaceId, {
+      onShareReset: scheduleShareRunInterruptOnReset(db, userId),
+    });
     this.userModel = new UserModel(db, userId);
   }
 

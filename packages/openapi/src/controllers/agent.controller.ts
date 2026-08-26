@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
+import { AGENT_SHARE_RESET_SIGNAL_HEADER } from '../const/shareResetSignal';
 import { AgentService } from '../services/agent.service';
 import type {
   AgentDeleteRequest,
@@ -72,7 +73,18 @@ export class AgentController extends BaseController {
 
       const db = await this.getDatabase();
       const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
-      const updatedAgent = await agentService.updateAgent(updateRequest);
+      const updatedAgent = await agentService.updateAgent(updateRequest, {
+        // `packages/openapi` cannot reach `AiAgentService` (apps/server) to
+        // interrupt in-flight visitor runs itself — signal the reset via a
+        // response header instead, so the process that mounts this Hono app
+        // (`src/app/(backend)/api/v1/[[...route]]/route.ts`, which DOES have
+        // `@/server/*` access) can schedule the interrupt after the response
+        // is built. Stripped from the response before it reaches the API
+        // caller — see that route file. See LOBE-11930 hole 2.
+        onShareReset: ({ agentId, ownerId }) => {
+          c.header(AGENT_SHARE_RESET_SIGNAL_HEADER, `${ownerId}:${agentId}`);
+        },
+      });
 
       return this.success(c, updatedAgent, 'Agent updated successfully');
     } catch (error) {

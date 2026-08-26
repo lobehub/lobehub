@@ -24,15 +24,31 @@ export type SessionOrphanDeletionGuard = (params: {
   executor: LobeChatDatabase;
 }) => Promise<void>;
 
+export interface SessionModelOptions {
+  /**
+   * Forwarded to `writeAgentConfigWithShareReset` from `updateConfig()` — see
+   * that function's `onShareReset` JSDoc and `AgentModelOptions` (same
+   * pattern, kept in sync). See LOBE-11930 hole 2.
+   */
+  onShareReset?: (agentId: string) => void;
+}
+
 export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private onShareReset?: (agentId: string) => void;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: SessionModelOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.onShareReset = options?.onShareReset;
   }
 
   private ownership = () =>
@@ -553,6 +569,7 @@ export class SessionModel {
      */
     await writeAgentConfigWithShareReset(this.db, {
       agentId: session.agent.id,
+      onShareReset: this.onShareReset,
       resultingConfig: mergedValue,
       touchesHeterogeneityFields:
         Object.hasOwn(data, 'model') || Object.hasOwn(data, 'agencyConfig'),

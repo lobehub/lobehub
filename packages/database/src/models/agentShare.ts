@@ -213,6 +213,52 @@ export class AgentShareModel {
     });
 
   /**
+   * Re-validate a share is still `link` immediately before a visitor run
+   * creates its operation, guarded by the SAME `agents.id FOR UPDATE` lock
+   * `updateVisibility` / `deleteByAgentId` (revocation) and
+   * `writeAgentConfigWithShareReset` (config-triggered reset, see
+   * `packages/database/src/utils/agentConfigShareReset.ts`) already take via
+   * `withOwnedPersonalAgentLock`.
+   *
+   * WHY here and not only at `findByShareIdWithAccessCheck`: that check runs
+   * once, at the top of `shareChat.execAgent`, long before the operation is
+   * actually created — `AiAgentService.execAgentWithReservation` resolves
+   * agent config, tools, and knowledge bases, and persists messages in
+   * between (thousands of lines of work, including real I/O). A revoke
+   * landing in that window used to be invisible to the in-flight request:
+   * `interruptActiveShareRuns`'s post-commit query found no
+   * `runningOperation` yet (the operation hadn't been created), and the
+   * operation created afterwards was then unstoppable by the visitor
+   * (`shareChat.interruptTask` re-checks visibility and gets `FORBIDDEN`).
+   * Taking the same row lock revocation/reset use forces one strict
+   * ordering: whichever side — this recheck, or a concurrent
+   * revoke/config-reset — commits its transaction first is the one the other
+   * observes. A revoke that already committed is always seen here, so this
+   * run fails closed instead of creating an operation the visitor can no
+   * longer stop. See LOBE-11930 hole 1.
+   *
+   * Deliberately narrow: only the `visibility` column is re-read (not
+   * `isHeterogeneousAgentConfig`, which `updateVisibility` already enforces
+   * on the ONLY path that can set `link`) — a broader check would duplicate
+   * `writeAgentConfigWithShareReset`'s own heterogeneity gate and risk
+   * drifting from it.
+   */
+  assertRunnableForVisitor = async (agentId: string): Promise<void> => {
+    const runnable = await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const [share] = await tx
+        .select({ visibility: agentShares.visibility })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId));
+
+      return share?.visibility === 'link';
+    });
+
+    if (!runnable) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+    }
+  };
+
+  /**
    * Update share visibility for a personally owned agent.
    *
    * Publishing (`link`) re-validates `isHeterogeneousAgentConfig` here, AFTER

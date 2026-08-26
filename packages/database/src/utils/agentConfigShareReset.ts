@@ -14,6 +14,25 @@ interface HeterogeneityCheckInput {
 interface WriteAgentConfigWithShareResetParams {
   /** Agent ID whose `agentShares` row (if any) must be reset. */
   agentId: string;
+  /**
+   * Invoked synchronously, AFTER this function's transaction has already
+   * committed, but ONLY when the write actually flipped a non-private share
+   * back to `private` (not merely "was heterogeneous enough to check" —
+   * `mayNeedShareReset` alone does not imply a row changed, e.g. the share
+   * was already `private` or didn't exist).
+   *
+   * WHY this hook exists: this function only flips `agentShares.visibility`.
+   * It does NOT stop an operation that is already running against the OLD
+   * (now-invalid) config snapshot under the creator's credentials/budget —
+   * that requires `AiAgentService.interruptActiveShareRuns`, which lives in
+   * `apps/server` and this package (`packages/database`) cannot import. Every
+   * caller that CAN reach the server layer (a tRPC procedure, a tool
+   * executor, an OpenAPI controller) MUST pass a callback here that schedules
+   * that interrupt (typically via `after()`), mirroring what
+   * `agentShareRouter.disableShare` / `updateVisibility` already do for
+   * explicit revocation. See LOBE-11930 hole 2.
+   */
+  onShareReset?: (agentId: string) => void;
   /** Post-merge `model` / `agencyConfig` that the write is about to persist. */
   resultingConfig: HeterogeneityCheckInput;
   /** Whether this write touches `model` or `agencyConfig` — skip the heterogeneity check otherwise, so a plain title/plugin/etc. update never pays for the extra query. */
@@ -60,23 +79,40 @@ export async function writeAgentConfigWithShareReset(
   db: LobeChatDatabase,
   params: WriteAgentConfigWithShareResetParams,
 ) {
-  const { agentId, resultingConfig, touchesHeterogeneityFields, updateData, where } = params;
+  const { agentId, onShareReset, resultingConfig, touchesHeterogeneityFields, updateData, where } =
+    params;
 
   const mayNeedShareReset =
     touchesHeterogeneityFields && isHeterogeneousAgentConfig(resultingConfig);
 
-  return db.transaction(async (trx) => {
+  const { updated, didResetShare } = await db.transaction(async (trx) => {
     await trx.select({ id: agents.id }).from(agents).where(where).for('update');
 
     const [updated] = await trx.update(agents).set(updateData).where(where).returning();
 
+    let didResetShare = false;
     if (mayNeedShareReset) {
-      await trx
+      // `.returning()` here is load-bearing, not cosmetic: `mayNeedShareReset`
+      // is only a possibility check (the new config is heterogeneous), it does
+      // NOT mean a row actually flipped — the share may already be `private`
+      // or not exist at all. `onShareReset` must fire only on an ACTUAL
+      // transition, so a caller's post-commit interrupt never fires (and pays
+      // its DB round-trip) for a no-op write.
+      const resetRows = await trx
         .update(agentShares)
         .set({ updatedAt: new Date(), visibility: 'private' })
-        .where(and(eq(agentShares.agentId, agentId), ne(agentShares.visibility, 'private')));
+        .where(and(eq(agentShares.agentId, agentId), ne(agentShares.visibility, 'private')))
+        .returning({ agentId: agentShares.agentId });
+      didResetShare = resetRows.length > 0;
     }
 
-    return updated ?? null;
+    return { didResetShare, updated: updated ?? null };
   });
+
+  // Fired only after the transaction above has committed — `onShareReset`
+  // callers schedule runtime side effects (device gateway calls, operation
+  // interrupts) that must never fire on a rollback. See this param's JSDoc.
+  if (didResetShare) onShareReset?.(agentId);
+
+  return updated;
 }

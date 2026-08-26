@@ -21,6 +21,7 @@ import {
 import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
+import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
@@ -41,7 +42,12 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       throw new Error('userId and serverDB are required for Agent Management execution');
     }
 
-    const agentModel = new AgentModel(serverDB, userId, context.workspaceId);
+    // `updateAgent`/`updatePrompt` below can set `model`/`agencyConfig` via
+    // `agentModel.updateConfig`/`update` — see LOBE-11930 hole 2 and
+    // `agentBuilder.ts`'s identical wiring for the sibling Agent Builder tool.
+    const agentModel = new AgentModel(serverDB, userId, context.workspaceId, {
+      onShareReset: scheduleShareRunInterruptOnReset(serverDB, userId),
+    });
     const pluginModel = new PluginModel(serverDB, userId, context.workspaceId);
     const discoverService = new DiscoverService();
 
