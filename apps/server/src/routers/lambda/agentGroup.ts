@@ -37,6 +37,8 @@ import { GROUP_MEMBER_ROLES } from '@/database/utils/groupMembership';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
+import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
@@ -162,8 +164,23 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 
   return opts.next({
     ctx: {
-      agentGroupRepo: new AgentGroupRepository(ctx.serverDB, ctx.userId, wsId),
-      agentGroupService: new AgentGroupService(ctx.serverDB, ctx.userId, wsId),
+      // `onShareReset` closes LOBE-11930's transfer-race hole for
+      // `transferToWorkspace`'s own `agentShares` reset (a group-owned
+      // agent's share), including the already-running case via its
+      // `targetWorkspaceId` param — see
+      // `AgentGroupRepositoryOptions.onShareReset`'s JSDoc and
+      // `scheduleShareRunInterruptOnReset`'s JSDoc.
+      agentGroupRepo: new AgentGroupRepository(ctx.serverDB, ctx.userId, wsId, {
+        onShareReset: scheduleShareRunInterruptOnReset(ctx.serverDB, ctx.userId),
+      }),
+      // `onShareRunsInterrupted` closes LOBE-11930's group-delete bypass:
+      // `AgentGroupService.deleteGroup` -> `ChatGroupModel.delete` removes a
+      // group's owned member agents directly, which can carry their own
+      // Agent Share the same as any personal agent — see
+      // `ChatGroupModelOptions.onShareRunsInterrupted`'s JSDoc.
+      agentGroupService: new AgentGroupService(ctx.serverDB, ctx.userId, wsId, {
+        onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
+      }),
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       editLockService: new EditLockService(ctx.userId),

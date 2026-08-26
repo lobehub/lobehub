@@ -6,13 +6,24 @@ import { type PartialDeep } from 'type-fest';
 
 import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
-import { ChatGroupModel } from '@/database/models/chatGroup';
+import { ChatGroupModel, type ChatGroupModelOptions } from '@/database/models/chatGroup';
 import { type UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
 type DefaultAgentConfig = Awaited<ReturnType<UserModel['getUserSettingsDefaultAgentConfig']>>;
+
+export interface AgentGroupServiceOptions {
+  /**
+   * Forwarded to `ChatGroupModel`'s `onShareRunsInterrupted` — see
+   * `ChatGroupModelOptions.onShareRunsInterrupted`'s JSDoc
+   * (`packages/database/src/models/chatGroup.ts`). `deleteGroup` below is the
+   * only production caller of `ChatGroupModel.delete`, so this is the one
+   * construction site that needs a real callback. See LOBE-11930.
+   */
+  onShareRunsInterrupted?: ChatGroupModelOptions['onShareRunsInterrupted'];
+}
 
 /**
  * ChatGroup Service
@@ -26,10 +37,17 @@ export class AgentGroupService {
   private readonly chatGroupModel: ChatGroupModel;
   private readonly agentGroupRepo: AgentGroupRepository;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: AgentGroupServiceOptions,
+  ) {
     this.userId = userId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
-    this.chatGroupModel = new ChatGroupModel(db, userId, workspaceId);
+    this.chatGroupModel = new ChatGroupModel(db, userId, workspaceId, {
+      onShareRunsInterrupted: options?.onShareRunsInterrupted,
+    });
     this.agentGroupRepo = new AgentGroupRepository(db, userId, workspaceId);
   }
 
