@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  emitToolOutcomeSafely: vi.fn().mockResolvedValue(undefined),
   findAll: vi.fn(),
   findById: vi.fn(),
   findByName: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock('@/helpers/skillFilters', () => ({
 }));
 
 vi.mock('@/server/services/agentSignal/procedure', () => ({
-  emitToolOutcomeSafely: vi.fn().mockResolvedValue(undefined),
+  emitToolOutcomeSafely: mocks.emitToolOutcomeSafely,
   resolveToolOutcomeScope: vi.fn(() => ({ scope: 'agent', scopeKey: 'agent-1' })),
 }));
 
@@ -185,6 +186,68 @@ describe('activatorRuntime', () => {
       const result = await runtime.activateSkill({ name: 'user-skill' });
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('activateSkill — Agent Signal suppression for share visitors', () => {
+    beforeEach(() => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+            }
+          : undefined,
+      );
+    });
+
+    /**
+     * Regression for LOBE-11930 P1: `emitActivationOutcome` must forward
+     * `context.agentShare` into `emitToolOutcomeSafely` so the choke point in
+     * `emitToolOutcome.ts` (`agentShare` presence check) can suppress the
+     * write — otherwise a successful visitor `activateSkill` call would write
+     * creator-scoped procedure state / reach self-reflection under
+     * `context.userId` (the share creator), never the visitor.
+     */
+    it('forwards the agentShare marker so the activation outcome cannot enter Agent Signal', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const agentShare = {
+        agentId: 'agent-1',
+        enabledToolIds: ['user-skill-identifier'],
+        visitorUserId: 'visitor-1',
+      };
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        agentShare,
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(true);
+      expect(mocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+        expect.objectContaining({ agentShare }),
+      );
+    });
+
+    it('omits the agentShare marker for a non-share run', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(mocks.emitToolOutcomeSafely).toHaveBeenCalledWith(
+        expect.objectContaining({ agentShare: undefined }),
+      );
     });
   });
 });

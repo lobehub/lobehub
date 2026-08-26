@@ -42,6 +42,15 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       });
 
       await emitToolOutcomeSafely({
+        // LOBE-11930 P1: `activateSkill`/`markActivated` resolve independently
+        // of the assembled tool set (see `isSkillAllowedForShare` above), so a
+        // share visitor can reach them through `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`.
+        // This emitter always stamps `context.userId` — the share creator,
+        // never `context.agentShare.visitorUserId` — so without this marker it
+        // would write creator-scoped procedure state and could enqueue a
+        // creator-scoped self-reflection run from a visitor's turn. See
+        // `agentShare`'s JSDoc on `EmitToolOutcomeInput` for the choke point.
+        agentShare: context.agentShare,
         apiName: 'activateSkill',
         context: { agentId: context.agentId, userId: context.userId },
         domainKey: 'skill:builtin-skill',

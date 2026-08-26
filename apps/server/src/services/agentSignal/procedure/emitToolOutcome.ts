@@ -13,6 +13,24 @@ import { createProcedureRecord, writeProcedureRecordField } from './record';
  * Direct tool outcome emission input.
  */
 export interface EmitToolOutcomeInput {
+  /**
+   * Share-visitor marker forwarded from `ToolExecutionContext.agentShare`.
+   * ANY truthy value here — even a partial/malformed one — suppresses this
+   * whole emission (see {@link isShareVisitorOutcome}). This field is the
+   * single choke point every direct tool-outcome emitter (activator, memory,
+   * agent-documents, and any future one) funnels through: `context.userId`
+   * below is always the share **creator** for a visitor run (the executing
+   * `AiAgentService` is instantiated with `share.ownerId`, never
+   * `agentShare.visitorUserId` — see `shareChat.ts`), so a caller that
+   * forgets its own per-call-site guard still fails closed here instead of
+   * writing creator-scoped procedure state or enqueuing self-reflection work
+   * for a visitor turn. Fixed for LOBE-11930 P1: `activatorRuntime`'s
+   * `emitActivationOutcome` called this machinery unconditionally on every
+   * share-visitor `activateSkill`/`markActivated` call, bypassing the
+   * `!shareGate` guard that only covered the generic `agent.user.message`
+   * signal (`aiAgent/index.ts`).
+   */
+  agentShare?: unknown;
   /** Tool API method name. */
   apiName?: string;
   /** Agent Signal execution context used by async source enqueue. */
@@ -110,6 +128,25 @@ export const resolveToolOutcomeScope = (input: {
   return { scope, scopeKey };
 };
 
+/**
+ * Whether an `EmitToolOutcomeInput` originates from a shared-agent visitor
+ * run and must therefore never enter Agent Signal.
+ *
+ * Use when:
+ * - `recordToolOutcome` / `emitToolOutcome` decide whether to write anything
+ *
+ * Expects:
+ * - `input.agentShare` is forwarded as-is from `ToolExecutionContext.agentShare`
+ *   (or omitted entirely for a non-share run)
+ *
+ * Returns:
+ * - `true` for any non-nullish `agentShare` value, including an incomplete
+ *   or malformed one — presence alone is enough to fail closed, since this
+ *   function has no way to validate the marker's shape
+ */
+const isShareVisitorOutcome = (input: Pick<EmitToolOutcomeInput, 'agentShare'>): boolean =>
+  input.agentShare !== undefined && input.agentShare !== null;
+
 const shouldWriteDirectHandledMarker = (input: EmitToolOutcomeInput) => {
   if (input.status !== 'succeeded' && input.status !== 'skipped') return false;
   if (input.domainKey?.startsWith('memory:')) return input.intentClass === 'explicit_persistence';
@@ -140,6 +177,11 @@ export const recordToolOutcome = async (
     ttlSeconds: number;
   },
 ) => {
+  // Fail closed for a share-visitor run — see `agentShare`'s JSDoc on
+  // `EmitToolOutcomeInput`. Skip before any write so a visitor turn never
+  // leaves a creator-scoped procedure record/marker/receipt behind.
+  if (isShareVisitorOutcome(input)) return { sourceId: createToolOutcomeSourceId(input) };
+
   const sourceId = createToolOutcomeSourceId(input);
   const procedureKey = createProcedureKey({
     messageId: input.messageId,
@@ -228,6 +270,13 @@ export const emitToolOutcome = async (
     ttlSeconds: number;
   },
 ) => {
+  // Fail closed for a share-visitor run — see `agentShare`'s JSDoc on
+  // `EmitToolOutcomeInput`. Return before the synchronous procedure write
+  // AND the async source enqueue, so neither the direct projection nor the
+  // `signal.tool.outcome` policy (self-reflection accumulation) ever sees a
+  // visitor-turn event.
+  if (isShareVisitorOutcome(input)) return;
+
   const { sourceId } = await recordToolOutcome(input);
 
   if (input.status === 'failed') {
