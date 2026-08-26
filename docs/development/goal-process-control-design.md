@@ -1,7 +1,7 @@
 # Goal detail — process control for long-horizon execution
 
 **Date:** 2026-08-26
-**Status:** aligning — round 9 (list polish: numbered dependencies, fading done items, folded budget row; findings expand inline)
+**Status:** aligning — round 10 (graph back to the hand-drawn SVG; react-flow reverted)
 **Scope:** the Goal detail page (`/agent/:aid/goal/:goalId`) and the two places that feed into it (Goal list, Home inbox rail), redesigned as a **process-control surface** for the long-horizon Goal runtime (Goal Graph + Work recovery + Acceptance + decision gates). Out of scope: Goal creation wizard, the Acceptance workspace itself, a full-screen graph editor, mobile.
 **Prototype:** `docs/development/goal-process-control-prototype/` (README inside) — production-style TSX components built into one HTML; an 18-step replay of one real Goal (上一步 / 下一步 or ← →). Steps: 1 create (initial plan)・2–3 first advance/execute・4 pass → findings → next Work・5 agent-authority decision → training starts・6 training・7 lost contact・8 reclaim・9 fail → auto retry・10 budget boundary・11 top-up・12 gate・13 decide・14 pass → sampling・15 sampling → README・16 goal acceptance starts・17 delivered → confirm・18 achieved. Every step has something running or something needing you.
 **Evidence:** the two exploration topics (`tpc_1p4dwDmUPsnN`, `tpc_XUh2GbVp3UVM`), the merged runtime PR #18670, domain types/services under `packages/types/src/goal.ts`, `apps/server/src/services/goal/*`, `apps/server/src/services/verify/*`, the shipped UI under `src/features/AgentGoals/*`, and `docs/development/agent-goals-*.md`.

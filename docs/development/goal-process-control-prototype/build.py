@@ -22,14 +22,6 @@ page = f'''<!doctype html>
     <title>Goal · 流程管控原型（时序回放）</title>
     <style>body{{margin:0}} #boot{{font:13px/1.6 ui-monospace,monospace;color:#888;padding:24px}}</style>
     <script src="./lobe-prototype-runtime.js"></script>
-    <script>
-      // @xyflow/react is bundled separately (external react) — hand it the runtime's React.
-      const __rfReact = __PROTO_DEPS_NS__.default['react'];
-      window.React = __rfReact.default ?? __rfReact;
-      window.ReactDOM = __PROTO_DEPS_NS__.default['react-dom'] ?? {{}};
-    </script>
-    <link rel="stylesheet" href="./xyflow.css" />
-    <script src="./rf-runtime.js"></script>
     <script src="./babel.min.js"></script>
   </head>
   <body>
@@ -63,7 +55,6 @@ page = f'''<!doctype html>
         const makeRequire = (from) => (spec) => {{
           const path = resolve(from, spec);
           if (!path) {{
-            if (spec === '@xyflow/react') return __RF_NS__.default['@xyflow/react'];
             const m = __PROTO_DEPS_NS__.default[spec];
             if (!m) throw new Error('prototype runtime is missing module: ' + spec + ' — add it to entry.mjs and rebuild');
             return m;

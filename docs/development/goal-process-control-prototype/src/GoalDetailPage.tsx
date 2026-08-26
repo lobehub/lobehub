@@ -290,7 +290,6 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           onViewChange={setGraphView}
           fullscreen={fullscreen}
           onFullscreen={setFullscreen}
-          isDraft={state.goal.status === 'planning'}
         />
         <Flexbox gap={8}>
           <SectionHeader
