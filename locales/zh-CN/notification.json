@@ -7,6 +7,8 @@
   "agent_cron_job_failed_paused": "定时任务「{{jobName}}」连续失败 {{count}} 次，已自动暂停。请检查错误后手动恢复运行。",
   "agent_cron_job_failed_paused_title": "定时任务已暂停",
   "agent_cron_job_failed_title": "定时任务执行失败",
+  "agent_intervention_required": "{{agent}} 需要你的输入：{{summary}}",
+  "agent_intervention_required_title": "{{agent}} 等待你的审核",
   "agent_run_completed": "{{preview}}",
   "agent_run_completed_title": "Agent 任务已完成",
   "agent_transfer_reassigned": "工作区所有者已将您的代理 \"{{agentTitle}}\" 转移至 {{recipientLabel}}。",

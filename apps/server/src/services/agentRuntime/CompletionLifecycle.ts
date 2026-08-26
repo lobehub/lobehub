@@ -3,6 +3,7 @@ import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
+import { notifyAgentInterventionRequired } from '@/business/server/agent-run/agentInterventionReview';
 import { notifyAgentRunCompleted } from '@/business/server/agent-run/notifyAgentRunCompleted';
 import {
   AgentOperationModel,
@@ -22,6 +23,7 @@ import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/se
 import { registerWorksForOperation } from '@/server/services/workRegistration';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { buildRuntimeInterventionNotification } from './agentInterventionNotification';
 import { CriticalHookDeliveryError, hookDispatcher, type SerializedHook } from './hooks';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -36,6 +38,18 @@ const log = debug('lobe-server:completion-lifecycle');
  */
 export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
+
+/**
+ * A parked human-approval run is not safely published until its generic Review
+ * batch is durable. Unlike ordinary notification fanout, this error must reach
+ * the queue/request boundary so the idempotent lifecycle delivery can retry.
+ */
+export class CriticalAgentInterventionPersistenceError extends Error {
+  constructor(operationId: string, cause: unknown) {
+    super(`Failed to persist intervention Review for parked operation ${operationId}`, { cause });
+    this.name = 'CriticalAgentInterventionPersistenceError';
+  }
+}
 
 type SignalEvent = { [key: string]: unknown; type: string };
 
@@ -175,6 +189,64 @@ export class CompletionLifecycle {
     }
 
     return persisted;
+  }
+
+  /**
+   * Publish a provider-neutral Review snapshot only after every referenced tool
+   * row can be read back as a member of this exact sealed parked batch. The
+   * business slot is idempotent by batch id; repeated lifecycle delivery is
+   * therefore safe, while a partial/mismatched write fails closed.
+   */
+  private async notifyPendingAgentIntervention(operationId: string, state: any): Promise<void> {
+    try {
+      const notification = await buildRuntimeInterventionNotification({
+        operationId,
+        state,
+        userId: state?.metadata?.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (!notification) return;
+
+      const persistedRows = await Promise.all(
+        notification.items.map(async (item, itemIndex) => {
+          if (item.sourceRef.type !== 'runtime') return;
+          const [message, plugin] = await Promise.all([
+            this.messageModel.findById(item.sourceRef.toolMessageId),
+            this.messageModel.findMessagePlugin(item.sourceRef.toolMessageId),
+          ]);
+          if (
+            !message ||
+            message.role !== 'tool' ||
+            message.parentId !== notification.context.assistantMessageId ||
+            message.topicId !== notification.context.topicId ||
+            !plugin ||
+            plugin.toolCallId !== item.sourceRef.toolCallId ||
+            plugin.intervention?.status !== 'pending' ||
+            plugin.intervention.operationId !== operationId ||
+            plugin.intervention.batchId !== notification.batch.id ||
+            plugin.intervention.stepIndex !== notification.batch.stepIndex ||
+            plugin.intervention.itemIndex !== itemIndex
+          ) {
+            return;
+          }
+          return true;
+        }),
+      );
+
+      if (persistedRows.some((persisted) => persisted !== true)) {
+        throw new Error(
+          'Cannot create intervention Review because the sealed pending batch is not durable',
+        );
+      }
+
+      // Contract boundary: Cloud resolves only after the generic batch is
+      // durable. Push/Live Activity fanout failures are handled inside the
+      // Cloud override and must not reject this call after persistence.
+      await notifyAgentInterventionRequired(notification);
+    } catch (error) {
+      if (error instanceof CriticalAgentInterventionPersistenceError) throw error;
+      throw new CriticalAgentInterventionPersistenceError(operationId, error);
+    }
   }
 
   /**
@@ -639,10 +711,11 @@ export class CompletionLifecycle {
     // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
     // or unregister hooks — the op resumes under this same id and reaches its
     // real terminal state later, which is when consumers should be notified.
-    // (`waiting_for_human` also resumes under the same operationId, but its
-    // park DOES fire `onComplete` — hook consumers surface the approval request
-    // as the run's outcome; the final completion re-dispatches with the
-    // serialized hooks carried on `metadata._hooks`.)
+    // `waiting_for_human` is different: the parked segment fires `onComplete`
+    // so hook consumers can surface the approval request. A winning decision
+    // schedules a fresh continuation operation and then retires this parked
+    // segment; the continuation receives the serialized hooks through
+    // `metadata._hooks`.
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
 
     try {
@@ -658,6 +731,13 @@ export class CompletionLifecycle {
       if (completionAccepted === false) {
         log('[%s] Skipping hooks for an operation with a conflicting terminal owner', operationId);
         return;
+      }
+
+      // At this point the parked operation state has been durably projected to
+      // agent_operations. Verify the tool rows independently before creating a
+      // durable Review so a partial batch can never reach notification UI.
+      if (reason === 'waiting_for_human') {
+        await this.notifyPendingAgentIntervention(operationId, state);
       }
 
       if (isAsyncToolPark) return;
@@ -767,12 +847,11 @@ export class CompletionLifecycle {
       // reasons, not `done` alone: a run stopped by a step/cost cap still
       // produced its edits and persists as status='done'.
       //
-      // `waiting_for_human` deliberately does NOT register: the approval resume
-      // continues the SAME operationId (`processHumanIntervention` reschedules
-      // it), so pre-park edits are covered by the real terminal completion's
-      // scan. Registering at the park would persist `_fileWorksRegistered` into
-      // the park snapshot — skipping the terminal registration entirely — and
-      // freeze per-(op, file) versions at pre-approval content.
+      // `waiting_for_human` deliberately does NOT register: the park is not a
+      // successful deliverable boundary. The fresh approval continuation is
+      // built from the complete authoritative history and performs the real
+      // terminal scan. Registering here would freeze pre-approval file content
+      // as a completed Work before the user decision has run.
       if (isSuccessLikeCompletionReason(reason)) {
         await this.registerFileWorks(operationId, state);
       }
@@ -808,7 +887,11 @@ export class CompletionLifecycle {
         }
       }
     } catch (error) {
-      if (error instanceof CriticalHookDeliveryError) throw error;
+      if (
+        error instanceof CriticalHookDeliveryError ||
+        error instanceof CriticalAgentInterventionPersistenceError
+      )
+        throw error;
       log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     } finally {
       // Keep hooks registered across an async-tool park so the eventual resume
