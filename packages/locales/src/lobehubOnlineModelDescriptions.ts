@@ -174,6 +174,8 @@ export const lobeHubOnlineModelDescriptions = {
     'o3 is a strong all-round model that sets a new bar for math, science, programming, and visual reasoning. It excels at technical writing and instruction following, and can analyze text, code, and images for multi-step problems.',
   'lobehub.o4-mini.description':
     'o4-mini is the latest small o-series model, optimized for fast, effective reasoning with high efficiency in coding and vision tasks.',
+  'lobehub.ox-alpha.description':
+    'Ox Alpha has been revealed as GLM-5.3-Flash. Requests are automatically redirected to GLM-5.3-Flash.',
   'lobehub.qwen3.7-max.description':
     "Qwen3.7-Max is Alibaba Cloud's flagship agent-era model for complex coding, reasoning, office automation, and long-horizon autonomous workflows.",
   'lobehub.qwen3.7-plus.description':
