@@ -131,6 +131,34 @@ describe('SettingsAction', () => {
       expect(payload).not.toHaveProperty('tool');
     });
 
+    it('should resend a column whose write was aborted by a later call', async () => {
+      const { result } = renderHook(() => useUserStore());
+
+      // First write (e.g. the market token refresh) never reaches the server:
+      // it rejects when the next call's internal_createSignal aborts it.
+      vi.mocked(userService.updateUserSettings).mockImplementationOnce(
+        (_value, signal) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      );
+
+      const first = result.current
+        .setSettings({ market: { accessToken: 'tok-1' } as any })
+        .catch(() => {});
+
+      await act(async () => {
+        await result.current.setSettings({ general: { fontSize: 17 } });
+        await first;
+      });
+
+      // The aborted `market` column must ride along on the second payload —
+      // otherwise the token refresh would silently never persist.
+      const payload = vi.mocked(userService.updateUserSettings).mock.lastCall?.[0] as any;
+      expect(payload.general).toEqual(expect.objectContaining({ fontSize: 17 }));
+      expect(payload.market).toEqual(expect.objectContaining({ accessToken: 'tok-1' }));
+    });
+
     it('should keep legacy scalar system agent fields unchanged', async () => {
       const { result } = renderHook(() => useUserStore());
       const settingsWithLegacySystemAgent = {

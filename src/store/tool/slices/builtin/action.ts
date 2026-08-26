@@ -167,9 +167,11 @@ export class BuiltinToolActionImpl {
       n(install ? 'installBuiltinTool' : 'uninstallBuiltinTool'),
     );
 
-    // Persist the active scope's slot (server derives the scope from the
-    // request's workspace context)
-    await userService.updateUninstalledBuiltinTools(newUninstalled);
+    // Persist the captured scope's slot. The scope is pinned explicitly: the
+    // list above was computed for `workspaceId`, and relying on the request's
+    // dynamic workspace header instead would write it into whatever workspace
+    // the user has switched to while `getUserState()` was in flight.
+    await userService.updateUninstalledBuiltinTools(newUninstalled, workspaceId);
 
     // Refresh to ensure consistency
     await this.refreshUninstalledBuiltinTools();

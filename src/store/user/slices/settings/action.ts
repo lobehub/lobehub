@@ -31,6 +31,14 @@ export class UserSettingsActionImpl {
   readonly #get: () => UserStore;
   readonly #set: Setter;
 
+  /**
+   * Top-level settings columns touched by a `setSettings` call whose server
+   * write has not succeeded yet. A later call aborts the in-flight one via
+   * `internal_createSignal`, so these columns must ride along on the next
+   * payload or the aborted change would silently never persist.
+   */
+  readonly #pendingSettingKeys = new Set<string>();
+
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -202,13 +210,21 @@ export class UserSettingsActionImpl {
     // rewrite untouched ones with stale values. E.g. the hourly market token
     // refresh calling setSettings({ market }) used to carry a stale `tool`
     // column and revert approvalMode changed from another tab.
-    const touchedKeys = new Set(Object.keys(changedFields));
+    //
+    // `internal_createSignal` aborts any in-flight settings write, so a column
+    // touched by an aborted call would be lost if the next call didn't resend
+    // it. `#pendingSettingKeys` keeps every touched-but-not-yet-persisted
+    // column in the payload until a write for it succeeds; the optimistic
+    // local state already carries the aborted call's values.
+    for (const key of Object.keys(changedFields)) this.#pendingSettingKeys.add(key);
+    const payloadKeys = new Set(this.#pendingSettingKeys);
     const payload = Object.fromEntries(
-      Object.entries(diffs).filter(([key]) => touchedKeys.has(key)),
+      Object.entries(diffs).filter(([key]) => payloadKeys.has(key)),
     ) as PartialDeep<UserSettings>;
 
     const abortController = this.#get().internal_createSignal();
     await userService.updateUserSettings(payload, abortController.signal);
+    for (const key of payloadKeys) this.#pendingSettingKeys.delete(key);
     await this.#get().refreshUserState();
   };
 

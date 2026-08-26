@@ -944,15 +944,20 @@ export const userRouter = router({
       z
         .object({
           uninstalledBuiltinTools: z.array(z.string().trim().min(1).max(256)).max(256),
+          // The client pins the scope it computed the list for. Deriving the slot
+          // from the request's dynamic workspace header instead would let a
+          // workspace switch during the action write scope A's list into scope B.
+          workspaceId: z.string().trim().min(1).max(128).nullable(),
         })
         .strict(),
     )
     .mutation(async ({ ctx, input }) => {
-      // `tool` is a member-scope workspace setting — same RBAC gate as updateSettings
-      if (ctx.workspaceId) {
+      // `tool` is a member-scope workspace setting — same RBAC gate as
+      // updateSettings, checked against the TARGET workspace slot
+      if (input.workspaceId) {
         const rbac = new RbacModel(ctx.serverDB, ctx.userId);
         const allowed = await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
-          workspaceId: ctx.workspaceId,
+          workspaceId: input.workspaceId,
         });
 
         if (!allowed) {
@@ -963,13 +968,13 @@ export const userRouter = router({
         }
       }
 
-      // The scope slot is derived from the server-side workspace context, and the
-      // model patches only that slot atomically — a whole-column write built from
-      // a client snapshot would race with concurrent tool-column writers (e.g.
-      // an approvalMode change) and could revert them.
+      // The model patches only the pinned scope's slot atomically — a
+      // whole-column write built from a client snapshot would race with
+      // concurrent tool-column writers (e.g. an approvalMode change) and could
+      // revert them.
       return ctx.userModel.replaceUninstalledBuiltinToolsSetting({
         uninstalledBuiltinTools: input.uninstalledBuiltinTools,
-        workspaceId: ctx.workspaceId ?? null,
+        workspaceId: input.workspaceId,
       });
     }),
 

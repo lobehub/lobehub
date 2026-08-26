@@ -1048,28 +1048,30 @@ describe('userRouter', () => {
   });
 
   describe('updateUninstalledBuiltinTools', () => {
-    it('delegates to the atomic scope patch with the server-derived workspace', async () => {
+    it('patches the slot pinned by the input workspace, gated on that workspace', async () => {
       const { RbacModel } = await import('@/database/models/rbac');
-      vi.mocked(RbacModel).mockImplementation(
-        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(true) }) as any,
-      );
+      const hasAnyPermission = vi.fn().mockResolvedValue(true);
+      vi.mocked(RbacModel).mockImplementation(() => ({ hasAnyPermission }) as any);
 
       const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
       vi.mocked(UserModel).mockImplementation(
         () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
       );
 
+      // ctx carries a DIFFERENT workspace than the pinned target — the write and
+      // the RBAC check must both follow the pinned input scope, not the header.
       await userRouter
-        .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
-        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: ['dalle'] });
+        .createCaller({ ...mockCtx, workspaceId: 'ws_other' } as any)
+        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: ['dalle'], workspaceId: 'ws_1' });
 
+      expect(hasAnyPermission).toHaveBeenCalledWith(expect.anything(), { workspaceId: 'ws_1' });
       expect(replaceUninstalledBuiltinToolsSetting).toHaveBeenCalledWith({
         uninstalledBuiltinTools: ['dalle'],
         workspaceId: 'ws_1',
       });
     });
 
-    it('targets the personal scope outside a workspace', async () => {
+    it('targets the personal scope when the pinned workspace is null', async () => {
       const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
       vi.mocked(UserModel).mockImplementation(
         () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
@@ -1077,7 +1079,7 @@ describe('userRouter', () => {
 
       await userRouter
         .createCaller({ ...mockCtx })
-        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: [] });
+        .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: [], workspaceId: null });
 
       expect(replaceUninstalledBuiltinToolsSetting).toHaveBeenCalledWith({
         uninstalledBuiltinTools: [],
@@ -1085,7 +1087,7 @@ describe('userRouter', () => {
       });
     });
 
-    it('rejects workspace members without content permission', async () => {
+    it('rejects members without content permission on the target workspace', async () => {
       const { RbacModel } = await import('@/database/models/rbac');
       vi.mocked(RbacModel).mockImplementation(
         () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
@@ -1094,7 +1096,10 @@ describe('userRouter', () => {
       await expect(
         userRouter
           .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
-          .updateUninstalledBuiltinTools({ uninstalledBuiltinTools: ['dalle'] }),
+          .updateUninstalledBuiltinTools({
+            uninstalledBuiltinTools: ['dalle'],
+            workspaceId: 'ws_1',
+          }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
