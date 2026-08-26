@@ -445,12 +445,14 @@ export default {
     'This shared agent is not available right now. Please contact its owner.',
   'share.visitor.errors.retry': 'Retry',
   'share.visitor.errors.retryCheckFailed': "Couldn't check the share status. Please try again.",
+  'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
   'share.visitor.errors.topicLimit':
     'You have reached the conversation limit on this shared agent.',
   'share.visitor.errors.turnLimit':
     'This conversation has reached its turn limit. Start a new conversation to continue.',
   'share.visitor.input.placeholder': 'Message this shared agent…',
   'share.visitor.input.send': 'Send',
+  'share.visitor.input.stop': 'Stop',
   'share.visitor.topics.empty': 'No conversations yet',
   'share.visitor.topics.new': 'New conversation',
   'share.visitor.topics.title': 'Conversations',

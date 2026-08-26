@@ -4,7 +4,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { ActionIcon, Flexbox, TextArea } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { SendHorizonal } from 'lucide-react';
+import { CircleStop, SendHorizonal } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ import { operationSelectors } from '@/store/chat/selectors';
 
 import { shouldSubmitOnEnter } from './composerEnterGuard';
 import { useBudgetStatusRetry } from './useBudgetStatusRetry';
+import { useShareRunStop } from './useShareRunStop';
 
 interface VisitorComposerProps {
   agentId: string;
@@ -62,6 +63,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
       shareId,
       blockedKey,
     );
+    const { stopError, stopping, stopSharedRun } = useShareRunStop(shareId, agentId, topicId);
     const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
     const isStreaming = useChatStore(
@@ -135,6 +137,15 @@ const VisitorComposer = memo<VisitorComposerProps>(
             onRetry={() => void retryBlockedCheck()}
           />
         )}
+        {!!stopError && (
+          <AsyncError
+            error={stopError}
+            retrying={stopping}
+            title={t('share.visitor.errors.stopFailed')}
+            variant="inline"
+            onRetry={() => void stopSharedRun()}
+          />
+        )}
         <Flexbox
           horizontal
           // Center the single-line state (the textarea is shorter than the send
@@ -165,14 +176,33 @@ const VisitorComposer = memo<VisitorComposerProps>(
               void send();
             }}
           />
-          <ActionIcon
-            disabled={busy || !!blockedKey || !value.trim()}
-            icon={SendHorizonal}
-            loading={busy}
-            style={{ alignSelf: 'flex-end' }}
-            title={t('share.visitor.input.send')}
-            onClick={() => void send()}
-          />
+          {isStreaming || stopping ? (
+            // A run is actually streaming (as opposed to `sending`, the brief
+            // window before the server has even created the operation) — show
+            // Stop instead of a plain spinner so a long or unwanted run can be
+            // cut off before it keeps burning the creator's share budget.
+            // `stopSharedRun` flips the operation's `isAborting` flag as soon as
+            // the request goes out, which makes `isStreaming` go false before
+            // the interrupt has actually resolved — keep showing Stop (loading)
+            // through `stopping` so the button doesn't flicker back to Send.
+            <ActionIcon
+              disabled={stopping}
+              icon={CircleStop}
+              loading={stopping}
+              style={{ alignSelf: 'flex-end' }}
+              title={t('share.visitor.input.stop')}
+              onClick={() => void stopSharedRun()}
+            />
+          ) : (
+            <ActionIcon
+              disabled={busy || !!blockedKey || !value.trim()}
+              icon={SendHorizonal}
+              loading={busy}
+              style={{ alignSelf: 'flex-end' }}
+              title={t('share.visitor.input.send')}
+              onClick={() => void send()}
+            />
+          )}
         </Flexbox>
       </Flexbox>
     );
