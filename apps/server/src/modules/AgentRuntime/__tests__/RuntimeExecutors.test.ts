@@ -388,6 +388,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         'user-123',
         'openai',
         'ws-1',
+        // No billing override outside agent-share visitor runs.
+        undefined,
       );
     });
 

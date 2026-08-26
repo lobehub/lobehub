@@ -11,6 +11,8 @@ describe('loadI18nNamespaceModule', () => {
       ns: 'agent',
     });
 
-    expect(module.default).toHaveProperty('share.popover.title');
+    // A visitor-surface key: the standalone share SSR renders the visitor
+    // conversation UI, so the bundled agent namespace must carry these.
+    expect(module.default).toHaveProperty('share.visitor.input.placeholder');
   });
 });
