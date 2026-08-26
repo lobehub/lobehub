@@ -1,10 +1,36 @@
 # Goal detail — process control for long-horizon execution
 
 **Date:** 2026-08-26
-**Status:** aligning — round 2 (frontier-first; round 1's Work-list IA was rejected by the user)
+**Status:** aligning — round 3 (frontier as a Task-style list on the Task-page skeleton, sidebar list added; rounds 1–2 rejected/refined by the user)
 **Scope:** the Goal detail page (`/agent/:aid/goal/:goalId`) and the two places that feed into it (Goal list, Home inbox rail), redesigned as a **process-control surface** for the long-horizon Goal runtime (Goal Graph + Work recovery + Acceptance + decision gates). Out of scope: Goal creation wizard, the Acceptance workspace itself, a full-screen graph editor, mobile.
-**Prototype:** `docs/development/goal-process-control-prototype.html`
+**Prototype:** `docs/development/goal-process-control-prototype.html` (three-pane app shell: sidebar list · NavHeader · detail column; 9 scenarios)
 **Evidence:** the two exploration topics (`tpc_1p4dwDmUPsnN`, `tpc_XUh2GbVp3UVM`), the merged runtime PR #18670, domain types/services under `packages/types/src/goal.ts`, `apps/server/src/services/goal/*`, `apps/server/src/services/verify/*`, the shipped UI under `src/features/AgentGoals/*`, and `docs/development/agent-goals-*.md`.
+
+---
+
+## 0. The flow, in time order
+
+What actually happens to one Goal from creation to closure, step by step, with what the user sees and can do at each step. State names are in parentheses only as provenance; the surface never leads with them.
+
+| #   | What happens (system)                                                                                                                                                                                                         | What the user sees / can do                                                                                                                                                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Create.** Goal row + requirement + budgets; the graph is seeded with a Problem node and the initial Work nodes (`goal.create`, or `/goal` in chat which also creates the carrier Task). Nothing is dispatched. (`planning`) | Goal appears in the left list under 排队中. Detail: "已就绪，还没有开始"; frontier lists the Works that have no dependencies as 可以开始. Actions: 开始执行，添加 Work, 预算.                                     |
+| 2   | **First advance.** The coordinator picks the highest-priority Work whose `depends_on` are resolved, creates its owner Task + Work-scoped Acceptance, and starts the Task (`tick`, `running`).                                 | The row moves to 进行中 with the owner Task inlined (agent, attempt 1, last activity). The graph shows the Work node thick-stroked with the Task line inside.                                                     |
+| 3   | **Execute.** The builder agent works inside the Task topic; the runtime refreshes the operation lease every 90 s.                                                                                                             | Last tool line + last-activity age on the row. "给下一次尝试的说明" is always available and is carried into the _next_ attempt, not the running one.                                                              |
+| 4   | **Submit evidence.** When the builder's run ends, the server registers its final delivery as evidence for the Work-scoped Acceptance (heterogeneous builders hand off server-side).                                           | Row reads 举证中 briefly; nothing to do.                                                                                                                                                                          |
+| 5   | **Verify.** An independent native verifier judges the evidence against the Work contract (`verifying`).                                                                                                                       | Row reads 验证中 with the verifier as the actor. Nothing to do.                                                                                                                                                   |
+| 6a  | **Pass → Finding.** Task completes, the Work version is pinned, a Finding is created from the handoff, the Work resolves, and the frontier is recomputed: downstream Works unblock.                                           | Row leaves the frontier; a new Finding appears in 最近结论 and as a green node; the next Work shows up as 可以开始 → 进行中 on the next advance.                                                                  |
+| 6b  | **Fail → automatic recovery.** If attempts remain and budget remains, a fresh attempt starts in a new topic carrying the verifier's feedback (`WorkRecoveryCoordinator: continued`).                                          | Row stays 进行中 as 第 N+1 次尝试；the previous attempt is in the row's ledger with the verifier's reason. **No human involvement** (the user's rule: intervene only for key decisions).                          |
+| 6c  | **Lost contact.** No lease refresh for `operationLeaseTimeoutMs`: the next advance marks the attempt `abandoned/lease_expired`, charges its cost, and asks recovery for a replacement.                                        | Row flips to 失联 with the age; the node goes dotted red. The user may 立即回收并重开 (an advance) or wait.                                                                                                       |
+| 7   | **Gate.** Attempts exhausted (or the terminal Work failed): a Decision node with options + recommendation opens; the Work waits; the Goal is 等你决定 (`review`, `waiting_human`).                                            | The decision row is **first in the frontier list**, expanded: question, why, attempts/cost, options with consequences, recommended, optional guidance → 决定. Left list shows the Goal under 需要你 with a badge. |
+| 8   | **Decide.** `retry` → the Work gets another attempt (back to step 2 for that Work); `retire` → the Work is abandoned and the Goal continues with what is left; on the terminal Work, `fail` → Goal failed.                    | The decision row collapses into the graph as a resolved orange node; the Work row returns to 进行中 or disappears.                                                                                                |
+| 9   | **Budget boundary.** Cost or attempt cap reached at any advance: the Goal pauses (`paused`, no reason recorded).                                                                                                              | Frontier's first row is 费用预算用完 with the numbers and 追加预算并继续 (= setBudget + resume). Nothing else moves until then.                                                                                   |
+| 10  | **Steer.** At any time the user (or an agent) can add a Work off a Finding (`addNode` + `leads_to` edge) or add a dependency.                                                                                                 | From a Finding's node detail: 基于这个结论开一条 Work. The new Work enters 可以开始 or 等待中.                                                                                                                    |
+| 11  | **All Works terminal → Goal acceptance.** The coordinator synthesizes one last Work, "Complete full Goal acceptance", with the whole requirement as its contract; steps 2–6 repeat for it.                                    | The row 完成整体 Goal 验收 becomes the only frontier item; its verifier verdict lists the goal-level checks.                                                                                                      |
+| 12  | **Close.** Task-carried: verifier pass parks the Goal and a human `accept` makes it `achieved`. Graph: the coordinator sets `achieved` itself when the terminal Work resolves. (D1 proposes unifying on the human accept.)    | Frontier's single row is 验收通过 p/q，等你确认 → 确认完成 / 还不够，再来一轮 (with feedback). After that: "没有需要推进的了・已达成", left list moves it to 已完成.                                              |
+| —   | **Pause / resume** can interleave anywhere: pause stops _new_ attempts only.                                                                                                                                                  | 暂停 confirm says exactly that; 继续 returns to whatever step the Goal was at.                                                                                                                                    |
+
+Two honest gaps in this timeline today: between any two steps a **Graph goal only advances when a client calls `tick`** (D2), and step 7 **does not notify** the user for Graph goals (no brief).
 
 ---
 
@@ -141,42 +167,59 @@ Full graph (zoom), per-node detail (attempts, evidence, edges "在图里的位�
 
 ---
 
-## 5. Information architecture — Goal detail
+## 5. Information architecture — on the Task page skeleton
 
-Two columns on desktop (frontier ≈ 400 px, graph fills the rest); stacked frontier-then-graph under 960 px. Each block names its business concept, its empty state, and how it holds at 100×.
+The Goal pages reuse the Task pages' shell verbatim so the two surfaces read as one family: global `NavPanel` / `AgentSidebar` on the left (NavItem accordion), `NavHeader` (44 px: panel toggle · breadcrumb · actions · right-panel toggle), a centered `WideScreenContainer` reading column (`CONVERSATION_MIN_WIDTH` = 960), and the optional right `AgentTaskManager` panel. Column order mirrors `TaskDetailPage` (title → run action + properties → body sections → activities). The page is single-pane list → detail, not master-detail.
 
-### 0 · Header
+```
+┌ AgentSidebar ─────────┬ NavHeader  [◧] 所有目标 › Agent › GOAL-12 title            [⋯][◨] ┐
+│ 对话 / 任务 / 目标 ●   ├────────────────────────────────────────────────────────────────┤
+│ 目标            [🔍][+]│  Title (TaskDetailTitleInput)                                   │
+│ ▾ 需要你 2            │  [暂停|继续|开始执行]  已进行 1h18m      状态  等你决定 · 3 分钟    │
+│   ⚠ nanoGPT …     (1) │  requirement excerpt                    费用  $1.84 / $5.00 ⚙   │
+│   ⚠ Search1API …  (1) │                                         尝试  4 / 10 · 单项 3     │
+│ ▾ 进行中 2            │                                         验收  0 / 3             │
+│   ◌ 回收站 Phase 2  1m │                                         负责  Coding Agent      │
+│   ◌ Device quota   8m │  现在能推进的 · 2 项 · 1 项需要你                    [+ 添加 Work] │
+│ ▾ 排队中 1            │  ┌ ▾ ● 训练已失败 2 次，怎么继续？  等你决定   W-3 · 2/3 $1.52 3m ┐│
+│   ○ 带教式创建原型  2h │  │   why · [再试一次 推荐] [放弃] · 说明 ▭  [再试一次]            ││
+│ ▸ 已完成 3            │  ├ ▸ ● W-4 写训练复现说明        可以开始                          ┤│
+│                       │  └ ◷ 2 项在等待依赖：采样 · 整体验收                       显示 ┘│
+│                       │  探索图  ■问题 ■Work ■结论 ■决策 · 粗边=能推进 · 虚线=等待   [⤢] │
+│                       │  (layered DAG, frontier emphasized, click → 节点详情)            │
+│                       │  ▾ 结论 3  ·  ▸ 目标与验收标准  ·  ▾ 活动 12 (comment input first)│
+└───────────────────────┴────────────────────────────────────────────────────────────────┘
+```
 
-Title · **status sentence in plain words + last-activity age** ("运行中・最近动作 2 分钟前", "等你决定・已等待 3 分钟", "已暂停・费用预算用完", "已达成・20 分钟前")・elapsed・four chips (Work n/m・验收 p/q・尝试 a/b・$x/$y, the spend chip turns warning at the cap)・controls **暂停 / 继续**, **预算** (popover: cost cap, attempt cap, attempts-per-Work → `setBudget`), overflow (添加 Work ⚠️, 编辑目标 ❌, 复制链接，结束 ❌, 删除).
+### Left list — `AgentSidebar › 目标` (mirrors `AgentSidebar/Task`)
 
-### 1・Frontier column — 现在能推进的
+Business concept: the agent's Goals grouped by what they ask of the user, same shape as the sidebar task groups (`needsInput / running / backlog`).
 
-Business concept: the coordinator's candidate set (`tick` step 3) plus pending decisions (`tick` step 2).
+| Group  | Membership                                                                                                           | Row                                                                                                                  |
+| ------ | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 需要你 | frontier has a `rank 0` item: pending user decision, goal-level acceptance delivered, budget exhausted, lost contact | ⚠ glyph・title・status sentence ("等你决定・已等待 3 分钟")・**orange count badge** (number of items waiting on you) |
+| 进行中 | `running` / `verifying` with a live attempt                                                                          | ◌ spinner glyph・title・"进行中・第 N 次・最近动作 2 分钟前"・age                                                    |
+| 排队中 | `planning`                                                                                                           | ○ glyph・title・"已就绪，还没有开始"・age                                                                            |
+| 已完成 | `achieved` / `failed` / `canceled` — **collapsed by default**                                                        | ✓ / ✗ glyph · title · outcome · age                                                                                  |
 
-| Group    | Members                                                                                     | Card contract                                                                                                                                                        | Actions (business event)                                                                                   |
-| -------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 需要你   | pending user decision · goal-level acceptance `delivered` · budget exhausted · lost contact | Decision: question, the Work it concerns, attempts N/M, cost, why (verifier reason), `options[]` each with a consequence line, recommended marked, optional guidance | `goal.decide` · `acceptance.accept` / `reject(comment)` · `setBudget`+`resume` composed · `tick` (reclaim) |
-| 进行中   | Work `active`                                                                               | title・进行中・第 N 次尝试・owner Task id + agent・last-activity age・last tool line・expand → attempt ledger, "给下一次尝试的说明"                                  | task comment (guidance) · open run                                                                         |
-| 可以开始 | Work `proposed` with all `depends_on` resolved                                              | title・"依赖已满足；下一次推进开始"・expand → 现在开始                                                                                                               | `tick` / `runTask` (⚠️ coordinator is serial today — parallel start is tagged NEW)                         |
-| 等待中   | Work `proposed` with an unresolved dependency — **folded**, one line naming the blocker     | —                                                                                                                                                                    | hover → highlight in graph                                                                                 |
-| 最近结论 | latest Findings                                                                             | title・来自「Work」・age・click → graph node                                                                                                                         | 基于这个结论开一条 Work = `addNode` + `leads_to` ⚠️                                                        |
+Group header carries the count; a collapsed 需要你 keeps its badge visible. Search + create live in the section header (as the task sidebar's `[→]` view-all does). Row = `NavItem` with `titlePrefix` glyph and a one-line `description` slot; active row = `NavItem active`. The full-page Goal list (`/agent/:aid/goals`) reuses `TaskList` + `AgentTaskItem` field order — glyph · id · title · frontier summary · assignee · age — with the same group config; it is not re-specified here.
 
-Empty: `planning` → one card "已就绪，还没有开始" with 开始执行 (+ honest NEW tag on "服务端持续推进", see D2); `achieved` → "没有需要推进的了". At scale: groups cap at 5 visible + count; 需要你 never truncates.
+### Detail column — block by block
 
-### 2・Exploration graph — 探索图
+1. **Title** — `TaskDetailTitleInput` (borderless, autosave).
+2. **Run action + properties** (the `TaskDetailRunPauseAction` / `TaskProperties` row). Left: **开始执行 / 暂停 / 继续 / 重新打开 (❌)** with the honest pause confirm, elapsed, requirement excerpt. Right, labelled rows like `TaskProperties`: 状态 (plain sentence + liveness)・费用 spent/cap (click → budget popover = `setBudget`)・尝试 used/cap・单项上限・验收 p/q・负责 agent.
+3. **现在能推进的 — the frontier list** (the body's first section; the `TaskSubtasks` slot). A `TaskList`-styled block: dashed-divided rows, 1–6 items, ordered by what they ask of the user:
+   - rows that **need you** come first and are **expanded by default**: decision gate (why・options with consequences・recommended・optional guidance・primary button), goal-level delivery (checks・确认完成 / 还不够→feedback), budget exhausted (追加预算并继续), lost contact (立即回收并重开);
+   - **进行中** rows: kind dot · `W-n`・title・"进行中・第 N 次尝试"・right meta `T-94 · Kimi Code · 尝试 2/3 · $1.52 · 2m`; expand → last tool line, attempt ledger, 给下一次尝试的说明；
+   - **可以开始** rows: "依赖已满足；下一次推进开始"; expand → 现在开始 (⚠️ serial coordinator);
+   - footer: **"N 项在等待依赖：…"** folded, toggles dimmed blocked rows with their blocker.
+     Header shows `N 项 · M 项需要你` and `+ 添加 Work`. Empty: `planning` → one row "Goal 已就绪，还没有开始" with 开始执行；`achieved` → "没有需要推进的了".
+4. **探索图** — full column width, legend, zoom-to-wide toggle; node click → **节点详情** block beneath (state・body・attempt ledger・在图里的位置・for a Finding: 基于这个结论开一条 Work). Visual grammar as in §4.
+5. **结论** — Findings list (dot・title・来自「Work」・age), open by default when non-empty; hover/click syncs with the graph.
+6. **目标与验收标准** — collapsed; requirement, goal-level checks, budget/recovery values (edit ❌ for Graph goals).
+7. **活动** — the `TaskActivities` slot: comment input on top (a task comment, carried into later attempts), then the merged ledger (attempt boundaries, verifier verdicts, findings, decisions, human actions).
 
-Business concept: `goal.graph` snapshot (nodes, edges, decisions). Layout is a layered DAG (Goal → decomposes → Work/Problem → produces → Finding → leads\_to → Decision → leads\_to → new Work); `depends_on` drawn as dashed edges. Node shape/color by kind (Problem pill purple · Work rect blue · Finding rect green · Decision hexagon orange); state by stroke (frontier thick · gate dashed warning + dot · blocked dashed · stale dotted red · resolved dimmed). Owner Task line inside the running Work node with a pulse. Hover/selection are shared with the frontier cards; clicking a node opens **节点详情** beneath the graph (state, body, attempt ledger, "在图里的位置" edges, and for a Finding "基于这个结论开一条 Work"). Zoom toggles the graph to full width.
-
-Empty: Goal node only, with "让 Agent 先拆一版" (❌ Planner). At 100×: collapse resolved subtrees to a count badge on their parent; keep frontier and the path from Goal to each frontier node expanded.
-
-### 3 · Contract (collapsed) · 4 · Activity (collapsed)
-
-Requirement, goal-level checks, budget/recovery values (read; edit ⚠️/❌). Activity merges `goal_events`, attempt boundaries, Findings and decisions, one human line each. Provenance only.
-
-### Goal list and Home
-
-- List: facets **需要你・进行中・已暂停・已完成**, with counts; rows carry the same status sentence + last-activity age; standalone goals included (⚠️ `list` filter).
-- Home rail: a pending gate is a **decision** item; today only task-carried failures produce one (⚠️ brief on Graph gate).
+The right `AgentTaskManager` panel is mounted by the same toggle as on Task pages (conversation with the responsible agent); not re-specified.
 
 ---
 
@@ -251,4 +294,4 @@ Requirement, goal-level checks, budget/recovery values (read; edit ⚠️/❌). 
 
 **D4 — Gate options.** Recommend the UI render `options[]` + `recommendedOptionId` generically now, so semantic options from the generator light up without UI change.
 
-**D5 — Graph on the first screen.** Decided by the user: the frontier is the key display and the graph sits beside it. Remaining question is layout at scale (collapse resolved subtrees vs. paginate lanes) — recommend collapse-to-badge, validated in the next prototype round with a 30-node graph.
+**D5 — Graph on the first screen.** Decided by the user: the frontier list is the key display and the full graph sits directly under it. Remaining question is layout at scale (collapse resolved subtrees vs. paginate lanes) — recommend collapse-to-badge, validated in the next prototype round with a 30-node graph.
