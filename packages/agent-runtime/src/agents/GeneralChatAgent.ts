@@ -30,6 +30,15 @@ import { shouldCompress } from '../utils/tokenCounter';
 const TOOL_NOT_ALLOWED_CONTENT =
   'Tool execution blocked because the tool is not allowed in the current execution scope.';
 const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
+// `approvalMode: 'reject'` — fail-closed headless runs (e.g. an Agent Share
+// visitor run executing under the creator's credentials with no visitor-facing
+// approval UI, see shareChat.ts/aiAgent/index.ts). Distinct message from
+// TOOL_NOT_ALLOWED_CONTENT (which means "not offered in this scope at all") —
+// here the tool IS offered, but this specific call needs consent nobody can give.
+const INTERVENTION_REJECTED_CONTENT =
+  'Tool execution blocked because it requires human approval, and this run has no ' +
+  'user present to grant it. Do not retry this call.';
+const INTERVENTION_REJECTED_REASON = 'human_intervention_unavailable';
 // Leave 35% of the model window for server-side context engineering (system
 // role, knowledge, memories, skills, etc.) and the model's completion. The
 // initial 50% threshold still supplies the lower side of the hysteresis band.
@@ -728,11 +737,21 @@ export class GeneralChatAgent implements Agent {
           }
 
           // Request approval for tools that need intervention
-          // Non-headless mode waits for human approval; headless mode returns blocked tool results.
+          // Non-headless mode waits for human approval; `headless` auto-runs
+          // overridable ('required') policies and only blocks non-bypassable
+          // ('always') ones, while `reject` (fail-closed, no approver present —
+          // e.g. an Agent Share visitor run) blocks EVERYTHING that reached this
+          // branch, since `checkInterventionNeeded` only routes tools here under
+          // `reject` when the tool's own policy already required intervention.
           if (toolsNeedingIntervention.length > 0) {
-            if (state.userInterventionConfig?.approvalMode === 'headless') {
+            const { approvalMode } = state.userInterventionConfig ?? {};
+            if (approvalMode === 'headless' || approvalMode === 'reject') {
               instructions.push({
                 payload: {
+                  ...(approvalMode === 'reject' && {
+                    blockedContent: INTERVENTION_REJECTED_CONTENT,
+                    blockedReason: INTERVENTION_REJECTED_REASON,
+                  }),
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,
                 },

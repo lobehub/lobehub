@@ -207,4 +207,58 @@ describe('AiAgentService.execAgent - headless approval default', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.userInterventionConfig).toEqual(config);
   });
+
+  describe('Agent Share visitor runs (shareGate)', () => {
+    // A share run executes under the CREATOR's credentials (see
+    // apps/server/src/routers/lambda/shareChat.ts execAgent) with no
+    // visitor-facing approval UI. `headless` (the default above) is meant for
+    // TRUSTED async tasks and auto-runs any overridable ('required')
+    // tool-level intervention — wrong here, since the visitor triggering the
+    // call is not the creator and nobody is present to grant consent. Every
+    // run carrying a `shareGate` must be forced onto the fail-closed `reject`
+    // policy regardless of what the caller passed, so this can't be bypassed
+    // by a future execAgent call site that forgets to set it explicitly.
+    const shareGate = {
+      agentId: 'agent-1',
+      shareConfig: {} as any,
+      visitorUserId: 'visitor-1',
+    };
+
+    it('forces the reject policy when shareGate is present and no userInterventionConfig was given', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+        shareGate,
+      });
+
+      expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+      const callArgs = mockCreateOperation.mock.calls[0][0];
+      expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'reject' });
+    });
+
+    it('overrides an explicit non-reject userInterventionConfig when shareGate is present', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+        shareGate,
+        // A caller that forgets/misconfigures this must still fail closed.
+        userInterventionConfig: { approvalMode: 'auto-run' },
+      });
+
+      expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+      const callArgs = mockCreateOperation.mock.calls[0][0];
+      expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'reject' });
+    });
+
+    it('leaves the headless default untouched for a normal (non-share) creator run', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+      });
+
+      expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+      const callArgs = mockCreateOperation.mock.calls[0][0];
+      expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    });
+  });
 });

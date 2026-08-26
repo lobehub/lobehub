@@ -1592,7 +1592,7 @@ export class AiAgentService {
       disableLocalSystem,
       initialStepCount,
       signal,
-      userInterventionConfig = { approvalMode: 'headless' },
+      userInterventionConfig: requestedUserInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
       parentMessageId,
@@ -1609,6 +1609,22 @@ export class AiAgentService {
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
+
+    // Agent Share visitor runs execute under the CREATOR's credentials (see
+    // `shareChat.ts` `execAgent` → `AiAgentService.execAgent({ shareGate })`)
+    // with no visitor-facing approval UI at all. The `headless` default above
+    // exists for TRUSTED async/background tasks and auto-runs any overridable
+    // ('required') tool-level intervention — correct only when the operator who
+    // queued the task is the one being trusted. A share visitor is not that
+    // operator, and nobody is present to grant consent, so every share run is
+    // forced onto the fail-closed `reject` policy here — unconditionally
+    // overriding whatever the caller passed — so this cannot be bypassed by a
+    // future execAgent call site that forgets to set it explicitly. See
+    // `checkInterventionNeeded` / `reject` handling in
+    // `packages/agent-runtime/src/agents/GeneralChatAgent.ts`.
+    const userInterventionConfig: UserInterventionConfig = shareGate
+      ? { approvalMode: 'reject' }
+      : requestedUserInterventionConfig;
 
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration
     // replays reach this method too (resumeApproval, resumeToolResult,
