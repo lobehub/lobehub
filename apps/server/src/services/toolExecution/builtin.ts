@@ -119,23 +119,28 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     const args = parsed || {};
 
     // Agent share C5 — the actual enforcement point for a share visitor's
-    // memory / knowledge-base / agent-documents tool calls, AND for tools
-    // whose entire API surface is blocked outright (e.g. `lobe-agent-
-    // management` — every API there executes against the creator's private
-    // agent collection with a visitor-suppliable `agentId`, so no per-API
-    // scoping survives; see `SHARE_VISITOR_BLOCKED_IDENTIFIERS` in
-    // shareGate.ts). `applyShareGateToDataToolAccess` / `stripAlways-
-    // BlockedIdentifiers` (shareGate.ts) already trim these off the
-    // manifest/`tools` schema handed to the model, but that only changes what
-    // the model is OFFERED — this dispatcher routes strictly by
-    // `payload.apiName` (see `runtime[apiName]` below) with no re-check
-    // against the (possibly already-trimmed) manifest, so a model that still
-    // emits a stripped API name (or targets a fully-blocked identifier) would
-    // otherwise execute it under the creator's own credentials. Runs after
-    // JSON parsing (not before) so id-scoped rules — e.g. `viewKnowledgeBase`'s
-    // `id` — can inspect `args`; still checked before any routing (including
-    // `lobehubSkill` / `composio`, which never match the data-tool
-    // identifiers this guards) so it can't be bypassed by a different source.
+    // builtin tool calls: default-deny against `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
+    // (shareGate.ts) for any builtin identifier not on that master allowlist
+    // (e.g. `lobe-agent-management`, `lobe-creds`, `lobe-message` — every API
+    // there executes against the creator's private account with a
+    // visitor-suppliable id, so no per-API scoping survives), AND the
+    // `DATA_TOOL_ACCESS_RULES` per-API narrowing for tools that ARE allowed but
+    // still grant-scoped (memory / knowledge-base / agent-documents). Non-builtin
+    // identifiers (MCP/market/custom plugins) fall straight through — this gate
+    // only governs the builtin registry population, see
+    // `isGovernedByBuiltinAllowlist` in shareGate.ts.
+    // `applyShareGateToToolSet` / `applyShareGateToDataToolAccess` (shareGate.ts)
+    // already trim denied/scoped tools off the manifest/`tools` schema handed to
+    // the model, but that only changes what the model is OFFERED — this
+    // dispatcher routes strictly by `payload.apiName` (see `runtime[apiName]`
+    // below) with no re-check against the (possibly already-trimmed) manifest,
+    // so a model that still emits a stripped API name (or targets a fully-denied
+    // identifier) would otherwise execute it under the creator's own
+    // credentials. Runs after JSON parsing (not before) so id-scoped rules —
+    // e.g. `viewKnowledgeBase`'s `id` — can inspect `args`; still checked before
+    // any routing (including `lobehubSkill` / `composio`, which are never
+    // builtin identifiers so this gate never matches them) so it can't be
+    // bypassed by a different source.
     if (
       context.agentShare &&
       isShareBlockedDataToolCall(context.agentShare, identifier, apiName, args)
