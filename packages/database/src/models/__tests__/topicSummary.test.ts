@@ -164,6 +164,48 @@ describe('TopicSummaryModel', () => {
     expect(result.map(({ id }) => id)).toEqual(['regular']);
   });
 
+  it('excludes share-visitor topics even when auto-summary is enabled for the creator', async () => {
+    // Share-visitor topics carry the creator's `userId` (billing) plus a
+    // non-null `senderId` (the visitor). A plain ownership scan would
+    // generate a creator-billed auto-summary for a conversation the creator
+    // never had.
+    await db.insert(topics).values([
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'creator-topic', userId },
+      {
+        createdAt: new Date('2026-07-31T00:00:00Z'),
+        id: 'visitor-topic',
+        senderId: 'visitor-user',
+        userId,
+      },
+    ]);
+    await db.insert(messages).values([
+      {
+        content: 'creator message',
+        id: 'm-creator',
+        role: 'user',
+        topicId: 'creator-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      {
+        content: 'visitor message',
+        id: 'm-visitor',
+        role: 'user',
+        topicId: 'visitor-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+    ]);
+
+    const result = await model.listCandidates({
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+
+    expect(result.map(({ id }) => id)).toEqual(['creator-topic']);
+  });
+
   it('does not overwrite the summary when a newer message arrives', async () => {
     await db.insert(topics).values({ id: 'racing', userId });
     await db.insert(messages).values([
