@@ -20,7 +20,17 @@
       the import paths and createStyles → createStaticStyles changed.
     -->
 <script type="text/plain" data-module="src/App.tsx">
-import { ActionIcon, Block, Button, Flexbox, Icon, Skeleton, Text, ThemeProvider, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Text,
+  ThemeProvider,
+  Tooltip,
+} from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { AlertTriangle, MoreHorizontal, PanelLeft, PanelRight } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -35,32 +45,40 @@ import { hhmm } from './model/format';
 
 const useStyles = createStyles(({ css, token }) => ({
   page: css`
-    height: 100dvh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
+
+    height: 100dvh;
+
     background: ${token.colorBgLayout};
-    overflow: hidden;
   `,
   stepBar: css`
-    flex: none;
     display: flex;
-    align-items: center;
+    flex: none;
     gap: 16px;
-    padding: 8px 16px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${token.colorBorderSecondary};
+
     background: ${token.colorBgContainer};
-    border-bottom: 1px solid ${token.colorBorderSecondary};
   `,
   dots: css`
     display: flex;
-    gap: 4px;
     flex-shrink: 0;
+    gap: 4px;
   `,
   dot: css`
+    cursor: pointer;
+
     width: 10px;
     height: 10px;
     border-radius: 3px;
+
     background: ${token.colorFillSecondary};
-    cursor: pointer;
+
     &:hover {
       background: ${token.colorFill};
     }
@@ -72,30 +90,35 @@ const useStyles = createStyles(({ css, token }) => ({
     background: ${token.colorPrimary};
   `,
   main: css`
-    flex: 1;
-    min-height: 0;
     display: flex;
+    flex: 1;
     flex-direction: column;
+
+    min-height: 0;
+
     background: ${token.colorBgContainer};
   `,
   navHeader: css`
+    display: flex;
     flex: none;
+    gap: 4px;
+    align-items: center;
+
     height: 44px;
     padding: 8px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    border-bottom: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${token.colorBorderSecondary};
   `,
   scroll: css`
+    overflow-y: auto;
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
   `,
   column: css`
     width: min(960px, 100%);
-    margin: 0 auto;
-    padding: 24px 16px;
+    margin-block: 0;
+    margin-inline: auto;
+    padding-block: 24px;
+    padding-inline: 16px;
   `,
 }));
 
@@ -151,10 +174,25 @@ export const App = memo(() => {
       <div className={styles.page}>
         <div className={styles.stepBar}>
           <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
-            <Button size="small" disabled={step === 0} onClick={() => { setMode('timeline'); setStep(step - 1); }}>
+            <Button
+              size="small"
+              disabled={step === 0}
+              onClick={() => {
+                setMode('timeline');
+                setStep(step - 1);
+              }}
+            >
               上一步
             </Button>
-            <Button size="small" type="primary" disabled={step === STEPS.length - 1} onClick={() => { setMode('timeline'); setStep(step + 1); }}>
+            <Button
+              size="small"
+              type="primary"
+              disabled={step === STEPS.length - 1}
+              onClick={() => {
+                setMode('timeline');
+                setStep(step + 1);
+              }}
+            >
               下一步
             </Button>
             <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
@@ -164,7 +202,17 @@ export const App = memo(() => {
           <div className={styles.dots}>
             {STEPS.map((st, i) => (
               <Tooltip key={i} title={`${i + 1}. ${st.label}`}>
-                <div className={cx(styles.dot, i === step && styles.dotActive, i < step && styles.dotDone)} onClick={() => { setMode('timeline'); setStep(i); }} />
+                <div
+                  className={cx(
+                    styles.dot,
+                    i === step && styles.dotActive,
+                    i < step && styles.dotDone,
+                  )}
+                  onClick={() => {
+                    setMode('timeline');
+                    setStep(i);
+                  }}
+                />
               </Tooltip>
             ))}
           </div>
@@ -177,10 +225,18 @@ export const App = memo(() => {
             </Text>
           </Flexbox>
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
-            <Button size="small" type={mode === 'loading' ? 'default' : 'text'} onClick={() => setMode(mode === 'loading' ? 'timeline' : 'loading')}>
+            <Button
+              size="small"
+              type={mode === 'loading' ? 'default' : 'text'}
+              onClick={() => setMode(mode === 'loading' ? 'timeline' : 'loading')}
+            >
               加载中
             </Button>
-            <Button size="small" type={mode === 'error' ? 'default' : 'text'} onClick={() => setMode(mode === 'error' ? 'timeline' : 'error')}>
+            <Button
+              size="small"
+              type={mode === 'error' ? 'default' : 'text'}
+              onClick={() => setMode(mode === 'error' ? 'timeline' : 'error')}
+            >
               加载失败
             </Button>
           </Flexbox>
@@ -217,7 +273,15 @@ export const App = memo(() => {
               </Tooltip>
             </Flexbox>
           </div>
-          <div className={styles.scroll}>{mode === 'loading' ? <LoadingState /> : mode === 'error' ? <ErrorState onRetry={() => setMode('timeline')} /> : <GoalDetailPage key={step} step={step} />}</div>
+          <div className={styles.scroll}>
+            {mode === 'loading' ? (
+              <LoadingState />
+            ) : mode === 'error' ? (
+              <ErrorState onRetry={() => setMode('timeline')} />
+            ) : (
+              <GoalDetailPage key={step} step={step} />
+            )}
+          </div>
         </div>
       </div>
     </ThemeProvider>
@@ -251,8 +315,10 @@ import type { GoalState } from './types';
 const useStyles = createStyles(({ css }) => ({
   column: css`
     width: min(960px, 100%);
-    margin: 0 auto;
-    padding: 24px 16px 120px;
+    margin-block: 0;
+    margin-inline: auto;
+    padding-block: 24px 120px;
+    padding-inline: 16px;
   `,
   wide: css`
     width: 100%;
@@ -260,12 +326,23 @@ const useStyles = createStyles(({ css }) => ({
   `,
 }));
 
-const Section = memo<{ title: string; count?: number; defaultOpen?: boolean; children: React.ReactNode }>(({ title, count, defaultOpen = false, children }) => {
+const Section = memo<{
+  title: string;
+  count?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}>(({ title, count, defaultOpen = false, children }) => {
   const { styles } = useSharedStyles();
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal gap={6} align="center" className={styles.sectionHead} onClick={() => setOpen(!open)}>
+      <Flexbox
+        horizontal
+        gap={6}
+        align="center"
+        className={styles.sectionHead}
+        onClick={() => setOpen(!open)}
+      >
         <Icon icon={open ? ChevronDown : ChevronRight} size={14} />
         <Text weight={600}>{title}</Text>
         {count !== undefined && (
@@ -288,13 +365,29 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   const frontier = useMemo(() => computeFrontier(state), [state]);
   const freshIds = useMemo(() => new Set(STEPS[step].fresh), [step]);
   const now = clock.now;
-  const select = (id: string, edit?: boolean) => setSelected(selected?.id === id && !edit ? null : { id, edit });
+  const select = (id: string, edit?: boolean) =>
+    setSelected(selected?.id === id && !edit ? null : { id, edit });
   const push = (e: GoalState['log'][number]) => setState((s) => ({ ...s, log: [...s.log, e] }));
-  const patch = (id: string, p: Partial<GoalState['nodes'][number]>) => setState((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }));
+  const patch = (id: string, p: Partial<GoalState['nodes'][number]>) =>
+    setState((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }));
 
   const actions = {
     start: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', startedAt: now, lastActivity: now }, nodes: s.nodes.map((n) => (n.id === 'W1' ? { ...n, status: 'active', lastActivity: now, task: { id: 'T-90', agent: 'Kimi Code' }, lastLine: '正在准备工作目录…' } : n)) }));
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'running', startedAt: now, lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          n.id === 'W1'
+            ? {
+                ...n,
+                status: 'active',
+                lastActivity: now,
+                task: { id: 'T-90', agent: 'Kimi Code' },
+                lastLine: '正在准备工作目录…',
+              }
+            : n,
+        ),
+      }));
       push({ t: now, kind: 'resume', who: '你', text: '开始执行' });
     },
     pause: () => {
@@ -302,12 +395,36 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
       push({ t: now, kind: 'pause', who: '你', text: '暂停：不再开始新的尝试' });
     },
     resume: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: s.decision ? 'review' : 'running', pauseCause: undefined, lastActivity: now } }));
+      setState((s) => ({
+        ...s,
+        goal: {
+          ...s.goal,
+          status: s.decision ? 'review' : 'running',
+          pauseCause: undefined,
+          lastActivity: now,
+        },
+      }));
       push({ t: now, kind: 'resume', who: '你', text: '继续' });
     },
-    setBudget: ({ rounds, cost, perWork }: { rounds: number | null; cost: number | null; perWork: number }) => {
-      setState((s) => ({ ...s, goal: { ...s.goal, maxRounds: rounds, maxTotalCost: cost, maxAttemptsPerWork: perWork } }));
-      push({ t: now, kind: 'budget', who: '你', text: `更新预算：费用 ${cost != null ? usd(cost) : '不限'} · 尝试 ${rounds ?? '不限'} · 单项 ${perWork}` });
+    setBudget: ({
+      rounds,
+      cost,
+      perWork,
+    }: {
+      rounds: number | null;
+      cost: number | null;
+      perWork: number;
+    }) => {
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, maxRounds: rounds, maxTotalCost: cost, maxAttemptsPerWork: perWork },
+      }));
+      push({
+        t: now,
+        kind: 'budget',
+        who: '你',
+        text: `更新预算：费用 ${cost != null ? usd(cost) : '不限'} · 尝试 ${rounds ?? '不限'} · 单项 ${perWork}`,
+      });
     },
     decide: (optionId: string, reason?: string) => {
       const d = state.decision;
@@ -317,31 +434,103 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         goal: { ...s.goal, status: 'running', lastActivity: now },
         decision: null,
         nodes: s.nodes.map((n) => {
-          if (n.id === d.nodeId) return { ...n, status: 'resolved', title: optionId === 'retry' ? '训练两次未通过 → 再试一次' : '训练两次未通过 → 放弃', body: reason ? `你的说明：${reason}` : undefined, at: now };
-          if (n.id === d.workId) return optionId === 'retry' ? { ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…' } : { ...n, status: 'retired' };
+          if (n.id === d.nodeId)
+            return {
+              ...n,
+              status: 'resolved',
+              title: optionId === 'retry' ? '训练两次未通过 → 再试一次' : '训练两次未通过 → 放弃',
+              body: reason ? `你的说明：${reason}` : undefined,
+              at: now,
+            };
+          if (n.id === d.workId)
+            return optionId === 'retry'
+              ? { ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…', humanTouches: [...(n.humanTouches ?? []), { t: now, kind: 'retry', text: `决策门：再试一次${reason ? ` — ${reason}` : ''}` }] }
+              : { ...n, status: 'retired', humanTouches: [...(n.humanTouches ?? []), { t: now, kind: 'retire', text: '决策门：放弃这项 Work' }] };
           return n;
         }),
       }));
-      push({ t: now, kind: 'decision', who: '你', text: optionId === 'retry' ? '决定：再试一次' : '决定：放弃这项 Work', nodeId: d.nodeId });
+      push({
+        t: now,
+        kind: 'decision',
+        who: '你',
+        text: optionId === 'retry' ? '决定：再试一次' : '决定：放弃这项 Work',
+        nodeId: d.nodeId,
+      });
     },
     accept: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'achieved', completedAt: now }, nodes: s.nodes.map((n) => (n.delivered ? { ...n, delivered: false, status: 'resolved' } : n.subtype === 'acceptance' && n.status === 'waiting' ? { ...n, status: 'resolved', title: '确认验收：Goal 达成', at: now } : n)) }));
-      push({ t: now, kind: 'achieved', who: '你', text: '确认完成：Goal 达成', nodeId: 'D3' });
+      const target = state.nodes.find((n) => n.delivered);
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'achieved', completedAt: now },
+        nodes: s.nodes.map((n) =>
+          n.delivered
+            ? { ...n, delivered: false, status: 'resolved', humanTouches: [...(n.humanTouches ?? []), { t: now, kind: 'accept', text: '确认验收：Goal 达成' }] }
+            : n,
+        ),
+      }));
+      push({ t: now, kind: 'achieved', who: '你', text: '确认完成：Goal 达成', nodeId: target?.id });
     },
     reject: (comment: string) => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', lastActivity: now }, nodes: s.nodes.map((n) => (n.delivered ? { ...n, delivered: false, status: 'active', lastActivity: now, lastLine: `按你的反馈重新验收：${comment}` } : n.subtype === 'acceptance' && n.status === 'waiting' ? { ...n, status: 'resolved', title: '还不够 → 再来一轮', body: comment, at: now } : n)) }));
-      push({ t: now, kind: 'decision', who: '你', text: `退回并带反馈再来一轮：${comment}`, nodeId: 'D3' });
+      const target = state.nodes.find((n) => n.delivered);
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'running', lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          n.delivered
+            ? { ...n, delivered: false, status: 'active', lastActivity: now, lastLine: `按你的反馈重新验收：${comment}`, humanTouches: [...(n.humanTouches ?? []), { t: now, kind: 'reject', text: `还不够，再来一轮：${comment}` }] }
+            : n,
+        ),
+      }));
+      push({ t: now, kind: 'decision', who: '你', text: `退回并带反馈再来一轮：${comment}`, nodeId: target?.id });
     },
     addBudget: (cap: number) => {
-      setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', pauseCause: undefined, maxTotalCost: cap, lastActivity: now }, nodes: s.nodes.map((n) => (n.subtype === 'budget' && n.status === 'waiting' ? { ...n, status: 'resolved', title: `预算 → ${usd(cap)}，继续`, at: now } : n)) }));
-      push({ t: now, kind: 'budget', who: '你', text: `费用上限调整为 ${usd(cap)}，继续`, nodeId: 'D2' });
+      const target = state.nodes.find((n) => n.kind === 'work' && n.status === 'active');
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, status: 'running', pauseCause: undefined, maxTotalCost: cap, lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          n.id === target?.id
+            ? { ...n, humanTouches: [...(n.humanTouches ?? []), { t: now, kind: 'budget', text: `预算 → ${usd(cap)}，继续` }] }
+            : n,
+        ),
+      }));
+      push({ t: now, kind: 'budget', who: '你', text: `费用上限调整为 ${usd(cap)}，继续`, nodeId: target?.id });
     },
     reclaim: () => {
-      setState((s) => ({ ...s, goal: { ...s.goal, lastActivity: now }, nodes: s.nodes.map((n) => (isStale(s.goal, n) ? { ...n, attempts: [...(n.attempts ?? []), { n: (n.attempts?.length ?? 0) + 1, started: (n.lastActivity ?? now) - 20 * 60_000, ended: now, outcome: 'abandoned', cost: 0.3, reason: '执行 Agent 失联，由系统回收；不计入失败次数', taskId: n.task?.id }], lastActivity: now, lastLine: '正在重新启动这次尝试…' } : n)) }));
+      setState((s) => ({
+        ...s,
+        goal: { ...s.goal, lastActivity: now },
+        nodes: s.nodes.map((n) =>
+          isStale(s.goal, n)
+            ? {
+                ...n,
+                attempts: [
+                  ...(n.attempts ?? []),
+                  {
+                    n: (n.attempts?.length ?? 0) + 1,
+                    started: (n.lastActivity ?? now) - 20 * 60_000,
+                    ended: now,
+                    outcome: 'abandoned',
+                    cost: 0.3,
+                    reason: '执行 Agent 失联，由系统回收；不计入失败次数',
+                    taskId: n.task?.id,
+                  },
+                ],
+                lastActivity: now,
+                lastLine: '正在重新启动这次尝试…',
+              }
+            : n,
+        ),
+      }));
       push({ t: now, kind: 'abandon', who: '系统', text: '回收失联的尝试并重开', nodeId: 'W2' });
     },
     startNode: (id: string) => {
-      patch(id, { status: 'active', lastActivity: now, task: { id: 'T-97', agent: 'Kimi Code' }, lastLine: '正在启动第 1 次尝试…' });
+      patch(id, {
+        status: 'active',
+        lastActivity: now,
+        task: { id: 'T-97', agent: 'Kimi Code' },
+        lastLine: '正在启动第 1 次尝试…',
+      });
       push({ t: now, kind: 'start', who: '你', text: '现在开始（与当前尝试并行）', nodeId: id });
       setSelected(null);
     },
@@ -353,8 +542,23 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   return (
     <div className={cx(styles.column, wide && styles.wide)}>
       <Flexbox gap={24}>
-        <GoalHeader state={state} frontier={frontier} onStart={actions.start} onPause={actions.pause} onResume={actions.resume} onSetBudget={actions.setBudget} />
-        <FrontierList state={state} frontier={frontier} hotId={hotId} freshIds={freshIds} onHover={setHotId} onSelect={select} actions={actions} />
+        <GoalHeader
+          state={state}
+          frontier={frontier}
+          onStart={actions.start}
+          onPause={actions.pause}
+          onResume={actions.resume}
+          onSetBudget={actions.setBudget}
+        />
+        <FrontierList
+          state={state}
+          frontier={frontier}
+          hotId={hotId}
+          freshIds={freshIds}
+          onHover={setHotId}
+          onSelect={select}
+          actions={actions}
+        />
         <Flexbox gap={12}>
           <Graph
             state={state}
@@ -368,7 +572,18 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
             onToggleWide={() => setWide(!wide)}
             isDraft={state.goal.status === 'planning'}
           />
-          {selected && <NodeDetail key={selected.id} state={state} frontier={frontier} id={selected.id} editing={selected.edit} onClose={() => setSelected(null)} onSelect={(id) => setSelected({ id })} onStart={actions.startNode} />}
+          {selected && (
+            <NodeDetail
+              key={selected.id}
+              state={state}
+              frontier={frontier}
+              id={selected.id}
+              editing={selected.edit}
+              onClose={() => setSelected(null)}
+              onSelect={(id) => setSelected({ id })}
+              onStart={actions.startNode}
+            />
+          )}
         </Flexbox>
         <Section title="结论" count={findingsCount} defaultOpen={findingsCount > 0}>
           <Findings state={state} hotId={hotId} onHover={setHotId} onSelect={(id) => select(id)} />
@@ -377,7 +592,12 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           <Contract goal={state.goal} />
         </Section>
         <Section title="活动" count={state.log.length} defaultOpen>
-          <Activity state={state} onHover={setHotId} onSelect={(id) => select(id)} onComment={actions.comment} />
+          <Activity
+            state={state}
+            onHover={setHotId}
+            onSelect={(id) => select(id)}
+            onComment={actions.comment}
+          />
         </Section>
       </Flexbox>
     </div>
@@ -388,7 +608,20 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
 <script type="text/plain" data-module="src/components/Activity.tsx">
 import { Button, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { Check, Coins, Flag, GitBranch, Lightbulb, MessageSquare, Pause, Play, Sparkles, Trophy, WifiOff, X } from 'lucide-react';
+import {
+  Check,
+  Coins,
+  Flag,
+  GitBranch,
+  Lightbulb,
+  MessageSquare,
+  Pause,
+  Play,
+  Sparkles,
+  Trophy,
+  WifiOff,
+  X,
+} from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { ago, clock } from '../model/format';
@@ -401,14 +634,18 @@ import { ActorAvatar, KindDot, useSharedStyles } from './shared';
 const useStyles = createStyles(({ css, token }) => ({
   feed: css`
     position: relative;
-    padding: 4px 0 4px 4px;
+    padding-block: 4px;
+    padding-inline: 4px 0;
+
     &::before {
       content: '';
+
       position: absolute;
-      left: 15px;
-      top: 16px;
-      bottom: 16px;
+      inset-block: 16px;
+      inset-inline-start: 15px;
+
       width: 1px;
+
       background: ${token.colorBorderSecondary};
     }
   `,
@@ -416,19 +653,24 @@ const useStyles = createStyles(({ css, token }) => ({
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    padding: 6px 0;
+
+    padding-block: 6px;
+    padding-inline: 0;
   `,
   icon: css`
     position: relative;
-    flex: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 12px;
+
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
-    background: ${token.colorBgContainer};
+
+    width: 24px;
+    height: 24px;
     border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 12px;
+
+    background: ${token.colorBgContainer};
   `,
   iconWarn: css`
     border-color: ${token.colorWarningBorder};
@@ -443,17 +685,22 @@ const useStyles = createStyles(({ css, token }) => ({
     background: ${token.colorErrorBg};
   `,
   chip: css`
+    cursor: pointer;
+
     display: inline-flex;
-    align-items: center;
     gap: 5px;
-    padding: 0 6px;
+    align-items: center;
+
+    max-width: 320px;
     height: 20px;
-    border-radius: ${token.borderRadiusXS}px;
+    padding-block: 0;
+    padding-inline: 6px;
     border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusXS}px;
+
     font-size: 12px;
     color: ${token.colorTextSecondary};
-    cursor: pointer;
-    max-width: 320px;
+
     &:hover {
       background: ${token.colorFillTertiary};
     }
@@ -497,13 +744,27 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
   const { styles: shared } = useSharedStyles();
   const [comment, setComment] = useState('');
   const events = [...state.log].sort((a, b) => b.t - a.t);
-  const nodeOf = (e: ActivityEvent) => (e.nodeId ? state.nodes.find((n) => n.id === e.nodeId) : undefined);
+  const nodeOf = (e: ActivityEvent) =>
+    e.nodeId ? state.nodes.find((n) => n.id === e.nodeId) : undefined;
 
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal gap={8} align="flex-start">
-        <TextArea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="给这个 Goal 留一条说明（进入活动记录，并作为后续尝试的上下文）" autoSize={{ minRows: 1, maxRows: 3 }} style={{ flex: 1 }} />
-        <Button size="small" disabled={!comment.trim()} onClick={() => { onComment(comment); setComment(''); }}>
+        <TextArea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="给这个 Goal 留一条说明（进入活动记录，并作为后续尝试的上下文）"
+          autoSize={{ minRows: 1, maxRows: 3 }}
+          style={{ flex: 1 }}
+        />
+        <Button
+          size="small"
+          disabled={!comment.trim()}
+          onClick={() => {
+            onComment(comment);
+            setComment('');
+          }}
+        >
           发送
         </Button>
       </Flexbox>
@@ -518,7 +779,14 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
           const node = nodeOf(e);
           return (
             <div key={i} className={styles.row}>
-              <div className={cx(styles.icon, meta.tone === 'ok' && styles.iconOk, meta.tone === 'bad' && styles.iconBad, meta.tone === 'warn' && styles.iconWarn)}>
+              <div
+                className={cx(
+                  styles.icon,
+                  meta.tone === 'ok' && styles.iconOk,
+                  meta.tone === 'bad' && styles.iconBad,
+                  meta.tone === 'warn' && styles.iconWarn,
+                )}
+              >
                 <Icon icon={meta.icon} size={12} />
               </div>
               <Flexbox gap={2} flex={1} style={{ minWidth: 0, paddingTop: 2 }}>
@@ -529,7 +797,12 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
                   </Text>
                   <Text fontSize={13}>{e.text}</Text>
                   {node && (
-                    <span className={styles.chip} onMouseEnter={() => onHover(node.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(node.id)}>
+                    <span
+                      className={styles.chip}
+                      onMouseEnter={() => onHover(node.id)}
+                      onMouseLeave={() => onHover(null)}
+                      onClick={() => onSelect(node.id)}
+                    >
                       <KindDot kind={node.kind} />
                       <span className={styles.chipText}>{node.title}</span>
                     </span>
@@ -537,7 +810,11 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
                 </Flexbox>
                 {e.detail && <span className={styles.detail}>{e.detail}</span>}
               </Flexbox>
-              <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ flexShrink: 0, paddingTop: 4 }}>
+              <Text
+                fontSize={12}
+                className={cx(shared.muted, shared.mono)}
+                style={{ flexShrink: 0, paddingTop: 4 }}
+              >
                 {ago(clock.now - e.t)}
               </Text>
             </div>
@@ -566,7 +843,8 @@ export const Contract = memo<{ goal: GoalInfo }>(({ goal }) => {
       <Flexbox horizontal justify="space-between" align="flex-start" gap={16}>
         <Text fontSize={13}>{goal.requirement}</Text>
         <Button size="small" type="text">
-          编辑 <NewTag title="Graph 型 Goal 的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
+          编辑{' '}
+          <NewTag title="Graph 型 Goal 的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
         </Button>
       </Flexbox>
       <Flexbox gap={6}>
@@ -575,7 +853,11 @@ export const Contract = memo<{ goal: GoalInfo }>(({ goal }) => {
         </Text>
         {goal.checks.map((c) => (
           <Flexbox key={c.label} horizontal gap={8} align="center">
-            <Icon icon={c.state === 'passed' ? Check : CircleDashed} size={14} color={c.state === 'passed' ? 'var(--ant-color-success)' : undefined} />
+            <Icon
+              icon={c.state === 'passed' ? Check : CircleDashed}
+              size={14}
+              color={c.state === 'passed' ? 'var(--ant-color-success)' : undefined}
+            />
             <Text fontSize={13} type={c.state === 'passed' ? undefined : 'secondary'}>
               {c.label}
             </Text>
@@ -618,10 +900,17 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 /** What the system currently believes — latest Findings, each traceable to the Work that produced it. */
-export const Findings = memo<{ state: GoalState; hotId: string | null; onHover: (id: string | null) => void; onSelect: (id: string) => void }>(({ state, hotId, onHover, onSelect }) => {
+export const Findings = memo<{
+  state: GoalState;
+  hotId: string | null;
+  onHover: (id: string | null) => void;
+  onSelect: (id: string) => void;
+}>(({ state, hotId, onHover, onSelect }) => {
   const { styles, cx } = useStyles();
   const { styles: shared } = useSharedStyles();
-  const findings = state.nodes.filter((n) => n.kind === 'finding').sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
+  const findings = state.nodes
+    .filter((n) => n.kind === 'finding')
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
   if (findings.length === 0)
     return (
       <Text fontSize={13} className={shared.muted}>
@@ -634,16 +923,32 @@ export const Findings = memo<{ state: GoalState; hotId: string | null; onHover: 
         {findings.map((f, i) => (
           <Fragment key={f.id}>
             {i > 0 && <Divider dashed style={{ margin: 0 }} />}
-            <Block clickable padding={12} className={cx(hotId === f.id && styles.rowHot)} onMouseEnter={() => onHover(f.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(f.id)}>
+            <Block
+              clickable
+              padding={12}
+              className={cx(hotId === f.id && styles.rowHot)}
+              onMouseEnter={() => onHover(f.id)}
+              onMouseLeave={() => onHover(null)}
+              onClick={() => onSelect(f.id)}
+            >
               <Flexbox horizontal gap={10} align="center">
                 <KindDot kind="finding" />
                 <Text weight={500} ellipsis style={{ minWidth: 0 }}>
                   {f.title}
                 </Text>
-                <Text fontSize={12} className={shared.muted} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
+                <Text
+                  fontSize={12}
+                  className={shared.muted}
+                  ellipsis
+                  style={{ flexShrink: 1, minWidth: 0 }}
+                >
                   来自「{state.nodes.find((n) => n.id === f.from)?.title}」
                 </Text>
-                <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                <Text
+                  fontSize={12}
+                  className={cx(shared.muted, shared.mono)}
+                  style={{ marginLeft: 'auto', flexShrink: 0 }}
+                >
                   {short(clock.now - (f.at ?? clock.now))}
                 </Text>
               </Flexbox>
@@ -657,10 +962,33 @@ export const Findings = memo<{ state: GoalState; hotId: string | null; onHover: 
 
 </script>
 <script type="text/plain" data-module="src/components/Frontier/FrontierList.tsx">
-import { ActionIcon, Block, Button, Flexbox, Icon, InputNumber, Text, TextArea, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Text,
+  TextArea,
+  Tooltip,
+} from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStyles } from 'antd-style';
-import { AlertTriangle, Check, CircleDashed, Clock, Coins, Loader, Pause, Pencil, Plus, RotateCcw, ShieldCheck, WifiOff } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  CircleDashed,
+  Clock,
+  Coins,
+  Loader,
+  Pause,
+  Pencil,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  WifiOff,
+} from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 
 import { ago, clock, short, usd } from '../../model/format';
@@ -676,6 +1004,7 @@ import { ActorAvatar, NewTag, useSharedStyles } from '../shared';
 const useStyles = createStyles(({ css, token }) => ({
   row: css`
     position: relative;
+
     &:hover .row-actions {
       opacity: 1;
     }
@@ -688,18 +1017,20 @@ const useStyles = createStyles(({ css, token }) => ({
     transition: opacity 0.15s;
   `,
   glyph: css`
-    flex: none;
-    width: 16px;
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
+
+    width: 16px;
   `,
   second: css`
     font-size: 12px;
     color: ${token.colorTextTertiary};
   `,
   blocked: css`
-    padding: 8px 12px 4px;
+    padding-block: 8px 4px;
+    padding-inline: 12px;
     font-size: 12px;
     color: ${token.colorTextTertiary};
   `,
@@ -736,10 +1067,24 @@ const Glyph = ({ item, paused }: { item: FrontierItem; paused: boolean }) => {
     case 'stale':
       return <Icon icon={WifiOff} size={16} color="var(--ant-color-error)" />;
     case 'running':
-      return paused ? <Icon icon={Pause} size={16} color="var(--ant-color-text-tertiary)" /> : <Icon icon={Loader} size={16} className={styles.spin} color="var(--ant-color-info)" />;
+      return paused ? (
+        <Icon icon={Pause} size={16} color="var(--ant-color-text-tertiary)" />
+      ) : (
+        <Icon icon={Loader} size={16} className={styles.spin} color="var(--ant-color-info)" />
+      );
     default:
       return <Icon icon={CircleDashed} size={16} color="var(--ant-color-text-quaternary)" />;
   }
+};
+
+const rowTitle = (state: GoalState, item: FrontierItem) => {
+  const { goal } = state;
+  if (item.kind === 'budget') return `费用预算用完了（${usd(goal.spent)} / ${usd(goal.maxTotalCost ?? 0)}）`;
+  if (item.kind === 'acceptance') {
+    const passed = goal.checks.filter((c) => c.state === 'passed').length;
+    return `验收通过 ${passed}/${goal.checks.length}，这个 Goal 算完成了吗？`;
+  }
+  return item.node.title;
 };
 
 /** The second line: where the row's live text comes from is the owner Task's topic + heartbeat. */
@@ -750,199 +1095,316 @@ const secondLine = (state: GoalState, item: FrontierItem, frontier: Frontier) =>
     case 'gate': {
       const d = state.decision;
       const w = d ? state.nodes.find((x) => x.id === d.workId) : undefined;
-      return d && w ? `「${w.title}」已试 ${w.attempts?.filter((a) => a.outcome !== 'abandoned').length} 次 · ${d.why.split('；')[0]}` : n.body;
+      return d && w
+        ? `「${w.title}」已试 ${w.attempts?.filter((a) => a.outcome !== 'abandoned').length} 次 · ${d.why.split('；')[0]}`
+        : n.body;
     }
     case 'acceptance':
-      return `${n.body ?? ''} 确认后记为已达成；不够就带反馈再来一轮。`;
+      return '独立 verifier 重新加载了 checkpoint、核对了 loss 和采样长度；确认后记为已达成，不够就带反馈再来一轮。';
     case 'budget':
       return `已花 ${usd(goal.spent)}，上限 ${usd(goal.maxTotalCost ?? 0)} · 已停下，不会再开始新的尝试`;
     case 'stale':
       return `${n.task?.agent} 已 ${ago(clock.now - (n.lastActivity ?? clock.now)).replace('前', '')}没有心跳 · 下一次推进会自动重开，不算失败次数`;
     case 'running':
-      if (goal.status === 'paused') return `已停止 · 第 ${(n.attempts?.length ?? 0) + 1} 次尝试会在继续后接着跑`;
+      if (goal.status === 'paused')
+        return `已停止 · 第 ${(n.attempts?.length ?? 0) + 1} 次尝试会在继续后接着跑`;
       return `${n.task?.agent} · 第 ${(n.attempts?.length ?? 0) + 1} 次尝试 · 最近：${n.lastLine ?? ''}`;
     default:
-      return goal.status === 'planning' ? '没有前置依赖，开始后由 Agent 领取' : `依赖已满足 · 排队第 ${item.queue}${frontier.items.some((i) => i.kind === 'running') ? '，等当前尝试结束' : ''}`;
+      return goal.status === 'planning'
+        ? '没有前置依赖，开始后由 Agent 领取'
+        : `依赖已满足 · 排队第 ${item.queue}${frontier.items.some((i) => i.kind === 'running') ? '，等当前尝试结束' : ''}`;
   }
 };
 
-export const FrontierList = memo<FrontierListProps>(({ state, frontier, hotId, freshIds, onHover, onSelect, actions }) => {
-  const { styles, cx } = useStyles();
-  const { styles: shared } = useSharedStyles();
-  const { goal } = state;
-  const [rejectFor, setRejectFor] = useState<string | null>(null);
-  const [comment, setComment] = useState('');
-  const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
-  const paused = goal.status === 'paused';
+export const FrontierList = memo<FrontierListProps>(
+  ({ state, frontier, hotId, freshIds, onHover, onSelect, actions }) => {
+    const { styles, cx } = useStyles();
+    const { styles: shared } = useSharedStyles();
+    const { goal } = state;
+    const [rejectFor, setRejectFor] = useState<string | null>(null);
+    const [comment, setComment] = useState('');
+    const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
+    const paused = goal.status === 'paused';
 
-  const rightCluster = (item: FrontierItem) => {
-    const n = item.node;
-    switch (item.kind) {
-      case 'gate': {
-        const d = state.decision!;
-        const rec = d.options.find((o) => o.id === d.recommended)!;
-        return (
-          <>
-            {d.options
-              .filter((o) => o.id !== rec.id)
-              .map((o) => (
-                <Tooltip key={o.id} title={o.consequence}>
-                  <Button size="small" onClick={(e) => { e.stopPropagation(); actions.decide(o.id); }}>
-                    {o.label}
-                  </Button>
-                </Tooltip>
-              ))}
-            <Tooltip title={`推荐 · ${rec.consequence}`}>
-              <Button type="primary" size="small" onClick={(e) => { e.stopPropagation(); actions.decide(rec.id); }}>
-                {rec.label}
+    const rightCluster = (item: FrontierItem) => {
+      const n = item.node;
+      switch (item.kind) {
+        case 'gate': {
+          const d = state.decision!;
+          const rec = d.options.find((o) => o.id === d.recommended)!;
+          return (
+            <>
+              {d.options
+                .filter((o) => o.id !== rec.id)
+                .map((o) => (
+                  <Tooltip key={o.id} title={o.consequence}>
+                    <Button
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        actions.decide(o.id);
+                      }}
+                    >
+                      {o.label}
+                    </Button>
+                  </Tooltip>
+                ))}
+              <Tooltip title={`推荐 · ${rec.consequence}`}>
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    actions.decide(rec.id);
+                  }}
+                >
+                  {rec.label}
+                </Button>
+              </Tooltip>
+            </>
+          );
+        }
+        case 'acceptance':
+          return (
+            <>
+              <Button
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRejectFor(n.id);
+                }}
+              >
+                还不够
               </Button>
-            </Tooltip>
-          </>
-        );
-      }
-      case 'acceptance':
-        return (
-          <>
-            <Button size="small" onClick={(e) => { e.stopPropagation(); setRejectFor(n.id); }}>
-              还不够
+              <Button
+                type="primary"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.accept();
+                }}
+              >
+                确认完成
+              </Button>
+            </>
+          );
+        case 'budget':
+          return (
+            <>
+              <InputNumber
+                size="small"
+                value={budget}
+                min={goal.spent}
+                step={1}
+                prefix="$"
+                onChange={(v) => setBudget(Number(v ?? 0))}
+                style={{ width: 96 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <Button
+                type="primary"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.addBudget(budget);
+                }}
+              >
+                追加并继续
+              </Button>
+            </>
+          );
+        case 'stale':
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<Icon icon={RotateCcw} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.reclaim();
+              }}
+            >
+              立即重开
             </Button>
-            <Button type="primary" size="small" onClick={(e) => { e.stopPropagation(); actions.accept(); }}>
-              确认完成
-            </Button>
-          </>
-        );
-      case 'budget':
-        return (
-          <>
-            <InputNumber size="small" value={budget} min={goal.spent} step={1} prefix="$" onChange={(v) => setBudget(Number(v ?? 0))} style={{ width: 96 }} onClick={(e) => e.stopPropagation()} />
-            <Button type="primary" size="small" onClick={(e) => { e.stopPropagation(); actions.addBudget(budget); }}>
-              追加并继续
-            </Button>
-          </>
-        );
-      case 'stale':
-        return (
-          <Button type="primary" size="small" icon={<Icon icon={RotateCcw} />} onClick={(e) => { e.stopPropagation(); actions.reclaim(); }}>
-            立即重开
-          </Button>
-        );
-      case 'running':
-        return (
-          <>
-            <ActorAvatar name={n.task?.agent ?? ''} />
-            <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
-              {short(clock.now - (n.lastActivity ?? clock.now))}
-            </Text>
-          </>
-        );
-      default:
-        return (
-          <>
-            <ActionIcon icon={Pencil} size="small" title="编辑这项 Work" className={cx('row-actions', styles.hoverActions)} onClick={(e) => { e.stopPropagation(); onSelect(n.id, true); }} />
-            <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
-              {item.queue ? `#${item.queue}` : ''}
-            </Text>
-          </>
-        );
-    }
-  };
-
-  const stateTone = (item: FrontierItem) => (item.rank === 0 ? (item.kind === 'stale' ? 'danger' : 'warning') : item.kind === 'running' && !paused ? 'info' : 'secondary');
-
-  return (
-    <Flexbox gap={8}>
-      <Flexbox horizontal justify="space-between" align="baseline">
-        <Flexbox horizontal gap={8} align="baseline">
-          <Text fontSize={16} weight={600}>
-            接下来
-          </Text>
-          <Text fontSize={12} className={shared.muted}>
-            {goal.status === 'planning'
-              ? '开始后 Agent 按优先级逐项领取'
-              : `${frontier.needsYou > 0 ? `${frontier.needsYou} 项需要你 · ` : ''}${frontier.items.length} 项能推进`}
-          </Text>
-        </Flexbox>
-        <Button size="small" type="text" icon={<Icon icon={Plus} />}>
-          添加 Work
-        </Button>
-      </Flexbox>
-
-      <div className={shared.list}>
-        <Block variant="borderless" gap={0} padding={2}>
-          {frontier.items.length === 0 && (
-            <Flexbox padding={12} gap={2}>
-              <Text weight={500}>{goal.status === 'achieved' ? '没有需要推进的了，Goal 已达成' : '当前没有可推进的节点'}</Text>
-              <Text fontSize={12} type="secondary">
-                {goal.status === 'achieved' ? '结论都在下面的图里；可以基于任何结论再开一条新的 Work。' : '所有节点都在等待或已终态。'}
+          );
+        case 'running':
+          return (
+            <>
+              <ActorAvatar name={n.task?.agent ?? ''} />
+              <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
+                {short(clock.now - (n.lastActivity ?? clock.now))}
               </Text>
-            </Flexbox>
+            </>
+          );
+        default:
+          return (
+            <>
+              <ActionIcon
+                icon={Pencil}
+                size="small"
+                title="编辑这项 Work"
+                className={cx('row-actions', styles.hoverActions)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(n.id, true);
+                }}
+              />
+              <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
+                {item.queue ? `#${item.queue}` : ''}
+              </Text>
+            </>
+          );
+      }
+    };
+
+    const stateTone = (item: FrontierItem) =>
+      item.rank === 0
+        ? item.kind === 'stale'
+          ? 'danger'
+          : 'warning'
+        : item.kind === 'running' && !paused
+          ? 'info'
+          : 'secondary';
+
+    return (
+      <Flexbox gap={8}>
+        <Flexbox horizontal justify="space-between" align="baseline">
+          <Flexbox horizontal gap={8} align="baseline">
+            <Text fontSize={16} weight={600}>
+              接下来
+            </Text>
+            <Text fontSize={12} className={shared.muted}>
+              {goal.status === 'planning'
+                ? '开始后 Agent 按优先级逐项领取'
+                : `${frontier.needsYou > 0 ? `${frontier.needsYou} 项需要你 · ` : ''}${frontier.items.length} 项能推进`}
+            </Text>
+          </Flexbox>
+          <Button size="small" type="text" icon={<Icon icon={Plus} />}>
+            添加 Work
+          </Button>
+        </Flexbox>
+
+        <div className={shared.list}>
+          <Block variant="borderless" gap={0} padding={2}>
+            {frontier.items.length === 0 && (
+              <Flexbox padding={12} gap={2}>
+                <Text weight={500}>
+                  {goal.status === 'achieved'
+                    ? '没有需要推进的了，Goal 已达成'
+                    : '当前没有可推进的节点'}
+                </Text>
+                <Text fontSize={12} type="secondary">
+                  {goal.status === 'achieved'
+                    ? '结论都在下面的图里；可以基于任何结论再开一条新的 Work。'
+                    : '所有节点都在等待或已终态。'}
+                </Text>
+              </Flexbox>
+            )}
+            {frontier.items.map((item, i) => {
+              const n = item.node;
+              const hot = hotId === n.id;
+              const stateText =
+                item.kind === 'gate'
+                  ? '等你决定'
+                  : item.kind === 'acceptance'
+                    ? '等你确认'
+                    : item.kind === 'budget'
+                      ? '需要你'
+                      : nodeStateText(goal, n, frontier);
+              return (
+                <Fragment key={item.key}>
+                  {i > 0 && <Divider dashed style={{ margin: 0 }} />}
+                  <Block
+                    clickable
+                    padding={12}
+                    className={cx(styles.row, hot && styles.rowHot)}
+                    onClick={() => onSelect(n.id)}
+                    onMouseEnter={() => onHover(n.id)}
+                    onMouseLeave={() => onHover(null)}
+                  >
+                    <Flexbox horizontal gap={12} align="center">
+                      <div className={styles.glyph}>
+                        <Glyph item={item} paused={paused} />
+                      </div>
+                      <Flexbox gap={2} flex={1} style={{ minWidth: 0 }}>
+                        <Flexbox horizontal gap={8} align="center">
+                          <Text weight={500} ellipsis style={{ minWidth: 0 }}>
+                            {rowTitle(state, item)}
+                          </Text>
+                          <Text fontSize={12} type={stateTone(item)} style={{ flexShrink: 0 }}>
+                            {stateText}
+                          </Text>
+                        </Flexbox>
+                        <Text ellipsis className={styles.second}>
+                          {secondLine(state, item, frontier)}
+                        </Text>
+                      </Flexbox>
+                      <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
+                        {rightCluster(item)}
+                      </Flexbox>
+                    </Flexbox>
+                    {rejectFor === n.id && (
+                      <Flexbox
+                        gap={8}
+                        style={{ marginTop: 10, paddingLeft: 28 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <TextArea
+                          autoFocus
+                          placeholder="哪里不够？会作为下一轮的输入"
+                          value={comment}
+                          onChange={(e) => setComment(e.target.value)}
+                          autoSize={{ minRows: 2, maxRows: 4 }}
+                        />
+                        <Flexbox horizontal gap={8} justify="flex-end">
+                          <Button size="small" onClick={() => setRejectFor(null)}>
+                            取消
+                          </Button>
+                          <Button
+                            size="small"
+                            type="primary"
+                            disabled={!comment.trim()}
+                            onClick={() => {
+                              actions.reject(comment);
+                              setRejectFor(null);
+                            }}
+                          >
+                            带反馈再来一轮
+                          </Button>
+                        </Flexbox>
+                      </Flexbox>
+                    )}
+                  </Block>
+                </Fragment>
+              );
+            })}
+          </Block>
+          {frontier.blocked.length > 0 && (
+            <>
+              <Divider dashed style={{ margin: 0 }} />
+              <Flexbox horizontal gap={6} align="center" wrap="wrap" className={styles.blocked}>
+                <Icon icon={Clock} size={12} />
+                <span>还有 {frontier.blocked.length} 项在等依赖：</span>
+                {frontier.blocked.map((b, i) => (
+                  <span
+                    key={b.key}
+                    style={{ cursor: 'pointer' }}
+                    onMouseEnter={() => onHover(b.node.id)}
+                    onMouseLeave={() => onHover(null)}
+                    onClick={() => onSelect(b.node.id, true)}
+                  >
+                    <u>{b.node.title}</u>（等{b.blockers.map((x) => x.title.slice(0, 8)).join('、')}
+                    …）{i < frontier.blocked.length - 1 ? '、' : ''}
+                  </span>
+                ))}
+              </Flexbox>
+            </>
           )}
-          {frontier.items.map((item, i) => {
-            const n = item.node;
-            const hot = hotId === n.id;
-            const stateText = item.kind === 'gate' ? '等你决定' : item.kind === 'acceptance' ? '等你确认' : item.kind === 'budget' ? '需要你' : nodeStateText(goal, n, frontier);
-            return (
-              <Fragment key={item.key}>
-                {i > 0 && <Divider dashed style={{ margin: 0 }} />}
-                <Block clickable padding={12} className={cx(styles.row, hot && styles.rowHot)} onClick={() => onSelect(n.id)} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)}>
-                  <Flexbox horizontal gap={12} align="center">
-                    <div className={styles.glyph}>
-                      <Glyph item={item} paused={paused} />
-                    </div>
-                    <Flexbox gap={2} flex={1} style={{ minWidth: 0 }}>
-                      <Flexbox horizontal gap={8} align="center">
-                        <Text weight={500} ellipsis style={{ minWidth: 0 }}>
-                          {item.kind === 'gate' || item.kind === 'acceptance' || item.kind === 'budget' ? n.title : n.title}
-                        </Text>
-                        <Text fontSize={12} type={stateTone(item)} style={{ flexShrink: 0 }}>
-                          {stateText}
-                        </Text>
-                        {n.isNew && <NewTag title="这类决策今天不是图节点（预算 / 验收确认），为回溯建模的提案" />}
-                      </Flexbox>
-                      <Text ellipsis className={styles.second}>
-                        {secondLine(state, item, frontier)}
-                      </Text>
-                    </Flexbox>
-                    <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
-                      {rightCluster(item)}
-                    </Flexbox>
-                  </Flexbox>
-                  {rejectFor === n.id && (
-                    <Flexbox gap={8} style={{ marginTop: 10, paddingLeft: 28 }} onClick={(e) => e.stopPropagation()}>
-                      <TextArea autoFocus placeholder="哪里不够？会作为下一轮的输入" value={comment} onChange={(e) => setComment(e.target.value)} autoSize={{ minRows: 2, maxRows: 4 }} />
-                      <Flexbox horizontal gap={8} justify="flex-end">
-                        <Button size="small" onClick={() => setRejectFor(null)}>
-                          取消
-                        </Button>
-                        <Button size="small" type="primary" disabled={!comment.trim()} onClick={() => { actions.reject(comment); setRejectFor(null); }}>
-                          带反馈再来一轮
-                        </Button>
-                      </Flexbox>
-                    </Flexbox>
-                  )}
-                </Block>
-              </Fragment>
-            );
-          })}
-        </Block>
-        {frontier.blocked.length > 0 && (
-          <>
-            <Divider dashed style={{ margin: 0 }} />
-            <Flexbox horizontal gap={6} align="center" wrap="wrap" className={styles.blocked}>
-              <Icon icon={Clock} size={12} />
-              <span>还有 {frontier.blocked.length} 项在等依赖：</span>
-              {frontier.blocked.map((b, i) => (
-                <span key={b.key} style={{ cursor: 'pointer' }} onMouseEnter={() => onHover(b.node.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(b.node.id, true)}>
-                  <u>{b.node.title}</u>（等{b.blockers.map((x) => x.title.slice(0, 8)).join('、')}…）{i < frontier.blocked.length - 1 ? '、' : ''}
-                </span>
-              ))}
-            </Flexbox>
-          </>
-        )}
-      </div>
-    </Flexbox>
-  );
-});
+        </div>
+      </Flexbox>
+    );
+  },
+);
 
 export type { GoalNode };
 
@@ -962,21 +1424,24 @@ import { NewTag, useSharedStyles } from './shared';
 
 const useStyles = createStyles(({ css, token }) => ({
   title: css`
+    width: 100%;
+    padding: 0;
+    border: none;
+
     font-size: 24px;
     font-weight: 600;
     line-height: 1.3;
-    border: none;
-    outline: none;
-    background: transparent;
-    width: 100%;
     color: ${token.colorText};
-    padding: 0;
+
+    background: transparent;
+    outline: none;
   `,
   propRow: css`
     display: grid;
     grid-template-columns: 56px 1fr;
     gap: 8px;
     align-items: center;
+
     min-height: 28px;
   `,
 }));
@@ -990,7 +1455,12 @@ interface GoalHeaderProps {
   onSetBudget: (v: { rounds: number | null; cost: number | null; perWork: number }) => void;
 }
 
-const RunPauseAction = ({ state, onStart, onPause, onResume }: Omit<GoalHeaderProps, 'frontier' | 'onSetBudget'>) => {
+const RunPauseAction = ({
+  state,
+  onStart,
+  onPause,
+  onResume,
+}: Omit<GoalHeaderProps, 'frontier' | 'onSetBudget'>) => {
   const [open, setOpen] = useState(false);
   const { goal } = state;
   if (['achieved', 'failed', 'canceled'].includes(goal.status))
@@ -1016,11 +1486,24 @@ const RunPauseAction = ({ state, onStart, onPause, onResume }: Omit<GoalHeaderPr
       <Button size="small" icon={<Icon icon={Pause} />} onClick={() => setOpen(true)}>
         暂停
       </Button>
-      <Modal open={open} title="暂停这个 Goal？" okText="暂停" cancelText="取消" onCancel={() => setOpen(false)} onOk={() => { setOpen(false); onPause(); }}>
+      <Modal
+        open={open}
+        title="暂停这个 Goal？"
+        okText="暂停"
+        cancelText="取消"
+        onCancel={() => setOpen(false)}
+        onOk={() => {
+          setOpen(false);
+          onPause();
+        }}
+      >
         <Flexbox gap={8}>
-          <Text>暂停后不会再开始新的尝试；正在进行的尝试会跑到它自己结束为止，期间的费用仍会计入。</Text>
+          <Text>
+            暂停后不会再开始新的尝试；正在进行的尝试会跑到它自己结束为止，期间的费用仍会计入。
+          </Text>
           <Text type="secondary" fontSize={13}>
-            随时可以点「继续」恢复。立刻中断正在执行的 Agent 目前还做不到 <NewTag title="AbortSignal 未接入 runtime；红线" />。
+            随时可以点「继续」恢复。立刻中断正在执行的 Agent 目前还做不到{' '}
+            <NewTag title="AbortSignal 未接入 runtime；红线" />。
           </Text>
         </Flexbox>
       </Modal>
@@ -1028,114 +1511,163 @@ const RunPauseAction = ({ state, onStart, onPause, onResume }: Omit<GoalHeaderPr
   );
 };
 
-export const GoalHeader = memo<GoalHeaderProps>(({ state, frontier, onStart, onPause, onResume, onSetBudget }) => {
-  const { styles } = useStyles();
-  const { styles: shared } = useSharedStyles();
-  const { goal } = state;
-  const [budgetOpen, setBudgetOpen] = useState(false);
-  const [rounds, setRounds] = useState<number | null>(goal.maxRounds);
-  const [cost, setCost] = useState<number | null>(goal.maxTotalCost);
-  const [perWork, setPerWork] = useState(goal.maxAttemptsPerWork);
-  const overCost = goal.maxTotalCost != null && goal.spent >= goal.maxTotalCost;
-  const passed = goal.checks.filter((c) => c.state === 'passed').length;
-  const attempts = countAttempts(state);
-  const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className={styles.propRow}>
-      <Text fontSize={12} type="secondary">
-        {label}
-      </Text>
-      <div>{children}</div>
-    </div>
-  );
+export const GoalHeader = memo<GoalHeaderProps>(
+  ({ state, frontier, onStart, onPause, onResume, onSetBudget }) => {
+    const { styles } = useStyles();
+    const { styles: shared } = useSharedStyles();
+    const { goal } = state;
+    const [budgetOpen, setBudgetOpen] = useState(false);
+    const [rounds, setRounds] = useState<number | null>(goal.maxRounds);
+    const [cost, setCost] = useState<number | null>(goal.maxTotalCost);
+    const [perWork, setPerWork] = useState(goal.maxAttemptsPerWork);
+    const overCost = goal.maxTotalCost != null && goal.spent >= goal.maxTotalCost;
+    const passed = goal.checks.filter((c) => c.state === 'passed').length;
+    const attempts = countAttempts(state);
+    const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+      <div className={styles.propRow}>
+        <Text fontSize={12} type="secondary">
+          {label}
+        </Text>
+        <div>{children}</div>
+      </div>
+    );
 
-  return (
-    <Flexbox gap={16}>
-      <input className={styles.title} defaultValue={goal.title} />
-      <Flexbox horizontal gap={24} align="flex-start" justify="space-between">
-        <Flexbox gap={12} flex={1} style={{ minWidth: 240 }}>
-          <Flexbox horizontal gap={8} align="center" wrap="wrap">
-            <RunPauseAction state={state} onStart={onStart} onPause={onPause} onResume={onResume} />
-            {goal.startedAt && (
-              <Text fontSize={12} className={shared.muted}>
-                已进行 {duration(clock.now - goal.startedAt)}
-              </Text>
-            )}
-          </Flexbox>
-          <Text fontSize={13} type="secondary">
-            {goal.requirement}
-          </Text>
-        </Flexbox>
-        <Flexbox gap={2} style={{ width: 300, flexShrink: 0 }}>
-          <Row label="状态">
-            <Text fontSize={13} type={frontier.needsYou ? 'warning' : goal.status === 'achieved' ? 'success' : undefined} weight={frontier.needsYou ? 600 : undefined}>
-              {goalSentence(goal, frontier)}
-            </Text>
-          </Row>
-          <Row label="费用">
-            <Popover
-              open={budgetOpen}
-              onOpenChange={setBudgetOpen}
-              trigger="click"
-              content={
-                <Flexbox gap={12} style={{ width: 260 }} padding={4}>
-                  <Text weight={600}>预算与保护</Text>
-                  <Flexbox gap={8}>
-                    <Flexbox horizontal justify="space-between" align="center">
-                      <Text fontSize={13}>总费用上限</Text>
-                      <InputNumber value={cost} min={0} step={1} prefix="$" onChange={(v) => setCost(v == null ? null : Number(v))} style={{ width: 110 }} placeholder="不限" />
-                    </Flexbox>
-                    <Flexbox horizontal justify="space-between" align="center">
-                      <Text fontSize={13}>总尝试次数</Text>
-                      <InputNumber value={rounds} min={1} onChange={(v) => setRounds(v == null ? null : Number(v))} style={{ width: 110 }} placeholder="不限" />
-                    </Flexbox>
-                    <Flexbox horizontal justify="space-between" align="center">
-                      <Text fontSize={13}>单项 Work 最多尝试</Text>
-                      <InputNumber value={perWork} min={1} onChange={(v) => setPerWork(Number(v ?? 1))} style={{ width: 110 }} />
-                    </Flexbox>
-                  </Flexbox>
-                  <Text fontSize={12} type="secondary">
-                    超过任一上限时 Goal 会自动停下并来问你，不会静默继续花钱。
-                  </Text>
-                  <Flexbox horizontal justify="flex-end" gap={8}>
-                    <Button size="small" onClick={() => setBudgetOpen(false)}>
-                      取消
-                    </Button>
-                    <Button size="small" type="primary" onClick={() => { onSetBudget({ rounds, cost, perWork }); setBudgetOpen(false); }}>
-                      保存
-                    </Button>
-                  </Flexbox>
-                </Flexbox>
-              }
-            >
-              <Text fontSize={13} className={shared.mono} type={overCost ? 'warning' : undefined} style={{ cursor: 'pointer' }}>
-                {usd(goal.spent)} / {goal.maxTotalCost != null ? usd(goal.maxTotalCost) : '不限'} <Icon icon={Coins} size={12} />
-              </Text>
-            </Popover>
-          </Row>
-          <Row label="尝试">
-            <Text fontSize={13} className={shared.mono}>
-              {attempts} / {goal.maxRounds ?? '∞'}{' '}
-              <Text fontSize={12} className={shared.muted}>
-                · 单项最多 {goal.maxAttemptsPerWork}
-              </Text>
-            </Text>
-          </Row>
-          <Row label="验收">
-            <Text fontSize={13} className={shared.mono} type={passed === goal.checks.length ? 'success' : undefined}>
-              {passed} / {goal.checks.length} 项通过
-            </Text>
-          </Row>
-          <Row label="负责">
-            <Flexbox horizontal gap={6} align="center">
-              <Avatar avatar="🧑‍💻" size={18} />
-              <Text fontSize={13}>{goal.agent}</Text>
+    return (
+      <Flexbox gap={16}>
+        <input className={styles.title} defaultValue={goal.title} />
+        <Flexbox horizontal gap={24} align="flex-start" justify="space-between">
+          <Flexbox gap={12} flex={1} style={{ minWidth: 240 }}>
+            <Flexbox horizontal gap={8} align="center" wrap="wrap">
+              <RunPauseAction
+                state={state}
+                onStart={onStart}
+                onPause={onPause}
+                onResume={onResume}
+              />
+              {goal.startedAt && (
+                <Text fontSize={12} className={shared.muted}>
+                  已进行 {duration(clock.now - goal.startedAt)}
+                </Text>
+              )}
             </Flexbox>
-          </Row>
+            <Text fontSize={13} type="secondary">
+              {goal.requirement}
+            </Text>
+          </Flexbox>
+          <Flexbox gap={2} style={{ width: 300, flexShrink: 0 }}>
+            <Row label="状态">
+              <Text
+                fontSize={13}
+                type={
+                  frontier.needsYou ? 'warning' : goal.status === 'achieved' ? 'success' : undefined
+                }
+                weight={frontier.needsYou ? 600 : undefined}
+              >
+                {goalSentence(goal, frontier)}
+              </Text>
+            </Row>
+            <Row label="费用">
+              <Popover
+                open={budgetOpen}
+                onOpenChange={setBudgetOpen}
+                trigger="click"
+                content={
+                  <Flexbox gap={12} style={{ width: 260 }} padding={4}>
+                    <Text weight={600}>预算与保护</Text>
+                    <Flexbox gap={8}>
+                      <Flexbox horizontal justify="space-between" align="center">
+                        <Text fontSize={13}>总费用上限</Text>
+                        <InputNumber
+                          value={cost}
+                          min={0}
+                          step={1}
+                          prefix="$"
+                          onChange={(v) => setCost(v == null ? null : Number(v))}
+                          style={{ width: 110 }}
+                          placeholder="不限"
+                        />
+                      </Flexbox>
+                      <Flexbox horizontal justify="space-between" align="center">
+                        <Text fontSize={13}>总尝试次数</Text>
+                        <InputNumber
+                          value={rounds}
+                          min={1}
+                          onChange={(v) => setRounds(v == null ? null : Number(v))}
+                          style={{ width: 110 }}
+                          placeholder="不限"
+                        />
+                      </Flexbox>
+                      <Flexbox horizontal justify="space-between" align="center">
+                        <Text fontSize={13}>单项 Work 最多尝试</Text>
+                        <InputNumber
+                          value={perWork}
+                          min={1}
+                          onChange={(v) => setPerWork(Number(v ?? 1))}
+                          style={{ width: 110 }}
+                        />
+                      </Flexbox>
+                    </Flexbox>
+                    <Text fontSize={12} type="secondary">
+                      超过任一上限时 Goal 会自动停下并来问你，不会静默继续花钱。
+                    </Text>
+                    <Flexbox horizontal justify="flex-end" gap={8}>
+                      <Button size="small" onClick={() => setBudgetOpen(false)}>
+                        取消
+                      </Button>
+                      <Button
+                        size="small"
+                        type="primary"
+                        onClick={() => {
+                          onSetBudget({ rounds, cost, perWork });
+                          setBudgetOpen(false);
+                        }}
+                      >
+                        保存
+                      </Button>
+                    </Flexbox>
+                  </Flexbox>
+                }
+              >
+                <Text
+                  fontSize={13}
+                  className={shared.mono}
+                  type={overCost ? 'warning' : undefined}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {usd(goal.spent)} / {goal.maxTotalCost != null ? usd(goal.maxTotalCost) : '不限'}{' '}
+                  <Icon icon={Coins} size={12} />
+                </Text>
+              </Popover>
+            </Row>
+            <Row label="尝试">
+              <Text fontSize={13} className={shared.mono}>
+                {attempts} / {goal.maxRounds ?? '∞'}{' '}
+                <Text fontSize={12} className={shared.muted}>
+                  · 单项最多 {goal.maxAttemptsPerWork}
+                </Text>
+              </Text>
+            </Row>
+            <Row label="验收">
+              <Text
+                fontSize={13}
+                className={shared.mono}
+                type={passed === goal.checks.length ? 'success' : undefined}
+              >
+                {passed} / {goal.checks.length} 项通过
+              </Text>
+            </Row>
+            <Row label="负责">
+              <Flexbox horizontal gap={6} align="center">
+                <Avatar avatar="🧑‍💻" size={18} />
+                <Text fontSize={13}>{goal.agent}</Text>
+              </Flexbox>
+            </Row>
+          </Flexbox>
         </Flexbox>
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 </script>
 <script type="text/plain" data-module="src/components/Graph/Graph.tsx">
@@ -1152,14 +1684,15 @@ import { POS, VIEW_W, edgePath } from './layout';
 
 const useStyles = createStyles(({ css, token }) => ({
   wrap: css`
+    overflow: hidden;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadius}px;
     background: ${token.colorBgContainer};
-    overflow: hidden;
   `,
   head: css`
-    padding: 10px 14px;
-    border-bottom: 1px solid ${token.colorBorderSecondary};
+    padding-block: 10px;
+    padding-inline: 14px;
+    border-block-end: 1px solid ${token.colorBorderSecondary};
   `,
   legend: css`
     font-size: 12px;
@@ -1169,6 +1702,7 @@ const useStyles = createStyles(({ css, token }) => ({
     display: block;
     width: 100%;
     height: auto;
+
     .edge {
       fill: none;
       stroke: ${token.colorBorder};
@@ -1177,88 +1711,110 @@ const useStyles = createStyles(({ css, token }) => ({
         opacity 0.2s,
         stroke 0.2s;
     }
+
     .edge.dep {
       stroke-dasharray: 4 4;
     }
+
     .edge.dim {
       opacity: 0.3;
     }
+
     .edge.hot {
+      opacity: 1;
       stroke: ${token.colorText};
       stroke-width: 2;
-      opacity: 1;
     }
+
     .node {
       cursor: pointer;
       transition: opacity 0.2s;
     }
+
     .node .main {
       stroke-width: 1.5;
       transition:
         stroke-width 0.15s,
         filter 0.15s;
     }
+
     .node.dim {
       opacity: 0.45;
     }
+
     .node.frontier .main {
       stroke-width: 3;
     }
+
     .node.gate .main {
       stroke-dasharray: 6 4;
       stroke-width: 3;
     }
+
     .node.blocked .main,
     .node.proposed .main {
       stroke-dasharray: 4 4;
     }
+
     .node.stale .main {
       stroke-dasharray: 2 4;
     }
+
     .node.selected .main {
       filter: drop-shadow(0 0 4px ${token.colorPrimaryBorder});
     }
+
     .node.hot .main {
       stroke-width: 3.5;
     }
+
     .node.fresh .main {
       filter: drop-shadow(0 0 6px ${token.colorPrimaryBorder});
     }
+
     .node text {
-      fill: ${token.colorText};
-      font-size: 13px;
       pointer-events: none;
+      font-size: 13px;
+      fill: ${token.colorText};
     }
+
     .node text.kind {
-      fill: ${token.colorTextTertiary};
       font-size: 10px;
       letter-spacing: 0.08em;
+      fill: ${token.colorTextTertiary};
     }
+
     .node text.task {
-      fill: ${token.colorTextSecondary};
-      font-size: 11px;
       font-family: ${token.fontFamilyCode};
+      font-size: 11px;
+      fill: ${token.colorTextSecondary};
     }
+
     .node text.badge {
-      fill: ${token.colorBgContainer};
       font-size: 9px;
       font-weight: 600;
+      fill: ${token.colorBgContainer};
     }
+
     .node line.sep {
       stroke: ${token.colorBorderSecondary};
     }
+
     .pulse {
       animation: goal-pulse 1.6s ease-in-out infinite;
     }
+
     @keyframes goal-pulse {
       0%,
       100% {
         opacity: 1;
       }
+
       50% {
         opacity: 0.25;
       }
     }
+
     @media (prefers-reduced-motion: reduce) {
       .pulse {
         animation: none;
@@ -1283,138 +1839,242 @@ interface GraphProps {
 
 const ellipsize = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
-export const Graph = memo<GraphProps>(({ state, frontier, hotId, selectedId, freshIds, onHover, onSelect, wide, onToggleWide, isDraft }) => {
-  const { styles, cx } = useStyles();
-  const colors = useKindColors();
-  const { goal } = state;
-  const ids = new Set(state.nodes.map((n) => n.id));
-  const frontierIds = new Set(frontier.items.map((i) => i.node.id));
-  const blockedIds = new Set(frontier.blocked.map((b) => b.node.id));
-  const maxY = Math.max(...state.nodes.map((n) => POS[n.id].y + POS[n.id].h)) + 24;
-  const focus = hotId || selectedId || null;
+export const Graph = memo<GraphProps>(
+  ({
+    state,
+    frontier,
+    hotId,
+    selectedId,
+    freshIds,
+    onHover,
+    onSelect,
+    wide,
+    onToggleWide,
+    isDraft,
+  }) => {
+    const { styles, cx } = useStyles();
+    const colors = useKindColors();
+    const { goal } = state;
+    const ids = new Set(state.nodes.map((n) => n.id));
+    const frontierIds = new Set(frontier.items.map((i) => i.node.id));
+    const blockedIds = new Set(frontier.blocked.map((b) => b.node.id));
+    const maxY = Math.max(...state.nodes.map((n) => POS[n.id].y + POS[n.id].h)) + 24;
+    const focus = hotId || selectedId || null;
 
-  return (
-    <div className={styles.wrap}>
-      <Flexbox horizontal justify="space-between" align="center" className={styles.head}>
-        <Flexbox horizontal gap={12} align="center">
-          <Text weight={600}>探索图</Text>
-          {isDraft && <Text fontSize={12} type="secondary">初始方案 · Agent 根据目标生成 · 开始前可以调整</Text>}
-          <Flexbox horizontal gap={10} className={styles.legend} align="center">
-            {(['problem', 'work', 'finding', 'decision'] as NodeKind[]).map((k) => (
-              <Flexbox key={k} horizontal gap={4} align="center">
-                <KindDot kind={k} />
-                <span>{KIND_CN[k]}</span>
-              </Flexbox>
-            ))}
-            <span>· 粗边 = 能推进 · 虚线 = 未开始 · 角标 = 谁决定的</span>
+    return (
+      <div className={styles.wrap}>
+        <Flexbox horizontal justify="space-between" align="center" className={styles.head}>
+          <Flexbox horizontal gap={12} align="center">
+            <Text weight={600}>探索图</Text>
+            {isDraft && (
+              <Text fontSize={12} type="secondary">
+                初始方案 · Agent 根据目标生成 · 开始前可以调整
+              </Text>
+            )}
+            <Flexbox horizontal gap={10} className={styles.legend} align="center">
+              {(['problem', 'work', 'finding', 'decision'] as NodeKind[]).map((k) => (
+                <Flexbox key={k} horizontal gap={4} align="center">
+                  <KindDot kind={k} />
+                  <span>{KIND_CN[k]}</span>
+                </Flexbox>
+              ))}
+              <span>· 粗边 = 能推进 · 虚线 = 未开始 · 你/AI 角标 = 谁决定的、有人参与过</span>
+            </Flexbox>
           </Flexbox>
+          <ActionIcon
+            icon={wide ? Minimize2 : Maximize2}
+            size="small"
+            title={wide ? '还原' : '放大'}
+            onClick={onToggleWide}
+          />
         </Flexbox>
-        <ActionIcon icon={wide ? Minimize2 : Maximize2} size="small" title={wide ? '还原' : '放大'} onClick={onToggleWide} />
-      </Flexbox>
-      <svg className={styles.svg} viewBox={`0 0 ${VIEW_W} ${maxY}`} role="img" aria-label="Goal Graph">
-        <defs>
-          <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L7,3 z" fill="context-stroke" />
-          </marker>
-        </defs>
-        {state.edges
-          .filter(([a, b]) => ids.has(a) && ids.has(b))
-          .map(([a, b, kind]) => {
-            const hot = !!focus && (a === focus || b === focus);
-            const dim = !!focus && !hot;
+        <svg
+          className={styles.svg}
+          viewBox={`0 0 ${VIEW_W} ${maxY}`}
+          role="img"
+          aria-label="Goal Graph"
+        >
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L7,3 z" fill="context-stroke" />
+            </marker>
+          </defs>
+          {state.edges
+            .filter(([a, b]) => ids.has(a) && ids.has(b))
+            .map(([a, b, kind]) => {
+              const hot = !!focus && (a === focus || b === focus);
+              const dim = !!focus && !hot;
+              return (
+                <path
+                  key={`${a}-${b}-${kind}`}
+                  className={cx('edge', kind === 'depends_on' && 'dep', hot && 'hot', dim && 'dim')}
+                  d={edgePath(a, b, kind)}
+                  markerEnd={kind === 'depends_on' ? undefined : 'url(#arrow)'}
+                />
+              );
+            })}
+          {state.nodes.map((n) => {
+            const p = POS[n.id];
+            const c = colors[n.kind];
+            const isFrontier = frontierIds.has(n.id);
+            const isGate = n.kind === 'decision' && n.status === 'waiting';
+            const stale = isStale(goal, n);
+            const fresh = freshIds.has(n.id);
+            const related = state.edges.some(
+              ([a, b]) => (a === focus && b === n.id) || (b === focus && a === n.id),
+            );
+            const dim = focus
+              ? !(n.id === focus || related)
+              : n.status === 'resolved' &&
+                n.kind !== 'finding' &&
+                n.kind !== 'decision' &&
+                !isFrontier;
+            const cls = cx(
+              'node',
+              isFrontier && !isGate && 'frontier',
+              isGate && 'gate',
+              blockedIds.has(n.id) && 'blocked',
+              n.status === 'proposed' && 'proposed',
+              stale && 'stale',
+              dim && !fresh && 'dim',
+              selectedId === n.id && 'selected',
+              (hotId === n.id || fresh) && 'hot',
+              fresh && 'fresh',
+            );
+            const stroke = isGate
+              ? 'var(--ant-color-warning)'
+              : stale
+                ? 'var(--ant-color-error)'
+                : c.line;
+            const fill = n.status === 'proposed' ? 'var(--ant-color-bg-container)' : c.soft;
+            const running =
+              n.kind === 'work' &&
+              n.status === 'active' &&
+              !n.delivered &&
+              goal.status !== 'paused' &&
+              !stale &&
+              n.task &&
+              n.lastActivity;
+            const h = running ? 84 : p.h;
+            const label =
+              n.kind === 'decision'
+                ? n.status === 'waiting'
+                  ? '等你决定'
+                  : n.authority === 'agent'
+                    ? 'AGENT 决定'
+                    : '你决定的'
+                : n.kind === 'work' && n.terminal
+                  ? 'WORK · GOAL ACCEPTANCE'
+                  : KIND_LABEL[n.kind];
+            const badge = n.kind === 'decision' ? (n.authority === 'agent' ? 'AI' : '你') : null;
+            const touches = n.kind === 'work' ? (n.humanTouches ?? []) : [];
             return (
-              <path
-                key={`${a}-${b}-${kind}`}
-                className={cx('edge', kind === 'depends_on' && 'dep', hot && 'hot', dim && 'dim')}
-                d={edgePath(a, b, kind)}
-                markerEnd={kind === 'depends_on' ? undefined : 'url(#arrow)'}
-              />
+              <g
+                key={n.id}
+                className={cls}
+                onMouseEnter={() => onHover(n.id)}
+                onMouseLeave={() => onHover(null)}
+                onClick={() => onSelect(n.id)}
+              >
+                {n.kind === 'decision' ? (
+                  <path
+                    className="main"
+                    d={`M ${p.x + 16} ${p.y} H ${p.x + p.w - 16} L ${p.x + p.w} ${p.y + p.h / 2} L ${p.x + p.w - 16} ${p.y + p.h} H ${p.x + 16} L ${p.x} ${p.y + p.h / 2} Z`}
+                    fill={fill}
+                    stroke={stroke}
+                  />
+                ) : (
+                  <rect
+                    className="main"
+                    x={p.x}
+                    y={p.y}
+                    width={p.w}
+                    height={h}
+                    rx={n.kind === 'problem' ? 28 : n.kind === 'finding' ? 6 : 10}
+                    fill={fill}
+                    stroke={stroke}
+                  />
+                )}
+                <text x={p.x + p.w / 2} y={p.y + (running ? 22 : h / 2 - 2)} textAnchor="middle">
+                  {ellipsize(n.title, n.kind === 'decision' ? 20 : 24)}
+                </text>
+                <text
+                  className="kind"
+                  x={p.x + p.w / 2}
+                  y={p.y + (running ? 38 : h / 2 + 14)}
+                  textAnchor="middle"
+                >
+                  {label}
+                </text>
+                {running && (
+                  <g>
+                    <line
+                      className="sep"
+                      x1={p.x + 16}
+                      y1={p.y + 50}
+                      x2={p.x + p.w - 16}
+                      y2={p.y + 50}
+                    />
+                    <circle className="pulse" cx={p.x + 26} cy={p.y + 67} r={3.5} fill={c.line} />
+                    <text className="task" x={p.x + 36} y={p.y + 71}>
+                      {n.task!.id} · {n.task!.agent} · 第 {(n.attempts?.length ?? 0) + 1} 次 ·{' '}
+                      {ago(clock.now - n.lastActivity!)}
+                    </text>
+                  </g>
+                )}
+                {badge && (
+                  <g>
+                    <circle
+                      cx={p.x + p.w - 10}
+                      cy={p.y + 2}
+                      r={9}
+                      fill={
+                        isGate
+                          ? 'var(--ant-color-warning)'
+                          : n.authority === 'agent'
+                            ? c.line
+                            : 'var(--ant-color-text)'
+                      }
+                    />
+                    <text className="badge" x={p.x + p.w - 10} y={p.y + 5.5} textAnchor="middle">
+                      {badge}
+                    </text>
+                  </g>
+                )}
+                {touches.length > 0 && (
+                  <g>
+                    <title>{touches.map((t) => t.text).join('\n')}</title>
+                    <circle cx={p.x + 10} cy={p.y + 2} r={9} fill="var(--ant-color-text)" />
+                    <text className="badge" x={p.x + 10} y={p.y + 5.5} textAnchor="middle">
+                      你
+                    </text>
+                  </g>
+                )}
+                {n.delivered && (
+                  <circle cx={p.x + p.w - 8} cy={p.y + 8} r={5} fill="var(--ant-color-warning)" />
+                )}
+              </g>
             );
           })}
-        {state.nodes.map((n) => {
-          const p = POS[n.id];
-          const c = colors[n.kind];
-          const isFrontier = frontierIds.has(n.id);
-          const isGate = n.kind === 'decision' && n.status === 'waiting';
-          const stale = isStale(goal, n);
-          const fresh = freshIds.has(n.id);
-          const related = state.edges.some(([a, b]) => (a === focus && b === n.id) || (b === focus && a === n.id));
-          const dim = focus ? !(n.id === focus || related) : n.status === 'resolved' && n.kind !== 'finding' && n.kind !== 'decision' && !isFrontier;
-          const cls = cx(
-            'node',
-            isFrontier && !isGate && 'frontier',
-            isGate && 'gate',
-            blockedIds.has(n.id) && 'blocked',
-            n.status === 'proposed' && 'proposed',
-            stale && 'stale',
-            dim && !fresh && 'dim',
-            selectedId === n.id && 'selected',
-            (hotId === n.id || fresh) && 'hot',
-            fresh && 'fresh',
-          );
-          const stroke = isGate ? 'var(--ant-color-warning)' : stale ? 'var(--ant-color-error)' : c.line;
-          const fill = n.status === 'proposed' ? 'var(--ant-color-bg-container)' : c.soft;
-          const running = n.kind === 'work' && n.status === 'active' && !n.delivered && goal.status !== 'paused' && !stale && n.task && n.lastActivity;
-          const h = running ? 84 : p.h;
-          const label =
-            n.kind === 'decision'
-              ? n.status === 'waiting'
-                ? '等你决定'
-                : n.authority === 'agent'
-                  ? 'AGENT 决定'
-                  : '你决定的'
-              : n.kind === 'work' && n.terminal
-                ? 'WORK · GOAL ACCEPTANCE'
-                : KIND_LABEL[n.kind];
-          const badge = n.kind === 'decision' ? (n.authority === 'agent' ? 'AI' : '你') : null;
-          return (
-            <g key={n.id} className={cls} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(n.id)}>
-              {n.kind === 'decision' ? (
-                <path
-                  className="main"
-                  d={`M ${p.x + 16} ${p.y} H ${p.x + p.w - 16} L ${p.x + p.w} ${p.y + p.h / 2} L ${p.x + p.w - 16} ${p.y + p.h} H ${p.x + 16} L ${p.x} ${p.y + p.h / 2} Z`}
-                  fill={fill}
-                  stroke={stroke}
-                />
-              ) : (
-                <rect className="main" x={p.x} y={p.y} width={p.w} height={h} rx={n.kind === 'problem' ? 28 : n.kind === 'finding' ? 6 : 10} fill={fill} stroke={stroke} />
-              )}
-              <text x={p.x + p.w / 2} y={p.y + (running ? 22 : h / 2 - 2)} textAnchor="middle">
-                {ellipsize(n.title, n.kind === 'decision' ? 20 : 24)}
-              </text>
-              <text className="kind" x={p.x + p.w / 2} y={p.y + (running ? 38 : h / 2 + 14)} textAnchor="middle">
-                {label}
-                {n.isNew ? ' · NEW' : ''}
-              </text>
-              {running && (
-                <g>
-                  <line className="sep" x1={p.x + 16} y1={p.y + 50} x2={p.x + p.w - 16} y2={p.y + 50} />
-                  <circle className="pulse" cx={p.x + 26} cy={p.y + 67} r={3.5} fill={c.line} />
-                  <text className="task" x={p.x + 36} y={p.y + 71}>
-                    {n.task!.id} · {n.task!.agent} · 第 {(n.attempts?.length ?? 0) + 1} 次 · {ago(clock.now - n.lastActivity!)}
-                  </text>
-                </g>
-              )}
-              {badge && (
-                <g>
-                  <circle cx={p.x + p.w - 10} cy={p.y + 2} r={9} fill={isGate ? 'var(--ant-color-warning)' : n.authority === 'agent' ? c.line : 'var(--ant-color-text)'} />
-                  <text className="badge" x={p.x + p.w - 10} y={p.y + 5.5} textAnchor="middle">
-                    {badge}
-                  </text>
-                </g>
-              )}
-              {n.delivered && <circle cx={p.x + p.w - 8} cy={p.y + 8} r={5} fill="var(--ant-color-warning)" />}
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-});
+        </svg>
+      </div>
+    );
+  },
+);
 
 </script>
 <script type="text/plain" data-module="src/components/Graph/NodeDetail.tsx">
-import { ActionIcon, Button, Flexbox, Icon, Input, InputNumber, Tag, Text, TextArea } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Flexbox,
+  Icon,
+  Input,
+  InputNumber,
+  Tag,
+  Text,
+  TextArea,
+} from '@lobehub/ui';
 import { Checkbox } from 'antd';
 import { createStyles } from 'antd-style';
 import { ArrowUp, ExternalLink, Lightbulb, Play, Trash2, X } from 'lucide-react';
@@ -1428,19 +2088,23 @@ import { KIND_CN, KindDot, NewTag, useSharedStyles } from '../shared';
 const useStyles = createStyles(({ css, token }) => ({
   head: css`
     display: flex;
-    align-items: center;
     gap: 10px;
-    padding: 10px 14px;
-    border-bottom: 1px solid ${token.colorBorderSecondary};
+    align-items: center;
+
+    padding-block: 10px;
+    padding-inline: 14px;
+    border-block-end: 1px solid ${token.colorBorderSecondary};
   `,
   body: css`
     padding: 14px;
   `,
   ledgerLine: css`
-    padding: 6px 0;
-    border-top: 1px dashed ${token.colorBorderSecondary};
+    padding-block: 6px;
+    padding-inline: 0;
+    border-block-start: 1px dashed ${token.colorBorderSecondary};
+
     &:first-of-type {
-      border-top: none;
+      border-block-start: none;
     }
   `,
   label: css`
@@ -1471,184 +2135,257 @@ interface NodeDetailProps {
 }
 
 /** Detail panel under the graph: what a node is, where it came from, and — for a not-yet-started Work — an editor. */
-export const NodeDetail = memo<NodeDetailProps>(({ state, frontier, id, editing, onClose, onSelect, onStart }) => {
-  const { styles, cx } = useStyles();
-  const { styles: shared } = useSharedStyles();
-  const n = state.nodes.find((x) => x.id === id);
-  const [title, setTitle] = useState(n?.title ?? '');
-  const [desc, setDesc] = useState(n?.description ?? '');
-  const [prio, setPrio] = useState(n?.priority ?? 0);
-  const [deps, setDeps] = useState<string[]>(n?.dependsOn ?? []);
-  if (!n) return null;
-  const { goal } = state;
-  const byId = (x: string) => state.nodes.find((m) => m.id === x);
-  const editable = n.kind === 'work' && n.status === 'proposed';
-  const producer = n.kind === 'finding' && n.from ? byId(n.from) : undefined;
-  const producingAttempt = producer?.attempts?.find((a) => a.outcome === 'passed');
-  const otherWorks = state.nodes.filter((w) => w.kind === 'work' && w.id !== n.id && !w.terminal);
+export const NodeDetail = memo<NodeDetailProps>(
+  ({ state, frontier, id, editing, onClose, onSelect, onStart }) => {
+    const { styles, cx } = useStyles();
+    const { styles: shared } = useSharedStyles();
+    const n = state.nodes.find((x) => x.id === id);
+    const [title, setTitle] = useState(n?.title ?? '');
+    const [desc, setDesc] = useState(n?.description ?? '');
+    const [prio, setPrio] = useState(n?.priority ?? 0);
+    const [deps, setDeps] = useState<string[]>(n?.dependsOn ?? []);
+    if (!n) return null;
+    const { goal } = state;
+    const byId = (x: string) => state.nodes.find((m) => m.id === x);
+    const editable = n.kind === 'work' && n.status === 'proposed';
+    const producer = n.kind === 'finding' && n.from ? byId(n.from) : undefined;
+    const producingAttempt = producer?.attempts?.find((a) => a.outcome === 'passed');
+    const otherWorks = state.nodes.filter((w) => w.kind === 'work' && w.id !== n.id && !w.terminal);
 
-  return (
-    <div className={shared.list}>
-      <div className={styles.head}>
-        <KindDot kind={n.kind} />
-        <Text fontSize={12} className={shared.muted}>
-          {KIND_CN[n.kind]}
-          {n.ref ? ` · ${n.ref}` : ''}
-        </Text>
-        <Text weight={600} ellipsis style={{ minWidth: 0 }}>
-          {n.title}
-        </Text>
-        <Text fontSize={12} type="secondary" style={{ flexShrink: 0 }}>
-          {nodeStateText(goal, n, frontier)}
-          {n.cost ? ` · ${usd(n.cost)}` : ''}
-        </Text>
-        {n.isNew && <NewTag title="这种决策今天不是图节点（预算 / 验收确认），为回溯而建模的提案" />}
-        <ActionIcon icon={X} size="small" onClick={onClose} style={{ marginLeft: 'auto' }} />
-      </div>
-      <Flexbox className={styles.body} gap={14}>
-        {editable && (
-          <Flexbox gap={10}>
-            <Flexbox gap={4}>
-              <span className={styles.label}>标题</span>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </Flexbox>
-            <Flexbox gap={4}>
-              <span className={styles.label}>要做什么 · 交付什么</span>
-              <TextArea value={desc} onChange={(e) => setDesc(e.target.value)} autoSize={{ minRows: 2, maxRows: 5 }} placeholder="写清允许的产出与完成标准，会进入负责人 Task 的指令" />
-            </Flexbox>
-            <Flexbox horizontal gap={24} align="flex-start" wrap="wrap">
+    return (
+      <div className={shared.list}>
+        <div className={styles.head}>
+          <KindDot kind={n.kind} />
+          <Text fontSize={12} className={shared.muted}>
+            {KIND_CN[n.kind]}
+            {n.ref ? ` · ${n.ref}` : ''}
+          </Text>
+          <Text weight={600} ellipsis style={{ minWidth: 0 }}>
+            {n.title}
+          </Text>
+          <Text fontSize={12} type="secondary" style={{ flexShrink: 0 }}>
+            {nodeStateText(goal, n, frontier)}
+            {n.cost ? ` · ${usd(n.cost)}` : ''}
+          </Text>
+          <ActionIcon icon={X} size="small" onClick={onClose} style={{ marginLeft: 'auto' }} />
+        </div>
+        <Flexbox className={styles.body} gap={14}>
+          {editable && (
+            <Flexbox gap={10}>
               <Flexbox gap={4}>
-                <span className={styles.label}>优先级</span>
-                <InputNumber value={prio} onChange={(v) => setPrio(Number(v ?? 0))} style={{ width: 100 }} />
+                <span className={styles.label}>标题</span>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
               </Flexbox>
-              <Flexbox gap={4} style={{ minWidth: 260 }}>
-                <span className={styles.label}>先等这些完成（依赖）</span>
-                <Flexbox gap={2}>
-                  {otherWorks.map((w) => (
-                    <Checkbox key={w.id} checked={deps.includes(w.id)} onChange={(e) => setDeps(e.target.checked ? [...deps, w.id] : deps.filter((d) => d !== w.id))}>
-                      <Text fontSize={13}>{w.title}</Text>
-                    </Checkbox>
-                  ))}
+              <Flexbox gap={4}>
+                <span className={styles.label}>要做什么 · 交付什么</span>
+                <TextArea
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
+                  autoSize={{ minRows: 2, maxRows: 5 }}
+                  placeholder="写清允许的产出与完成标准，会进入负责人 Task 的指令"
+                />
+              </Flexbox>
+              <Flexbox horizontal gap={24} align="flex-start" wrap="wrap">
+                <Flexbox gap={4}>
+                  <span className={styles.label}>优先级</span>
+                  <InputNumber
+                    value={prio}
+                    onChange={(v) => setPrio(Number(v ?? 0))}
+                    style={{ width: 100 }}
+                  />
+                </Flexbox>
+                <Flexbox gap={4} style={{ minWidth: 260 }}>
+                  <span className={styles.label}>先等这些完成（依赖）</span>
+                  <Flexbox gap={2}>
+                    {otherWorks.map((w) => (
+                      <Checkbox
+                        key={w.id}
+                        checked={deps.includes(w.id)}
+                        onChange={(e) =>
+                          setDeps(
+                            e.target.checked ? [...deps, w.id] : deps.filter((d) => d !== w.id),
+                          )
+                        }
+                      >
+                        <Text fontSize={13}>{w.title}</Text>
+                      </Checkbox>
+                    ))}
+                  </Flexbox>
                 </Flexbox>
               </Flexbox>
-            </Flexbox>
-            <Flexbox horizontal gap={8} align="center" wrap="wrap">
-              <Button type="primary" size="small">
-                保存 <NewTag title="没有 goal.updateNode；今天只能 addNode / addEdge" />
-              </Button>
-              <Button size="small" icon={<Icon icon={ArrowUp} />}>
-                先做这个 <NewTag title="调优先级 = updateNode，未建模" />
-              </Button>
-              {goal.status !== 'planning' && onStart && (
-                <Button size="small" icon={<Icon icon={Play} />} onClick={() => onStart(n.id)}>
-                  现在开始 <NewTag title="并行派发：coordinator 每次 tick 只派一个节点（串行）" />
+              <Flexbox horizontal gap={8} align="center" wrap="wrap">
+                <Button type="primary" size="small">
+                  保存 <NewTag title="没有 goal.updateNode；今天只能 addNode / addEdge" />
                 </Button>
-              )}
-              <Button size="small" danger icon={<Icon icon={Trash2} />}>
-                移除 <NewTag title="retire 一个未开始的 Work：未建模" />
-              </Button>
-            </Flexbox>
-          </Flexbox>
-        )}
-
-        {!editable && n.description && <Text fontSize={13}>{n.description}</Text>}
-        {n.body && <Text fontSize={13}>{n.body}</Text>}
-
-        {n.kind === 'finding' && producer && (
-          <Flexbox gap={4}>
-            <span className={styles.label}>来源</span>
-            <Flexbox horizontal gap={8} align="center" wrap="wrap">
-              <KindDot kind={producer.kind} />
-              <Text fontSize={13} style={{ cursor: 'pointer' }} onClick={() => onSelect(producer.id)}>
-                {producer.title}
-              </Text>
-              {producingAttempt && (
-                <>
-                  <Text fontSize={12} type="secondary">
-                    第 {producingAttempt.n} 次尝试 · {producingAttempt.taskId} · {ago(clock.now - producingAttempt.ended)}
-                  </Text>
-                  <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
-                    打开这次运行
+                <Button size="small" icon={<Icon icon={ArrowUp} />}>
+                  先做这个 <NewTag title="调优先级 = updateNode，未建模" />
+                </Button>
+                {goal.status !== 'planning' && onStart && (
+                  <Button size="small" icon={<Icon icon={Play} />} onClick={() => onStart(n.id)}>
+                    现在开始 <NewTag title="并行派发：coordinator 每次 tick 只派一个节点（串行）" />
                   </Button>
-                  <Tag size="small">证据版本 #1</Tag>
-                </>
-              )}
+                )}
+                <Button size="small" danger icon={<Icon icon={Trash2} />}>
+                  移除 <NewTag title="retire 一个未开始的 Work：未建模" />
+                </Button>
+              </Flexbox>
             </Flexbox>
-          </Flexbox>
-        )}
+          )}
 
-        {n.kind === 'work' && n.task && (
+          {!editable && n.description && <Text fontSize={13}>{n.description}</Text>}
+          {n.body && <Text fontSize={13}>{n.body}</Text>}
+
+          {n.kind === 'finding' && producer && (
+            <Flexbox gap={4}>
+              <span className={styles.label}>来源</span>
+              <Flexbox horizontal gap={8} align="center" wrap="wrap">
+                <KindDot kind={producer.kind} />
+                <Text
+                  fontSize={13}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelect(producer.id)}
+                >
+                  {producer.title}
+                </Text>
+                {producingAttempt && (
+                  <>
+                    <Text fontSize={12} type="secondary">
+                      第 {producingAttempt.n} 次尝试 · {producingAttempt.taskId} ·{' '}
+                      {ago(clock.now - producingAttempt.ended)}
+                    </Text>
+                    <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
+                      打开这次运行
+                    </Button>
+                    <Tag size="small">证据版本 #1</Tag>
+                  </>
+                )}
+              </Flexbox>
+            </Flexbox>
+          )}
+
+          {!!n.humanTouches?.length && (
           <Flexbox gap={4}>
-            <span className={styles.label}>负责人 Task</span>
-            <Flexbox horizontal gap={8} align="center">
-              <Text fontSize={13} className={shared.mono}>
-                {n.task.id}
-              </Text>
-              <Text fontSize={13}>{n.task.agent}</Text>
-              <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
-                打开会话
-              </Button>
-            </Flexbox>
-            {n.lastLine && <div className={shared.evidence}>{n.lastLine}</div>}
-          </Flexbox>
-        )}
-
-        {n.kind === 'work' && !!n.attempts?.length && (
-          <Flexbox gap={2}>
-            <span className={styles.label}>尝试记录</span>
-            {n.attempts.map((a) => (
-              <Flexbox key={a.n} horizontal gap={10} align="baseline" className={styles.ledgerLine}>
-                <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ flexShrink: 0, width: 44 }}>
-                  第 {a.n} 次
-                </Text>
-                <Text fontSize={12} type={a.outcome === 'passed' ? 'success' : a.outcome === 'failed' ? 'danger' : 'secondary'} style={{ flexShrink: 0 }}>
-                  {a.outcome === 'passed' ? '通过' : a.outcome === 'failed' ? '未通过' : '失联'}
-                </Text>
-                <Text fontSize={12} type="secondary" style={{ flex: 1, minWidth: 0 }}>
-                  {a.reason}
-                </Text>
+            <span className={styles.label}>人工参与</span>
+            {n.humanTouches.map((t, i) => (
+              <Flexbox key={i} horizontal gap={8} align="baseline">
                 <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ flexShrink: 0 }}>
-                  {Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}
+                  {ago(clock.now - t.t)}
                 </Text>
-                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />} style={{ flexShrink: 0 }} />
+                <Text fontSize={13}>{t.text}</Text>
               </Flexbox>
             ))}
           </Flexbox>
         )}
 
-        <Flexbox gap={4}>
-          <span className={styles.label}>在图里的位置</span>
-          {state.edges
-            .filter(([a, b]) => a === id || b === id)
-            .map(([a, b, kind]) => {
-              const other = a === id ? b : a;
-              const o = byId(other);
-              if (!o) return null;
-              return (
-                <Flexbox key={`${a}${b}${kind}`} horizontal gap={6} align="center" style={{ cursor: 'pointer' }} onClick={() => onSelect(other)}>
-                  <KindDot kind={o.kind} />
-                  <Text fontSize={12} type="secondary">
-                    {a === id ? `${REL[kind]} → ${o.title}` : `${o.title} → ${REL[kind]}这里`}
-                  </Text>
-                </Flexbox>
-              );
-            })}
-        </Flexbox>
+        {n.kind === 'work' && n.task && (
+            <Flexbox gap={4}>
+              <span className={styles.label}>负责人 Task</span>
+              <Flexbox horizontal gap={8} align="center">
+                <Text fontSize={13} className={shared.mono}>
+                  {n.task.id}
+                </Text>
+                <Text fontSize={13}>{n.task.agent}</Text>
+                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>
+                  打开会话
+                </Button>
+              </Flexbox>
+              {n.lastLine && <div className={shared.evidence}>{n.lastLine}</div>}
+            </Flexbox>
+          )}
 
-        {n.kind === 'finding' && (
-          <Flexbox horizontal gap={8} align="center">
-            <Button size="small" icon={<Icon icon={Lightbulb} />}>
-              基于这个结论开一条 Work
-            </Button>
-            <Text fontSize={12} className={shared.muted}>
-              = addNode + leads_to
-            </Text>
+          {n.kind === 'work' && !!n.attempts?.length && (
+            <Flexbox gap={2}>
+              <span className={styles.label}>尝试记录</span>
+              {n.attempts.map((a) => (
+                <Flexbox
+                  key={a.n}
+                  horizontal
+                  gap={10}
+                  align="baseline"
+                  className={styles.ledgerLine}
+                >
+                  <Text
+                    fontSize={12}
+                    className={cx(shared.muted, shared.mono)}
+                    style={{ flexShrink: 0, width: 56, whiteSpace: 'nowrap' }}
+                  >
+                    第 {a.n} 次
+                  </Text>
+                  <Text
+                    fontSize={12}
+                    type={
+                      a.outcome === 'passed'
+                        ? 'success'
+                        : a.outcome === 'failed'
+                          ? 'danger'
+                          : 'secondary'
+                    }
+                    style={{ flexShrink: 0 }}
+                  >
+                    {a.outcome === 'passed' ? '通过' : a.outcome === 'failed' ? '未通过' : '失联'}
+                  </Text>
+                  <Text fontSize={12} type="secondary" style={{ flex: 1, minWidth: 0 }}>
+                    {a.reason}
+                  </Text>
+                  <Text
+                    fontSize={12}
+                    className={cx(shared.muted, shared.mono)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}
+                  </Text>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<Icon icon={ExternalLink} />}
+                    style={{ flexShrink: 0 }}
+                  />
+                </Flexbox>
+              ))}
+            </Flexbox>
+          )}
+
+          <Flexbox gap={4}>
+            <span className={styles.label}>在图里的位置</span>
+            {state.edges
+              .filter(([a, b]) => a === id || b === id)
+              .map(([a, b, kind]) => {
+                const other = a === id ? b : a;
+                const o = byId(other);
+                if (!o) return null;
+                return (
+                  <Flexbox
+                    key={`${a}${b}${kind}`}
+                    horizontal
+                    gap={6}
+                    align="center"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onSelect(other)}
+                  >
+                    <KindDot kind={o.kind} />
+                    <Text fontSize={12} type="secondary">
+                      {a === id ? `${REL[kind]} → ${o.title}` : `${o.title} → ${REL[kind]}这里`}
+                    </Text>
+                  </Flexbox>
+                );
+              })}
           </Flexbox>
-        )}
-      </Flexbox>
-    </div>
-  );
-});
+
+          {n.kind === 'finding' && (
+            <Flexbox horizontal gap={8} align="center">
+              <Button size="small" icon={<Icon icon={Lightbulb} />}>
+                基于这个结论开一条 Work
+              </Button>
+              <Text fontSize={12} className={shared.muted}>
+                = addNode + leads_to
+              </Text>
+            </Flexbox>
+          )}
+        </Flexbox>
+      </div>
+    );
+  },
+);
 
 </script>
 <script type="text/plain" data-module="src/components/Graph/layout.ts">
@@ -1676,13 +2413,11 @@ export const POS: Record<string, Box> = {
   W2: { x: 300, y: 316, w: 280, h: 84 },
   D0: { x: 620, y: 316, w: 300, h: 56 },
   F6: { x: 40, y: 444, w: 220, h: 52 },
-  D2: { x: 300, y: 444, w: 240, h: 56 },
   W3: { x: 620, y: 444, w: 300, h: 56 },
-  D1: { x: 300, y: 548, w: 240, h: 56 },
+  D1: { x: 300, y: 444, w: 240, h: 56 },
   F4: { x: 620, y: 548, w: 240, h: 52 },
-  F3: { x: 300, y: 652, w: 280, h: 52 },
+  F3: { x: 300, y: 548, w: 280, h: 52 },
   W4: { x: 620, y: 652, w: 300, h: 56 },
-  D3: { x: 620, y: 756, w: 300, h: 56 },
 };
 
 export const VIEW_W = 960;
@@ -1766,49 +2501,57 @@ export const useSharedStyles = createStyles(({ css, token }) => ({
     color: ${token.colorTextTertiary};
   `,
   newTag: css`
+    padding-block: 0;
+    padding-inline: 4px;
+    border: 1px solid ${token.colorWarningBorder};
+    border-radius: ${token.borderRadiusXS}px;
+
     font-family: ${token.fontFamilyCode};
     font-size: 10px;
     line-height: 14px;
-    padding: 0 4px;
-    border-radius: ${token.borderRadiusXS}px;
-    background: ${token.colorWarningBg};
     color: ${token.colorWarningText};
-    border: 1px solid ${token.colorWarningBorder};
     vertical-align: middle;
+
+    background: ${token.colorWarningBg};
   `,
   kindDot: css`
     display: inline-block;
+    flex-shrink: 0;
+
     width: 8px;
     height: 8px;
     border-radius: 2px;
-    flex-shrink: 0;
   `,
   list: css`
+    overflow: hidden;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadius}px;
     background: ${token.colorBgContainer};
-    overflow: hidden;
   `,
   sectionHead: css`
     cursor: pointer;
     user-select: none;
   `,
   evidence: css`
-    padding: 8px 12px;
-    border-radius: ${token.borderRadiusSM}px;
+    padding-block: 8px;
+    padding-inline: 12px;
     border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusSM}px;
+
     font-family: ${token.fontFamilyCode};
     font-size: 12px;
-    white-space: pre-wrap;
     color: ${token.colorTextSecondary};
+    white-space: pre-wrap;
   `,
   spin: css`
     animation: goal-spin 1.2s linear infinite;
+
     @keyframes goal-spin {
       to {
         transform: rotate(360deg);
       }
     }
+
     @media (prefers-reduced-motion: reduce) {
       animation: none;
     }
@@ -1835,10 +2578,10 @@ const AGENT_AVATAR: Record<string, string> = {
   'Kimi Code': '🌙',
   'verify-agent': '🔍',
   'Coding Agent': '🧑‍💻',
-  你: '👤',
-  系统: '⚙️',
-  verifier: '🔍',
-  Agent: '🧑‍💻',
+  '你': '👤',
+  '系统': '⚙️',
+  'verifier': '🔍',
+  'Agent': '🧑‍💻',
 };
 
 export const ActorAvatar = memo<{ name: string; size?: number }>(({ name, size = 20 }) => (
@@ -1879,12 +2622,69 @@ const INITIAL = (): GoalState => ({
   },
   nodes: [
     { id: 'G', kind: 'goal', title: '复现 nanoGPT 本地训练', status: 'active' },
-    { id: 'P1', kind: 'problem', title: '本机 MPS 能否支撑从零训练？', status: 'proposed', description: '训练前必须回答：Apple Silicon 上 PyTorch/MPS 是否可用、内存与磁盘是否足够。' },
-    { id: 'W1', kind: 'work', ref: 'W-1', title: '获取源码并准备 Shakespeare 数据', status: 'proposed', cost: 0, attempts: [], priority: 2, description: 'fresh clone nanoGPT，运行 data/shakespeare_char/prepare.py 生成 train.bin / val.bin；顺带做环境预检。' },
-    { id: 'W5', kind: 'work', ref: 'W-2', title: '校准合理的 val loss 验收阈值', status: 'proposed', cost: 0, attempts: [], priority: 1, description: '查官方 train_shakespeare_char 基线与本机缩小配置的历史结果，给训练一个可审查的成功门槛。' },
-    { id: 'W2', kind: 'work', ref: 'W-3', title: '从零训练 5000 iterations（MPS）', status: 'proposed', cost: 0, dependsOn: ['W1', 'W5'], attempts: [], description: '按验收契约训练并交付 checkpoint、完整 train.log、exit code 与 summary.json。' },
-    { id: 'W3', kind: 'work', ref: 'W-5', title: '加载 checkpoint 并固定 seed 采样 500 字符', status: 'proposed', cost: 0, dependsOn: ['W2'], attempts: [] },
-    { id: 'W4', kind: 'work', ref: 'W-6', title: '完成整体 Goal 验收', status: 'proposed', cost: 0, dependsOn: ['W3'], terminal: true, attempts: [] },
+    {
+      id: 'P1',
+      kind: 'problem',
+      title: '本机 MPS 能否支撑从零训练？',
+      status: 'proposed',
+      description: '训练前必须回答：Apple Silicon 上 PyTorch/MPS 是否可用、内存与磁盘是否足够。',
+    },
+    {
+      id: 'W1',
+      kind: 'work',
+      ref: 'W-1',
+      title: '获取源码并准备 Shakespeare 数据',
+      status: 'proposed',
+      cost: 0,
+      attempts: [],
+      priority: 2,
+      description:
+        'fresh clone nanoGPT，运行 data/shakespeare_char/prepare.py 生成 train.bin / val.bin；顺带做环境预检。',
+    },
+    {
+      id: 'W5',
+      kind: 'work',
+      ref: 'W-2',
+      title: '校准合理的 val loss 验收阈值',
+      status: 'proposed',
+      cost: 0,
+      attempts: [],
+      priority: 1,
+      description:
+        '查官方 train_shakespeare_char 基线与本机缩小配置的历史结果，给训练一个可审查的成功门槛。',
+    },
+    {
+      id: 'W2',
+      kind: 'work',
+      ref: 'W-3',
+      title: '从零训练 5000 iterations（MPS）',
+      status: 'proposed',
+      cost: 0,
+      dependsOn: ['W1', 'W5'],
+      attempts: [],
+      description: '按验收契约训练并交付 checkpoint、完整 train.log、exit code 与 summary.json。',
+    },
+    {
+      id: 'W3',
+      kind: 'work',
+      ref: 'W-5',
+      title: '加载 checkpoint 并固定 seed 采样 500 字符',
+      status: 'proposed',
+      cost: 0,
+      dependsOn: ['W2'],
+      attempts: [],
+    },
+    {
+      id: 'W4',
+      kind: 'work',
+      ref: 'W-6',
+      title: '完成整体 Goal 验收',
+      status: 'proposed',
+      cost: 0,
+      dependsOn: ['W3'],
+      terminal: true,
+      attempts: [],
+    },
   ],
   edges: [
     ['G', 'P1', 'decomposes'],
@@ -1924,7 +2724,13 @@ export const STEPS: Step[] = [
     note: '你写下目标、验收要求和预算。Agent 的第一轮把它拆成 1 个问题 + 5 项 Work 和依赖，这就是探索图的初始方案；开始前可以改。什么都还没派发。',
     fresh: ['G', 'P1', 'W1', 'W5', 'W2', 'W3', 'W4'],
     apply: (s) => {
-      log(s, { t: at(0), kind: 'create', who: 'Agent', text: '根据目标生成初始方案：1 个问题、5 项 Work、4 条依赖', nodeId: 'G' });
+      log(s, {
+        t: at(0),
+        kind: 'create',
+        who: 'Agent',
+        text: '根据目标生成初始方案：1 个问题、5 项 Work、4 条依赖',
+        nodeId: 'G',
+      });
     },
   },
   {
@@ -1942,7 +2748,13 @@ export const STEPS: Step[] = [
       w.lastActivity = at(1);
       w.lastLine = '正在准备工作目录 .records/nanogpt-full…';
       log(s, { t: at(1), kind: 'resume', who: '你', text: '开始执行' });
-      log(s, { t: at(1), kind: 'start', who: '系统', text: '派发第 1 次尝试给 Kimi Code（T-90）', nodeId: 'W1' });
+      log(s, {
+        t: at(1),
+        kind: 'start',
+        who: '系统',
+        text: '派发第 1 次尝试给 Kimi Code（T-90）',
+        nodeId: 'W1',
+      });
     },
   },
   {
@@ -1953,7 +2765,8 @@ export const STEPS: Step[] = [
     apply: (s) => {
       const w = N(s, 'W1');
       w.lastActivity = at(3);
-      w.lastLine = 'git clone https://github.com/karpathy/nanoGPT && python data/shakespeare_char/prepare.py';
+      w.lastLine =
+        'git clone https://github.com/karpathy/nanoGPT && python data/shakespeare_char/prepare.py';
       s.goal.lastActivity = at(3);
       s.goal.spent = 0.06;
     },
@@ -1969,14 +2782,45 @@ export const STEPS: Step[] = [
       w.cost = 0.12;
       w.at = at(7);
       w.lastLine = undefined;
-      w.attempts!.push({ n: 1, started: at(1), ended: at(7), outcome: 'passed', cost: 0.12, reason: 'fresh clone 3adf61e，train.bin / val.bin 已生成；环境预检通过', taskId: 'T-90' });
+      w.attempts!.push({
+        n: 1,
+        started: at(1),
+        ended: at(7),
+        outcome: 'passed',
+        cost: 0.12,
+        reason: 'fresh clone 3adf61e，train.bin / val.bin 已生成；环境预检通过',
+        taskId: 'T-90',
+      });
       N(s, 'P1').status = 'resolved';
-      add(s, { id: 'F1', kind: 'finding', title: 'M5 Max · 128 GB · PyTorch 2.8 · MPS 可用', status: 'resolved', at: at(7), from: 'W1', body: '环境预检通过：Apple M5 Max、128 GB 内存、PyTorch 2.8，MPS 可用，磁盘余量 3.1 TB。回答了「本机 MPS 能否支撑从零训练？」。' });
+      add(s, {
+        id: 'F1',
+        kind: 'finding',
+        title: 'M5 Max · 128 GB · PyTorch 2.8 · MPS 可用',
+        status: 'resolved',
+        at: at(7),
+        from: 'W1',
+        body: '环境预检通过：Apple M5 Max、128 GB 内存、PyTorch 2.8，MPS 可用，磁盘余量 3.1 TB。回答了「本机 MPS 能否支撑从零训练？」。',
+      });
       edge(s, ['W1', 'F1', 'produces']);
       edge(s, ['F1', 'P1', 'supports']);
-      add(s, { id: 'F2', kind: 'finding', title: 'fresh clone 3adf61e，数据 1.0M tokens', status: 'resolved', at: at(7), from: 'W1', body: 'nanoGPT commit 3adf61e154c3；Shakespeare char 数据 train 1,003,854 / val 111,540 tokens。' });
+      add(s, {
+        id: 'F2',
+        kind: 'finding',
+        title: 'fresh clone 3adf61e，数据 1.0M tokens',
+        status: 'resolved',
+        at: at(7),
+        from: 'W1',
+        body: 'nanoGPT commit 3adf61e154c3；Shakespeare char 数据 train 1,003,854 / val 111,540 tokens。',
+      });
       edge(s, ['W1', 'F2', 'produces']);
-      log(s, { t: at(7), kind: 'pass', who: 'verifier', text: '第 1 次尝试通过', nodeId: 'W1', detail: 'fresh clone 3adf61e，train.bin / val.bin 已生成；环境预检通过' });
+      log(s, {
+        t: at(7),
+        kind: 'pass',
+        who: 'verifier',
+        text: '第 1 次尝试通过',
+        nodeId: 'W1',
+        detail: 'fresh clone 3adf61e，train.bin / val.bin 已生成；环境预检通过',
+      });
       log(s, { t: at(7), kind: 'finding', who: '系统', text: '沉淀结论', nodeId: 'F1' });
       log(s, { t: at(7), kind: 'finding', who: '系统', text: '沉淀结论', nodeId: 'F2' });
       const w5 = N(s, 'W5');
@@ -1984,7 +2828,13 @@ export const STEPS: Step[] = [
       w5.task = { id: 'T-91', agent: 'Kimi Code' };
       w5.lastActivity = at(7);
       w5.lastLine = '检索 nanoGPT README 与 train_shakespeare_char 的公开基线…';
-      log(s, { t: at(7), kind: 'start', who: '系统', text: '派发第 1 次尝试给 Kimi Code（T-91）', nodeId: 'W5' });
+      log(s, {
+        t: at(7),
+        kind: 'start',
+        who: '系统',
+        text: '派发第 1 次尝试给 Kimi Code（T-91）',
+        nodeId: 'W5',
+      });
       s.goal.spent = 0.12;
       s.goal.lastActivity = at(7);
     },
@@ -2000,23 +2850,77 @@ export const STEPS: Step[] = [
       w.cost = 0.08;
       w.at = at(14);
       w.lastLine = undefined;
-      w.attempts!.push({ n: 1, started: at(7), ended: at(14), outcome: 'passed', cost: 0.08, reason: '查到官方 char 配置基线与本机缩小配置的历史结果', taskId: 'T-91' });
-      add(s, { id: 'F5', kind: 'finding', title: '官方 char 配置 val loss ≈ 1.47；"loss 下降"不是有效门槛', status: 'resolved', at: at(14), from: 'W5', body: '官方 train_shakespeare_char 在 GPU 上 5000 iter 约 1.47；0.8M 参数 500 iter 只到 2.33。仅要求 "低于初始值" 会让验收几乎必过。' });
+      w.attempts!.push({
+        n: 1,
+        started: at(7),
+        ended: at(14),
+        outcome: 'passed',
+        cost: 0.08,
+        reason: '查到官方 char 配置基线与本机缩小配置的历史结果',
+        taskId: 'T-91',
+      });
+      add(s, {
+        id: 'F5',
+        kind: 'finding',
+        title: '官方 char 配置 val loss ≈ 1.47；"loss 下降"不是有效门槛',
+        status: 'resolved',
+        at: at(14),
+        from: 'W5',
+        body: '官方 train_shakespeare_char 在 GPU 上 5000 iter 约 1.47；0.8M 参数 500 iter 只到 2.33。仅要求 "低于初始值" 会让验收几乎必过。',
+      });
       edge(s, ['W5', 'F5', 'produces']);
-      add(s, { id: 'D0', kind: 'decision', subtype: 'gate', title: '验收阈值定为 ≤ 1.8 且降幅 ≥ 30%', status: 'resolved', authority: 'agent', at: at(14), body: 'Agent 基于 F5 自行决定（authority: agent，无需人介入）：把 "loss 下降" 改为绝对阈值 ≤ 1.8 + 相对降幅 ≥ 30%，写入 W-3 的验收契约；并追加一项「写训练复现说明」。' });
+      add(s, {
+        id: 'D0',
+        kind: 'decision',
+        subtype: 'gate',
+        title: '验收阈值定为 ≤ 1.8 且降幅 ≥ 30%',
+        status: 'resolved',
+        authority: 'agent',
+        at: at(14),
+        body: 'Agent 基于 F5 自行决定（authority: agent，无需人介入）：把 "loss 下降" 改为绝对阈值 ≤ 1.8 + 相对降幅 ≥ 30%，写入 W-3 的验收契约；并追加一项「写训练复现说明」。',
+      });
       edge(s, ['F5', 'D0', 'leads_to']);
       edge(s, ['D0', 'W2', 'leads_to']);
-      add(s, { id: 'W6', kind: 'work', ref: 'W-4', title: '写训练复现说明（命令 + 硬件 + 耗时）', status: 'proposed', cost: 0, attempts: [], description: '把命令、硬件、耗时、SHA-256 写进 README，便于复现。' });
+      add(s, {
+        id: 'W6',
+        kind: 'work',
+        ref: 'W-4',
+        title: '写训练复现说明（命令 + 硬件 + 耗时）',
+        status: 'proposed',
+        cost: 0,
+        attempts: [],
+        description: '把命令、硬件、耗时、SHA-256 写进 README，便于复现。',
+      });
       edge(s, ['D0', 'W6', 'leads_to']);
-      log(s, { t: at(14), kind: 'pass', who: 'verifier', text: '第 1 次尝试通过', nodeId: 'W5', detail: '查到官方 char 配置基线与本机缩小配置的历史结果' });
+      log(s, {
+        t: at(14),
+        kind: 'pass',
+        who: 'verifier',
+        text: '第 1 次尝试通过',
+        nodeId: 'W5',
+        detail: '查到官方 char 配置基线与本机缩小配置的历史结果',
+      });
       log(s, { t: at(14), kind: 'finding', who: '系统', text: '沉淀结论', nodeId: 'F5' });
-      log(s, { t: at(14), kind: 'decision', who: 'Agent', text: '决策：验收阈值定为 ≤ 1.8 且降幅 ≥ 30%；新增 Work「写训练复现说明」', nodeId: 'D0' });
+      log(s, {
+        t: at(14),
+        kind: 'decision',
+        who: 'Agent',
+        text: '决策：验收阈值定为 ≤ 1.8 且降幅 ≥ 30%；新增 Work「写训练复现说明」',
+        nodeId: 'D0',
+      });
       const w2 = N(s, 'W2');
       w2.status = 'active';
       w2.task = { id: 'T-94', agent: 'Kimi Code' };
       w2.lastActivity = at(14);
-      w2.lastLine = '执行 python3 train.py config/train_shakespeare_char.py --device=mps --max_iters=5000 …';
-      log(s, { t: at(14), kind: 'start', who: '系统', text: '派发第 1 次尝试给 Kimi Code（T-94）', nodeId: 'W2' });
+      w2.lastLine =
+        '执行 python3 train.py config/train_shakespeare_char.py --device=mps --max_iters=5000 …';
+      log(s, {
+        t: at(14),
+        kind: 'start',
+        who: '系统',
+        text: '派发第 1 次尝试给 Kimi Code（T-94）',
+        nodeId: 'W2',
+      });
       s.goal.spent = 0.2;
       s.goal.lastActivity = at(14);
     },
@@ -2032,7 +2936,13 @@ export const STEPS: Step[] = [
       w.lastLine = 'step 1000: train loss 1.61, val loss 1.52 · 已写入 checkpoint（iter_num=1000）';
       s.goal.lastActivity = at(33);
       s.goal.spent = 0.7;
-      log(s, { t: at(33), kind: 'progress', who: 'Kimi Code', text: 'step 1000：val loss 1.52，已写入 checkpoint', nodeId: 'W2' });
+      log(s, {
+        t: at(33),
+        kind: 'progress',
+        who: 'Kimi Code',
+        text: 'step 1000：val loss 1.52，已写入 checkpoint',
+        nodeId: 'W2',
+      });
     },
   },
   {
@@ -2053,13 +2963,33 @@ export const STEPS: Step[] = [
     fresh: ['W2'],
     apply: (s) => {
       const w = N(s, 'W2');
-      w.attempts!.push({ n: 1, started: at(14), ended: at(83), outcome: 'abandoned', cost: 0.91, reason: '执行 Agent 失联，由系统回收；训练进程已自行跑完 5000 iter', taskId: 'T-94' });
+      w.attempts!.push({
+        n: 1,
+        started: at(14),
+        ended: at(83),
+        outcome: 'abandoned',
+        cost: 0.91,
+        reason: '执行 Agent 失联，由系统回收；训练进程已自行跑完 5000 iter',
+        taskId: 'T-94',
+      });
       w.cost = 0.91;
       w.lastActivity = at(83);
       w.lastLine = '审计静止 checkpoint：iter_num=5000，val loss 1.7119；补写 summary.json…';
       s.goal.lastActivity = at(83);
-      log(s, { t: at(83), kind: 'abandon', who: '系统', text: '第 1 次尝试失联 47 分钟，已回收（不计失败次数）', nodeId: 'W2' });
-      log(s, { t: at(83), kind: 'start', who: '系统', text: '自动重开：第 2 次尝试（T-94，Kimi Code）', nodeId: 'W2' });
+      log(s, {
+        t: at(83),
+        kind: 'abandon',
+        who: '系统',
+        text: '第 1 次尝试失联 47 分钟，已回收（不计失败次数）',
+        nodeId: 'W2',
+      });
+      log(s, {
+        t: at(83),
+        kind: 'start',
+        who: '系统',
+        text: '自动重开：第 2 次尝试（T-94，Kimi Code）',
+        nodeId: 'W2',
+      });
     },
   },
   {
@@ -2069,21 +2999,43 @@ export const STEPS: Step[] = [
     fresh: ['W2'],
     apply: (s) => {
       const w = N(s, 'W2');
-      w.attempts!.push({ n: 2, started: at(83), ended: at(95), outcome: 'failed', cost: 0.61, reason: 'train.log 只保留 6/21 个 eval 点，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未捕获', taskId: 'T-94' });
+      w.attempts!.push({
+        n: 2,
+        started: at(83),
+        ended: at(95),
+        outcome: 'failed',
+        cost: 0.61,
+        reason:
+          'train.log 只保留 6/21 个 eval 点，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未捕获',
+        taskId: 'T-94',
+      });
       w.cost = 1.52;
       w.lastActivity = at(95);
       w.lastLine = '第 3 次尝试：重新完整训练以补齐完整 train.log…';
       s.goal.spent = 1.52;
       s.goal.lastActivity = at(95);
-      log(s, { t: at(95), kind: 'fail', who: 'verifier', text: '第 2 次尝试未通过', nodeId: 'W2', detail: 'train.log 只保留 6/21 个 eval 点；exit code 未捕获' });
-      log(s, { t: at(95), kind: 'start', who: '系统', text: '自动重试：第 3 次尝试，携带 verifier 的缺口反馈', nodeId: 'W2' });
+      log(s, {
+        t: at(95),
+        kind: 'fail',
+        who: 'verifier',
+        text: '第 2 次尝试未通过',
+        nodeId: 'W2',
+        detail: 'train.log 只保留 6/21 个 eval 点；exit code 未捕获',
+      });
+      log(s, {
+        t: at(95),
+        kind: 'start',
+        who: '系统',
+        text: '自动重试：第 3 次尝试，携带 verifier 的缺口反馈',
+        nodeId: 'W2',
+      });
     },
   },
   {
     t: 100,
     label: '预算用完，停下来问你',
-    note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，并把这次预算决策记成图上的一个节点——这样回溯时能看到"钱是在这里追加的"。',
-    fresh: ['D2'],
+    note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，来问你。这不是一个新节点：预算是针对正在跑的这项 Work 的人工介入，之后会记在它身上。',
+    fresh: ['W2'],
     apply: (s) => {
       const w = N(s, 'W2');
       w.cost = 4.9;
@@ -2092,29 +3044,39 @@ export const STEPS: Step[] = [
       s.goal.status = 'paused';
       s.goal.pauseCause = 'cost';
       s.goal.lastActivity = at(100);
-      add(s, { id: 'D2', kind: 'decision', subtype: 'budget', title: '费用预算用完了（$5.02 / $5.00）', status: 'waiting', authority: 'user', at: at(100), isNew: true, body: '第 3 次尝试重新完整训练，费用越过上限。' });
-      edge(s, ['W2', 'D2', 'leads_to']);
-      log(s, { t: at(100), kind: 'pause', who: '系统', text: '费用 $5.02 超过上限 $5.00，已暂停：不再开始新的尝试', nodeId: 'D2' });
+      log(s, {
+        t: at(100),
+        kind: 'pause',
+        who: '系统',
+        text: '费用 $5.02 超过上限 $5.00，已暂停：不再开始新的尝试',
+        nodeId: 'W2',
+      });
     },
   },
   {
     t: 101,
     label: '你追加预算',
-    note: '你把上限调到 $10 并继续；当前尝试接着跑。',
-    fresh: ['D2', 'W2'],
+    note: '你把上限调到 $10 并继续；当前尝试接着跑。「从零训练」这个 Work 从此带上"你"角标——有人参与过。',
+    fresh: ['W2'],
     apply: (s) => {
       s.goal.maxTotalCost = 10;
       s.goal.status = 'running';
       s.goal.pauseCause = undefined;
       s.goal.lastActivity = at(101);
-      const d = N(s, 'D2');
-      d.status = 'resolved';
-      d.title = '预算 $5 → $10，继续';
-      d.at = at(101);
       const w = N(s, 'W2');
+      w.humanTouches = [
+        ...(w.humanTouches ?? []),
+        { t: at(101), kind: 'budget', text: '预算 $5 → $10，继续' },
+      ];
       w.lastLine = '重训完成；提交 summary.json 与 checkpoint SHA-256…';
       w.lastActivity = at(101);
-      log(s, { t: at(101), kind: 'budget', who: '你', text: '费用上限调整为 $10.00，继续', nodeId: 'D2' });
+      log(s, {
+        t: at(101),
+        kind: 'budget',
+        who: '你',
+        text: '费用上限调整为 $10.00，继续',
+        nodeId: 'W2',
+      });
     },
   },
   {
@@ -2124,7 +3086,15 @@ export const STEPS: Step[] = [
     fresh: ['D1'],
     apply: (s) => {
       const w = N(s, 'W2');
-      w.attempts!.push({ n: 3, started: at(95), ended: at(108), outcome: 'failed', cost: 3.38, reason: '重新训练后仍只补交 summary.json；日志缺口未举证，verifier 判定证据不可审计', taskId: 'T-94' });
+      w.attempts!.push({
+        n: 3,
+        started: at(95),
+        ended: at(108),
+        outcome: 'failed',
+        cost: 3.38,
+        reason: '重新训练后仍只补交 summary.json；日志缺口未举证，verifier 判定证据不可审计',
+        taskId: 'T-94',
+      });
       w.status = 'waiting';
       w.lastActivity = at(108);
       w.lastLine = undefined;
@@ -2132,21 +3102,51 @@ export const STEPS: Step[] = [
       s.goal.spent = 5.4;
       s.goal.status = 'review';
       s.goal.lastActivity = at(108);
-      add(s, { id: 'D1', kind: 'decision', subtype: 'gate', title: '训练已两次未通过验证，怎么继续？', status: 'waiting', authority: 'user', at: at(108) });
-      edge(s, ['D2', 'D1', 'leads_to']);
+      add(s, {
+        id: 'D1',
+        kind: 'decision',
+        subtype: 'gate',
+        title: '训练已两次未通过验证，怎么继续？',
+        status: 'waiting',
+        authority: 'user',
+        at: at(108),
+      });
+      edge(s, ['W2', 'D1', 'leads_to']);
       s.decision = {
         id: 'd1',
         nodeId: 'D1',
         workId: 'W2',
         why: '两次 verifier 判定都指向同一缺口：train.log 只保留了 21 个 eval 点中的 6 个，缺少 iter 1500–5000 的原始记录；exit code 未捕获。模型本身已训练到 iter 5000，静止 checkpoint val loss 1.7119（≤ 1.8）。',
         options: [
-          { id: 'retry', label: '再试一次', consequence: '开始第 4 次尝试，把缺口反馈和你的说明写进指令；预计再花约 $0.6。' },
-          { id: 'retire', label: '放弃这项 Work', consequence: '标为已放弃；依赖它的「采样」和「整体验收」无法继续，Goal 很可能以失败结束。' },
+          {
+            id: 'retry',
+            label: '再试一次',
+            consequence: '开始第 4 次尝试，把缺口反馈和你的说明写进指令；预计再花约 $0.6。',
+          },
+          {
+            id: 'retire',
+            label: '放弃这项 Work',
+            consequence:
+              '标为已放弃；依赖它的「采样」和「整体验收」无法继续，Goal 很可能以失败结束。',
+          },
         ],
         recommended: 'retry',
       };
-      log(s, { t: at(108), kind: 'fail', who: 'verifier', text: '第 3 次尝试未通过', nodeId: 'W2', detail: '重新训练后仍只补交 summary.json；日志缺口未举证' });
-      log(s, { t: at(108), kind: 'decision', who: '系统', text: '单项尝试次数用完，开决策门等你', nodeId: 'D1' });
+      log(s, {
+        t: at(108),
+        kind: 'fail',
+        who: 'verifier',
+        text: '第 3 次尝试未通过',
+        nodeId: 'W2',
+        detail: '重新训练后仍只补交 summary.json；日志缺口未举证',
+      });
+      log(s, {
+        t: at(108),
+        kind: 'decision',
+        who: '系统',
+        text: '单项尝试次数用完，开决策门等你',
+        nodeId: 'D1',
+      });
     },
   },
   {
@@ -2158,17 +3158,34 @@ export const STEPS: Step[] = [
       const d = N(s, 'D1');
       d.status = 'resolved';
       d.title = '训练两次未通过 → 再试一次';
-      d.body = '你选择了「再试一次」，并附说明：不要重训，基于静止 checkpoint 补齐 train.log 缺口。';
+      d.body =
+        '你选择了「再试一次」，并附说明：不要重训，基于静止 checkpoint 补齐 train.log 缺口。';
       d.at = at(110);
       s.decision = null;
       const w = N(s, 'W2');
       w.status = 'active';
       w.lastActivity = at(110);
       w.lastLine = '按你的说明：从静止 checkpoint 与训练日志重建 21 个 eval 点，捕获 exit code…';
+      w.humanTouches = [
+        ...(w.humanTouches ?? []),
+        { t: at(110), kind: 'retry', text: '决策门：再试一次 — "不要重训，基于静止 checkpoint 补齐 train.log 缺口"' },
+      ];
       s.goal.status = 'running';
       s.goal.lastActivity = at(110);
-      log(s, { t: at(110), kind: 'decision', who: '你', text: '决定：再试一次 — "不要重训，基于静止 checkpoint 补齐 train.log 缺口"', nodeId: 'D1' });
-      log(s, { t: at(110), kind: 'start', who: '系统', text: '第 4 次尝试开始（T-94，Kimi Code）', nodeId: 'W2' });
+      log(s, {
+        t: at(110),
+        kind: 'decision',
+        who: '你',
+        text: '决定：再试一次 — "不要重训，基于静止 checkpoint 补齐 train.log 缺口"',
+        nodeId: 'D1',
+      });
+      log(s, {
+        t: at(110),
+        kind: 'start',
+        who: '系统',
+        text: '第 4 次尝试开始（T-94，Kimi Code）',
+        nodeId: 'W2',
+      });
     },
   },
   {
@@ -2178,21 +3195,51 @@ export const STEPS: Step[] = [
     fresh: ['F3', 'W3'],
     apply: (s) => {
       const w = N(s, 'W2');
-      w.attempts!.push({ n: 4, started: at(110), ended: at(126), outcome: 'passed', cost: 0.58, reason: '完整 train.log 21/21 eval 点；exit code 0；ckpt SHA-256 5eeedcc7…', taskId: 'T-94' });
+      w.attempts!.push({
+        n: 4,
+        started: at(110),
+        ended: at(126),
+        outcome: 'passed',
+        cost: 0.58,
+        reason: '完整 train.log 21/21 eval 点；exit code 0；ckpt SHA-256 5eeedcc7…',
+        taskId: 'T-94',
+      });
       w.status = 'resolved';
       w.cost = 5.48;
       w.at = at(126);
       w.lastLine = undefined;
-      add(s, { id: 'F3', kind: 'finding', title: '5000 iter 完成，val loss 1.7119，checkpoint 可加载', status: 'resolved', at: at(126), from: 'W2', body: '最终 checkpoint iter_num=5000，val loss 1.7119（相对初始 4.28 下降 60%），123 MB，torch.load 成功。' });
+      add(s, {
+        id: 'F3',
+        kind: 'finding',
+        title: '5000 iter 完成，val loss 1.7119，checkpoint 可加载',
+        status: 'resolved',
+        at: at(126),
+        from: 'W2',
+        body: '最终 checkpoint iter_num=5000，val loss 1.7119（相对初始 4.28 下降 60%），123 MB，torch.load 成功。',
+      });
       edge(s, ['W2', 'F3', 'produces']);
-      log(s, { t: at(126), kind: 'pass', who: 'verifier', text: '第 4 次尝试通过', nodeId: 'W2', detail: '完整 train.log 21/21 eval 点；exit code 0' });
+      log(s, {
+        t: at(126),
+        kind: 'pass',
+        who: 'verifier',
+        text: '第 4 次尝试通过',
+        nodeId: 'W2',
+        detail: '完整 train.log 21/21 eval 点；exit code 0',
+      });
       log(s, { t: at(126), kind: 'finding', who: '系统', text: '沉淀结论', nodeId: 'F3' });
       const w3 = N(s, 'W3');
       w3.status = 'active';
       w3.task = { id: 'T-96', agent: 'Kimi Code' };
       w3.lastActivity = at(126);
-      w3.lastLine = 'torch.load(ckpt.pt) → sample.py --seed=1337 --num_samples=1 --max_new_tokens=500';
-      log(s, { t: at(126), kind: 'start', who: '系统', text: '派发第 1 次尝试给 Kimi Code（T-96）', nodeId: 'W3' });
+      w3.lastLine =
+        'torch.load(ckpt.pt) → sample.py --seed=1337 --num_samples=1 --max_new_tokens=500';
+      log(s, {
+        t: at(126),
+        kind: 'start',
+        who: '系统',
+        text: '派发第 1 次尝试给 Kimi Code（T-96）',
+        nodeId: 'W3',
+      });
       s.goal.spent = 6.0;
       s.goal.lastActivity = at(126);
     },
@@ -2208,17 +3255,46 @@ export const STEPS: Step[] = [
       w3.cost = 0.09;
       w3.at = at(134);
       w3.lastLine = undefined;
-      w3.attempts!.push({ n: 1, started: at(126), ended: at(134), outcome: 'passed', cost: 0.09, reason: '固定 seed 采样 635 个非空白字符', taskId: 'T-96' });
-      add(s, { id: 'F4', kind: 'finding', title: '固定 seed 采样 635 字符，Shakespeare 风格', status: 'resolved', at: at(134), from: 'W3', body: '采样输出 SHA-256 951a2d97…；非空白字符 635。' });
+      w3.attempts!.push({
+        n: 1,
+        started: at(126),
+        ended: at(134),
+        outcome: 'passed',
+        cost: 0.09,
+        reason: '固定 seed 采样 635 个非空白字符',
+        taskId: 'T-96',
+      });
+      add(s, {
+        id: 'F4',
+        kind: 'finding',
+        title: '固定 seed 采样 635 字符，Shakespeare 风格',
+        status: 'resolved',
+        at: at(134),
+        from: 'W3',
+        body: '采样输出 SHA-256 951a2d97…；非空白字符 635。',
+      });
       edge(s, ['W3', 'F4', 'produces']);
-      log(s, { t: at(134), kind: 'pass', who: 'verifier', text: '第 1 次尝试通过', nodeId: 'W3', detail: '固定 seed 采样 635 个非空白字符' });
+      log(s, {
+        t: at(134),
+        kind: 'pass',
+        who: 'verifier',
+        text: '第 1 次尝试通过',
+        nodeId: 'W3',
+        detail: '固定 seed 采样 635 个非空白字符',
+      });
       log(s, { t: at(134), kind: 'finding', who: '系统', text: '沉淀结论', nodeId: 'F4' });
       const w6 = N(s, 'W6');
       w6.status = 'active';
       w6.task = { id: 'T-97', agent: 'Kimi Code' };
       w6.lastActivity = at(134);
       w6.lastLine = '写入 README：命令、硬件（M5 Max/MPS）、耗时 58 min、SHA-256…';
-      log(s, { t: at(134), kind: 'start', who: '系统', text: '派发第 1 次尝试给 Kimi Code（T-97）', nodeId: 'W6' });
+      log(s, {
+        t: at(134),
+        kind: 'start',
+        who: '系统',
+        text: '派发第 1 次尝试给 Kimi Code（T-97）',
+        nodeId: 'W6',
+      });
       s.goal.spent = 6.09;
       s.goal.lastActivity = at(134);
     },
@@ -2234,10 +3310,33 @@ export const STEPS: Step[] = [
       w6.cost = 0.04;
       w6.at = at(140);
       w6.lastLine = undefined;
-      w6.attempts!.push({ n: 1, started: at(134), ended: at(140), outcome: 'passed', cost: 0.04, reason: 'README 含命令、硬件、耗时与 SHA-256', taskId: 'T-97' });
-      add(s, { id: 'F6', kind: 'finding', title: '复现说明已写入 README', status: 'resolved', at: at(140), from: 'W6', body: '命令、硬件、耗时、SHA-256 齐全。' });
+      w6.attempts!.push({
+        n: 1,
+        started: at(134),
+        ended: at(140),
+        outcome: 'passed',
+        cost: 0.04,
+        reason: 'README 含命令、硬件、耗时与 SHA-256',
+        taskId: 'T-97',
+      });
+      add(s, {
+        id: 'F6',
+        kind: 'finding',
+        title: '复现说明已写入 README',
+        status: 'resolved',
+        at: at(140),
+        from: 'W6',
+        body: '命令、硬件、耗时、SHA-256 齐全。',
+      });
       edge(s, ['W6', 'F6', 'produces']);
-      log(s, { t: at(140), kind: 'pass', who: 'verifier', text: '第 1 次尝试通过', nodeId: 'W6', detail: 'README 含命令、硬件、耗时与 SHA-256' });
+      log(s, {
+        t: at(140),
+        kind: 'pass',
+        who: 'verifier',
+        text: '第 1 次尝试通过',
+        nodeId: 'W6',
+        detail: 'README 含命令、硬件、耗时与 SHA-256',
+      });
       log(s, { t: at(140), kind: 'finding', who: '系统', text: '沉淀结论', nodeId: 'F6' });
       const w4 = N(s, 'W4');
       w4.status = 'active';
@@ -2247,48 +3346,72 @@ export const STEPS: Step[] = [
       s.goal.status = 'verifying';
       s.goal.spent = 6.13;
       s.goal.lastActivity = at(141);
-      log(s, { t: at(141), kind: 'start', who: '系统', text: '所有 Work 终态，生成整体验收并派给 verify-agent（T-98）', nodeId: 'W4' });
+      log(s, {
+        t: at(141),
+        kind: 'start',
+        who: '系统',
+        text: '所有 Work 终态，生成整体验收并派给 verify-agent（T-98）',
+        nodeId: 'W4',
+      });
     },
   },
   {
     t: 150,
     label: '验收通过，等你确认',
     note: '3/3 项通过。按 D1 的建议，Goal 级验收由你关闭：确认完成，或带反馈再来一轮。这是整个流程里第三次、也是最后一次找你（前两次：预算、决策门）。',
-    fresh: ['W4', 'D3'],
+    fresh: ['W4'],
     apply: (s) => {
       const w = N(s, 'W4');
       w.delivered = true;
       w.cost = 0.1;
       w.lastActivity = at(150);
       w.lastLine = undefined;
-      w.attempts!.push({ n: 1, started: at(141), ended: at(150), outcome: 'passed', cost: 0.1, reason: '独立 verifier 复验 checkpoint、loss、采样，3/3 通过', taskId: 'T-98' });
+      w.attempts!.push({
+        n: 1,
+        started: at(141),
+        ended: at(150),
+        outcome: 'passed',
+        cost: 0.1,
+        reason: '独立 verifier 复验 checkpoint、loss、采样，3/3 通过',
+        taskId: 'T-98',
+      });
       s.goal.checks = s.goal.checks.map((c) => ({ ...c, state: 'passed' }));
       s.goal.status = 'review';
       s.goal.spent = 6.23;
       s.goal.lastActivity = at(150);
-      add(s, { id: 'D3', kind: 'decision', subtype: 'acceptance', title: '验收通过 3/3，这个 Goal 算完成了吗？', status: 'waiting', authority: 'user', at: at(150), isNew: true, body: '独立 verifier 重新加载了 checkpoint、核对了 loss 和采样长度。' });
-      edge(s, ['W4', 'D3', 'leads_to']);
-      log(s, { t: at(150), kind: 'pass', who: 'verifier', text: '整体验收 3/3 通过，等你确认', nodeId: 'W4' });
+      log(s, {
+        t: at(150),
+        kind: 'pass',
+        who: 'verifier',
+        text: '整体验收 3/3 通过，等你确认',
+        nodeId: 'W4',
+      });
     },
   },
   {
     t: 151,
     label: '你确认完成',
-    note: 'Goal 达成。"接下来"空了；图完整留存——每一次人工/Agent 决策都是一个带角标的节点，随时可以回溯，也可以基于任何结论再开新的 Work。',
-    fresh: ['D3', 'G'],
+    note: 'Goal 达成。"接下来"空了；图完整留存——决策门是橙色节点，有人参与过的 Work 带"你"角标（预算、决策、验收确认都记在 Work 上），随时可以回溯。',
+    fresh: ['W4', 'G'],
     apply: (s) => {
       const w = N(s, 'W4');
       w.delivered = false;
       w.status = 'resolved';
       w.lastLine = undefined;
-      const d = N(s, 'D3');
-      d.status = 'resolved';
-      d.title = '确认验收：Goal 达成';
-      d.at = at(151);
+      w.humanTouches = [
+        ...(w.humanTouches ?? []),
+        { t: at(151), kind: 'accept', text: '确认验收：Goal 达成' },
+      ];
       s.goal.status = 'achieved';
       s.goal.completedAt = at(151);
       s.goal.lastActivity = at(151);
-      log(s, { t: at(151), kind: 'achieved', who: '你', text: '确认完成：Goal 达成', nodeId: 'D3' });
+      log(s, {
+        t: at(151),
+        kind: 'achieved',
+        who: '你',
+        text: '确认完成：Goal 达成',
+        nodeId: 'W4',
+      });
     },
   },
 ];
@@ -2322,7 +3445,8 @@ export const ago = (ms: number) => {
   if (ms < min(1)) return '刚刚';
   if (ms < min(60)) return `${Math.round(ms / min(1))} 分钟前`;
   const h = Math.floor(ms / min(60));
-  if (h < 24) return `${h} 小时${h < 3 ? ` ${Math.round((ms - h * min(60)) / min(1))} 分钟` : ''}前`;
+  if (h < 24)
+    return `${h} 小时${h < 3 ? ` ${Math.round((ms - h * min(60)) / min(1))} 分钟` : ''}前`;
   return `${Math.floor(h / 24)} 天前`;
 };
 
@@ -2359,13 +3483,7 @@ export const isStale = (goal: GoalInfo, n: GoalNode) =>
   !!n.lastActivity &&
   clock.now - n.lastActivity > min(goal.leaseTimeoutMin);
 
-export type FrontierItemKind =
-  | 'gate'
-  | 'budget'
-  | 'acceptance'
-  | 'stale'
-  | 'running'
-  | 'ready';
+export type FrontierItemKind = 'gate' | 'budget' | 'acceptance' | 'stale' | 'running' | 'ready';
 
 export interface FrontierItem {
   key: string;
@@ -2400,21 +3518,33 @@ export const computeFrontier = (state: GoalState): Frontier => {
   const blocked: BlockedItem[] = [];
   for (const n of state.nodes) {
     if (n.kind === 'decision' && n.status === 'waiting' && n.authority === 'user') {
-      items.push({ key: n.id, kind: n.subtype === 'budget' ? 'budget' : n.subtype === 'acceptance' ? 'acceptance' : 'gate', node: n, rank: 0 });
+      items.push({ key: n.id, kind: 'gate', node: n, rank: 0 });
       continue;
     }
     if (n.kind !== 'work') continue;
-    if (n.delivered) continue; // represented by its acceptance decision node
+    if (n.delivered) {
+      // verifier passed; the human accept is an action on this Work, not a node
+      items.push({ key: `accept:${n.id}`, kind: 'acceptance', node: n, rank: 0 });
+      continue;
+    }
     if (n.status === 'active') {
-      if (isStale(state.goal, n) && state.goal.status !== 'paused') items.push({ key: n.id, kind: 'stale', node: n, rank: 0 });
+      if (isStale(state.goal, n) && state.goal.status !== 'paused')
+        items.push({ key: n.id, kind: 'stale', node: n, rank: 0 });
       else items.push({ key: n.id, kind: 'running', node: n, rank: 1 });
       continue;
     }
     if (n.status === 'proposed') {
-      const blockers = (n.dependsOn ?? []).map((id) => byId[id]).filter((d) => d && d.status !== 'resolved');
+      const blockers = (n.dependsOn ?? [])
+        .map((id) => byId[id])
+        .filter((d) => d && d.status !== 'resolved');
       if (blockers.length) blocked.push({ key: n.id, node: n, blockers });
       else items.push({ key: n.id, kind: 'ready', node: n, rank: 2 });
     }
+  }
+  if (state.goal.status === 'paused' && state.goal.pauseCause === 'cost') {
+    // budget top-up is asked on the Work that was running, not on a new node
+    const target = state.nodes.find((n) => n.kind === 'work' && n.status === 'active') ?? state.nodes[0];
+    items.push({ key: `budget:${target.id}`, kind: 'budget', node: target, rank: 0 });
   }
   items.sort((a, b) => a.rank - b.rank || (b.node.priority ?? 0) - (a.node.priority ?? 0));
   let q = 0;
@@ -2428,15 +3558,22 @@ export const goalSentence = (goal: GoalInfo, frontier: Frontier) => {
       return '初始方案已生成，还没有开始';
     case 'running': {
       const stale = frontier.items.find((i) => i.kind === 'stale');
-      if (stale) return `运行中，但已失联 · 最近动作 ${ago(clock.now - (stale.node.lastActivity ?? clock.now))}`;
+      if (stale)
+        return `运行中，但已失联 · 最近动作 ${ago(clock.now - (stale.node.lastActivity ?? clock.now))}`;
       return `运行中 · 最近动作 ${ago(clock.now - (goal.lastActivity ?? clock.now))}`;
     }
     case 'verifying':
       return '整体验收中';
     case 'review':
-      return frontier.items.some((i) => i.kind === 'gate') ? `等你决定 · 已等待 ${ago(clock.now - (goal.lastActivity ?? clock.now)).replace('前', '')}` : '验收通过，等你确认';
+      return frontier.items.some((i) => i.kind === 'gate')
+        ? `等你决定 · 已等待 ${ago(clock.now - (goal.lastActivity ?? clock.now)).replace('前', '')}`
+        : '验收通过，等你确认';
     case 'paused':
-      return goal.pauseCause === 'cost' ? '已暂停 · 费用预算用完' : goal.pauseCause === 'rounds' ? '已暂停 · 尝试次数用完' : '已由你暂停';
+      return goal.pauseCause === 'cost'
+        ? '已暂停 · 费用预算用完'
+        : goal.pauseCause === 'rounds'
+          ? '已暂停 · 尝试次数用完'
+          : '已由你暂停';
     case 'achieved':
       return `已达成 · ${ago(clock.now - (goal.completedAt ?? clock.now))}`;
     case 'failed':
@@ -2447,7 +3584,12 @@ export const goalSentence = (goal: GoalInfo, frontier: Frontier) => {
 };
 
 export const nodeStateText = (goal: GoalInfo, n: GoalNode, frontier: Frontier) => {
-  if (n.kind === 'decision') return n.status === 'waiting' ? '等你决定' : n.authority === 'agent' ? 'Agent 已决定' : '你已决定';
+  if (n.kind === 'decision')
+    return n.status === 'waiting'
+      ? '等你决定'
+      : n.authority === 'agent'
+        ? 'Agent 已决定'
+        : '你已决定';
   if (n.kind === 'finding') return `结论 · ${ago(clock.now - (n.at ?? clock.now))}`;
   if (n.kind === 'problem') return n.status === 'resolved' ? '已回答' : '待回答';
   if (n.delivered) return '验收通过，等你确认';
@@ -2474,7 +3616,10 @@ export const nodeStateText = (goal: GoalInfo, n: GoalNode, frontier: Frontier) =
 };
 
 export const countAttempts = (state: GoalState) =>
-  state.nodes.reduce((a, n) => a + (n.attempts?.filter((x) => x.outcome !== 'abandoned').length ?? 0), 0);
+  state.nodes.reduce(
+    (a, n) => a + (n.attempts?.filter((x) => x.outcome !== 'abandoned').length ?? 0),
+    0,
+  );
 
 </script>
 <script type="text/plain" data-module="src/types.ts">
@@ -2534,14 +3679,25 @@ export interface GoalNode {
   from?: string;
   /** Decision: who is allowed to resolve it. */
   authority?: 'agent' | 'user';
-  /** Decision sub-type: gate (retry/retire), budget top-up, goal acceptance. */
-  subtype?: 'gate' | 'budget' | 'acceptance';
+  /** Decision sub-type. Only gates are decision nodes; other human actions mark the Work itself. */
+  subtype?: 'gate';
   /** Work: the terminal "Complete full Goal acceptance" Work. */
   terminal?: boolean;
   /** Work: verifier passed, waiting for the human accept. */
   delivered?: boolean;
-  /** Not modeled by the business today — rendered with a NEW tag. */
-  isNew?: boolean;
+  /**
+   * Human actions taken on this Work (budget top-up, gate choice, acceptance). Derived from
+   * goal_events / acceptance decisions / task comments — shown as a 你 badge, never as extra nodes.
+   */
+  humanTouches?: HumanTouch[];
+}
+
+export type HumanTouchKind = 'budget' | 'retry' | 'retire' | 'accept' | 'reject' | 'guidance';
+
+export interface HumanTouch {
+  t: number;
+  kind: HumanTouchKind;
+  text: string;
 }
 
 export interface DecisionOption {
@@ -2576,7 +3732,8 @@ export interface GoalInfo {
   leaseTimeoutMin: number;
   startedAt: number | null;
   completedAt?: number;
-  status: 'planning' | 'running' | 'verifying' | 'review' | 'paused' | 'achieved' | 'failed' | 'canceled';
+  status:
+    'planning' | 'running' | 'verifying' | 'review' | 'paused' | 'achieved' | 'failed' | 'canceled';
   pauseCause?: 'user' | 'cost' | 'rounds';
   spent: number;
   lastActivity: number | null;

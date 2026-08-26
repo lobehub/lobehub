@@ -205,7 +205,7 @@ export const Graph = memo<GraphProps>(
                   <span>{KIND_CN[k]}</span>
                 </Flexbox>
               ))}
-              <span>· 粗边 = 能推进 · 虚线 = 未开始 · 角标 = 谁决定的</span>
+              <span>· 粗边 = 能推进 · 虚线 = 未开始 · 你/AI 角标 = 谁决定的、有人参与过</span>
             </Flexbox>
           </Flexbox>
           <ActionIcon
@@ -294,6 +294,7 @@ export const Graph = memo<GraphProps>(
                   ? 'WORK · GOAL ACCEPTANCE'
                   : KIND_LABEL[n.kind];
             const badge = n.kind === 'decision' ? (n.authority === 'agent' ? 'AI' : '你') : null;
+            const touches = n.kind === 'work' ? (n.humanTouches ?? []) : [];
             return (
               <g
                 key={n.id}
@@ -331,7 +332,6 @@ export const Graph = memo<GraphProps>(
                   textAnchor="middle"
                 >
                   {label}
-                  {n.isNew ? ' · NEW' : ''}
                 </text>
                 {running && (
                   <g>
@@ -365,6 +365,15 @@ export const Graph = memo<GraphProps>(
                     />
                     <text className="badge" x={p.x + p.w - 10} y={p.y + 5.5} textAnchor="middle">
                       {badge}
+                    </text>
+                  </g>
+                )}
+                {touches.length > 0 && (
+                  <g>
+                    <title>{touches.map((t) => t.text).join('\n')}</title>
+                    <circle cx={p.x + 10} cy={p.y + 2} r={9} fill="var(--ant-color-text)" />
+                    <text className="badge" x={p.x + 10} y={p.y + 5.5} textAnchor="middle">
+                      你
                     </text>
                   </g>
                 )}

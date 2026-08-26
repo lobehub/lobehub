@@ -442,8 +442,8 @@ export const STEPS: Step[] = [
   {
     t: 100,
     label: '预算用完，停下来问你',
-    note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，并把这次预算决策记成图上的一个节点——这样回溯时能看到"钱是在这里追加的"。',
-    fresh: ['D2'],
+    note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，来问你。这不是一个新节点：预算是针对正在跑的这项 Work 的人工介入，之后会记在它身上。',
+    fresh: ['W2'],
     apply: (s) => {
       const w = N(s, 'W2');
       w.cost = 4.9;
@@ -452,42 +452,30 @@ export const STEPS: Step[] = [
       s.goal.status = 'paused';
       s.goal.pauseCause = 'cost';
       s.goal.lastActivity = at(100);
-      add(s, {
-        id: 'D2',
-        kind: 'decision',
-        subtype: 'budget',
-        title: '费用预算用完了（$5.02 / $5.00）',
-        status: 'waiting',
-        authority: 'user',
-        at: at(100),
-        isNew: true,
-        body: '第 3 次尝试重新完整训练，费用越过上限。',
-      });
-      edge(s, ['W2', 'D2', 'leads_to']);
       log(s, {
         t: at(100),
         kind: 'pause',
         who: '系统',
         text: '费用 $5.02 超过上限 $5.00，已暂停：不再开始新的尝试',
-        nodeId: 'D2',
+        nodeId: 'W2',
       });
     },
   },
   {
     t: 101,
     label: '你追加预算',
-    note: '你把上限调到 $10 并继续；当前尝试接着跑。',
-    fresh: ['D2', 'W2'],
+    note: '你把上限调到 $10 并继续；当前尝试接着跑。「从零训练」这个 Work 从此带上"你"角标——有人参与过。',
+    fresh: ['W2'],
     apply: (s) => {
       s.goal.maxTotalCost = 10;
       s.goal.status = 'running';
       s.goal.pauseCause = undefined;
       s.goal.lastActivity = at(101);
-      const d = N(s, 'D2');
-      d.status = 'resolved';
-      d.title = '预算 $5 → $10，继续';
-      d.at = at(101);
       const w = N(s, 'W2');
+      w.humanTouches = [
+        ...(w.humanTouches ?? []),
+        { t: at(101), kind: 'budget', text: '预算 $5 → $10，继续' },
+      ];
       w.lastLine = '重训完成；提交 summary.json 与 checkpoint SHA-256…';
       w.lastActivity = at(101);
       log(s, {
@@ -495,7 +483,7 @@ export const STEPS: Step[] = [
         kind: 'budget',
         who: '你',
         text: '费用上限调整为 $10.00，继续',
-        nodeId: 'D2',
+        nodeId: 'W2',
       });
     },
   },
@@ -531,7 +519,7 @@ export const STEPS: Step[] = [
         authority: 'user',
         at: at(108),
       });
-      edge(s, ['D2', 'D1', 'leads_to']);
+      edge(s, ['W2', 'D1', 'leads_to']);
       s.decision = {
         id: 'd1',
         nodeId: 'D1',
@@ -586,6 +574,14 @@ export const STEPS: Step[] = [
       w.status = 'active';
       w.lastActivity = at(110);
       w.lastLine = '按你的说明：从静止 checkpoint 与训练日志重建 21 个 eval 点，捕获 exit code…';
+      w.humanTouches = [
+        ...(w.humanTouches ?? []),
+        {
+          t: at(110),
+          kind: 'retry',
+          text: '决策门：再试一次 — "不要重训，基于静止 checkpoint 补齐 train.log 缺口"',
+        },
+      ];
       s.goal.status = 'running';
       s.goal.lastActivity = at(110);
       log(s, {
@@ -775,7 +771,7 @@ export const STEPS: Step[] = [
     t: 150,
     label: '验收通过，等你确认',
     note: '3/3 项通过。按 D1 的建议，Goal 级验收由你关闭：确认完成，或带反馈再来一轮。这是整个流程里第三次、也是最后一次找你（前两次：预算、决策门）。',
-    fresh: ['W4', 'D3'],
+    fresh: ['W4'],
     apply: (s) => {
       const w = N(s, 'W4');
       w.delivered = true;
@@ -795,18 +791,6 @@ export const STEPS: Step[] = [
       s.goal.status = 'review';
       s.goal.spent = 6.23;
       s.goal.lastActivity = at(150);
-      add(s, {
-        id: 'D3',
-        kind: 'decision',
-        subtype: 'acceptance',
-        title: '验收通过 3/3，这个 Goal 算完成了吗？',
-        status: 'waiting',
-        authority: 'user',
-        at: at(150),
-        isNew: true,
-        body: '独立 verifier 重新加载了 checkpoint、核对了 loss 和采样长度。',
-      });
-      edge(s, ['W4', 'D3', 'leads_to']);
       log(s, {
         t: at(150),
         kind: 'pass',
@@ -819,17 +803,17 @@ export const STEPS: Step[] = [
   {
     t: 151,
     label: '你确认完成',
-    note: 'Goal 达成。"接下来"空了；图完整留存——每一次人工/Agent 决策都是一个带角标的节点，随时可以回溯，也可以基于任何结论再开新的 Work。',
-    fresh: ['D3', 'G'],
+    note: 'Goal 达成。"接下来"空了；图完整留存——决策门是橙色节点，有人参与过的 Work 带"你"角标（预算、决策、验收确认都记在 Work 上），随时可以回溯。',
+    fresh: ['W4', 'G'],
     apply: (s) => {
       const w = N(s, 'W4');
       w.delivered = false;
       w.status = 'resolved';
       w.lastLine = undefined;
-      const d = N(s, 'D3');
-      d.status = 'resolved';
-      d.title = '确认验收：Goal 达成';
-      d.at = at(151);
+      w.humanTouches = [
+        ...(w.humanTouches ?? []),
+        { t: at(151), kind: 'accept', text: '确认验收：Goal 达成' },
+      ];
       s.goal.status = 'achieved';
       s.goal.completedAt = at(151);
       s.goal.lastActivity = at(151);
@@ -838,7 +822,7 @@ export const STEPS: Step[] = [
         kind: 'achieved',
         who: '你',
         text: '确认完成：Goal 达成',
-        nodeId: 'D3',
+        nodeId: 'W4',
       });
     },
   },

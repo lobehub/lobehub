@@ -54,14 +54,25 @@ export interface GoalNode {
   from?: string;
   /** Decision: who is allowed to resolve it. */
   authority?: 'agent' | 'user';
-  /** Decision sub-type: gate (retry/retire), budget top-up, goal acceptance. */
-  subtype?: 'gate' | 'budget' | 'acceptance';
+  /** Decision sub-type. Only gates are decision nodes; other human actions mark the Work itself. */
+  subtype?: 'gate';
   /** Work: the terminal "Complete full Goal acceptance" Work. */
   terminal?: boolean;
   /** Work: verifier passed, waiting for the human accept. */
   delivered?: boolean;
-  /** Not modeled by the business today — rendered with a NEW tag. */
-  isNew?: boolean;
+  /**
+   * Human actions taken on this Work (budget top-up, gate choice, acceptance). Derived from
+   * goal_events / acceptance decisions / task comments — shown as a 你 badge, never as extra nodes.
+   */
+  humanTouches?: HumanTouch[];
+}
+
+export type HumanTouchKind = 'budget' | 'retry' | 'retire' | 'accept' | 'reject' | 'guidance';
+
+export interface HumanTouch {
+  t: number;
+  kind: HumanTouchKind;
+  text: string;
 }
 
 export interface DecisionOption {

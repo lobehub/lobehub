@@ -46,17 +46,15 @@ export const computeFrontier = (state: GoalState): Frontier => {
   const blocked: BlockedItem[] = [];
   for (const n of state.nodes) {
     if (n.kind === 'decision' && n.status === 'waiting' && n.authority === 'user') {
-      items.push({
-        key: n.id,
-        kind:
-          n.subtype === 'budget' ? 'budget' : n.subtype === 'acceptance' ? 'acceptance' : 'gate',
-        node: n,
-        rank: 0,
-      });
+      items.push({ key: n.id, kind: 'gate', node: n, rank: 0 });
       continue;
     }
     if (n.kind !== 'work') continue;
-    if (n.delivered) continue; // represented by its acceptance decision node
+    if (n.delivered) {
+      // verifier passed; the human accept is an action on this Work, not a node
+      items.push({ key: `accept:${n.id}`, kind: 'acceptance', node: n, rank: 0 });
+      continue;
+    }
     if (n.status === 'active') {
       if (isStale(state.goal, n) && state.goal.status !== 'paused')
         items.push({ key: n.id, kind: 'stale', node: n, rank: 0 });
@@ -70,6 +68,12 @@ export const computeFrontier = (state: GoalState): Frontier => {
       if (blockers.length) blocked.push({ key: n.id, node: n, blockers });
       else items.push({ key: n.id, kind: 'ready', node: n, rank: 2 });
     }
+  }
+  if (state.goal.status === 'paused' && state.goal.pauseCause === 'cost') {
+    // budget top-up is asked on the Work that was running, not on a new node
+    const target =
+      state.nodes.find((n) => n.kind === 'work' && n.status === 'active') ?? state.nodes[0];
+    items.push({ key: `budget:${target.id}`, kind: 'budget', node: target, rank: 0 });
   }
   items.sort((a, b) => a.rank - b.rank || (b.node.priority ?? 0) - (a.node.priority ?? 0));
   let q = 0;

@@ -101,9 +101,6 @@ export const NodeDetail = memo<NodeDetailProps>(
             {nodeStateText(goal, n, frontier)}
             {n.cost ? ` · ${usd(n.cost)}` : ''}
           </Text>
-          {n.isNew && (
-            <NewTag title="这种决策今天不是图节点（预算 / 验收确认），为回溯而建模的提案" />
-          )}
           <ActionIcon icon={X} size="small" onClick={onClose} style={{ marginLeft: 'auto' }} />
         </div>
         <Flexbox className={styles.body} gap={14}>
@@ -200,6 +197,24 @@ export const NodeDetail = memo<NodeDetailProps>(
             </Flexbox>
           )}
 
+          {!!n.humanTouches?.length && (
+            <Flexbox gap={4}>
+              <span className={styles.label}>人工参与</span>
+              {n.humanTouches.map((t, i) => (
+                <Flexbox key={i} horizontal gap={8} align="baseline">
+                  <Text
+                    fontSize={12}
+                    className={cx(shared.muted, shared.mono)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {ago(clock.now - t.t)}
+                  </Text>
+                  <Text fontSize={13}>{t.text}</Text>
+                </Flexbox>
+              ))}
+            </Flexbox>
+          )}
+
           {n.kind === 'work' && n.task && (
             <Flexbox gap={4}>
               <span className={styles.label}>负责人 Task</span>
@@ -230,7 +245,7 @@ export const NodeDetail = memo<NodeDetailProps>(
                   <Text
                     fontSize={12}
                     className={cx(shared.muted, shared.mono)}
-                    style={{ flexShrink: 0, width: 44 }}
+                    style={{ flexShrink: 0, width: 56, whiteSpace: 'nowrap' }}
                   >
                     第 {a.n} 次
                   </Text>

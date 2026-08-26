@@ -152,8 +152,28 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
             };
           if (n.id === d.workId)
             return optionId === 'retry'
-              ? { ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…' }
-              : { ...n, status: 'retired' };
+              ? {
+                  ...n,
+                  status: 'active',
+                  lastActivity: now,
+                  lastLine: '正在启动下一次尝试…',
+                  humanTouches: [
+                    ...(n.humanTouches ?? []),
+                    {
+                      t: now,
+                      kind: 'retry',
+                      text: `决策门：再试一次${reason ? ` — ${reason}` : ''}`,
+                    },
+                  ],
+                }
+              : {
+                  ...n,
+                  status: 'retired',
+                  humanTouches: [
+                    ...(n.humanTouches ?? []),
+                    { t: now, kind: 'retire', text: '决策门：放弃这项 Work' },
+                  ],
+                };
           return n;
         }),
       }));
@@ -166,20 +186,34 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
       });
     },
     accept: () => {
+      const target = state.nodes.find((n) => n.delivered);
       setState((s) => ({
         ...s,
         goal: { ...s.goal, status: 'achieved', completedAt: now },
         nodes: s.nodes.map((n) =>
           n.delivered
-            ? { ...n, delivered: false, status: 'resolved' }
-            : n.subtype === 'acceptance' && n.status === 'waiting'
-              ? { ...n, status: 'resolved', title: '确认验收：Goal 达成', at: now }
-              : n,
+            ? {
+                ...n,
+                delivered: false,
+                status: 'resolved',
+                humanTouches: [
+                  ...(n.humanTouches ?? []),
+                  { t: now, kind: 'accept', text: '确认验收：Goal 达成' },
+                ],
+              }
+            : n,
         ),
       }));
-      push({ t: now, kind: 'achieved', who: '你', text: '确认完成：Goal 达成', nodeId: 'D3' });
+      push({
+        t: now,
+        kind: 'achieved',
+        who: '你',
+        text: '确认完成：Goal 达成',
+        nodeId: target?.id,
+      });
     },
     reject: (comment: string) => {
+      const target = state.nodes.find((n) => n.delivered);
       setState((s) => ({
         ...s,
         goal: { ...s.goal, status: 'running', lastActivity: now },
@@ -191,10 +225,12 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
                 status: 'active',
                 lastActivity: now,
                 lastLine: `按你的反馈重新验收：${comment}`,
+                humanTouches: [
+                  ...(n.humanTouches ?? []),
+                  { t: now, kind: 'reject', text: `还不够，再来一轮：${comment}` },
+                ],
               }
-            : n.subtype === 'acceptance' && n.status === 'waiting'
-              ? { ...n, status: 'resolved', title: '还不够 → 再来一轮', body: comment, at: now }
-              : n,
+            : n,
         ),
       }));
       push({
@@ -202,10 +238,11 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         kind: 'decision',
         who: '你',
         text: `退回并带反馈再来一轮：${comment}`,
-        nodeId: 'D3',
+        nodeId: target?.id,
       });
     },
     addBudget: (cap: number) => {
+      const target = state.nodes.find((n) => n.kind === 'work' && n.status === 'active');
       setState((s) => ({
         ...s,
         goal: {
@@ -216,8 +253,14 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           lastActivity: now,
         },
         nodes: s.nodes.map((n) =>
-          n.subtype === 'budget' && n.status === 'waiting'
-            ? { ...n, status: 'resolved', title: `预算 → ${usd(cap)}，继续`, at: now }
+          n.id === target?.id
+            ? {
+                ...n,
+                humanTouches: [
+                  ...(n.humanTouches ?? []),
+                  { t: now, kind: 'budget', text: `预算 → ${usd(cap)}，继续` },
+                ],
+              }
             : n,
         ),
       }));
@@ -226,7 +269,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         kind: 'budget',
         who: '你',
         text: `费用上限调整为 ${usd(cap)}，继续`,
-        nodeId: 'D2',
+        nodeId: target?.id,
       });
     },
     reclaim: () => {

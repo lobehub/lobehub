@@ -113,6 +113,17 @@ const Glyph = ({ item, paused }: { item: FrontierItem; paused: boolean }) => {
   }
 };
 
+const rowTitle = (state: GoalState, item: FrontierItem) => {
+  const { goal } = state;
+  if (item.kind === 'budget')
+    return `费用预算用完了（${usd(goal.spent)} / ${usd(goal.maxTotalCost ?? 0)}）`;
+  if (item.kind === 'acceptance') {
+    const passed = goal.checks.filter((c) => c.state === 'passed').length;
+    return `验收通过 ${passed}/${goal.checks.length}，这个 Goal 算完成了吗？`;
+  }
+  return item.node.title;
+};
+
 /** The second line: where the row's live text comes from is the owner Task's topic + heartbeat. */
 const secondLine = (state: GoalState, item: FrontierItem, frontier: Frontier) => {
   const n = item.node;
@@ -126,7 +137,7 @@ const secondLine = (state: GoalState, item: FrontierItem, frontier: Frontier) =>
         : n.body;
     }
     case 'acceptance':
-      return `${n.body ?? ''} 确认后记为已达成；不够就带反馈再来一轮。`;
+      return '独立 verifier 重新加载了 checkpoint、核对了 loss 和采样长度；确认后记为已达成，不够就带反馈再来一轮。';
     case 'budget':
       return `已花 ${usd(goal.spent)}，上限 ${usd(goal.maxTotalCost ?? 0)} · 已停下，不会再开始新的尝试`;
     case 'stale':
@@ -355,18 +366,11 @@ export const FrontierList = memo<FrontierListProps>(
                       <Flexbox gap={2} flex={1} style={{ minWidth: 0 }}>
                         <Flexbox horizontal gap={8} align="center">
                           <Text weight={500} ellipsis style={{ minWidth: 0 }}>
-                            {item.kind === 'gate' ||
-                            item.kind === 'acceptance' ||
-                            item.kind === 'budget'
-                              ? n.title
-                              : n.title}
+                            {rowTitle(state, item)}
                           </Text>
                           <Text fontSize={12} type={stateTone(item)} style={{ flexShrink: 0 }}>
                             {stateText}
                           </Text>
-                          {n.isNew && (
-                            <NewTag title="这类决策今天不是图节点（预算 / 验收确认），为回溯建模的提案" />
-                          )}
                         </Flexbox>
                         <Text ellipsis className={styles.second}>
                           {secondLine(state, item, frontier)}
