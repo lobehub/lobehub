@@ -504,17 +504,13 @@ export class GroupAgentBuilderExecutionRuntime {
    */
   async updateGroup(args: UpdateGroupParams): Promise<BuiltinToolResult> {
     try {
-      const { currentGroup, group, groupId, isCurrentGroup, state } = await this.resolveGroupTarget(
-        args.groupId,
-      );
+      const { currentGroup, group, groupId, isCurrentGroup, state } =
+        await this.resolveGroupTarget();
 
       if (!group || !groupId) {
         return {
-          content: args.groupId ? `Group "${args.groupId}" not found` : 'No active group found',
-          error: {
-            message: args.groupId ? `Group "${args.groupId}" not found` : 'No active group found',
-            type: args.groupId ? 'GroupNotFound' : 'NoGroupContext',
-          },
+          content: 'No active group found',
+          error: { message: 'No active group found', type: 'NoGroupContext' },
           success: false,
         };
       }
@@ -615,15 +611,12 @@ export class GroupAgentBuilderExecutionRuntime {
    */
   async updateGroupPrompt(args: UpdateGroupPromptParams): Promise<BuiltinToolResult> {
     try {
-      const { group, groupId, isCurrentGroup, state } = await this.resolveGroupTarget(args.groupId);
+      const { group, groupId, isCurrentGroup, state } = await this.resolveGroupTarget();
 
       if (!group || !groupId) {
         return {
-          content: args.groupId ? `Group "${args.groupId}" not found` : 'No active group found',
-          error: {
-            message: args.groupId ? `Group "${args.groupId}" not found` : 'No active group found',
-            type: args.groupId ? 'GroupNotFound' : 'NoGroupContext',
-          },
+          content: 'No active group found',
+          error: { message: 'No active group found', type: 'NoGroupContext' },
           success: false,
         };
       }
@@ -678,12 +671,28 @@ export class GroupAgentBuilderExecutionRuntime {
     await state.updateGroup(groupId, { content: prompt });
   }
 
-  private async resolveGroupTarget(groupId?: string) {
+  /**
+   * Resolve the group this builder conversation is allowed to touch.
+   *
+   * This used to accept an optional `groupId` override sourced from the
+   * model's own tool-call arguments (`UpdateGroupParams.groupId` /
+   * `UpdateGroupPromptParams.groupId`), and let it replace the active group
+   * outright. That is the same confused-deputy path fixed server-side in
+   * `apps/server/src/services/toolExecution/serverRuntimes/groupAgentBuilder.ts`:
+   * a prompt-injected instruction (e.g. malicious content pasted into the
+   * chat) could redirect `updateGroup` / `updateGroupPrompt` to rename or
+   * reconfigure a *different* group the same user owns, never the group
+   * actually under edit. `chatGroupService.updateGroup` is ownership-scoped
+   * server-side, so this was never a cross-user IDOR, but it broke the
+   * single-active-group confinement the builder conversation is supposed to
+   * honor. Always resolve from the active group in the store — no override.
+   */
+  private async resolveGroupTarget() {
     const state = getChatGroupStoreState();
     const currentGroup = state.activeGroupId
       ? agentGroupSelectors.getGroupById(state.activeGroupId)(state)
       : undefined;
-    const targetGroupId = groupId ?? currentGroup?.id;
+    const targetGroupId = currentGroup?.id;
 
     if (!targetGroupId) {
       return { currentGroup, group: undefined, groupId: undefined, isCurrentGroup: false, state };

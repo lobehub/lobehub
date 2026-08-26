@@ -226,8 +226,12 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
 
     if (!result.success || !GROUP_WRITE_APIS.has(apiName)) return;
 
-    const args = (params ?? {}) as { agentId?: string; groupId?: string; prompt?: string };
-    const groupId = args.groupId ?? groupStore.activeGroupId;
+    const args = (params ?? {}) as { agentId?: string; prompt?: string };
+    // Mirrors the write path: `updateGroup` / `updateGroupPrompt` always act on
+    // the active group (no model-supplied `groupId` override, see
+    // `ExecutionRuntime.resolveGroupTarget`), so the post-write refresh must
+    // target the same group, not a caller-supplied id.
+    const groupId = groupStore.activeGroupId;
     if (!groupId) return;
 
     await groupStore.refreshGroupDetail(groupId);

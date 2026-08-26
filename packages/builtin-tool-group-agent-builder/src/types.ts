@@ -249,10 +249,6 @@ export interface UpdateGroupParams {
     openingQuestions?: string[];
   };
   /**
-   * The group ID to update. If not provided, updates the current active group.
-   */
-  groupId?: string;
-  /**
    * Partial metadata to update for the group
    */
   meta?: Partial<Pick<MetaData, 'avatar' | 'backgroundColor' | 'description' | 'tags' | 'title'>>;
@@ -279,10 +275,6 @@ export interface UpdateGroupState {
 }
 
 export interface UpdateGroupPromptParams {
-  /**
-   * The group ID to update. If not provided, updates the current active group.
-   */
-  groupId?: string;
   /**
    * The new shared prompt/content for the group (markdown format)
    */

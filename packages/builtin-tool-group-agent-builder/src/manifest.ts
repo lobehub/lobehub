@@ -411,10 +411,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
             },
             type: 'object',
           },
-          groupId: {
-            description: 'The group ID to update. If omitted, updates the current active group.',
-            type: 'string',
-          },
           meta: {
             description: 'Partial metadata object. Only include fields you want to update.',
             properties: {
@@ -448,10 +444,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
       name: GroupAgentBuilderApiName.updateGroupPrompt,
       parameters: {
         properties: {
-          groupId: {
-            description: 'The group ID to update. If omitted, updates the current active group.',
-            type: 'string',
-          },
           prompt: {
             description:
               "The new shared prompt/content for the group. Supports markdown formatting. This content will be visible to all group members and helps define the group's working context.",
