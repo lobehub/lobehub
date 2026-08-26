@@ -172,6 +172,32 @@ export const topicCommentKeys = {
   ]),
 };
 
+// ---- document comment ---------------------------------------------------
+export const documentCommentKeys = {
+  replies: def(
+    'documentComment:replies',
+    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
+      'documentComment:replies',
+      workspaceId ?? '',
+      rootCommentId,
+      cursor ?? '',
+    ],
+  ),
+  summary: def('documentComment:summary', (documentId: string) => [
+    'documentComment:summary',
+    documentId,
+  ]),
+  threads: def(
+    'documentComment:threads',
+    (workspaceId: string | null, documentId: string, cursor?: string) => [
+      'documentComment:threads',
+      workspaceId ?? '',
+      documentId,
+      cursor ?? '',
+    ],
+  ),
+};
+
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
@@ -1333,6 +1359,7 @@ export const swrKeys = {
   tool: toolKeys,
   topic: topicKeys,
   topicComment: topicCommentKeys,
+  documentComment: documentCommentKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

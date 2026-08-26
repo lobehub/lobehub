@@ -17,6 +17,7 @@ export * from './creds';
 export * from './device';
 export * from './discover';
 export * from './document';
+export * from './documentComment';
 export * from './entityId';
 export * from './eval';
 export * from './expertise';

@@ -48,6 +48,7 @@ import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
 import { documentRouter } from './document';
+import { documentCommentRouter } from './documentComment';
 import { expertiseRouter } from './expertise';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
@@ -124,6 +125,7 @@ export const lambdaRouter = router({
   connector: connectorRouter,
   device: deviceRouter,
   document: documentRouter,
+  documentComment: documentCommentRouter,
   exporter: exporterRouter,
   file: fileRouter,
   followUpAction: followUpActionRouter,
