@@ -363,3 +363,32 @@ registered work versions (⚠️ both already modeled, never surfaced). Edges ca
 **D6 — Artifacts.** Where do produced files live: a 产物 section (TaskArtifacts-style) on the page, or a file space in the right panel? Recommend the section, because artifacts belong to attempts and read best next to 结论；the right panel is already the node inspector. Awaiting your call.
 
 **D5 — Graph on the first screen.** Decided by the user: the frontier list is the key display and the full graph sits directly under it. Remaining question is layout at scale (collapse resolved subtrees vs. paginate lanes) — recommend collapse-to-badge, validated in the next prototype round with a 30-node graph.
+
+## 10. Migration into the product (2026-08-27)
+
+The prototype now ships as `src/features/AgentGoals/ProcessControl/` — frontier, exploration map (react-flow), findings and activity — mounted on the goal detail page whenever the goal carries a Goal Graph. `@xyflow/react@12.11.5` was added as a dependency; the layered layout is hand-rolled (`Graph/layout.ts`) rather than pulling in dagre/elk for a graph that fits on a screen.
+
+### What the surface reads
+
+One `goal.graph` query, exposed through `goalService.getGraph` → `useGoalStore.useFetchGoalGraph` → `goalGraphViewModel.buildGoalGraphView`. Writes go through `tick` / `pause` / `resume` / `decide` / `setBudget` / `addNode`, all of which already existed on the server and had **zero** client callers before this change.
+
+### Derived client-side, because the server has no projection
+
+| Shown           | Derived from                                                   | Note                                                                                                                                                        |
+| --------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontier        | `nodes` + `depends_on` edges                                   | Re-implements `GoalService.tick`'s own selection rule. Drifts if the server rule changes — a `goal.frontier` query would fix that.                          |
+| Attempt ledger  | `goal_events` (`activated` opens, next lifecycle event closes) | No per-attempt cost or duration column exists, so neither is reported.                                                                                      |
+| Liveness / 失联 | `node.updatedAt` vs `config.recovery.operationLeaseTimeoutMs`  | Same window the coordinator reclaims on.                                                                                                                    |
+| Artifacts       | `goal_node_work_versions` link count                           | Count only. `graph` returns bare `workVersionId`s and `work.listVersions` takes a `workId`, so there is no path from a version id to a renderable artifact. |
+| Verifier        | `node.taskId`                                                  | The coordinator always calls `ensureForSubject('task', …)` when it dispatches, so a dispatched task always has one.                                         |
+
+### Deliberately not shown
+
+- **Executing agent name / avatar.** The snapshot carries `taskId` only; resolving it to an agent needs a per-node task join that does not exist.
+- **Per-node and per-attempt cost.** Only goal-root totals exist (`GoalModel.list`).
+- **Goal-level activity rows** (created / paused / budget / achieved). `goal_events` only records `node` / `edge` / `decision` / `task` entities — goal status changes leave no trail.
+- **The "delivered, waiting for your accept" state.** Not modeled for graph Work; the coordinator resolves a Work the moment its task completes.
+
+### Reachability — the real gap
+
+Only `goal.create` seeds a graph, and it writes `subjectType: 'standalone'`. `GoalModel.list` joins on `subjectType = 'task'`, so graph goals never appear in any list, and the detail route is keyed by a carrier task's identifier. To give the surface an entry point without a server change, `GoalDetailPage` falls back to `GoalGraphDetailPage` when the identifier resolves to no task, so `/agent/:aid/goal/<goals.id>` opens a graph goal directly. **Listing them still needs a server change** — `GoalModel.list` returns a task-shaped row (`...task`), so standalone goals need either a separate list shape or a synthetic carrier.
