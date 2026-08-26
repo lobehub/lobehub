@@ -159,15 +159,15 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
               }
             />
           </SettingRow>
-          <SettingRow label={t('share.settings.permissions.uploadAllowed')}>
-            <Switch
-              checked={filePermission?.uploadAllowed ?? false}
-              onChange={(checked) =>
-                handleConfigChange({
-                  filePermissionConfig: { uploadAllowed: checked },
-                })
-              }
-            />
+          {/* v1 has no visitor upload entry point (VisitorComposer is text-only and
+          shareChat.execAgent has no file parameter), so the switch stays disabled
+          rather than confirming a permission the UI cannot exercise yet. The
+          underlying `uploadAllowed` field is left alone for forward compatibility. */}
+          <SettingRow
+            desc={t('share.settings.permissions.uploadAllowedComingSoon')}
+            label={t('share.settings.permissions.uploadAllowed')}
+          >
+            <Switch disabled checked={filePermission?.uploadAllowed ?? false} />
           </SettingRow>
         </Flexbox>
       </Section>

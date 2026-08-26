@@ -415,6 +415,8 @@ export default {
   'share.settings.permissions.knowledgeBase': 'Knowledge bases',
   'share.settings.permissions.title': 'Visitor Permissions',
   'share.settings.permissions.uploadAllowed': 'Allow visitors to upload files',
+  'share.settings.permissions.uploadAllowedComingSoon':
+    'The visitor chat is text-only for now — file uploads are coming soon.',
   'share.settings.tools.desc': 'Only the tools you select here are available to visitors.',
   'share.settings.tools.empty': 'This agent has no tools configured yet.',
   'share.settings.tools.title': 'Tool Whitelist',
@@ -440,6 +442,7 @@ export default {
     'This shared agent has run out of budget. Please contact its owner.',
   'share.visitor.errors.providerNotSupported':
     'This shared agent is not available right now. Please contact its owner.',
+  'share.visitor.errors.retry': 'Retry',
   'share.visitor.errors.topicLimit':
     'You have reached the conversation limit on this shared agent.',
   'share.visitor.errors.turnLimit':

@@ -447,6 +447,24 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
   };
 };
 
+/**
+ * Strip creator-only fields from a message row before it reaches an
+ * agent-share visitor. Visitor-facing message DTO: creator account identity
+ * never crosses the share boundary — only role/content and the message's
+ * own presentational payload (files, tool results, translation, TTS) do.
+ *
+ * Nulls the fields out rather than omitting the keys so the result stays
+ * assignable to {@link UIChatMessage} for every existing consumer.
+ */
+export const toVisitorMessage = (message: UIChatMessage): UIChatMessage => ({
+  ...message,
+  extra: message.extra
+    ? { ...message.extra, model: undefined, provider: undefined }
+    : message.extra,
+  sender: null,
+  usage: undefined,
+});
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -644,6 +662,28 @@ export class MessageModel {
       stageMs: getDurationMs(queryStartedAt),
     });
     return messageItems;
+  };
+
+  /**
+   * Visitor-facing twin of {@link query} for agent-share reads.
+   *
+   * Share messages persist under the CREATOR's account (see shareChat.ts),
+   * so `query()`'s joined `sender` and the billing/model-snapshot fields
+   * describe the creator, not the visitor reading them. Visitor-facing
+   * message DTO: creator account identity never crosses the share boundary.
+   */
+  queryForVisitor = async (
+    params: QueryMessageParams = {},
+    options: {
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
+      timing?: ModelTimingContext;
+    } = {},
+  ): Promise<UIChatMessage[]> => {
+    const messageItems = await this.query(params, options);
+    return messageItems.map(toVisitorMessage);
   };
 
   /**
