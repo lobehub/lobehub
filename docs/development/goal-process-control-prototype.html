@@ -97,6 +97,7 @@
         Search,
         Sparkles,
         Target,
+        WifiOff,
         X,
       } from 'lucide-react';
       import React, { memo, useMemo, useState } from 'react';
@@ -246,6 +247,68 @@
           gap: 8px;
           align-items: center;
           min-height: 28px;
+        `,
+        item: css`
+          border: 1px solid ${token.colorBorderSecondary};
+          border-radius: ${token.borderRadius}px;
+          background: ${token.colorBgContainer};
+          transition: box-shadow 0.15s, border-color 0.15s;
+        `,
+        itemWarning: css`
+          border-color: ${token.colorWarningBorder};
+          background: ${token.colorWarningBg};
+        `,
+        itemDanger: css`
+          border-color: ${token.colorErrorBorder};
+          background: ${token.colorErrorBg};
+        `,
+        itemHot: css`
+          box-shadow: 0 0 0 2px ${token.colorPrimaryBorder};
+        `,
+        itemMain: css`
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 12px 12px 16px;
+        `,
+        itemIcon: css`
+          flex: none;
+          width: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        `,
+        itemText: css`
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          cursor: default;
+        `,
+        itemActions: css`
+          flex: none;
+        `,
+        itemDetail: css`
+          padding: 0 16px 16px 44px;
+        `,
+        ledgerLine: css`
+          padding: 6px 0;
+          border-top: 1px dashed ${token.colorBorderSecondary};
+          &:first-of-type {
+            border-top: none;
+          }
+        `,
+        spin: css`
+          animation: spin 1.2s linear infinite;
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            animation: none;
+          }
         `,
         newTag: css`
           font-family: ${token.fontFamilyCode};
@@ -701,300 +764,239 @@
       };
 
       // ────────────────────────────────────────────────────────────────────
-      // Sidebar (AgentSidebar-style NavItem accordion)
+      // Frontier — "接下来": one card per thing that can move now.
+      // Three layers only: title · one plain sentence · one action. Everything else folds.
       // ────────────────────────────────────────────────────────────────────
-      const StatusGlyph = ({ kind }) => {
-        const map = {
-          needsYou: { icon: AlertTriangle, color: 'var(--ant-color-warning)' },
-          running: { icon: Loader, color: 'var(--ant-color-info)' },
-          queued: { icon: CircleDashed, color: 'var(--ant-color-text-quaternary)' },
-          done: { icon: Check, color: 'var(--ant-color-success)' },
-          failed: { icon: X, color: 'var(--ant-color-error)' },
-        };
-        const m = map[kind] ?? map.queued;
-        return <Icon icon={m.icon} size={14} color={m.color} style={{ flexShrink: 0 }} />;
-      };
+      const Spinner = () => { const { styles } = useStyles(); return <Icon icon={Loader} size={16} className={styles.spin} color="var(--ant-color-info)" />; };
 
-      const GROUP_TITLES = { needsYou: '需要你', running: '进行中', queued: '排队中', done: '已完成' };
-
-      const Sidebar = memo(({ state, frontier, activeId, onPick }) => {
+      const FrontierItem = ({ tone, icon, title, sentence, actions, children, defaultOpen = false, hot, onHover, nodeId }) => {
         const { styles, cx } = useStyles();
-        const [open, setOpen] = useState({ needsYou: true, running: true, queued: true, done: false });
-        const current = { id: state.goal.id, title: state.goal.title, group: sidebarGroupOf(state.goal, frontier), meta: goalSentence(state.goal, frontier), at: state.goal.lastActivity ?? NOW - min(140), badge: frontier.needsYou, failed: state.goal.status === 'failed' };
-        const all = [current, ...OTHER_GOALS];
-        const groups = ['needsYou', 'running', 'queued', 'done'].map((g) => ({ key: g, rows: all.filter((r) => r.group === g) })).filter((g) => g.rows.length);
-        const total = all.filter((r) => r.group !== 'done').length;
+        const [open, setOpen] = useState(defaultOpen);
         return (
-          <aside className={styles.sidebar}>
-            <div className={styles.sidebarHead}>
-              <Flexbox horizontal gap={8} align="center">
-                <Avatar avatar="🧑‍💻" size={24} />
-                <Text weight={600} fontSize={13}>Coding Agent</Text>
+          <div className={cx(styles.item, tone === 'warning' && styles.itemWarning, tone === 'danger' && styles.itemDanger, hot && styles.itemHot)} onMouseEnter={() => onHover?.(nodeId ?? null)} onMouseLeave={() => onHover?.(null)}>
+            <div className={styles.itemMain}>
+              <div className={styles.itemIcon}>{icon}</div>
+              <div className={styles.itemText} onClick={() => children && setOpen(!open)}>
+                <Text weight={500}>{title}</Text>
+                <Text fontSize={13} type="secondary" ellipsis>{sentence}</Text>
+              </div>
+              <Flexbox horizontal gap={8} align="center" className={styles.itemActions}>
+                {actions}
+                {children && <ActionIcon icon={open ? ChevronDown : ChevronRight} size="small" title={open ? '收起' : '详情'} onClick={() => setOpen(!open)} />}
               </Flexbox>
             </div>
-            <div className={styles.navGroup}>
-              <div className={styles.navItem}><Icon icon={MessageSquare} size={14} /><span>对话</span></div>
-              <div className={styles.navItem}><Icon icon={ListTodo} size={14} /><span>任务</span><Text fontSize={11} className={styles.muted} style={{ marginLeft: 'auto' }}>7</Text></div>
-              <div className={cx(styles.navItem, styles.navItemActive)}><Icon icon={Target} size={14} /><span>目标</span><Text fontSize={11} className={styles.muted} style={{ marginLeft: 'auto' }}>{total}</Text></div>
-            </div>
-            <div className={styles.navGroup}>
-              <Flexbox horizontal justify="space-between" align="center" style={{ padding: '0 8px', height: 28 }}>
-                <Text fontSize={12} type="secondary" weight={500}>目标</Text>
-                <Flexbox horizontal gap={2}>
-                  <ActionIcon icon={Search} size="small" title="搜索目标" />
-                  <ActionIcon icon={Plus} size="small" title="新建目标" />
-                </Flexbox>
-              </Flexbox>
-              {groups.map((g) => (
-                <div key={g.key}>
-                  <div className={styles.navGroupTitle} onClick={() => setOpen({ ...open, [g.key]: !open[g.key] })}>
-                    <Icon icon={open[g.key] ? ChevronDown : ChevronRight} size={12} />
-                    <Text fontSize={12} type="secondary" weight={500}>{GROUP_TITLES[g.key]}</Text>
-                    <Text fontSize={11} className={styles.muted}>{g.rows.length}</Text>
-                    {g.key === 'needsYou' && !open[g.key] && <span className={styles.badge} style={{ marginLeft: 'auto' }}>{g.rows.length}</span>}
-                  </div>
-                  {open[g.key] && g.rows.map((r) => (
-                    <div key={r.id} className={cx(styles.goalRow, r.id === activeId && styles.goalRowActive)} onClick={() => onPick(r.id)}>
-                      <StatusGlyph kind={r.failed ? 'failed' : r.group} />
-                      <Flexbox gap={0} style={{ minWidth: 0, flex: 1 }}>
-                        <Text fontSize={13} ellipsis weight={r.id === activeId ? 500 : undefined}>{r.title}</Text>
-                        <Text fontSize={11} className={styles.muted} ellipsis>{r.meta}</Text>
-                      </Flexbox>
-                      {r.badge > 0 ? <span className={styles.badge}>{r.badge}</span> : <Text fontSize={11} className={cx(styles.muted, styles.mono)} style={{ flexShrink: 0 }}>{short(NOW - r.at)}</Text>}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </aside>
-        );
-      });
-
-      // ────────────────────────────────────────────────────────────────────
-      // Frontier list (Task-list styled rows)
-      // ────────────────────────────────────────────────────────────────────
-      const Meta = ({ children }) => { const { styles, cx } = useStyles(); return <Text fontSize={12} className={cx(styles.muted, styles.mono)} style={{ flexShrink: 0 }}>{children}</Text>; };
-
-      const RowHead = ({ kind, node, title, state, stateTone, meta, open, onToggle, onHover, hot, children, dim }) => {
-        const { styles, cx } = useStyles();
-        return (
-          <div className={cx(styles.row, hot && styles.rowHot, dim && styles.rowDim)} onMouseEnter={() => onHover?.(node?.id ?? null)} onMouseLeave={() => onHover?.(null)}>
-            <div className={styles.rowHead} onClick={onToggle}>
-              <Icon icon={open ? ChevronDown : ChevronRight} size={14} style={{ flexShrink: 0 }} />
-              <KindDot kind={kind} />
-              {node?.ref && <Text fontSize={12} className={cx(styles.muted, styles.mono)} style={{ flexShrink: 0 }}>{node.ref}</Text>}
-              <Text weight={500} ellipsis style={{ minWidth: 0 }}>{title}</Text>
-              {node?.terminal && <Tag size="small">整体验收</Tag>}
-              <Text fontSize={12} type={stateTone} style={{ flexShrink: 0, marginLeft: 4 }}>{state}</Text>
-              <Flexbox horizontal gap={12} align="center" style={{ marginLeft: 'auto', flexShrink: 0 }}>{meta}</Flexbox>
-            </div>
-            {open && <div className={styles.rowBody}>{children}</div>}
+            {open && children && <div className={styles.itemDetail}>{children}</div>}
           </div>
         );
       };
 
-      const DecisionRow = memo(({ goal, state, decision, hot, onHover, onDecide }) => {
+      const Ledger = ({ goal, node }) => {
         const { styles, cx } = useStyles();
-        const [open, setOpen] = useState(true);
-        const [picked, setPicked] = useState(decision.recommended);
+        if (!node.attempts?.length) return null;
+        return (
+          <Flexbox gap={4}>
+            <Text fontSize={12} weight={600} type="secondary">之前的尝试</Text>
+            {node.attempts.map((a) => (
+              <Flexbox key={a.n} horizontal gap={10} align="baseline" className={styles.ledgerLine}>
+                <Text fontSize={12} className={cx(styles.muted, styles.mono)} style={{ flexShrink: 0, width: 44 }}>第 {a.n} 次</Text>
+                <Text fontSize={12} type={a.outcome === 'passed' ? 'success' : a.outcome === 'failed' ? 'danger' : 'secondary'} style={{ flexShrink: 0 }}>{a.outcome === 'passed' ? '通过' : a.outcome === 'failed' ? '未通过' : '失联'}</Text>
+                <Text fontSize={12} type="secondary" style={{ flex: 1, minWidth: 0 }}>{a.reason}</Text>
+                <Text fontSize={12} className={cx(styles.muted, styles.mono)} style={{ flexShrink: 0 }}>{Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}</Text>
+                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />} style={{ flexShrink: 0 }} />
+              </Flexbox>
+            ))}
+          </Flexbox>
+        );
+      };
+
+      const Guidance = ({ node, onGuidance }) => {
+        const [guide, setGuide] = useState('');
+        return (
+          <Flexbox horizontal gap={8} align="flex-start">
+            <TextArea value={guide} onChange={(e) => setGuide(e.target.value)} placeholder="给下一次尝试的说明，例如：不要重训，直接基于静止 checkpoint 补齐 train.log 缺口" autoSize={{ minRows: 1, maxRows: 3 }} style={{ flex: 1 }} />
+            <Button size="small" disabled={!guide.trim()} onClick={() => { onGuidance(node.id, guide); setGuide(''); }}>加入</Button>
+          </Flexbox>
+        );
+      };
+
+      const DecisionItem = ({ goal, state, decision, hot, onHover, onDecide }) => {
+        const { styles } = useStyles();
         const [reason, setReason] = useState('');
         const work = state.nodes.find((n) => n.id === decision.workId);
         const dnode = state.nodes.find((n) => n.id === decision.nodeId);
+        const rec = decision.options.find((o) => o.id === decision.recommended);
+        const other = decision.options.filter((o) => o.id !== decision.recommended);
         return (
-          <RowHead kind="decision" node={dnode} title={dnode.title} state="等你决定" stateTone="warning" open={open} onToggle={() => setOpen(!open)} hot={hot} onHover={onHover}
-            meta={<><Meta>{work.ref} · 尝试 {work.attempts.length}/{goal.maxAttemptsPerWork}</Meta><Meta>{usd(work.cost)}</Meta><Meta>{short(NOW - dnode.at)}</Meta></>}>
-            <Flexbox gap={10}>
-              <Text fontSize={13} type="secondary">{decision.why}</Text>
-              <Flexbox gap={6}>
+          <FrontierItem tone="warning" icon={<Icon icon={AlertTriangle} size={16} color="var(--ant-color-warning)" />} nodeId={dnode.id} hot={hot} onHover={onHover}
+            title={dnode.title}
+            sentence={`「${work.title}」已试 ${work.attempts.length} 次、花了 ${usd(work.cost)}；${decision.why.split('；')[0]}`}
+            actions={<>
+              {other.map((o) => <Button key={o.id} size="small" onClick={() => onDecide(o.id, reason)}>{o.label}</Button>)}
+              <Tooltip title={`推荐 · ${rec.consequence}`}><Button type="primary" size="small" onClick={() => onDecide(rec.id, reason)}>{rec.label}</Button></Tooltip>
+            </>}
+            defaultOpen={false}>
+            <Flexbox gap={12}>
+              <Flexbox gap={4}>
+                <Text fontSize={12} weight={600} type="secondary">为什么停下来</Text>
+                <Text fontSize={13}>{decision.why}</Text>
+              </Flexbox>
+              <Flexbox gap={4}>
+                <Text fontSize={12} weight={600} type="secondary">每个选择意味着什么</Text>
                 {decision.options.map((o) => (
-                  <div key={o.id} className={cx(styles.option, picked === o.id && styles.optionActive)} onClick={() => setPicked(o.id)}>
-                    <Flexbox horizontal gap={8} align="center"><Text weight={600} fontSize={13}>{o.label}</Text>{decision.recommended === o.id && <Tag size="small">推荐</Tag>}</Flexbox>
-                    <Text fontSize={12} type="secondary">{o.consequence}</Text>
-                  </div>
+                  <Flexbox key={o.id} horizontal gap={8} align="baseline">
+                    <Text fontSize={13} weight={500} style={{ flexShrink: 0, width: 96 }}>{o.label}{o.id === decision.recommended ? '（推荐）' : ''}</Text>
+                    <Text fontSize={13} type="secondary">{o.consequence}</Text>
+                  </Flexbox>
                 ))}
               </Flexbox>
-              <Flexbox horizontal gap={8} align="flex-start">
-                <TextArea placeholder="给下一次尝试的补充说明（可选，会写进指令）" value={reason} onChange={(e) => setReason(e.target.value)} autoSize={{ minRows: 1, maxRows: 3 }} style={{ flex: 1 }} />
-                <Button type="primary" size="small" disabled={!picked} onClick={() => onDecide(picked, reason)}>{picked === 'retry' ? '再试一次' : '放弃这项 Work'}</Button>
+              <Ledger goal={goal} node={work} />
+              <Flexbox gap={4}>
+                <Text fontSize={12} weight={600} type="secondary">补充说明（可选，会写进下一次尝试的指令）</Text>
+                <TextArea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="例如：不要重训，基于静止 checkpoint 补齐 train.log 缺口" autoSize={{ minRows: 1, maxRows: 3 }} />
               </Flexbox>
             </Flexbox>
-          </RowHead>
+          </FrontierItem>
         );
-      });
+      };
 
-      const DeliveredRow = memo(({ goal, node, hot, onHover, onAccept, onReject }) => {
-        const [open, setOpen] = useState(true);
+      const DeliveredItem = ({ goal, node, hot, onHover, onAccept, onReject }) => {
         const [rejectOpen, setRejectOpen] = useState(false);
         const [comment, setComment] = useState('');
         const passed = goal.checks.filter((c) => c.state === 'passed').length;
         return (
-          <RowHead kind="work" node={node} title={node.title} state={`验收通过 ${passed}/${goal.checks.length}，等你确认`} stateTone="warning" open={open} onToggle={() => setOpen(!open)} hot={hot} onHover={onHover}
-            meta={<><Meta>{node.task.id} · {node.task.agent}</Meta><Meta>{usd(node.cost)}</Meta><Meta>{short(NOW - node.attempts[0].ended)}</Meta></>}>
-            <Flexbox gap={10}>
+          <FrontierItem tone="warning" icon={<Icon icon={Check} size={16} color="var(--ant-color-warning)" />} nodeId={node.id} hot={hot} onHover={onHover}
+            title={`验收通过 ${passed}/${goal.checks.length}，这个 Goal 算完成了吗？`}
+            sentence="独立 verifier 重新加载了 checkpoint、核对了 loss 和采样长度；确认后记为已达成。"
+            actions={<><Button size="small" onClick={() => setRejectOpen(true)}>还不够</Button><Button type="primary" size="small" onClick={onAccept}>确认完成</Button></>}
+            defaultOpen={rejectOpen}>
+            <Flexbox gap={12}>
               <Flexbox gap={4}>
-                {goal.checks.map((c) => (
-                  <Flexbox key={c.label} horizontal gap={8} align="center"><Icon icon={Check} size={14} color="var(--ant-color-success)" /><Text fontSize={13}>{c.label}</Text></Flexbox>
-                ))}
+                {goal.checks.map((c) => (<Flexbox key={c.label} horizontal gap={8} align="center"><Icon icon={Check} size={14} color="var(--ant-color-success)" /><Text fontSize={13}>{c.label}</Text></Flexbox>))}
               </Flexbox>
-              <Text fontSize={12} type="secondary">独立 verifier 在同一目录重新加载了 checkpoint、核对 loss 和采样长度。确认后 Goal 记为已达成；不够就带反馈再来一轮。</Text>
-              {rejectOpen && <TextArea autoFocus placeholder="哪里不够？会作为下一轮的输入（必填）" value={comment} onChange={(e) => setComment(e.target.value)} autoSize={{ minRows: 2, maxRows: 4 }} />}
-              <Flexbox horizontal justify="space-between" align="center" gap={8}>
-                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>完整证据</Button>
-                <Flexbox horizontal gap={8}>
-                  {rejectOpen ? (<><Button size="small" onClick={() => setRejectOpen(false)}>取消</Button><Button size="small" disabled={!comment.trim()} onClick={() => onReject(comment)}>带反馈再来一轮</Button></>)
-                    : (<><Button size="small" onClick={() => setRejectOpen(true)}>还不够</Button><Button size="small" type="primary" onClick={onAccept}>确认完成</Button></>)}
+              <Button type="text" size="small" icon={<Icon icon={ExternalLink} />} style={{ alignSelf: 'flex-start' }}>查看完整证据</Button>
+              {rejectOpen && (
+                <Flexbox gap={8}>
+                  <TextArea autoFocus placeholder="哪里不够？会作为下一轮的输入" value={comment} onChange={(e) => setComment(e.target.value)} autoSize={{ minRows: 2, maxRows: 4 }} />
+                  <Flexbox horizontal gap={8} justify="flex-end"><Button size="small" onClick={() => setRejectOpen(false)}>取消</Button><Button size="small" type="primary" disabled={!comment.trim()} onClick={() => onReject(comment)}>带反馈再来一轮</Button></Flexbox>
                 </Flexbox>
-              </Flexbox>
+              )}
             </Flexbox>
-          </RowHead>
+          </FrontierItem>
         );
-      });
+      };
 
-      const BudgetRow = memo(({ goal, onAddBudget }) => {
-        const [open, setOpen] = useState(true);
+      const BudgetItem = ({ goal, onAddBudget }) => {
         const [budget, setBudget] = useState(goal.maxTotalCost + 5);
         return (
-          <RowHead kind="goal" title={`费用预算用完：已花 ${usd(goal.spent)}，上限 ${usd(goal.maxTotalCost)}`} state="需要你" stateTone="warning" open={open} onToggle={() => setOpen(!open)} meta={<Meta>{short(NOW - goal.lastActivity)}</Meta>}>
-            <Flexbox gap={10}>
-              <Text fontSize={13} type="secondary">Goal 已停下，不会再开始新的尝试；追加预算后从当前 frontier 继续。</Text>
-              <Flexbox horizontal gap={8} align="center" wrap="wrap">
-                <InputNumber value={budget} min={goal.spent} step={1} prefix="$" onChange={setBudget} style={{ width: 110 }} />
-                <Button type="primary" size="small" onClick={() => onAddBudget(budget)}>追加预算并继续</Button>
-                <Button size="small" danger>就此结束 <NewTag title="Graph 型 Goal 还没有 cancel 事件；目前只能删除" /></Button>
-              </Flexbox>
+          <FrontierItem tone="warning" icon={<Icon icon={Coins} size={16} color="var(--ant-color-warning)" />}
+            title={`费用预算用完了（${usd(goal.spent)} / ${usd(goal.maxTotalCost)}）`}
+            sentence="已停下，不会再开始新的尝试；追加预算后从这里继续。"
+            actions={<><Button size="small" danger>就此结束 <NewTag title="Graph 型 Goal 还没有 cancel 事件" /></Button><Button type="primary" size="small" onClick={() => onAddBudget(goal.maxTotalCost + 5)}>追加 $5 并继续</Button></>}>
+            <Flexbox horizontal gap={8} align="center">
+              <Text fontSize={13}>改成其它上限</Text>
+              <InputNumber value={budget} min={goal.spent} step={1} prefix="$" onChange={setBudget} style={{ width: 110 }} />
+              <Button size="small" onClick={() => onAddBudget(budget)}>保存并继续</Button>
             </Flexbox>
-          </RowHead>
+          </FrontierItem>
         );
-      });
+      };
 
-      const StaleRow = memo(({ goal, node, hot, onHover, onReclaim }) => {
-        const [open, setOpen] = useState(true);
-        return (
-          <RowHead kind="work" node={node} title={node.title} state={`失联 · ${ago(NOW - node.lastActivity).replace('前', '')}没有动作`} stateTone="danger" open={open} onToggle={() => setOpen(!open)} hot={hot} onHover={onHover}
-            meta={<><Meta>{node.task.id} · {node.task.agent}</Meta><Meta>尝试 {node.attempts.length + 1}/{goal.maxAttemptsPerWork}</Meta><Meta>{usd(node.cost)}</Meta></>}>
-            <Flexbox gap={10}>
-              <Text fontSize={13} type="secondary">执行它的 Agent 超过 {goal.leaseTimeoutMin} 分钟没有心跳；下一次推进会把这次尝试标为失联并自动重开（不算失败次数）。本机上的训练进程不会被中断。</Text>
-              <Flexbox horizontal gap={8}>
-                <Button type="primary" size="small" icon={<Icon icon={RotateCcw} />} onClick={onReclaim}>立即回收并重开</Button>
-                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>最后一次输出</Button>
-              </Flexbox>
-            </Flexbox>
-          </RowHead>
-        );
-      });
+      const StaleItem = ({ goal, node, hot, onHover, onReclaim }) => (
+        <FrontierItem tone="danger" icon={<Icon icon={WifiOff} size={16} color="var(--ant-color-error)" />} nodeId={node.id} hot={hot} onHover={onHover}
+          title={node.title}
+          sentence={`${node.task.agent} 已 ${ago(NOW - node.lastActivity).replace('前', '')}没有心跳；下一次推进会自动重开这次尝试，不算失败次数。`}
+          actions={<><Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>最后输出</Button><Button type="primary" size="small" icon={<Icon icon={RotateCcw} />} onClick={onReclaim}>立即重开</Button></>}>
+          <Flexbox gap={12}>
+            <Text fontSize={13} type="secondary">本机上由它拉起的训练进程不会被中断；重开的尝试会先审计已有产物，不会从头再训。</Text>
+            <Ledger goal={goal} node={node} />
+          </Flexbox>
+        </FrontierItem>
+      );
 
-      const WorkRow = memo(({ goal, node, frontier, kind, hot, onHover, onGuidance, onStart, dim }) => {
+      const RunningItem = ({ goal, node, hot, onHover, onGuidance }) => {
         const { styles } = useStyles();
-        const [open, setOpen] = useState(false);
-        const [guide, setGuide] = useState('');
-        const running = kind === 'running' && goal.status !== 'paused';
-        const stateText = nodeStateText(goal, node, frontier);
+        const paused = goal.status === 'paused';
         return (
-          <RowHead kind="work" node={node} title={node.title} state={stateText} stateTone={running ? 'info' : 'secondary'} open={open} onToggle={() => setOpen(!open)} hot={hot} onHover={onHover} dim={dim}
-            meta={<>
-              {node.task && running && <Meta>{node.task.id} · {node.task.agent}</Meta>}
-              {node.attempts?.length > 0 && <Meta>尝试 {node.attempts.length}/{goal.maxAttemptsPerWork}</Meta>}
-              {node.cost > 0 && <Meta>{usd(node.cost)}</Meta>}
-              {running && node.lastActivity && <Meta>{short(NOW - node.lastActivity)}</Meta>}
-            </>}>
-            <Flexbox gap={10}>
-              {running && node.lastLine && <div className={styles.evidence}>{node.lastLine}</div>}
-              {kind === 'ready' && (
-                <Flexbox horizontal gap={8} align="center" wrap="wrap">
-                  <Text fontSize={12} type="secondary">{goal.status === 'planning' ? '开始后由 Agent 领取。' : running ? '依赖已满足；当前尝试结束后由下一次推进开始。' : '依赖已满足；下一次推进开始。'}</Text>
-                  {goal.status !== 'planning' && <Button size="small" icon={<Icon icon={Play} />} onClick={() => onStart(node.id)}>现在开始</Button>}
-                  {goal.status !== 'planning' && <Text fontSize={12} className={styles.muted}>与当前尝试并行 <NewTag title="coordinator 目前每次 tick 只派发一个 frontier 节点（串行）" /></Text>}
-                </Flexbox>
-              )}
-              {kind === 'blocked' && <Text fontSize={12} type="secondary">等「{frontier.blocked.find((b) => b.node.id === node.id)?.blockers[0].title}」完成后进入 frontier。</Text>}
-              {node.attempts?.length > 0 && (
-                <Flexbox gap={4}>
-                  <Text fontSize={12} weight={600} type="secondary">尝试记录</Text>
-                  {node.attempts.map((a) => (
-                    <Flexbox key={a.n} className={styles.ledgerRow} gap={2}>
-                      <Flexbox horizontal gap={8} align="center" justify="space-between">
-                        <Flexbox horizontal gap={8} align="center">
-                          <Text fontSize={12} weight={600}>第 {a.n} 次</Text>
-                          <Text fontSize={12} type={a.outcome === 'passed' ? 'success' : a.outcome === 'failed' ? 'danger' : 'secondary'}>{a.outcome === 'passed' ? 'verifier 通过' : a.outcome === 'failed' ? 'verifier 未通过' : '失联回收'}</Text>
-                          <Meta>{Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}</Meta>
-                        </Flexbox>
-                        <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>打开这次运行</Button>
-                      </Flexbox>
-                      <Text fontSize={12} type="secondary">{a.reason}</Text>
-                    </Flexbox>
-                  ))}
-                </Flexbox>
-              )}
-              {kind !== 'blocked' && (
-                <Flexbox gap={6}>
-                  <Text fontSize={12} weight={600} type="secondary">给下一次尝试的说明</Text>
-                  <Flexbox horizontal gap={8} align="flex-start">
-                    <TextArea value={guide} onChange={(e) => setGuide(e.target.value)} placeholder="例如：不要重训，直接基于静止 checkpoint 补齐 train.log 缺口" autoSize={{ minRows: 1, maxRows: 3 }} style={{ flex: 1 }} />
-                    <Button size="small" disabled={!guide.trim()} onClick={() => { onGuidance(node.id, guide); setGuide(''); }}>加入</Button>
-                  </Flexbox>
-                </Flexbox>
-              )}
+          <FrontierItem icon={paused ? <Icon icon={Pause} size={16} color="var(--ant-color-text-tertiary)" /> : <Spinner />} nodeId={node.id} hot={hot} onHover={onHover}
+            title={node.title}
+            sentence={paused ? `已停止 · ${node.task?.agent ?? ''} 第 ${node.attempts.length + 1} 次尝试会在继续后接着跑` : `${node.task.agent} 正在做第 ${node.attempts.length + 1} 次尝试 · ${ago(NOW - node.lastActivity)}：${node.lastLine}`}
+            actions={<Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>打开运行</Button>}>
+            <Flexbox gap={12}>
+              {!paused && <div className={styles.evidence}>{node.lastLine}</div>}
+              <Ledger goal={goal} node={node} />
+              <Guidance node={node} onGuidance={onGuidance} />
             </Flexbox>
-          </RowHead>
+          </FrontierItem>
         );
-      });
+      };
 
-      const FrontierList = memo(({ state, frontier, hotId, onHover, actions }) => {
-        const { styles, cx } = useStyles();
+      const ReadyItem = ({ goal, node, anyRunning, hot, onHover, onGuidance, onStart }) => {
+        const { styles } = useStyles();
+        return (
+          <FrontierItem icon={<Icon icon={CircleDashed} size={16} color="var(--ant-color-text-quaternary)" />} nodeId={node.id} hot={hot} onHover={onHover}
+            title={node.title}
+            sentence={goal.status === 'planning' ? '没有前置依赖，开始后由 Agent 领取。' : anyRunning ? '依赖已满足；当前尝试结束后由下一次推进开始。' : '依赖已满足；下一次推进开始。'}
+            actions={goal.status !== 'planning' && <Tooltip title={<>与当前尝试并行 <NewTag title="coordinator 目前每次 tick 只派发一个 frontier 节点（串行）" /></>}><Button type="text" size="small" icon={<Icon icon={Play} />} onClick={() => onStart(node.id)}>现在开始</Button></Tooltip>}>
+            <Guidance node={node} onGuidance={onGuidance} />
+          </FrontierItem>
+        );
+      };
+
+      const FrontierList = memo(({ state, frontier, hotId, onHover, onSelect, actions }) => {
+        const { styles } = useStyles();
         const { goal } = state;
-        const [showBlocked, setShowBlocked] = useState(false);
+        const anyRunning = frontier.items.some((i) => i.kind === 'running');
         const empty = frontier.items.length === 0;
         return (
-          <Flexbox gap={8}>
+          <Flexbox gap={12}>
             <Flexbox horizontal justify="space-between" align="baseline">
               <Flexbox horizontal gap={8} align="baseline">
-                <Text weight={600}>现在能推进的</Text>
-                <Text fontSize={12} className={styles.muted}>{frontier.items.length} 项{frontier.needsYou > 0 ? ` · ${frontier.needsYou} 项需要你` : ''}</Text>
+                <Text fontSize={16} weight={600}>接下来</Text>
+                <Text fontSize={12} className={styles.muted}>{frontier.needsYou > 0 ? `${frontier.needsYou} 项需要你 · ` : ''}{frontier.items.length} 项能推进</Text>
               </Flexbox>
               <Button size="small" type="text" icon={<Icon icon={Plus} />}>添加 Work</Button>
             </Flexbox>
-            <div className={styles.list}>
+            <Flexbox gap={8}>
               {goal.status === 'planning' && (
-                <div className={styles.row}>
-                  <Flexbox className={styles.rowHead} horizontal gap={10} align="center" style={{ cursor: 'default' }}>
-                    <Icon icon={Play} size={14} /><Text weight={500} style={{ flexShrink: 0 }}>Goal 已就绪，还没有开始</Text>
-                    <Text fontSize={12} type="secondary" ellipsis>开始后 Agent 先领取没有依赖的 Work；每项完成后由独立 verifier 验证并沉淀结论；只有关键分叉才会来找你。</Text>
-                  </Flexbox>
-                  <Flexbox className={styles.rowBody} horizontal gap={8} align="center" wrap="wrap" style={{ paddingLeft: 38 }}>
-                    <Button type="primary" size="small" icon={<Icon icon={Play} />} onClick={actions.start}>开始执行</Button>
-                    <Button size="small" icon={<Icon icon={Sparkles} />}>让 Agent 先拆一版 <NewTag title="Planner/Replanner 未产品化" /></Button>
-                    <Text fontSize={12} className={styles.muted}>服务端持续推进 <NewTag title="Graph 型 Goal 目前只由 CLI `goal run` 驱动；服务端无自动 tick（D2）" /></Text>
-                  </Flexbox>
-                </div>
+                <FrontierItem icon={<Icon icon={Play} size={16} />} title="一切就绪，还没有开始"
+                  sentence="开始后 Agent 先领取没有依赖的 Work；每项完成后由独立 verifier 验证并沉淀结论；只有关键分叉才会来找你。"
+                  actions={<><Button size="small" icon={<Icon icon={Sparkles} />}>让 Agent 先拆一版 <NewTag title="Planner/Replanner 未产品化" /></Button><Button type="primary" size="small" icon={<Icon icon={Play} />} onClick={actions.start}>开始执行</Button></>}>
+                  <Text fontSize={13} type="secondary">开始后会在服务端持续推进，无需保持页面打开 <NewTag title="Graph 型 Goal 目前只由 CLI `goal run` 驱动；服务端无自动 tick（D2）" /></Text>
+                </FrontierItem>
               )}
               {frontier.items.map((it) => {
                 const hot = hotId === it.node?.id;
                 switch (it.kind) {
-                  case 'budget': return <BudgetRow key={it.key} goal={goal} onAddBudget={actions.addBudget} />;
-                  case 'decision': return <DecisionRow key={it.key} goal={goal} state={state} decision={state.decision} hot={hot} onHover={onHover} onDecide={actions.decide} />;
-                  case 'delivered': return <DeliveredRow key={it.key} goal={goal} node={it.node} hot={hot} onHover={onHover} onAccept={actions.accept} onReject={actions.reject} />;
-                  case 'stale': return <StaleRow key={it.key} goal={goal} node={it.node} hot={hot} onHover={onHover} onReclaim={actions.reclaim} />;
-                  default: return <WorkRow key={it.key} goal={goal} node={it.node} frontier={frontier} kind={it.kind} hot={hot} onHover={onHover} onGuidance={actions.guidance} onStart={actions.startNode} />;
+                  case 'budget': return <BudgetItem key={it.key} goal={goal} onAddBudget={actions.addBudget} />;
+                  case 'decision': return <DecisionItem key={it.key} goal={goal} state={state} decision={state.decision} hot={hot} onHover={onHover} onDecide={actions.decide} />;
+                  case 'delivered': return <DeliveredItem key={it.key} goal={goal} node={it.node} hot={hot} onHover={onHover} onAccept={actions.accept} onReject={actions.reject} />;
+                  case 'stale': return <StaleItem key={it.key} goal={goal} node={it.node} hot={hot} onHover={onHover} onReclaim={actions.reclaim} />;
+                  case 'running': return <RunningItem key={it.key} goal={goal} node={it.node} hot={hot} onHover={onHover} onGuidance={actions.guidance} />;
+                  default: return <ReadyItem key={it.key} goal={goal} node={it.node} anyRunning={anyRunning} hot={hot} onHover={onHover} onGuidance={actions.guidance} onStart={actions.startNode} />;
                 }
               })}
               {empty && goal.status !== 'planning' && (
-                <Flexbox className={styles.rowHead} gap={2} style={{ cursor: 'default' }}>
-                  <Text weight={500}>{goal.status === 'achieved' ? '没有需要推进的了 · Goal 已达成' : '当前没有可推进的节点'}</Text>
-                  <Text fontSize={12} type="secondary">{goal.status === 'achieved' ? '结论都在下面的图里；可以基于任何结论再开一条新的 Work。' : '所有节点都在等待或已终态。'}</Text>
-                </Flexbox>
+                <FrontierItem icon={<Icon icon={goal.status === 'achieved' ? Check : CircleDashed} size={16} color={goal.status === 'achieved' ? 'var(--ant-color-success)' : undefined} />}
+                  title={goal.status === 'achieved' ? '没有需要推进的了，Goal 已达成' : '当前没有可推进的节点'}
+                  sentence={goal.status === 'achieved' ? '结论都在下面的图里；可以基于任何结论再开一条新的 Work。' : '所有节点都在等待或已终态。'} />
               )}
-              {showBlocked && frontier.blocked.map((b) => <WorkRow key={b.key} goal={goal} node={b.node} frontier={frontier} kind="blocked" hot={hotId === b.node.id} onHover={onHover} onGuidance={actions.guidance} onStart={actions.startNode} dim />)}
-              {frontier.blocked.length > 0 && (
-                <Flexbox horizontal gap={8} align="center" className={cx(styles.row, styles.sectionHead)} style={{ padding: '8px 14px' }} onClick={() => setShowBlocked(!showBlocked)}>
-                  <Icon icon={Clock} size={12} />
-                  <Text fontSize={12} type="secondary" ellipsis>{frontier.blocked.length} 项在等待依赖{showBlocked ? '' : `：${frontier.blocked.map((b) => b.node.title).join(' · ')}`}</Text>
-                  <Text fontSize={12} type="secondary" style={{ marginLeft: 'auto', flexShrink: 0 }}>{showBlocked ? '收起' : '显示'}</Text>
-                </Flexbox>
-              )}
-            </div>
+            </Flexbox>
+            {frontier.blocked.length > 0 && (
+              <Flexbox horizontal gap={6} align="center" wrap="wrap" style={{ paddingInline: 4 }}>
+                <Icon icon={Clock} size={12} />
+                <Text fontSize={12} type="secondary">还有 {frontier.blocked.length} 项在等依赖：</Text>
+                {frontier.blocked.map((b, i) => (
+                  <Text key={b.key} fontSize={12} type="secondary" style={{ cursor: 'pointer' }} onMouseEnter={() => onHover(b.node.id)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(b.node.id)}>
+                    <u>{b.node.title}</u>（等{b.blockers[0].title.slice(0, 10)}…）{i < frontier.blocked.length - 1 ? '、' : ''}
+                  </Text>
+                ))}
+              </Flexbox>
+            )}
           </Flexbox>
         );
       });
+
+      const Meta = ({ children }) => { const { styles, cx } = useStyles(); return <Text fontSize={12} className={cx(styles.muted, styles.mono)} style={{ flexShrink: 0 }}>{children}</Text>; };
 
       // ────────────────────────────────────────────────────────────────────
       // Graph
@@ -1193,7 +1195,7 @@
         );
       };
 
-      const GoalDetail = memo(({ scenario, onHotChange }) => {
+      const GoalDetail = memo(({ scenario }) => {
         const { styles, cx } = useStyles();
         const [state, setState] = useState(() => buildState(scenario));
         const [log, setLog] = useState([]);
@@ -1202,7 +1204,6 @@
         const [wide, setWide] = useState(false);
         const [comment, setComment] = useState('');
         const frontier = useMemo(() => computeFrontier(state), [state]);
-        React.useEffect(() => { onHotChange?.(state, frontier); }, [state, frontier]);
         const push = (text, who = '你') => setLog((l) => [{ t: NOW, text, who }, ...l]);
         const patchNode = (id, patch) => setState((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }));
         const goal = { ...state.goal, attemptsUsed: state.nodes.reduce((a, n) => a + (n.attempts?.length ?? 0), 0) };
@@ -1256,7 +1257,7 @@
                 </Flexbox>
               </Flexbox>
 
-              <FrontierList state={state} frontier={frontier} hotId={hotId} onHover={setHotId} actions={actions} />
+              <FrontierList state={state} frontier={frontier} hotId={hotId} onHover={setHotId} onSelect={setSelectedId} actions={actions} />
 
               <Flexbox gap={12}>
                 <Graph state={state} frontier={frontier} hotId={hotId} selectedId={selectedId} onHover={setHotId} onSelect={(id) => setSelectedId(id === selectedId ? null : id)} wide={wide} onToggleWide={() => setWide(!wide)} />
@@ -1318,27 +1319,22 @@
       const App = memo(() => {
         const { styles } = useStyles();
         const [scenario, setScenario] = useState('gate');
-        const [activeId, setActiveId] = useState('GOAL-12');
-        const [snap, setSnap] = useState(null);
-        const sidebarState = snap?.state ?? buildState(scenario);
-        const sidebarFrontier = snap?.frontier ?? computeFrontier(sidebarState);
-        const other = OTHER_GOALS.find((g) => g.id === activeId);
+        const [title, setTitle] = useState(BASE().goal.title);
         return (
           <div className={styles.page}>
             <Flexbox className={styles.toggleBar} horizontal gap={12} align="center">
               <Text fontSize={12} type="secondary">场景</Text>
-              <Segmented size="small" value={scenario} onChange={(v) => { setScenario(v); setActiveId('GOAL-12'); setSnap(null); }} options={Object.entries(SCENARIOS).map(([value, label]) => ({ label, value }))} />
+              <Segmented size="small" value={scenario} onChange={setScenario} options={Object.entries(SCENARIOS).map(([value, label]) => ({ label, value }))} />
             </Flexbox>
             <div className={styles.shell}>
-              <Sidebar state={sidebarState} frontier={sidebarFrontier} activeId={activeId} onPick={setActiveId} />
               <div className={styles.main}>
                 <div className={styles.navHeader}>
                   <ActionIcon icon={PanelLeft} size="small" />
                   <Flexbox horizontal gap={6} align="center" style={{ paddingLeft: 4, minWidth: 0 }}>
                     <Text fontSize={13} type="secondary">所有目标</Text><Text fontSize={13} type="secondary">›</Text>
                     <Text fontSize={13} type="secondary">Coding Agent</Text><Text fontSize={13} type="secondary">›</Text>
-                    <Text fontSize={13} className={styles.mono} type="secondary">{activeId}</Text>
-                    <Text fontSize={13} weight={500} ellipsis style={{ maxWidth: 420 }}>{other ? other.title : sidebarState.goal.title}</Text>
+                    <Text fontSize={13} className={styles.mono} type="secondary">GOAL-12</Text>
+                    <Text fontSize={13} weight={500} ellipsis style={{ maxWidth: 480 }}>{title}</Text>
                   </Flexbox>
                   <Flexbox horizontal gap={2} align="center" style={{ marginLeft: 'auto' }}>
                     <Tooltip title="添加 Work · 编辑目标 [NEW] · 复制 ID · 复制链接 · 结束 Goal [NEW] · 删除"><ActionIcon icon={MoreHorizontal} size="small" /></Tooltip>
@@ -1346,11 +1342,7 @@
                   </Flexbox>
                 </div>
                 <div className={styles.scroll}>
-                  {other ? (
-                    <div className={styles.column}><Block variant="outlined" padding={24} gap={8}><Text weight={600}>{other.title}</Text><Text fontSize={13} type="secondary">{other.meta} · 原型只展开了 GOAL-12 这一条；其它 Goal 的详情结构完全相同。</Text><Button size="small" onClick={() => setActiveId('GOAL-12')}>回到 GOAL-12</Button></Block></div>
-                  ) : scenario === 'loading' ? <LoadingState /> : scenario === 'error' ? <ErrorState onRetry={() => setScenario('running')} /> : (
-                    <GoalDetail key={scenario} scenario={scenario} onHotChange={(state, frontier) => setSnap({ state, frontier })} />
-                  )}
+                  {scenario === 'loading' ? <LoadingState /> : scenario === 'error' ? <ErrorState onRetry={() => setScenario('running')} /> : <GoalDetail key={scenario} scenario={scenario} />}
                 </div>
               </div>
             </div>
