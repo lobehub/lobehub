@@ -15,6 +15,7 @@ import {
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import { SkillMaintainerIdentifier } from '@lobechat/builtin-tool-skill-maintainer';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
@@ -430,11 +431,51 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   grants `'read'` or `'none'` — there is no write grant to honor, so any
  *   accidental future path that lets a share-visitor operation pick up either
  *   plugin id must still resolve to "blocked," not "scoped-so-it's-fine."
+ *
+ * - `lobe-task`: executes in `createTaskRuntime`
+ *   (`apps/server/src/services/toolExecution/serverRuntimes/task.ts`) against
+ *   `TaskModel`/`taskRouter`, both scoped only by `userId`/`workspaceId` — the
+ *   CREATOR's, since a share run always executes as the creator (see
+ *   `AgentShareGate`). Every mutating and single-task-read API takes a
+ *   model-supplied `identifier` (`deleteTask` task.ts:373, `editTask`
+ *   task.ts:413, `setTaskSchedule`/`setTaskVerify` task.ts:551,632,
+ *   `runTask`/`runTasks` task.ts:704,747, `updateTaskStatus`/`viewTask`
+ *   task.ts:786,839) or `commentId` (`addTaskComment`/`updateTaskComment`/
+ *   `deleteTaskComment` task.ts:210,772,390) resolved through `TaskModel.resolve`
+ *   / `taskRouter`'s comment procedures with NO topic/conversation check —
+ *   `TaskModel.resolve`'s `ownership()` filter only checks `userId`/
+ *   `workspaceId` (`packages/database/src/models/task.ts:326`), not which
+ *   topic created or is currently working the task. That lets a visitor read,
+ *   edit, delete, comment on, reschedule, reconfigure, or RUN (spending the
+ *   creator's budget) any task anywhere in the creator's workspace, created by
+ *   any agent or topic — not just the one behind this share. `listTasks`
+ *   (task.ts:521) makes the breadth explicit: `scope: 'allAgents'` deliberately
+ *   returns every task across every agent in the workspace, by design (it is
+ *   the tool's advertised "see the whole team's board" feature).
+ *
+ *   Unlike `lobe-agent-plan`'s `updatePlan` (see `lobeAgentPlan.ts`'s
+ *   `restrictToTopicId`), there is no membership relation this gate can use
+ *   to scope a task to "only tasks belonging to this visitor's topic": a task
+ *   is not 1:1 with the topic that created it — `tasks.currentTopicId` and
+ *   `task_topics` track EXECUTION runs (a task can span many topics over its
+ *   lifetime, and `task_topics` rows are only created once a task actually
+ *   runs), a task created via `createTask` inside this share's topic has no
+ *   queryable column linking it back (only a best-effort `context.origin`
+ *   JSONB pocket, not indexed or joinable), and identifiers/parent-child/
+ *   dependency links are explicitly meant to be resolved and cross-referenced
+ *   workspace-wide. Inventing a `restrictToTopicId`-style filter here would
+ *   therefore be dishonest scoping — it would silently miss most of the
+ *   actual attack surface (any task NOT created in this exact topic) while
+ *   giving the impression the hole is closed. The task tracker is a
+ *   creator/workspace-level surface by design, with no per-conversation
+ *   boundary, so the fail-closed fix is to block the whole identifier for
+ *   share visitors, exactly like `lobe-agent-management`.
  */
 const SHARE_VISITOR_BLOCKED_IDENTIFIERS = new Set<string>([
   AgentManagementIdentifier,
   SkillMaintainerIdentifier,
   AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+  TaskIdentifier,
 ]);
 
 const stripAlwaysBlockedIdentifiers = (toolSet: ShareGateToolSet): void => {

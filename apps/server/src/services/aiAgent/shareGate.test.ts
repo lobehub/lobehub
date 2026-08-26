@@ -25,6 +25,7 @@ import {
   SkillMaintainerIdentifier,
   SkillMaintainerManifest,
 } from '@lobechat/builtin-tool-skill-maintainer';
+import { TaskApiName, TaskIdentifier, TaskManifest } from '@lobechat/builtin-tool-task';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -263,6 +264,46 @@ describe('applyShareGateToToolSet', () => {
       expect(toolSet.executorMap[AgentManagementIdentifier]).toBeUndefined();
       expect(toolSet.enabledToolIds).not.toContain(AgentManagementIdentifier);
       expect(toolSet.activatableToolIds).not.toContain(AgentManagementIdentifier);
+      expect(toolSet.tools).toEqual([]);
+    });
+  });
+
+  describe('lobe-task is fully blocked for share visitors', () => {
+    // Tasks are a creator/workspace-level tracker, not a per-conversation
+    // resource: `listTasks` deliberately supports `scope: 'allAgents'`
+    // (enumerating every agent's tasks), and every single-task API
+    // (`editTask`, `deleteTask`, `viewTask`, comments, schedule/verify
+    // config, `runTask`) resolves a model-supplied `identifier`/`commentId`
+    // through `TaskModel`/`taskRouter`, scoped only by the creator's
+    // `userId`/`workspaceId` — never by which topic created or is currently
+    // working the task (see `apps/server/src/services/toolExecution/
+    // serverRuntimes/task.ts`). There is no membership relation (unlike
+    // `lobe-agent-plan`'s topic-document association) to scope this to "only
+    // tasks from this visitor's topic," so the whole identifier is removed.
+    // Reproduces the real exported manifest, as if it had been whitelisted.
+    const buildTaskToolSet = (): ShareGateToolSet => ({
+      activatableToolIds: [TaskIdentifier],
+      enabledToolIds: [TaskIdentifier],
+      executorMap: { [TaskIdentifier]: 'server' as any },
+      manifestMap: { [TaskIdentifier]: TaskManifest },
+      sourceMap: { [TaskIdentifier]: 'builtin' } as any,
+      tools: TaskManifest.api.map((api) => ({
+        function: { name: `${TaskIdentifier}____${api.name}` },
+        type: 'function',
+      })),
+    });
+
+    it('removes the identifier entirely from every surface, even when explicitly whitelisted', () => {
+      const gate = buildGate({ enabledToolIds: [TaskIdentifier] });
+      const toolSet = buildTaskToolSet();
+
+      applyShareGateToToolSet(toolSet, gate);
+
+      expect(toolSet.manifestMap[TaskIdentifier]).toBeUndefined();
+      expect(toolSet.sourceMap[TaskIdentifier]).toBeUndefined();
+      expect(toolSet.executorMap[TaskIdentifier]).toBeUndefined();
+      expect(toolSet.enabledToolIds).not.toContain(TaskIdentifier);
+      expect(toolSet.activatableToolIds).not.toContain(TaskIdentifier);
       expect(toolSet.tools).toEqual([]);
     });
   });
@@ -626,6 +667,60 @@ describe('isShareBlockedDataToolCall', () => {
           ),
         ).toBe(true);
       }
+    });
+  });
+
+  describe('lobe-task is fully blocked at dispatch time', () => {
+    // Unbypassable enforcement layer, same reasoning as the
+    // `lobe-agent-management` suite above: `BuiltinToolsExecutor.execute`
+    // (builtin.ts) routes strictly by `payload.apiName`/`args` and never
+    // re-consults the (possibly already-trimmed) manifest, so a model that
+    // still emits a `lobe-task` call must be blocked here regardless of the
+    // arguments — including the concrete cross-topic/cross-agent leak this
+    // hole allowed: reading or mutating a task the visitor never created,
+    // and enumerating the creator's whole workspace via `scope: 'allAgents'`.
+    //
+    // Built from the REAL exported `TaskApiName` enum, not a hand-picked
+    // subset, so adding a new API to the tool is covered automatically.
+    it.each(Object.values(TaskApiName))('blocks %s unconditionally', (apiName) => {
+      expect(isShareBlockedDataToolCall({}, TaskIdentifier, apiName)).toBe(true);
+    });
+
+    it("blocks resolving a task identifier from outside the visitor's own topic (viewTask/editTask/deleteTask cross-topic read)", () => {
+      // `TaskModel.resolve` has no topic filter at all — it is scoped only by
+      // the creator's `userId`/`workspaceId` — so a visitor supplying ANY
+      // identifier from the creator's workspace (created by another agent, in
+      // another topic, possibly before this share ever existed) would
+      // otherwise resolve successfully. This asserts the block holds
+      // regardless of which identifier or which API is targeted.
+      expect(
+        isShareBlockedDataToolCall({}, TaskIdentifier, TaskApiName.viewTask, {
+          identifier: 'T-999-from-another-topic',
+        }),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall({}, TaskIdentifier, TaskApiName.editTask, {
+          identifier: 'T-999-from-another-topic',
+          name: 'renamed by visitor',
+        }),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall({}, TaskIdentifier, TaskApiName.deleteTask, {
+          identifier: 'T-999-from-another-topic',
+        }),
+      ).toBe(true);
+    });
+
+    it("blocks listTasks with scope: 'allAgents' — the tool's advertised whole-workspace enumeration", () => {
+      expect(
+        isShareBlockedDataToolCall({}, TaskIdentifier, TaskApiName.listTasks, {
+          scope: 'allAgents',
+        }),
+      ).toBe(true);
+    });
+
+    it('blocks even with no args at all', () => {
+      expect(isShareBlockedDataToolCall({}, TaskIdentifier, TaskApiName.viewTask)).toBe(true);
     });
   });
 
