@@ -16,6 +16,7 @@ import { installMarketplaceAgents } from '@/services/installMarketplaceAgents';
 import { topicService } from '@/services/topic';
 
 const QODER_IDENTIFIER = 'qoder';
+const CURSOR_IDENTIFIER = 'cursor';
 
 interface SubmitToolInteractionOptions {
   createUserMessage?: boolean;
@@ -40,7 +41,7 @@ type CustomInteractionSubmitHandler = (
   context?: CustomInteractionContext,
 ) => Promise<CustomInteractionSubmitResult | undefined>;
 
-const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
+export const isAgentMarketplaceCall = (identifier: string, apiName?: string) =>
   identifier === WebOnboardingIdentifier && apiName === WebOnboardingApiName.showAgentMarketplace;
 
 const isLobeAgentAskUserQuestion = (identifier: string, apiName?: string) =>
@@ -165,6 +166,7 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  */
 const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   ClaudeCodeIdentifier,
+  CURSOR_IDENTIFIER,
   QODER_IDENTIFIER,
 ]);
 

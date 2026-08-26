@@ -26,7 +26,17 @@ import { type ChatToolPayload, ThreadStatus, ThreadType } from '@lobechat/types'
 import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';
 
-import { notifyAgentIntervention } from '@/business/server/agent-run/notifyAgentIntervention';
+import {
+  deriveAgentInterventionActivityKey,
+  hashAgentInterventionRequestRevision,
+} from '@/business/server/agent-run/agentInterventionIdentity';
+import {
+  acknowledgeAgentInterventionProducerResolution,
+  type AgentInterventionAllowedAction,
+  type AgentInterventionReviewDetail,
+  notifyAgentInterventionRequired,
+  type NotifyAgentInterventionRequiredParams,
+} from '@/business/server/agent-run/agentInterventionReview';
 import type { MessageModel } from '@/database/models/message';
 import type { ThreadModel } from '@/database/models/thread';
 import type { TopicModel } from '@/database/models/topic';
@@ -199,6 +209,63 @@ const interventionSummary = (request?: AgentInterventionRequestData): string => 
   const apiName = request?.apiName || 'interaction';
   return `${provider} ${kind}: ${apiName}`.slice(0, 160);
 };
+
+const buildHeterogeneousReviewDetail = (
+  request: AgentInterventionRequestData,
+): Extract<AgentInterventionReviewDetail, { type: 'permission' | 'plan' | 'question' }> => {
+  const parsed = JSON.parse(request.arguments) as {
+    questions: Array<{
+      header: string;
+      multiSelect: boolean;
+      options: Array<{ description?: string; id?: string; label: string }>;
+      question: string;
+    }>;
+  };
+  const questions = parsed.questions.map((question, questionIndex) => ({
+    header: question.header || undefined,
+    id: `question_${questionIndex + 1}`,
+    multiple: question.multiSelect,
+    options: question.options.map((option) => ({
+      description: option.description,
+      id: option.id ?? option.label,
+      label: option.label,
+    })),
+    question: question.question,
+  }));
+  const first = questions[0];
+
+  switch (request.interactionKind) {
+    case 'permission': {
+      return {
+        description: first.header,
+        options: first.options,
+        title: first.question,
+        type: 'permission',
+      };
+    }
+    case 'plan': {
+      return {
+        content: first.question,
+        options: first.options,
+        title: first.header ?? 'Review plan',
+        type: 'plan',
+      };
+    }
+    case 'question': {
+      return { questions, title: first.header, type: 'question' };
+    }
+    default: {
+      throw new Error('Unsupported heterogeneous intervention kind');
+    }
+  }
+};
+
+const heterogeneousActionsFor = (
+  interactionKind: AgentInterventionInteractionKind,
+): AgentInterventionAllowedAction[] =>
+  interactionKind === 'question'
+    ? ['submit_answers', 'skip_interaction']
+    : ['select_provider_option', 'skip_interaction'];
 
 const INTERVENTION_TRANSITIONS = new Set<MainAgentInterventionTransition>([
   'cancelled',
@@ -1009,7 +1076,7 @@ export class HeterogeneousPersistenceHandler {
       if ('threadId' in intent) {
         await this.applySubagentIntent(state, intent as SubagentIntent);
       } else {
-        await this.applyMainIntent(state, intent as MainAgentIntent);
+        await this.applyMainIntent(state, intent as MainAgentIntent, event.stepIndex);
       }
     }
 
@@ -1035,7 +1102,7 @@ export class HeterogeneousPersistenceHandler {
     return out;
   }
 
-  private async applyMainIntent(state: OperationState, intent: MainAgentIntent) {
+  private async applyMainIntent(state: OperationState, intent: MainAgentIntent, stepIndex: number) {
     switch (intent.kind) {
       case 'createAssistant': {
         const createMetadata: Record<string, any> = {
@@ -1147,7 +1214,7 @@ export class HeterogeneousPersistenceHandler {
       }
 
       case 'setToolIntervention': {
-        await this.applyToolIntervention(state, intent);
+        await this.applyToolIntervention(state, intent, stepIndex);
         return;
       }
 
@@ -1246,6 +1313,7 @@ export class HeterogeneousPersistenceHandler {
   private async applyToolIntervention(
     state: OperationState,
     intent: Extract<MainAgentIntent, { kind: 'setToolIntervention' }>,
+    stepIndex: number,
   ): Promise<void> {
     const toolMsgId = state.toolMsgIdByCallId.get(intent.toolCallId);
     if (!toolMsgId) {
@@ -1255,10 +1323,7 @@ export class HeterogeneousPersistenceHandler {
     }
 
     const summary = interventionSummary(intent.request);
-    const reviewRequest =
-      intent.transition === 'pending'
-        ? sanitizeAgentInterventionRequestForReview(intent.request)
-        : undefined;
+    const reviewRequest = sanitizeAgentInterventionRequestForReview(intent.request);
     const durableState: StoredHeterogeneousIntervention = {
       deadline: intent.request?.deadline,
       interactionKind: intent.request?.interactionKind,
@@ -1280,21 +1345,98 @@ export class HeterogeneousPersistenceHandler {
     const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
     if (!this.deps.userId || state.notifiedInterventionTransitions.has(transitionKey)) return;
 
-    await notifyAgentIntervention({
-      agentId: state.agentId,
-      deadline: intent.request?.deadline,
-      interactionKind: intent.request?.interactionKind ?? 'question',
-      operationId: state.operationId,
-      provider: intent.request?.provider ?? 'unknown',
-      request: reviewRequest,
-      resolutionRequestId: intent.resolutionRequestId,
-      status: intent.transition,
-      summary,
-      toolCallId: intent.toolCallId,
-      topicId: state.topicId,
-      userId: this.deps.userId,
-      workspaceId: this.deps.workspaceId,
-    });
+    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}:pending`;
+    if (!state.notifiedInterventionTransitions.has(pendingTransitionKey)) {
+      if (!reviewRequest?.interactionKind || !reviewRequest.provider) {
+        throw new Error(
+          `Unsafe heterogeneous intervention review payload toolCallId=${intent.toolCallId}`,
+        );
+      }
+      const assistantMessageId = state.main.currentAssistantId;
+      if (!assistantMessageId) {
+        throw new Error(
+          `Missing assistant owner for heterogeneous intervention toolCallId=${intent.toolCallId}`,
+        );
+      }
+      // Heterogeneous callbacks are individually sealed. Include the tool call
+      // so two concurrent interventions emitted by one assistant step never
+      // claim the same batch identity with conflicting item-0 contents.
+      const batchId = `${state.operationId}:${stepIndex}:${assistantMessageId}:${intent.toolCallId}`;
+      // The generic Web source bridge reads the same authoritative correlation
+      // from the tool row. Stamp it before notify so a card can never appear
+      // actionable while its operation/batch locator is still absent.
+      await this.deps.messageModel.updateMessagePlugin(toolMsgId, {
+        intervention: {
+          ...intent.intervention,
+          batchId,
+          itemIndex: 0,
+          operationId: state.operationId,
+          stepIndex,
+        },
+      });
+      const allowedActions = heterogeneousActionsFor(reviewRequest.interactionKind);
+      const notification: NotifyAgentInterventionRequiredParams = {
+        agentId: state.agentId ?? undefined,
+        approvalMode: 'manual',
+        batch: {
+          activityKey: deriveAgentInterventionActivityKey({
+            batchId,
+            operationId: state.operationId,
+            userId: this.deps.userId,
+            workspaceId: this.deps.workspaceId,
+          }),
+          allowedActions: [],
+          id: batchId,
+          kind: 'single',
+          sealed: true,
+          stepIndex,
+        },
+        context: {
+          agentId: state.agentId ?? undefined,
+          assistantMessageId,
+          operationId: state.operationId,
+          topicId: state.topicId,
+          workspaceId: this.deps.workspaceId,
+        },
+        deadline: reviewRequest.deadline,
+        items: [
+          {
+            allowedActions,
+            detail: buildHeterogeneousReviewDetail(reviewRequest),
+            interactionKind: reviewRequest.interactionKind,
+            provider: reviewRequest.provider,
+            requestRevision: {
+              hash: hashAgentInterventionRequestRevision(intent.request?.arguments ?? ''),
+              version: 1,
+            },
+            sourceRef: {
+              operationId: state.operationId,
+              toolCallId: intent.toolCallId,
+              type: 'heterogeneous',
+            },
+            summary,
+            surface: 'form',
+          },
+        ],
+        summary,
+        systemActionEligibility: 'review_only',
+        userId: this.deps.userId,
+        workspaceId: this.deps.workspaceId,
+      };
+      await notifyAgentInterventionRequired(notification);
+      state.notifiedInterventionTransitions.add(pendingTransitionKey);
+    }
+
+    if (intent.transition !== 'pending') {
+      await acknowledgeAgentInterventionProducerResolution({
+        operationId: state.operationId,
+        ownerUserId: this.deps.userId,
+        resolutionRequestId: intent.resolutionRequestId,
+        status: intent.transition,
+        toolCallId: intent.toolCallId,
+        workspaceId: this.deps.workspaceId,
+      });
+    }
     state.notifiedInterventionTransitions.add(transitionKey);
 
     // Cold-replica dedupe marker. Cloud's override must still use the same

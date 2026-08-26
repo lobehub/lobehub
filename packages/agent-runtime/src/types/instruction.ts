@@ -364,6 +364,12 @@ export interface AgentInstructionRequestHumanApprove extends AgentInstructionBas
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;
+  /** Previous sealed batch for a partial-decision re-park. */
+  supersedes?: {
+    batchId: string;
+    operationId: string;
+    toolCallIds: string[];
+  };
   type: 'request_human_approve';
 }
 

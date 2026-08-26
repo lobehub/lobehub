@@ -2,6 +2,8 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { matchesAgentInterventionContinuationProvenance } from '@/business/server/agent-run/agentInterventionIdentity';
+
 import { getTestDB } from '../../core/getTestDB';
 import { agentOperations, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -93,6 +95,95 @@ describe('AgentOperationModel', () => {
         .from(agentOperations)
         .where(eq(agentOperations.id, operationId));
       expect(rows).toHaveLength(1);
+    });
+  });
+
+  describe('agent intervention dispatch recovery markers', () => {
+    it('persists ready preparation and queue ACK without replacing provenance', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-intervention-marker';
+      const provenance = {
+        resolutionRequestId: 'request-intervention-marker',
+        sourceOperationId: 'source-operation',
+        sourceToolMessageIds: ['tool-message'],
+      };
+      await model.recordStart({
+        metadata: { agentInterventionContinuation: provenance },
+        operationId,
+      });
+
+      await expect(
+        model.recordAgentInterventionPreparation(operationId, {
+          deduplicationId: 'agent-intervention:op-intervention-marker:0',
+          resolutionRequestId: provenance.resolutionRequestId,
+          state: 'ready',
+          stepIndex: 0,
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        model.recordAgentInterventionDispatch(operationId, {
+          deduplicationId: 'agent-intervention:op-intervention-marker:0',
+          messageId: 'queue-message',
+          resolutionRequestId: provenance.resolutionRequestId,
+          scheduledAt: '2026-08-26T00:00:00.000Z',
+          state: 'scheduled',
+        }),
+      ).resolves.toBe(true);
+
+      const row = await model.findById(operationId);
+      expect(
+        matchesAgentInterventionContinuationProvenance(
+          row?.metadata?.agentInterventionContinuation,
+          provenance,
+        ),
+      ).toBe(true);
+      expect(row?.metadata).toMatchObject({
+        agentInterventionContinuation: provenance,
+        agentInterventionDispatch: {
+          deduplicationId: 'agent-intervention:op-intervention-marker:0',
+          state: 'scheduled',
+        },
+        agentInterventionPreparation: {
+          deduplicationId: 'agent-intervention:op-intervention-marker:0',
+          state: 'ready',
+          stepIndex: 0,
+        },
+      });
+    });
+
+    it('rejects a preparation marker from another request or owner', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const attacker = new AgentOperationModel(serverDB, otherUserId);
+      const operationId = 'op-intervention-marker-authority';
+      await model.recordStart({
+        metadata: {
+          agentInterventionContinuation: {
+            resolutionRequestId: 'request-owner',
+            sourceOperationId: 'source-operation',
+            sourceToolMessageIds: ['tool-message'],
+          },
+        },
+        operationId,
+      });
+      const marker = {
+        deduplicationId: 'agent-intervention:op-intervention-marker-authority:0',
+        resolutionRequestId: 'request-other',
+        state: 'ready' as const,
+        stepIndex: 0,
+      };
+
+      await expect(model.recordAgentInterventionPreparation(operationId, marker)).resolves.toBe(
+        false,
+      );
+      await expect(
+        attacker.recordAgentInterventionPreparation(operationId, {
+          ...marker,
+          resolutionRequestId: 'request-owner',
+        }),
+      ).resolves.toBe(false);
+      expect((await model.findById(operationId))?.metadata).not.toHaveProperty(
+        'agentInterventionPreparation',
+      );
     });
   });
 
