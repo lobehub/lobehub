@@ -85,29 +85,6 @@ export class BuiltinToolsExecutor implements IToolExecutor {
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: argsStr, source } = payload;
 
-    // Agent share C5 — the actual enforcement point for a share visitor's
-    // memory / knowledge-base / agent-documents tool calls. `applyShareGate-
-    // ToDataToolAccess` (shareGate.ts) already trims these APIs off the
-    // manifest/`tools` schema handed to the model, but that only changes what
-    // the model is OFFERED — this dispatcher routes strictly by
-    // `payload.apiName` (see `runtime[apiName]` below) with no re-check
-    // against the (possibly already-trimmed) manifest, so a model that still
-    // emits a stripped API name would otherwise execute it read-write under
-    // the creator's own credentials. Checked before any routing (including
-    // `lobehubSkill` / `composio`, which never match the data-tool
-    // identifiers this guards) so it can't be bypassed by a different source.
-    if (context.agentShare && isShareBlockedDataToolCall(context.agentShare, identifier, apiName)) {
-      const message =
-        `Tool "${identifier}.${apiName}" is not permitted for this shared agent's visitors — ` +
-        `the share only grants a restricted view of the creator's data. Do not retry this call.`;
-      log('Blocked share-visitor tool call %s:%s (agentShare gate)', identifier, apiName);
-      return {
-        content: message,
-        error: { code: 'SHARE_GATE_BLOCKED', message },
-        success: false,
-      };
-    }
-
     const parsed = safeParseJSON(argsStr);
 
     // When JSON.parse fails, return a dedicated error rather than silently
@@ -140,6 +117,34 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     }
 
     const args = parsed || {};
+
+    // Agent share C5 — the actual enforcement point for a share visitor's
+    // memory / knowledge-base / agent-documents tool calls. `applyShareGate-
+    // ToDataToolAccess` (shareGate.ts) already trims these APIs off the
+    // manifest/`tools` schema handed to the model, but that only changes what
+    // the model is OFFERED — this dispatcher routes strictly by
+    // `payload.apiName` (see `runtime[apiName]` below) with no re-check
+    // against the (possibly already-trimmed) manifest, so a model that still
+    // emits a stripped API name would otherwise execute it read-write under
+    // the creator's own credentials. Runs after JSON parsing (not before) so
+    // id-scoped rules — e.g. `viewKnowledgeBase`'s `id` — can inspect `args`;
+    // still checked before any routing (including `lobehubSkill` /
+    // `composio`, which never match the data-tool identifiers this guards) so
+    // it can't be bypassed by a different source.
+    if (
+      context.agentShare &&
+      isShareBlockedDataToolCall(context.agentShare, identifier, apiName, args)
+    ) {
+      const message =
+        `Tool "${identifier}.${apiName}" is not permitted for this shared agent's visitors — ` +
+        `the share only grants a restricted view of the creator's data. Do not retry this call.`;
+      log('Blocked share-visitor tool call %s:%s (agentShare gate)', identifier, apiName);
+      return {
+        content: message,
+        error: { code: 'SHARE_GATE_BLOCKED', message },
+        success: false,
+      };
+    }
 
     log(
       'Executing builtin tool: %s:%s (source: %s) with args: %O',

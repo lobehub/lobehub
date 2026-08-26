@@ -5399,6 +5399,19 @@ export class AiAgentService {
               // `BuiltinToolsExecutor` can re-check the knowledge-base /
               // agent-documents tools' grant at dispatch time.
               filePermissionConfig: shareGate.shareConfig.filePermissionConfig,
+              // Sourced from the agent's OWN persisted assignment
+              // (`agentConfig.knowledgeBases`, already gated by
+              // `applyShareGateToAgentConfig` above — empty unless
+              // `filePermissionConfig.knowledgeBase === 'read'`), never from
+              // visitor input. Lets `isShareBlockedDataToolCall` scope
+              // `lobe-knowledge-base.viewKnowledgeBase`'s `id` argument to
+              // knowledge bases actually mounted on this agent — see
+              // `shareGate.ts`.
+              knowledgeBaseIds: (agentConfig.knowledgeBases ?? [])
+                .filter(
+                  (kb: { enabled?: boolean | null; id?: string | null }) => kb.enabled && kb.id,
+                )
+                .map((kb: { id?: string | null }) => kb.id as string),
               visitorUserId: shareGate.visitorUserId,
             }
           : undefined,

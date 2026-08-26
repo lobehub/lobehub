@@ -322,14 +322,28 @@ describe('applyShareGateToToolSet', () => {
           MemoryApiName.queryTaxonomyOptions,
         ]),
       );
+      // `viewKnowledgeBase` / `searchKnowledgeBase` survive: `searchKnowledgeBase`
+      // is already agent/task-id scoped server-side, and `viewKnowledgeBase`'s
+      // `id` argument is checked per-call against the agent's own assignment
+      // (see the `isArgsOutOfScope` coverage below) — the manifest can't
+      // pre-filter that, so it stays offered.
       expect(knowledgeApis).toEqual(
         expect.arrayContaining([
-          KnowledgeBaseApiName.listKnowledgeBases,
           KnowledgeBaseApiName.viewKnowledgeBase,
           KnowledgeBaseApiName.searchKnowledgeBase,
-          KnowledgeBaseApiName.readKnowledge,
         ]),
       );
+      // `listFiles` / `getFileDetail` (the creator's whole resource library)
+      // and `listKnowledgeBases` / `readKnowledge` (every KB/file the creator
+      // owns, not just this agent's assignment) have no id to scope by, so a
+      // `read` grant never offers them — this is the P1 fix: previously these
+      // survived a `read` grant and let a visitor enumerate + read the
+      // creator's entire resource library regardless of what was actually
+      // assigned to the shared agent.
+      expect(knowledgeApis).not.toContain(KnowledgeBaseApiName.listFiles);
+      expect(knowledgeApis).not.toContain(KnowledgeBaseApiName.getFileDetail);
+      expect(knowledgeApis).not.toContain(KnowledgeBaseApiName.listKnowledgeBases);
+      expect(knowledgeApis).not.toContain(KnowledgeBaseApiName.readKnowledge);
       expect(documentApis).toEqual(
         expect.arrayContaining([
           AgentDocumentsApiName.listDocuments,
@@ -370,8 +384,20 @@ describe('applyShareGateToToolSet', () => {
       for (const apiName of knowledgeWriteApis) expect(knowledgeApis).not.toContain(apiName);
       for (const apiName of documentWriteApis) expect(documentApis).not.toContain(apiName);
 
+      const knowledgeAlwaysBlockedApis = [
+        KnowledgeBaseApiName.listFiles,
+        KnowledgeBaseApiName.getFileDetail,
+        KnowledgeBaseApiName.listKnowledgeBases,
+        KnowledgeBaseApiName.readKnowledge,
+      ];
+
       const toolNames = toolSet.tools!.map((tool) => tool.function.name);
-      for (const apiName of [...memoryWriteApis, ...knowledgeWriteApis, ...documentWriteApis]) {
+      for (const apiName of [
+        ...memoryWriteApis,
+        ...knowledgeWriteApis,
+        ...documentWriteApis,
+        ...knowledgeAlwaysBlockedApis,
+      ]) {
         expect(toolNames.some((name) => name.endsWith(`____${apiName}`))).toBe(false);
       }
 
@@ -447,5 +473,111 @@ describe('isShareBlockedDataToolCall', () => {
 
   it('never blocks tools outside the data-tool registry', () => {
     expect(isShareBlockedDataToolCall({}, 'web-search', 'search')).toBe(false);
+  });
+
+  describe('lobe-knowledge-base creator-scoped reads', () => {
+    const readPermissions = {
+      filePermissionConfig: { knowledgeBase: 'read' as const },
+      knowledgeBaseIds: ['kb-mounted-1', 'kb-mounted-2'],
+    };
+
+    it("blocks listFiles / getFileDetail / listKnowledgeBases / readKnowledge outright even under a read grant — they read the creator's whole personal store with no id to scope to this agent", () => {
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.listFiles,
+          {},
+        ),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.getFileDetail,
+          { id: 'file-anything' },
+        ),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.listKnowledgeBases,
+          {},
+        ),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.readKnowledge,
+          { fileIds: ['file-anything'] },
+        ),
+      ).toBe(true);
+    });
+
+    it('allows viewKnowledgeBase for a knowledge base actually assigned to the agent', () => {
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          { id: 'kb-mounted-1' },
+        ),
+      ).toBe(false);
+    });
+
+    it('blocks viewKnowledgeBase for a knowledge base the visitor supplies but the agent is not assigned — the P1 enumeration path', () => {
+      // A visitor-supplied id outside the agent's own assignment must be
+      // rejected even though the identifier's grant is 'read' — the grant
+      // means "read what this agent is assigned," not "read any knowledge
+      // base the creator owns."
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          { id: 'kb-not-mounted' },
+        ),
+      ).toBe(true);
+    });
+
+    it('fails closed when the id is missing, the wrong type, or the assignment set itself is empty/absent', () => {
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          {},
+        ),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall(
+          readPermissions,
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          { id: 42 },
+        ),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall(
+          {
+            filePermissionConfig: { knowledgeBase: 'read' as const },
+            knowledgeBaseIds: [],
+          },
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          { id: 'kb-mounted-1' },
+        ),
+      ).toBe(true);
+      expect(
+        isShareBlockedDataToolCall(
+          { filePermissionConfig: { knowledgeBase: 'read' as const } },
+          KnowledgeBaseIdentifier,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          { id: 'kb-mounted-1' },
+        ),
+      ).toBe(true);
+    });
   });
 });
