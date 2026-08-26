@@ -56,10 +56,12 @@ const startVisitorRun = async (
   agentId: string,
   operationId: string,
   topicId: string,
+  expectedGeneration: number,
 ): Promise<'rejected-upfront' | 'rejected-on-confirm' | 'started'> => {
   try {
     await agentShareModel.assertRunnableForVisitor({
       agentId,
+      expectedGeneration,
       operationId,
       topicId,
       visitorUserId: visitorId,
@@ -91,10 +93,10 @@ const revokeAndCollectSurvivors = async (
   agentId: string,
   topicId: string,
 ): Promise<{ operationId: string; topicId: string }[]> => {
-  await agentShareModel.deleteByAgentId(agentId);
+  const { revocationGeneration } = await agentShareModel.deleteByAgentId(agentId);
 
-  const revoked = await agentShareModel.revokeReservations(agentId);
-  const active = await topicModel.findActiveVisitorRunTopics(agentId);
+  const revoked = await agentShareModel.revokeReservations(agentId, revocationGeneration!);
+  const active = await topicModel.findActiveVisitorRunTopics(agentId, revocationGeneration);
 
   // Same de-dupe `interruptActiveShareRuns` does across both sources.
   const seen = new Set(revoked.map((r) => r.operationId));
@@ -133,7 +135,9 @@ describe('AgentShareModel visitor run reservation × revocation (real Postgres)'
         .returning();
 
       const [startResult, survivors] = await Promise.all([
-        startVisitorRun(agentId, operationId, topic.id),
+        // Baseline generation: this agent's share was just `create()`d and
+        // never tightened/revoked, so the counter has never been bumped.
+        startVisitorRun(agentId, operationId, topic.id, 1),
         revokeAndCollectSurvivors(agentId, topic.id),
       ]);
 
@@ -188,6 +192,8 @@ describe('AgentShareModel visitor run reservation × revocation (real Postgres)'
     // `createOperation`'s I/O.
     await agentShareModel.assertRunnableForVisitor({
       agentId,
+      // Baseline generation — this share was just `create()`d.
+      expectedGeneration: 1,
       operationId,
       topicId: topic.id,
       visitorUserId: visitorId,
@@ -202,8 +208,8 @@ describe('AgentShareModel visitor run reservation × revocation (real Postgres)'
     // 3. Revocation lands in the middle of that delay — well within the
     // window the OLD retry loop would have already given up on.
     await new Promise((resolve) => setTimeout(resolve, 500));
-    await agentShareModel.deleteByAgentId(agentId);
-    const revoked = await agentShareModel.revokeReservations(agentId);
+    const { revocationGeneration } = await agentShareModel.deleteByAgentId(agentId);
+    const revoked = await agentShareModel.revokeReservations(agentId, revocationGeneration!);
     expect(revoked).toEqual([{ operationId, topicId: topic.id }]);
 
     await standingUp;

@@ -772,11 +772,20 @@ table agent_quota_windows {
   }
 }
 
+table agent_share_generations {
+  agent_id text [pk, not null]
+  generation integer [not null, default: 1]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+}
+
 table agent_share_run_reservations {
   id text [pk, not null]
   agent_id text [not null]
   topic_id text [not null]
   visitor_user_id text [not null]
+  generation integer [not null]
   revoked_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
 

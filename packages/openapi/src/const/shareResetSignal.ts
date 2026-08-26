@@ -10,7 +10,11 @@
  * config write resets a `link` share back to `private`. The mounting file
  * DOES have `@/server/*` access, so it reads this header off the `Response`,
  * fires the interrupt, and strips the header before the response reaches the
- * API caller. Value shape: `"<ownerId>:<agentId>"`. See LOBE-11930 hole 2.
+ * API caller. Value shape: `"<ownerId>:<agentId>:<revocationGeneration>"` —
+ * the third segment is the EXACT `agentShareGenerations` value the reset
+ * transaction bumped to, threaded straight through to
+ * `AiAgentService.interruptActiveShareRuns` (never re-read at header-parse
+ * time — see that method's JSDoc for why). See LOBE-11930 hole 2.
  */
 export const AGENT_SHARE_RESET_SIGNAL_HEADER = 'x-lobehub-agent-share-reset';
 

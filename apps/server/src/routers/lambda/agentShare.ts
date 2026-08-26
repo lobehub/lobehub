@@ -48,12 +48,24 @@ const agentShareProcedure = authedProcedure.use(serverDatabase).use(async (opts)
   });
 });
 
-const requireShare = <T>(share: T | null): T => {
+/** `AgentShareModel.updateConfig` / `updateVisibility` / `deleteByAgentId` all return this shape — see `ShareMutationResult`'s JSDoc there. */
+interface ShareMutationResult<T> {
+  revocationGeneration?: number;
+  share: T | null;
+}
+
+const requireShare = <T>({
+  revocationGeneration,
+  share,
+}: ShareMutationResult<T>): {
+  revocationGeneration?: number;
+  share: T;
+} => {
   if (!share) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent share not found' });
   }
 
-  return share;
+  return { revocationGeneration, share };
 };
 
 /**
@@ -93,23 +105,47 @@ const assertShareableAgent = async (agentModel: AgentModel, agentId: string) => 
  * this is the only thing left to stop an already-running operation instead
  * of letting it keep spending the creator's share budget until it finishes
  * on its own. See LOBE-11930.
+ *
+ * `revocationGeneration` MUST be the exact value `AgentShareModel` bumped
+ * `agentShareGenerations` to as part of the SAME write this schedules after
+ * — never a value re-read later, after this `after()` callback has already
+ * been queued. Re-reading "the current generation" at callback time would
+ * reopen the exact hole this closes: an owner could revoke, then republish
+ * (bumping nothing — publishing never bumps the generation) before this
+ * callback runs, and a re-read would then see the SAME generation the
+ * republish's fresh reservations were staked at, sweeping them up as if they
+ * predated the revocation they didn't. Capturing the cutoff at write time and
+ * passing it through closed-over is what makes `revokeReservations` /
+ * `findActiveVisitorRunTopics`'s `generation < revocationGeneration` filter
+ * correct regardless of how late this callback actually runs. See
+ * `agentShareGenerations`'s JSDoc (`packages/database/src/schemas/agentShare.ts`).
  */
 const interruptActiveShareRunsAfterResponse = (
   serverDB: ConstructorParameters<typeof AiAgentService>[0],
   ownerId: string,
   agentId: string,
+  revocationGeneration: number,
 ) => {
   after(() =>
     new AiAgentService(serverDB, ownerId)
-      .interruptActiveShareRuns(agentId)
+      .interruptActiveShareRuns(agentId, revocationGeneration)
       .catch((error) => console.error('[agentShare] interruptActiveShareRuns failed', error)),
   );
 };
 
 export const agentShareRouter = router({
   disableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
-    const share = requireShare(await ctx.agentShareModel.deleteByAgentId(input.agentId));
-    interruptActiveShareRunsAfterResponse(ctx.serverDB, ctx.userId, input.agentId);
+    const { revocationGeneration, share } = requireShare(
+      await ctx.agentShareModel.deleteByAgentId(input.agentId),
+    );
+    // `deleteByAgentId` always bumps the generation (disabling unconditionally
+    // revokes), so `revocationGeneration` is always defined here.
+    interruptActiveShareRunsAfterResponse(
+      ctx.serverDB,
+      ctx.userId,
+      input.agentId,
+      revocationGeneration!,
+    );
     return share;
   }),
 
@@ -133,7 +169,25 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
-      return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
+      const { revocationGeneration, share } = requireShare(
+        await ctx.agentShareModel.updateConfig(input.agentId, input.config),
+      );
+
+      // `revocationGeneration` is only set when the merged patch actually
+      // NARROWED a `link` share's grants (`AgentShareModel.isConfigTightening`)
+      // — a purely additive/loosening patch, or any patch to a `private`
+      // share, must not interrupt anything. See both methods' JSDoc for the
+      // exact field-by-field tightening rules (LOBE-11930 P1).
+      if (revocationGeneration !== undefined) {
+        interruptActiveShareRunsAfterResponse(
+          ctx.serverDB,
+          ctx.userId,
+          input.agentId,
+          revocationGeneration,
+        );
+      }
+
+      return share;
     }),
 
   updateVisibility: agentShareProcedure
@@ -152,14 +206,20 @@ export const agentShareRouter = router({
       // pre-lock check here (the previous approach) could be bypassed by a
       // concurrent `AgentModel.updateConfig` write. Not duplicated here to
       // avoid the two checks drifting apart.
-      const share = requireShare(
+      const { revocationGeneration, share } = requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),
       );
 
-      // Only `link` → `private` revokes visitor access; publishing (`link`)
+      // Only `link` → `private` revokes visitor access (and is the only case
+      // `updateVisibility` bumps the generation for); publishing (`link`)
       // never needs to interrupt anything.
       if (input.visibility === 'private') {
-        interruptActiveShareRunsAfterResponse(ctx.serverDB, ctx.userId, input.agentId);
+        interruptActiveShareRunsAfterResponse(
+          ctx.serverDB,
+          ctx.userId,
+          input.agentId,
+          revocationGeneration!,
+        );
       }
 
       return share;

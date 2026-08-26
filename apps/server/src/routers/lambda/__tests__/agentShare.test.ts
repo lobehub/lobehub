@@ -64,10 +64,15 @@ describe('agentShareRouter', () => {
     afterTasks.length = 0;
     mockInterruptActiveShareRuns.mockResolvedValue(undefined);
     mockCreate.mockResolvedValue(share);
-    mockDeleteByAgentId.mockResolvedValue(share);
+    // `deleteByAgentId` / `updateVisibility` / `updateConfig` all return
+    // `{ share, revocationGeneration? }` now — see `ShareMutationResult`'s
+    // JSDoc on `AgentShareModel`. `revocationGeneration: 2` mirrors an actual
+    // revocation bump; individual tests override this where the distinction
+    // (bumped vs. not) matters.
+    mockDeleteByAgentId.mockResolvedValue({ revocationGeneration: 2, share });
     mockGetByAgentId.mockResolvedValue(share);
-    mockUpdateConfig.mockResolvedValue(share);
-    mockUpdateVisibility.mockResolvedValue(share);
+    mockUpdateConfig.mockResolvedValue({ share });
+    mockUpdateVisibility.mockResolvedValue({ share });
     mockGetAgentConfigById.mockResolvedValue({ agencyConfig: null, model: 'gpt-4o' });
   });
 
@@ -158,12 +163,15 @@ describe('agentShareRouter', () => {
   // see `AiAgentService.interruptActiveShareRuns`.
   describe('revocation interrupts active visitor runs', () => {
     it('interrupts active runs when flipping link -> private', async () => {
+      // `updateVisibility` only bumps the generation on a transition INTO
+      // `private` (a tightening) — see `AgentShareModel.updateVisibility`.
+      mockUpdateVisibility.mockResolvedValue({ revocationGeneration: 3, share });
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
       await caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' });
       await Promise.all(afterTasks);
 
-      expect(mockInterruptActiveShareRuns).toHaveBeenCalledWith('agent-1');
+      expect(mockInterruptActiveShareRuns).toHaveBeenCalledWith('agent-1', 3);
     });
 
     it('does not interrupt anything when publishing (private -> link)', async () => {
@@ -181,11 +189,13 @@ describe('agentShareRouter', () => {
       await caller.disableShare({ agentId: 'agent-1' });
       await Promise.all(afterTasks);
 
-      expect(mockInterruptActiveShareRuns).toHaveBeenCalledWith('agent-1');
+      // `deleteByAgentId` always bumps the generation (see its JSDoc) — the
+      // `beforeEach` default mock stubs it at `2`.
+      expect(mockInterruptActiveShareRuns).toHaveBeenCalledWith('agent-1', 2);
     });
 
     it('does not interrupt anything when the revoking mutation itself fails', async () => {
-      mockUpdateVisibility.mockResolvedValue(null);
+      mockUpdateVisibility.mockResolvedValue({ share: null });
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
       await expect(
@@ -198,9 +208,9 @@ describe('agentShareRouter', () => {
   });
 
   it('returns NOT_FOUND when an existing share is required', async () => {
-    mockDeleteByAgentId.mockResolvedValue(null);
-    mockUpdateConfig.mockResolvedValue(null);
-    mockUpdateVisibility.mockResolvedValue(null);
+    mockDeleteByAgentId.mockResolvedValue({ share: null });
+    mockUpdateConfig.mockResolvedValue({ share: null });
+    mockUpdateVisibility.mockResolvedValue({ share: null });
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
     await expect(caller.disableShare({ agentId: 'agent-1' })).rejects.toMatchObject({

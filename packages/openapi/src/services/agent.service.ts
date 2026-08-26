@@ -138,7 +138,13 @@ export class AgentService extends BaseService {
    */
   async updateAgent(
     request: UpdateAgentRequest,
-    options?: { onShareReset?: (params: { agentId: string; ownerId: string }) => void },
+    options?: {
+      onShareReset?: (params: {
+        agentId: string;
+        ownerId: string;
+        revocationGeneration: number;
+      }) => void;
+    },
   ): ServiceResult<AgentDetailResponse> {
     this.log('info', 'update agent', { id: request.id, title: request.title });
 
@@ -233,8 +239,8 @@ export class AgentService extends BaseService {
       // See `writeAgentConfigWithShareReset`'s JSDoc and LOBE-11930.
       const updatedAgent = await writeAgentConfigWithShareReset(this.db, {
         agentId: request.id,
-        onShareReset: (agentId) =>
-          options?.onShareReset?.({ agentId, ownerId: existingAgent.userId }),
+        onShareReset: (agentId, revocationGeneration) =>
+          options?.onShareReset?.({ agentId, ownerId: existingAgent.userId, revocationGeneration }),
         // `updateData` may legitimately carry an explicit `null` for either
         // field (a caller-requested clear), so branch on key presence rather
         // than `??` — a `??` fallback would silently undo an intentional

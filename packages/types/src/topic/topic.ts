@@ -268,6 +268,19 @@ export interface ChatTopicMetadata {
     orchestrationRole?: 'supervisor' | 'member';
     scope?: string;
     /**
+     * The Agent Share `agentShareGenerations` value the reservation backing
+     * this run was staked at (`AgentShareModel.confirmReservation` copies it
+     * from the reservation row it just redeemed). Absent for every non-share
+     * run. Lets a deferred revocation (`AiAgentService.interruptActiveShareRuns`)
+     * scope its `findActiveVisitorRunTopics` sweep to runs that predate the
+     * revocation (`shareGeneration < revocationGeneration`) instead of every
+     * running visitor operation on the agent — see `agentShareGenerations`'s
+     * JSDoc (`packages/database/src/schemas/agentShare.ts`) for why a broad
+     * agentId-only scan would also catch a run legitimately started by a
+     * republish that raced a stale deferred callback.
+     */
+    shareGeneration?: number;
+    /**
      * When this run claimed the topic, as an ISO string. This marker gates every
      * background existing-topic start (`TopicModel.tryReserveTaskCallback`), so
      * without a liveness stamp a run that dies before clearing it holds the
@@ -541,6 +554,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
       operationId: z.string(),
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
       scope: z.string().optional(),
+      shareGeneration: z.number().optional(),
       threadId: z.string().nullish(),
     })
     .nullable()

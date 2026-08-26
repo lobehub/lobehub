@@ -40,6 +40,19 @@ const PLUGIN_SCHEMA_SEPARATOR = '____';
  */
 export interface AgentShareGate {
   agentId: string;
+  /**
+   * The `agentShareGenerations` value observed alongside `shareConfig` above,
+   * at the SAME read (`AgentShareModel.findByShareId`, via `shareChat.ts`'s
+   * `findByShareIdWithAccessCheck`). `shareConfig` is snapshotted into this
+   * run's runtime state for its whole lifetime, so nothing downstream
+   * re-reads it — this value is what lets `assertRunnableForVisitor` detect,
+   * right before the operation is actually created, that the config this run
+   * is about to execute with has since been tightened (the generation moved
+   * on) and fail closed instead of starting with a stale, over-broad grant.
+   * See `agentShareGenerations`'s JSDoc (`packages/database/src/schemas/agentShare.ts`)
+   * and LOBE-11930 P1.
+   */
+  generation: number;
   shareConfig: AgentShareConfig;
   /**
    * The signed-in visitor driving this run. Recorded on `topics.senderId` and
