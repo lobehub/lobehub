@@ -6,19 +6,13 @@ import type { RuntimeExecutorContext } from '../context';
 import { ServerToolTransport } from './ServerToolTransport';
 
 /**
- * Agent share C3 (bypass B fix): a share-visitor run must not be able to
- * dispatch `lobe-agent-management.callAgent` (or `lobe-agent.callSubAgent`)
- * — the child run has no shareGate of its own. `resolveLobeAgentManifest` /
- * `resolveAgentManagementManifest` already hide the APIs from the model's
- * tool list, but `callAgent` calls `ctx.subAgent.run` directly
- * (`serverRuntimes/agentManagement.ts`), bypassing the manifest layer if
- * reached some other way (e.g. a stale/replayed tool call, or a share
- * whitelist that explicitly names `lobe-agent-management`). This must fail
- * closed at the `ServerToolTransport` injection site, which is what actually
- * builds the `ctx.subAgent` / `ctx.execSubAgent` runners handed to the
- * Agent Management runtime.
+ * Sub-agent execution is not available for shared visitor runs. This must
+ * fail closed at the `ServerToolTransport` injection site, which is what
+ * actually builds the `ctx.subAgent` / `ctx.execSubAgent` runners handed to
+ * the Agent Management runtime — independent of whether the manifest layer
+ * already hides the dispatch APIs from the model's tool list.
  */
-describe('ServerToolTransport — agent share C3 sub-agent dispatch guard', () => {
+describe('ServerToolTransport — share-visitor sub-agent dispatch guard', () => {
   const baseChatToolPayload = {
     apiName: 'callAgent',
     executor: 'server',

@@ -1,3 +1,13 @@
+import {
+  AgentManagementApiName,
+  AgentManagementIdentifier,
+  systemPromptWithoutCallAgent,
+} from '@lobechat/builtin-tool-agent-management';
+import {
+  LobeAgentApiName,
+  LobeAgentIdentifier,
+  systemPromptWithoutSubAgent,
+} from '@lobechat/builtin-tool-lobe-agent';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
@@ -73,30 +83,12 @@ export interface ShareGateToolSet {
  * Final allowlist enforcement for a share visitor's fully-assembled tool set
  * (agent share C1).
  *
- * `filterPluginsByShareGate` above only trims the INITIAL candidate id list
- * before manifest discovery. Every source that feeds `toolManifestMap` after
- * that — Composio manifests, real-MCP connector manifests, LobeHub Skill
- * manifests, and the always-on builtin defaults — is fetched from the
- * creator's own config unconditionally, so the map stays "discoverable"
- * far beyond the whitelist:
- *
- * - `lobe-activator`'s `getToolManifests` resolves ANY identifier present in
- *   `context.toolManifestMap` (see `serverRuntimes/activator.ts`), so the
- *   model can dynamically activate a tool that was never in
- *   `shareConfig.enabledToolIds`.
- * - `ToolExecutionService.execute*` looks up `context.toolManifestMap[identifier]`
- *   with no allowlist check of its own (see `services/toolExecution/index.ts`).
- *
- * Once activated, execution runs with the CREATOR's credentials (Composio /
- * connector OAuth, MCP endpoints), so an unfiltered `toolManifestMap` is a
- * full whitelist bypass, not just a discovery/UX leak.
- *
- * Mutates `toolSet` in place and must run once, after every manifest/default/
- * dynamic-activation source has been merged in, immediately before the
- * operation's `toolSet` is persisted — so no later ingestion path can re-add
- * an identifier this pass drops. An empty/missing whitelist collapses the
- * set to nothing (no built-in tool is exempted; a share with no configured
- * tools is a plain-chat run).
+ * `shareConfig.enabledToolIds` is the single source of truth for what a share
+ * visitor can see or run. This pass mutates `toolSet` in place and must run
+ * once, after every manifest/default/dynamic-activation source has been
+ * merged in, immediately before the operation's `toolSet` is persisted. An
+ * empty/missing whitelist collapses the set to nothing (no built-in tool is
+ * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
   const allowed = new Set(gate.shareConfig.enabledToolIds ?? []);
@@ -124,6 +116,57 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
       const identifier = tool?.function?.name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0];
       return !!identifier && isAllowed(identifier);
     });
+  }
+
+  stripSubAgentDispatchApis(toolSet);
+};
+
+/**
+ * Sub-agent dispatch is not available in shared visitor runs. This strip runs
+ * unconditionally on `lobe-agent-management` / `lobe-agent`, independent of
+ * whether the manifest was resolved through the normal context-aware path, so
+ * a whitelisted entry can never surface `callAgent` / `callSubAgent` — nor a
+ * `systemRole` that instructs the model to call them — to a share visitor's
+ * model or the activator. `lobe-agent` already ships a precise systemRole
+ * variant without the dispatch section (`systemPromptWithoutSubAgent`, also
+ * used by its own context-aware `resolveManifest`); `lobe-agent-management`'s
+ * equivalent (`systemPromptWithoutCallAgent`) mirrors that.
+ */
+const SUB_AGENT_DISPATCH_APIS: Record<
+  string,
+  { apiName: string; systemRoleWithoutDispatch: string }
+> = {
+  [AgentManagementIdentifier]: {
+    apiName: AgentManagementApiName.callAgent,
+    systemRoleWithoutDispatch: systemPromptWithoutCallAgent,
+  },
+  [LobeAgentIdentifier]: {
+    apiName: LobeAgentApiName.callSubAgent,
+    systemRoleWithoutDispatch: systemPromptWithoutSubAgent,
+  },
+};
+
+const stripSubAgentDispatchApis = (toolSet: ShareGateToolSet): void => {
+  for (const [identifier, { apiName, systemRoleWithoutDispatch }] of Object.entries(
+    SUB_AGENT_DISPATCH_APIS,
+  )) {
+    const manifest = toolSet.manifestMap[identifier];
+    if (manifest) {
+      // Always pin the sanitized `systemRole`, not only when `api` still
+      // carries the dispatch entry — an already context-aware-trimmed
+      // manifest (api filtered upstream) could otherwise keep a stale
+      // `systemRole` that still instructs the model to call the removed tool.
+      toolSet.manifestMap[identifier] = {
+        ...manifest,
+        api: manifest.api.filter((api) => api.name !== apiName),
+        systemRole: systemRoleWithoutDispatch,
+      };
+    }
+
+    if (toolSet.tools) {
+      const dispatchToolName = `${identifier}${PLUGIN_SCHEMA_SEPARATOR}${apiName}`;
+      pruneArrayInPlace(toolSet.tools, (tool) => tool?.function?.name !== dispatchToolName);
+    }
   }
 };
 

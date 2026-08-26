@@ -1,3 +1,5 @@
+import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -154,5 +156,65 @@ describe('applyShareGateToToolSet', () => {
 
     expect(() => applyShareGateToToolSet(toolSet, gate)).not.toThrow();
     expect(toolSet.tools).toBeUndefined();
+  });
+
+  it('strips sub-agent dispatch APIs even when the tool is explicitly whitelisted', () => {
+    // Sub-agent dispatch is not available in shared visitor runs, regardless
+    // of whether the manifest passed to `applyShareGateToToolSet` was already
+    // context-aware trimmed or not — this reproduces the untrimmed shape by
+    // using the REAL exported builtin manifests (not a hand-written fixture),
+    // so the regression also catches a future edit to either systemRole that
+    // reintroduces a callAgent/callSubAgent reference.
+    const gate = buildGate({ enabledToolIds: ['lobe-agent-management', 'lobe-agent'] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: ['lobe-agent-management', 'lobe-agent'],
+      enabledToolIds: ['lobe-agent-management', 'lobe-agent'],
+      executorMap: {},
+      manifestMap: {
+        'lobe-agent': LobeAgentManifest,
+        'lobe-agent-management': AgentManagementManifest,
+      },
+      sourceMap: {},
+      tools: [
+        { function: { name: 'lobe-agent-management____callAgent' }, type: 'function' },
+        { function: { name: 'lobe-agent-management____searchAgent' }, type: 'function' },
+        { function: { name: 'lobe-agent____callSubAgent' }, type: 'function' },
+        { function: { name: 'lobe-agent____createPlan' }, type: 'function' },
+      ],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    // Both identifiers stay allowed (they were explicitly whitelisted)...
+    expect(Object.keys(toolSet.manifestMap)).toEqual(
+      expect.arrayContaining(['lobe-agent-management', 'lobe-agent']),
+    );
+    // ...but their sub-agent dispatch API is gone from every surface,
+    const managementApiNames = toolSet.manifestMap['lobe-agent-management'].api.map(
+      (api) => api.name,
+    );
+    const lobeAgentApiNames = toolSet.manifestMap['lobe-agent'].api.map((api) => api.name);
+    expect(managementApiNames).not.toContain('callAgent');
+    expect(managementApiNames).toContain('searchAgent');
+    expect(lobeAgentApiNames).not.toContain('callSubAgent');
+    expect(lobeAgentApiNames).toContain('createPlan');
+    expect(toolSet.tools).toEqual([
+      { function: { name: 'lobe-agent-management____searchAgent' }, type: 'function' },
+      { function: { name: 'lobe-agent____createPlan' }, type: 'function' },
+    ]);
+
+    // ...and the systemRole no longer instructs the model to call either
+    // dispatch tool (the exact leak this test guards against: a stale
+    // systemRole prompting a call to a tool that was just removed).
+    expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(/callAgent/);
+    expect(toolSet.manifestMap['lobe-agent'].systemRole).not.toMatch(/callSubAgent/);
+    // ...including semantic phrasings that suggest dispatching to an agent
+    // without naming the API.
+    expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(
+      /Before calling an agent/,
+    );
+    expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(
+      /whether to call it/,
+    );
   });
 });

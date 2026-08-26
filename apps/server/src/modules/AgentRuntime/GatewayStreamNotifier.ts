@@ -36,12 +36,10 @@ const isShareVisitorEnd = (finalState: any): boolean =>
 
 /**
  * Public `agent_runtime_init` DTO pushed to the Gateway for shared-agent
- * visitor runs. The full operation metadata (`agentConfig` — including the
- * un-redacted system prompt, `modelRuntimeConfig`, the creator's `userId` /
- * `workspaceId`) must never cross the WS boundary to the visitor, who can
- * read raw frames straight off the connection. The client doesn't render
- * anything from this event today — `runAgent.ts`'s `agent_runtime_init` case
- * only logs it — so `status` is the only field forwarded.
+ * visitor runs. The full operation metadata must never cross the WS boundary
+ * to the visitor. The client doesn't render anything from this event today —
+ * `runAgent.ts`'s `agent_runtime_init` case only logs it — so `status` is the
+ * only field forwarded.
  */
 const buildPublicInitEventData = (initialState: any): { status?: unknown } => ({
   status: initialState?.status,
@@ -49,12 +47,11 @@ const buildPublicInitEventData = (initialState: any): { status?: unknown } => ({
 
 /**
  * Public `agent_runtime_end` DTO pushed to the Gateway for shared-agent
- * visitor runs. `finalState` is the creator's full `AgentState` — including
- * `metadata.userMemory`, `metadata.agentConfig`, `systemRole`,
- * `userInterventionConfig`, `securityBlacklist`, etc. — none of which the
- * client reads off this event (`gatewayEventHandler.ts` only consumes
- * `reason` and `uiMessages`, both already-sanitized UI-facing values), so
- * drop `finalState` wholesale instead of trying to allowlist inside it.
+ * visitor runs. `finalState` is the creator's full `AgentState`, none of
+ * which the client reads off this event (`gatewayEventHandler.ts` only
+ * consumes `reason` and `uiMessages`, both already-sanitized UI-facing
+ * values), so drop `finalState` wholesale instead of trying to allowlist
+ * inside it.
  */
 const buildPublicEndEventData = <T extends { finalState?: unknown }>(
   data: T,
@@ -67,9 +64,7 @@ const buildPublicEndEventData = <T extends { finalState?: unknown }>(
  * Chokepoint applied to every event this notifier pushes to the Gateway WS
  * channel (`pushEvent`) — not just `agent_runtime_init` / `agent_runtime_end`.
  * Any event whose `data.finalState` belongs to a shared-agent visitor run
- * (`isShareVisitorEnd`) must not leak the creator's full `AgentState`
- * (`metadata.agentConfig` incl. system prompt, `metadata.userMemory`,
- * `systemRole`, `userInterventionConfig`, `securityBlacklist`, ...) over the
+ * (`isShareVisitorEnd`) must not leak the creator's full `AgentState` over the
  * wire, so `finalState` is dropped wholesale — same DTO shape as
  * `buildPublicEndEventData`.
  *
