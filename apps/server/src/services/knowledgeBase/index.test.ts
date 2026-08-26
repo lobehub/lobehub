@@ -57,6 +57,12 @@ describe('KnowledgeBaseSearchService', () => {
     service = new KnowledgeBaseSearchService(serverDB, userId);
   });
 
+  it('forwards the caller agent visibility to BM25 document search', () => {
+    new KnowledgeBaseSearchService(serverDB, userId, 'workspace-1', 'public');
+
+    expect(SearchRepo).toHaveBeenLastCalledWith(serverDB, userId, 'workspace-1', 'public');
+  });
+
   describe('getFileContents', () => {
     it('reads docs_* directly from documents table without touching files', async () => {
       documentModelMock.findById.mockResolvedValue({

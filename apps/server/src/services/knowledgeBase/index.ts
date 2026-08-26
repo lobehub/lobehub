@@ -111,7 +111,11 @@ export class KnowledgeBaseSearchService {
     // enforcement point today.
     this.documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
     this.fileModel = new FileModel(serverDB, userId, workspaceId);
-    this.searchRepo = new SearchRepo(serverDB, userId, workspaceId);
+    /**
+     * BM25 results include document snippets, so the public-agent visibility
+     * gate must apply during search as well as during the later full-content read.
+     */
+    this.searchRepo = new SearchRepo(serverDB, userId, workspaceId, callerAgentVisibility);
   }
 
   private get documentService() {

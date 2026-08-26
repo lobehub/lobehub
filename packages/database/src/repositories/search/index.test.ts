@@ -991,6 +991,54 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(results).toEqual([]);
     });
 
+    it('should hide caller-private workspace documents from a public agent', async () => {
+      const workspaceId = 'kb-search-workspace';
+      const privateKbId = 'kb-search-private';
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Search Workspace',
+        primaryOwnerId: userId,
+        slug: 'search-workspace',
+      });
+      await serverDB.insert(knowledgeBases).values({
+        id: privateKbId,
+        name: 'Private Knowledge Base',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      await serverDB.insert(documents).values({
+        content: 'Confidential launch details for the private workspace project.',
+        fileType: 'custom/document',
+        filename: 'private-launch.md',
+        knowledgeBaseId: privateKbId,
+        source: 'internal://document/private-launch',
+        sourceType: 'api',
+        title: 'Private Launch Plan',
+        totalCharCount: 62,
+        totalLineCount: 1,
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+
+      const privateAgentResults = await new SearchRepo(
+        serverDB,
+        userId,
+        workspaceId,
+        'private',
+      ).searchKnowledgeBaseDocuments('confidential launch', [privateKbId]);
+      const publicAgentResults = await new SearchRepo(
+        serverDB,
+        userId,
+        workspaceId,
+        'public',
+      ).searchKnowledgeBaseDocuments('confidential launch', [privateKbId]);
+
+      expect(privateAgentResults).toHaveLength(1);
+      expect(publicAgentResults).toEqual([]);
+    });
+
     it('should produce snippet ≤ 300 characters', async () => {
       const results = await searchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
       results.forEach((r) => {

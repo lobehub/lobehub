@@ -305,18 +305,29 @@ interface WorkspaceScopedColumns {
  * Search Repository - provides unified search across Agents, Topics, and Files
  */
 export class SearchRepo {
+  private callerAgentVisibility?: 'private' | 'public' | null;
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.callerAgentVisibility = callerAgentVisibility;
   }
 
   private get scope() {
-    return { userId: this.userId, workspaceId: this.workspaceId };
+    return {
+      callerAgentVisibility: this.callerAgentVisibility,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    };
   }
 
   /**
