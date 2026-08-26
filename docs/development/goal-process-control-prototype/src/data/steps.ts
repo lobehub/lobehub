@@ -160,8 +160,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(1),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-90）',
+        who: 'Kimi Code',
+        text: '开始执行（T-90）',
         nodeId: 'W1',
       });
     },
@@ -241,8 +241,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(7),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-91）',
+        who: 'Kimi Code',
+        text: '开始执行（T-91）',
         nodeId: 'W5',
       });
       s.goal.spent = 0.12;
@@ -328,8 +328,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(14),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-94）',
+        who: 'Kimi Code',
+        text: '开始执行（T-94）',
         nodeId: 'W2',
       });
       s.goal.spent = 0.2;
@@ -397,8 +397,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(83),
         kind: 'start',
-        who: '系统',
-        text: '自动重开：第 2 次尝试（T-94，Kimi Code）',
+        who: 'Kimi Code',
+        text: '自动重开：第 2 次尝试（T-94）',
         nodeId: 'W2',
       });
     },
@@ -436,7 +436,7 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(95),
         kind: 'start',
-        who: '系统',
+        who: 'Kimi Code',
         text: '自动重试：第 3 次尝试，携带 verifier 的缺口反馈',
         nodeId: 'W2',
       });
@@ -598,8 +598,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(110),
         kind: 'start',
-        who: '系统',
-        text: '第 4 次尝试开始（T-94，Kimi Code）',
+        who: 'Kimi Code',
+        text: '第 4 次尝试开始（T-94）',
         nodeId: 'W2',
       });
     },
@@ -653,8 +653,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(126),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-96）',
+        who: 'Kimi Code',
+        text: '开始执行（T-96）',
         nodeId: 'W3',
       });
       s.goal.spent = 6.0;
@@ -709,8 +709,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(134),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-97）',
+        who: 'Kimi Code',
+        text: '开始执行（T-97）',
         nodeId: 'W6',
       });
       s.goal.spent = 6.09;

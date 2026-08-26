@@ -16,7 +16,7 @@ import { ChevronDown, ChevronRight, Pencil, Plus, RotateCcw } from 'lucide-react
 import { Fragment, memo, useState } from 'react';
 
 import { clock, elapsed, short, usd } from '../../model/format';
-import type { Frontier, FrontierItem } from '../../model/frontier';
+import { type Frontier, type FrontierItem, nodeNumbers } from '../../model/frontier';
 import type { GoalState } from '../../types';
 import { ActorAvatar, type ExecStatus, StatusGlyph, useSharedStyles } from '../shared';
 
@@ -138,13 +138,15 @@ const tagOf = (state: GoalState, item: FrontierItem): { text: string; color?: st
     case 'done':
       return { text: item.node.status === 'retired' ? '已放弃' : '完成' };
     default:
-      return { text: state.goal.status === 'planning' ? '待开始' : '可以开始' };
+      // Not started and unblocked. The coordinator dispatches one node per tick, so promising
+      // "可以开始" would be a promise the runtime can't keep — the row stays quiet.
+      return null;
   }
 };
 
 const titleOf = (state: GoalState, item: FrontierItem) => {
   const { goal } = state;
-  if (item.kind === 'budget') return `${item.node.title} · 需要你接手`;
+  if (item.kind === 'budget') return item.node.title;
   if (item.kind === 'acceptance') {
     const passed = goal.checks.filter((c) => c.state === 'passed').length;
     return `验收通过 ${passed}/${goal.checks.length}，这个目标算完成了吗？`;
@@ -179,11 +181,9 @@ export const FrontierList = memo<FrontierListProps>(
     const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
     const [showBlocked, setShowBlocked] = useState(false);
 
-    // One stable numbering across the whole list, so "依赖 #1 #2" always resolves.
-    const numberOf = new Map<string, number>();
-    [...frontier.items, ...frontier.blocked].forEach((it, i) => {
-      if (!numberOf.has(it.node.id)) numberOf.set(it.node.id, i + 1);
-    });
+    // Numbers come from the graph (creation order), not the list position — a task keeps its number
+    // when others finish above it, so 依赖 #2 always points at the same node.
+    const numberOf = nodeNumbers(state);
 
     const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -398,7 +398,7 @@ export const FrontierList = memo<FrontierListProps>(
       );
     };
 
-    const BlockedRow = ({ node, index }: { node: GoalState['nodes'][number]; index: number }) => {
+    const BlockedRow = ({ node }: { node: GoalState['nodes'][number] }) => {
       const deps = (node.dependsOn ?? []).map((id) => numberOf.get(id)).filter(Boolean);
       return (
         <Block
@@ -411,7 +411,7 @@ export const FrontierList = memo<FrontierListProps>(
           onMouseLeave={() => onHover(null)}
         >
           <Flexbox horizontal gap={10} align="center">
-            <span className={styles.num}>#{index}</span>
+            <span className={styles.num}>#{numberOf.get(node.id)}</span>
             <StatusGlyph status="backlog" />
             <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
               {node.title}

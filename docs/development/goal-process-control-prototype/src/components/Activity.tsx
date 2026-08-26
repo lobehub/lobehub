@@ -120,6 +120,9 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
   const nodeOf = (e: ActivityEvent) =>
     e.nodeId ? state.nodes.find((n) => n.id === e.nodeId) : undefined;
   const isAgent = (who: string) => who !== '你' && who !== '系统';
+  // A finding has no actor worth naming — the system just records what the task produced.
+  const isSystemRecord = (e: ActivityEvent) =>
+    e.who === '系统' && (e.kind === 'finding' || e.kind === 'abandon');
 
   return (
     <Flexbox gap={8}>
@@ -171,9 +174,11 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
                         <Icon icon={meta.icon} size={12} />
                       </div>
                     )}
-                    <Text fontSize={14} weight={500} style={{ flexShrink: 0 }}>
-                      {e.who}
-                    </Text>
+                    {!isSystemRecord(e) && (
+                      <Text fontSize={14} weight={500} style={{ flexShrink: 0 }}>
+                        {e.who}
+                      </Text>
+                    )}
                     {isAgent(e.who) && <Tag size="small">Agent</Tag>}
                     <span className={styles.text}>
                       {e.text}

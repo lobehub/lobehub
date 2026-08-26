@@ -197,6 +197,8 @@ export const StatusGlyph = memo<{ status: ExecStatus; live?: boolean; size?: num
   },
 );
 
+// Heterogeneous CLI agents (Kimi Code / Claude Code / Codex) get their own mark; in the product this
+// is the agent's avatar from the agent store.
 const AGENT_AVATAR: Record<string, string> = {
   'Kimi Code': '🌙',
   'verify-agent': '🔍',

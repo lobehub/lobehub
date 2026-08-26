@@ -14,7 +14,7 @@ import { memo, useState } from 'react';
 import { usd } from '../model/format';
 import type { GoalCheck, GoalInfo } from '../types';
 import { SectionHeader } from './SectionHeader';
-import { NewTag, useSharedStyles } from './shared';
+import { useSharedStyles } from './shared';
 
 // Mirrors TaskAcceptance: section header → body (padding-inline 12, gap 14) → 验收目标 text →
 // checklist as CriterionList (Block variant="outlined", rows separated by adjacency, leading status
@@ -83,15 +83,9 @@ export const Contract = memo<{ goal: GoalInfo }>(({ goal }) => {
         isOpen={open}
         onToggle={() => setOpen(!open)}
         extra={
-          <>
-            <Button icon={<Icon icon={ExternalLink} />} size="small" type="text">
-              验收报告
-            </Button>
-            <Button size="small" type="text">
-              编辑{' '}
-              <NewTag title="Graph 型目标的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
-            </Button>
-          </>
+          <Button icon={<Icon icon={ExternalLink} />} size="small" type="text">
+            验收报告
+          </Button>
         }
       />
       {open && (

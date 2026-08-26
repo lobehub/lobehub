@@ -219,7 +219,6 @@ export const Graph = memo<GraphProps>(
     const frontierIds = new Set(frontier.items.map((i) => i.node.id));
     const maxY = Math.max(...nodes.map((n) => POS[n.id].y + POS[n.id].h)) + 24;
     const focus = hotId || selectedId || null;
-    const hiddenCount = state.nodes.length - nodes.length;
 
     const head = (
       <Flexbox horizontal justify="space-between" align="center" className={styles.head}>
@@ -236,11 +235,6 @@ export const Graph = memo<GraphProps>(
               { label: '全图', value: 'all' },
             ]}
           />
-          {view === 'stage' && hiddenCount > 0 && (
-            <Text fontSize={12} type="secondary">
-              还有 {hiddenCount} 个节点在更后面的阶段
-            </Text>
-          )}
         </Flexbox>
         <Flexbox horizontal gap={12} align="center">
           <Flexbox horizontal gap={10} className={styles.legend} align="center">

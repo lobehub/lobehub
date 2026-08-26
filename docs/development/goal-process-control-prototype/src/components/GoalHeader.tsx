@@ -1,16 +1,23 @@
-import { Avatar, Button, Flexbox, Icon, InputNumber, Modal, Popover, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, InputNumber, Modal, Popover, Text } from '@lobehub/ui';
+import { Progress } from 'antd';
 import { createStyles } from 'antd-style';
-import { Coins, Pause, Play, RotateCcw } from 'lucide-react';
+import { Pause, Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 
-import { clock, duration, usd } from '../model/format';
+import { clock, duration, elapsed, usd } from '../model/format';
 import { type Frontier, countAttempts, goalSentence } from '../model/frontier';
 import type { GoalState } from '../types';
 import { NewTag, useSharedStyles } from './shared';
 
-// Mirrors the top of TaskDetailPage: TaskDetailTitleInput · run/pause action · TaskProperties column.
+// Mirrors the shipped Goal detail header (src/features/AgentGoals/GoalDetailPage.tsx):
+// title → description → a row of metric cells (18px value / 12px label, separated by a left border)
+// → the requirement block. The run/pause control sits with the metrics; budget is edited from the
+// 费用 cell.
 
 const useStyles = createStyles(({ css, token }) => ({
+  header: css`
+    padding-block: 8px 4px;
+  `,
   title: css`
     width: 100%;
     padding: 0;
@@ -24,13 +31,16 @@ const useStyles = createStyles(({ css, token }) => ({
     background: transparent;
     outline: none;
   `,
-  propRow: css`
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 8px;
-    align-items: center;
+  metric: css`
+    min-width: 112px;
 
-    min-height: 28px;
+    & + & {
+      padding-inline-start: 18px;
+      border-inline-start: 1px solid ${token.colorBorderSecondary};
+    }
+  `,
+  clickable: css`
+    cursor: pointer;
   `,
 }));
 
@@ -99,6 +109,20 @@ const RunPauseAction = ({
   );
 };
 
+const Metric = memo<{ label: string; children: React.ReactNode; onClick?: () => void }>(
+  ({ label, children, onClick }) => {
+    const { styles, cx } = useStyles();
+    return (
+      <Flexbox className={cx(styles.metric, onClick && styles.clickable)} gap={2} onClick={onClick}>
+        {children}
+        <Text fontSize={12} type="secondary">
+          {label}
+        </Text>
+      </Flexbox>
+    );
+  },
+);
+
 export const GoalHeader = memo<GoalHeaderProps>(
   ({ state, frontier, onStart, onPause, onResume, onSetBudget }) => {
     const { styles } = useStyles();
@@ -111,145 +135,137 @@ export const GoalHeader = memo<GoalHeaderProps>(
     const overCost = goal.maxTotalCost != null && goal.spent >= goal.maxTotalCost;
     const passed = goal.checks.filter((c) => c.state === 'passed').length;
     const attempts = countAttempts(state);
-    const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-      <div className={styles.propRow}>
-        <Text fontSize={12} type="secondary">
-          {label}
-        </Text>
-        <div>{children}</div>
-      </div>
-    );
+    const progress = goal.checks.length ? Math.round((passed / goal.checks.length) * 100) : 0;
+    const running = goal.nodes ? 0 : 0;
 
     return (
-      <Flexbox gap={16}>
-        <input className={styles.title} defaultValue={goal.title} />
-        <Flexbox horizontal gap={24} align="flex-start" justify="space-between">
-          <Flexbox gap={12} flex={1} style={{ minWidth: 240 }}>
-            <Flexbox horizontal gap={8} align="center" wrap="wrap">
-              <RunPauseAction
-                state={state}
-                onStart={onStart}
-                onPause={onPause}
-                onResume={onResume}
+      <Flexbox className={styles.header} gap={8}>
+        <Flexbox gap={5}>
+          <input className={styles.title} defaultValue={goal.title} />
+          <Text fontSize={15} style={{ lineHeight: 1.65 }}>
+            {goal.requirement}
+          </Text>
+        </Flexbox>
+
+        <Flexbox horizontal gap={18} wrap="wrap" align="center" paddingBlock={'6px 0'}>
+          <Metric label="验收进度">
+            <Flexbox horizontal align="center" gap={7}>
+              <Progress
+                percent={progress}
+                showInfo={false}
+                size={24}
+                strokeColor="var(--ant-color-success)"
+                type="circle"
               />
-              {goal.startedAt && (
-                <Text fontSize={12} className={shared.muted}>
-                  已进行 {duration(clock.now - goal.startedAt)}
-                </Text>
-              )}
-            </Flexbox>
-            <Text fontSize={13} type="secondary">
-              {goal.requirement}
-            </Text>
-          </Flexbox>
-          <Flexbox gap={2} style={{ width: 300, flexShrink: 0 }}>
-            <Row label="状态">
-              <Text
-                fontSize={13}
-                type={
-                  frontier.needsYou ? 'warning' : goal.status === 'achieved' ? 'success' : undefined
-                }
-                weight={frontier.needsYou ? 600 : undefined}
-              >
-                {goalSentence(goal, frontier)}
+              <Text fontSize={18} weight={600}>
+                {passed}/{goal.checks.length}
               </Text>
-            </Row>
-            <Row label="费用">
-              <Popover
-                open={budgetOpen}
-                onOpenChange={setBudgetOpen}
-                trigger="click"
-                content={
-                  <Flexbox gap={12} style={{ width: 260 }} padding={4}>
-                    <Text weight={600}>预算与保护</Text>
-                    <Flexbox gap={8}>
-                      <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>总费用上限</Text>
-                        <InputNumber
-                          value={cost}
-                          min={0}
-                          step={1}
-                          prefix="$"
-                          onChange={(v) => setCost(v == null ? null : Number(v))}
-                          style={{ width: 110 }}
-                          placeholder="不限"
-                        />
-                      </Flexbox>
-                      <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>总尝试次数</Text>
-                        <InputNumber
-                          value={rounds}
-                          min={1}
-                          onChange={(v) => setRounds(v == null ? null : Number(v))}
-                          style={{ width: 110 }}
-                          placeholder="不限"
-                        />
-                      </Flexbox>
-                      <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>单项任务最多尝试</Text>
-                        <InputNumber
-                          value={perWork}
-                          min={1}
-                          onChange={(v) => setPerWork(Number(v ?? 1))}
-                          style={{ width: 110 }}
-                        />
-                      </Flexbox>
-                    </Flexbox>
-                    <Text fontSize={12} type="secondary">
-                      超过任一上限时目标会自动停下并来问你，不会静默继续花钱。
-                    </Text>
-                    <Flexbox horizontal justify="flex-end" gap={8}>
-                      <Button size="small" onClick={() => setBudgetOpen(false)}>
-                        取消
-                      </Button>
-                      <Button
-                        size="small"
-                        type="primary"
-                        onClick={() => {
-                          onSetBudget({ rounds, cost, perWork });
-                          setBudgetOpen(false);
-                        }}
-                      >
-                        保存
-                      </Button>
-                    </Flexbox>
+            </Flexbox>
+          </Metric>
+          <Metric label={frontier.needsYou > 0 ? '状态 · 需要你' : '状态'}>
+            <Text
+              fontSize={18}
+              weight={600}
+              type={
+                frontier.needsYou ? 'warning' : goal.status === 'achieved' ? 'success' : undefined
+              }
+            >
+              {goalSentence(goal, frontier)}
+            </Text>
+          </Metric>
+          <Metric label="已进行">
+            <Text fontSize={18} weight={600}>
+              {goal.startedAt ? duration(clock.now - goal.startedAt) : '—'}
+            </Text>
+          </Metric>
+          <Metric label={`尝试 · 单项最多 ${goal.maxAttemptsPerWork}`}>
+            <Text fontSize={18} weight={600}>
+              {attempts}
+              <Text fontSize={13} type="secondary">
+                {' '}
+                / {goal.maxRounds ?? '∞'}
+              </Text>
+            </Text>
+          </Metric>
+          <Popover
+            open={budgetOpen}
+            onOpenChange={setBudgetOpen}
+            trigger="click"
+            content={
+              <Flexbox gap={12} style={{ width: 260 }} padding={4}>
+                <Text weight={600}>预算与保护</Text>
+                <Flexbox gap={8}>
+                  <Flexbox horizontal justify="space-between" align="center">
+                    <Text fontSize={13}>总费用上限</Text>
+                    <InputNumber
+                      value={cost}
+                      min={0}
+                      step={1}
+                      prefix="$"
+                      onChange={(v) => setCost(v == null ? null : Number(v))}
+                      style={{ width: 110 }}
+                      placeholder="不限"
+                    />
                   </Flexbox>
-                }
+                  <Flexbox horizontal justify="space-between" align="center">
+                    <Text fontSize={13}>总尝试次数</Text>
+                    <InputNumber
+                      value={rounds}
+                      min={1}
+                      onChange={(v) => setRounds(v == null ? null : Number(v))}
+                      style={{ width: 110 }}
+                      placeholder="不限"
+                    />
+                  </Flexbox>
+                  <Flexbox horizontal justify="space-between" align="center">
+                    <Text fontSize={13}>单项任务最多尝试</Text>
+                    <InputNumber
+                      value={perWork}
+                      min={1}
+                      onChange={(v) => setPerWork(Number(v ?? 1))}
+                      style={{ width: 110 }}
+                    />
+                  </Flexbox>
+                </Flexbox>
+                <Text fontSize={12} type="secondary">
+                  超过任一上限时目标会自动停下并来问你，不会静默继续花钱。
+                </Text>
+                <Flexbox horizontal justify="flex-end" gap={8}>
+                  <Button size="small" onClick={() => setBudgetOpen(false)}>
+                    取消
+                  </Button>
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => {
+                      onSetBudget({ rounds, cost, perWork });
+                      setBudgetOpen(false);
+                    }}
+                  >
+                    保存
+                  </Button>
+                </Flexbox>
+              </Flexbox>
+            }
+          >
+            <div>
+              <Metric
+                label={`费用 · 上限 ${goal.maxTotalCost == null ? '不限' : usd(goal.maxTotalCost)}`}
+                onClick={() => setBudgetOpen(true)}
               >
                 <Text
-                  fontSize={13}
+                  fontSize={18}
+                  weight={600}
                   className={shared.mono}
                   type={overCost ? 'warning' : undefined}
-                  style={{ cursor: 'pointer' }}
                 >
-                  {usd(goal.spent)} / {goal.maxTotalCost != null ? usd(goal.maxTotalCost) : '不限'}{' '}
-                  <Icon icon={Coins} size={12} />
+                  {usd(goal.spent)}
                 </Text>
-              </Popover>
-            </Row>
-            <Row label="尝试">
-              <Text fontSize={13} className={shared.mono}>
-                {attempts} / {goal.maxRounds ?? '∞'}{' '}
-                <Text fontSize={12} className={shared.muted}>
-                  · 单项最多 {goal.maxAttemptsPerWork}
-                </Text>
-              </Text>
-            </Row>
-            <Row label="验收">
-              <Text
-                fontSize={13}
-                className={shared.mono}
-                type={passed === goal.checks.length ? 'success' : undefined}
-              >
-                {passed} / {goal.checks.length} 项通过
-              </Text>
-            </Row>
-            <Row label="负责">
-              <Flexbox horizontal gap={6} align="center">
-                <Avatar avatar="🧑‍💻" size={18} />
-                <Text fontSize={13}>{goal.agent}</Text>
-              </Flexbox>
-            </Row>
+              </Metric>
+            </div>
+          </Popover>
+          <Flexbox style={{ marginLeft: 'auto' }}>
+            <RunPauseAction state={state} onStart={onStart} onPause={onPause} onResume={onResume} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

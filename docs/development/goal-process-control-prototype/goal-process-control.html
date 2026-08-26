@@ -754,6 +754,8 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
   const nodeOf = (e: ActivityEvent) =>
     e.nodeId ? state.nodes.find((n) => n.id === e.nodeId) : undefined;
   const isAgent = (who: string) => who !== '你' && who !== '系统';
+  // A finding has no actor worth naming — the system just records what the task produced.
+  const isSystemRecord = (e: ActivityEvent) => e.who === '系统' && (e.kind === 'finding' || e.kind === 'abandon');
 
   return (
     <Flexbox gap={8}>
@@ -805,9 +807,11 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
                         <Icon icon={meta.icon} size={12} />
                       </div>
                     )}
-                    <Text fontSize={14} weight={500} style={{ flexShrink: 0 }}>
-                      {e.who}
-                    </Text>
+                    {!isSystemRecord(e) && (
+                      <Text fontSize={14} weight={500} style={{ flexShrink: 0 }}>
+                        {e.who}
+                      </Text>
+                    )}
                     {isAgent(e.who) && <Tag size="small">Agent</Tag>}
                     <span className={styles.text}>
                       {e.text}
@@ -856,7 +860,7 @@ import { memo, useState } from 'react';
 import { usd } from '../model/format';
 import type { GoalCheck, GoalInfo } from '../types';
 import { SectionHeader } from './SectionHeader';
-import { NewTag, useSharedStyles } from './shared';
+import { useSharedStyles } from './shared';
 
 // Mirrors TaskAcceptance: section header → body (padding-inline 12, gap 14) → 验收目标 text →
 // checklist as CriterionList (Block variant="outlined", rows separated by adjacency, leading status
@@ -925,15 +929,9 @@ export const Contract = memo<{ goal: GoalInfo }>(({ goal }) => {
         isOpen={open}
         onToggle={() => setOpen(!open)}
         extra={
-          <>
-            <Button icon={<Icon icon={ExternalLink} />} size="small" type="text">
-              验收报告
-            </Button>
-            <Button size="small" type="text">
-              编辑{' '}
-              <NewTag title="Graph 型目标的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
-            </Button>
-          </>
+          <Button icon={<Icon icon={ExternalLink} />} size="small" type="text">
+            验收报告
+          </Button>
         }
       />
       {open && (
@@ -1033,7 +1031,7 @@ export const Findings = memo<{
 }>(({ state, hotId, onHover, onSelect }) => {
   const { styles, cx } = useStyles();
   const { styles: shared } = useSharedStyles();
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const findings = state.nodes.filter((n) => n.kind === 'finding').sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
 
   if (findings.length === 0)
@@ -1046,19 +1044,24 @@ export const Findings = memo<{
   return (
     <Flexbox gap={0}>
       {findings.map((f) => {
-        const open = openId === f.id;
+        const open = openIds.has(f.id);
         const producer = state.nodes.find((n) => n.id === f.from);
         const attempt = producer?.attempts?.find((a) => a.outcome === 'passed');
+        // A finding may answer a Problem (supports edge) — show that question, it's the reason it exists.
+        const answers = state.edges
+          .filter(([a, , kind]) => a === f.id && kind === 'supports')
+          .map(([, b]) => state.nodes.find((n) => n.id === b))
+          .filter(Boolean);
         return (
           <Flexbox key={f.id} gap={0}>
-            <Flexbox horizontal gap={8} align="center" className={styles.row} onClick={() => setOpenId(open ? null : f.id)} onMouseEnter={() => onHover(f.id)} onMouseLeave={() => onHover(null)}>
+            <Flexbox horizontal gap={8} align="center" className={styles.row} onClick={() => setOpenIds((prev) => { const next = new Set(prev); if (next.has(f.id)) next.delete(f.id); else next.add(f.id); return next; })} onMouseEnter={() => onHover(f.id)} onMouseLeave={() => onHover(null)}>
               <Icon icon={ChevronRight} size={14} className={cx(styles.arrow, open && styles.arrowOpen)} />
               <KindDot kind="finding" />
               <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
                 {f.title}
               </Text>
               <Text fontSize={12} className={shared.muted} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
-                来自「{producer?.title}」
+                {answers.length > 0 ? `回答「${answers[0]!.title}」` : `来自「${producer?.title}」`}
               </Text>
               <Text fontSize={12} className={cx(shared.muted, shared.mono)} style={{ marginLeft: 'auto', flexShrink: 0 }}>
                 {short(clock.now - (f.at ?? clock.now))}
@@ -1066,6 +1069,14 @@ export const Findings = memo<{
             </Flexbox>
             {open && (
               <Flexbox className={styles.body} gap={8}>
+                {answers.map((q) => (
+                  <Flexbox key={q!.id} horizontal gap={6} align="center" style={{ cursor: 'pointer' }} onClick={() => onSelect(q!.id)}>
+                    <KindDot kind="problem" />
+                    <Text fontSize={12} type="secondary">
+                      回答了：{q!.title}
+                    </Text>
+                  </Flexbox>
+                ))}
                 {f.body && <Text fontSize={13}>{f.body}</Text>}
                 <Flexbox horizontal gap={8} align="center" wrap="wrap">
                   {attempt && (
@@ -1101,7 +1112,7 @@ import { ChevronDown, ChevronRight, Pencil, Plus, RotateCcw } from 'lucide-react
 import { Fragment, memo, useState } from 'react';
 
 import { clock, elapsed, short, usd } from '../../model/format';
-import type { Frontier, FrontierItem } from '../../model/frontier';
+import { type Frontier, type FrontierItem, nodeNumbers } from '../../model/frontier';
 import type { GoalState } from '../../types';
 import { ActorAvatar, type ExecStatus, StatusGlyph, useSharedStyles } from '../shared';
 
@@ -1213,13 +1224,15 @@ const tagOf = (state: GoalState, item: FrontierItem): { text: string; color?: st
     case 'done':
       return { text: item.node.status === 'retired' ? '已放弃' : '完成' };
     default:
-      return { text: state.goal.status === 'planning' ? '待开始' : '可以开始' };
+      // Not started and unblocked. The coordinator dispatches one node per tick, so promising
+      // "可以开始" would be a promise the runtime can't keep — the row stays quiet.
+      return null;
   }
 };
 
 const titleOf = (state: GoalState, item: FrontierItem) => {
   const { goal } = state;
-  if (item.kind === 'budget') return `${item.node.title} · 需要你接手`;
+  if (item.kind === 'budget') return item.node.title;
   if (item.kind === 'acceptance') {
     const passed = goal.checks.filter((c) => c.state === 'passed').length;
     return `验收通过 ${passed}/${goal.checks.length}，这个目标算完成了吗？`;
@@ -1253,11 +1266,9 @@ export const FrontierList = memo<FrontierListProps>(({ state, frontier, hotId, o
   const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
   const [showBlocked, setShowBlocked] = useState(false);
 
-  // One stable numbering across the whole list, so "依赖 #1 #2" always resolves.
-  const numberOf = new Map<string, number>();
-  [...frontier.items, ...frontier.blocked].forEach((it, i) => {
-    if (!numberOf.has(it.node.id)) numberOf.set(it.node.id, i + 1);
-  });
+  // Numbers come from the graph (creation order), not the list position — a task keeps its number
+  // when others finish above it, so 依赖 #2 always points at the same node.
+  const numberOf = nodeNumbers(state);
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -1397,12 +1408,12 @@ export const FrontierList = memo<FrontierListProps>(({ state, frontier, hotId, o
     );
   };
 
-  const BlockedRow = ({ node, index }: { node: GoalState['nodes'][number]; index: number }) => {
+  const BlockedRow = ({ node }: { node: GoalState['nodes'][number] }) => {
     const deps = (node.dependsOn ?? []).map((id) => numberOf.get(id)).filter(Boolean);
     return (
       <Block clickable variant="borderless" padding={12} className={cx(styles.row, styles.dim)} onClick={() => onSelect(node.id, true)} onMouseEnter={() => onHover(node.id)} onMouseLeave={() => onHover(null)}>
         <Flexbox horizontal gap={10} align="center">
-          <span className={styles.num}>#{index}</span>
+          <span className={styles.num}>#{numberOf.get(node.id)}</span>
           <StatusGlyph status="backlog" />
           <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
             {node.title}
@@ -1477,19 +1488,26 @@ export const FrontierList = memo<FrontierListProps>(({ state, frontier, hotId, o
 
 </script>
 <script type="text/plain" data-module="src/components/GoalHeader.tsx">
-import { Avatar, Button, Flexbox, Icon, InputNumber, Modal, Popover, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, InputNumber, Modal, Popover, Text } from '@lobehub/ui';
+import { Progress } from 'antd';
 import { createStyles } from 'antd-style';
-import { Coins, Pause, Play, RotateCcw } from 'lucide-react';
+import { Pause, Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 
-import { clock, duration, usd } from '../model/format';
+import { clock, duration, elapsed, usd } from '../model/format';
 import { type Frontier, countAttempts, goalSentence } from '../model/frontier';
 import type { GoalState } from '../types';
 import { NewTag, useSharedStyles } from './shared';
 
-// Mirrors the top of TaskDetailPage: TaskDetailTitleInput · run/pause action · TaskProperties column.
+// Mirrors the shipped Goal detail header (src/features/AgentGoals/GoalDetailPage.tsx):
+// title → description → a row of metric cells (18px value / 12px label, separated by a left border)
+// → the requirement block. The run/pause control sits with the metrics; budget is edited from the
+// 费用 cell.
 
 const useStyles = createStyles(({ css, token }) => ({
+  header: css`
+    padding-block: 8px 4px;
+  `,
   title: css`
     width: 100%;
     padding: 0;
@@ -1503,13 +1521,16 @@ const useStyles = createStyles(({ css, token }) => ({
     background: transparent;
     outline: none;
   `,
-  propRow: css`
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 8px;
-    align-items: center;
+  metric: css`
+    min-width: 112px;
 
-    min-height: 28px;
+    & + & {
+      padding-inline-start: 18px;
+      border-inline-start: 1px solid ${token.colorBorderSecondary};
+    }
+  `,
+  clickable: css`
+    cursor: pointer;
   `,
 }));
 
@@ -1522,12 +1543,7 @@ interface GoalHeaderProps {
   onSetBudget: (v: { rounds: number | null; cost: number | null; perWork: number }) => void;
 }
 
-const RunPauseAction = ({
-  state,
-  onStart,
-  onPause,
-  onResume,
-}: Omit<GoalHeaderProps, 'frontier' | 'onSetBudget'>) => {
+const RunPauseAction = ({ state, onStart, onPause, onResume }: Omit<GoalHeaderProps, 'frontier' | 'onSetBudget'>) => {
   const [open, setOpen] = useState(false);
   const { goal } = state;
   if (['achieved', 'failed', 'canceled'].includes(goal.status))
@@ -1553,24 +1569,11 @@ const RunPauseAction = ({
       <Button size="small" icon={<Icon icon={Pause} />} onClick={() => setOpen(true)}>
         暂停
       </Button>
-      <Modal
-        open={open}
-        title="暂停这个目标？"
-        okText="暂停"
-        cancelText="取消"
-        onCancel={() => setOpen(false)}
-        onOk={() => {
-          setOpen(false);
-          onPause();
-        }}
-      >
+      <Modal open={open} title="暂停这个目标？" okText="暂停" cancelText="取消" onCancel={() => setOpen(false)} onOk={() => { setOpen(false); onPause(); }}>
         <Flexbox gap={8}>
-          <Text>
-            暂停后不会再开始新的尝试；正在进行的尝试会跑到它自己结束为止，期间的费用仍会计入。
-          </Text>
+          <Text>暂停后不会再开始新的尝试；正在进行的尝试会跑到它自己结束为止，期间的费用仍会计入。</Text>
           <Text type="secondary" fontSize={13}>
-            随时可以点「继续」恢复。立刻中断正在执行的 Agent 目前还做不到{' '}
-            <NewTag title="AbortSignal 未接入 runtime；红线" />。
+            随时可以点「继续」恢复。立刻中断正在执行的 Agent 目前还做不到 <NewTag title="AbortSignal 未接入 runtime；红线" />。
           </Text>
         </Flexbox>
       </Modal>
@@ -1578,163 +1581,119 @@ const RunPauseAction = ({
   );
 };
 
-export const GoalHeader = memo<GoalHeaderProps>(
-  ({ state, frontier, onStart, onPause, onResume, onSetBudget }) => {
-    const { styles } = useStyles();
-    const { styles: shared } = useSharedStyles();
-    const { goal } = state;
-    const [budgetOpen, setBudgetOpen] = useState(false);
-    const [rounds, setRounds] = useState<number | null>(goal.maxRounds);
-    const [cost, setCost] = useState<number | null>(goal.maxTotalCost);
-    const [perWork, setPerWork] = useState(goal.maxAttemptsPerWork);
-    const overCost = goal.maxTotalCost != null && goal.spent >= goal.maxTotalCost;
-    const passed = goal.checks.filter((c) => c.state === 'passed').length;
-    const attempts = countAttempts(state);
-    const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
-      <div className={styles.propRow}>
-        <Text fontSize={12} type="secondary">
-          {label}
-        </Text>
-        <div>{children}</div>
-      </div>
-    );
+const Metric = memo<{ label: string; children: React.ReactNode; onClick?: () => void }>(({ label, children, onClick }) => {
+  const { styles, cx } = useStyles();
+  return (
+    <Flexbox className={cx(styles.metric, onClick && styles.clickable)} gap={2} onClick={onClick}>
+      {children}
+      <Text fontSize={12} type="secondary">
+        {label}
+      </Text>
+    </Flexbox>
+  );
+});
 
-    return (
-      <Flexbox gap={16}>
+export const GoalHeader = memo<GoalHeaderProps>(({ state, frontier, onStart, onPause, onResume, onSetBudget }) => {
+  const { styles } = useStyles();
+  const { styles: shared } = useSharedStyles();
+  const { goal } = state;
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [rounds, setRounds] = useState<number | null>(goal.maxRounds);
+  const [cost, setCost] = useState<number | null>(goal.maxTotalCost);
+  const [perWork, setPerWork] = useState(goal.maxAttemptsPerWork);
+  const overCost = goal.maxTotalCost != null && goal.spent >= goal.maxTotalCost;
+  const passed = goal.checks.filter((c) => c.state === 'passed').length;
+  const attempts = countAttempts(state);
+  const progress = goal.checks.length ? Math.round((passed / goal.checks.length) * 100) : 0;
+  const running = goal.nodes ? 0 : 0;
+
+  return (
+    <Flexbox className={styles.header} gap={8}>
+      <Flexbox gap={5}>
         <input className={styles.title} defaultValue={goal.title} />
-        <Flexbox horizontal gap={24} align="flex-start" justify="space-between">
-          <Flexbox gap={12} flex={1} style={{ minWidth: 240 }}>
-            <Flexbox horizontal gap={8} align="center" wrap="wrap">
-              <RunPauseAction
-                state={state}
-                onStart={onStart}
-                onPause={onPause}
-                onResume={onResume}
-              />
-              {goal.startedAt && (
-                <Text fontSize={12} className={shared.muted}>
-                  已进行 {duration(clock.now - goal.startedAt)}
-                </Text>
-              )}
-            </Flexbox>
-            <Text fontSize={13} type="secondary">
-              {goal.requirement}
+        <Text fontSize={15} style={{ lineHeight: 1.65 }}>
+          {goal.requirement}
+        </Text>
+      </Flexbox>
+
+      <Flexbox horizontal gap={18} wrap="wrap" align="center" paddingBlock={'6px 0'}>
+        <Metric label="验收进度">
+          <Flexbox horizontal align="center" gap={7}>
+            <Progress percent={progress} showInfo={false} size={24} strokeColor="var(--ant-color-success)" type="circle" />
+            <Text fontSize={18} weight={600}>
+              {passed}/{goal.checks.length}
             </Text>
           </Flexbox>
-          <Flexbox gap={2} style={{ width: 300, flexShrink: 0 }}>
-            <Row label="状态">
-              <Text
-                fontSize={13}
-                type={
-                  frontier.needsYou ? 'warning' : goal.status === 'achieved' ? 'success' : undefined
-                }
-                weight={frontier.needsYou ? 600 : undefined}
-              >
-                {goalSentence(goal, frontier)}
-              </Text>
-            </Row>
-            <Row label="费用">
-              <Popover
-                open={budgetOpen}
-                onOpenChange={setBudgetOpen}
-                trigger="click"
-                content={
-                  <Flexbox gap={12} style={{ width: 260 }} padding={4}>
-                    <Text weight={600}>预算与保护</Text>
-                    <Flexbox gap={8}>
-                      <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>总费用上限</Text>
-                        <InputNumber
-                          value={cost}
-                          min={0}
-                          step={1}
-                          prefix="$"
-                          onChange={(v) => setCost(v == null ? null : Number(v))}
-                          style={{ width: 110 }}
-                          placeholder="不限"
-                        />
-                      </Flexbox>
-                      <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>总尝试次数</Text>
-                        <InputNumber
-                          value={rounds}
-                          min={1}
-                          onChange={(v) => setRounds(v == null ? null : Number(v))}
-                          style={{ width: 110 }}
-                          placeholder="不限"
-                        />
-                      </Flexbox>
-                      <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>单项任务最多尝试</Text>
-                        <InputNumber
-                          value={perWork}
-                          min={1}
-                          onChange={(v) => setPerWork(Number(v ?? 1))}
-                          style={{ width: 110 }}
-                        />
-                      </Flexbox>
-                    </Flexbox>
-                    <Text fontSize={12} type="secondary">
-                      超过任一上限时目标会自动停下并来问你，不会静默继续花钱。
-                    </Text>
-                    <Flexbox horizontal justify="flex-end" gap={8}>
-                      <Button size="small" onClick={() => setBudgetOpen(false)}>
-                        取消
-                      </Button>
-                      <Button
-                        size="small"
-                        type="primary"
-                        onClick={() => {
-                          onSetBudget({ rounds, cost, perWork });
-                          setBudgetOpen(false);
-                        }}
-                      >
-                        保存
-                      </Button>
-                    </Flexbox>
-                  </Flexbox>
-                }
-              >
-                <Text
-                  fontSize={13}
-                  className={shared.mono}
-                  type={overCost ? 'warning' : undefined}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {usd(goal.spent)} / {goal.maxTotalCost != null ? usd(goal.maxTotalCost) : '不限'}{' '}
-                  <Icon icon={Coins} size={12} />
-                </Text>
-              </Popover>
-            </Row>
-            <Row label="尝试">
-              <Text fontSize={13} className={shared.mono}>
-                {attempts} / {goal.maxRounds ?? '∞'}{' '}
-                <Text fontSize={12} className={shared.muted}>
-                  · 单项最多 {goal.maxAttemptsPerWork}
-                </Text>
-              </Text>
-            </Row>
-            <Row label="验收">
-              <Text
-                fontSize={13}
-                className={shared.mono}
-                type={passed === goal.checks.length ? 'success' : undefined}
-              >
-                {passed} / {goal.checks.length} 项通过
-              </Text>
-            </Row>
-            <Row label="负责">
-              <Flexbox horizontal gap={6} align="center">
-                <Avatar avatar="🧑‍💻" size={18} />
-                <Text fontSize={13}>{goal.agent}</Text>
+        </Metric>
+        <Metric label={frontier.needsYou > 0 ? '状态 · 需要你' : '状态'}>
+          <Text fontSize={18} weight={600} type={frontier.needsYou ? 'warning' : goal.status === 'achieved' ? 'success' : undefined}>
+            {goalSentence(goal, frontier)}
+          </Text>
+        </Metric>
+        <Metric label="已进行">
+          <Text fontSize={18} weight={600}>
+            {goal.startedAt ? duration(clock.now - goal.startedAt) : '—'}
+          </Text>
+        </Metric>
+        <Metric label={`尝试 · 单项最多 ${goal.maxAttemptsPerWork}`}>
+          <Text fontSize={18} weight={600}>
+            {attempts}
+            <Text fontSize={13} type="secondary">
+              {' '}
+              / {goal.maxRounds ?? '∞'}
+            </Text>
+          </Text>
+        </Metric>
+        <Popover
+          open={budgetOpen}
+          onOpenChange={setBudgetOpen}
+          trigger="click"
+          content={
+            <Flexbox gap={12} style={{ width: 260 }} padding={4}>
+              <Text weight={600}>预算与保护</Text>
+              <Flexbox gap={8}>
+                <Flexbox horizontal justify="space-between" align="center">
+                  <Text fontSize={13}>总费用上限</Text>
+                  <InputNumber value={cost} min={0} step={1} prefix="$" onChange={(v) => setCost(v == null ? null : Number(v))} style={{ width: 110 }} placeholder="不限" />
+                </Flexbox>
+                <Flexbox horizontal justify="space-between" align="center">
+                  <Text fontSize={13}>总尝试次数</Text>
+                  <InputNumber value={rounds} min={1} onChange={(v) => setRounds(v == null ? null : Number(v))} style={{ width: 110 }} placeholder="不限" />
+                </Flexbox>
+                <Flexbox horizontal justify="space-between" align="center">
+                  <Text fontSize={13}>单项任务最多尝试</Text>
+                  <InputNumber value={perWork} min={1} onChange={(v) => setPerWork(Number(v ?? 1))} style={{ width: 110 }} />
+                </Flexbox>
               </Flexbox>
-            </Row>
-          </Flexbox>
+              <Text fontSize={12} type="secondary">
+                超过任一上限时目标会自动停下并来问你，不会静默继续花钱。
+              </Text>
+              <Flexbox horizontal justify="flex-end" gap={8}>
+                <Button size="small" onClick={() => setBudgetOpen(false)}>
+                  取消
+                </Button>
+                <Button size="small" type="primary" onClick={() => { onSetBudget({ rounds, cost, perWork }); setBudgetOpen(false); }}>
+                  保存
+                </Button>
+              </Flexbox>
+            </Flexbox>
+          }
+        >
+          <div>
+            <Metric label={`费用 · 上限 ${goal.maxTotalCost == null ? '不限' : usd(goal.maxTotalCost)}`} onClick={() => setBudgetOpen(true)}>
+              <Text fontSize={18} weight={600} className={shared.mono} type={overCost ? 'warning' : undefined}>
+                {usd(goal.spent)}
+              </Text>
+            </Metric>
+          </div>
+        </Popover>
+        <Flexbox style={{ marginLeft: 'auto' }}>
+          <RunPauseAction state={state} onStart={onStart} onPause={onPause} onResume={onResume} />
         </Flexbox>
       </Flexbox>
-    );
-  },
-);
+    </Flexbox>
+  );
+});
 
 </script>
 <script type="text/plain" data-module="src/components/Graph/Graph.tsx">
@@ -1959,7 +1918,6 @@ export const Graph = memo<GraphProps>(
     const frontierIds = new Set(frontier.items.map((i) => i.node.id));
     const maxY = Math.max(...nodes.map((n) => POS[n.id].y + POS[n.id].h)) + 24;
     const focus = hotId || selectedId || null;
-    const hiddenCount = state.nodes.length - nodes.length;
 
     const head = (
       <Flexbox horizontal justify="space-between" align="center" className={styles.head}>
@@ -1976,11 +1934,6 @@ export const Graph = memo<GraphProps>(
               { label: '全图', value: 'all' },
             ]}
           />
-          {view === 'stage' && hiddenCount > 0 && (
-            <Text fontSize={12} type="secondary">
-              还有 {hiddenCount} 个节点在更后面的阶段
-            </Text>
-          )}
         </Flexbox>
         <Flexbox horizontal gap={12} align="center">
           <Flexbox horizontal gap={10} className={styles.legend} align="center">
@@ -2832,6 +2785,8 @@ export const StatusGlyph = memo<{ status: ExecStatus; live?: boolean; size?: num
   },
 );
 
+// Heterogeneous CLI agents (Kimi Code / Claude Code / Codex) get their own mark; in the product this
+// is the agent's avatar from the agent store.
 const AGENT_AVATAR: Record<string, string> = {
   'Kimi Code': '🌙',
   'verify-agent': '🔍',
@@ -3010,8 +2965,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(1),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-90）',
+        who: 'Kimi Code',
+        text: '开始执行（T-90）',
         nodeId: 'W1',
       });
     },
@@ -3091,8 +3046,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(7),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-91）',
+        who: 'Kimi Code',
+        text: '开始执行（T-91）',
         nodeId: 'W5',
       });
       s.goal.spent = 0.12;
@@ -3178,8 +3133,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(14),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-94）',
+        who: 'Kimi Code',
+        text: '开始执行（T-94）',
         nodeId: 'W2',
       });
       s.goal.spent = 0.2;
@@ -3247,8 +3202,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(83),
         kind: 'start',
-        who: '系统',
-        text: '自动重开：第 2 次尝试（T-94，Kimi Code）',
+        who: 'Kimi Code',
+        text: '自动重开：第 2 次尝试（T-94）',
         nodeId: 'W2',
       });
     },
@@ -3286,7 +3241,7 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(95),
         kind: 'start',
-        who: '系统',
+        who: 'Kimi Code',
         text: '自动重试：第 3 次尝试，携带 verifier 的缺口反馈',
         nodeId: 'W2',
       });
@@ -3448,8 +3403,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(110),
         kind: 'start',
-        who: '系统',
-        text: '第 4 次尝试开始（T-94，Kimi Code）',
+        who: 'Kimi Code',
+        text: '第 4 次尝试开始（T-94）',
         nodeId: 'W2',
       });
     },
@@ -3503,8 +3458,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(126),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-96）',
+        who: 'Kimi Code',
+        text: '开始执行（T-96）',
         nodeId: 'W3',
       });
       s.goal.spent = 6.0;
@@ -3559,8 +3514,8 @@ export const STEPS: Step[] = [
       log(s, {
         t: at(134),
         kind: 'start',
-        who: '系统',
-        text: '派发第 1 次尝试给 Kimi Code（T-97）',
+        who: 'Kimi Code',
+        text: '开始执行（T-97）',
         nodeId: 'W6',
       });
       s.goal.spent = 6.09;
@@ -3858,6 +3813,17 @@ export interface BlockedItem {
 
 /** How many just-finished tasks stay in the list. */
 export const RECENT_DONE = 2;
+
+/**
+ * Stable per-node number, taken from creation order in the graph — the row's identity, not its
+ * position in today's list. `依赖 #2` keeps pointing at the same node forever.
+ */
+export const nodeNumbers = (state: GoalState) => {
+  const map = new Map<string, number>();
+  let n = 0;
+  for (const node of state.nodes) if (node.kind === 'work') map.set(node.id, ++n);
+  return map;
+};
 
 export interface Frontier {
   items: FrontierItem[];

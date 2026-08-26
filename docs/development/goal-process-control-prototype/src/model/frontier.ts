@@ -31,6 +31,17 @@ export interface BlockedItem {
 /** How many just-finished tasks stay in the list. */
 export const RECENT_DONE = 2;
 
+/**
+ * Stable per-node number, taken from creation order in the graph — the row's identity, not its
+ * position in today's list. `依赖 #2` keeps pointing at the same node forever.
+ */
+export const nodeNumbers = (state: GoalState) => {
+  const map = new Map<string, number>();
+  let n = 0;
+  for (const node of state.nodes) if (node.kind === 'work') map.set(node.id, ++n);
+  return map;
+};
+
 export interface Frontier {
   items: FrontierItem[];
   blocked: BlockedItem[];

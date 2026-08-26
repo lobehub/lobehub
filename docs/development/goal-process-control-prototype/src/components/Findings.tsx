@@ -43,7 +43,7 @@ export const Findings = memo<{
 }>(({ state, hotId, onHover, onSelect }) => {
   const { styles, cx } = useStyles();
   const { styles: shared } = useSharedStyles();
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const findings = state.nodes
     .filter((n) => n.kind === 'finding')
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
@@ -58,9 +58,14 @@ export const Findings = memo<{
   return (
     <Flexbox gap={0}>
       {findings.map((f) => {
-        const open = openId === f.id;
+        const open = openIds.has(f.id);
         const producer = state.nodes.find((n) => n.id === f.from);
         const attempt = producer?.attempts?.find((a) => a.outcome === 'passed');
+        // A finding may answer a Problem (supports edge) — show that question, it's the reason it exists.
+        const answers = state.edges
+          .filter(([a, , kind]) => a === f.id && kind === 'supports')
+          .map(([, b]) => state.nodes.find((n) => n.id === b))
+          .filter(Boolean);
         return (
           <Flexbox key={f.id} gap={0}>
             <Flexbox
@@ -68,7 +73,14 @@ export const Findings = memo<{
               gap={8}
               align="center"
               className={styles.row}
-              onClick={() => setOpenId(open ? null : f.id)}
+              onClick={() =>
+                setOpenIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(f.id)) next.delete(f.id);
+                  else next.add(f.id);
+                  return next;
+                })
+              }
               onMouseEnter={() => onHover(f.id)}
               onMouseLeave={() => onHover(null)}
             >
@@ -87,7 +99,7 @@ export const Findings = memo<{
                 ellipsis
                 style={{ flexShrink: 1, minWidth: 0 }}
               >
-                来自「{producer?.title}」
+                {answers.length > 0 ? `回答「${answers[0]!.title}」` : `来自「${producer?.title}」`}
               </Text>
               <Text
                 fontSize={12}
@@ -99,6 +111,21 @@ export const Findings = memo<{
             </Flexbox>
             {open && (
               <Flexbox className={styles.body} gap={8}>
+                {answers.map((q) => (
+                  <Flexbox
+                    key={q!.id}
+                    horizontal
+                    gap={6}
+                    align="center"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onSelect(q!.id)}
+                  >
+                    <KindDot kind="problem" />
+                    <Text fontSize={12} type="secondary">
+                      回答了：{q!.title}
+                    </Text>
+                  </Flexbox>
+                ))}
                 {f.body && <Text fontSize={13}>{f.body}</Text>}
                 <Flexbox horizontal gap={8} align="center" wrap="wrap">
                   {attempt && (

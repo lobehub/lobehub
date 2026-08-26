@@ -1,7 +1,7 @@
 # Goal detail — process control for long-horizon execution
 
 **Date:** 2026-08-26
-**Status:** aligning — round 10 (graph back to the hand-drawn SVG; react-flow reverted)
+**Status:** aligning — round 11 (header matches the shipped Goal page; stable node numbers; honest ready state)
 **Scope:** the Goal detail page (`/agent/:aid/goal/:goalId`) and the two places that feed into it (Goal list, Home inbox rail), redesigned as a **process-control surface** for the long-horizon Goal runtime (Goal Graph + Work recovery + Acceptance + decision gates). Out of scope: Goal creation wizard, the Acceptance workspace itself, a full-screen graph editor, mobile.
 **Prototype:** `docs/development/goal-process-control-prototype/` (README inside) — production-style TSX components built into one HTML; an 18-step replay of one real Goal (上一步 / 下一步 or ← →). Steps: 1 create (initial plan)・2–3 first advance/execute・4 pass → findings → next Work・5 agent-authority decision → training starts・6 training・7 lost contact・8 reclaim・9 fail → auto retry・10 budget boundary・11 top-up・12 gate・13 decide・14 pass → sampling・15 sampling → README・16 goal acceptance starts・17 delivered → confirm・18 achieved. Every step has something running or something needing you.
 **Evidence:** the two exploration topics (`tpc_1p4dwDmUPsnN`, `tpc_XUh2GbVp3UVM`), the merged runtime PR #18670, domain types/services under `packages/types/src/goal.ts`, `apps/server/src/services/goal/*`, `apps/server/src/services/verify/*`, the shipped UI under `src/features/AgentGoals/*`, and `docs/development/agent-goals-*.md`.
@@ -310,6 +310,22 @@ Round-9 corrections:
 | Budget-exhausted should be one row, not two                   | The paused task **is** the row: `任务标题 · 需要你接手` with a 需要你接手 tag; expanding it explains the spend and offers 追加预算并继续 / 就此结束.                                                                                                                                    |
 | 「排队第 N」 is confusing                                     | Gone — a dependency-free task is just 可以开始.                                                                                                                                                                                                                                         |
 | Where do artifacts live?                                      | **Open (D6).** Proposal: a dedicated 产物 section modeled on `TaskArtifacts` (accordion + file rows, sourced from each attempt's registered work versions), rather than a permanent right-side file list — the right panel stays the node inspector. Not implemented pending your call. |
+
+Round-11 corrections:
+
+| Correction (user)                                            | What changed                                                                                                                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header should follow the shipped Goal page                   | Title → description → a row of metric cells (18px value / 12px label, left-border separated) — 验收进度 (ring)・状态・已进行・尝试・费用 — with the run/pause control at the end. |
+| 「还有 N 个节点在更后面的阶段」 is noise                     | Removed from the graph header.                                                                                                                                                    |
+| The acceptance section doesn't need 编辑                     | Removed; only 验收报告 remains.                                                                                                                                                   |
+| Activity phrasing: no 系统 on findings; dispatch reads wrong | A finding row has no actor (the system just records it). Dispatch is now `Kimi Code 开始执行（T-90）` / `verify-agent 开始独立复验（T-98）` — the executor is the actor.          |
+| The goal-acceptance node appears out of nowhere              | It exists from the start as a numbered task, folded under 等依赖 (it depends on every other task) until its turn — the same as any other blocked task.                            |
+| Row numbers shift when tasks finish                          | Numbers come from the **graph's creation order** (`nodeNumbers`), not the list position: `#3` stays `#3` forever and `依赖 #2` always resolves.                                   |
+| The agent avatar disappeared on running rows                 | Heterogeneous CLI agents (Kimi Code / verify-agent) keep their avatar in both the row and the activity feed.                                                                      |
+| What does 可以开始 promise?                                  | It promised parallel start, which the serial coordinator can't deliver. **Tag removed** — an unblocked, not-started task simply shows its number and title.                       |
+| Budget row repeats 需要你接手 twice                          | Title is just the task; the state Tag carries 需要你接手 once.                                                                                                                    |
+| Findings should show the Question they answer                | A finding that `supports` a Problem reads 回答「…」 in the row and links to the question when expanded.                                                                           |
+| Only one finding could be open                               | Multiple findings expand at once (a `Set` of open ids).                                                                                                                           |
 
 **Coverage:** domain types and enums, goal/verify/recovery services, TRPC and CLI surfaces, the shipped SPA (routes, store, components), three design docs, and both exploration topics. Not checked: production Goal data on app.lobehub.com, any user other than the author, Linear tickets (connector not authorized in this session). Low-confidence: the "ordinary user reads Work rows" claim rests on one power user; the exact staleness threshold copy.
 
