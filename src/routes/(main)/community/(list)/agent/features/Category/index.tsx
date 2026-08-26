@@ -5,6 +5,7 @@ import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
 import { withSuspense } from '@/components/withSuspense';
+import { buildAssistantListQuery } from '@/features/CommunityAgentList/assistantListQuery';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
@@ -13,7 +14,6 @@ import { useDiscoverStore } from '@/store/discover';
 import { AssistantCategory, type AssistantQueryParams, AssistantSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
-import { buildAssistantListQuery } from '../../assistantListQuery';
 import { useCategory } from './useCategory';
 
 const Category = memo(() => {
@@ -21,7 +21,7 @@ const Category = memo(() => {
   const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
   const query = useQuery() as AssistantQueryParams;
   const { category = AssistantCategory.Discover, q, source } = query;
-  const { data } = useAssistantList(buildAssistantListQuery(query));
+  const { data } = useAssistantList(buildAssistantListQuery(query), { keepPreviousData: true });
   const shouldLoadFallbackCategories = data !== undefined && data.categoryCounts === undefined;
   const { data: fallbackItems = [] } = useAssistantCategories(
     { q, source },

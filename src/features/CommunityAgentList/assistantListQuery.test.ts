@@ -18,4 +18,18 @@ describe('buildAssistantListQuery', () => {
       source: undefined,
     });
   });
+
+  it('should preserve the browse path when there is no keyword search', () => {
+    expect(buildAssistantListQuery({})).toEqual({
+      category: undefined,
+      includeAgentGroup: true,
+      includeCategoryCounts: false,
+      order: undefined,
+      page: undefined,
+      pageSize: 21,
+      q: undefined,
+      sort: AssistantSorts.Recommended,
+      source: undefined,
+    });
+  });
 });

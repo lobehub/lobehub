@@ -4,7 +4,7 @@ import { type AssistantQueryParams, AssistantSorts } from '@/types/discover';
 export const buildAssistantListQuery = (params: AssistantQueryParams): AssistantQueryParams => ({
   category: params.category,
   includeAgentGroup: true,
-  includeCategoryCounts: true,
+  includeCategoryCounts: Boolean(params.q?.trim()),
   order: params.order,
   page: params.page,
   pageSize: 21,

@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { buildAssistantListQuery } from '@/features/CommunityAgentList/assistantListQuery';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 import { type AssistantQueryParams } from '@/types/discover';
@@ -11,7 +12,6 @@ import { DiscoverTab } from '@/types/discover';
 
 import AssistantEmpty from '../../features/AssistantEmpty';
 import Pagination from '../features/Pagination';
-import { buildAssistantListQuery } from './assistantListQuery';
 import List from './features/List';
 import Loading from './loading';
 
