@@ -1,4 +1,6 @@
 import type {
+  AgentInterventionRequestData,
+  AgentInterventionResponseData,
   AgentStreamEvent,
   StepCompleteData,
   StreamChunkData,
@@ -439,6 +441,7 @@ export const createGatewayEventHandler = (
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const completedToolStateCallIds = new Set<string>();
+  const pendingInterventionToolCallIds = new Set<string>();
 
   // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
@@ -479,6 +482,22 @@ export const createGatewayEventHandler = (
   const enqueue = (fn: () => Promise<void> | void): Promise<void> => {
     processingChain = processingChain.then(fn, fn);
     return processingChain;
+  };
+
+  const writeTopicStatus = (status: 'running' | 'waitingForHuman') => {
+    if (!context.topicId) return;
+    const statusWrite = get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      ...(context.scope === 'group' || context.scope === 'group_agent'
+        ? { scope: context.scope }
+        : {}),
+      status,
+      topicId: context.topicId,
+    });
+    void statusWrite?.catch((error) => {
+      console.error('[gatewayEventHandler] updateTopicStatus failed:', error);
+    });
   };
 
   const getToolMessageByCallId = (toolCallId: string): UIChatMessage | undefined => {
@@ -912,6 +931,44 @@ export const createGatewayEventHandler = (
         break;
       }
 
+      case 'agent_intervention_request': {
+        const data = event.data as AgentInterventionRequestData | undefined;
+        if (!data?.toolCallId) break;
+
+        pendingInterventionToolCallIds.add(data.toolCallId);
+        writeTopicStatus('waitingForHuman');
+        void notifyDesktopHumanApprovalRequired(get, context);
+
+        // Server persistence runs before stream publish. Reconcile from DB so
+        // both the inline tool and global InterventionBar see `pending`, even
+        // when this request raced ahead of the provider's tools_calling event.
+        enqueue(async () => {
+          await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+          hasStreamedContent = true;
+        });
+        break;
+      }
+
+      case 'agent_intervention_response': {
+        const data = event.data as AgentInterventionResponseData | undefined;
+        if (!data?.toolCallId) break;
+
+        // A modern submit response is a producer-delivery leg, not completion.
+        // Keep the topic/card waiting until the producer echoes producerAck.
+        // Older responses had no request id and remain terminal-compatible.
+        if (data.resolutionRequestId && data.producerAck !== true) break;
+
+        pendingInterventionToolCallIds.delete(data.toolCallId);
+        enqueue(async () => {
+          // Successful Web submits, explicit cancellation, producer timeout,
+          // and session teardown all converge on the durable tool row before
+          // this refresh. Do not infer the terminal state from identifier.
+          await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+          if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
+        });
+        break;
+      }
+
       case 'step_start': {
         const data = event.data as {
           pendingToolsCalling?: unknown[];
@@ -946,20 +1003,7 @@ export const createGatewayEventHandler = (
           void notifyDesktopHumanApprovalRequired(get, context);
           // Persist the explicit "needs user input" marker so the sidebar swaps
           // the running spinner for the hand icon across reloads.
-          if (context.topicId) {
-            const statusWrite = get().updateTopicStatus?.({
-              agentId: context.agentId,
-              groupId: context.groupId,
-              ...(context.scope === 'group' || context.scope === 'group_agent'
-                ? { scope: context.scope }
-                : {}),
-              status: 'waitingForHuman',
-              topicId: context.topicId,
-            });
-            void statusWrite?.catch((error) => {
-              console.error('[gatewayEventHandler] updateTopicStatus failed:', error);
-            });
-          }
+          writeTopicStatus('waitingForHuman');
         }
 
         break;

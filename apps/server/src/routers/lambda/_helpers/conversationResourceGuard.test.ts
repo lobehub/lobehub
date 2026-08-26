@@ -15,6 +15,7 @@ import {
   assertCanUseMessageTargets,
   assertCanUseSessionTargets,
   assertCanUseTopicTargets,
+  assertCanViewConversationTargets,
   assertCanViewTopicTargets,
   filterUserIdsByTopicViewAccess,
 } from './conversationResourceGuard';
@@ -139,6 +140,32 @@ describe('assertCanUseConversationTargets', () => {
     await expect(
       assertCanUseConversationTargets(baseCtx(createDb([])), [{ agentId: 'agent-1' }]),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('assertCanViewConversationTargets', () => {
+  it('checks authoritative agent/group context with view access and returns what was gated', async () => {
+    const resolved = await assertCanViewConversationTargets(baseCtx(createDb([])), [
+      { agentId: 'agent-1', groupId: 'group-1' },
+    ]);
+
+    expect(resolved.map(({ resourceId, resourceType }) => ({ resourceId, resourceType }))).toEqual([
+      { resourceId: 'group-1', resourceType: 'agentGroup' },
+      { resourceId: 'agent-1', resourceType: 'agent' },
+    ]);
+    expect(assertActionMock).toHaveBeenCalledTimes(2);
+    expect(assertActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'view', resourceId: 'agent-1' }),
+    );
+  });
+
+  it('returns an empty result for an unbacked workspace target so callers can fail closed', async () => {
+    getResourceMetaMock.mockResolvedValue(null);
+
+    await expect(
+      assertCanViewConversationTargets(baseCtx(createDb([])), [{ agentId: 'missing-agent' }]),
+    ).resolves.toEqual([]);
+    expect(assertActionMock).not.toHaveBeenCalled();
   });
 });
 

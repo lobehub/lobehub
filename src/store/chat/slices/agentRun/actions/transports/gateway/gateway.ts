@@ -435,6 +435,12 @@ export class GatewayActionImpl {
     optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
+    /**
+     * Operation already created by the generic intervention claim+dispatch
+     * endpoint. The client adopts it here so streaming setup stays identical
+     * without issuing a second legacy resume request.
+     */
+    precreatedResult?: ExecAgentResult;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
     /**
@@ -503,6 +509,7 @@ export class GatewayActionImpl {
       optimisticTopic,
       parentMessageId,
       parentOperationId,
+      precreatedResult,
       replacesOperationId,
       resumeApproval,
       resumeApprovals,
@@ -574,67 +581,69 @@ export class GatewayActionImpl {
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
 
-    const result = await aiAgentService.execAgentTask(
-      {
-        agentId: executionContext.agentId,
-        // Fresh sends only — resume flows never pass this, and the server drops
-        // it defensively on resume-like params anyway.
-        clientIds,
-        appContext: {
-          agentDocumentId: executionContext.agentDocumentId,
-          ...(messageContext.agentId !== executionContext.agentId && {
-            conversationAgentId: messageContext.agentId,
-          }),
-          defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
-          documentId: executionContext.documentId,
-          // When AgentBuilder runs, context.agentId is the builtin builder agent.
-          // The actual editing target is chatStore.activeAgentId (kept in sync by
-          // AgentBuilderProvider). Pass it so the server can route tool calls to
-          // the correct agent rather than the builder itself.
-          ...(executionContext.scope === 'agent_builder' && {
-            editingAgentId: this.#get().activeAgentId ?? undefined,
-          }),
-          // Same shape as `editingAgentId`, for the Group Agent Builder panel on
-          // the group Profile page. The builder conversation is keyed by the
-          // builtin builder agent (no groupId in its ConversationContext, so the
-          // message map key and the group's own chat stay separate), which left
-          // the server runtime with no idea which group it was editing.
-          // The context value wins, and every surface that opens this scope sets
-          // it from its own route/group: it is fixed for the run, so a mid-run
-          // navigation cannot make the server stamp a different group than the
-          // panel is reading from. The `activeGroupId` fallback is a last resort
-          // for a caller that forgot — it is sampled here, AFTER the async
-          // preflight above, so it can already be stale by this point.
-          ...(executionContext.scope === 'group_agent_builder' && {
-            editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
-          }),
-          groupId: executionContext.groupId,
-          ...(initialTopicMetadata && { initialTopicMetadata }),
-          // Forward the group orchestration role so the server can stamp it onto
-          // the assistant message metadata. Without this the gateway-created
-          // supervisor turn loses its role on the step_start snapshot / refetch
-          // and renders as a generic assistant.
-          orchestrationRole: executionContext.orchestrationRole,
-          scope: executionContext.scope,
-          taskId,
-          threadId: executionContext.threadId,
-          topicId: executionContext.topicId,
+    const result =
+      precreatedResult ??
+      (await aiAgentService.execAgentTask(
+        {
+          agentId: executionContext.agentId,
+          // Fresh sends only — resume flows never pass this, and the server drops
+          // it defensively on resume-like params anyway.
+          clientIds,
+          appContext: {
+            agentDocumentId: executionContext.agentDocumentId,
+            ...(messageContext.agentId !== executionContext.agentId && {
+              conversationAgentId: messageContext.agentId,
+            }),
+            defaultTaskAssigneeAgentId: executionContext.defaultTaskAssigneeAgentId,
+            documentId: executionContext.documentId,
+            // When AgentBuilder runs, context.agentId is the builtin builder agent.
+            // The actual editing target is chatStore.activeAgentId (kept in sync by
+            // AgentBuilderProvider). Pass it so the server can route tool calls to
+            // the correct agent rather than the builder itself.
+            ...(executionContext.scope === 'agent_builder' && {
+              editingAgentId: this.#get().activeAgentId ?? undefined,
+            }),
+            // Same shape as `editingAgentId`, for the Group Agent Builder panel on
+            // the group Profile page. The builder conversation is keyed by the
+            // builtin builder agent (no groupId in its ConversationContext, so the
+            // message map key and the group's own chat stay separate), which left
+            // the server runtime with no idea which group it was editing.
+            // The context value wins, and every surface that opens this scope sets
+            // it from its own route/group: it is fixed for the run, so a mid-run
+            // navigation cannot make the server stamp a different group than the
+            // panel is reading from. The `activeGroupId` fallback is a last resort
+            // for a caller that forgot — it is sampled here, AFTER the async
+            // preflight above, so it can already be stale by this point.
+            ...(executionContext.scope === 'group_agent_builder' && {
+              editingGroupId: executionContext.editingGroupId ?? this.#get().activeGroupId,
+            }),
+            groupId: executionContext.groupId,
+            ...(initialTopicMetadata && { initialTopicMetadata }),
+            // Forward the group orchestration role so the server can stamp it onto
+            // the assistant message metadata. Without this the gateway-created
+            // supervisor turn loses its role on the step_start snapshot / refetch
+            // and renders as a generic assistant.
+            orchestrationRole: executionContext.orchestrationRole,
+            scope: executionContext.scope,
+            taskId,
+            threadId: executionContext.threadId,
+            topicId: executionContext.topicId,
+          },
+          ...desktopDeviceHints,
+          fileIds,
+          replacesOperationId,
+          mentionedAgents,
+          parentMessageId,
+          prompt: message,
+          resumeApproval,
+          resumeApprovals,
+          resumeToolResult,
+          selectedToolIds,
+          trigger: metadata?.trigger,
+          userInterventionConfig,
         },
-        ...desktopDeviceHints,
-        fileIds,
-        replacesOperationId,
-        mentionedAgents,
-        parentMessageId,
-        prompt: message,
-        resumeApproval,
-        resumeApprovals,
-        resumeToolResult,
-        selectedToolIds,
-        trigger: metadata?.trigger,
-        userInterventionConfig,
-      },
-      { signal: abortSignal },
-    );
+        { signal: abortSignal },
+      ));
 
     // Persistence is the ownership boundary. Notify before later UI synchronization awaits and
     // before handling a late abort so callers never delete a file already attached server-side.

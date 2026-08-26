@@ -1757,6 +1757,13 @@ export class TopicModel {
        */
       allowRunningOperationId?: string;
       /**
+       * A deterministic intervention reservation is an initializer fence, not
+       * a reentrant mutex. Its concurrent same-id caller must wait until the
+       * owner releases (or the lease expires) instead of entering preparation
+       * and overwriting an already-running continuation state.
+       */
+      allowSameReservationReentry?: boolean;
+      /**
        * Skip the `runningOperation` check entirely and serialize only on the
        * short reservation. Set by interactive sends: "don't run two foreground
        * turns at once" is a UX policy the client already owns end to end (queue
@@ -1786,7 +1793,13 @@ export class TopicModel {
         Number.isFinite(reservedAt) &&
         Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
 
-      if (reservation?.messageId === messageId && hasLiveReservation) return true;
+      if (
+        reservation?.messageId === messageId &&
+        hasLiveReservation &&
+        options?.allowSameReservationReentry !== false
+      ) {
+        return true;
+      }
 
       const runningOperation = existing.metadata?.runningOperation;
       const ownedRunningOperation =
@@ -1828,18 +1841,98 @@ export class TopicModel {
     });
 
   /**
+   * Repair the reconnect anchor after an intervention queue ACK. The same row
+   * lock also releases only this continuation's reservation, closing the crash
+   * window between provider ACK and execAgent's ordinary running-marker write.
+   */
+  repairAgentInterventionContinuation = async (params: {
+    active: boolean;
+    assistantMessageId: string;
+    continuationOperationId: string;
+    reservationId: string;
+    scope?: string | null;
+    sourceOperationId: string;
+    startedAt: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<'conflict' | 'repaired' | 'terminal'> =>
+    this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(and(eq(topics.id, params.topicId), this.ownership()))
+        .for('update');
+      if (!existing) return 'conflict';
+
+      const current = existing.metadata?.runningOperation;
+      const reservation = existing.metadata?.taskCallbackReservation;
+      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
+      const hasLiveReservation =
+        !!reservation &&
+        Number.isFinite(reservedAt) &&
+        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+      const ownsCurrent =
+        !current ||
+        current.operationId === params.sourceOperationId ||
+        current.operationId === params.continuationOperationId;
+      const ownsReservation = reservation?.messageId === params.reservationId;
+      if (hasLiveReservation && !ownsReservation) return 'conflict';
+      if (!ownsCurrent) {
+        if (ownsReservation) {
+          await tx
+            .update(topics)
+            .set({
+              metadata: { ...existing.metadata, taskCallbackReservation: null },
+              updatedAt: new Date(),
+            })
+            .where(and(eq(topics.id, params.topicId), this.ownership()));
+        }
+        return 'conflict';
+      }
+
+      const runningOperation = params.active
+        ? {
+            ...(current?.operationId === params.continuationOperationId ? current : {}),
+            assistantMessageId: params.assistantMessageId,
+            operationId: params.continuationOperationId,
+            scope: params.scope ?? undefined,
+            startedAt: params.startedAt,
+            threadId: params.threadId ?? undefined,
+          }
+        : null;
+      await tx
+        .update(topics)
+        .set({
+          metadata: {
+            ...existing.metadata,
+            runningOperation,
+            ...(ownsReservation || !hasLiveReservation ? { taskCallbackReservation: null } : {}),
+          },
+          updatedAt: new Date(),
+        })
+        .where(and(eq(topics.id, params.topicId), this.ownership()));
+
+      return params.active ? 'repaired' : 'terminal';
+    });
+
+  /**
    * Release only the caller's reservation. The ownership check prevents a
    * delayed finally block from clearing a newer callback's claim.
    */
-  releaseTaskCallbackReservation = async (id: string, messageId: string): Promise<void> => {
-    await this.db.transaction(async (tx) => {
+  releaseTaskCallbackReservation = async (
+    id: string,
+    messageId: string,
+  ): Promise<'absent' | 'foreign' | 'released'> =>
+    this.db.transaction(async (tx) => {
       const [existing] = await tx
         .select({ metadata: topics.metadata })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
 
-      if (existing?.metadata?.taskCallbackReservation?.messageId !== messageId) return;
+      const reservation = existing?.metadata?.taskCallbackReservation;
+      if (!reservation) return 'absent';
+      if (reservation.messageId !== messageId) return 'foreign';
 
       await tx
         .update(topics)
@@ -1850,8 +1943,8 @@ export class TopicModel {
           },
         })
         .where(and(eq(topics.id, id), this.ownership()));
+      return 'released';
     });
-  };
 
   /**
    * Arm a scheduled run on an owned topic: writes `metadata.scheduledRun` and
