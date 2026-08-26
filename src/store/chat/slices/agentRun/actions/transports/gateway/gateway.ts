@@ -856,12 +856,11 @@ export class GatewayActionImpl {
           // this callback rides on, so by now the mark is legitimately gone and
           // a settle from here would only ever return 'missing'.
           //
-          // What the server could NOT know is whether the user is watching. That
-          // is the one correction left to make, and it has to be a
-          // mark-independent write for exactly the reason above. The settle is
-          // still issued as a backstop — `clearRunningMark` is best-effort and
-          // swallows its failures, so on that path the mark is still here and
-          // this is what clears it.
+          // What the server could NOT know is whether the user is watching. The
+          // settle below performs that correction with the completed operation
+          // id: after the marker is gone, the model only accepts unread → active
+          // when `lastSettledOperationId` still matches. It also remains the
+          // backstop when `clearRunningMark` failed and left the marker in place.
           const viewing = this.#get().activeTopicId === result.topicId;
           topicService
             .settleRunningOperation(
@@ -870,29 +869,6 @@ export class GatewayActionImpl {
               viewing || !succeeded ? 'active' : 'unread',
             )
             .catch(console.error);
-          //
-          // Ownership-checked locally, because `updateTopicStatus` is an
-          // unconditional UPDATE with no server-side compare-and-set: a late
-          // close observing a stale marker would otherwise retire a newer run
-          // that another tab already started on this topic. That is exactly
-          // what routing this through the operation id buys on the settle
-          // above, and the correction must not give it back.
-          if (
-            (viewing || !succeeded) &&
-            !this.#isSupersededRunningOperation({
-              agentId: resolvedMessageContext.agentId,
-              groupId: resolvedMessageContext.groupId,
-              operationId: result.operationId,
-              topicId: result.topicId,
-            })
-          ) {
-            void this.#get().updateTopicStatus?.({
-              agentId: resolvedMessageContext.agentId,
-              groupId: resolvedMessageContext.groupId,
-              status: 'active',
-              topicId: result.topicId,
-            });
-          }
           // Also clear the local store copy — the server settle above does NOT
           // touch the Zustand topic map that useGatewayReconnect (and the sidebar
           // spinner) read. Mirror the same 'active' decision passed to the server
@@ -1119,19 +1095,6 @@ export class GatewayActionImpl {
               viewing || !succeeded ? 'active' : 'unread',
             )
             .catch(console.error);
-          // Mark-independent correction — see executeGatewayAgent's
-          // onSessionComplete: the runtime's `finish` already settled this topic
-          // to 'unread' before the terminal event arrived, so the settle above
-          // finds nothing and only the write below can flip a WATCHED topic
-          // back. Safe to leave unguarded HERE only because the whole branch is
-          // already behind `superseded`, which is the same ownership check.
-          if (viewing || !succeeded) {
-            void this.#get().updateTopicStatus?.({
-              agentId: context.agentId,
-              status: 'active',
-              topicId,
-            });
-          }
         }
         // Mirror into the local store — the server settle does NOT touch the
         // Zustand topic map that useGatewayReconnect (and the sidebar spinner)
