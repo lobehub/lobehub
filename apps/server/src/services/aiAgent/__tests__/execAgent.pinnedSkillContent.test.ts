@@ -397,10 +397,10 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(injected).toContain('guide.md');
   });
 
-  // Agent share: shared runs must not let a visitor enumerate the creator's
-  // broader skill set (names/descriptions) through `<available_skills>`.
-  // `SkillEngine.generate` only annotates activation state on its input array,
-  // so the share whitelist has to shrink the candidate pool itself, before
+  // Agent share: shared runs must only surface skills the share configuration
+  // allows through `<available_skills>`. Since `SkillEngine.generate` only
+  // annotates activation state on its input array rather than shrinking it,
+  // the share whitelist has to filter the candidate pool itself, before
   // `SkillEngine` ever sees it.
   describe('agent share skill whitelist', () => {
     const buildShareGate = (enabledToolIds: string[]) => ({

@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentShareModel } from '@/database/models/agentShare';
+import { VISITOR_TOPIC_PAGE_SIZE } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -19,7 +20,10 @@ export const agentShareConfigSchema = z
       })
       .strict()
       .optional(),
-    maxTopicsPerVisitor: z.number().int().positive(),
+    // Bounded by the visitor topic list page size (`TopicModel.queryBySender`),
+    // which has no cursor: a higher cap would let a visitor create topics that
+    // the list can never show again.
+    maxTopicsPerVisitor: z.number().int().positive().max(VISITOR_TOPIC_PAGE_SIZE),
     maxTurnsPerTopic: z.number().int().positive(),
   })
   .strict();

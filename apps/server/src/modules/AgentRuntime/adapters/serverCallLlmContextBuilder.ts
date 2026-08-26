@@ -117,9 +117,10 @@ export const buildServerCallLlmContext = async ({
     const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
     const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
     const agentShare = ctx.agentShare;
-    // Topic references are limited to the visitor's own topics in shared runs
-    // — the run itself executes as the creator, so ownership-only filtering
-    // on TopicModel is not enough to keep a reference scoped to the visitor.
+    // Topic references are limited to the visitor's own topics in shared runs.
+    // `TopicModel`'s built-in ownership scoping is not sufficient here — it
+    // must also be checked against the visitor/agent pairing of the active
+    // share, not just the DB row's owner.
     const isTopicVisibleToRun = (
       topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
     ): boolean => {
@@ -151,8 +152,9 @@ export const buildServerCallLlmContext = async ({
   // Fetch agent documents for context injection.
   // Share visitor runs never see agent context documents unless the share's
   // file gate explicitly grants read access — this mirrors
-  // `applyShareGateToAgentConfig`'s fail-closed handling of agentConfig.files,
-  // since ALWAYS-policy documents are fetched independently of agentConfig.
+  // `applyShareGateToAgentConfig`'s fail-closed handling of agentConfig.files.
+  // This source is fetched independently of agentConfig, so it needs its own
+  // gate check rather than inheriting the one already applied there.
   const agentDocumentsAllowedForShare =
     !ctx.agentShare || ctx.agentShare.filePermissionConfig?.agentFiles === 'read';
   let agentDocuments: AgentContextDocument[] | undefined;

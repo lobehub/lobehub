@@ -85,22 +85,46 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
       }
 
+      // Same independent-resolution gap applies to shared-agent visitor runs:
+      // `activateSkill` bypasses the share allowlist already enforced on the
+      // assembled tool set / `<available_skills>` pool unless it is re-checked
+      // here. A missing/empty allowlist allows nothing, matching how the tool
+      // set gate treats an unconfigured share.
+      const shareAllowedSkillIds = context.agentShare
+        ? new Set(context.agentShare.enabledToolIds ?? [])
+        : undefined;
+      const isSkillAllowedForShare = (identifier: string) =>
+        !shareAllowedSkillIds || shareAllowedSkillIds.has(identifier);
+
       skillsRuntime = new SkillsExecutionRuntime({
         // Same device gate as the skills runtime: device-only skills are
         // activatable in device-capable runs (matching <available_skills>),
         // with `activeDeviceId` as the fallback for callers without a plan.
         builtinSkills: filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
-        }).filter((skill) => !disabledSkillIds.has(skill.identifier)),
+        }).filter(
+          (skill) =>
+            !disabledSkillIds.has(skill.identifier) && isSkillAllowedForShare(skill.identifier),
+        ),
         service: {
-          findAll: () => skillModel.findAll(),
+          findAll: async () => {
+            const result = await skillModel.findAll();
+            const data = result.data.filter((skill) => isSkillAllowedForShare(skill.identifier));
+            return { ...result, data, total: data.length };
+          },
           findById: async (id) => {
             const skill = await skillModel.findById(id);
-            return skill && disabledSkillIds.has(skill.identifier) ? undefined : skill;
+            if (!skill) return undefined;
+            if (disabledSkillIds.has(skill.identifier)) return undefined;
+            if (!isSkillAllowedForShare(skill.identifier)) return undefined;
+            return skill;
           },
           findByName: async (name) => {
             const skill = await skillModel.findByName(name);
-            return skill && disabledSkillIds.has(skill.identifier) ? undefined : skill;
+            if (!skill) return undefined;
+            if (disabledSkillIds.has(skill.identifier)) return undefined;
+            if (!isSkillAllowedForShare(skill.identifier)) return undefined;
+            return skill;
           },
           readResource: async () => {
             throw new Error('readResource not available in tools runtime');

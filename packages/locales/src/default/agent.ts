@@ -394,32 +394,28 @@ export default {
   'share.budget.transferSuccess': 'Shared usage updated',
   'share.privacyWarning.confirm': 'Share via link',
   'share.privacyWarning.content':
-    'Signed-in users with the link can view this agent. Visitor conversations are not available yet. Please note:',
+    'Signed-in users with the link can chat with this agent in real time, using the usage allowance you assign to it. Please note:',
   'share.privacyWarning.doNotShowAgain': 'Do not show again',
   'share.privacyWarning.items.files':
-    'Agent files and knowledge bases remain private while shared links are view-only',
+    'Agent files and knowledge bases stay private unless you grant read access below',
   'share.privacyWarning.items.memory':
-    'Your memories remain private while shared links are view-only',
-  'share.privacyWarning.items.tools':
-    'Shared links cannot invoke tools while visitor conversations are unavailable',
+    'Your memories stay private unless you allow reading them below',
+  'share.privacyWarning.items.tools': 'Visitors can only use the tools you enable below',
   'share.privacyWarning.note': 'You can switch back to Private at any time to pause sharing.',
   'share.privacyWarning.title': 'Share this agent via link?',
-  'share.settings.limits.desc':
-    'Saved for future visitor conversations; shared links are currently view-only.',
+  'share.settings.limits.desc': 'Caps how much each visitor can use this shared agent.',
   'share.settings.limits.maxTopicsPerVisitor': 'Max conversations per visitor',
   'share.settings.limits.maxTurnsPerTopic': 'Max turns per conversation',
   'share.settings.limits.title': 'Visitor Limits',
   'share.settings.permissions.agentFiles': 'Agent files',
   'share.settings.permissions.allowReadMemory': 'Allow reading memory',
-  'share.settings.permissions.desc':
-    'Saved for future visitor conversations; shared links are currently view-only.',
+  'share.settings.permissions.desc': 'Controls what visitors can access during a shared chat.',
   'share.settings.permissions.fileAccess.none': 'No access',
   'share.settings.permissions.fileAccess.read': 'Read-only',
   'share.settings.permissions.knowledgeBase': 'Knowledge bases',
   'share.settings.permissions.title': 'Visitor Permissions',
   'share.settings.permissions.uploadAllowed': 'Allow visitors to upload files',
-  'share.settings.tools.desc':
-    'Saved for future visitor conversations; shared links are currently view-only.',
+  'share.settings.tools.desc': 'Only the tools you select here are available to visitors.',
   'share.settings.tools.empty': 'This agent has no tools configured yet.',
   'share.settings.tools.title': 'Tool Whitelist',
   'share.updateError': 'Failed to update share settings',
@@ -432,7 +428,7 @@ export default {
   'share.usage.visitors': 'Visitors',
   'share.visibility.link': 'Signed-in users with the link',
   'share.visibility.linkHint':
-    'Signed-in users with the link can view this agent. Visitor chat is not available yet.',
+    'Signed-in users with the link can chat with this agent, using the usage allowance and permissions you configure.',
   'share.visibility.private': 'Private',
   'share.visibility.privateHint': 'Only you can access this agent for now.',
   'share.visibility.title': 'Visibility',

@@ -140,7 +140,7 @@ beforeEach(() => {
   messageQueryMock.mockResolvedValue([]);
 });
 
-describe('buildServerCallLlmContext — refer_topic share gate (agent share IDOR fix)', () => {
+describe("buildServerCallLlmContext — refer_topic share gate limits topic references to the visitor's own topics", () => {
   it('injects the referenced topic content for a non-share run', async () => {
     topicFindByIdMock.mockResolvedValue({
       agentId: AGENT_ID,
@@ -187,7 +187,7 @@ describe('buildServerCallLlmContext — refer_topic share gate (agent share IDOR
     });
 
     const engineInput = serverMessagesEngineMock.mock.calls[0][0];
-    // No summary/recentMessages leaked — only the attacker-supplied tag echoed back.
+    // No summary/recentMessages leaked — only the referenced tag's own id/title echoed back.
     expect(engineInput.topicReferences).toEqual([
       { topicId: 'topic-private', topicTitle: 'Creator private topic' },
     ]);

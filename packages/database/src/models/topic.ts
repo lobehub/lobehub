@@ -104,6 +104,24 @@ export interface TopicListItem extends TopicItem {
   runStartedAt?: Date | null;
 }
 
+/**
+ * Visitor-facing topic DTO returned to a share visitor — deliberately narrower
+ * than `TopicItem`, which also carries the owning creator's userId, model/
+ * provider snapshot, cost/usage, and internal status/metadata.
+ */
+export interface VisitorTopicItem {
+  createdAt: Date;
+  id: string;
+  title: string | null;
+  updatedAt: Date;
+}
+
+/**
+ * Page size of the visitor topic list. The visitor surface has no cursor, so
+ * `maxTopicsPerVisitor` is validated against this bound.
+ */
+export const VISITOR_TOPIC_PAGE_SIZE = 50;
+
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
@@ -1041,13 +1059,23 @@ export class TopicModel {
    * constructed with the creator's userId (visitor topics carry it), so the
    * caller — the shareChat router — must have already authorized the visitor
    * via the share access check; `senderId` is the only per-visitor boundary.
+   *
+   * Selects a visitor-facing DTO instead of the full row: the visitor surface
+   * only renders id/title, and the row also carries creator-only fields
+   * (owning userId, model/provider snapshot, cost/usage, internal status and
+   * metadata) that must never reach a share visitor.
    */
   queryBySender = async (
     { agentId, senderId }: { agentId: string; senderId: string },
-    { pageSize = 50 }: { pageSize?: number } = {},
-  ): Promise<TopicItem[]> => {
+    { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
+  ): Promise<VisitorTopicItem[]> => {
     return this.db
-      .select()
+      .select({
+        createdAt: topics.createdAt,
+        id: topics.id,
+        title: topics.title,
+        updatedAt: topics.updatedAt,
+      })
       .from(topics)
       .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
       .orderBy(desc(topics.updatedAt))

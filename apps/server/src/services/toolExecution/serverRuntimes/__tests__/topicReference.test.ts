@@ -318,4 +318,106 @@ describe('topicReferenceRuntime', () => {
       expect(result.content).toContain('**Assistant**: Real message');
     });
   });
+
+  describe('getTopicContext — agent share ownership gate', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("limits topic references to the visitor's own topics: rejects a topic outside the share", async () => {
+      const context: ToolExecutionContext = {
+        agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      };
+      const runtime = topicReferenceRuntime.factory(context);
+
+      // Belongs to a different visitor/agent pairing than the active share.
+      mockTopicModelFindById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-out-of-scope',
+        senderId: 'someone-else',
+        title: 'Not visible',
+      });
+
+      const result = await runtime.getTopicContext({ topicId: 'topic-out-of-scope' });
+
+      // Same "not found" shape as a missing topic — must not reveal existence.
+      expect(result).toEqual({
+        content: 'Topic not found: topic-out-of-scope',
+        success: false,
+      });
+      expect(mockMessageModelQuery).not.toHaveBeenCalled();
+    });
+
+    it("limits topic references to the visitor's own topics: rejects a topic on a different agent", async () => {
+      const context: ToolExecutionContext = {
+        agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      };
+      const runtime = topicReferenceRuntime.factory(context);
+
+      mockTopicModelFindById.mockResolvedValue({
+        agentId: 'agent-2',
+        id: 'topic-other-agent',
+        senderId: 'visitor-1',
+        title: 'Not visible',
+      });
+
+      const result = await runtime.getTopicContext({ topicId: 'topic-other-agent' });
+
+      expect(result).toEqual({
+        content: 'Topic not found: topic-other-agent',
+        success: false,
+      });
+    });
+
+    it('allows a topic reference that matches the active share', async () => {
+      const context: ToolExecutionContext = {
+        agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      };
+      const runtime = topicReferenceRuntime.factory(context);
+
+      mockTopicModelFindById.mockResolvedValue({
+        agentId: 'agent-1',
+        historySummary: 'Summary for the visitor own topic',
+        id: 'topic-in-scope',
+        senderId: 'visitor-1',
+        title: 'Visible Topic',
+      });
+
+      const result = await runtime.getTopicContext({ topicId: 'topic-in-scope' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('# Topic: Visible Topic');
+      expect(result.content).toContain('Summary for the visitor own topic');
+    });
+
+    it('is not affected by the ownership gate outside a share run', async () => {
+      const context: ToolExecutionContext = {
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'user-1',
+      };
+      const runtime = topicReferenceRuntime.factory(context);
+
+      // No senderId/agentId match required when there is no active share.
+      mockTopicModelFindById.mockResolvedValue({
+        historySummary: 'Regular summary',
+        id: 'topic-regular',
+        title: 'Regular Topic',
+      });
+
+      const result = await runtime.getTopicContext({ topicId: 'topic-regular' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Regular summary');
+    });
+  });
 });

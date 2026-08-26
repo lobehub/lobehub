@@ -3657,10 +3657,11 @@ export class AiAgentService {
     // Share whitelist filters the full candidate set (pinned + mentioned +
     // internal additions) before manifest discovery. This only trims which
     // plugin ids get *activated*; the separate skill candidate pool below
-    // (`skills`, consumed by `SkillEngine`) is filtered against the same
-    // whitelist on its own, since `SkillEngine.generate` does not filter its
-    // `skills` array by the plugin id list it is given. The operationToolSet
-    // snapshot then carries the restricted surface into every later step.
+    // (`skills`, consumed by `SkillEngine`) needs its own pass against the
+    // same whitelist, since building the skill list is a distinct step from
+    // `SkillEngine.generate` and is not scoped by the plugin id list on its
+    // own. The operationToolSet snapshot then carries the restricted surface
+    // into every later step.
     if (shareGate) {
       agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
     }
@@ -5303,13 +5304,12 @@ export class AiAgentService {
       // activatable — mirrors the tool-manifest treatment above (installedPlugins/
       // additionalManifests), which this array had never received.
       //
-      // Shared runs only see skills allowed by the share configuration: a
-      // share visitor must not be able to enumerate the creator's broader
-      // skill set (names/descriptions) just because `SkillEngine.generate`
-      // only annotates activation state rather than shrinking the candidate
-      // pool itself. Reuse `filterPluginsByShareGate` (id-list intersection,
-      // not tool-specific) to keep this pool the single enforcement point —
-      // an empty/missing whitelist collapses it to nothing.
+      // Shared runs only see skills allowed by the share configuration. The
+      // candidate pool must be trimmed here rather than left to
+      // `SkillEngine.generate`, which annotates activation state on its input
+      // rather than shrinking it. Reuse `filterPluginsByShareGate` (id-list
+      // intersection, not tool-specific) to keep this pool the single
+      // enforcement point — an empty/missing whitelist collapses it to nothing.
       const shareAllowedSkillIds = shareGate
         ? new Set(
             filterPluginsByShareGate(
@@ -5384,6 +5384,10 @@ export class AiAgentService {
         agentShare: shareGate
           ? {
               agentId: shareGate.agentId,
+              // Mirrors `shareConfig.enabledToolIds` so tool runtimes resolved
+              // outside `toolManifestMap` (e.g. `activateSkill`, which queries
+              // builtin/DB skills by name) can enforce the same allowlist.
+              enabledToolIds: shareGate.shareConfig.enabledToolIds,
               // Threaded through so per-step context building can re-apply the
               // same fail-closed file gate as `applyShareGateToAgentConfig` to
               // sources fetched independently of `agentConfig`.

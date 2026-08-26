@@ -13,16 +13,45 @@ interface GetTopicContextParams {
   topicId: string;
 }
 
+interface TopicReferenceShareContext {
+  agentId: string;
+  visitorUserId: string;
+}
+
 class TopicReferenceExecutionRuntime {
   private db: LobeChatDatabase;
   private userId: string;
   private workspaceId?: string;
+  private shareContext?: TopicReferenceShareContext;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    shareContext?: TopicReferenceShareContext,
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.shareContext = shareContext;
   }
+
+  /**
+   * A shared-agent visitor run reads the database as the creator, so
+   * ownership-only filtering on `TopicModel` is not enough to keep a topic
+   * reference scoped to the visitor: it must also match the topic to this
+   * specific share (visitor + agent), mirroring the same check applied to
+   * automatic topic-reference injection in `buildServerCallLlmContext`.
+   */
+  private isTopicVisibleToRun = (
+    topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
+  ): boolean => {
+    if (!this.shareContext) return true;
+    return (
+      topic?.senderId === this.shareContext.visitorUserId &&
+      topic?.agentId === this.shareContext.agentId
+    );
+  };
 
   getTopicContext = async (params: GetTopicContextParams): Promise<BuiltinServerRuntimeOutput> => {
     const { topicId } = params;
@@ -35,7 +64,10 @@ class TopicReferenceExecutionRuntime {
       const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
       const topic = await topicModel.findById(topicId);
 
-      if (!topic) {
+      // Same "not found" response for a missing topic and one outside the
+      // visitor's scope, so this tool never leaks whether an out-of-scope
+      // topic id exists on the creator's account.
+      if (!topic || !this.isTopicVisibleToRun(topic)) {
         return { content: `Topic not found: ${topicId}`, success: false };
       }
 
@@ -93,6 +125,9 @@ export const topicReferenceRuntime: ServerRuntimeRegistration = {
       context.serverDB,
       context.userId,
       context.workspaceId,
+      context.agentShare
+        ? { agentId: context.agentShare.agentId, visitorUserId: context.agentShare.visitorUserId }
+        : undefined,
     );
   },
   identifier: TopicReferenceIdentifier,

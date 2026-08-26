@@ -156,6 +156,23 @@ export interface ToolExecutionContext {
    */
   agentMember?: ServerAgentMemberRunner;
   /**
+   * Shared-agent visitor marker (agent share C4), forwarded from
+   * `RuntimeExecutorContext.agentShare`. Tool runtimes that resolve their
+   * target independently of `toolManifestMap` (e.g. `activateSkill` querying
+   * skills by name, `lobe-topic-reference` querying a topic by id) must apply
+   * the same allowlist/ownership rule here that the assembled tool set and
+   * per-step context builder already enforce elsewhere. Undefined for
+   * non-share runs.
+   */
+  agentShare?: {
+    /** Id of the shared agent this run belongs to. */
+    agentId: string;
+    /** Share whitelist; an empty/missing list allows nothing. */
+    enabledToolIds?: string[];
+    /** The signed-in visitor driving this run. */
+    visitorUserId: string;
+  };
+  /**
    * Visibility of the agent executing this tool call. Resolved once per tool
    * call in the runtime executor. Tool runtimes that persist agent side-effects
    * (documents, tasks, etc.) forward this so private-agent output inherits
