@@ -12,6 +12,7 @@ const mockDeleteByAgentId = vi.fn();
 const mockGetByAgentId = vi.fn();
 const mockUpdateConfig = vi.fn();
 const mockUpdateVisibility = vi.fn();
+const mockGetAgentConfigById = vi.fn();
 
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: vi.fn(() => ({
@@ -20,6 +21,12 @@ vi.mock('@/database/models/agentShare', () => ({
     getByAgentId: mockGetByAgentId,
     updateConfig: mockUpdateConfig,
     updateVisibility: mockUpdateVisibility,
+  })),
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(() => ({
+    getAgentConfigById: mockGetAgentConfigById,
   })),
 }));
 
@@ -41,6 +48,7 @@ describe('agentShareRouter', () => {
     mockGetByAgentId.mockResolvedValue(share);
     mockUpdateConfig.mockResolvedValue(share);
     mockUpdateVisibility.mockResolvedValue(share);
+    mockGetAgentConfigById.mockResolvedValue({ agencyConfig: null, model: 'gpt-4o' });
   });
 
   it('requires authentication for share management', async () => {
@@ -142,5 +150,67 @@ describe('agentShareRouter', () => {
     await expect(
       caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  // A share published for a heterogeneous agent looks live in the owner's
+  // settings but the server unconditionally rejects every visitor send
+  // against it (`ShareHeterogeneousAgentUnsupported`, see
+  // `AiAgentService.execAgent`) — these mutations must fail-closed before
+  // that state can be reached at all, regardless of which client path (tab
+  // switcher or direct route) triggered them.
+  describe('heterogeneous agent share gate', () => {
+    it('rejects enableShare for an agent pinned via agencyConfig.heterogeneousProvider', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+        model: 'claude-code',
+      });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.enableShare({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects enableShare for a legacy bare heterogeneous model id', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ agencyConfig: null, model: 'codex' });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(caller.enableShare({ agentId: 'agent-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects switching visibility to link for a heterogeneous agent', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+        model: 'codex',
+      });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(
+        caller.updateVisibility({ agentId: 'agent-1', visibility: 'link' }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+    });
+
+    it('still allows reverting a heterogeneous agent share back to private', async () => {
+      mockGetAgentConfigById.mockResolvedValue({
+        agencyConfig: { heterogeneousProvider: { type: 'codex' } },
+        model: 'codex',
+      });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(
+        caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' }),
+      ).resolves.toEqual(share);
+      expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'private');
+    });
   });
 });
