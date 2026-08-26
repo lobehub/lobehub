@@ -1,4 +1,8 @@
-import { AGENT_GROUP_CREATION_ENABLED, SOCIAL_URL } from '@lobechat/business-const';
+import {
+  AGENT_GROUP_CREATION_ENABLED,
+  FOOTER_HIDDEN_MENU_KEYS,
+  SOCIAL_URL,
+} from '@lobechat/business-const';
 import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import {
@@ -168,30 +172,36 @@ const MainMenu = memo(() => {
         >
           {t('cmdk.contactUs')}
         </CommandItem>
-        <CommandItem
-          icon={<GithubIcon />}
-          keywords={t('cmdk.keywords.submitIssue').split(' ')}
-          value="submit-issue"
-          onSelect={() => handleExternalLink(FEEDBACK)}
-        >
-          {t('cmdk.submitIssue')}
-        </CommandItem>
-        <CommandItem
-          icon={<Star />}
-          keywords={t('cmdk.keywords.starGitHub').split(' ')}
-          value="star-github"
-          onSelect={() => handleExternalLink(SOCIAL_URL.github)}
-        >
-          {t('cmdk.starOnGitHub')}
-        </CommandItem>
-        <CommandItem
-          icon={<DiscordIcon />}
-          keywords={t('cmdk.keywords.discord').split(' ')}
-          value="discord"
-          onSelect={() => handleExternalLink(SOCIAL_URL.discord)}
-        >
-          {t('cmdk.communitySupport')}
-        </CommandItem>
+        {!FOOTER_HIDDEN_MENU_KEYS.includes('feedback') && (
+          <CommandItem
+            icon={<GithubIcon />}
+            keywords={t('cmdk.keywords.submitIssue').split(' ')}
+            value="submit-issue"
+            onSelect={() => handleExternalLink(FEEDBACK)}
+          >
+            {t('cmdk.submitIssue')}
+          </CommandItem>
+        )}
+        {!FOOTER_HIDDEN_MENU_KEYS.includes('github') && (
+          <CommandItem
+            icon={<Star />}
+            keywords={t('cmdk.keywords.starGitHub').split(' ')}
+            value="star-github"
+            onSelect={() => handleExternalLink(SOCIAL_URL.github)}
+          >
+            {t('cmdk.starOnGitHub')}
+          </CommandItem>
+        )}
+        {!FOOTER_HIDDEN_MENU_KEYS.includes('discord') && (
+          <CommandItem
+            icon={<DiscordIcon />}
+            keywords={t('cmdk.keywords.discord').split(' ')}
+            value="discord"
+            onSelect={() => handleExternalLink(SOCIAL_URL.discord)}
+          >
+            {t('cmdk.communitySupport')}
+          </CommandItem>
+        )}
       </Command.Group>
     </>
   );
