@@ -518,6 +518,15 @@ export class GatewayService {
     // blocking every restart recovery on an unrelated host's outage costs far
     // more availability than the duplicate window it would avoid — and that
     // window only opens if the outage overlaps an actual migration.
+    // What this host says it can serve. Routing a platform here does not mean
+    // it can run it, and handing over credentials for a connection it will
+    // reject is handing them over for nothing. The reconcile already refuses
+    // to move such a platform; this refuses to arm it.
+    const declared = await getMessageGatewayClientForHost(host).getCapabilities();
+    const declaredPlatforms = new Map<MessageGatewayHost, Set<string> | null>([
+      [host, declared ? new Set(declared.platforms ?? []) : null],
+    ]);
+
     const elsewhere = new Set<string>();
     let peersProven = true;
     for (const other of getConfiguredMessageGatewayHosts()) {
@@ -552,6 +561,10 @@ export class GatewayService {
     let complete = desiredComplete;
 
     for (const entry of this.hostDesiredSlice(desired, host).values()) {
+      if (this.hostRefusesPlatform(declaredPlatforms, host, entry.platform)) {
+        excluded++;
+        continue;
+      }
       if (Object.keys(entry.provider.credentials).length === 0) {
         excluded++;
         continue;
@@ -572,6 +585,14 @@ export class GatewayService {
       if (definition.connectionMode !== 'polling') continue;
       const platform = definition.id;
       if (resolveMessageGatewayHost(platform) !== host) continue;
+      if (this.hostRefusesPlatform(declaredPlatforms, host, platform)) {
+        log(
+          'Gateway pull[%s]: host does not serve %s, withholding its credentials',
+          host,
+          platform,
+        );
+        continue;
+      }
 
       let links: DecryptedMessengerAccountLink[];
       try {

@@ -1832,6 +1832,34 @@ describe('GatewayService', () => {
       });
     });
 
+    // Routing a platform here does not mean this host can run it. Handing over
+    // credentials for a connection it will reject arms nothing and exposes
+    // them for no reason — and the reconcile already refuses to move such a
+    // platform, so leaving the gap here would put the two out of step.
+    it('withholds credentials for a platform this host says it cannot serve', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['wechat'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockNodeGatewayClient.getCapabilities.mockResolvedValue({
+        platforms: ['whatsapp-baileys'],
+      });
+      mockResolveConnectionMode.mockReturnValue('polling');
+      mockFindEnabledByPlatform.mockResolvedValue([]);
+      mockFindAllLinksByPlatform.mockResolvedValue([
+        {
+          applicationId: 'wx-app',
+          credentials: { baseUrl: 'https://ilink', botId: 'bot-1', botToken: 'tok-1' },
+          tenantId: 't1',
+          userId: 'u1',
+        },
+      ]);
+      mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+
+      const result = await service.listDesiredConnectionsForHost('node');
+
+      expect(result.connections).toEqual([]);
+    });
+
     // Today's production shape: the node URL is configured but no platform is
     // routed there yet. Deploying the node gateway must not drag the other
     // host's fleet over — it should be handed nothing at all.
