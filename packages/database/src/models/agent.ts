@@ -83,6 +83,7 @@ import {
 } from '../utils/agentKnowledgeMounts';
 import { rehomeAgentLabelsForRecipient } from '../utils/agentLabelsOwnership';
 import { rehomeAgentQuotaBindingsForRecipient } from '../utils/agentQuotaBindings';
+import { bumpAgentShareGeneration } from '../utils/agentShareGeneration';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { resolveGroupMembershipType } from '../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
@@ -230,8 +231,24 @@ export interface AgentModelOptions {
    * keeps its current behavior; only construction sites that can reach the
    * server layer (tRPC procedures, tool executors) pass a real callback. See
    * LOBE-11930 hole 2.
+   *
+   * `targetWorkspaceId` is populated ONLY by `transferAgents` (undefined —
+   * i.e. "stay in personal scope" — from every other caller): a transfer
+   * moves the reset agent's topics into that workspace in the SAME
+   * transaction, and unlike `writeAgentConfigWithShareReset`'s reset (which
+   * leaves every row where it already was), the post-commit
+   * `interruptActiveShareRuns` re-query this callback schedules needs to run
+   * against the NEW scope, or it silently finds nothing. Re-querying — not
+   * snapshotting inside the transaction — stays correct here specifically
+   * because a transfer only MOVES rows, it never destroys them; contrast
+   * `onShareRunsInterrupted` below, whose snapshot exists because `delete()`
+   * DOES destroy them. See LOBE-11930.
    */
-  onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  onShareReset?: (
+    agentId: string,
+    revocationGeneration: number,
+    targetWorkspaceId?: string | null,
+  ) => void;
 
   /**
    * Called with the snapshot of Agent Share visitor runs that were still
@@ -253,7 +270,11 @@ export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
-  private onShareReset?: (agentId: string, revocationGeneration: number) => void;
+  private onShareReset?: (
+    agentId: string,
+    revocationGeneration: number,
+    targetWorkspaceId?: string | null,
+  ) => void;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
@@ -2196,7 +2217,14 @@ export class AgentModel {
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
-    return this.db.transaction(async (trx) => {
+    // Populated only for an agent whose share ACTUALLY flipped to `private`
+    // below (not merely "was eligible") — read post-commit to fire
+    // `onShareReset` once per reset agent. Same commit-then-notify split as
+    // `writeAgentConfigWithShareReset`: interrupting a runtime operation is a
+    // side effect that must never fire on a rolled-back transfer.
+    const shareResetGenerations = new Map<string, number>();
+
+    const result = await this.db.transaction(async (trx) => {
       // 1. Verify all agents exist and belong to current scope. FOR UPDATE so
       // two concurrent transfers of the same agent serialize HERE, before the
       // pending-job guard below: the loser re-reads after the winner commits
@@ -2214,11 +2242,35 @@ export class AgentModel {
       // A link share belongs to the personal scope in which it was enabled.
       // Reset it before leaving that scope so moving the same agent back later
       // cannot silently reactivate a previously distributed URL.
+      //
+      // Routed through the SAME generation-bump + `onShareReset` contract
+      // every other restrictive share write uses (`writeAgentConfigWithShareReset`,
+      // `AgentShareModel.updateVisibility` / `deleteByAgentId`) instead of a
+      // bare visibility flip: without bumping `agentShareGenerations`, a
+      // reservation staked (`AgentShareModel.assertRunnableForVisitor`) or an
+      // operation already running under the pre-transfer grants would survive
+      // the move — `revokeReservations` / `findActiveVisitorRunTopics` only
+      // sweep generations strictly older than the one a revocation bumps TO,
+      // so a bare flip with no bump leaves them nothing to match. The row
+      // lock on `agents` taken in step 1 above (still held here, same `trx`)
+      // is what `bumpAgentShareGeneration` requires. `.returning()` +
+      // `ne(visibility, 'private')` mirror `writeAgentConfigWithShareReset`'s
+      // own guard: only an ACTUAL transition schedules a post-commit
+      // interrupt, so a share that was already private (or never existed)
+      // never pays for one. See LOBE-11930.
       if (!this.workspaceId && targetWorkspaceId) {
-        await trx
+        const resetShares = await trx
           .update(agentShares)
           .set({ updatedAt: new Date(), visibility: 'private' })
-          .where(inArray(agentShares.agentId, agentIds));
+          .where(and(inArray(agentShares.agentId, agentIds), ne(agentShares.visibility, 'private')))
+          .returning({ agentId: agentShares.agentId });
+
+        for (const { agentId: resetAgentId } of resetShares) {
+          shareResetGenerations.set(
+            resetAgentId,
+            await bumpAgentShareGeneration(trx, resetAgentId),
+          );
+        }
       }
 
       // 1a. An unfinished backfill still owns these agents' message rewrite —
@@ -2677,6 +2729,19 @@ export class AgentModel {
         transferJobId,
       }));
     });
+
+    // Fired only after the transaction above has committed, once per agent
+    // whose share was actually reset — see `shareResetGenerations`'s JSDoc
+    // above and `writeAgentConfigWithShareReset`'s `onShareReset` timing.
+    // `targetWorkspaceId` is passed through so the post-commit interrupt
+    // re-queries the agent's ALREADY-MOVED topics in their new scope instead
+    // of the stale personal one — see `AgentModelOptions.onShareReset`'s
+    // JSDoc.
+    for (const [resetAgentId, revocationGeneration] of shareResetGenerations) {
+      this.onShareReset?.(resetAgentId, revocationGeneration, targetWorkspaceId);
+    }
+
+    return result;
   };
 
   /**

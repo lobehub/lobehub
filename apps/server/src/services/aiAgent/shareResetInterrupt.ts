@@ -23,10 +23,21 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * (apps/server), so every caller that CAN reach the server layer must build
  * and pass this callback down through `AgentModel`/`SessionModel`'s
  * constructor options instead. See LOBE-11930 hole 2.
+ *
+ * `targetWorkspaceId`, when passed by the caller (`AgentModel.transferAgents`
+ * / `AgentGroupRepository.transferToWorkspace`), scopes the `AiAgentService`
+ * — and therefore `interruptActiveShareRuns`'s own `TopicModel` re-query — to
+ * the workspace the transfer just moved the agent's topics into, instead of
+ * the source personal scope every other caller of this builder implicitly
+ * queries. Without it, a transfer's post-commit sweep would query the OLD
+ * (now empty) scope and silently find nothing for an already-running
+ * operation. `revokeReservations`'s own sweep (step 1 of
+ * `interruptActiveShareRuns`) is unaffected either way — it matches on
+ * `agentShareRunReservations.agentId`, which never changes. See LOBE-11930.
  */
 export const scheduleShareRunInterruptOnReset =
   (serverDB: LobeChatDatabase, ownerId: string) =>
-  (agentId: string, revocationGeneration: number): void => {
+  (agentId: string, revocationGeneration: number, targetWorkspaceId?: string | null): void => {
     after(async () => {
       // Dynamic import, not a static one: `services/agent/index.ts` (one of
       // this callback's callers) is itself imported by `./index.ts`
@@ -40,7 +51,9 @@ export const scheduleShareRunInterruptOnReset =
       // at write time and threaded straight through — see
       // `interruptActiveShareRuns`'s JSDoc for why it must never be re-read
       // here instead.
-      await new AiAgentService(serverDB, ownerId)
+      await new AiAgentService(serverDB, ownerId, {
+        workspaceId: targetWorkspaceId ?? undefined,
+      })
         .interruptActiveShareRuns(agentId, revocationGeneration)
         .catch((error) =>
           console.error('[agentConfigShareReset] interruptActiveShareRuns failed', error),

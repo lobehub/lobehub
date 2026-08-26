@@ -12,9 +12,11 @@ import {
   agents as agentsTable,
   chatGroups,
   chatGroupsAgents,
+  topics,
   users,
   workspaces,
 } from '../../schemas';
+import { AgentShareModel } from '../agentShare';
 import { ChatGroupModel } from '../chatGroup';
 
 const userId = 'test-user';
@@ -1152,6 +1154,78 @@ describe('ChatGroupModel', () => {
         .from(agentsTable)
         .where(inArray(agentsTable.id, ['owned-supervisor', 'owned-member', 'referenced-member']));
       expect(survivors).toEqual([{ id: 'referenced-member' }]);
+    });
+
+    // Regression for LOBE-11930's group-delete bypass: `deleteOwnedMemberAgents`
+    // removes an owned member's `agents` row directly, cascading its
+    // `agentShares` / `agentShareRunReservations` rows away with it — but an
+    // owned member is an ordinary personal agent as far as Agent Share is
+    // concerned and can carry its own `link` share the same as any other. A
+    // group delete must snapshot and interrupt its in-flight visitor runs
+    // exactly like `AgentModel.delete()` does, not silently cascade the
+    // active run's runtime operation away with no notice to the visitor.
+    it('snapshots and reports in-flight Agent Share visitor runs on an owned member before deleting it', async () => {
+      const shareOwnerId = 'chat-group-share-owner';
+      const visitorId = 'chat-group-share-visitor';
+      const groupId = 'share-cleanup-group';
+      const supervisorId = 'share-cleanup-supervisor';
+
+      await serverDB.insert(users).values([{ id: shareOwnerId }]);
+
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(chatGroups)
+          .values({ id: groupId, title: 'Share Cleanup', userId: shareOwnerId });
+        await trx
+          .insert(agentsTable)
+          .values([{ id: supervisorId, title: 'Supervisor', userId: shareOwnerId, virtual: true }]);
+        await trx.insert(chatGroupsAgents).values([
+          {
+            agentId: supervisorId,
+            chatGroupId: groupId,
+            role: 'supervisor',
+            userId: shareOwnerId,
+          },
+        ]);
+      });
+
+      const agentShareModel = new AgentShareModel(serverDB, shareOwnerId);
+      await agentShareModel.create(supervisorId, 'link');
+
+      const operationId = 'op-share-cleanup-group';
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({ agentId: supervisorId, senderId: visitorId, userId: shareOwnerId })
+        .returning();
+      await agentShareModel.assertRunnableForVisitor({
+        agentId: supervisorId,
+        expectedGeneration: 1,
+        operationId,
+        topicId: topic.id,
+        visitorUserId: visitorId,
+      });
+      const confirmed = await agentShareModel.confirmReservation({
+        operationId,
+        runningOperation: {
+          assistantMessageId: 'msg',
+          operationId,
+          startedAt: new Date().toISOString(),
+        },
+        topicId: topic.id,
+      });
+      expect(confirmed).toBe(true);
+
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new ChatGroupModel(serverDB, shareOwnerId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await modelWithCallback.delete(groupId);
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledTimes(1);
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([{ operationId, topicId: topic.id }]);
+
+      await serverDB.delete(users).where(eq(users.id, shareOwnerId));
     });
 
     it('rolls back group deletion when an owned-agent deletion guard rejects', async () => {

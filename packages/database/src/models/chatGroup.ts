@@ -40,6 +40,7 @@ import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from './agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from './agentTransferJob';
+import { type ActiveShareRun, TopicModel } from './topic';
 
 /** Slugs owned by builtin provisioning; a group delete must never reach one. */
 const RESERVED_BUILTIN_AGENT_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
@@ -59,16 +60,65 @@ export const CHAT_GROUP_TRANSFER_HIDDEN_MEMBER = 'CHAT_GROUP_TRANSFER_HIDDEN_MEM
 
 export type AgentDeletionGuard = (agentId: string, executor: LobeChatDatabase) => Promise<void>;
 
+export interface ChatGroupModelOptions {
+  /**
+   * Same contract as `AgentModelOptions.onShareRunsInterrupted`
+   * (`packages/database/src/models/agent.ts`) — `delete()` / `deleteAll()`
+   * below remove a group's OWNED member agents directly (`deleteOwnedMemberAgents`),
+   * bypassing `AgentModel.delete()` and the free Agent Share interrupt it
+   * gives every other deletion path. An owned member is an ordinary agent in
+   * the group's own scope and can carry its own `link` share the same as any
+   * other personal agent, so a group delete must snapshot and interrupt its
+   * visitor runs exactly like `AgentModel.delete()` does, not silently cascade
+   * them away. Optional and defaulted to a no-op so every EXISTING `new
+   * ChatGroupModel(...)` call site keeps its current behavior; only
+   * construction sites that can reach the server layer pass a real callback.
+   * See LOBE-11930.
+   */
+  onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
+}
+
 export class ChatGroupModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: ChatGroupModelOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
   }
+
+  /**
+   * Snapshot in-flight Agent Share visitor runs for a batch of OWNED member
+   * agents BEFORE `deleteOwnedMemberAgents` cascades their topic rows away —
+   * mirrors `AgentModel.delete`'s single-agent snapshot (see that method's
+   * JSDoc). Only OWNED members can carry their own personal-scope share
+   * (`AgentShareModel.ownership` requires `workspaceId IS NULL`); a workspace
+   * group's owned members are workspace-scoped and never have one, so this is
+   * a no-op there — but the check stays unconditional rather than gated on
+   * `!this.workspaceId` so a future relaxation of that constraint doesn't
+   * silently regain this bypass.
+   */
+  private snapshotOwnedMemberShareRuns = async (
+    executor: LobeChatDatabase,
+    ownedAgentIds: string[],
+  ): Promise<ActiveShareRun[]> => {
+    if (ownedAgentIds.length === 0) return [];
+
+    const topicModel = new TopicModel(executor, this.userId);
+    const runs = await Promise.all(
+      ownedAgentIds.map((agentId) => topicModel.findActiveVisitorRunTopics(agentId)),
+    );
+    return runs.flat();
+  };
 
   private ownership = () =>
     buildWorkspaceWhere(
@@ -811,17 +861,24 @@ export class ChatGroupModel {
     id: string,
     deletionGuard?: AgentDeletionGuard,
   ): Promise<{ deletedOwnedAgentIds: string[]; group: ChatGroupItem }> {
-    return this.db.transaction(async (trx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
       // Collect BEFORE the delete: the junction rows cascade away with the
       // group, taking the only record of which agents were group-owned.
       const ownedAgentIds = await this.findOwnedMemberAgentIds(trx, [id]);
 
-      const [result] = await trx
+      // Snapshot BEFORE `deleteOwnedMemberAgents` cascades the owned members'
+      // topic rows away — see `snapshotOwnedMemberShareRuns`'s JSDoc and
+      // LOBE-11930.
+      activeShareRuns = await this.snapshotOwnedMemberShareRuns(trx, ownedAgentIds);
+
+      const [deletedGroup] = await trx
         .delete(chatGroups)
         .where(and(eq(chatGroups.id, id), this.ownership()))
         .returning();
 
-      if (!result) {
+      if (!deletedGroup) {
         throw new Error('Chat group not found or access denied');
       }
 
@@ -833,11 +890,22 @@ export class ChatGroupModel {
         deletionGuard,
       );
 
-      return { deletedOwnedAgentIds, group: result };
+      return { deletedOwnedAgentIds, group: deletedGroup };
     });
+
+    // Fired only after the transaction above has committed — mirrors
+    // `AgentModel.delete`'s `onShareRunsInterrupted` timing, for the same
+    // reason: interrupting a runtime operation must never fire on a rollback.
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return result;
   }
 
   async deleteAll(deletionGuard?: AgentDeletionGuard): Promise<void> {
+    let activeShareRuns: ActiveShareRun[] = [];
+
     await this.db.transaction(async (trx) => {
       const groupIds = await trx
         .select({ id: chatGroups.id })
@@ -849,10 +917,16 @@ export class ChatGroupModel {
         groupIds.map((group) => group.id),
       );
 
+      activeShareRuns = await this.snapshotOwnedMemberShareRuns(trx, ownedAgentIds);
+
       await trx.delete(chatGroups).where(this.ownership());
 
       await this.deleteOwnedMemberAgents(trx, ownedAgentIds, deletionGuard);
     });
+
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
   }
 
   /**

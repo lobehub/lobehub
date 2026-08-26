@@ -42,6 +42,7 @@ import {
   topics,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { bumpAgentShareGeneration } from '../../utils/agentShareGeneration';
 import { insertInBatches, splitCrossBatchSelfReferences } from '../../utils/batchInsert';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
 import { copyMessagesInDatabase, type IdPair } from '../../utils/copyMessagesInDatabase';
@@ -122,6 +123,34 @@ export interface CreateGroupWithSupervisorResult {
   supervisorAgentId: string;
 }
 
+export interface AgentGroupRepositoryOptions {
+  /**
+   * Forwarded to the same generation-bump + post-commit notify contract
+   * `AgentModelOptions.onShareReset` uses (see that option's JSDoc in
+   * `packages/database/src/models/agent.ts`) — `transferToWorkspace` is this
+   * repository's own writer of a group-owned agent's `agentShares` row, and
+   * needs the identical hook to schedule `AiAgentService.interruptActiveShareRuns`
+   * post-commit. Optional and defaulted to a no-op so every EXISTING `new
+   * AgentGroupRepository(...)` call site keeps its current behavior; only
+   * construction sites that can reach the server layer (tRPC procedures) pass
+   * a real callback. See LOBE-11930.
+   *
+   * `targetWorkspaceId` is passed through on every call here (this
+   * repository has no OTHER writer of `agentShares`, unlike
+   * `AgentModelOptions.onShareReset`): `transferToWorkspace` moves the
+   * group's topics into that workspace in the SAME transaction, so the
+   * post-commit `interruptActiveShareRuns` re-query this callback schedules
+   * has to run against the NEW scope — see that option's full JSDoc in
+   * `packages/database/src/models/agent.ts` for why re-querying (rather than
+   * snapshotting inside the transaction) is correct here.
+   */
+  onShareReset?: (
+    agentId: string,
+    revocationGeneration: number,
+    targetWorkspaceId?: string | null,
+  ) => void;
+}
+
 /**
  * Agent Group Repository - provides agent group detail data
  */
@@ -129,11 +158,22 @@ export class AgentGroupRepository {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private onShareReset?: (
+    agentId: string,
+    revocationGeneration: number,
+    targetWorkspaceId?: string | null,
+  ) => void;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: AgentGroupRepositoryOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.onShareReset = options?.onShareReset;
   }
 
   /**
@@ -1073,7 +1113,15 @@ export class AgentGroupRepository {
 
     if (!sourceGroup) return null;
 
-    return this.db.transaction(async (trx) => {
+    // Populated only for an owned member whose share ACTUALLY flipped to
+    // `private` below — read post-commit to fire `onShareReset` once per
+    // reset agent. Same commit-then-notify split as
+    // `writeAgentConfigWithShareReset` / `AgentModel.transferAgents`: an
+    // interrupt is a side effect that must never fire on a rolled-back
+    // transfer.
+    const shareResetGenerations = new Map<string, number>();
+
+    const result = await this.db.transaction(async (trx) => {
       // Lock the group row first: it is the one serialization point every
       // group-level operation shares, including for a group whose roster is
       // empty (where the member-agent locks below are a no-op).
@@ -1206,11 +1254,29 @@ export class AgentGroupRepository {
       // Group-owned agents bypass AgentModel.transferAgents and therefore
       // need the same personal-scope share reset here. Otherwise a round trip
       // through a workspace silently revives an old distributed link.
+      //
+      // Routed through the SAME generation-bump + `onShareReset` contract as
+      // `AgentModel.transferAgents` — a bare visibility flip leaves a
+      // reservation staked (or an operation already running) under the
+      // pre-transfer generation able to confirm/continue after the move, with
+      // no way for the visitor to stop it. See that method's comment and
+      // LOBE-11930. The row lock on `agents` taken above (still held here,
+      // same `trx`) is what `bumpAgentShareGeneration` requires.
       if (!this.workspaceId && targetWorkspaceId && ownedAgentIds.length > 0) {
-        await trx
+        const resetShares = await trx
           .update(agentShares)
           .set({ updatedAt: new Date(), visibility: 'private' })
-          .where(inArray(agentShares.agentId, ownedAgentIds));
+          .where(
+            and(inArray(agentShares.agentId, ownedAgentIds), ne(agentShares.visibility, 'private')),
+          )
+          .returning({ agentId: agentShares.agentId });
+
+        for (const { agentId: resetAgentId } of resetShares) {
+          shareResetGenerations.set(
+            resetAgentId,
+            await bumpAgentShareGeneration(trx, resetAgentId),
+          );
+        }
       }
 
       await trx
@@ -1448,6 +1514,19 @@ export class AgentGroupRepository {
 
       return { groupId, transferJobId };
     });
+
+    // Fired only after the transaction above has committed, once per owned
+    // member agent whose share was actually reset — see
+    // `shareResetGenerations`'s JSDoc above and
+    // `writeAgentConfigWithShareReset`'s `onShareReset` timing.
+    // `targetWorkspaceId` is passed through so the post-commit interrupt
+    // re-queries the moved topics in their new scope — see
+    // `AgentGroupRepositoryOptions.onShareReset`'s JSDoc.
+    for (const [resetAgentId, revocationGeneration] of shareResetGenerations) {
+      this.onShareReset?.(resetAgentId, revocationGeneration, targetWorkspaceId);
+    }
+
+    return result;
   }
 
   /**
