@@ -12,6 +12,7 @@ import {
 } from '@lobechat/builtin-tool-agent-management';
 import {
   AGENT_SIGNAL_REVIEW_IDENTIFIER,
+  AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
   AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
   AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES,
   agentSignalSkillManagementManifest,
@@ -871,7 +872,6 @@ const MIRRORED_ALLOWED_IDENTIFIERS = new Set<string>([
   BriefIdentifier,
   ImageGenerationIdentifier,
   VerifyToolIdentifier,
-  AGENT_SIGNAL_REVIEW_IDENTIFIER,
   AcceptanceEvidenceIdentifier,
   LobeAgentIdentifier,
 ]);
@@ -893,6 +893,7 @@ describe('default-deny covers every registered builtin identifier not explicitly
     expect(deniedBuiltinIdentifiers).toEqual(
       expect.arrayContaining([
         AgentManagementIdentifier,
+        AGENT_SIGNAL_REVIEW_IDENTIFIER,
         SkillMaintainerIdentifier,
         AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
         TaskIdentifier,
@@ -982,6 +983,119 @@ describe('default-deny covers every registered builtin identifier not explicitly
     // added it here" — every one of `deniedBuiltinIdentifiers` already proves
     // this, e.g. the newest addition among them:
     expect(deniedBuiltinIdentifiers.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Regression coverage for the `agent-signal-review` removal (codex review
+ * finding on `shareGate.ts:192`): a completed trace of
+ * `createReviewRuntimePrimitives` (`apps/server/src/services/agentSignal/services/
+ * selfIteration/review/server.ts`) found this identifier was previously
+ * allowlisted on an unverified "scoped by `context.operationId`, fails
+ * closed" claim that never actually held for it — `listManagedSkills` /
+ * `getManagedSkill` honor a model-supplied `agentId` that overrides the
+ * server-bound one (cross-agent read of another agent's private skills), and
+ * `writeMemory` / `createSkillIfAbsent` / `replaceSkillContentCAS` are
+ * unconditional creator-scoped mutations with no corresponding
+ * `DATA_TOOL_ACCESS_RULES` entry to narrow them. Asserted here against the
+ * REAL exported `AGENT_SIGNAL_REVIEW_TOOL_API_NAMES` manifest so a rename or
+ * a future re-allowlisting attempt has to consciously re-derive safety
+ * instead of silently reopening the hole this test guards.
+ */
+describe('agent-signal-review: cross-agent read and mutation stay blocked for share visitors', () => {
+  const fullyGrantedPermissions = {
+    allowReadMemory: true,
+    filePermissionConfig: { agentFiles: 'read' as const, knowledgeBase: 'read' as const },
+  };
+
+  it('is absent from the master allowlist entirely', () => {
+    expect(MIRRORED_ALLOWED_IDENTIFIERS.has(AGENT_SIGNAL_REVIEW_IDENTIFIER)).toBe(false);
+  });
+
+  it.each(AGENT_SIGNAL_REVIEW_TOOL_API_NAMES)(
+    'blocks %s unconditionally at dispatch time, even under a fully-granted share',
+    (apiName) => {
+      expect(
+        isShareBlockedDataToolCall(
+          fullyGrantedPermissions,
+          AGENT_SIGNAL_REVIEW_IDENTIFIER,
+          apiName,
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('blocks a cross-agent listManagedSkills read that targets another agent by id', () => {
+    expect(
+      isShareBlockedDataToolCall(
+        fullyGrantedPermissions,
+        AGENT_SIGNAL_REVIEW_IDENTIFIER,
+        'listManagedSkills',
+        {
+          agentId: 'some-other-creator-owned-agent',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('blocks a cross-agent getManagedSkill read that targets another agent by id', () => {
+    expect(
+      isShareBlockedDataToolCall(
+        fullyGrantedPermissions,
+        AGENT_SIGNAL_REVIEW_IDENTIFIER,
+        'getManagedSkill',
+        {
+          agentId: 'some-other-creator-owned-agent',
+          skillDocumentId: 'skill-doc-1',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('blocks writeMemory, createSkillIfAbsent, and replaceSkillContentCAS mutations', () => {
+    for (const apiName of ['writeMemory', 'createSkillIfAbsent', 'replaceSkillContentCAS']) {
+      expect(
+        isShareBlockedDataToolCall(
+          fullyGrantedPermissions,
+          AGENT_SIGNAL_REVIEW_IDENTIFIER,
+          apiName,
+          {
+            bodyMarkdown: '# hijacked',
+            content: 'hijacked memory write',
+            name: 'hijacked-skill',
+          },
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('strips the identifier from the assembled tool set even when the owner whitelists it', () => {
+    const gate = buildGate({ enabledToolIds: [AGENT_SIGNAL_REVIEW_IDENTIFIER] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [AGENT_SIGNAL_REVIEW_IDENTIFIER],
+      enabledToolIds: [AGENT_SIGNAL_REVIEW_IDENTIFIER],
+      executorMap: { [AGENT_SIGNAL_REVIEW_IDENTIFIER]: 'server' as any },
+      manifestMap: {
+        [AGENT_SIGNAL_REVIEW_IDENTIFIER]: {
+          api: [],
+          identifier: AGENT_SIGNAL_REVIEW_IDENTIFIER,
+          type: 'default',
+        } as any,
+      },
+      sourceMap: { [AGENT_SIGNAL_REVIEW_IDENTIFIER]: 'builtin' as any },
+      tools: [
+        {
+          function: { name: `${AGENT_SIGNAL_REVIEW_IDENTIFIER}____listManagedSkills` },
+          type: 'function',
+        },
+      ],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
   });
 });
 
