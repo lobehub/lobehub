@@ -36,6 +36,8 @@ export const FeatureFlagsSchema = z.object({
   agent_onboarding: FeatureFlagValue.optional(),
   dev_dock: FeatureFlagValue.optional(),
   dev_dock_workspaces: z.array(z.string()).optional(),
+  /** Server-only switch from the default search backend to a deployment-provided candidate. */
+  search_backend: FeatureFlagValue.optional(),
   // Cloud feature flag. Keep here until cloud owns a separate runtime flag domain.
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
@@ -90,6 +92,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   dev_dock: isDev,
+  search_backend: false,
   auth_captcha: true,
   cloud_promotion: false,
   onboarding_v2: isDev,

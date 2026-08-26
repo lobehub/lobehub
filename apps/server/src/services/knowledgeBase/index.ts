@@ -12,12 +12,13 @@ import pMap from 'p-map';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import { type KnowledgeBaseDocumentHit, SearchRepo } from '@/database/repositories/search';
+import type { KnowledgeBaseDocumentHit } from '@/database/repositories/search';
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
+import { createSearchRepo } from '@/server/services/searchBackend';
 
 export interface FileContentResult {
   content: string;
@@ -87,7 +88,6 @@ export class KnowledgeBaseSearchService {
   private chunkModel: ChunkModel;
   private documentModel: DocumentModel;
   private fileModel: FileModel;
-  private searchRepo: SearchRepo;
   private documentServiceInstance?: DocumentService;
   private callerAgentVisibility?: 'private' | 'public' | null;
 
@@ -111,11 +111,6 @@ export class KnowledgeBaseSearchService {
     // enforcement point today.
     this.documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
     this.fileModel = new FileModel(serverDB, userId, workspaceId);
-    /**
-     * BM25 results include document snippets, so the public-agent visibility
-     * gate must apply during search as well as during the later full-content read.
-     */
-    this.searchRepo = new SearchRepo(serverDB, userId, workspaceId, callerAgentVisibility);
   }
 
   private get documentService() {
@@ -180,7 +175,17 @@ export class KnowledgeBaseSearchService {
     // Path 2: BM25 search over KB-scoped custom/document documents
     const bm25Path = async (): Promise<KnowledgeBaseDocumentHit[]> => {
       if (knowledgeIds.length === 0) return [];
-      return this.searchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);
+      /**
+       * BM25 results already contain snippets, so provider selection and the
+       * public-agent visibility gate must both be resolved before the search.
+       */
+      const searchRepo = await createSearchRepo({
+        callerAgentVisibility: this.callerAgentVisibility,
+        db: this.serverDB,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      return searchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);
     };
 
     const [vectorResult, bm25Result] = await Promise.allSettled([vectorPath(), bm25Path()]);

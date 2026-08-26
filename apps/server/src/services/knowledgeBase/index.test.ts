@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import { SearchRepo } from '@/database/repositories/search';
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createSearchRepo } from '@/server/services/searchBackend';
 
 import { DocumentService } from '../document';
 import { KnowledgeBaseSearchService } from './index';
@@ -16,7 +16,7 @@ import { KnowledgeBaseSearchService } from './index';
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
-vi.mock('@/database/repositories/search', () => ({ SearchRepo: vi.fn() }));
+vi.mock('@/server/services/searchBackend', () => ({ createSearchRepo: vi.fn() }));
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
@@ -51,16 +51,10 @@ describe('KnowledgeBaseSearchService', () => {
     vi.mocked(ChunkModel).mockImplementation(() => chunkModelMock);
     vi.mocked(DocumentModel).mockImplementation(() => documentModelMock);
     vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(SearchRepo).mockImplementation(() => searchRepoMock);
+    vi.mocked(createSearchRepo).mockResolvedValue(searchRepoMock);
     vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
 
     service = new KnowledgeBaseSearchService(serverDB, userId);
-  });
-
-  it('forwards the caller agent visibility to BM25 document search', () => {
-    new KnowledgeBaseSearchService(serverDB, userId, 'workspace-1', 'public');
-
-    expect(SearchRepo).toHaveBeenLastCalledWith(serverDB, userId, 'workspace-1', 'public');
   });
 
   describe('getFileContents', () => {
@@ -193,6 +187,26 @@ describe('KnowledgeBaseSearchService', () => {
       vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
         embeddings: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
       } as any);
+    });
+
+    it('forwards the caller agent visibility to the selected BM25 backend', async () => {
+      chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+      searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+      const scopedService = new KnowledgeBaseSearchService(
+        serverDB,
+        userId,
+        'workspace-1',
+        'public',
+      );
+
+      await scopedService.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'hello' });
+
+      expect(createSearchRepo).toHaveBeenCalledWith({
+        callerAgentVisibility: 'public',
+        db: serverDB,
+        userId,
+        workspaceId: 'workspace-1',
+      });
     });
 
     it('groups chunks by file and ranks them by average top-3 similarity', async () => {
