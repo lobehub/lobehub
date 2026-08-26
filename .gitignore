@@ -162,3 +162,7 @@ docs/superpowers/
 # Amp agent runtime
 .amp/*
 !.amp/settings.json
+
+# design-prototype generated runtime (see .claude/skills/design-prototype)
+lobe-prototype-runtime.js
+babel.min.js

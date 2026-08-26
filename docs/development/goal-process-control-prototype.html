@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Goal · 流程管控原型</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #boot {
+        font:
+          13px/1.6 ui-monospace,
+          monospace;
+        color: #888;
+        padding: 24px;
+      }
+    </style>
+    <script src="./lobe-prototype-runtime.js"></script>
+    <script>
+      window.require = (name) => {
+        const m = __PROTO_DEPS_NS__.default[name];
+        if (!m)
+          throw new Error(
+            'prototype runtime is missing module: ' + name + ' — add it to entry.mjs and rebuild',
+          );
+        return m;
+      };
+      window.exports = {};
+      window.module = { exports: window.exports };
+    </script>
+    <script src="./babel.min.js"></script>
+  </head>
+  <body>
+    <div id="boot">booting prototype runtime…</div>
+    <div id="root"></div>
+
+    <!--
+      Goal detail — process-control surface (frame from docs/development/goal-process-control-design.md)
+
+      To open: build the design-system runtime next to this file once, then double-click it.
+        bash .claude/skills/design-prototype/scripts/build-runtime.sh docs/development
+      (lobe-prototype-runtime.js + babel.min.js are generated and must not be committed.)
+
+      Deliberate cuts (not decisions):
+        - Graph tab, Activity ledger contents, mobile layout: out of v1 scope.
+        - Every element the business cannot back today carries a [NEW] tag on the mock.
+      Prototype-only deviations: createStyles instead of createStaticStyles; no i18n; inline data.
+    -->
+    <script type="text/babel" data-presets="react" data-plugins="transform-modules-commonjs">
+      import {
+        ActionIcon,
+        Block,
+        Button,
+        Flexbox,
+        Icon,
+        InputNumber,
+        Modal,
+        Popover,
+        Segmented,
+        Skeleton,
+        Tag,
+        Text,
+        TextArea,
+        ThemeProvider,
+        Tooltip,
+      } from '@lobehub/ui';
+      import { createStyles } from 'antd-style';
+      import {
+        AlertTriangle,
+        Check,
+        ChevronDown,
+        ChevronRight,
+        CircleDashed,
+        CircleDot,
+        Clock,
+        Coins,
+        ExternalLink,
+        MoreHorizontal,
+        Pause,
+        Play,
+        RotateCcw,
+        Target,
+        WifiOff,
+      } from 'lucide-react';
+      import React, { memo, useMemo, useState } from 'react';
+      import { createRoot } from 'react-dom/client';
+
+      // ────────────────────────────────────────────────────────────────────
+      // Styles
+      // ────────────────────────────────────────────────────────────────────
+      const useStyles = createStyles(({ css, token }) => ({
+        page: css`
+          min-height: 100dvh;
+          background: ${token.colorBgLayout};
+        `,
+        shell: css`
+          width: 100%;
+          max-width: 920px;
+          margin: 0 auto;
+        `,
+        toggleBar: css`
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          padding: 8px 16px;
+          background: ${token.colorBgContainer};
+          border-bottom: 1px solid ${token.colorBorderSecondary};
+        `,
+        newTag: css`
+          font-family: ${token.fontFamilyCode};
+          font-size: 10px;
+          line-height: 14px;
+          padding: 0 4px;
+          border-radius: ${token.borderRadiusXS}px;
+          background: ${token.colorWarningBg};
+          color: ${token.colorWarningText};
+          border: 1px solid ${token.colorWarningBorder};
+          vertical-align: middle;
+        `,
+        attention: css`
+          border: 1px solid ${token.colorPrimaryBorder};
+          background: ${token.colorBgContainer};
+          box-shadow: ${token.boxShadowTertiary};
+        `,
+        attentionWarn: css`
+          border-color: ${token.colorWarningBorder};
+        `,
+        option: css`
+          cursor: pointer;
+          border: 1px solid ${token.colorBorderSecondary};
+          border-radius: ${token.borderRadius}px;
+          padding: 12px 16px;
+          &:hover {
+            background: ${token.colorFillTertiary};
+          }
+        `,
+        optionActive: css`
+          border-color: ${token.colorPrimary};
+          background: ${token.colorFillQuaternary};
+        `,
+        bar: css`
+          position: relative;
+          height: 6px;
+          border-radius: 3px;
+          background: ${token.colorFillSecondary};
+          overflow: hidden;
+        `,
+        barFill: css`
+          position: absolute;
+          inset: 0 auto 0 0;
+          border-radius: 3px;
+          background: ${token.colorText};
+        `,
+        barFillWarn: css`
+          background: ${token.colorWarning};
+        `,
+        barFillSuccess: css`
+          background: ${token.colorSuccess};
+        `,
+        cell: css`
+          flex: 1;
+          min-width: 0;
+        `,
+        workRow: css`
+          border-top: 1px solid ${token.colorBorderSecondary};
+          &:first-of-type {
+            border-top: none;
+          }
+        `,
+        workHead: css`
+          cursor: pointer;
+          padding: 12px 16px;
+          &:hover {
+            background: ${token.colorFillTertiary};
+          }
+        `,
+        workBody: css`
+          padding: 0 16px 16px 44px;
+        `,
+        ledgerRow: css`
+          padding: 8px 12px;
+          border-radius: ${token.borderRadiusSM}px;
+          background: ${token.colorBgContainerSecondary};
+        `,
+        mono: css`
+          font-family: ${token.fontFamilyCode};
+          font-variant-numeric: tabular-nums;
+        `,
+        muted: css`
+          color: ${token.colorTextTertiary};
+        `,
+        sectionHead: css`
+          cursor: pointer;
+          user-select: none;
+        `,
+        evidence: css`
+          padding: 8px 12px;
+          border-radius: ${token.borderRadiusSM}px;
+          border: 1px solid ${token.colorBorderSecondary};
+          font-family: ${token.fontFamilyCode};
+          font-size: 12px;
+          white-space: pre-wrap;
+          color: ${token.colorTextSecondary};
+        `,
+      }));
+
+      const NewTag = ({ title }) => {
+        const { styles } = useStyles();
+        return (
+          <Tooltip title={title || '业务模型里还没有这个概念/事件'}>
+            <span className={styles.newTag}>NEW</span>
+          </Tooltip>
+        );
+      };
+
+      // ────────────────────────────────────────────────────────────────────
+      // Data — from the real nanoGPT Goal run (tpc_XUh2GbVp3UVM)
+      // ────────────────────────────────────────────────────────────────────
+      const NOW = Date.parse('2026-08-26T02:10:00+08:00');
+      const min = (n) => n * 60_000;
+      const ago = (ms) => {
+        if (ms < min(1)) return '刚刚';
+        if (ms < min(60)) return `${Math.round(ms / min(1))} 分钟前`;
+        const h = Math.floor(ms / min(60));
+        return `${h} 小时 ${Math.round((ms - h * min(60)) / min(1))} 分钟前`;
+      };
+      const usd = (n) => `$${n.toFixed(2)}`;
+
+      const BASE_WORKS = [
+        {
+          id: 'w1',
+          title: '获取 nanoGPT 源码并准备 Shakespeare 数据',
+          status: 'resolved',
+          attempts: [
+            {
+              n: 1,
+              started: NOW - min(78),
+              ended: NOW - min(71),
+              outcome: 'passed',
+              cost: 0.12,
+              reason: 'fresh clone 3adf61e，train.bin / val.bin 已生成，1.0M tokens',
+            },
+          ],
+          finding: 'fresh clone `3adf61e154c3`；Shakespeare char 数据 train 1,003,854 / val 111,540 tokens；MPS 可用。',
+          cost: 0.12,
+        },
+        {
+          id: 'w2',
+          title: '从零训练 5000 iterations（MPS）',
+          status: 'active',
+          dependsOn: ['w1'],
+          attempts: [
+            {
+              n: 1,
+              started: NOW - min(70),
+              ended: NOW - min(12),
+              outcome: 'failed',
+              cost: 0.91,
+              reason: 'train.log 只保留 6/21 个 eval 点，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未捕获',
+            },
+            {
+              n: 2,
+              started: NOW - min(11),
+              ended: NOW - min(3),
+              outcome: 'failed',
+              cost: 0.61,
+              reason: '仅补交了 summary.json，日志缺口仍未举证；verifier 判定证据不可审计',
+            },
+          ],
+          lastActivity: NOW - min(2),
+          lastLine: '执行 python3 train.py config/train_shakespeare_char.py --device=mps …',
+          cost: 1.52,
+        },
+        {
+          id: 'w3',
+          title: '加载 checkpoint 并固定 seed 采样 500 字符',
+          status: 'proposed',
+          dependsOn: ['w2'],
+          attempts: [],
+          cost: 0,
+        },
+        {
+          id: 'w4',
+          title: '完成整体 Goal 验收',
+          terminal: true,
+          status: 'proposed',
+          dependsOn: ['w3'],
+          attempts: [],
+          cost: 0,
+        },
+      ];
+
+      const GOAL = {
+        title: '复现 nanoGPT 本地训练（Shakespeare char，跑满 5000 iterations）',
+        requirement:
+          '在本机 MPS 上从零训练 nanoGPT Shakespeare char 至 5000 iterations；checkpoint 可用 torch.load 加载且 iter_num=5000；最终 validation loss ≤ 1.8 且相对初始下降 ≥ 30%；固定 seed 采样 ≥ 500 字符；summary.json 含命令、耗时、硬件、loss、SHA-256。',
+        checks: [
+          { label: '跑满 5000 iterations，checkpoint 可加载', state: 'pending' },
+          { label: 'validation loss ≤ 1.8，且相对初始下降 ≥ 30%', state: 'pending' },
+          { label: '固定 seed 采样 ≥ 500 字符', state: 'pending' },
+        ],
+        maxRounds: 10,
+        maxTotalCost: 5,
+        maxAttemptsPerWork: 3,
+        leaseTimeoutMin: 5,
+        startedAt: NOW - min(78),
+      };
+
+      // Scenario → overrides. Each scenario is a *state the business can be in*.
+      const SCENARIOS = {
+        gate: { label: '等你决定' },
+        running: { label: '运行中' },
+        stale: { label: '失联' },
+        budget: { label: '预算耗尽' },
+        delivered: { label: '待验收' },
+        achieved: { label: '已达成' },
+        planning: { label: '待推进' },
+        empty: { label: '无 Work' },
+        loading: { label: '加载中' },
+        error: { label: '加载失败' },
+      };
+
+      const buildState = (scenario) => {
+        const works = BASE_WORKS.map((w) => ({ ...w, attempts: [...w.attempts] }));
+        const w2 = works[1];
+        const w3 = works[2];
+        const w4 = works[3];
+        let goal = { ...GOAL, status: 'running', lastActivity: NOW - min(2), spent: 1.64 };
+        let decision = null;
+
+        switch (scenario) {
+          case 'gate': {
+            goal.status = 'review';
+            goal.lastActivity = NOW - min(3);
+            w2.status = 'waiting';
+            w2.lastActivity = NOW - min(3);
+            decision = {
+              id: 'd1',
+              workId: 'w2',
+              question: '「从零训练 5000 iterations」已失败 2 次，接下来怎么做？',
+              why: '第 2 次尝试的 verifier 判定：train.log 只保留了 21 个 eval 点中的 6 个，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未被捕获。模型本身已训练到 iter 5000，静止 checkpoint val loss 1.7119（≤ 1.8）。',
+              options: [
+                { id: 'retry', label: '再试一次', consequence: '开始第 3 次尝试（上限 3 次）；会把 verifier 的缺口反馈带入指令。预计再花约 $0.6。' },
+                { id: 'retire', label: '放弃这项 Work', consequence: '该 Work 标为已放弃；依赖它的「采样」和「整体验收」将无法继续，Goal 很可能以失败结束。' },
+              ],
+              recommended: 'retry',
+            };
+            break;
+          }
+          case 'stale': {
+            goal.lastActivity = NOW - min(47);
+            w2.lastActivity = NOW - min(47);
+            w2.lastLine = '执行 python3 train.py …（47 分钟没有新的心跳）';
+            break;
+          }
+          case 'budget': {
+            goal.status = 'paused';
+            goal.pauseCause = 'cost';
+            goal.spent = 5.02;
+            goal.lastActivity = NOW - min(6);
+            w2.status = 'active';
+            w2.lastActivity = NOW - min(6);
+            w2.cost = 4.9;
+            w2.attempts.push({
+              n: 3,
+              started: NOW - min(9),
+              ended: NOW - min(6),
+              outcome: 'failed',
+              cost: 3.38,
+              reason: '第 3 次尝试重新跑完整训练，verifier 通过前费用已超出上限',
+            });
+            break;
+          }
+          case 'delivered': {
+            goal.status = 'review';
+            goal.spent = 2.41;
+            goal.lastActivity = NOW - min(1);
+            w2.status = 'resolved';
+            w2.attempts.push({ n: 3, started: NOW - min(30), ended: NOW - min(14), outcome: 'passed', cost: 0.58, reason: '完整 train.log 21/21 eval 点；exit code 0；ckpt SHA-256 5eeedcc7…' });
+            w2.finding = '5000 iterations 完成，最终 val loss 1.7119，checkpoint 123 MB 可加载。';
+            w2.cost = 2.1;
+            w3.status = 'resolved';
+            w3.attempts.push({ n: 1, started: NOW - min(13), ended: NOW - min(9), outcome: 'passed', cost: 0.09, reason: '固定 seed 采样 635 个非空白字符' });
+            w3.finding = '采样输出为 Shakespeare 风格文本，SHA-256 951a2d97…';
+            w3.cost = 0.09;
+            w4.status = 'active';
+            w4.delivered = true;
+            w4.attempts.push({ n: 1, started: NOW - min(8), ended: NOW - min(1), outcome: 'passed', cost: 0.1, reason: '独立 verifier 复验 checkpoint、loss、采样，3/3 通过' });
+            w4.cost = 0.1;
+            goal.checks = goal.checks.map((c) => ({ ...c, state: 'passed' }));
+            break;
+          }
+          case 'achieved': {
+            goal.status = 'achieved';
+            goal.spent = 2.41;
+            goal.completedAt = NOW - min(20);
+            goal.lastActivity = NOW - min(20);
+            works.forEach((w) => (w.status = 'resolved'));
+            w2.attempts.push({ n: 3, started: NOW - min(60), ended: NOW - min(44), outcome: 'passed', cost: 0.58, reason: '完整 train.log 21/21 eval 点；exit code 0' });
+            w2.finding = '5000 iterations 完成，最终 val loss 1.7119，checkpoint 123 MB 可加载。';
+            w3.attempts.push({ n: 1, started: NOW - min(43), ended: NOW - min(39), outcome: 'passed', cost: 0.09, reason: '固定 seed 采样 635 个非空白字符' });
+            w4.attempts.push({ n: 1, started: NOW - min(38), ended: NOW - min(21), outcome: 'passed', cost: 0.1, reason: '独立 verifier 3/3 通过，你已确认验收' });
+            goal.checks = goal.checks.map((c) => ({ ...c, state: 'passed' }));
+            break;
+          }
+          case 'planning': {
+            goal.status = 'planning';
+            goal.spent = 0;
+            goal.startedAt = null;
+            goal.lastActivity = null;
+            works.forEach((w) => {
+              w.status = 'proposed';
+              w.attempts = [];
+              w.cost = 0;
+              w.finding = undefined;
+              w.lastActivity = undefined;
+              w.lastLine = undefined;
+            });
+            break;
+          }
+          case 'empty': {
+            goal.status = 'planning';
+            goal.spent = 0;
+            goal.startedAt = null;
+            goal.lastActivity = null;
+            return { goal, works: [], decision: null };
+          }
+          default:
+            break;
+        }
+        return { goal, works, decision };
+      };
+
+      // ────────────────────────────────────────────────────────────────────
+      // Derived language — plain words, never enums (P-01)
+      // ────────────────────────────────────────────────────────────────────
+      const isStale = (goal, w) =>
+        w.status === 'active' && w.lastActivity && NOW - w.lastActivity > min(goal.leaseTimeoutMin);
+
+      const goalSentence = (goal, works, decision) => {
+        switch (goal.status) {
+          case 'planning':
+            return works.length === 0 ? '尚未规划任何 Work' : '等待推进 · 还没有开始任何尝试';
+          case 'running': {
+            const active = works.find((w) => w.status === 'active');
+            if (active && isStale(goal, active)) return `运行中，但已失联 · 最近动作 ${ago(NOW - active.lastActivity)}`;
+            return `运行中 · 最近动作 ${ago(NOW - goal.lastActivity)}`;
+          }
+          case 'verifying':
+            return '正在验证交付';
+          case 'review':
+            return decision ? `等你决定 · 已等待 ${ago(NOW - goal.lastActivity).replace('前', '')}` : '验收通过，等你确认';
+          case 'paused':
+            return goal.pauseCause === 'cost' ? '已暂停 · 费用预算用完' : goal.pauseCause === 'rounds' ? '已暂停 · 轮次预算用完' : '已由你暂停';
+          case 'achieved':
+            return `已达成 · ${ago(NOW - goal.completedAt)}`;
+          case 'failed':
+            return '未达成';
+          case 'canceled':
+            return '已取消';
+          default:
+            return goal.status;
+        }
+      };
+
+      const workState = (goal, w, works, decision) => {
+        if (decision && decision.workId === w.id) return { text: '等你决定', tone: 'warning', icon: AlertTriangle };
+        if (w.delivered) return { text: '验收通过，等你确认', tone: 'info', icon: Check };
+        switch (w.status) {
+          case 'resolved':
+            return { text: '完成', tone: 'success', icon: Check };
+          case 'retired':
+            return { text: '已放弃', tone: 'secondary', icon: CircleDashed };
+          case 'active':
+            if (goal.status === 'paused') return { text: '已停止', tone: 'secondary', icon: Pause };
+            if (isStale(goal, w)) return { text: '失联，等待回收', tone: 'danger', icon: WifiOff };
+            return { text: `进行中 · 第 ${w.attempts.length + 1} 次尝试`, tone: 'info', icon: CircleDot };
+          case 'waiting':
+            return { text: '等你决定', tone: 'warning', icon: AlertTriangle };
+          case 'proposed': {
+            const blockers = (w.dependsOn || []).map((id) => works.find((x) => x.id === id)).filter((x) => x && x.status !== 'resolved');
+            if (blockers.length) return { text: `等待「${blockers[0].title}」完成`, tone: 'secondary', icon: Clock };
+            return { text: goal.status === 'planning' ? '排队中' : '排队中，下一步开始', tone: 'secondary', icon: Clock };
+          }
+          default:
+            return { text: w.status, tone: 'secondary', icon: CircleDashed };
+        }
+      };
+
+      // ────────────────────────────────────────────────────────────────────
+      // Blocks
+      // ────────────────────────────────────────────────────────────────────
+      const Bar = ({ value, max, tone }) => {
+        const { styles, cx } = useStyles();
+        const pct = !max || max === Infinity ? 0 : Math.min(100, (value / max) * 100);
+        return (
+          <div className={styles.bar}>
+            <div
+              className={cx(styles.barFill, tone === 'warning' && styles.barFillWarn, tone === 'success' && styles.barFillSuccess)}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        );
+      };
+
+      const ProgressStrip = memo(({ goal, works }) => {
+        const { styles } = useStyles();
+        const resolved = works.filter((w) => w.status === 'resolved').length;
+        const passed = goal.checks.filter((c) => c.state === 'passed').length;
+        const attempts = works.reduce((s, w) => s + w.attempts.length, 0);
+        const overCost = goal.maxTotalCost && goal.spent >= goal.maxTotalCost;
+        const cells = [
+          { label: 'Work 完成', value: `${resolved} / ${works.length}`, v: resolved, max: works.length, tone: resolved === works.length && works.length ? 'success' : undefined },
+          { label: '验收项通过', value: `${passed} / ${goal.checks.length}`, v: passed, max: goal.checks.length, tone: passed === goal.checks.length ? 'success' : undefined },
+          { label: '尝试次数', value: `${attempts} / ${goal.maxRounds ?? '∞'}`, v: attempts, max: goal.maxRounds ?? Infinity, tone: goal.maxRounds && attempts >= goal.maxRounds ? 'warning' : undefined },
+          { label: '费用', value: `${usd(goal.spent)} / ${goal.maxTotalCost ? usd(goal.maxTotalCost) : '不限'}`, v: goal.spent, max: goal.maxTotalCost ?? Infinity, tone: overCost ? 'warning' : undefined },
+        ];
+        return (
+          <Block variant="outlined" padding={16}>
+            <Flexbox horizontal gap={24}>
+              {cells.map((c) => (
+                <Flexbox key={c.label} className={styles.cell} gap={8}>
+                  <Flexbox horizontal justify="space-between" align="baseline">
+                    <Text fontSize={12} type="secondary">{c.label}</Text>
+                    <Text className={styles.mono} fontSize={13} weight={600} type={c.tone === 'warning' ? 'warning' : undefined}>{c.value}</Text>
+                  </Flexbox>
+                  <Bar value={c.v} max={c.max} tone={c.tone} />
+                </Flexbox>
+              ))}
+            </Flexbox>
+          </Block>
+        );
+      });
+
+      const AttentionCard = memo(({ goal, works, decision, onDecide, onAccept, onReject, onAddBudget, onReclaim, onRetry }) => {
+        const { styles, cx } = useStyles();
+        const [picked, setPicked] = useState(decision?.recommended ?? null);
+        const [reason, setReason] = useState('');
+        const [rejectOpen, setRejectOpen] = useState(false);
+        const [comment, setComment] = useState('');
+        const [budget, setBudget] = useState(goal.maxTotalCost ? goal.maxTotalCost + 5 : 10);
+
+        // Decision gate ───────────────────────────────
+        if (decision) {
+          const work = works.find((w) => w.id === decision.workId);
+          return (
+            <Block className={styles.attention} padding={20} gap={16}>
+              <Flexbox horizontal gap={8} align="center">
+                <Icon icon={AlertTriangle} size={18} />
+                <Text weight={600} fontSize={16}>{decision.question}</Text>
+              </Flexbox>
+              <Text type="secondary">{decision.why}</Text>
+              <Flexbox horizontal gap={16} className={styles.mono}>
+                <Text fontSize={12} type="secondary">已尝试 {work.attempts.length} / {goal.maxAttemptsPerWork} 次</Text>
+                <Text fontSize={12} type="secondary">这项 Work 已花 {usd(work.cost)}</Text>
+                <Text fontSize={12} type="secondary">Goal 累计 {usd(goal.spent)} / {usd(goal.maxTotalCost)}</Text>
+              </Flexbox>
+              <Flexbox gap={8}>
+                {decision.options.map((o) => (
+                  <div key={o.id} className={cx(styles.option, picked === o.id && styles.optionActive)} onClick={() => setPicked(o.id)}>
+                    <Flexbox horizontal gap={8} align="center">
+                      <Text weight={600}>{o.label}</Text>
+                      {decision.recommended === o.id && <Tag size="small">推荐</Tag>}
+                    </Flexbox>
+                    <Text fontSize={12} type="secondary">{o.consequence}</Text>
+                  </div>
+                ))}
+              </Flexbox>
+              <TextArea
+                placeholder="给下一次尝试的补充说明（可选，会写进指令）"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                autoSize={{ minRows: 1, maxRows: 3 }}
+              />
+              <Flexbox horizontal gap={8} justify="flex-end">
+                <Button type="primary" disabled={!picked} onClick={() => onDecide(picked, reason)}>
+                  {picked === 'retry' ? '再试一次' : picked === 'retire' ? '放弃这项 Work' : '确认'}
+                </Button>
+              </Flexbox>
+            </Block>
+          );
+        }
+
+        // Delivered, awaiting human accept ───────────
+        const delivered = works.find((w) => w.delivered);
+        if (delivered) {
+          const passed = goal.checks.filter((c) => c.state === 'passed').length;
+          return (
+            <Block className={styles.attention} padding={20} gap={16}>
+              <Flexbox horizontal gap={8} align="center">
+                <Icon icon={Check} size={18} />
+                <Text weight={600} fontSize={16}>验收通过 {passed} / {goal.checks.length}，等你确认这个 Goal 是否算完成</Text>
+              </Flexbox>
+              <Flexbox gap={4}>
+                {goal.checks.map((c) => (
+                  <Flexbox key={c.label} horizontal gap={8} align="center">
+                    <Icon icon={Check} size={14} color="var(--ant-color-success)" />
+                    <Text fontSize={13}>{c.label}</Text>
+                  </Flexbox>
+                ))}
+              </Flexbox>
+              <Text type="secondary" fontSize={13}>verifier 在同一目录独立加载了 checkpoint、核对 loss 和采样长度；完整证据见验收页。</Text>
+              {rejectOpen && (
+                <TextArea
+                  autoFocus
+                  placeholder="哪里不够？这段话会作为下一轮的输入（必填）"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  autoSize={{ minRows: 2, maxRows: 4 }}
+                />
+              )}
+              <Flexbox horizontal gap={8} justify="space-between" align="center">
+                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>查看完整证据</Button>
+                <Flexbox horizontal gap={8}>
+                  {rejectOpen ? (
+                    <>
+                      <Button onClick={() => setRejectOpen(false)}>取消</Button>
+                      <Button disabled={!comment.trim()} onClick={() => onReject(comment)}>带反馈再来一轮</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button onClick={() => setRejectOpen(true)}>还不够，再来一轮</Button>
+                      <Button type="primary" onClick={onAccept}>确认完成</Button>
+                    </>
+                  )}
+                </Flexbox>
+              </Flexbox>
+            </Block>
+          );
+        }
+
+        // Budget exhausted ───────────────────────────
+        if (goal.status === 'paused' && goal.pauseCause === 'cost') {
+          return (
+            <Block className={cx(styles.attention, styles.attentionWarn)} padding={20} gap={16}>
+              <Flexbox horizontal gap={8} align="center">
+                <Icon icon={Coins} size={18} />
+                <Text weight={600} fontSize={16}>费用预算用完了：已花 {usd(goal.spent)}，上限 {usd(goal.maxTotalCost)}</Text>
+              </Flexbox>
+              <Text type="secondary">Goal 已停下，不会再开始新的尝试。「从零训练」这一项还差 verifier 通过；追加预算后会从这里继续。</Text>
+              <Flexbox horizontal gap={12} align="center">
+                <Text fontSize={13}>新的费用上限</Text>
+                <InputNumber value={budget} min={goal.spent} step={1} prefix="$" onChange={(v) => setBudget(v)} style={{ width: 120 }} />
+                <Button type="primary" onClick={() => onAddBudget(budget)}>追加预算并继续</Button>
+                <Button danger>
+                  就此结束 <NewTag title="Graph 型 Goal 还没有 cancel 事件；目前只能删除" />
+                </Button>
+              </Flexbox>
+            </Block>
+          );
+        }
+
+        // Lost contact ───────────────────────────────
+        const stale = works.find((w) => isStale(goal, w));
+        if (stale) {
+          const since = ago(NOW - stale.lastActivity);
+          return (
+            <Block className={cx(styles.attention, styles.attentionWarn)} padding={20} gap={12}>
+              <Flexbox horizontal gap={8} align="center">
+                <Icon icon={WifiOff} size={18} />
+                <Text weight={600} fontSize={16}>「{stale.title}」已 {since.replace('前', '')}没有任何动作</Text>
+              </Flexbox>
+              <Text type="secondary">
+                执行它的 Agent 超过 {goal.leaseTimeoutMin} 分钟没有心跳。系统会在下一次推进时把这次尝试标记为失联并自动重开一次（不算失败次数）；本机上正在跑的训练进程不会被中断。
+              </Text>
+              <Flexbox horizontal gap={8}>
+                <Button type="primary" icon={<Icon icon={RotateCcw} />} onClick={onReclaim}>立即回收并重开</Button>
+                <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>看最后一次输出</Button>
+              </Flexbox>
+            </Block>
+          );
+        }
+
+        // Planning with nothing ticking (D2: honest state) ───────────
+        if (goal.status === 'planning' && works.length > 0) {
+          return (
+            <Block className={styles.attention} padding={20} gap={12}>
+              <Flexbox horizontal gap={8} align="center">
+                <Icon icon={Play} size={18} />
+                <Text weight={600} fontSize={16}>Goal 已就绪，还没有开始</Text>
+              </Flexbox>
+              <Text type="secondary">
+                第一项 Work「{works[0].title}」会先开始，其余按依赖顺序推进；每一项完成后由独立 verifier 验证，只有遇到关键决策才会来找你。
+              </Text>
+              <Flexbox horizontal gap={8} align="center">
+                <Button type="primary" icon={<Icon icon={Play} />} onClick={onRetry}>开始执行</Button>
+                <Text fontSize={12} type="secondary">
+                  开始后会在服务端持续推进，无需保持页面打开 <NewTag title="Graph 型 Goal 目前只有 CLI `goal run` 循环在驱动；服务端无自动 tick（D2）" />
+                </Text>
+              </Flexbox>
+            </Block>
+          );
+        }
+        return null;
+      });
+
+      const Header = memo(({ goal, works, decision, onPause, onResume, onSetBudget }) => {
+        const { styles } = useStyles();
+        const [pauseOpen, setPauseOpen] = useState(false);
+        const [budgetOpen, setBudgetOpen] = useState(false);
+        const [rounds, setRounds] = useState(goal.maxRounds);
+        const [cost, setCost] = useState(goal.maxTotalCost);
+        const [perWork, setPerWork] = useState(goal.maxAttemptsPerWork);
+        const terminal = ['achieved', 'failed', 'canceled'].includes(goal.status);
+        const elapsed = goal.startedAt ? ago(NOW - goal.startedAt).replace('前', '') : null;
+        const running = goal.status === 'running' || goal.status === 'verifying';
+
+        return (
+          <Flexbox gap={8}>
+            <Flexbox horizontal gap={8} align="center">
+              <Text fontSize={12} type="secondary">Goal</Text>
+              <Text fontSize={12} type="secondary">·</Text>
+              <Text fontSize={12} type="secondary">Coding Agent</Text>
+            </Flexbox>
+            <Flexbox horizontal justify="space-between" align="flex-start" gap={16}>
+              <Flexbox gap={4} flex={1}>
+                <Text fontSize={20} weight={600}>{goal.title}</Text>
+                <Flexbox horizontal gap={12} align="center">
+                  <Text fontSize={13} type={goal.status === 'review' ? 'warning' : goal.status === 'achieved' ? 'success' : 'secondary'} weight={goal.status === 'review' ? 600 : undefined}>
+                    {goalSentence(goal, works, decision)}
+                  </Text>
+                  {elapsed && <Text fontSize={12} className={styles.muted}>已进行 {elapsed}</Text>}
+                </Flexbox>
+              </Flexbox>
+              {!terminal && (
+                <Flexbox horizontal gap={8} align="center">
+                  {goal.status === 'paused' ? (
+                    <Button icon={<Icon icon={Play} />} onClick={onResume}>继续</Button>
+                  ) : (
+                    <Button icon={<Icon icon={Pause} />} disabled={goal.status === 'planning'} onClick={() => setPauseOpen(true)}>暂停</Button>
+                  )}
+                  <Popover
+                    open={budgetOpen}
+                    onOpenChange={setBudgetOpen}
+                    trigger="click"
+                    content={
+                      <Flexbox gap={12} style={{ width: 260 }} padding={4}>
+                        <Text weight={600}>预算与保护</Text>
+                        <Flexbox gap={8}>
+                          <Flexbox horizontal justify="space-between" align="center">
+                            <Text fontSize={13}>总费用上限</Text>
+                            <InputNumber value={cost} min={0} step={1} prefix="$" onChange={setCost} style={{ width: 110 }} placeholder="不限" />
+                          </Flexbox>
+                          <Flexbox horizontal justify="space-between" align="center">
+                            <Text fontSize={13}>总尝试次数</Text>
+                            <InputNumber value={rounds} min={1} onChange={setRounds} style={{ width: 110 }} placeholder="不限" />
+                          </Flexbox>
+                          <Flexbox horizontal justify="space-between" align="center">
+                            <Text fontSize={13}>单项 Work 最多尝试</Text>
+                            <InputNumber value={perWork} min={1} onChange={setPerWork} style={{ width: 110 }} />
+                          </Flexbox>
+                        </Flexbox>
+                        <Text fontSize={12} type="secondary">超过任一上限时 Goal 会自动停下并来问你，不会静默继续花钱。</Text>
+                        <Flexbox horizontal justify="flex-end" gap={8}>
+                          <Button size="small" onClick={() => setBudgetOpen(false)}>取消</Button>
+                          <Button size="small" type="primary" onClick={() => { onSetBudget({ rounds, cost, perWork }); setBudgetOpen(false); }}>保存</Button>
+                        </Flexbox>
+                      </Flexbox>
+                    }
+                  >
+                    <Button icon={<Icon icon={Coins} />}>预算</Button>
+                  </Popover>
+                  <Tooltip title="添加 Work · 复制链接 · 结束 Goal [NEW] · 删除">
+                    <ActionIcon icon={MoreHorizontal} />
+                  </Tooltip>
+                </Flexbox>
+              )}
+            </Flexbox>
+            <Modal
+              open={pauseOpen}
+              title="暂停这个 Goal？"
+              okText="暂停"
+              cancelText="取消"
+              onCancel={() => setPauseOpen(false)}
+              onOk={() => { setPauseOpen(false); onPause(); }}
+            >
+              <Flexbox gap={8}>
+                <Text>暂停后不会再开始新的尝试；{running ? '正在进行的这次尝试会跑到它自己结束为止，' : ''}期间的费用仍会计入。</Text>
+                <Text type="secondary" fontSize={13}>随时可以点「继续」恢复。要立刻中断正在执行的 Agent 目前还做不到 <NewTag title="AbortSignal 未接入 runtime；红线" />。</Text>
+              </Flexbox>
+            </Modal>
+          </Flexbox>
+        );
+      });
+
+      const WorkRow = memo(({ goal, w, works, decision, open, onToggle, onGuidance }) => {
+        const { styles, cx } = useStyles();
+        const st = workState(goal, w, works, decision);
+        const [guide, setGuide] = useState('');
+        const latest = w.finding
+          ? w.finding
+          : w.attempts.length
+            ? `第 ${w.attempts[w.attempts.length - 1].n} 次：${w.attempts[w.attempts.length - 1].reason}`
+            : null;
+        const showLive = w.status === 'active' && w.lastLine && !isStale(goal, w) && goal.status !== 'paused';
+
+        return (
+          <div className={styles.workRow}>
+            <Flexbox horizontal gap={12} align="flex-start" className={styles.workHead} onClick={onToggle}>
+              <Icon icon={open ? ChevronDown : ChevronRight} size={16} style={{ marginTop: 3 }} />
+              <Flexbox gap={4} flex={1} style={{ minWidth: 0 }}>
+                <Flexbox horizontal gap={8} align="center" wrap="wrap">
+                  <Text weight={600}>{w.title}</Text>
+                  {w.terminal && <Tag size="small">整体验收</Tag>}
+                </Flexbox>
+                <Flexbox horizontal gap={12} align="center" wrap="wrap">
+                  <Flexbox horizontal gap={4} align="center">
+                    <Icon icon={st.icon} size={13} color={st.tone === 'success' ? 'var(--ant-color-success)' : st.tone === 'warning' ? 'var(--ant-color-warning)' : st.tone === 'danger' ? 'var(--ant-color-error)' : undefined} />
+                    <Text fontSize={12} type={st.tone === 'secondary' ? 'secondary' : st.tone}>{st.text}</Text>
+                  </Flexbox>
+                  {w.lastActivity && w.status === 'active' && (
+                    <Text fontSize={12} className={styles.muted}>最近动作 {ago(NOW - w.lastActivity)}</Text>
+                  )}
+                  {w.attempts.length > 0 && (
+                    <Text fontSize={12} className={cx(styles.muted, styles.mono)}>尝试 {w.attempts.length} / {goal.maxAttemptsPerWork}</Text>
+                  )}
+                  {w.cost > 0 && <Text fontSize={12} className={cx(styles.muted, styles.mono)}>{usd(w.cost)}</Text>}
+                </Flexbox>
+                {showLive && (
+                  <Text fontSize={12} className={cx(styles.muted, styles.mono)} ellipsis>{w.lastLine}</Text>
+                )}
+                {!showLive && latest && !open && (
+                  <Text fontSize={13} type="secondary" ellipsis={{ rows: 1 }}>{latest}</Text>
+                )}
+              </Flexbox>
+            </Flexbox>
+            {open && (
+              <Flexbox className={styles.workBody} gap={12}>
+                {w.finding && (
+                  <Flexbox gap={4}>
+                    <Text fontSize={12} weight={600} type="secondary">结论</Text>
+                    <Text fontSize={13}>{w.finding}</Text>
+                  </Flexbox>
+                )}
+                <Flexbox gap={4}>
+                  <Text fontSize={12} weight={600} type="secondary">尝试记录</Text>
+                  {w.attempts.length === 0 && <Text fontSize={13} className={styles.muted}>还没有开始。</Text>}
+                  {w.attempts.map((a) => (
+                    <Flexbox key={a.n} className={styles.ledgerRow} gap={4}>
+                      <Flexbox horizontal gap={12} align="center" justify="space-between">
+                        <Flexbox horizontal gap={8} align="center">
+                          <Text fontSize={13} weight={600}>第 {a.n} 次</Text>
+                          <Text fontSize={12} type={a.outcome === 'passed' ? 'success' : a.outcome === 'failed' ? 'danger' : 'secondary'}>
+                            {a.outcome === 'passed' ? 'verifier 通过' : a.outcome === 'failed' ? 'verifier 未通过' : '失联'}
+                          </Text>
+                          <Text fontSize={12} className={cx(styles.muted, styles.mono)}>{Math.round((a.ended - a.started) / min(1))} 分钟 · {usd(a.cost)}</Text>
+                        </Flexbox>
+                        <Button type="text" size="small" icon={<Icon icon={ExternalLink} />}>打开这次运行</Button>
+                      </Flexbox>
+                      <Text fontSize={13} type="secondary">{a.reason}</Text>
+                    </Flexbox>
+                  ))}
+                  {w.status === 'active' && !isStale(goal, w) && goal.status !== 'paused' && (
+                    <Flexbox className={styles.ledgerRow} gap={4}>
+                      <Flexbox horizontal gap={8} align="center">
+                        <Text fontSize={13} weight={600}>第 {w.attempts.length + 1} 次</Text>
+                        <Text fontSize={12} type="info">进行中</Text>
+                        <Text fontSize={12} className={styles.muted}>最近动作 {ago(NOW - w.lastActivity)}</Text>
+                      </Flexbox>
+                      <div className={styles.evidence}>{w.lastLine}</div>
+                    </Flexbox>
+                  )}
+                </Flexbox>
+                {w.status !== 'resolved' && w.status !== 'retired' && (
+                  <Flexbox gap={6}>
+                    <Text fontSize={12} weight={600} type="secondary">给下一次尝试的说明</Text>
+                    <Flexbox horizontal gap={8} align="flex-start">
+                      <TextArea
+                        value={guide}
+                        onChange={(e) => setGuide(e.target.value)}
+                        placeholder="例如：不要重训，直接基于静止 checkpoint 补齐 train.log 缺口"
+                        autoSize={{ minRows: 1, maxRows: 3 }}
+                        style={{ flex: 1 }}
+                      />
+                      <Button size="small" disabled={!guide.trim()} onClick={() => { onGuidance(w.id, guide); setGuide(''); }}>加入</Button>
+                    </Flexbox>
+                  </Flexbox>
+                )}
+              </Flexbox>
+            )}
+          </div>
+        );
+      });
+
+      const WorkList = memo(({ goal, works, decision, onGuidance, onAddWork }) => {
+        const [openIds, setOpenIds] = useState(() => new Set(decision ? [decision.workId] : []));
+        const toggle = (id) => setOpenIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+        const rank = (w) => {
+          const st = workState(goal, w, works, decision);
+          if (st.tone === 'warning' || st.tone === 'danger' || w.delivered) return 0;
+          if (w.status === 'active') return 1;
+          if (w.status === 'proposed') return 2;
+          return 3;
+        };
+        const ordered = useMemo(() => [...works].sort((a, b) => rank(a) - rank(b)), [works, goal.status, decision]);
+
+        return (
+          <Flexbox gap={8}>
+            <Flexbox horizontal justify="space-between" align="center">
+              <Text weight={600}>Work</Text>
+              <Button size="small" type="text" onClick={onAddWork}>添加 Work</Button>
+            </Flexbox>
+            <Block variant="outlined" style={{ overflow: 'hidden' }}>
+              {ordered.length === 0 ? (
+                <Flexbox align="center" gap={8} padding={32}>
+                  <Icon icon={Target} size={24} />
+                  <Text weight={600}>这个 Goal 还没有规划任何 Work</Text>
+                  <Text type="secondary" fontSize={13}>添加第一项 Work 后 Goal 才能开始；也可以让 Agent 先根据目标拆一版。</Text>
+                  <Flexbox horizontal gap={8}>
+                    <Button type="primary" size="small" onClick={onAddWork}>添加 Work</Button>
+                    <Button size="small">让 Agent 拆解 <NewTag title="自动 Planner 未产品化" /></Button>
+                  </Flexbox>
+                </Flexbox>
+              ) : (
+                ordered.map((w) => (
+                  <WorkRow key={w.id} goal={goal} w={w} works={works} decision={decision} open={openIds.has(w.id)} onToggle={() => toggle(w.id)} onGuidance={onGuidance} />
+                ))
+              )}
+            </Block>
+          </Flexbox>
+        );
+      });
+
+      const Section = memo(({ title, children, defaultOpen = false, extra }) => {
+        const { styles } = useStyles();
+        const [open, setOpen] = useState(defaultOpen);
+        return (
+          <Flexbox gap={8}>
+            <Flexbox horizontal justify="space-between" align="center">
+              <Flexbox horizontal gap={6} align="center" className={styles.sectionHead} onClick={() => setOpen(!open)}>
+                <Icon icon={open ? ChevronDown : ChevronRight} size={14} />
+                <Text weight={600}>{title}</Text>
+              </Flexbox>
+              {extra}
+            </Flexbox>
+            {open && children}
+          </Flexbox>
+        );
+      });
+
+      const Contract = memo(({ goal }) => {
+        const { styles } = useStyles();
+        return (
+          <Section title="目标与验收标准" defaultOpen={false} extra={<Button size="small" type="text">编辑 <NewTag title="Graph 型 Goal 的 requirement 无更新接口；task 型走 acceptance.saveGoal" /></Button>}>
+            <Block variant="outlined" padding={16} gap={12}>
+              <Text fontSize={13}>{goal.requirement}</Text>
+              <Flexbox gap={6}>
+                <Text fontSize={12} weight={600} type="secondary">整体验收项（由独立 verifier 判定，最终由你确认）</Text>
+                {goal.checks.map((c) => (
+                  <Flexbox key={c.label} horizontal gap={8} align="center">
+                    <Icon icon={c.state === 'passed' ? Check : CircleDashed} size={14} color={c.state === 'passed' ? 'var(--ant-color-success)' : undefined} />
+                    <Text fontSize={13} type={c.state === 'passed' ? undefined : 'secondary'}>{c.label}</Text>
+                  </Flexbox>
+                ))}
+              </Flexbox>
+              <Flexbox horizontal gap={16} className={styles.mono}>
+                <Text fontSize={12} type="secondary">费用上限 {goal.maxTotalCost ? usd(goal.maxTotalCost) : '不限'}</Text>
+                <Text fontSize={12} type="secondary">总尝试 {goal.maxRounds ?? '不限'}</Text>
+                <Text fontSize={12} type="secondary">单项最多 {goal.maxAttemptsPerWork} 次</Text>
+                <Text fontSize={12} type="secondary">失联判定 {goal.leaseTimeoutMin} 分钟</Text>
+              </Flexbox>
+            </Block>
+          </Section>
+        );
+      });
+
+      const Activity = memo(({ goal, works, log }) => {
+        const { styles } = useStyles();
+        const rows = useMemo(() => {
+          const out = [];
+          works.forEach((w) => w.attempts.forEach((a) => {
+            out.push({ t: a.started, text: `开始「${w.title}」第 ${a.n} 次尝试`, who: '系统' });
+            out.push({ t: a.ended, text: `第 ${a.n} 次尝试结束 · ${a.outcome === 'passed' ? 'verifier 通过' : 'verifier 未通过'}`, who: 'verifier' });
+          }));
+          log.forEach((l) => out.push(l));
+          return out.sort((a, b) => b.t - a.t);
+        }, [works, log]);
+        return (
+          <Section title="活动记录" extra={<Text fontSize={12} className={styles.muted}>{rows.length} 条</Text>}>
+            <Block variant="outlined" padding={12} gap={6}>
+              {rows.length === 0 && <Text fontSize={13} className={styles.muted}>还没有任何活动。</Text>}
+              {rows.map((r, i) => (
+                <Flexbox key={i} horizontal gap={12} align="baseline">
+                  <Text fontSize={12} className={styles.muted} style={{ width: 88, flexShrink: 0 }}>{ago(NOW - r.t)}</Text>
+                  <Text fontSize={12} type="secondary" style={{ width: 52, flexShrink: 0 }}>{r.who}</Text>
+                  <Text fontSize={13}>{r.text}</Text>
+                </Flexbox>
+              ))}
+            </Block>
+          </Section>
+        );
+      });
+
+      // ────────────────────────────────────────────────────────────────────
+      // Page
+      // ────────────────────────────────────────────────────────────────────
+      const GoalDetail = memo(({ scenario }) => {
+        const [state, setState] = useState(() => buildState(scenario));
+        const [log, setLog] = useState([]);
+        React.useEffect(() => { setState(buildState(scenario)); setLog([]); }, [scenario]);
+        const { goal, works, decision } = state;
+        const push = (text, who = '你') => setLog((l) => [{ t: NOW, text, who }, ...l]);
+
+        // Actions — each maps to one real business event (P-02)
+        const decide = (optionId, reason) => {
+          setState((s) => {
+            const works = s.works.map((w) => {
+              if (w.id !== s.decision.workId) return w;
+              if (optionId === 'retry') return { ...w, status: 'active', lastActivity: NOW, lastLine: '正在启动第 3 次尝试…' };
+              return { ...w, status: 'retired' };
+            });
+            return { goal: { ...s.goal, status: 'running', lastActivity: NOW }, works, decision: null };
+          });
+          push(optionId === 'retry' ? `决定：再试一次${reason ? `（${reason}）` : ''}` : '决定：放弃这项 Work');
+        };
+        const accept = () => {
+          setState((s) => ({ ...s, goal: { ...s.goal, status: 'achieved', completedAt: NOW }, works: s.works.map((w) => (w.delivered ? { ...w, delivered: false, status: 'resolved' } : w)) }));
+          push('确认完成：Goal 达成');
+        };
+        const reject = (comment) => {
+          setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', lastActivity: NOW }, works: s.works.map((w) => (w.delivered ? { ...w, delivered: false, status: 'active', lastActivity: NOW, lastLine: `按你的反馈重新开始：${comment}` } : w)) }));
+          push(`退回并带反馈再来一轮：${comment}`);
+        };
+        const addBudget = (cost) => {
+          setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', pauseCause: undefined, maxTotalCost: cost, lastActivity: NOW } }));
+          push(`费用上限调整为 ${usd(cost)}，继续`);
+        };
+        const reclaim = () => {
+          setState((s) => ({ ...s, goal: { ...s.goal, lastActivity: NOW }, works: s.works.map((w) => (isStale(s.goal, w) ? { ...w, attempts: [...w.attempts, { n: w.attempts.length + 1, started: w.lastActivity - min(20), ended: NOW, outcome: 'abandoned', cost: 0.3, reason: '执行 Agent 失联，由系统回收；不计入失败次数' }], lastActivity: NOW, lastLine: '正在重新启动这次尝试…' } : w)) }));
+          push('回收失联的尝试并重开', '系统');
+        };
+        const pause = () => { setState((s) => ({ ...s, goal: { ...s.goal, status: 'paused', pauseCause: 'user' } })); push('暂停 Goal'); };
+        const resume = () => { setState((s) => ({ ...s, goal: { ...s.goal, status: s.decision ? 'review' : 'running', pauseCause: undefined, lastActivity: NOW } })); push('继续 Goal'); };
+        const setBudget = ({ rounds, cost, perWork }) => { setState((s) => ({ ...s, goal: { ...s.goal, maxRounds: rounds, maxTotalCost: cost, maxAttemptsPerWork: perWork } })); push('更新预算'); };
+        const guidance = (id, text) => push(`给「${works.find((w) => w.id === id).title}」的下一次尝试加入说明：${text}`);
+        const start = () => { setState((s) => ({ ...s, goal: { ...s.goal, status: 'running', startedAt: NOW, lastActivity: NOW }, works: s.works.map((w, i) => (i === 0 ? { ...w, status: 'active', lastActivity: NOW, lastLine: '正在启动第 1 次尝试…' } : w)) })); push('开始执行'); };
+        const addWork = () => push('添加 Work（原型中略：打开一个标题/说明/依赖的小表单）');
+
+        return (
+          <Flexbox gap={20}>
+            <Header goal={goal} works={works} decision={decision} onPause={pause} onResume={resume} onSetBudget={setBudget} />
+            <AttentionCard goal={goal} works={works} decision={decision} onDecide={decide} onAccept={accept} onReject={reject} onAddBudget={addBudget} onReclaim={reclaim} onRetry={start} />
+            <ProgressStrip goal={goal} works={works} />
+            <WorkList goal={goal} works={works} decision={decision} onGuidance={guidance} onAddWork={addWork} />
+            <Contract goal={goal} />
+            <Activity goal={goal} works={works} log={log} />
+          </Flexbox>
+        );
+      });
+
+      const LoadingState = () => (
+        <Flexbox gap={20}>
+          <Skeleton.Button active style={{ width: 120, height: 14 }} />
+          <Skeleton active title paragraph={{ rows: 1 }} />
+          <Skeleton.Button active block style={{ height: 72 }} />
+          <Skeleton.Button active block style={{ height: 220 }} />
+        </Flexbox>
+      );
+
+      const ErrorState = ({ onRetry }) => (
+        <Block variant="outlined" padding={32} align="center" gap={8}>
+          <Icon icon={AlertTriangle} size={24} />
+          <Text weight={600}>这个 Goal 暂时加载不出来</Text>
+          <Text type="secondary" fontSize={13}>网络或服务出了点问题，Goal 本身没有受影响。</Text>
+          <Button size="small" onClick={onRetry}>重新加载</Button>
+        </Block>
+      );
+
+      const App = memo(() => {
+        const { styles } = useStyles();
+        const [scenario, setScenario] = useState('gate');
+        return (
+          <Flexbox className={styles.page}>
+            <Flexbox className={styles.toggleBar} horizontal gap={12} align="center">
+              <Text fontSize={12} type="secondary">场景</Text>
+              <Segmented
+                size="small"
+                value={scenario}
+                onChange={setScenario}
+                options={Object.entries(SCENARIOS).map(([value, s]) => ({ label: s.label, value }))}
+              />
+            </Flexbox>
+            <Flexbox className={styles.shell} padding={32} gap={20}>
+              {scenario === 'loading' ? <LoadingState /> : scenario === 'error' ? <ErrorState onRetry={() => setScenario('running')} /> : <GoalDetail key={scenario} scenario={scenario} />}
+            </Flexbox>
+          </Flexbox>
+        );
+      });
+
+      document.querySelector('#boot').remove();
+      createRoot(document.querySelector('#root')).render(
+        <ThemeProvider themeMode="auto">
+          <App />
+        </ThemeProvider>,
+      );
+    </script>
+  </body>
+</html>
