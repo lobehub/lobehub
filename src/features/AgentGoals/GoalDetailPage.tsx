@@ -9,7 +9,6 @@ import { BotIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
@@ -34,6 +33,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import { useVerifyStore, verifySelectors } from '@/store/verify';
 
 import GoalDetailActions from './GoalDetailActions';
+import GoalGraphDetailPage from './GoalGraphDetailPage';
 import { getGoalPresentation } from './goalPresentation';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import {
@@ -43,6 +43,7 @@ import {
   getGoalRuns,
   getRecentGoalRuns,
 } from './goalViewModel';
+import ProcessControl from './ProcessControl';
 
 const styles = createStaticStyles(({ css }) => ({
   executionSection: css`
@@ -164,10 +165,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const title = task?.name?.trim() || task?.instruction.trim() || goalId;
 
   if (error) return <AsyncError error={error} variant={'page'} onRetry={onRetry} />;
-  if (isNotFound)
-    return (
-      <NotFound desc={t('goalDetail.notFoundDescription')} title={t('goalDetail.notFoundTitle')} />
-    );
+  // A Goal Graph goal has no carrier task, so the identifier resolves to
+  // nothing here — it is a `goals` row id, and the graph page owns it.
+  if (isNotFound) return <GoalGraphDetailPage agentId={agentId} goalId={goalId} />;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -257,6 +257,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   <TaskInstruction />
                 </Flexbox>
               </Flexbox>
+
+              {task.goal?.id && <ProcessControl goalId={task.goal.id} />}
 
               <Flexbox gap={4}>
                 <Accordion defaultExpandedKeys={['acceptance']} gap={0}>
