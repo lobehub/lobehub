@@ -18,6 +18,10 @@ export default {
     'The share budget for your agent "{{agentName}}" has run out — new visitor conversations are being rejected. Transfer more credits to bring it back online.',
   'agent_share_budget_exhausted_action': 'Top up share budget',
   'agent_share_budget_exhausted_title': 'Agent share budget exhausted',
+  'agent_share_budget_insufficient':
+    'A visitor\'s request to your agent "{{agentName}}" needed about {{requiredAmount}}, more than the {{balance}} left in its share budget, so it was declined. Smaller requests may still succeed — transfer more credits to avoid future rejections.',
+  'agent_share_budget_insufficient_action': 'Top up share budget',
+  'agent_share_budget_insufficient_title': 'Insufficient share budget for a visitor request',
   'agent_share_budget_low':
     'The share budget for your agent "{{agentName}}" is running low — about {{balance}} remaining. Transfer more credits so visitors can keep chatting with it.',
   'agent_share_budget_low_action': 'Top up share budget',
