@@ -13,6 +13,7 @@ import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { AgentChatConfigSchema } from '@/types/agent';
@@ -66,8 +67,13 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       // `updateSessionChatConfig` below — see `scheduleShareRunInterruptOnReset`'s
       // JSDoc and `SessionModel.updateConfig`'s own JSDoc on the
       // session-level bypass this writer guards against.
+      // `onShareRunsInterrupted` covers `removeSession` below: deleting a
+      // session can orphan-delete its last agent, which carries its own
+      // Agent Share the same as a direct `agent.removeAgent` — see
+      // `SessionModelOptions.onShareRunsInterrupted`'s JSDoc.
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId, wsId, {
         onShareReset: scheduleShareRunInterruptOnReset(ctx.serverDB, ctx.userId),
+        onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
       }),
     },
   });

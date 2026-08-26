@@ -45,7 +45,7 @@ import {
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
-import { AiAgentService } from '@/server/services/aiAgent';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
@@ -770,19 +770,6 @@ export const agentRouter = router({
     .use(withScopedPermission('agent:delete'))
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // Snapshot in-flight Agent Share visitor runs BEFORE the delete cascade
-      // below removes their topic rows (`topics.agentId` cascades through the
-      // session delete). Agent sharing is personal-only, so a workspace agent
-      // never has any. Read here — not from `AiAgentService
-      // .interruptActiveShareRuns` after commit — because that helper
-      // rediscovers active runs by re-querying `topics` for this agentId,
-      // which returns nothing once the cascade has deleted them; the runtime
-      // operation itself would then keep running under the deleted agent's
-      // former owner with no way left to find it. See LOBE-11930.
-      const activeShareRuns = ctx.workspaceId
-        ? []
-        : await new TopicModel(ctx.serverDB, ctx.userId).findActiveVisitorRunTopics(input.agentId);
-
       if (ctx.workspaceId) {
         await assertCanPerformResourceAction({
           action: 'delete',
@@ -813,6 +800,13 @@ export const agentRouter = router({
             trx,
             ctx.userId,
             ctx.workspaceId ?? undefined,
+            {
+              // `AgentModel.delete` snapshots active Agent Share visitor runs
+              // itself, BEFORE its cascade removes their topic rows, and hands
+              // the snapshot here once the transaction commits — see that
+              // method's JSDoc and LOBE-11930.
+              onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
+            },
           );
           if (await transactionAgentModel.existsById(input.agentId)) {
             await assertAgentDeletionAllowed({
@@ -853,28 +847,6 @@ export const agentRouter = router({
           ctx.serverDB,
           ctx.workspaceId,
         ).invalidateForResources('agent', [input.agentId]);
-      }
-
-      // Best-effort, scheduled with after() so it doesn't delay the delete
-      // response: interrupt every visitor run that was active on this agent's
-      // share. The share row (and its topics) are already gone by now, so
-      // this is purely stopping the still-executing runtime operations —
-      // without it a visitor run started right before deletion would keep
-      // streaming tool calls and spending the (now-deleted) owner's budget
-      // until it finishes on its own. See LOBE-11930.
-      if (activeShareRuns.length > 0) {
-        const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
-        after(() =>
-          Promise.all(
-            activeShareRuns.map(({ operationId }) =>
-              aiAgentService
-                .interruptTask({ operationId })
-                .catch((error) =>
-                  console.error('[agent:removeAgent] interruptActiveShareRuns failed', error),
-                ),
-            ),
-          ),
-        );
       }
 
       return result;

@@ -18,6 +18,8 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import type { ActiveShareRun } from './topic';
+import { TopicModel } from './topic';
 
 export type SessionOrphanDeletionGuard = (params: {
   agentId: string;
@@ -31,6 +33,19 @@ export interface SessionModelOptions {
    * pattern, kept in sync). See LOBE-11930 hole 2.
    */
   onShareReset?: (agentId: string) => void;
+
+  /**
+   * Called with the snapshot of Agent Share visitor runs that were still
+   * in-flight on an agent `delete()`/`batchDelete()` orphan-deleted — AFTER
+   * the deleting transaction has committed. Deleting a session's last
+   * remaining agent link cascades the agent away (`clearOrphanAgent`) the
+   * same way `AgentModel.delete` does, and bypasses that method entirely (a
+   * raw `trx.delete(agents)`), so it needs the identical before/after
+   * snapshot split here instead of inheriting it for free. Same shape as
+   * `AgentModelOptions.onShareRunsInterrupted` — kept in sync. See
+   * LOBE-11930.
+   */
+  onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
 
 export class SessionModel {
@@ -38,6 +53,7 @@ export class SessionModel {
   private db: LobeChatDatabase;
   private workspaceId?: string;
   private onShareReset?: (agentId: string) => void;
+  private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
     db: LobeChatDatabase,
@@ -49,6 +65,7 @@ export class SessionModel {
     this.db = db;
     this.workspaceId = workspaceId;
     this.onShareReset = options?.onShareReset;
+    this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
   }
 
   private ownership = () =>
@@ -386,7 +403,9 @@ export class SessionModel {
    * Delete a session and its associated agent data if no longer referenced.
    */
   delete = async (id: string, assertOrphanDeletionAllowed?: SessionOrphanDeletionGuard) => {
-    return this.db.transaction(async (trx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const outcome = await this.db.transaction(async (trx) => {
       // First get the agent IDs associated with this session
       const links = await trx
         .select({ agentId: agentsToSessions.agentId })
@@ -404,14 +423,24 @@ export class SessionModel {
       const result = await trx.delete(sessions).where(and(eq(sessions.id, id), this.ownership()));
 
       // Delete orphaned agents
-      const orphanedAgentIds = await this.clearOrphanAgent(
+      const { activeShareRuns: runs, orphanedAgentIds } = await this.clearOrphanAgent(
         agentIds,
         trx,
         assertOrphanDeletionAllowed,
       );
+      activeShareRuns = runs;
 
       return { orphanedAgentIds, result };
     });
+
+    // Fired only after the transaction above has committed — mirrors
+    // `AgentModel.delete`'s `onShareRunsInterrupted` timing, for the same
+    // reason: interrupting a runtime operation must never fire on a rollback.
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return outcome;
   };
 
   /**
@@ -420,7 +449,9 @@ export class SessionModel {
   batchDelete = async (ids: string[], assertOrphanDeletionAllowed?: SessionOrphanDeletionGuard) => {
     if (ids.length === 0) return { orphanedAgentIds: [] as string[], result: { count: 0 } };
 
-    return this.db.transaction(async (trx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const outcome = await this.db.transaction(async (trx) => {
       // Get agent IDs associated with these sessions
       const links = await trx
         .select({ agentId: agentsToSessions.agentId })
@@ -440,14 +471,21 @@ export class SessionModel {
         .where(and(inArray(sessions.id, ids), this.ownership()));
 
       // Delete orphaned agents
-      const orphanedAgentIds = await this.clearOrphanAgent(
+      const { activeShareRuns: runs, orphanedAgentIds } = await this.clearOrphanAgent(
         agentIds,
         trx,
         assertOrphanDeletionAllowed,
       );
+      activeShareRuns = runs;
 
       return { orphanedAgentIds, result };
     });
+
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return outcome;
   };
 
   /**
@@ -465,8 +503,8 @@ export class SessionModel {
     agentIds: string[],
     trx: any,
     assertOrphanDeletionAllowed?: SessionOrphanDeletionGuard,
-  ): Promise<string[]> => {
-    if (agentIds.length === 0) return [];
+  ): Promise<{ activeShareRuns: ActiveShareRun[]; orphanedAgentIds: string[] }> => {
+    if (agentIds.length === 0) return { activeShareRuns: [], orphanedAgentIds: [] };
 
     // Batch query to find which agents still have sessions
     const remainingLinks = (await trx
@@ -483,6 +521,19 @@ export class SessionModel {
       await assertOrphanDeletionAllowed?.({ agentId, executor: trx as LobeChatDatabase });
     }
 
+    // Snapshot in-flight Agent Share visitor runs on every orphan BEFORE the
+    // delete below cascades their topic rows away. Agent sharing is
+    // personal-only, so a workspace-scoped SessionModel never has any — skip
+    // the query entirely there. Mirrors `AgentModel.delete`'s JSDoc, which
+    // this raw delete bypasses. See LOBE-11930.
+    const activeShareRuns: ActiveShareRun[] = [];
+    if (!this.workspaceId && orphanedAgentIds.length > 0) {
+      const topicModel = new TopicModel(trx as LobeChatDatabase, this.userId);
+      for (const agentId of orphanedAgentIds) {
+        activeShareRuns.push(...(await topicModel.findActiveVisitorRunTopics(agentId)));
+      }
+    }
+
     // Batch delete orphaned agents (this will cascade to agentsFiles, agentsKnowledgeBases, etc.)
     // and SET NULL on messages.agentId
     if (orphanedAgentIds.length > 0) {
@@ -491,7 +542,7 @@ export class SessionModel {
         .where(and(inArray(agents.id, orphanedAgentIds), this.agentsOwnership()));
     }
 
-    return orphanedAgentIds;
+    return { activeShareRuns, orphanedAgentIds };
   };
 
   // **************** Update *************** //

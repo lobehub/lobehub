@@ -13,9 +13,13 @@ const {
   mockUpdateConfig,
   mockFindById,
   mockCreatePlugin,
+  mockExistsById,
+  mockDelete,
 } = vi.hoisted(() => ({
   mockCountAgents: vi.fn(),
   mockCreatePlugin: vi.fn(),
+  mockDelete: vi.fn(),
+  mockExistsById: vi.fn().mockResolvedValue(false),
   mockFindById: vi.fn(),
   mockGetAgentConfigById: vi.fn(),
   mockGetAssistantList: vi.fn(),
@@ -26,6 +30,8 @@ const {
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(() => ({
     countAgents: mockCountAgents,
+    delete: mockDelete,
+    existsById: mockExistsById,
     getAgentConfigById: mockGetAgentConfigById,
     queryAgents: mockQueryAgents,
     updateConfig: mockUpdateConfig,
@@ -95,6 +101,32 @@ describe('agentManagementRuntime', () => {
       onShareReset: expect.any(Function),
     });
     expect(PluginModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
+  });
+
+  describe('deleteAgent', () => {
+    // Regression for LOBE-11930 / codex P1: this tool-runtime delete used to
+    // construct its transaction-scoped `AgentModel` with NO options at all,
+    // so a visitor mid-conversation on the deleted agent's share was never
+    // interrupted. `AgentModel.delete` now snapshots and reports in-flight
+    // runs itself — this only has to verify the runtime wires a callback
+    // through to it (the snapshot/interrupt behavior is covered by
+    // `packages/database`'s `agent.test.ts` and `shareDeleteInterrupt`'s own
+    // unit test).
+    it('wires onShareRunsInterrupted into the transaction-scoped AgentModel', async () => {
+      const trx = {};
+      const transaction = vi.fn(async (callback: any) => callback(trx));
+      const runtime = agentManagementRuntime.factory({
+        serverDB: { transaction } as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      await runtime.deleteAgent({ agentId: 'agent-to-delete' });
+
+      const transactionScopedCall = vi.mocked(AgentModel).mock.calls.find(([db]) => db === trx);
+      expect(transactionScopedCall?.[3]?.onShareRunsInterrupted).toBeInstanceOf(Function);
+      expect(mockDelete).toHaveBeenCalledWith('agent-to-delete');
+    });
   });
 
   describe('callAgent', () => {

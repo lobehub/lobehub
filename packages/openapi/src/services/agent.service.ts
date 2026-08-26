@@ -2,6 +2,8 @@ import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
 import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
+import type { ActiveShareRun } from '@/database/models/topic';
+import { TopicModel } from '@/database/models/topic';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -268,8 +270,17 @@ export class AgentService extends BaseService {
   /**
    * Delete an agent
    * @param request Delete request parameters
+   * @param options `onShareRunsInterrupted` — see `AgentModel.delete`'s
+   * JSDoc: `packages/openapi` cannot reach `AiAgentService` (apps/server) to
+   * interrupt in-flight Agent Share visitor runs itself, so the caller that
+   * CAN (`AgentController.deleteAgent`) must pass a callback that stashes the
+   * post-commit snapshot somewhere the mounting route file can pick up — see
+   * `AGENT_SHARE_DELETE_SIGNAL_HEADER`. See LOBE-11930.
    */
-  async deleteAgent(request: AgentDeleteRequest): ServiceResult<void> {
+  async deleteAgent(
+    request: AgentDeleteRequest,
+    options?: { onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void },
+  ): ServiceResult<void> {
     this.log('info', 'delete agent', {
       agentId: request.agentId,
       migrateSessionTo: request.migrateSessionTo,
@@ -286,6 +297,13 @@ export class AgentService extends BaseService {
           permissionResult.message || 'No permission to delete this agent',
         );
       }
+
+      // Snapshotted inside the transaction below (both branches), BEFORE
+      // whichever delete cascades the visitor topic rows away, and reported
+      // to `options.onShareRunsInterrupted` only after the transaction has
+      // committed — a runtime interrupt is a side effect that must never
+      // fire on a rollback. See LOBE-11930.
+      let activeShareRuns: ActiveShareRun[] = [];
 
       await this.db.transaction(async (tx) => {
         // Re-read inside the lock-holding transaction so an OpenAPI delete has
@@ -324,6 +342,16 @@ export class AgentService extends BaseService {
             to: request.migrateSessionTo,
           });
 
+          // Agent sharing is personal-only (`workspaceId` unset), and this raw
+          // delete bypasses `AgentModel.delete`'s own snapshot — take it here,
+          // before the delete below cascades the topic rows away.
+          if (!this.workspaceId && this.userId) {
+            activeShareRuns = await new TopicModel(
+              tx as unknown as LobeChatDatabase,
+              this.userId,
+            ).findActiveVisitorRunTopics(request.agentId);
+          }
+
           // Sessions already moved; delete only the source agent while the
           // durable-state guard remains locked in the outer transaction.
           await tx
@@ -332,12 +360,16 @@ export class AgentService extends BaseService {
           return;
         }
 
-        await new AgentModel(
-          tx as unknown as LobeChatDatabase,
-          this.userId,
-          this.workspaceId,
-        ).delete(request.agentId);
+        await new AgentModel(tx as unknown as LobeChatDatabase, this.userId, this.workspaceId, {
+          onShareRunsInterrupted: (runs) => {
+            activeShareRuns = runs;
+          },
+        }).delete(request.agentId);
       });
+
+      if (activeShareRuns.length > 0) {
+        options?.onShareRunsInterrupted?.(activeShareRuns);
+      }
 
       this.log('info', 'agent deleted successfully', { agentId: request.agentId });
     } catch (error) {

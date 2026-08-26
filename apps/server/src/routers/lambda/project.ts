@@ -8,6 +8,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { ProjectModel } from '@/database/models/project';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 
 const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -140,8 +141,11 @@ export const projectRouter = router({
     try {
       return {
         data: requireResult(
-          await ctx.projectModel.delete(input.id, ({ agentId, executor }) =>
-            assertAgentDeletionAllowed({ agentId, executor, userId: ctx.userId }),
+          await ctx.projectModel.delete(
+            input.id,
+            ({ agentId, executor }) =>
+              assertAgentDeletionAllowed({ agentId, executor, userId: ctx.userId }),
+            interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
           ),
         ),
         message: 'Project deleted',

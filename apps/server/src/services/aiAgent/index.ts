@@ -228,20 +228,6 @@ import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache
 
 const log = debug('lobe-server:ai-agent-service');
 
-/**
- * Bounds the retry window `interruptActiveShareRuns` polls
- * `findActiveVisitorRunTopics` over — see that method's JSDoc for why a
- * single query can miss an operation created in the moments right after
- * revocation. ~4 attempts x 750ms covers the `createOperation` dispatch
- * window without meaningfully delaying the revocation caller's `after()`
- * callback.
- */
-const INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS = 4;
-const INTERRUPT_SHARE_RUNS_RETRY_DELAY_MS = 750;
-
-const delay = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
-
 const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
   type === 'claude-code' || type === 'codex';
 
@@ -5472,6 +5458,13 @@ export class AiAgentService {
       operationSkillSet?.skills?.length ?? 0,
     );
 
+    // Constructed outside the try so the catch block below can release an
+    // in-flight reservation on ANY failure path between
+    // `assertRunnableForVisitor` staking it and `confirmReservation`
+    // redeeming it (e.g. `createOperation` throwing) — see
+    // `agentShareRunReservations`'s JSDoc.
+    const agentShareModel = shareGate ? new AgentShareModel(this.db, this.userId) : undefined;
+
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
@@ -5487,8 +5480,18 @@ export class AiAgentService {
       // updated with an error card, no operation created), instead of a raw
       // unhandled throw. See `AgentShareModel.assertRunnableForVisitor`'s
       // JSDoc for the exact race this closes and LOBE-11930 hole 1.
-      if (shareGate) {
-        await new AgentShareModel(this.db, this.userId).assertRunnableForVisitor(shareGate.agentId);
+      //
+      // Also stakes the durable `agentShareRunReservations` claim that
+      // `confirmReservation` below redeems — see that method's JSDoc for why
+      // this pair (not a bounded retry) is what actually closes the window
+      // between this recheck and the operation being fully stood up.
+      if (shareGate && agentShareModel) {
+        await agentShareModel.assertRunnableForVisitor({
+          agentId: shareGate.agentId,
+          operationId,
+          topicId,
+          visitorUserId: shareGate.visitorUserId,
+        });
       }
 
       const result = await this.agentRuntimeService.createOperation({
@@ -5668,18 +5671,60 @@ export class AiAgentService {
         !appContext?.threadId &&
         !params.topicStartOwnerOperationId
       ) {
-        await this.topicModel.updateMetadata(topicId, {
-          runningOperation: {
-            assistantMessageId: assistantMessageRecord.id,
-            heteroType: null,
+        const runningOperationMarker = {
+          assistantMessageId: assistantMessageRecord.id,
+          heteroType: null,
+          operationId,
+          scope: appContext?.scope ?? undefined,
+          // Liveness stamp — without it this marker can never be proven dead
+          // and would hold the topic against background starts forever.
+          startedAt: new Date().toISOString(),
+          threadId: appContext?.threadId ?? undefined,
+        };
+
+        if (shareGate && agentShareModel) {
+          // Redeem the reservation staked above, ATOMICALLY with this marker
+          // write (same DB transaction — see `confirmReservation`'s JSDoc).
+          // `false` means a revoke landed and durably claimed this
+          // reservation first: fail closed — tear down everything
+          // `createOperation` already stood up (gateway registration, saved
+          // state, scheduled queue message) instead of letting the operation
+          // run unstoppably under the creator's budget.
+          const confirmed = await agentShareModel.confirmReservation({
             operationId,
-            scope: appContext?.scope ?? undefined,
-            // Liveness stamp — without it this marker can never be proven dead
-            // and would hold the topic against background starts forever.
-            startedAt: new Date().toISOString(),
-            threadId: appContext?.threadId ?? undefined,
-          },
-        });
+            runningOperation: runningOperationMarker,
+            topicId,
+          });
+
+          if (!confirmed) {
+            await this.agentRuntimeService
+              .interruptOperation(operationId)
+              .catch((error) =>
+                log(
+                  'execAgent: interruptOperation failed while tearing down a revoked share reservation, operationId=%s: %O',
+                  operationId,
+                  error,
+                ),
+              );
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+          }
+        } else {
+          await this.topicModel.updateMetadata(topicId, {
+            runningOperation: runningOperationMarker,
+          });
+        }
+      } else if (shareGate && agentShareModel) {
+        // Share-visitor runs are never isolation-thread children or
+        // topic-start-owned continuations today (`shareGate` is not
+        // propagated into `callAgent`/`callSubAgent`/group-member dispatch —
+        // see `execAgent`'s call sites). If that invariant ever breaks, fail
+        // closed rather than silently leaving the reservation both
+        // unconfirmed and unreleased, which would make it neither
+        // interruptible via the topic marker nor cleanable.
+        await agentShareModel.releaseReservation(operationId);
+        throw new Error(
+          'Agent Share visitor run unexpectedly skipped the runningOperation marker write; reservation released defensively.',
+        );
       }
 
       // Generate a short-lived JWT for Gateway WebSocket authentication.
@@ -5713,6 +5758,22 @@ export class AiAgentService {
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     } catch (error) {
+      // Best-effort, idempotent: no-ops if `confirmReservation` already
+      // deleted the row (success path throwing later) or if
+      // `assertRunnableForVisitor` never inserted one (rejected before
+      // reaching that point). See the declaration above for why this lives
+      // outside the try.
+      if (agentShareModel) {
+        await agentShareModel
+          .releaseReservation(operationId)
+          .catch((releaseError) =>
+            log(
+              'execAgent: releaseReservation failed for operationId=%s: %O',
+              operationId,
+              releaseError,
+            ),
+          );
+      }
       if (params.topicStartOwnerOperationId) {
         await this.topicModel.removeRunningOperationChild(topicId, operationId).catch(() => false);
       }
@@ -6845,55 +6906,77 @@ export class AiAgentService {
    * stop the others from being attempted, and must never re-open the
    * already-committed revocation.
    *
-   * Polls `findActiveVisitorRunTopics` a bounded number of times instead of
-   * querying once: a request that passed its own live-visibility recheck
-   * (`AgentShareModel.assertRunnableForVisitor`, taken under the SAME row
-   * lock this revocation just released) a moment earlier can still finish
-   * creating its operation and write `topics.metadata.runningOperation`
-   * shortly AFTER this function's first query — holding a DB lock across
-   * that gap isn't viable (it spans tool/knowledge-base resolution and the
-   * `agentRuntimeService.createOperation` dispatch itself). Retrying over a
-   * short bounded window catches an operation that starts in the moments
-   * after revocation instead of leaving it to run unbounded on the
-   * creator's budget. See LOBE-11930 hole 1.
+   * Queries ONCE, not on a bounded retry loop — the previous stopgap here
+   * polled `findActiveVisitorRunTopics` 4x/750ms to catch a request that
+   * passed its own live-visibility recheck (`AgentShareModel
+   * .assertRunnableForVisitor`) a moment earlier and finished creating its
+   * operation shortly after this function's first query. That window is not
+   * actually bounded by anything — `AgentRuntimeService.createOperation` does
+   * gateway registration, state persistence, and queue scheduling, any of
+   * which can outlast a fixed 3s window under load, letting the run start
+   * unstoppably anyway. See LOBE-11930 hole 1.
+   *
+   * This now relies on `AgentShareModel.revokeReservations` for durability
+   * instead: it revokes every reservation `assertRunnableForVisitor` staked
+   * (in the SAME locked transaction as the visibility check) BEFORE
+   * `createOperation`'s I/O begins, and — because that revoke and a
+   * concurrent `confirmReservation` both write the SAME row —
+   * `revokeReservations` cannot return until every reservation it could
+   * possibly race against has been resolved one way or the other (ordinary
+   * Postgres row locking, not a timing assumption). By the time it returns,
+   * `findActiveVisitorRunTopics` querying ONCE is guaranteed to see every
+   * operation that won that race and got as far as writing its
+   * `runningOperation` marker.
    */
   async interruptActiveShareRuns(agentId: string): Promise<void> {
     const interruptedOperationIds = new Set<string>();
 
-    for (let attempt = 0; attempt < INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS; attempt += 1) {
-      const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
-      const newRuns = activeRuns.filter((run) => !interruptedOperationIds.has(run.operationId));
-
-      if (newRuns.length > 0) {
+    const interrupt = async (operationId: string, topicId: string) => {
+      if (interruptedOperationIds.has(operationId)) return;
+      interruptedOperationIds.add(operationId);
+      try {
+        await this.interruptTask({ operationId, topicId });
+      } catch (error) {
         log(
-          'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s) (attempt %d/%d)',
-          agentId,
-          newRuns.length,
-          attempt + 1,
-          INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS,
-        );
-
-        await Promise.all(
-          newRuns.map(async ({ operationId, topicId }) => {
-            interruptedOperationIds.add(operationId);
-            try {
-              await this.interruptTask({ operationId, topicId });
-            } catch (error) {
-              log(
-                'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
-                operationId,
-                topicId,
-                error,
-              );
-            }
-          }),
+          'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
+          operationId,
+          topicId,
+          error,
         );
       }
+    };
 
-      if (attempt < INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS - 1) {
-        await delay(INTERRUPT_SHARE_RUNS_RETRY_DELAY_MS);
-      }
+    // 1. Revoke every reservation still standing up. Also try to interrupt
+    // each — most won't have registered with the runtime yet (harmless
+    // no-op via `interruptTask`), but some may have reached that point by
+    // the time this revoke wins the row-lock race.
+    const revokedReservations = await new AgentShareModel(this.db, this.userId).revokeReservations(
+      agentId,
+    );
+    if (revokedReservations.length > 0) {
+      log(
+        'interruptActiveShareRuns: agentId=%s revoked %d pending reservation(s)',
+        agentId,
+        revokedReservations.length,
+      );
     }
+    await Promise.all(
+      revokedReservations.map(({ operationId, topicId }) => interrupt(operationId, topicId)),
+    );
+
+    // 2. A single (not retried) query for already-confirmed/running
+    // operations — safe per this method's JSDoc.
+    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
+    if (activeRuns.length > 0) {
+      log(
+        'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s)',
+        agentId,
+        activeRuns.length,
+      );
+    }
+    await Promise.all(
+      activeRuns.map(({ operationId, topicId }) => interrupt(operationId, topicId)),
+    );
   }
 
   /**

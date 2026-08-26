@@ -139,6 +139,13 @@ vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => topicMock),
 }));
 
+const agentShareMock = {
+  revokeReservations: vi.fn().mockResolvedValue([]),
+};
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: vi.fn().mockImplementation(() => agentShareMock),
+}));
+
 vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(() => ({
     create: vi.fn(),

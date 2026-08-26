@@ -1,12 +1,12 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentConfig } from '@lobechat/const';
-import type { LobeAgentAgencyConfig, ShareVisibility } from '@lobechat/types';
+import type { ChatTopicMetadata, LobeAgentAgencyConfig, ShareVisibility } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, exists, isNull, notInArray, or, sql } from 'drizzle-orm';
 
 import type { AgentShareConfig, AgentShareConfigPatch } from '../schemas';
-import { agents, agentShares } from '../schemas';
+import { agents, agentShareRunReservations, agentShares, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { isUuid } from '../utils/uuid';
@@ -242,20 +242,158 @@ export class AgentShareModel {
    * on the ONLY path that can set `link`) — a broader check would duplicate
    * `writeAgentConfigWithShareReset`'s own heterogeneity gate and risk
    * drifting from it.
+   *
+   * This recheck alone only closes the window up to THIS transaction's
+   * commit — `createOperation` (gateway init, state persistence, queue
+   * scheduling) still runs afterwards, unlocked, and can take arbitrarily
+   * long. To close THAT window too, insert the durable
+   * `agentShareRunReservations` row in the SAME transaction as the
+   * visibility recheck (before releasing the lock), not after: a revoke that
+   * commits any time later — seconds or minutes into a slow `createOperation`
+   * — will always find and revoke this row (`revokeReservations`), and the
+   * run's own `confirmReservation` call, right before it commits to actually
+   * running, fails closed if it was. See `agentShareRunReservations`'s JSDoc
+   * for why this replaces the previous bounded-retry stopgap.
    */
-  assertRunnableForVisitor = async (agentId: string): Promise<void> => {
+  assertRunnableForVisitor = async (params: {
+    agentId: string;
+    operationId: string;
+    topicId: string;
+    visitorUserId: string;
+  }): Promise<void> => {
+    const { agentId, operationId, topicId, visitorUserId } = params;
+
     const runnable = await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
       const [share] = await tx
         .select({ visibility: agentShares.visibility })
         .from(agentShares)
         .where(eq(agentShares.agentId, agentId));
 
-      return share?.visibility === 'link';
+      if (share?.visibility !== 'link') return false;
+
+      // Durable claim, written under the SAME lock/transaction as the
+      // visibility check above — see this method's JSDoc.
+      await tx.insert(agentShareRunReservations).values({
+        agentId,
+        id: operationId,
+        topicId,
+        visitorUserId,
+      });
+
+      return true;
     });
 
     if (!runnable) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
     }
+  };
+
+  /**
+   * Atomically confirm a reservation is still live and, in the SAME
+   * transaction, write the topic's `runningOperation` marker — the durable
+   * counterpart to `assertRunnableForVisitor`'s reservation insert.
+   *
+   * Returns `false` (never writes the marker) if `revokeReservations`
+   * already revoked this reservation. Correctness here rests on ordinary
+   * Postgres row locking, not timing: this `DELETE ... WHERE revoked_at IS
+   * NULL` and a concurrent `revokeReservations` `UPDATE` both target the
+   * SAME row (`id = operationId`), so whichever commits first is the one the
+   * other observes — there is no query-based polling window between them.
+   * If this call wins the race, the marker write lands in the SAME
+   * transaction as the reservation delete, so a revoke unblocked by this
+   * transaction's commit is guaranteed to see the marker on its very next
+   * (single, non-retried) `findActiveVisitorRunTopics` query.
+   *
+   * Callers MUST call `releaseReservation` on every path that does NOT reach
+   * this method (e.g. `createOperation` throwing) — otherwise the row is
+   * never cleaned up.
+   */
+  confirmReservation = async (params: {
+    operationId: string;
+    runningOperation: NonNullable<ChatTopicMetadata['runningOperation']>;
+    topicId: string;
+  }): Promise<boolean> => {
+    const { operationId, runningOperation, topicId } = params;
+
+    return this.db.transaction(async (tx) => {
+      const [reservation] = await tx
+        .delete(agentShareRunReservations)
+        .where(
+          and(
+            eq(agentShareRunReservations.id, operationId),
+            isNull(agentShareRunReservations.revokedAt),
+          ),
+        )
+        .returning({ id: agentShareRunReservations.id });
+
+      if (!reservation) return false;
+
+      const [existingTopic] = await tx
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(eq(topics.id, topicId))
+        .for('update');
+
+      await tx
+        .update(topics)
+        .set({ metadata: { ...existingTopic?.metadata, runningOperation } })
+        .where(eq(topics.id, topicId));
+
+      return true;
+    });
+  };
+
+  /**
+   * Best-effort cleanup for a reservation that never reaches
+   * `confirmReservation` — `createOperation` threw, or `confirmReservation`
+   * itself returned `false` (already revoked). Unconditional delete (no
+   * `revoked_at` filter): the caller already owns this operation id and is
+   * done with it either way.
+   */
+  releaseReservation = async (operationId: string): Promise<void> => {
+    await this.db
+      .delete(agentShareRunReservations)
+      .where(eq(agentShareRunReservations.id, operationId));
+  };
+
+  /**
+   * Revoke every still-pending reservation for an agent — called right after
+   * a revocation write (`deleteByAgentId` / `updateVisibility('private')` /
+   * `writeAgentConfigWithShareReset`) commits.
+   *
+   * A single `UPDATE ... WHERE revoked_at IS NULL`, not a query loop: for any
+   * reservation whose run is concurrently inside `confirmReservation`, this
+   * statement blocks on that row until the confirm transaction commits or
+   * rolls back (ordinary Postgres row locking — see `confirmReservation`'s
+   * JSDoc), so by the time this call returns, every reservation it could
+   * possibly race against has already been resolved one way or the other.
+   * No fixed retry window, no missed operations.
+   *
+   * Returns the reservations this call itself revoked (i.e. runs that were
+   * still standing up) so the caller can proactively interrupt them —
+   * already-running operations (reservation already confirmed and deleted)
+   * are covered separately by `TopicModel.findActiveVisitorRunTopics`, which
+   * the SAME guarantee above makes safe to query just once, right after this
+   * call returns.
+   */
+  revokeReservations = async (
+    agentId: string,
+  ): Promise<Array<{ operationId: string; topicId: string }>> => {
+    const rows = await this.db
+      .update(agentShareRunReservations)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(agentShareRunReservations.agentId, agentId),
+          isNull(agentShareRunReservations.revokedAt),
+        ),
+      )
+      .returning({
+        operationId: agentShareRunReservations.id,
+        topicId: agentShareRunReservations.topicId,
+      });
+
+    return rows;
   };
 
   /**

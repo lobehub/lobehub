@@ -9,6 +9,7 @@ import {
   projects,
   projectWorks,
   tasks,
+  topics,
   users,
   works,
   workspaces,
@@ -85,6 +86,33 @@ describe('ProjectModel', () => {
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
     ).toHaveLength(1);
+  });
+
+  // Regression for LOBE-11930: a project's coordinator agent is an ordinary
+  // (virtual) personal agent that can carry its own Agent Share — see the
+  // first test in this file, which asserts `virtual: true` on the row this
+  // one shares a run against. Deleting the project must not silently drop
+  // an in-flight visitor run on it; `ProjectModel.delete` forwards its 3rd
+  // arg straight through to the coordinator's `AgentModel.delete`, which
+  // does the actual snapshot/report — see that method's own regression
+  // coverage in `agent.test.ts` for the snapshot behavior itself.
+  it('reports in-flight Agent Share visitor runs on the coordinator agent through onShareRunsInterrupted', async () => {
+    const project = await createProject(model, { name: 'Shared coordinator' });
+    await serverDB.insert(topics).values({
+      id: `visitor-topic-${project.id}`,
+      title: 'Visitor',
+      userId,
+      agentId: project.coordinatorAgentId,
+      senderId: 'visitor-1',
+      metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+    });
+    const onShareRunsInterrupted = vi.fn();
+
+    await model.delete(project.id, undefined, onShareRunsInterrupted);
+
+    expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+      { operationId: 'op-1', topicId: `visitor-topic-${project.id}` },
+    ]);
   });
 
   it('resolves a project by slug without escaping the current scope', async () => {

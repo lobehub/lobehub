@@ -15,6 +15,7 @@ import { tasks } from '../schemas/task';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import type { AgentModelOptions } from './agent';
 import { AgentModel } from './agent';
 
 export interface CreateProjectInput {
@@ -119,7 +120,19 @@ export class ProjectModel {
     });
   }
 
-  async delete(id: string, assertCoordinatorDeletionAllowed?: ProjectCoordinatorDeletionGuard) {
+  /**
+   * @param onShareRunsInterrupted Forwarded straight through to the
+   * coordinator agent's `AgentModel.delete` — see `AgentModelOptions`'s
+   * JSDoc. A project's coordinator agent is an ordinary personal agent (not
+   * `workspaceId`-scoped when the project itself is personal), so it can
+   * carry its own Agent Share the same as any other agent; deleting the
+   * project must not silently drop its visitor runs. See LOBE-11930.
+   */
+  async delete(
+    id: string,
+    assertCoordinatorDeletionAllowed?: ProjectCoordinatorDeletionGuard,
+    onShareRunsInterrupted?: AgentModelOptions['onShareRunsInterrupted'],
+  ) {
     return this.db.transaction(async (tx) => {
       const [project] = await tx
         .select({ coordinatorAgentId: projects.coordinatorAgentId })
@@ -137,9 +150,9 @@ export class ProjectModel {
         .delete(projects)
         .where(and(eq(projects.id, id), this.manageable()))
         .returning();
-      await new AgentModel(tx as LobeChatDatabase, this.userId, this.workspaceId).delete(
-        project.coordinatorAgentId,
-      );
+      await new AgentModel(tx as LobeChatDatabase, this.userId, this.workspaceId, {
+        onShareRunsInterrupted,
+      }).delete(project.coordinatorAgentId);
       return deleted ?? null;
     });
   }

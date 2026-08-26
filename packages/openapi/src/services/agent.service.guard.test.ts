@@ -14,6 +14,23 @@ describe('AgentService deletion guard wiring', () => {
   });
 });
 
+describe('AgentService delete share-interrupt guard wiring', () => {
+  // LOBE-11930 / codex P1: `DELETE /api/v1/agents/:id` cascades away the
+  // agent's share AND its visitor topics in the same transaction as the
+  // lambda `removeAgent` path, but used to do so with no interrupt at all.
+  // This guards that BOTH delete branches (the `AgentModel.delete` branch
+  // and the `migrateSessionTo` raw-delete branch) still snapshot/report
+  // in-flight visitor runs instead of regressing back to a silent delete.
+  // Behavioral coverage (the actual snapshot query) lives in
+  // `packages/database`'s `agent.test.ts`/`topic.query.test.ts` — this only
+  // guards the OpenAPI-layer wiring that reaches them.
+  it('snapshots and reports active share runs on both delete branches', () => {
+    expect(source).toContain('onShareRunsInterrupted');
+    expect(source).toContain('findActiveVisitorRunTopics');
+    expect(source).toContain("import { TopicModel } from '@/database/models/topic';");
+  });
+});
+
 describe('AgentService update guard wiring', () => {
   // LOBE-11930: `updateAgent` (backing `PATCH /api/v1/agents/:id`) used to
   // write `agents.model` / `agents.agencyConfig` directly with

@@ -97,6 +97,7 @@ import {
   rewriteMessageScopeForTopics,
   rewriteResidualMessageScope,
 } from './agentTransferJob';
+import { type ActiveShareRun, TopicModel } from './topic';
 import {
   hasForeignTopicComments,
   syncTopicCommentsOnTopicTransfer,
@@ -231,6 +232,21 @@ export interface AgentModelOptions {
    * LOBE-11930 hole 2.
    */
   onShareReset?: (agentId: string) => void;
+
+  /**
+   * Called with the snapshot of Agent Share visitor runs that were still
+   * in-flight when `delete()` removed a personal agent — AFTER the deleting
+   * transaction has committed. `delete()` takes the snapshot itself, BEFORE
+   * its own cascade removes the topic rows the lookup needs (`topics.agentId`
+   * cascades directly off `agents`, not only through the session delete), so
+   * every caller gets this for free instead of hand-rolling the same
+   * before/after split the lambda `removeAgent` path pioneered. Optional and
+   * defaulted to a no-op so every EXISTING `new AgentModel(...)` call site
+   * keeps its current behavior; only construction sites that can reach the
+   * server layer (tRPC procedures, tool executors) pass a real callback —
+   * same shape as `onShareReset` above. See LOBE-11930.
+   */
+  onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 }
 
 export class AgentModel {
@@ -238,6 +254,7 @@ export class AgentModel {
   private db: LobeChatDatabase;
   private workspaceId?: string;
   private onShareReset?: (agentId: string) => void;
+  private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
     db: LobeChatDatabase,
@@ -249,6 +266,7 @@ export class AgentModel {
     this.db = db;
     this.workspaceId = workspaceId;
     this.onShareReset = options?.onShareReset;
+    this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
   }
 
   /**
@@ -948,9 +966,21 @@ export class AgentModel {
   /**
    * Delete an agent and its associated session.
    * This will cascade delete messages, topics, etc. through the session deletion.
+   *
+   * Every caller — the lambda `removeAgent` procedure, the Agent Management
+   * tool runtime, the OpenAPI delete endpoint, and `ProjectModel.delete`'s
+   * coordinator-agent cleanup — gets the Agent Share visitor-run interrupt
+   * for free here instead of hand-rolling it: this method snapshots
+   * `TopicModel.findActiveVisitorRunTopics` itself, BEFORE the cascade below
+   * removes the topic rows the lookup needs (`topics.agentId` cascades
+   * directly off the final `agents` delete, not only through the session
+   * delete), and hands the snapshot to `onShareRunsInterrupted` once the
+   * transaction has committed. See LOBE-11930.
    */
   delete = async (agentId: string) => {
-    return this.db.transaction(async (trx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
       // Lock the agent row BEFORE consulting the pending-copy guard — same
       // lock-then-guard order as transferAgents. A concurrent copy enqueue
       // locks the same source rows, so the guard here cannot run in the window
@@ -988,6 +1018,17 @@ export class AgentModel {
         throw new Error(AGENT_COPY_IN_PROGRESS);
       }
 
+      // Snapshot in-flight Agent Share visitor runs BEFORE anything below
+      // cascades their topic rows away. Agent sharing is personal-only, so a
+      // workspace agent never has any — skip the query entirely there. See
+      // this method's JSDoc and LOBE-11930.
+      if (!this.workspaceId) {
+        activeShareRuns = await new TopicModel(
+          trx as LobeChatDatabase,
+          this.userId,
+        ).findActiveVisitorRunTopics(agentId);
+      }
+
       // 1. Get associated session IDs
       const links = await trx
         .select({ sessionId: agentsToSessions.sessionId })
@@ -1011,6 +1052,16 @@ export class AgentModel {
       // 4. Delete the agent itself
       return trx.delete(agents).where(and(eq(agents.id, agentId), this.ownership()));
     });
+
+    // Fired only after the transaction above has committed — mirrors
+    // `writeAgentConfigWithShareReset`'s `onShareReset` timing, for the same
+    // reason: interrupting a runtime operation is a side effect that must
+    // never fire on a rollback.
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return result;
   };
 
   /**

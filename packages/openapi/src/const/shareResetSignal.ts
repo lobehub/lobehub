@@ -13,3 +13,25 @@
  * API caller. Value shape: `"<ownerId>:<agentId>"`. See LOBE-11930 hole 2.
  */
 export const AGENT_SHARE_RESET_SIGNAL_HEADER = 'x-lobehub-agent-share-reset';
+
+/**
+ * Same cross-boundary bridge as {@link AGENT_SHARE_RESET_SIGNAL_HEADER}, used
+ * by `AgentController.deleteAgent` instead: a `DELETE /api/v1/agents/:id`
+ * cascades away the agent's share AND its visitor topics in the same
+ * transaction, so by the time the mounting route file could re-query
+ * `topics` for this agentId (the reset signal's approach) there is nothing
+ * left to find — see `AgentModel.delete`'s JSDoc. The payload therefore
+ * carries the pre-snapshotted run list itself (`ownerId` + every
+ * `{ operationId, topicId }` still in flight at delete time) instead of just
+ * an agentId, JSON-encoded since a header value cannot hold a structured
+ * value directly. Stripped from the response before it reaches the API
+ * caller — see `src/app/(backend)/api/v1/[[...route]]/route.ts`. See
+ * LOBE-11930.
+ */
+export const AGENT_SHARE_DELETE_SIGNAL_HEADER = 'x-lobehub-agent-share-delete';
+
+/** Payload shape carried by {@link AGENT_SHARE_DELETE_SIGNAL_HEADER}, JSON-encoded. */
+export interface AgentShareDeleteSignal {
+  activeShareRuns: Array<{ operationId: string; topicId: string }>;
+  ownerId: string;
+}

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewAgent } from '../../schemas';
@@ -1198,6 +1198,89 @@ describe('AgentModel', () => {
         where: eq(agentsKnowledgeBases.agentId, agent.id),
       });
       expect(remainingKBs).toHaveLength(0);
+    });
+
+    // Regression for LOBE-11930: deleting a personal agent cascades its
+    // topics away (both through the session delete and directly via
+    // `topics.agentId`), so any in-flight Agent Share visitor run must be
+    // snapshotted BEFORE that cascade and reported through
+    // `onShareRunsInterrupted` — re-querying `topics` for this agentId after
+    // the delete commits would find nothing.
+    it('reports in-flight Agent Share visitor runs via onShareRunsInterrupted', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Shared Agent' })
+        .returning();
+      await serverDB.insert(topics).values({
+        id: 'delete-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId: agent.id,
+        senderId: 'visitor-1',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new AgentModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await modelWithCallback.delete(agent.id);
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'delete-visitor-topic' },
+      ]);
+
+      // Cascade still ran — nothing left to re-discover afterward.
+      const remainingTopic = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, 'delete-visitor-topic'),
+      });
+      expect(remainingTopic).toBeUndefined();
+    });
+
+    it('does not call onShareRunsInterrupted when there is nothing in flight', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Unshared Agent' })
+        .returning();
+
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new AgentModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await modelWithCallback.delete(agent.id);
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
+    });
+
+    it('skips the snapshot entirely for a workspace-scoped agent (sharing is personal-only)', async () => {
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'ws', primaryOwnerId: userId, slug: 'delete-share-runs-ws' })
+        .returning();
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({ userId, title: 'Workspace Agent', workspaceId: workspace.id })
+        .returning();
+      await serverDB.insert(topics).values({
+        id: 'workspace-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId: agent.id,
+        workspaceId: workspace.id,
+        senderId: 'visitor-1',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      const onShareRunsInterrupted = vi.fn();
+      const workspaceAgentModel = new AgentModel(serverDB, userId, workspace.id, {
+        onShareRunsInterrupted,
+      });
+
+      await workspaceAgentModel.delete(agent.id);
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
     });
   });
 

@@ -316,6 +316,13 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * tick from the day it shipped, so rate-limit continuations never once resumed).
  * `jsonbNullTest.test.ts` is the source-shape guard that holds the line.
  */
+/**
+ * One in-flight Agent Share visitor run — the payload every delete/revoke
+ * path snapshots before it cascades the underlying topic row away and hands
+ * off to `AiAgentService.interruptTask`. See `findActiveVisitorRunTopics`.
+ */
+export type ActiveShareRun = { operationId: string; topicId: string };
+
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -1136,9 +1143,7 @@ export class TopicModel {
    * topic metadata, so callers can pass these pairs straight through without
    * re-reading child operations here.
    */
-  findActiveVisitorRunTopics = async (
-    agentId: string,
-  ): Promise<Array<{ operationId: string; topicId: string }>> => {
+  findActiveVisitorRunTopics = async (agentId: string): Promise<ActiveShareRun[]> => {
     const rows = await this.db
       .select({ id: topics.id, metadata: topics.metadata })
       .from(topics)
@@ -1156,7 +1161,7 @@ export class TopicModel {
         operationId: row.metadata?.runningOperation?.operationId,
         topicId: row.id,
       }))
-      .filter((row): row is { operationId: string; topicId: string } => Boolean(row.operationId));
+      .filter((row): row is ActiveShareRun => Boolean(row.operationId));
   };
 
   // **************** Create *************** //

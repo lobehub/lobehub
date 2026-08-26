@@ -1,7 +1,10 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
-import { AGENT_SHARE_RESET_SIGNAL_HEADER } from '../const/shareResetSignal';
+import {
+  AGENT_SHARE_DELETE_SIGNAL_HEADER,
+  AGENT_SHARE_RESET_SIGNAL_HEADER,
+} from '../const/shareResetSignal';
 import { AgentService } from '../services/agent.service';
 import type {
   AgentDeleteRequest,
@@ -104,8 +107,22 @@ export class AgentController extends BaseController {
       const request: AgentDeleteRequest = { agentId: id };
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
-      await agentService.deleteAgent(request);
+      const ownerId = this.getUserId(c);
+      const agentService = new AgentService(db, ownerId, this.getWorkspaceId(c));
+      await agentService.deleteAgent(request, {
+        // `packages/openapi` cannot reach `AiAgentService` (apps/server) to
+        // interrupt in-flight Agent Share visitor runs itself — signal the
+        // pre-snapshotted run list via a response header instead, so the
+        // process that mounts this Hono app
+        // (`src/app/(backend)/api/v1/[[...route]]/route.ts`, which DOES have
+        // `@/server/*` access) can schedule the interrupt after the response
+        // is built. Stripped from the response before it reaches the API
+        // caller — see that route file. See LOBE-11930.
+        onShareRunsInterrupted: (activeShareRuns) => {
+          if (!ownerId) return;
+          c.header(AGENT_SHARE_DELETE_SIGNAL_HEADER, JSON.stringify({ activeShareRuns, ownerId }));
+        },
+      });
 
       return this.success(c, null, 'Agent deleted successfully');
     } catch (error) {
