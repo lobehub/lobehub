@@ -317,6 +317,14 @@ export const isTaskListKey = (key: unknown): boolean =>
 export const isScheduledTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:scheduledList';
 
+/**
+ * Goal Graph reads. Keyed by the `goals` row id (not the carrier task's
+ * identifier) because that is what every `goal.*` procedure takes.
+ */
+export const goalKeys = {
+  graph: def('goal:graph', (goalId: string) => ['goal:graph', goalId]),
+};
+
 export const taskKeys = {
   detail: def('task:detail', (taskId: string) => ['task:detail', taskId]),
   groupList: def(
@@ -1344,6 +1352,7 @@ export const swrKeys = {
   file: fileKeys,
   fork: forkKeys,
   gateway: gatewayKeys,
+  goal: goalKeys,
   global: globalKeys,
   group: groupKeys,
   home: homeKeys,

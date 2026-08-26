@@ -1,7 +1,8 @@
 import { type GoalStatus, goalStatuses } from '@lobechat/const/goal';
+import type { GoalTickResult } from '@lobechat/types';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { taskKeys } from '@/libs/swr/keys';
+import { goalKeys, taskKeys } from '@/libs/swr/keys';
 import { goalService } from '@/services/goal';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -56,6 +57,65 @@ export class GoalActionImpl {
     );
     await this.refreshGoals(agentId);
   };
+
+  /**
+   * Resolve a pending decision gate. `goalId` is the `goals` row id.
+   *
+   * Resolving a gate does not advance the graph — the coordinator only moves on
+   * the next tick — so the caller decides whether to follow up with `tickGoal`.
+   */
+  decideGoal = async (
+    goalId: string,
+    params: { decisionId: string; optionId: string; resolution?: string },
+  ): Promise<void> => {
+    await goalService.decide({ id: goalId, ...params });
+    await this.refreshGoalGraph(goalId);
+  };
+
+  pauseGoal = async (goalId: string): Promise<void> => {
+    await goalService.pause(goalId);
+    await this.refreshGoalGraph(goalId);
+  };
+
+  refreshGoalGraph = async (goalId: string): Promise<void> => {
+    await mutate(goalKeys.graph(goalId));
+  };
+
+  resumeGoal = async (goalId: string): Promise<void> => {
+    await goalService.resume(goalId);
+    await this.refreshGoalGraph(goalId);
+  };
+
+  setGoalBudget = async (
+    goalId: string,
+    budget: { maxRounds?: number | null; maxTotalCost?: number | null },
+  ): Promise<void> => {
+    await goalService.setBudget({ id: goalId, ...budget });
+    await this.refreshGoalGraph(goalId);
+  };
+
+  /**
+   * One coordinator step. Graph goals have no server-side driver, so this is
+   * the only thing that moves them from the app.
+   */
+  tickGoal = async (goalId: string): Promise<GoalTickResult> => {
+    const result = await goalService.tick(goalId);
+    await this.refreshGoalGraph(goalId);
+    return result;
+  };
+
+  /** The Goal Graph snapshot behind the process-control surface. */
+  useFetchGoalGraph = (goalId?: string | null) =>
+    useClientDataSWR(goalId ? goalKeys.graph(goalId) : null, () => goalService.getGraph(goalId!), {
+      onSuccess: (graph) => {
+        this.#set(
+          ({ goalGraphById }) => ({ goalGraphById: { ...goalGraphById, [goalId!]: graph } }),
+          false,
+          'useFetchGoalGraph/success',
+        );
+      },
+      revalidateOnFocus: true,
+    });
 
   loadMoreGoals = (): void => {
     this.#set(
