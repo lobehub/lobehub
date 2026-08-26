@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
+import { MessageModel, toVisitorMessage } from '../../message';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -117,5 +117,68 @@ describe('MessageModel.queryForVisitor', () => {
       id: creatorId,
       username: 'creator-handle',
     });
+  });
+});
+
+describe('toVisitorMessage — nested messages', () => {
+  it('sanitizes messages nested under a compressed group and group members', () => {
+    const creatorSender = {
+      avatar: 'https://example.com/avatar.png',
+      fullName: 'Creator Name',
+      id: 'creator-user-id',
+      username: 'creator',
+    };
+
+    const sanitized = toVisitorMessage({
+      compressedMessages: [
+        {
+          content: 'compacted turn',
+          createdAt: 1,
+          extra: { model: 'gpt-4', provider: 'openai' },
+          id: 'inner-1',
+          role: 'assistant',
+          sender: creatorSender,
+          updatedAt: 1,
+          usage: { totalTokens: 42 },
+        },
+      ] as any,
+      content: 'compressed',
+      createdAt: 1,
+      id: 'group-1',
+      members: [
+        {
+          content: 'member turn',
+          createdAt: 1,
+          id: 'member-1',
+          role: 'assistant',
+          sender: creatorSender,
+          updatedAt: 1,
+          usage: { totalTokens: 7 },
+        },
+      ] as any,
+      pinnedMessages: [
+        {
+          content: 'pinned',
+          createdAt: new Date(),
+          id: 'pinned-1',
+          model: 'gpt-4',
+          provider: 'openai',
+          role: 'assistant',
+        },
+      ],
+      role: 'compressedGroup',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.compressedMessages?.[0].sender).toBeNull();
+    expect(sanitized.compressedMessages?.[0].usage).toBeUndefined();
+    expect(sanitized.compressedMessages?.[0].extra?.model).toBeUndefined();
+    expect(sanitized.compressedMessages?.[0].extra?.provider).toBeUndefined();
+    expect(sanitized.members?.[0].sender).toBeNull();
+    expect(sanitized.members?.[0].usage).toBeUndefined();
+    expect(sanitized.pinnedMessages?.[0].model).toBeNull();
+    expect(sanitized.pinnedMessages?.[0].provider).toBeNull();
+    // Content is preserved — only creator-only metadata is stripped.
+    expect(sanitized.compressedMessages?.[0].content).toBe('compacted turn');
   });
 });

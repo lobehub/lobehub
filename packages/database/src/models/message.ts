@@ -458,6 +458,24 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
  */
 export const toVisitorMessage = (message: UIChatMessage): UIChatMessage => ({
   ...message,
+  // A compacted topic nests raw rows under the group node, and group chat
+  // nests member messages, so a shallow spread would sanitize only the outer
+  // node and leave the creator's identity on everything inside it.
+  ...(message.compressedMessages && {
+    compressedMessages: message.compressedMessages.map((nested) => toVisitorMessage(nested)),
+  }),
+  ...(message.members && {
+    members: message.members.map((nested) => toVisitorMessage(nested)),
+  }),
+  // `pinnedMessages` is a narrow projection rather than a full message, so it
+  // carries no `sender`/`usage` — only the model snapshot needs stripping.
+  ...(message.pinnedMessages && {
+    pinnedMessages: message.pinnedMessages.map((pinned) => ({
+      ...pinned,
+      model: null,
+      provider: null,
+    })),
+  }),
   extra: message.extra
     ? { ...message.extra, model: undefined, provider: undefined }
     : message.extra,
