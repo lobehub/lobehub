@@ -1119,10 +1119,48 @@ export class AgentModel {
       this.stripImmutableFields(apiSafeData),
     );
 
-    return this.db
-      .update(agents)
-      .set({ ...sanitizedData, updatedAt: new Date() })
-      .where(and(eq(agents.id, agentId), this.ownership()));
+    /**
+     * `update()` takes a raw `Partial<AgentItem>` column patch — several
+     * callers pass it as an untyped `Record<string, unknown>` cast (the
+     * Agent Builder / Agent Management tool executors forward model-produced
+     * `meta` / `rawMeta` objects this way), so TypeScript's `Partial<AgentItem>`
+     * signature does not actually stop a caller — buggy or model-influenced —
+     * from slipping `model` / `agencyConfig` through here. Route those two
+     * fields through the same `writeAgentConfigWithShareReset` choke point
+     * `AgentModel.updateConfig` / `SessionModel.updateConfig` /
+     * `AgentService.updateAgent` use, instead of writing `agents` directly,
+     * so a `link` share can never survive an `update()` call that turns the
+     * agent heterogeneous (Codex / Claude Code). See LOBE-11930.
+     */
+    const touchesHeterogeneityFields =
+      Object.hasOwn(sanitizedData, 'model') || Object.hasOwn(sanitizedData, 'agencyConfig');
+
+    if (!touchesHeterogeneityFields) {
+      return this.db
+        .update(agents)
+        .set({ ...sanitizedData, updatedAt: new Date() })
+        .where(and(eq(agents.id, agentId), this.ownership()));
+    }
+
+    const existing = await this.db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), this.ownership()),
+      columns: { agencyConfig: true, model: true },
+    });
+
+    return writeAgentConfigWithShareReset(this.db, {
+      agentId,
+      resultingConfig: {
+        agencyConfig: Object.hasOwn(sanitizedData, 'agencyConfig')
+          ? (sanitizedData.agencyConfig as LobeAgentAgencyConfig | null | undefined)
+          : existing?.agencyConfig,
+        model: Object.hasOwn(sanitizedData, 'model')
+          ? (sanitizedData.model as string | null | undefined)
+          : existing?.model,
+      },
+      touchesHeterogeneityFields,
+      updateData: { ...sanitizedData, updatedAt: new Date() },
+      where: and(eq(agents.id, agentId), this.ownership())!,
+    });
   };
 
   /**

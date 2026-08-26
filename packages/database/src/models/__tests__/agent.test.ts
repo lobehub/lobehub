@@ -908,6 +908,61 @@ describe('AgentModel', () => {
 
       expect(result?.title).toBe('Updated Title');
     });
+
+    // Regression for LOBE-11930: `update()` — unlike `updateConfig()` — used
+    // to write `agents.model` / `agents.agencyConfig` directly with
+    // `tx.update(agents)`, bypassing the invariant that a `link` share must
+    // reset to `private` when a write turns the agent heterogeneous (Codex /
+    // Claude Code). Several callers forward untyped `Record<string, unknown>`
+    // casts into `update()` (e.g. the Agent Builder / Agent Management tool
+    // executors' `meta` / `rawMeta` forwarding — see
+    // apps/server/.../serverRuntimes/agentBuilder.ts and agentManagement.ts),
+    // so `Partial<AgentItem>`'s compile-time signature does not actually stop
+    // `model` / `agencyConfig` from reaching here.
+    it('should reset an already link-shared agent to private when update() turns it heterogeneous', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ userId, model: 'gpt-4' })
+        .returning()
+        .then((res) => res[0]);
+
+      await serverDB.insert(agentShares).values({
+        agentId: agent.id,
+        shareConfig: {},
+        visibility: 'link',
+      });
+
+      await agentModel.update(agent.id, { model: 'codex' });
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.model).toBe('codex');
+
+      const share = await serverDB.query.agentShares.findFirst({
+        where: eq(agentShares.agentId, agent.id),
+      });
+      expect(share?.visibility).toBe('private');
+    });
+
+    it('should leave a link-shared agent untouched when update() does not touch model/agencyConfig', async () => {
+      const agent = await serverDB
+        .insert(agents)
+        .values({ userId, model: 'gpt-4' })
+        .returning()
+        .then((res) => res[0]);
+
+      await serverDB.insert(agentShares).values({
+        agentId: agent.id,
+        shareConfig: {},
+        visibility: 'link',
+      });
+
+      await agentModel.update(agent.id, { title: 'Renamed via update()' });
+
+      const share = await serverDB.query.agentShares.findFirst({
+        where: eq(agentShares.agentId, agent.id),
+      });
+      expect(share?.visibility).toBe('link');
+    });
   });
 
   describe('touchUpdatedAt', () => {
