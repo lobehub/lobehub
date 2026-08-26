@@ -1,6 +1,9 @@
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { VISITOR_TOPIC_PAGE_SIZE } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -37,6 +40,7 @@ const agentShareProcedure = authedProcedure.use(serverDatabase).use(async (opts)
 
   return opts.next({
     ctx: {
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId),
       agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId),
     },
   });
@@ -50,12 +54,38 @@ const requireShare = <T>(share: T | null): T => {
   return share;
 };
 
+/**
+ * Reject enabling/publishing a share for a heterogeneous (Claude Code / Codex /
+ * …) agent. `AiAgentService.execAgent` fail-closes every visitor run against
+ * such agents with `ShareHeterogeneousAgentUnsupported` (see
+ * apps/server/src/services/aiAgent/index.ts), so a link that reaches this
+ * state looks live in the owner's settings but breaks on the recipient's very
+ * first message. Reusing the same classification the runtime uses — rather
+ * than re-deriving it — keeps this gate and the execution gate from drifting
+ * apart. Checked here (in the router, not `AgentShareModel`) so it composes
+ * cleanly with that model's own hardening work happening in parallel.
+ */
+const assertShareableAgent = async (agentModel: AgentModel, agentId: string) => {
+  const agent = await agentModel.getAgentConfigById(agentId);
+  const isHeterogeneous =
+    !!agent?.agencyConfig?.heterogeneousProvider?.type || isHeterogeneousAgentModelId(agent?.model);
+
+  if (isHeterogeneous) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+    });
+  }
+};
+
 export const agentShareRouter = router({
   disableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
     return requireShare(await ctx.agentShareModel.deleteByAgentId(input.agentId));
   }),
 
   enableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
+    await assertShareableAgent(ctx.agentModel, input.agentId);
+
     return ctx.agentShareModel.create(input.agentId);
   }),
 
@@ -86,6 +116,13 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
+      // Only publishing (`link`) needs the check — reverting to `private` never
+      // exposes visitor execution, so it must stay reachable even if the agent
+      // config changed to a heterogeneous provider after the share was created.
+      if (input.visibility === 'link') {
+        await assertShareableAgent(ctx.agentModel, input.agentId);
+      }
+
       return requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),
       );

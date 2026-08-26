@@ -78,7 +78,19 @@ const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   // Link-share only exists for personal agents (the share model rejects
   // workspace agents), never builtin/inbox rows, and only on deployments with
   // the business link-share capability — same gate as topic share.
-  const shareSupported = !hasActiveWorkspace && !isBuiltinAgent && !isInbox && enableAgentLinkShare;
+  // Heterogeneous (Claude Code / Codex / …) agents are excluded too: the
+  // server unconditionally rejects every visitor send against them with
+  // `ShareHeterogeneousAgentUnsupported` (see `AiAgentService.execAgent`), so
+  // a link published for one looks live in settings but breaks on the
+  // recipient's very first message. `heterogeneousProviderType` is the same
+  // predicate `channelsSupported` above already uses to classify these
+  // agents — reused here rather than re-derived.
+  const shareSupported =
+    !hasActiveWorkspace &&
+    !isBuiltinAgent &&
+    !isInbox &&
+    enableAgentLinkShare &&
+    !heterogeneousProviderType;
 
   const options = useMemo(
     () =>
