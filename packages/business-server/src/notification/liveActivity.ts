@@ -1,4 +1,4 @@
-import type { HeteroInterventionReviewStatus } from '../agent-run/heteroInterventionReview';
+import type { AgentInterventionReviewStatus } from '../agent-run/agentInterventionReview';
 
 export type ApnsEnvironment = 'production' | 'sandbox';
 
@@ -25,7 +25,9 @@ export interface RegisterAgentInterventionLiveActivityParams {
 
 export interface RegisterAgentInterventionLiveActivityResult {
   /** Current durable state so a late token registration can end immediately. */
-  interventionStatus: HeteroInterventionReviewStatus;
+  interventionStatus: AgentInterventionReviewStatus;
+  /** Authoritative aggregate terminality; `mixed` alone cannot determine whether work remains. */
+  interventionTerminal: boolean;
 }
 
 /** OSS has no APNs ActivityKit token store. Cloud overrides this module. */
@@ -37,5 +39,5 @@ export async function registerLiveActivityPushToStartToken(
 export async function registerAgentInterventionLiveActivity(
   _params: RegisterAgentInterventionLiveActivityParams,
 ): Promise<RegisterAgentInterventionLiveActivityResult> {
-  return { interventionStatus: 'unavailable' };
+  return { interventionStatus: 'unavailable', interventionTerminal: true };
 }
