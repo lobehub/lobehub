@@ -1,8 +1,8 @@
 # Goal detail — process control for long-horizon execution
 
 **Date:** 2026-08-26
-**Status:** discovery → aligning (frame mode; no implementation yet)
-**Scope:** the Goal detail page (`/agent/:aid/goal/:goalId`) and the two places that feed into it (Goal list, Home inbox rail), redesigned as a **process-control surface** for the long-horizon Goal runtime (Goal Graph + Work recovery + Acceptance + decision gates). Out of scope: Goal creation wizard, the Acceptance workspace itself, Graph visualization as a first screen, mobile.
+**Status:** aligning — round 2 (frontier-first; round 1's Work-list IA was rejected by the user)
+**Scope:** the Goal detail page (`/agent/:aid/goal/:goalId`) and the two places that feed into it (Goal list, Home inbox rail), redesigned as a **process-control surface** for the long-horizon Goal runtime (Goal Graph + Work recovery + Acceptance + decision gates). Out of scope: Goal creation wizard, the Acceptance workspace itself, a full-screen graph editor, mobile.
 **Prototype:** `docs/development/goal-process-control-prototype.html`
 **Evidence:** the two exploration topics (`tpc_1p4dwDmUPsnN`, `tpc_XUh2GbVp3UVM`), the merged runtime PR #18670, domain types/services under `packages/types/src/goal.ts`, `apps/server/src/services/goal/*`, `apps/server/src/services/verify/*`, the shipped UI under `src/features/AgentGoals/*`, and `docs/development/agent-goals-*.md`.
 
@@ -86,20 +86,23 @@ Work node status: `proposed` (queued, may be blocked by `depends_on`), `active` 
 
 ### Lookup objects and attached proof (`P-14`)
 
-1. "I came here to find every **piece of Work** the Goal is doing."
-2. "For each one I need, without another click: its **current state in plain words**, **when it last did something**, **attempt N of M**, **cost**, and the **one-line outcome** (Finding title or the verifier's reason for rejecting)."
-3. "I use **attempt history, verifier reasoning, evidence files, topics, the graph, and the event ledger** only to investigate."
+1. "I came here to find **what can move next** — the frontier: every node that can change state under current conditions (a decision waiting on me, a Work being executed, a Work whose dependencies are met)."
+2. "For each frontier item I need, without another click: **why it is on the frontier** (needs me / running / ready), **who is executing it and when it last did something**, **attempt N of M and cost**, and — for a decision — **the evidence, the options, what each costs, and the recommendation**."
+3. "I use **the exploration graph** to see what the system currently believes and which paths it is on; **attempt ledgers, verifier reasoning, evidence, topics and the event ledger** only to investigate."
+
+The frontier is not "all unfinished nodes" — it is the candidate set the coordinator itself selects from (`depends_on` resolved, no open gate, non-terminal). Nodes waiting on other nodes are folded, not listed.
 
 ### First scan — answered without a click
 
-1. Is it still moving? — status sentence **plus last-activity age** (a spinner alone is what lied in the nanoGPT run).
-2. How far? — Work resolved n/m and acceptance checks passed p/q.
-3. Does it need me? — one attention card at the top, or none.
-4. What has it cost, and what is left? — spend / cap, attempts / cap.
+1. Does it need me? — the **需要你** group at the top of the frontier, or none.
+2. What is moving right now, and is it alive? — **进行中** items with owner Task + last-activity age (a spinner alone is what lied in the nanoGPT run).
+3. What comes next and why? — **可以开始** items, blocked items folded with their blocker's name.
+4. What does the system currently believe? — **最近结论** (latest Findings) beside the graph, where the same nodes are highlighted.
+5. Cost and progress — header chips: Work n/m, checks p/q, attempts a/b, spend $x/$y.
 
 ### Secondary dimensions
 
-Graph topology, chronology (events), attempt ledger, verifier transcripts, task tree, topics. All drill-down.
+Full graph (zoom), per-node detail (attempts, evidence, edges "在图里的位置"), chronology (activity ledger), contract text. All one click away, none on the first scan.
 
 ### Evidence and confidence
 
@@ -119,98 +122,86 @@ Graph topology, chronology (events), attempt ledger, verifier transcripts, task 
 3. **The page is organized by the execution model.** Detail = Task tree + last 10 TopicCards + a read-only criteria list. The user's lookup object (Work) and its proof (latest outcome, attempts, cost) are not rows on the page (`P-13`, `P-14`).
 4. **Liveness is not represented.** The nanoGPT run had goal `running`, task `running`, and the executing operation gone for an hour. A `running` spinner with no "last activity 47 min ago" is a false claim; the domain already has operation heartbeats and leases (`P-04`).
 5. **Two different closers.** Task-carried goals need a human `accept` to become `achieved`; Graph goals close themselves. A user cannot form one expectation of "who says it's done" (`P-12`).
-6. **Controls that exist name the wrong effect.** "Pause" reads as "stop"; the business event is "start nothing new, let the current attempt finish". "Set budget" reads as "continue"; it does not resume.
+6. **Round 1 of this spec repeated error 3 in a new costume.** A Work _list_ is still an execution-model projection; the user's mental model is the exploration graph, and the retrieval object is its frontier. A flat list hides why a node is next, what it depends on, and what the system currently believes (`P-14`, mental model).
+7. **Controls that exist name the wrong effect.** "Pause" reads as "stop"; the business event is "start nothing new, let the current attempt finish". "Set budget" reads as "continue"; it does not resume.
 
 ---
 
 ## 4. Principles (each with the alternative it rejects)
 
-- **Blocked-on-you first.** The attention card sits above everything, or is absent. _Rejected:_ a chronological feed / a graph as the first screen — nothing gets stuck if the user never looks at them (`P-07`).
-- **Liveness over status label.** Every running row shows last-activity age; past the lease timeout it flips to "unresponsive, reclaiming". _Rejected:_ a spinner on `running`.
-- **Work is the row; attempts are the drill-down.** _Rejected:_ the Task tree and TopicCards as the body (`P-13`).
+- **Frontier first.** The first screen is the candidate set that can move now, grouped by what it asks of the user: 需要你 → 进行中 → 可以开始；everything waiting is folded. _Rejected:_ a Work list ordered by status (round 1) and a chronological feed — both hide _why this, now_.
+- **The graph is the mental model, not a drill-down.** It sits beside the frontier, always visible, with frontier nodes emphasized and the same hover/selection as the cards. _Rejected:_ graph as a secondary tab (round 1) and graph as the only view (nobody can act from a picture).
+- **Kind is color, state is stroke.** Problem / Work / Finding / Decision keep stable colors (the user's explicit ask); running / gate / blocked / stale are stroke weight and dash, never fill. _Rejected:_ one `active` visual for "just created", "selected for synthesis" and "running" (the correction from the first graph mock).
+- **Owner Task is inline in its Work node**, never a separate node. _Rejected:_ Task-as-node.
+- **Liveness over status label.** Every running item shows last-activity age; past the lease timeout it becomes a 需要你 card and a dashed red node. _Rejected:_ a spinner on `running`.
 - **A gate is evidence + options + consequences + a recommendation, resolved in place.** _Rejected:_ "open the Acceptance page" / "use the CLI".
+- **Findings are the system's beliefs and get their own place** (最近结论), each traceable to the Work that produced it and clickable into the graph. _Rejected:_ burying Findings inside Work rows.
 - **Controls say what they really do.** "Pause — no new attempts; the current one finishes." "Add budget and continue." _Rejected:_ generic Pause / Stop / Save.
-- **Budget is a control, not a metric.** Spend is shown _against_ its cap and editable there. _Rejected:_ read-only cost in a stats row.
-- **Plain-word states.** `proposed` → "Queued" / "Waiting for X"; `waiting` → "Needs your decision"; `lease_expired` → "Lost contact, restarting". _Rejected:_ exposing node/acceptance enums.
+- **Plain words for states.** `proposed`+deps-met → 可以开始；`proposed`+blocked → 等待「X」; `waiting` → 等你决定；`lease_expired` → 失联，等待回收. _Rejected:_ exposing node/acceptance enums.
 
 ---
 
 ## 5. Information architecture — Goal detail
 
-Block by block. Each names its business concept, its empty state, and how it holds at 100×.
+Two columns on desktop (frontier ≈ 400 px, graph fills the rest); stacked frontier-then-graph under 960 px. Each block names its business concept, its empty state, and how it holds at 100×.
 
-### 0 · Attention card (conditional)
+### 0 · Header
 
-Exactly one card, only when the goal obliges the user to act. Variants:
+Title · **status sentence in plain words + last-activity age** ("运行中・最近动作 2 分钟前", "等你决定・已等待 3 分钟", "已暂停・费用预算用完", "已达成・20 分钟前")・elapsed・four chips (Work n/m・验收 p/q・尝试 a/b・$x/$y, the spend chip turns warning at the cap)・controls **暂停 / 继续**, **预算** (popover: cost cap, attempt cap, attempts-per-Work → `setBudget`), overflow (添加 Work ⚠️, 编辑目标 ❌, 复制链接，结束 ❌, 删除).
 
-| Variant               | Trigger                                            | Content                                                                                                                                                                                                                         | Actions (business event)                                                                                                          |
-| --------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Decision gate         | `decisions[].status = pending`, `authority = user` | The Work it concerns · why it stopped (last verifier reason / failure error, ≤ 2 lines) · attempts used N/M · cost so far · options from `options[]` with a consequence line each · recommended option marked · optional reason | `goal.decide(optionId, reason)`. Retry → attempt N+1; Retire → Work abandoned, goal continues; Fail (terminal Work) → goal failed |
-| Delivery awaiting you | goal-level acceptance `delivered`                  | Checks passed p/q · verifier summary · link to evidence                                                                                                                                                                         | `acceptance.accept` → achieved; `acceptance.reject(comment)` → another round with your comment                                    |
-| Budget exhausted      | `paused` **and** (spend ≥ cap or attempts ≥ cap)   | Which cap, spent vs cap                                                                                                                                                                                                         | "Add budget and continue" = `setBudget` + `resume` composed; "Stop here" = cancel ❌ / delete                                     |
-| Lost contact          | running attempt's lease older than timeout         | "No activity for 12 min; will be reclaimed automatically at 15 min"                                                                                                                                                             | "Reclaim now" = `goal.tick` (safe, deterministic); no new concept                                                                 |
-| Verify errored        | `paused` with task error present, no gate          | The error                                                                                                                                                                                                                       | Retry = `task.run`; Stop                                                                                                          |
+### 1・Frontier column — 现在能推进的
 
-Empty: block absent (not an empty card). At scale: multiple pending gates → one card with a count and the most-blocking first; the rest listed inside the Work rows.
+Business concept: the coordinator's candidate set (`tick` step 3) plus pending decisions (`tick` step 2).
 
-### 1 · Header
+| Group    | Members                                                                                     | Card contract                                                                                                                                                        | Actions (business event)                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 需要你   | pending user decision · goal-level acceptance `delivered` · budget exhausted · lost contact | Decision: question, the Work it concerns, attempts N/M, cost, why (verifier reason), `options[]` each with a consequence line, recommended marked, optional guidance | `goal.decide` · `acceptance.accept` / `reject(comment)` · `setBudget`+`resume` composed · `tick` (reclaim) |
+| 进行中   | Work `active`                                                                               | title・进行中・第 N 次尝试・owner Task id + agent・last-activity age・last tool line・expand → attempt ledger, "给下一次尝试的说明"                                  | task comment (guidance) · open run                                                                         |
+| 可以开始 | Work `proposed` with all `depends_on` resolved                                              | title・"依赖已满足；下一次推进开始"・expand → 现在开始                                                                                                               | `tick` / `runTask` (⚠️ coordinator is serial today — parallel start is tagged NEW)                         |
+| 等待中   | Work `proposed` with an unresolved dependency — **folded**, one line naming the blocker     | —                                                                                                                                                                    | hover → highlight in graph                                                                                 |
+| 最近结论 | latest Findings                                                                             | title・来自「Work」・age・click → graph node                                                                                                                         | 基于这个结论开一条 Work = `addNode` + `leads_to` ⚠️                                                        |
 
-Title (editable) · **status sentence in plain words + last-activity age** (e.g. "Running · last activity 2 min ago", "Waiting for you · since 14:02", "Paused by you", "Paused — cost budget reached", "Done · 3/3 checks passed") · elapsed since start · controls: **Pause / Resume** (label reflects the real effect in its confirm), **Budget** (popover: rounds cap, cost cap, attempts-per-Work; save = `setBudget`), overflow (Add Work ⚠️, Copy link, Cancel ❌, Delete).
+Empty: `planning` → one card "已就绪，还没有开始" with 开始执行 (+ honest NEW tag on "服务端持续推进", see D2); `achieved` → "没有需要推进的了". At scale: groups cap at 5 visible + count; 需要你 never truncates.
 
-### 2 · Progress strip
+### 2・Exploration graph — 探索图
 
-Four cells: Work resolved n/m · Acceptance checks passed p/q (goal-level) · Attempts used a/b (b = maxRounds or ∞) · Spend $x / $y. Bars, not rings; caps drawn as the bar's end. Empty (planning): 0/m, 0/q, 0/b, $0.
+Business concept: `goal.graph` snapshot (nodes, edges, decisions). Layout is a layered DAG (Goal → decomposes → Work/Problem → produces → Finding → leads\_to → Decision → leads\_to → new Work); `depends_on` drawn as dashed edges. Node shape/color by kind (Problem pill purple · Work rect blue · Finding rect green · Decision hexagon orange); state by stroke (frontier thick · gate dashed warning + dot · blocked dashed · stale dotted red · resolved dimmed). Owner Task line inside the running Work node with a pulse. Hover/selection are shared with the frontier cards; clicking a node opens **节点详情** beneath the graph (state, body, attempt ledger, "在图里的位置" edges, and for a Finding "基于这个结论开一条 Work"). Zoom toggles the graph to full width.
 
-### 3 · Work list (the body)
+Empty: Goal node only, with "让 Agent 先拆一版" (❌ Planner). At 100×: collapse resolved subtrees to a count badge on their parent; keep frontier and the path from Goal to each frontier node expanded.
 
-One row per Work node, ordered: needs-you → running → queued → done. Row contract:
+### 3 · Contract (collapsed) · 4 · Activity (collapsed)
 
-- title · state chip (plain words) · last-activity age · attempts N/M · cost · one-line latest outcome
-- `depends_on` rendered as "Waiting for: <Work title>" text, not edges
-- expand → attempt ledger (each: started, ended, outcome, verifier verdict + reason, cost, "Open run" → topic), evidence links (work versions), Finding text, "Add guidance" (task comment, carried into the next attempt)
-
-Empty (no Work yet): "The Goal has no Work planned yet" + Add Work. At 100×: virtualized, filter by state, done rows collapsed to a count.
-
-### 4 · Contract
-
-Requirement text · goal-level acceptance checks (read; edit ⚠️ for task-carried via `acceptance.saveGoal`, ❌ for Graph) · budget & recovery policy values (read here, edited in the header popover).
-
-### 5 · Activity (collapsed)
-
-Merged `goal_events` + attempt boundaries + human actions, one line each, human-readable. Provenance only.
-
-### 6 · Graph (secondary tab, later)
-
-Problem / Work / Finding / Decision nodes with stable colors; execution activity as stroke, not fill. Exploration and audit view — never the landing view.
+Requirement, goal-level checks, budget/recovery values (read; edit ⚠️/❌). Activity merges `goal_events`, attempt boundaries, Findings and decisions, one human line each. Provenance only.
 
 ### Goal list and Home
 
-- List: facets **Needs you · Running · Paused · Done**, with counts; "Needs you" and budget-paused rows first; each row carries the same status sentence + last-activity age. Standalone goals included (requires `list` change ⚠️).
-- Home rail: a pending gate is a **decision** item (the inbox already models decisions); today only task-carried failures produce one.
+- List: facets **需要你・进行中・已暂停・已完成**, with counts; rows carry the same status sentence + last-activity age; standalone goals included (⚠️ `list` filter).
+- Home rail: a pending gate is a **decision** item; today only task-carried failures produce one (⚠️ brief on Graph gate).
 
 ---
 
 ## 6. Scope — what does the business already support?
 
-| Bucket | Capability                                                                                                                | Note                                                                                        |
-| ------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ✅     | Pause / Resume / Set budget / Decide / Tick                                                                               | TRPC exists, SPA never calls it                                                             |
-| ✅     | Graph snapshot: nodes, edges, decisions (options, recommendation), events, work versions                                  | `goal.graph`                                                                                |
-| ✅     | Accept / Reject-with-comment on the goal-level acceptance                                                                 | verify store already used by `GoalAcceptance`                                               |
-| ✅     | Task comments as guidance for the next attempt                                                                            |                                                                                             |
-| ⚠️     | Standalone (Graph) goals in the list                                                                                      | drop the `subjectType = 'task'` filter, or add a second query; visibility rule needs a home |
-| ⚠️     | Last-activity age / lease staleness per running Work                                                                      | operation `lastHeartbeatAt` + `operationLeaseTimeoutMs`; needs projecting into the snapshot |
-| ⚠️     | Attempt ledger per Work (topics with handoff, verdicts, cost)                                                             | `taskTopicModel.findWithHandoffByTaskIds` is what tick already reads                        |
-| ⚠️     | Add Work / Add edge from the UI                                                                                           | procedures exist                                                                            |
-| ⚠️     | Budget-exhausted detection                                                                                                | derive from spend ≥ cap; no reason field                                                    |
-| ⚠️     | Brief / inbox item for a Graph gate                                                                                       | brief model exists; `openFailureDecision` never raises one                                  |
-| ❌     | **Unattended driver for Graph goals** (enqueue `tick` on task completion, verify settle, decide, resume + periodic sweep) | without it the UI must not claim "running unattended"                                       |
-| ❌     | Pause reason on the goal                                                                                                  | small column + event                                                                        |
-| ❌     | Cancel / edit requirement for Graph goals                                                                                 | two procedures                                                                              |
-| ❌     | Stop the current attempt                                                                                                  | AbortSignal wiring through the runtime; known TODO                                          |
-| ❌     | Semantic gate options                                                                                                     | generator work; UI renders `options[]` generically today                                    |
-| ❌     | Progress within an attempt                                                                                                | new concept; would need a runtime progress channel                                          |
-| ❌     | Partial / inconclusive terminal states                                                                                    | domain expansion                                                                            |
+| Bucket | Capability                                                                                                                 | Note                                                                                        |
+| ------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ✅     | Pause / Resume / Set budget / Decide / Tick                                                                                | TRPC exists, SPA never calls it                                                             |
+| ✅     | Graph snapshot: nodes, edges, decisions (options, recommendation), events, work versions                                   | `goal.graph`                                                                                |
+| ✅     | Accept / Reject-with-comment on the goal-level acceptance                                                                  | verify store already used by `GoalAcceptance`                                               |
+| ✅     | Task comments as guidance for the next attempt                                                                             |                                                                                             |
+| ⚠️     | Standalone (Graph) goals in the list                                                                                       | drop the `subjectType = 'task'` filter, or add a second query; visibility rule needs a home |
+| ⚠️     | Last-activity age / lease staleness per running Work                                                                       | operation `lastHeartbeatAt` + `operationLeaseTimeoutMs`; needs projecting into the snapshot |
+| ⚠️     | Attempt ledger per Work (topics with handoff, verdicts, cost)                                                              | `taskTopicModel.findWithHandoffByTaskIds` is what tick already reads                        |
+| ⚠️     | Frontier computation on the server (today it is internal to `tick`; the UI needs it as a read, e.g. in the graph snapshot) | pure projection of existing state                                                           |
+| ⚠️     | Add Work / Add edge from the UI                                                                                            | procedures exist                                                                            |
+| ⚠️     | Budget-exhausted detection                                                                                                 | derive from spend ≥ cap; no reason field                                                    |
+| ⚠️     | Brief / inbox item for a Graph gate                                                                                        | brief model exists; `openFailureDecision` never raises one                                  |
+| ❌     | **Unattended driver for Graph goals** (enqueue `tick` on task completion, verify settle, decide, resume + periodic sweep)  | without it the UI must not claim "running unattended"                                       |
+| ❌     | Pause reason on the goal                                                                                                   | small column + event                                                                        |
+| ❌     | Cancel / edit requirement for Graph goals                                                                                  | two procedures                                                                              |
+| ❌     | Stop the current attempt                                                                                                   | AbortSignal wiring through the runtime; known TODO                                          |
+| ❌     | Semantic gate options                                                                                                      | generator work; UI renders `options[]` generically today                                    |
+| ❌     | Progress within an attempt                                                                                                 | new concept; would need a runtime progress channel                                          |
+| ❌     | Partial / inconclusive terminal states                                                                                     | domain expansion                                                                            |
 
 **Recommended coherent slice (v1):** blocks 0–3 and the list facets, on ✅ + the four cheap ⚠️ items (list filter, staleness projection, attempt ledger, brief on Graph gate). This completes the job — _see it moving, see how far, act when blocked, control spend_ — for both carriers.
 
@@ -260,4 +251,4 @@ Problem / Work / Finding / Decision nodes with stable colors; execution activity
 
 **D4 — Gate options.** Recommend the UI render `options[]` + `recommendedOptionId` generically now, so semantic options from the generator light up without UI change.
 
-**D5 — Graph visualization.** Recommend a secondary tab after v1; never the landing view.
+**D5 — Graph on the first screen.** Decided by the user: the frontier is the key display and the graph sits beside it. Remaining question is layout at scale (collapse resolved subtrees vs. paginate lanes) — recommend collapse-to-badge, validated in the next prototype round with a 30-node graph.
