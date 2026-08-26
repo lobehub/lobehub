@@ -2799,6 +2799,7 @@
   "workspace.waitlistPage.entryCta": "Am Workspace-Beta teilnehmen",
   "workspace.waitlistPage.goHome": "Zurück zu LobeHub",
   "workspace.waitlistPage.learnMore": "Erfahren Sie mehr über Workspace",
+  "workspace.waitlistPage.learnMoreNewTabHint": "Öffnet in einem neuen Tab",
   "workspace.waitlistPage.organizationLabel": "Organisation / Gruppe (optional)",
   "workspace.waitlistPage.organizationPlaceholder": "Firma, Schule oder Familie…",
   "workspace.waitlistPage.pendingSubtitle": "Wir öffnen den Zugang in Etappen und benachrichtigen Sie per E-Mail, sobald Ihr Zugang bereit ist.",

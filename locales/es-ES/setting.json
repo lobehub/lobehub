@@ -2799,6 +2799,7 @@
   "workspace.waitlistPage.entryCta": "Únete a la beta de Espacio de trabajo",
   "workspace.waitlistPage.goHome": "Volver a LobeHub",
   "workspace.waitlistPage.learnMore": "Obtén más información sobre Workspace",
+  "workspace.waitlistPage.learnMoreNewTabHint": "Se abre en una nueva pestaña",
   "workspace.waitlistPage.organizationLabel": "Organización / Grupo (opcional)",
   "workspace.waitlistPage.organizationPlaceholder": "Empresa, escuela o familia…",
   "workspace.waitlistPage.pendingSubtitle": "Estamos abriendo el acceso en lotes y te notificaremos por correo electrónico tan pronto como tu acceso esté listo.",
