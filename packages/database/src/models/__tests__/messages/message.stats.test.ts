@@ -1120,6 +1120,87 @@ describe('MessageModel Statistics Tests', () => {
     });
   });
 
+  describe('countByTopic', () => {
+    it('counts an agent-share visitor topic that count() would report as 0', async () => {
+      // Regression test for the shareChat `maxTurnsPerTopic` bypass: a share
+      // topic carries the creator's userId (so `ownership()` matches) plus a
+      // non-null senderId (the visitor). `count()` ANDs in
+      // `notShareVisitorMessage()` for personal analytics, so it always
+      // returns 0 for this topic — silently disabling the turn cap.
+      // `countByTopic()` is the exact counter the share router must use
+      // instead.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-turns',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-turn-1',
+          userId,
+          role: 'user',
+          content: 'visitor message 1',
+          topicId: 'topic-visitor-turns',
+        },
+        {
+          id: 'visitor-turn-2',
+          userId,
+          role: 'user',
+          content: 'visitor message 2',
+          topicId: 'topic-visitor-turns',
+        },
+        {
+          id: 'visitor-turn-assistant',
+          userId,
+          role: 'assistant',
+          content: 'assistant reply',
+          topicId: 'topic-visitor-turns',
+        },
+      ]);
+
+      const byTopic = await messageModel.countByTopic({
+        role: 'user',
+        topicId: 'topic-visitor-turns',
+      });
+      const viaAnalyticsCount = await messageModel.count({
+        role: 'user',
+        topicId: 'topic-visitor-turns',
+      });
+
+      expect(byTopic).toBe(2);
+      expect(viaAnalyticsCount).toBe(0);
+    });
+
+    it('scopes by role and topicId', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-count-by-topic',
+        userId,
+        title: 'topic',
+      });
+      await serverDB.insert(messages).values([
+        { id: 'cbt-u1', userId, role: 'user', content: '1', topicId: 'topic-count-by-topic' },
+        { id: 'cbt-u2', userId, role: 'user', content: '2', topicId: 'topic-count-by-topic' },
+        {
+          id: 'cbt-a1',
+          userId,
+          role: 'assistant',
+          content: '3',
+          topicId: 'topic-count-by-topic',
+        },
+        // different topic must not leak in
+        { id: 'cbt-other-topic', userId, role: 'user', content: '4' },
+      ]);
+
+      const result = await messageModel.countByTopic({
+        role: 'user',
+        topicId: 'topic-count-by-topic',
+      });
+
+      expect(result).toBe(2);
+    });
+  });
+
   describe('hasMoreThanN', () => {
     it('should return true when message count is greater than N', async () => {
       // Create test data

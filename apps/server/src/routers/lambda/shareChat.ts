@@ -108,7 +108,13 @@ export const shareChatRouter = router({
           visitorUserId: ctx.userId,
         });
 
-        const turnCount = await messageModel.count({ role: 'user', topicId: input.topicId });
+        // `messageModel.count()` excludes agent-share visitor messages by
+        // design (personal analytics predicate) — see `countByTopic` JSDoc
+        // for why the turn cap must use the exact per-topic counter instead.
+        const turnCount = await messageModel.countByTopic({
+          role: 'user',
+          topicId: input.topicId,
+        });
         if (turnCount >= maxTurnsPerTopic) {
           throw new TRPCError({
             code: 'TOO_MANY_REQUESTS',

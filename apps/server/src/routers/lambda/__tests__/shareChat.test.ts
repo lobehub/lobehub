@@ -29,10 +29,10 @@ vi.mock('@/database/models/topic', () => ({
   TopicModel: TopicModelMock,
 }));
 
-const mockMessageCount = vi.fn();
+const mockMessageCountByTopic = vi.fn();
 const mockMessageQuery = vi.fn();
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({ count: mockMessageCount, query: mockMessageQuery })),
+  MessageModel: vi.fn(() => ({ countByTopic: mockMessageCountByTopic, query: mockMessageQuery })),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -92,7 +92,7 @@ describe('shareChatRouter', () => {
     mockFindById.mockResolvedValue(visitorTopic);
     mockCountBySender.mockResolvedValue(0);
     mockQueryBySender.mockResolvedValue([]);
-    mockMessageCount.mockResolvedValue(0);
+    mockMessageCountByTopic.mockResolvedValue(0);
     mockMessageQuery.mockResolvedValue([]);
     mockExecAgent.mockResolvedValue({ operationId: 'op-1', success: true });
     mockSignUserJWT.mockResolvedValue('visitor-jwt');
@@ -109,7 +109,7 @@ describe('shareChatRouter', () => {
       });
       expect(mockGetAgentShareBudgetRemaining).toHaveBeenCalledWith({ agentId: share.agentId });
       expect(mockCountBySender).not.toHaveBeenCalled();
-      expect(mockMessageCount).not.toHaveBeenCalled();
+      expect(mockMessageCountByTopic).not.toHaveBeenCalled();
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
@@ -135,7 +135,7 @@ describe('shareChatRouter', () => {
     });
 
     it('rejects an existing-topic run once the turn cap is reached', async () => {
-      mockMessageCount.mockResolvedValue(3);
+      mockMessageCountByTopic.mockResolvedValue(3);
       const caller = await createCaller();
 
       await expect(
@@ -144,7 +144,10 @@ describe('shareChatRouter', () => {
         code: 'TOO_MANY_REQUESTS',
         message: 'ShareTurnLimitExceeded',
       });
-      expect(mockMessageCount).toHaveBeenCalledWith({ role: 'user', topicId: 'tpc_visitor' });
+      expect(mockMessageCountByTopic).toHaveBeenCalledWith({
+        role: 'user',
+        topicId: 'tpc_visitor',
+      });
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
