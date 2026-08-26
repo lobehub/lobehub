@@ -3,6 +3,10 @@ import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import type { AgentGraph } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  type AgentInterventionContinuationProvenance,
+  deriveAgentInterventionQueueDeduplicationId,
+} from '@/business/server/agent-run/agentInterventionIdentity';
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
@@ -53,6 +57,122 @@ vi.mock('@/server/services/toolExecution/builtin', () => ({
 vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
+
+describe('AgentRuntimeService intervention continuation dispatch recovery', () => {
+  const operationId = 'op-intervention-recovery';
+  const provenance: AgentInterventionContinuationProvenance = {
+    resolutionRequestId: 'request-intervention-recovery',
+    sourceOperationId: 'op-source',
+    sourceToolMessageIds: ['tool-message'],
+  };
+  const deduplicationId = deriveAgentInterventionQueueDeduplicationId(operationId, 0);
+  const preparation = {
+    deduplicationId,
+    resolutionRequestId: provenance.resolutionRequestId,
+    state: 'ready' as const,
+    stepIndex: 0,
+  };
+  const readyState = (status: 'done' | 'idle' | 'running' = 'idle') => ({
+    initialContext: { phase: 'user_input' },
+    metadata: {
+      agentInterventionContinuation: provenance,
+      agentInterventionPreparation: preparation,
+    },
+    operationId,
+    status,
+  });
+
+  it.each(['idle', 'running', 'done'] as const)(
+    'backfills durable preparation and a stable queue ACK from %s state',
+    async (status) => {
+      const scheduleMessage = vi.fn().mockResolvedValue('queue-message');
+      const service = new AgentRuntimeService({} as any, 'user-1', {
+        queueService: { getImpl: () => ({}), scheduleMessage } as any,
+      });
+      const coordinator = (service as any).coordinator;
+      coordinator.loadAgentState = vi.fn().mockResolvedValue(readyState(status));
+      const operationModel = (service as any).agentOperationModel;
+      operationModel.findById = vi.fn().mockResolvedValue({
+        metadata: { agentInterventionContinuation: provenance },
+      });
+      operationModel.recordAgentInterventionPreparation = vi.fn().mockResolvedValue(true);
+      operationModel.recordAgentInterventionDispatch = vi.fn().mockResolvedValue(true);
+
+      await expect(service.ensureInterventionContinuationStarted(operationId)).resolves.toBe(
+        'scheduled',
+      );
+
+      expect(operationModel.recordAgentInterventionPreparation).toHaveBeenCalledWith(
+        operationId,
+        preparation,
+      );
+      expect(scheduleMessage).toHaveBeenCalledTimes(1);
+      expect(scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ deduplicationId, operationId, stepIndex: 0 }),
+      );
+      expect(operationModel.recordAgentInterventionDispatch).toHaveBeenCalledWith(
+        operationId,
+        expect.objectContaining({
+          deduplicationId,
+          messageId: 'queue-message',
+          resolutionRequestId: provenance.resolutionRequestId,
+          state: 'scheduled',
+        }),
+      );
+    },
+  );
+
+  it('does not enqueue again when the exact durable queue ACK already exists', async () => {
+    const scheduleMessage = vi.fn();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(readyState('running'));
+    const operationModel = (service as any).agentOperationModel;
+    operationModel.findById = vi.fn().mockResolvedValue({
+      metadata: {
+        agentInterventionContinuation: provenance,
+        agentInterventionDispatch: {
+          deduplicationId,
+          messageId: 'queue-message',
+          resolutionRequestId: provenance.resolutionRequestId,
+          state: 'scheduled',
+        },
+        agentInterventionPreparation: preparation,
+      },
+    });
+    operationModel.recordAgentInterventionPreparation = vi.fn();
+
+    await expect(service.ensureInterventionContinuationStarted(operationId)).resolves.toBe(
+      'already_started',
+    );
+
+    expect(operationModel.recordAgentInterventionPreparation).not.toHaveBeenCalled();
+    expect(scheduleMessage).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on a conflicting durable preparation marker', async () => {
+    const scheduleMessage = vi.fn();
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+    });
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue(readyState());
+    const operationModel = (service as any).agentOperationModel;
+    operationModel.findById = vi.fn().mockResolvedValue({
+      metadata: {
+        agentInterventionContinuation: provenance,
+        agentInterventionPreparation: { ...preparation, resolutionRequestId: 'foreign-request' },
+      },
+    });
+
+    await expect(service.ensureInterventionContinuationStarted(operationId)).rejects.toThrow(
+      /durable preparation conflict/,
+    );
+    expect(scheduleMessage).not.toHaveBeenCalled();
+  });
+});
 
 describe('AgentRuntimeService.executeStep - early exit on terminal state', () => {
   const createService = () => {
@@ -1410,10 +1530,9 @@ describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration'
     expect(registerSpy).not.toHaveBeenCalled();
   });
 
-  // Regression: the approval resume continues the SAME operationId, so the
-  // terminal completion's scan covers pre-park edits. Registering at the park
-  // would persist `_fileWorksRegistered` into the park snapshot — skipping the
-  // terminal registration — and freeze versions at pre-approval content.
+  // Regression: the park is not a completed deliverable boundary. The fresh
+  // continuation sees the complete history and performs the terminal scan;
+  // registering here would freeze pre-approval content too early.
   it('skips pre-save registration when parking on waiting_for_human', async () => {
     const { registerSpy } = await runTerminalStep(doneState('waiting_for_human'));
 

@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
 import {
+  canApproveInterventionBatch,
   getInterventionBatch,
   type PendingIntervention,
 } from '../store/slices/data/pendingInterventions';
@@ -67,17 +68,17 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
   // Tabs still list every pending call so nothing is hidden; only the batch
   // action is scoped to the active turn.
   const hasMultipleCards = interventions.length > 1;
-  const canApproveBatch = batch.length > 1;
+  const canApproveBatch = canApproveInterventionBatch(batch);
 
   return (
     <ChatInput
       data-pending-hotkey-scope
       className={styles.container}
       footer={<div className={styles.actions} ref={setActionsPortalTarget} />}
-      resize={false}
       // The card's action row — Stop sits beside Submit inside `ApprovalActions`
       // and the whole row portals in here.
       maxHeight={'50vh' as any}
+      resize={false}
     >
       {hasMultipleCards && (
         <InterventionTabBar

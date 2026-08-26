@@ -14,10 +14,12 @@ import type { AgentEvent, AgentInstruction, AnyHookEvent, InstructionExecutor } 
 export const requestHumanApprove =
   (host: AgentRuntimeHost): InstructionExecutor =>
   async (instruction, state) => {
-    const { parentMessageId, pendingToolsCalling, skipCreateToolMessage } = instruction as Extract<
-      AgentInstruction,
-      { type: 'request_human_approve' }
-    >;
+    const {
+      parentMessageId,
+      pendingToolsCalling,
+      skipCreateToolMessage,
+      supersedes: instructionSupersedes,
+    } = instruction as Extract<AgentInstruction, { type: 'request_human_approve' }>;
     const { operation, transports, lifecycle } = host;
     const { operationId, stepIndex, userId } = operation;
     const agentId = operation.agentId ?? state.metadata?.agentId;
@@ -78,12 +80,64 @@ export const requestHumanApprove =
     // Map of toolCallId -> toolMessageId, populated either by creating fresh
     // pending tool messages or (in resumption mode) by looking up existing ones.
     const toolMessageIds: Record<string, string> = {};
+    let approvalAssistantMessageId = parentMessageId;
+    let supersedes: { batchId: string; operationId: string; toolCallIds: string[] } | undefined;
 
     if (skipCreateToolMessage) {
+      // The payloads came from the authoritative pending tool rows. Preserve
+      // their previous generic batch identity before rebinding the rows below,
+      // so the server can atomically terminal that batch when it persists the
+      // replacement. A partially-stamped set is unsafe: creating a second
+      // Review would otherwise leave the old token and Live Activity active.
+      const previousIdentities = pendingToolsCalling.map((toolPayload) => ({
+        batchId: toolPayload.intervention?.batchId,
+        operationId: toolPayload.intervention?.operationId,
+        toolCallId: toolPayload.id,
+      }));
+      const hasPreviousDurableIdentity = previousIdentities.some(
+        ({ batchId, operationId: previousOperationId }) => batchId || previousOperationId,
+      );
+      if (instructionSupersedes) {
+        const pendingToolCallIds = pendingToolsCalling.map(({ id }) => id);
+        if (
+          instructionSupersedes.toolCallIds.length !== pendingToolCallIds.length ||
+          new Set(instructionSupersedes.toolCallIds).size !== pendingToolCallIds.length ||
+          instructionSupersedes.toolCallIds.some((id) => !pendingToolCallIds.includes(id))
+        ) {
+          throw new Error(
+            `[request_human_approve] Supersession does not match rebound members (op=${operationId})`,
+          );
+        }
+        supersedes = instructionSupersedes;
+      } else if (hasPreviousDurableIdentity) {
+        const firstPrevious = previousIdentities[0];
+        if (
+          !firstPrevious.batchId ||
+          !firstPrevious.operationId ||
+          previousIdentities.some(
+            (identity) =>
+              !identity.batchId ||
+              !identity.operationId ||
+              identity.batchId !== firstPrevious.batchId ||
+              identity.operationId !== firstPrevious.operationId,
+          )
+        ) {
+          throw new Error(
+            `[request_human_approve] Cannot rebind a partial or mixed durable intervention batch (op=${operationId})`,
+          );
+        }
+        supersedes = {
+          batchId: firstPrevious.batchId,
+          operationId: firstPrevious.operationId,
+          toolCallIds: previousIdentities.map(({ toolCallId }) => toolCallId),
+        };
+      }
+
       // Resumption mode: tool messages already exist. Look them up by
       // tool_call_id so we can still ship the mapping to the client.
+      let dbMessages: Awaited<ReturnType<typeof transports.messages.query>> = [];
       try {
-        const dbMessages = await transports.messages.query({
+        dbMessages = await transports.messages.query({
           agentId,
           // Group runs need groupId or the query returns no group messages, so
           // the existing tool-message lookup on resume would find nothing.
@@ -91,17 +145,43 @@ export const requestHumanApprove =
           threadId,
           topicId,
         });
-        for (const toolPayload of pendingToolsCalling) {
-          const existing = dbMessages.find(
-            (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
-          );
-          if (existing) {
-            toolMessageIds[toolPayload.id] = existing.id;
-          }
-        }
       } catch {
-        // best-effort lookup — a miss just omits the mapping
+        // The explicit missing-row guard below keeps the parked batch closed.
       }
+      for (const toolPayload of pendingToolsCalling) {
+        const existing = dbMessages.find(
+          (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
+        );
+        if (!existing) {
+          throw new Error(
+            `[request_human_approve] Missing durable tool message for resumed intervention ${toolPayload.id}`,
+          );
+        }
+        toolMessageIds[toolPayload.id] = existing.id;
+      }
+
+      if (!approvalAssistantMessageId) {
+        throw new Error(
+          `[request_human_approve] Missing assistant owner for resumed intervention (op=${operationId})`,
+        );
+      }
+
+      // A partial resolution starts a new runtime operation and can park the
+      // unresolved siblings again. Rebind those durable rows to the new parked
+      // owner and sealed batch; retaining the previous operation id would let
+      // Stop target a stale run and make notification durability checks fail.
+      const batchId = `${operationId}:${stepIndex}:${approvalAssistantMessageId}`;
+      await Promise.all(
+        pendingToolsCalling.map((toolPayload, itemIndex) =>
+          transports.messages.updateToolIntervention(toolMessageIds[toolPayload.id], {
+            batchId,
+            itemIndex,
+            operationId,
+            status: 'pending',
+            stepIndex,
+          }),
+        ),
+      );
     } else {
       // Resolve the assistant message that owns these tool calls.
       //
@@ -175,14 +255,22 @@ export const requestHumanApprove =
         );
       }
 
-      for (const toolPayload of pendingToolsCalling) {
+      approvalAssistantMessageId = parentAssistant.id;
+      const batchId = `${operationId}:${stepIndex}:${parentAssistant.id}`;
+      for (const [itemIndex, toolPayload] of pendingToolsCalling.entries()) {
         const toolMessage = await transports.messages.createToolMessage({
           agentId,
           content: '',
           groupId: groupId ?? parentAssistant.groupId ?? undefined,
           parentId: parentAssistant.id,
           plugin: toolPayload as any,
-          pluginIntervention: { status: 'pending' },
+          pluginIntervention: {
+            batchId,
+            itemIndex,
+            operationId,
+            status: 'pending',
+            stepIndex,
+          },
           role: 'tool',
           threadId,
           tool_call_id: toolPayload.id,
@@ -197,6 +285,17 @@ export const requestHumanApprove =
         // state.messages itself. Pushing a placeholder here produced two
         // entries for the same tool_call_id.
       }
+    }
+
+    newState.pendingToolMessageIds = toolMessageIds;
+    if (approvalAssistantMessageId) {
+      newState.pendingApprovalBatch = {
+        assistantMessageId: approvalAssistantMessageId,
+        id: `${operationId}:${stepIndex}:${approvalAssistantMessageId}`,
+        sealed: true,
+        stepIndex,
+        ...(supersedes && { supersedes }),
+      };
     }
 
     // Notify frontend to display approval UI through streaming system.

@@ -86,6 +86,23 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
 
+export class HumanApprovalAlreadyResolvedError extends Error {
+  constructor(messageId: string) {
+    super(`Human approval is no longer pending for tool message ${messageId}`);
+    this.name = 'HumanApprovalAlreadyResolvedError';
+  }
+}
+
+export interface HumanApprovalResolution {
+  /** Conditional owner checked by rollback; never accepted as client authority. */
+  claimedResolutionRequestId?: string;
+  content?: string;
+  id: string;
+  intervention: Record<string, unknown>;
+  pluginState?: Record<string, unknown> | null;
+  replacePluginState?: boolean;
+}
+
 /**
  * Read the operation-final Work root id stamped on a message's metadata by the
  * Work registry (`metadata.work.rootOperationId`). Mirrors the client-side
@@ -2732,6 +2749,130 @@ export class MessageModel {
       .update(messagePlugins)
       .set(value)
       .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
+  };
+
+  /**
+   * Resolve an approval batch at one row-locking boundary. Every target is
+   * checked before any write, so Web, Mobile, Stop, and notification actions
+   * cannot each win a subset of the same assistant turn.
+   */
+  resolveHumanApproval = async (
+    resolutions: HumanApprovalResolution[],
+  ): Promise<'applied' | 'idempotent'> => {
+    if (resolutions.length === 0) return 'idempotent';
+
+    const ids = resolutions.map(({ id }) => id);
+    if (new Set(ids).size !== ids.length) {
+      throw new Error('Human approval batch contains duplicate tool messages');
+    }
+
+    return this.db.transaction(async (trx) => {
+      const lockedRows = await trx
+        .select({
+          id: messagePlugins.id,
+          intervention: messagePlugins.intervention,
+          state: messagePlugins.state,
+        })
+        .from(messagePlugins)
+        .where(and(inArray(messagePlugins.id, ids), this.pluginsOwnership()))
+        .for('update');
+      const lockedById = new Map(lockedRows.map((row) => [row.id, row]));
+
+      const rowStates = resolutions.map((resolution) => {
+        const row = lockedById.get(resolution.id);
+        if (!row) throw new Error(`Plugin not found: ${resolution.id}`);
+        if (row.intervention?.status === 'pending') return 'pending' as const;
+
+        const sameRequest =
+          Boolean(resolution.intervention.resolutionRequestId) &&
+          row.intervention?.resolutionRequestId === resolution.intervention.resolutionRequestId;
+        const sameDecision = Object.entries(resolution.intervention).every(
+          ([key, value]) =>
+            JSON.stringify(row.intervention?.[key as keyof typeof row.intervention]) ===
+            JSON.stringify(value),
+        );
+        if (sameRequest && sameDecision) return 'idempotent' as const;
+        throw new HumanApprovalAlreadyResolvedError(resolution.id);
+      });
+      const pendingCount = rowStates.filter((state) => state === 'pending').length;
+      if (pendingCount === 0) return 'idempotent';
+      if (pendingCount !== resolutions.length) {
+        throw new Error('Human approval batch contains a partial idempotent claim');
+      }
+
+      for (const resolution of resolutions) {
+        const row = lockedById.get(resolution.id)!;
+        if (resolution.content !== undefined) {
+          const [updatedMessage] = await trx
+            .update(messages)
+            .set({ content: resolution.content })
+            .where(and(eq(messages.id, resolution.id), this.ownership()))
+            .returning({ id: messages.id });
+          if (!updatedMessage) throw new Error(`Message not found: ${resolution.id}`);
+        }
+
+        const [updatedPlugin] = await trx
+          .update(messagePlugins)
+          .set({
+            // Status/result is a claim patch, not a replacement. Preserve the
+            // authoritative operation/batch/item identity stamped when the
+            // parked tool row was created so subsequent source reads, Stop,
+            // and rollback still address the same sealed batch.
+            intervention: merge(row.intervention || {}, resolution.intervention),
+            ...(resolution.pluginState !== undefined && {
+              state: resolution.replacePluginState
+                ? resolution.pluginState
+                : merge(row.state || {}, resolution.pluginState || {}),
+            }),
+          })
+          .where(and(eq(messagePlugins.id, resolution.id), this.pluginsOwnership()))
+          .returning({ id: messagePlugins.id });
+        if (!updatedPlugin) throw new Error(`Plugin not found: ${resolution.id}`);
+      }
+
+      return 'applied';
+    });
+  };
+
+  /** Restore the exact pre-claim snapshot when continuation startup fails. */
+  restoreHumanApproval = async (resolutions: HumanApprovalResolution[]): Promise<void> => {
+    if (resolutions.length === 0) return;
+
+    await this.db.transaction(async (trx) => {
+      const ids = resolutions.map(({ id }) => id);
+      const lockedRows = await trx
+        .select({ id: messagePlugins.id, intervention: messagePlugins.intervention })
+        .from(messagePlugins)
+        .where(and(inArray(messagePlugins.id, ids), this.pluginsOwnership()))
+        .for('update');
+      const lockedById = new Map(lockedRows.map((row) => [row.id, row]));
+
+      for (const resolution of resolutions) {
+        const locked = lockedById.get(resolution.id);
+        if (!locked) throw new Error(`Plugin not found: ${resolution.id}`);
+        if (
+          resolution.claimedResolutionRequestId &&
+          locked.intervention?.resolutionRequestId !== resolution.claimedResolutionRequestId
+        ) {
+          continue;
+        }
+        if (resolution.content !== undefined) {
+          const [updatedMessage] = await trx
+            .update(messages)
+            .set({ content: resolution.content })
+            .where(and(eq(messages.id, resolution.id), this.ownership()))
+            .returning({ id: messages.id });
+          if (!updatedMessage) throw new Error(`Message not found: ${resolution.id}`);
+        }
+        await trx
+          .update(messagePlugins)
+          .set({
+            intervention: resolution.intervention,
+            ...(resolution.pluginState !== undefined && { state: resolution.pluginState }),
+          })
+          .where(and(eq(messagePlugins.id, resolution.id), this.pluginsOwnership()));
+      }
+    });
   };
 
   /**

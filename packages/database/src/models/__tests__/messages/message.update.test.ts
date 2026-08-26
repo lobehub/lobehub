@@ -18,7 +18,7 @@ import {
   workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
+import { HumanApprovalAlreadyResolvedError, MessageModel } from '../../message';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -632,6 +632,173 @@ describe('MessageModel Update Tests', () => {
       const plugin = await messageModel.findMessagePlugin('non-existent-id');
 
       expect(plugin).toBeUndefined();
+    });
+  });
+
+  describe('resolveHumanApproval', () => {
+    const pendingIdentity = {
+      batchId: 'batch-approval-1',
+      itemIndex: 0,
+      operationId: 'operation-approval-1',
+      status: 'pending' as const,
+      stepIndex: 4,
+    };
+
+    const seedPendingTool = async (
+      id: string,
+      intervention: Record<string, unknown> = pendingIdentity,
+    ) => {
+      await serverDB.insert(messages).values({
+        content: 'pending content',
+        id,
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'editFile',
+        arguments: '{"path":"/tmp/a"}',
+        id,
+        identifier: 'lobe-local-system',
+        intervention,
+        state: { preserved: true },
+        toolCallId: `call-${id}`,
+        userId,
+      });
+    };
+
+    it('preserves sealed operation/batch identity while applying a claim patch', async () => {
+      await seedPendingTool('approval-preserves-identity');
+
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'approval-preserves-identity',
+          intervention: {
+            resolutionRequestId: 'resolution-1',
+            status: 'approved',
+          },
+          pluginState: { approvedBy: 'review' },
+        },
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'approval-preserves-identity'));
+      expect(plugin.intervention).toEqual({
+        ...pendingIdentity,
+        resolutionRequestId: 'resolution-1',
+        status: 'approved',
+      });
+      expect(plugin.state).toEqual({ approvedBy: 'review', preserved: true });
+    });
+
+    it('rejects the whole batch when any sibling already has a winner', async () => {
+      await seedPendingTool('approval-atomic-pending');
+      await seedPendingTool('approval-atomic-settled', {
+        ...pendingIdentity,
+        itemIndex: 1,
+        status: 'approved',
+      });
+
+      await expect(
+        messageModel.resolveHumanApproval([
+          {
+            content: 'must not commit',
+            id: 'approval-atomic-pending',
+            intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+          },
+          {
+            id: 'approval-atomic-settled',
+            intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+          },
+        ]),
+      ).rejects.toBeInstanceOf(HumanApprovalAlreadyResolvedError);
+
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'approval-atomic-pending'));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'approval-atomic-pending'));
+      expect(message.content).toBe('pending content');
+      expect(plugin.intervention).toEqual(pendingIdentity);
+    });
+
+    it('returns one applied owner and one idempotent follower for concurrent same-request claims', async () => {
+      await seedPendingTool('approval-concurrent-same-request');
+      const resolution = {
+        content: 'approved once',
+        id: 'approval-concurrent-same-request',
+        intervention: { resolutionRequestId: 'resolution-concurrent', status: 'approved' as const },
+      };
+
+      const results = await Promise.all([
+        messageModel.resolveHumanApproval([resolution]),
+        messageModel.resolveHumanApproval([resolution]),
+      ]);
+
+      expect(results.sort()).toEqual(['applied', 'idempotent']);
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, resolution.id));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, resolution.id));
+      expect(message.content).toBe('approved once');
+      expect(plugin.intervention).toMatchObject({
+        resolutionRequestId: 'resolution-concurrent',
+        status: 'approved',
+      });
+    });
+
+    it('restores the exact pre-claim snapshot only for the owning resolution request', async () => {
+      await seedPendingTool('approval-rollback');
+      const original = {
+        content: 'pending content',
+        id: 'approval-rollback',
+        intervention: pendingIdentity,
+        pluginState: { preserved: true },
+      };
+
+      await messageModel.resolveHumanApproval([
+        {
+          content: 'approved content',
+          id: original.id,
+          intervention: { resolutionRequestId: 'resolution-owner', status: 'approved' },
+          pluginState: { approvedBy: 'review' },
+        },
+      ]);
+      await messageModel.restoreHumanApproval([
+        { ...original, claimedResolutionRequestId: 'resolution-loser' },
+      ]);
+
+      let [message] = await serverDB.select().from(messages).where(eq(messages.id, original.id));
+      let [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, original.id));
+      expect(message.content).toBe('approved content');
+      expect(plugin.intervention).toMatchObject({
+        resolutionRequestId: 'resolution-owner',
+        status: 'approved',
+      });
+
+      await messageModel.restoreHumanApproval([
+        { ...original, claimedResolutionRequestId: 'resolution-owner' },
+      ]);
+
+      [message] = await serverDB.select().from(messages).where(eq(messages.id, original.id));
+      [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, original.id));
+      expect(message.content).toBe(original.content);
+      expect(plugin.intervention).toEqual(original.intervention);
+      expect(plugin.state).toEqual(original.pluginState);
     });
   });
 

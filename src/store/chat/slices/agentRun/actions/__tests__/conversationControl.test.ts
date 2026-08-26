@@ -20,6 +20,13 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     aiAgent: {
       processHumanIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+      resolveAgentInterventionBySource: {
+        mutate: vi.fn().mockResolvedValue({
+          contractVersion: 2,
+          status: 'unavailable',
+          success: false,
+        }),
+      },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
   },
@@ -51,6 +58,13 @@ vi.mock('@/utils/localStorage', () => {
 
 beforeEach(() => {
   resetTestEnvironment();
+  vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate)
+    .mockReset()
+    .mockResolvedValue({
+      contractVersion: 2,
+      status: 'unavailable',
+      success: false,
+    });
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
   });
@@ -59,6 +73,18 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+const captureActError = async (action: () => Promise<void>): Promise<unknown> => {
+  let captured: unknown;
+  await act(async () => {
+    try {
+      await action();
+    } catch (error) {
+      captured = error;
+    }
+  });
+  return captured;
+};
 
 describe('ConversationControl actions', () => {
   describe('stopGenerateMessage', () => {
@@ -839,6 +865,220 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
 
+      it('uses the generic source claim for a durable edited approval and adopts its precreated op', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-durable',
+          plugin: {
+            apiName: 'editFile',
+            arguments: '{"path":"/tmp/a"}',
+            identifier: 'lobe-local-system',
+            type: 'default',
+          },
+          pluginIntervention: {
+            batchId: 'batch-durable',
+            operationId: 'operation-durable',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'call-durable',
+        } as any);
+        const precreatedResult = {
+          autoStarted: true,
+          messageId: 'assistant-resumed',
+          operationId: 'operation-resumed',
+          success: true,
+        } as any;
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        vi.mocked(
+          lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
+        ).mockResolvedValueOnce({
+          contractVersion: 2,
+          execution: precreatedResult,
+          status: 'approved',
+          success: true,
+        });
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-durable', '', undefined, {
+            editedArguments: { path: '/tmp/b' },
+          });
+        });
+
+        expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).toHaveBeenCalledWith({
+          action: {
+            edits: { 'tool-msg-durable': { path: '/tmp/b' } },
+            scope: 'once',
+            type: 'approve_tool',
+          },
+          batchId: 'batch-durable',
+          operationId: 'operation-durable',
+          resolutionRequestId: expect.any(String),
+          targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
+        });
+        expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
+          '{"path":"/tmp/a"}',
+        );
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            parentMessageId: 'tool-msg-durable',
+            precreatedResult,
+          }),
+        );
+        expect(executeGatewayAgentSpy.mock.calls[0]?.[0]).not.toHaveProperty('resumeApproval');
+      });
+
+      it('propagates a generic approval failure, keeps the card pending, and reuses its UUID', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-claim-failure',
+          plugin: { apiName: 'writeFile', arguments: '{}', identifier: 'fs', type: 'default' },
+          pluginIntervention: {
+            batchId: 'batch-claim-failure',
+            operationId: 'operation-claim-failure',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'call-claim-failure',
+        } as any);
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        const mutation = vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate);
+        mutation.mockRejectedValue(new Error('claim unavailable'));
+
+        expect(
+          await captureActError(() =>
+            result.current.approveToolCalling('tool-msg-claim-failure', ''),
+          ),
+        ).toMatchObject({ message: 'claim unavailable' });
+        expect(
+          await captureActError(() =>
+            result.current.approveToolCalling('tool-msg-claim-failure', ''),
+          ),
+        ).toMatchObject({ message: 'claim unavailable' });
+
+        expect(result.current.dbMessagesMap[chatKey][0].pluginIntervention?.status).toBe('pending');
+        expect(mutation.mock.calls[0]?.[0].resolutionRequestId).toBe(
+          mutation.mock.calls[1]?.[0].resolutionRequestId,
+        );
+      });
+
+      it('falls back to the legacy Gateway resume only when the durable source is absent', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-compat',
+          plugin: { apiName: 'search', arguments: '{}', identifier: 'web-search', type: 'default' },
+          pluginIntervention: {
+            batchId: 'batch-compat',
+            operationId: 'operation-compat',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'call-compat',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-compat', '');
+        });
+
+        expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).toHaveBeenCalledOnce();
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeApproval: {
+              decision: 'approved',
+              parentMessageId: 'tool-msg-compat',
+              toolCallId: 'call-compat',
+            },
+          }),
+        );
+      });
+
+      it('retains a source idempotency UUID across transport retry and clears it after success', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-retry',
+          pluginIntervention: {
+            batchId: 'batch-retry',
+            operationId: 'operation-retry',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'call-retry',
+        } as any);
+        act(() => {
+          useChatStore.setState({
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+        const mutation = vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate);
+        mutation
+          .mockRejectedValueOnce(new Error('transport failed'))
+          .mockResolvedValueOnce({ contractVersion: 2, status: 'approved', success: true })
+          .mockResolvedValueOnce({ contractVersion: 2, status: 'approved', success: true });
+        const params = {
+          action: { scope: 'once', type: 'approve_tool' } as const,
+          toolMessageIds: ['tool-msg-retry'],
+        };
+
+        await expect(result.current.tryResolveAgentInterventionBySource(params)).rejects.toThrow(
+          'transport failed',
+        );
+        await expect(result.current.tryResolveAgentInterventionBySource(params)).resolves.toEqual({
+          execution: undefined,
+          handled: true,
+        });
+        await result.current.tryResolveAgentInterventionBySource(params);
+
+        const requestIds = mutation.mock.calls.map(([input]) => input.resolutionRequestId);
+        expect(requestIds[0]).toBe(requestIds[1]);
+        expect(requestIds[2]).not.toBe(requestIds[1]);
+      });
+
       it('should still take the Gateway branch when the server already ended the paused op (post-coordinator-fix state)', async () => {
         const { result } = renderHook(() => useChatStore());
 
@@ -953,9 +1193,9 @@ describe('ConversationControl actions', () => {
         const updateTopicStatusMock = vi.mocked(result.current.updateTopicStatus);
         updateTopicStatusMock.mockClear();
 
-        await act(async () => {
-          await result.current.approveToolCalling('tool-msg-1', 'group-1');
-        });
+        expect(
+          await captureActError(() => result.current.approveToolCalling('tool-msg-1', 'group-1')),
+        ).toMatchObject({ message: 'network error' });
 
         expect(executeGatewayAgentSpy).toHaveBeenCalled();
 
@@ -1596,6 +1836,7 @@ describe('ConversationControl actions', () => {
             parentMessageId: 'tool-msg-1',
             resumeToolResult: {
               content: 'My favorite color is blue',
+              outcome: 'submitted',
               parentMessageId: 'tool-msg-1',
               toolCallId: 'call_ask',
             },
@@ -1666,6 +1907,67 @@ describe('ConversationControl actions', () => {
         );
 
         executeGatewayAgentSpy.mockRestore();
+      });
+
+      it('propagates a generic custom-submit failure without running side effects or settling the card', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-custom-failure',
+          plugin: {
+            apiName: 'showAgentMarketplace',
+            arguments: '{}',
+            identifier: 'lobe-web-onboarding',
+            type: 'default',
+          },
+          pluginIntervention: {
+            batchId: 'batch-custom-failure',
+            operationId: 'operation-custom-failure',
+            status: 'pending',
+          },
+          role: 'tool',
+          tool_call_id: 'call-custom-failure',
+        } as any);
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        const legacySideEffect = vi.fn().mockResolvedValue({
+          response: { selectedTemplateIds: ['template-1'] },
+        });
+        const mutation = vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate);
+        mutation.mockRejectedValue(new Error('custom claim unavailable'));
+        const submit = () =>
+          result.current.submitToolInteraction('tool-msg-custom-failure', {}, undefined, {
+            agentInterventionAction: {
+              result: {
+                kind: 'agent_marketplace',
+                selectedTemplateIds: ['template-1'],
+              },
+              type: 'submit_custom',
+            },
+            prepareLegacyFallback: legacySideEffect,
+          });
+
+        expect(await captureActError(submit)).toMatchObject({
+          message: 'custom claim unavailable',
+        });
+        expect(await captureActError(submit)).toMatchObject({
+          message: 'custom claim unavailable',
+        });
+
+        expect(legacySideEffect).not.toHaveBeenCalled();
+        expect(result.current.dbMessagesMap[chatKey][0].pluginIntervention?.status).toBe('pending');
+        expect(mutation.mock.calls[0]?.[0].resolutionRequestId).toBe(
+          mutation.mock.calls[1]?.[0].resolutionRequestId,
+        );
       });
 
       it('takes the client path (executeClientAgent) when gateway mode is disabled', async () => {
@@ -2699,7 +3001,7 @@ describe('ConversationControl actions', () => {
       executeGatewayAgentSpy.mockRestore();
     });
 
-    it('marks every card approved so the bar settles in one paint', async () => {
+    it('does not forge approved cards before the server wins the batch claim', async () => {
       const { result } = renderHook(() => useChatStore());
       seedPendingBatch(result);
 
@@ -2713,13 +3015,7 @@ describe('ConversationControl actions', () => {
         await result.current.approveAllToolCalls(['tool-msg-a', 'tool-msg-b', 'tool-msg-c']);
       });
 
-      for (const id of ['tool-msg-a', 'tool-msg-b', 'tool-msg-c']) {
-        expect(optimisticSpy).toHaveBeenCalledWith(
-          id,
-          { intervention: { status: 'approved' } },
-          expect.anything(),
-        );
-      }
+      expect(optimisticSpy).not.toHaveBeenCalled();
 
       executeGatewayAgentSpy.mockRestore();
     });

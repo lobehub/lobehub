@@ -63,6 +63,32 @@ describe('QueueService', () => {
       expect(taskId).toMatch(/^local-test-op-0-\d+$/);
     });
 
+    it('deduplicates retries with the same stable execution key', async () => {
+      vi.useFakeTimers();
+      const execution = vi.fn().mockResolvedValue(undefined);
+      const { LocalQueueServiceImpl } = await import('../impls/local');
+      const impl = new LocalQueueServiceImpl();
+      impl.setExecutionCallback(execution);
+      const message = {
+        context: { phase: 'user_input' } as any,
+        deduplicationId: 'agent-intervention:op-stable:0',
+        delay: 0,
+        endpoint: 'http://test.com',
+        operationId: 'op-stable',
+        priority: 'normal' as const,
+        stepIndex: 0,
+      };
+
+      const [firstTaskId, retryTaskId] = await Promise.all([
+        impl.scheduleMessage(message),
+        impl.scheduleMessage(message),
+      ]);
+
+      expect(retryTaskId).toBe(firstTaskId);
+      await vi.runAllTimersAsync();
+      expect(execution).toHaveBeenCalledTimes(1);
+    });
+
     it('should schedule batch messages in local mode', async () => {
       const { QueueService } = await import('../QueueService');
       const service = new QueueService();
@@ -218,6 +244,27 @@ describe('QueueService', () => {
       });
 
       expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({ delay: 2 });
+    });
+
+    it('passes the stable intervention deduplication key to QStash', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+
+      await impl.scheduleMessage({
+        context: { phase: 'user_input' } as any,
+        deduplicationId: 'agent-intervention:op-stable:0',
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-stable',
+        priority: 'high',
+        stepIndex: 0,
+      });
+
+      expect(qstashMocks.publishJSON).toHaveBeenCalledWith(
+        expect.objectContaining({ deduplicationId: 'agent-intervention:op-stable:0' }),
+      );
     });
   });
 
