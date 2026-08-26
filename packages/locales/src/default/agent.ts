@@ -410,10 +410,14 @@ export default {
   'share.settings.limits.title': 'Visitor Limits',
   'share.settings.permissions.agentFiles': 'Agent files',
   'share.settings.permissions.allowReadMemory': 'Allow reading memory',
+  'share.settings.permissions.allowReadMemoryHint':
+    'Also enable the Memory tool in the Tool Whitelist below so visitors can actually use it.',
   'share.settings.permissions.desc': 'Controls what visitors can access during a shared chat.',
   'share.settings.permissions.fileAccess.none': 'No access',
   'share.settings.permissions.fileAccess.read': 'Read-only',
   'share.settings.permissions.knowledgeBase': 'Knowledge bases',
+  'share.settings.permissions.knowledgeBaseHint':
+    'Also enable the Knowledge Base tool in the Tool Whitelist below so visitors can actually use it.',
   'share.settings.permissions.title': 'Visitor Permissions',
   'share.settings.permissions.uploadAllowed': 'Allow visitors to upload files',
   'share.settings.permissions.uploadAllowedComingSoon':

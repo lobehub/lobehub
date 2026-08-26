@@ -1,4 +1,7 @@
-import { isAgentShareAllowedBuiltinIdentifier } from '@lobechat/builtin-tools';
+import {
+  isAgentShareAllowedBuiltinIdentifier,
+  runtimeManagedToolIds,
+} from '@lobechat/builtin-tools';
 
 /**
  * Whether a tool the owner has configured on the agent can ever be granted to
@@ -29,3 +32,37 @@ export const isToolAvailableToVisitors = (toolId: string): boolean =>
  */
 export const getVisitorVisibleEnabledToolIds = (enabledToolIds: string[] | undefined): string[] =>
   (enabledToolIds ?? []).filter(isToolAvailableToVisitors);
+
+/**
+ * Runtime-managed builtin tool identifiers (Knowledge Base, Memory, Web
+ * Browsing, the `lobe-agent` sub-agent tool, ...) that the server's agent
+ * mode rules can enable on a run independently of `agentConfig.plugins` — see
+ * `agentModeRules` in
+ * `apps/server/src/modules/Mecha/AgentToolsEngine/index.ts` (e.g.
+ * `[KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases` and
+ * `[MemoryManifest.identifier]: globalMemoryEnabled` fire regardless of
+ * whether those ids are in `agentConfig.plugins`). `getActivePluginIds` only
+ * reflects the owner's plugin selection, so a share tool picker built from
+ * that list alone can never surface these ids: the owner could never add
+ * them to `shareConfig.enabledToolIds`, and `applyShareGateToToolSet`
+ * (`shareGate.ts`) unconditionally strips any tool id absent from
+ * `enabledToolIds` — regardless of `allowReadMemory` or
+ * `filePermissionConfig.knowledgeBase` being on.
+ *
+ * Filtered through `isToolAvailableToVisitors` so the picker only ever
+ * surfaces runtime-managed tools a share visitor's run could actually reach;
+ * device/local-system/browser/sandbox tools (also runtime-managed, but never
+ * on `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`) stay hidden instead of
+ * cluttering the picker with a row the owner can never act on.
+ */
+export const runtimeManagedShareCandidateToolIds: string[] =
+  runtimeManagedToolIds.filter(isToolAvailableToVisitors);
+
+/**
+ * Full candidate set for the share tool picker: the owner's configured
+ * plugins plus the runtime-managed builtin tools a share can ever grant.
+ * Deduplicated because a runtime-managed tool id may also already be present
+ * in `pluginIds` (e.g. explicitly pinned, like image generation).
+ */
+export const getShareToolCandidateIds = (pluginIds: string[]): string[] =>
+  Array.from(new Set([...pluginIds, ...runtimeManagedShareCandidateToolIds]));

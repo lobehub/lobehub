@@ -1,10 +1,16 @@
+import { BrowserIdentifier } from '@lobechat/builtin-tool-browser';
+import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
+import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { describe, expect, it } from 'vitest';
 
 import {
+  getShareToolCandidateIds,
   getVisitorVisibleEnabledToolIds,
   isToolAvailableToVisitors,
+  runtimeManagedShareCandidateToolIds,
 } from './toolVisitorAvailability';
 
 describe('isToolAvailableToVisitors', () => {
@@ -30,5 +36,41 @@ describe('getVisitorVisibleEnabledToolIds', () => {
 
   it('handles a missing enabledToolIds list', () => {
     expect(getVisitorVisibleEnabledToolIds(undefined)).toEqual([]);
+  });
+});
+
+describe('runtimeManagedShareCandidateToolIds', () => {
+  it('includes runtime-managed tools the server share allowlist permits', () => {
+    // These are enabled by AgentToolsEngine's agentModeRules independently of
+    // agentConfig.plugins (hasEnabledKnowledgeBases / globalMemoryEnabled /
+    // isSearchEnabled), so they must be candidates even when absent from plugins.
+    expect(runtimeManagedShareCandidateToolIds).toEqual(
+      expect.arrayContaining([KnowledgeBaseIdentifier, MemoryIdentifier]),
+    );
+  });
+
+  it('excludes runtime-managed tools the server share gate always rejects', () => {
+    // Device/local-runtime tools are runtime-managed too, but a share
+    // visitor's run can never reach them (not on
+    // AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS) — they must stay out of the
+    // candidate set entirely rather than show as a permanently disabled row.
+    expect(runtimeManagedShareCandidateToolIds).not.toContain(BrowserIdentifier);
+  });
+});
+
+describe('getShareToolCandidateIds', () => {
+  it('merges the agent plugin ids with the runtime-managed share candidates', () => {
+    const result = getShareToolCandidateIds(['custom-mcp']);
+
+    expect(result).toContain('custom-mcp');
+    expect(result).toContain(MemoryIdentifier);
+    expect(result).toContain(KnowledgeBaseIdentifier);
+    expect(result).toContain(WebBrowsingManifest.identifier);
+  });
+
+  it('deduplicates an id present in both the plugin list and the runtime-managed set', () => {
+    const result = getShareToolCandidateIds([MemoryIdentifier]);
+
+    expect(result.filter((id) => id === MemoryIdentifier)).toHaveLength(1);
   });
 });
