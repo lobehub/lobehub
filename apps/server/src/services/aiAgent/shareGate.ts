@@ -1,9 +1,13 @@
+import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER } from '@lobechat/builtin-tool-agent-signal';
+import { AGENT_SIGNAL_REVIEW_IDENTIFIER } from '@lobechat/builtin-tool-agent-signal';
+import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
+import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
+import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -14,8 +18,12 @@ import {
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
-import { SkillMaintainerIdentifier } from '@lobechat/builtin-tool-skill-maintainer';
-import { TaskIdentifier } from '@lobechat/builtin-tool-task';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
+import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { builtinTools } from '@lobechat/builtin-tools';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
@@ -91,6 +99,124 @@ interface ShareDataToolPermissions {
    */
   knowledgeBaseIds?: string[];
 }
+
+/**
+ * Master allowlist of builtin tool identifiers a share visitor's run may ever
+ * touch, at BOTH the tool-set-assembly layer (`applyShareGateToToolSet`) and
+ * the dispatch layer (`isShareBlockedDataToolCall`, called from
+ * `BuiltinToolsExecutor.execute`).
+ *
+ * DEFAULT-DENY, not default-allow-minus-a-blocklist. A share visitor's run
+ * executes with the CREATOR's full credentials (see `AgentShareGate`), and
+ * every builtin runtime defaults to creator-scoped — it is written for the
+ * creator's own conversation, where "the caller" and "the data owner" are the
+ * same person. A share visitor breaks that assumption (caller ≠ data owner),
+ * and nothing about a builtin tool's manifest or registration signals whether
+ * its runtime happens to re-derive its scope from a model-suppliable
+ * argument (unsafe for a visitor) or purely from server-side context like
+ * `context.agentId` / `context.operationId` (safe). Five review rounds each
+ * surfaced one more tool that leaked the creator's whole account under the
+ * previous denylist (`SHARE_VISITOR_BLOCKED_IDENTIFIERS` — removed, see the
+ * bottom of this file for what replaced it) precisely because "not yet
+ * proven unsafe" defaulted to "exposed." Under this allowlist, a newly
+ * registered builtin tool — or a newly added API on an already-allowed one —
+ * is exposed to a share visitor ONLY once someone explicitly adds it here
+ * with the file:line evidence for why its runtime cannot resolve to the
+ * creator's data outside what this specific share/agent grants.
+ *
+ * Every entry below was verified against its actual server runtime
+ * (`apps/server/src/services/toolExecution/serverRuntimes/*`), not just its
+ * manifest — see the per-identifier comments for the file:line evidence.
+ * Builtin identifiers NOT listed here are denied unconditionally, regardless
+ * of `shareConfig.enabledToolIds` — see the denied-bucket rationale after
+ * this declaration.
+ *
+ * Governs ONLY builtin tool identifiers (checked via `isGovernedByBuiltinAllowlist`
+ * against the real `@lobechat/builtin-tools` registry). MCP servers, market
+ * plugins, and custom plugins are a different population, gated exclusively
+ * by `filterPluginsByShareGate` (the owner's `enabledToolIds` picker) — they
+ * must never be matched against this set, in either direction: an unknown
+ * non-builtin id must not be silently allowed through as "not a known
+ * builtin, so no rule applies" NOR silently blocked as "not on the builtin
+ * allowlist." See `isGovernedByBuiltinAllowlist`.
+ */
+const SHARE_VISITOR_ALLOWED_IDENTIFIERS = new Set<string>([
+  // `getTopicContext` re-derives scope from `context.agentShare` and checks
+  // the resolved topic's `senderId`/`agentId` against the visitor/share
+  // before returning anything — see `isTopicVisibleToRun` in
+  // `serverRuntimes/topicReference.ts:44-51`. A missing/out-of-scope topic
+  // and a real out-of-scope topic return the identical "not found" response,
+  // so the tool can't even be used to probe for the existence of another of
+  // the creator's topics.
+  TopicReferenceIdentifier,
+  // Pure computation — `CalculatorExecutionRuntime` takes no db/user context
+  // at all (`serverRuntimes/calculator.ts`), so there is no creator data it
+  // could reach even in principle.
+  CalculatorIdentifier,
+  // `WebBrowsingExecutionRuntime`'s `searchService` hits a stateless public
+  // search API; the only write path (`createDocument`/`associateDocument`)
+  // requires `context.agentId` (`serverRuntimes/webBrowsing.ts:11-38`), which
+  // is server-resolved from the running share, not model-suppliable.
+  WebBrowsingManifest.identifier,
+  // Returns a static help/interaction payload — `UserInteractionExecutionRuntime`
+  // has no constructor arguments and no db/user access at all
+  // (`serverRuntimes/userInteraction.ts`).
+  UserInteractionIdentifier,
+  // `getToolManifests` only echoes back entries from `context.toolManifestMap`
+  // (already the trimmed, share-gated set); `activateSkill` delegates to its
+  // OWN embedded `SkillsExecutionRuntime`, which — unlike the standalone
+  // `lobe-skills` tool below — re-checks every skill id against
+  // `context.agentShare.enabledToolIds` before resolving it
+  // (`isSkillAllowedForShare` in `serverRuntimes/activator.ts:104-112`, applied
+  // to `findAll`/`findById`/`findByName`/the `builtinSkills` list alike).
+  LobeActivatorIdentifier,
+  // `documentId` is read from `ctx.documentId` (server-resolved per operation),
+  // never from model args (`serverRuntimes/pageAgent.ts:191`).
+  PageAgentIdentifier,
+  // Writes are tied to `context.agentId`/`context.taskId`
+  // (`serverRuntimes/brief.ts:38,62-65,87-92`), not a model-suppliable id.
+  BriefIdentifier,
+  // No model-supplied ids; every write (image persistence, document
+  // association) routes through context-scoped callers keyed off
+  // `context.userId`/`context.agentVisibility`
+  // (`serverRuntimes/imageGeneration.ts:26-47`).
+  ImageGenerationIdentifier,
+  // `lobe-verify`, `agent-signal-review`, `acceptance-evidence`: each is
+  // scoped by `context.operationId`/`context.agentId` resolved server-side,
+  // and fails closed (`NO_OPERATION`/no-op) when that context is absent —
+  // `serverRuntimes/verifyResult.ts:35,42`,
+  // `serverRuntimes/acceptanceEvidence.ts:18,23`,
+  // `serverRuntimes/agentSignalReview.ts:37-41` (requires `agentId`, `userId`,
+  // `operationId`, `serverDB` all present, none from model args).
+  VerifyToolIdentifier,
+  AGENT_SIGNAL_REVIEW_IDENTIFIER,
+  AcceptanceEvidenceIdentifier,
+  // `callSubAgent` is stripped unconditionally regardless of this allowlist
+  // (see `SUB_AGENT_DISPATCH_APIS`/`stripSubAgentDispatchApis` below) — the
+  // remaining APIs (`createPlan`, etc.) are self-scoped to the current agent.
+  LobeAgentIdentifier,
+  // Data-bearing tools whose whole-identifier grant AND per-API write/always-
+  // blocked surface is further narrowed by `DATA_TOOL_ACCESS_RULES` below —
+  // being on this allowlist only lets them survive to that narrower gate, it
+  // does not itself grant read or write access.
+  KnowledgeBaseIdentifier,
+  MemoryIdentifier,
+  AgentDocumentsIdentifier,
+]);
+
+/**
+ * Whether `identifier` belongs to the population this allowlist governs — the
+ * real builtin tool registry (`@lobechat/builtin-tools`), the same source
+ * `BuiltinToolsExecutor`/`hasServerRuntime` resolve against. MCP servers,
+ * market plugins (source `'lobehubSkill'`/`'composio'`), and custom plugins
+ * never appear in this registry, so they fall outside this allowlist's
+ * jurisdiction entirely and are left to `filterPluginsByShareGate` /
+ * `shareConfig.enabledToolIds` — the pre-existing (and unaffected) gate for
+ * that population.
+ */
+const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
+const isGovernedByBuiltinAllowlist = (identifier: string): boolean =>
+  builtinIdentifierSet.has(identifier);
 
 type DataToolGrant = 'none' | 'read';
 
@@ -223,18 +349,30 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
 /**
  * Whether a specific `identifier`/`apiName` tool call must be blocked for a
  * share visitor run. This is the enforcement counterpart of
- * `applyShareGateToDataToolAccess` / `stripAlwaysBlockedIdentifiers` below,
- * reusable from the actual dispatch chokepoint (`BuiltinToolsExecutor.execute`,
- * which invokes `runtime[apiName](...)` directly and never consults the
- * manifest that those trim — the trimmed manifest only changes what the model
- * is OFFERED via function-calling schema, not what the executor is willing to
- * run if the model calls it anyway).
+ * `applyShareGateToDataToolAccess` below, reusable from the actual dispatch
+ * chokepoint (`BuiltinToolsExecutor.execute`, which invokes
+ * `runtime[apiName](...)` directly and never re-consults the (possibly
+ * already-trimmed) manifest — the trimmed manifest only changes what the
+ * model is OFFERED via function-calling schema, not what the executor is
+ * willing to run if the model calls it anyway).
  *
- * Fails closed: an identifier with no rule and not in
- * `SHARE_VISITOR_BLOCKED_IDENTIFIERS` is unaffected (ordinary plugins, gated
- * only by the C1 allowlist); an identifier WITH a rule but no `permissions`
- * (a non-share run never reaches here) is not this function's concern —
- * callers only invoke it when `agentShare` is set.
+ * DEFAULT-DENY for the builtin population: an `identifier` that resolves
+ * against the real `@lobechat/builtin-tools` registry
+ * (`isGovernedByBuiltinAllowlist`) but is NOT in
+ * `SHARE_VISITOR_ALLOWED_IDENTIFIERS` is blocked outright, with no
+ * `apiName`-level distinction — this is what replaced the old
+ * `SHARE_VISITOR_BLOCKED_IDENTIFIERS` denylist (e.g. `lobe-agent-management`,
+ * `lobe-creds`, `lobe-message`, `lobe-skill-store`, `lobe-agent-builder`,
+ * `lobe-skills`, `lobe-group-agent-builder`, `lobe-group-management`,
+ * `lobe-task`, `lobe-skill-maintainer`, `agent-signal-skill-management` — see
+ * `SHARE_VISITOR_ALLOWED_IDENTIFIERS`'s JSDoc for why each is absent). A
+ * non-builtin identifier (MCP server, market plugin, custom plugin) is NOT
+ * this function's concern at all — it falls through to `false` untouched,
+ * left entirely to `filterPluginsByShareGate` / `shareConfig.enabledToolIds`.
+ *
+ * An identifier WITH a `DATA_TOOL_ACCESS_RULES` entry but no `permissions`
+ * (a non-share run never reaches here) is not this function's concern either
+ * — callers only invoke it when `agentShare` is set.
  *
  * `args` is the tool call's parsed arguments, needed only for
  * `isArgsOutOfScope` rules (e.g. `viewKnowledgeBase`'s `id`). Omit it for
@@ -248,10 +386,14 @@ export const isShareBlockedDataToolCall = (
   apiName: string,
   args?: any,
 ): boolean => {
-  // Whole-identifier block (e.g. `lobe-agent-management`, see
-  // `SHARE_VISITOR_BLOCKED_IDENTIFIERS`) — every API on the tool is unsafe
-  // for a share visitor, so no `apiName`-level distinction is needed here.
-  if (SHARE_VISITOR_BLOCKED_IDENTIFIERS.has(identifier)) return true;
+  // Outside this gate's jurisdiction entirely — MCP/market/custom plugin
+  // identifiers are governed by the enabledToolIds picker, not this allowlist.
+  if (!isGovernedByBuiltinAllowlist(identifier)) return false;
+
+  // Default-deny: a known builtin identifier not on the allowlist is blocked
+  // unconditionally, including any tool registered after this allowlist was
+  // written — the whole point of inverting the old denylist.
+  if (!SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(identifier)) return true;
 
   const rule = DATA_TOOL_ACCESS_RULES[identifier];
   if (!rule) return false;
@@ -352,8 +494,20 @@ export interface ShareGateToolSet {
  * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
-  const allowed = new Set(gate.shareConfig.enabledToolIds ?? []);
-  const isAllowed = (id: string) => allowed.has(id);
+  const ownerAllowed = new Set(gate.shareConfig.enabledToolIds ?? []);
+
+  // A tool must clear BOTH gates: the owner's own `enabledToolIds` picker
+  // (`ownerAllowed`, pre-existing), AND — for builtin identifiers only — the
+  // default-deny master allowlist (`SHARE_VISITOR_ALLOWED_IDENTIFIERS`).
+  // Non-builtin identifiers (MCP/market/custom plugins) are outside
+  // `isGovernedByBuiltinAllowlist`'s population, so they pass straight
+  // through to the owner-picker check unaffected — this allowlist must never
+  // decide their fate, in either direction.
+  const isAllowed = (id: string) => {
+    if (!ownerAllowed.has(id)) return false;
+    if (!isGovernedByBuiltinAllowlist(id)) return true;
+    return SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(id);
+  };
 
   // Prune arrays in place (`splice`, not reassignment) so this works whether
   // the caller's binding for `enabledToolIds` / `activatableToolIds` / `tools`
@@ -380,15 +534,21 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   }
 
   stripSubAgentDispatchApis(toolSet);
-  stripAlwaysBlockedIdentifiers(toolSet);
   applyShareGateToDataToolAccess(toolSet, gate);
 };
 
 /**
- * Builtin tool identifiers whose ENTIRE API surface must never reach a share
- * visitor's model or tool set — as opposed to `DATA_TOOL_ACCESS_RULES`, which
- * trims a tool down to a scoped subset, or `SUB_AGENT_DISPATCH_APIS`, which
- * hides only one dispatch API.
+ * Rationale for every registered builtin identifier that is DENIED — i.e.
+ * absent from `SHARE_VISITOR_ALLOWED_IDENTIFIERS` above. Under the old
+ * denylist (`SHARE_VISITOR_BLOCKED_IDENTIFIERS`, removed — its members are
+ * simply absent from the allowlist now, no separate set needed since the
+ * allowlist itself is the single source of truth) an identifier had to be
+ * explicitly proven dangerous to be blocked; under the allowlist an
+ * identifier has to be explicitly proven safe to be exposed, so this comment
+ * exists purely to record the evidence trail for reviewers — the denial
+ * itself needs no code beyond "not in the Set above."
+ *
+ * Confirmed leak paths (a concrete visitor→creator-data route was found):
  *
  * - `lobe-agent-management`: executes in `agentManagementRuntime`
  *   (`apps/server/src/services/toolExecution/serverRuntimes/agentManagement.ts`)
@@ -398,13 +558,12 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   workspace; `getAgentDetail` returns any creator-owned agent's full
  *   config (system prompt included) for an arbitrary id; `createAgent` /
  *   `updateAgent` / `updatePrompt` / `duplicateAgent` / `installPlugin`
- *   persistently mutate the creator's agent collection. `callAgent` is
- *   already covered by `SUB_AGENT_DISPATCH_APIS`, but the rest of the tool
- *   has no API worth keeping, so the whole identifier is removed — fail
- *   closed rather than allowlist API-by-API. Mirrored by `resolveAgentManagementManifest`
- *   returning `null` for `isShareVisitor` (defense in depth: this strip is
- *   unconditional here too, independent of whether that context-aware path
- *   ran) and by the dispatch-time block in `isShareBlockedDataToolCall`.
+ *   persistently mutate the creator's agent collection. `callAgent` is the
+ *   sub-agent dispatch API also covered by `SUB_AGENT_DISPATCH_APIS` for
+ *   `lobe-agent`, but the rest of this tool has no API worth keeping — fail
+ *   closed rather than allowlist API-by-API. Mirrored by
+ *   `resolveAgentManagementManifest` returning `null` for `isShareVisitor`
+ *   (defense in depth).
  *
  * - `lobe-skill-maintainer` / `agent-signal-skill-management`: hidden,
  *   system-only tools (`hidden: true` in `packages/builtin-tools/src/index.ts`)
@@ -413,86 +572,143 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   conversational agent — under the current toolset-assembly path
  *   (`apps/server/src/services/aiAgent/index.ts`) neither identifier can reach
  *   a live share-visitor operation's `toolManifestMap`/`enabledToolIds` today.
- *   Unlike `lobe-agent-management`, their `agentId` IS genuinely context-scoped,
- *   not model-suppliable: `SkillMaintainerExecutionRuntime.resolveAgentId`
+ *   Their `agentId` IS genuinely context-scoped, not model-suppliable:
+ *   `SkillMaintainerExecutionRuntime.resolveAgentId`
  *   (`packages/builtin-tool-skill-maintainer/src/ExecutionRuntime/index.ts:66-69`)
- *   reads only `context.agentId` — the agent executing the tool call — and the
- *   `{ ...args, agentId }` spread order (same file, e.g. line 93) overwrites
- *   any `agentId` a model tries to smuggle into `args`; `agentSignalSkillManagementRuntime`
+ *   reads only `context.agentId`, and the `{ ...args, agentId }` spread order
+ *   (same file, e.g. line 93) overwrites any `agentId` a model tries to
+ *   smuggle into `args`; `agentSignalSkillManagementRuntime`
  *   (`apps/server/src/services/toolExecution/serverRuntimes/agentSignalSkillManagement.ts:21-33`)
- *   likewise binds `agentId` from `context` at factory time, and its manifest
- *   APIs (`RESOURCE_TOOL_APIS` in `packages/builtin-tool-agent-signal/src/shared/schemas.ts`)
- *   never declare an `agentId` parameter at all. Both are still listed here as
+ *   likewise binds `agentId` from `context` at factory time. Absent here as
  *   defense in depth: every API on both tools (`createSkill` /
  *   `replaceSkillIndex` / `renameSkill` / `createSkillIfAbsent` /
  *   `replaceSkillContentCAS`) WRITES agent-document rows under the creator's
- *   account via `SkillManagementDocumentService` (`AgentDocumentModel(db,
- *   userId, workspaceId)`), and a v1 share's `filePermissionConfig` only ever
- *   grants `'read'` or `'none'` — there is no write grant to honor, so any
- *   accidental future path that lets a share-visitor operation pick up either
- *   plugin id must still resolve to "blocked," not "scoped-so-it's-fine."
+ *   account via `SkillManagementDocumentService`, and a v1 share's
+ *   `filePermissionConfig` only ever grants `'read'` or `'none'` — there is
+ *   no write grant to honor, so any accidental future path that lets a
+ *   share-visitor operation pick up either plugin id must still resolve to
+ *   "blocked."
  *
- * - `lobe-task`: executes in `createTaskRuntime`
+ * - `lobe-task` / `lobe-goal`: `lobe-task` executes in `createTaskRuntime`
  *   (`apps/server/src/services/toolExecution/serverRuntimes/task.ts`) against
  *   `TaskModel`/`taskRouter`, both scoped only by `userId`/`workspaceId` — the
- *   CREATOR's, since a share run always executes as the creator (see
- *   `AgentShareGate`). Every mutating and single-task-read API takes a
- *   model-supplied `identifier` (`deleteTask` task.ts:373, `editTask`
- *   task.ts:413, `setTaskSchedule`/`setTaskVerify` task.ts:551,632,
- *   `runTask`/`runTasks` task.ts:704,747, `updateTaskStatus`/`viewTask`
- *   task.ts:786,839) or `commentId` (`addTaskComment`/`updateTaskComment`/
- *   `deleteTaskComment` task.ts:210,772,390) resolved through `TaskModel.resolve`
- *   / `taskRouter`'s comment procedures with NO topic/conversation check —
- *   `TaskModel.resolve`'s `ownership()` filter only checks `userId`/
- *   `workspaceId` (`packages/database/src/models/task.ts:326`), not which
- *   topic created or is currently working the task. That lets a visitor read,
- *   edit, delete, comment on, reschedule, reconfigure, or RUN (spending the
- *   creator's budget) any task anywhere in the creator's workspace, created by
- *   any agent or topic — not just the one behind this share. `listTasks`
- *   (task.ts:521) makes the breadth explicit: `scope: 'allAgents'` deliberately
- *   returns every task across every agent in the workspace, by design (it is
- *   the tool's advertised "see the whole team's board" feature).
+ *   CREATOR's. Every mutating and single-task-read API takes a model-supplied
+ *   `identifier` (`deleteTask` task.ts:373, `editTask` task.ts:413,
+ *   `setTaskSchedule`/`setTaskVerify` task.ts:551,632, `runTask`/`runTasks`
+ *   task.ts:704,747, `updateTaskStatus`/`viewTask` task.ts:786,839) or
+ *   `commentId` resolved through `TaskModel.resolve` with NO topic/
+ *   conversation check — `TaskModel.resolve`'s `ownership()` filter only
+ *   checks `userId`/`workspaceId` (`packages/database/src/models/task.ts:326`).
+ *   That lets a visitor read, edit, delete, comment on, reschedule,
+ *   reconfigure, or RUN (spending the creator's budget) any task anywhere in
+ *   the creator's workspace. `listTasks` (task.ts:521) makes the breadth
+ *   explicit: `scope: 'allAgents'` deliberately returns every task across
+ *   every agent in the workspace. There is no membership relation to scope a
+ *   task to "only tasks from this visitor's topic" (`tasks.currentTopicId`/
+ *   `task_topics` track execution runs, not creation), so the fail-closed fix
+ *   is to block the whole identifier. `lobe-goal`'s `createGoal`
+ *   (`serverRuntimes/index.ts`'s `goalRuntime`) is a thin wrapper that reuses
+ *   `taskRuntime.factory(context).createGoal` directly — same
+ *   creator/workspace-wide task tracker, same absence of topic scoping, so it
+ *   is denied for the identical reason even though it exposes only one API.
  *
- *   Unlike `lobe-agent-plan`'s `updatePlan` (see `lobeAgentPlan.ts`'s
- *   `restrictToTopicId`), there is no membership relation this gate can use
- *   to scope a task to "only tasks belonging to this visitor's topic": a task
- *   is not 1:1 with the topic that created it — `tasks.currentTopicId` and
- *   `task_topics` track EXECUTION runs (a task can span many topics over its
- *   lifetime, and `task_topics` rows are only created once a task actually
- *   runs), a task created via `createTask` inside this share's topic has no
- *   queryable column linking it back (only a best-effort `context.origin`
- *   JSONB pocket, not indexed or joinable), and identifiers/parent-child/
- *   dependency links are explicitly meant to be resolved and cross-referenced
- *   workspace-wide. Inventing a `restrictToTopicId`-style filter here would
- *   therefore be dishonest scoping — it would silently miss most of the
- *   actual attack surface (any task NOT created in this exact topic) while
- *   giving the impression the hole is closed. The task tracker is a
- *   creator/workspace-level surface by design, with no per-conversation
- *   boundary, so the fail-closed fix is to block the whole identifier for
- *   share visitors, exactly like `lobe-agent-management`.
+ * - `lobe-creds`: `injectCreds`
+ *   (`serverRuntimes/creds.ts:97-125`, `ServerCredsService.injectCreds`) takes
+ *   a free-form `keys: string[]` and decrypts the matching entries straight
+ *   out of the creator's (or workspace's) ENTIRE saved credential store into
+ *   the sandbox env — nothing ties `keys` to this agent/share. `listCreds`/
+ *   `getByKey`/`saveKVCred` are the same whole-account credential surface.
+ *
+ * - `lobe-message`: every bot-management API on `MessageDispatcherService`'s
+ *   `botProvider` (`serverRuntimes/message/index.ts`) resolves `botId`
+ *   straight from model args with no check against `context.agentId`
+ *   (`getBotDetail`/`updateBot`/`deleteBot`/`toggleBot`/`connectBot`, lines
+ *   293-451) — an arbitrary bot integration credential on the creator's
+ *   account. `listMessengers`/`getMessengerDetail`/`unlinkMessenger`/
+ *   `setMessengerActiveAgent`/`sendMessengerPush` (lines 458-742) act on the
+ *   creator's whole personal messenger account (every platform install, every
+ *   linked IM account), not anything scoped to the shared agent.
+ *
+ * - `lobe-skill-store`: `importFromGitHub`/`importFromUrl`/`importFromZipUrl`/
+ *   `importFromMarket` (`serverRuntimes/skillStore.ts:104-230`) fetch
+ *   attacker-chosen remote code/zip content and persist it into the creator's
+ *   (or workspace's) skill catalog via `SkillImporter` — arbitrary code
+ *   supply into the creator's account, gated by nothing but the URL the model
+ *   supplies.
+ *
+ * - `lobe-agent-builder`: `updateConfig`/`updatePrompt`
+ *   (`serverRuntimes/agentBuilder.ts:169-282`) resolve `agentId` from
+ *   `ctx.editingAgentId ?? ctx.agentId` and then overwrite that agent's
+ *   `systemRole`/config wholesale — for the shared agent this IS the agent
+ *   the visitor is chatting through, so this is a visitor rewriting the
+ *   creator's live agent prompt/config. `installPlugin` (lines 284-377)
+ *   installs an arbitrary market MCP plugin (or pins a builtin tool) onto
+ *   that same agent as the creator, with no OAuth/consent step.
+ *
+ * - `lobe-skills`: `findById`/`findByName`
+ *   (`serverRuntimes/skills.ts:154-162`) resolve any skill by id/name across
+ *   the creator's ENTIRE personal `AgentSkillModel` catalog — scoped only by
+ *   `disabledSkillIds` (an opt-out set), with no equivalent of the
+ *   `shareAllowedSkillIds` allowlist that the separate `lobe-activator`
+ *   runtime already applies to its own embedded skills runtime
+ *   (`serverRuntimes/activator.ts:104-112` — which is why `lobe-activator`
+ *   IS allowed above; the two tools reach the same underlying skill catalog
+ *   through differently-guarded paths).
+ *
+ * - `lobe-group-agent-builder` / `lobe-group-management`: group-orchestration
+ *   tools (member CRUD, dispatch) that operate on the creator's group-agent
+ *   collection and membership, with no share-run scoping designed in — same
+ *   risk class as `lobe-agent-management` (arbitrary creator-resource
+ *   mutation via model-suppliable ids). `lobe-group-agent-builder`'s server
+ *   runtime is owned by another in-flight change; this denial does not depend
+ *   on or modify that file.
+ *
+ * Denied for lack of positive safety evidence (no confirmed exploit was
+ * required to withhold access — the point of default-deny is that an unproven
+ * tool does not ship, full stop):
+ *
+ * - `lobe-local-system` / `lobe-browser` / `lobe-remote-device`: these proxy
+ *   through `deviceGateway` to the creator's own registered physical
+ *   device(s) — shell commands (`local-system`), live browser control
+ *   (`browser`), and device enumeration/attachment (`remote-device`,
+ *   `serverRuntimes/remoteDevice.ts:29-58`). A share visitor executing
+ *   arbitrary commands or driving a live browser session on the CREATOR's own
+ *   computer/phone is a far larger blast radius than any single data store,
+ *   and none of the three re-derive scope from the share.
+ *
+ * - `lobe-cloud-sandbox`: general-purpose shell/script execution
+ *   (`serverRuntimes/cloudSandbox.ts`) authenticated as the creator, including
+ *   `lh` CLI credential injection (`preprocessLhCommand`). Unlike the
+ *   `lobe-skills` sandbox path (execScript/runCommand there are also denied
+ *   via the `lobe-skills` block above), this is the standalone tool with no
+ *   skill-catalog scoping at all — arbitrary creator-authenticated code
+ *   execution.
+ *
+ * - `lobe-web-onboarding`: `readDocument`/`updateDocument`
+ *   (`serverRuntimes/webOnboarding.ts`) read and WRITE the creator's own
+ *   onboarding `SOUL.md` document and persona (`UserPersonaModel`) — a
+ *   share-visitor write to the creator's personal onboarding profile, with no
+ *   scoping to the shared agent at all.
+ *
+ * - `lobe-self-feedback-intent` / `agent-signal-reflection` /
+ *   `agent-signal-feedback-intent`: hidden, system-only self-iteration tools
+ *   for the internal background agents (`@lobechat/builtin-agents`), same
+ *   population as `lobe-skill-maintainer` above. Their runtimes resolve
+ *   `agentId` from context, not model args, and — like
+ *   `agent-signal-review` (allowed above) — appear to fail closed without
+ *   full operation/agent context. They are withheld anyway: unlike
+ *   `agent-signal-review`, no completed audit pass verified their write paths
+ *   (`SkillManagementDocumentService`-backed, same write surface flagged
+ *   unsafe for `lobe-skill-maintainer`) as safe, so per the default-deny rule
+ *   they stay out until that verification happens.
+ *
+ * SAFE / allowed — see the per-entry comments on `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
+ * above for `lobe-topic-reference`, `lobe-calculator`, `lobe-web-browsing`,
+ * `lobe-user-interaction`, `lobe-activator`, `lobe-page-agent`, `lobe-brief`,
+ * `lobe-image-generation`, `lobe-verify`, `agent-signal-review`,
+ * `lobe-acceptance-evidence`, `lobe-agent`, `lobe-knowledge-base`,
+ * `lobe-user-memory`, `lobe-agent-documents`.
  */
-const SHARE_VISITOR_BLOCKED_IDENTIFIERS = new Set<string>([
-  AgentManagementIdentifier,
-  SkillMaintainerIdentifier,
-  AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
-  TaskIdentifier,
-]);
-
-const stripAlwaysBlockedIdentifiers = (toolSet: ShareGateToolSet): void => {
-  for (const identifier of SHARE_VISITOR_BLOCKED_IDENTIFIERS) {
-    delete toolSet.manifestMap[identifier];
-    delete toolSet.sourceMap[identifier];
-    delete toolSet.executorMap[identifier];
-    pruneArrayInPlace(toolSet.enabledToolIds, (id) => id !== identifier);
-    pruneArrayInPlace(toolSet.activatableToolIds, (id) => id !== identifier);
-    if (toolSet.tools) {
-      pruneArrayInPlace(toolSet.tools, (tool) => {
-        const toolIdentifier = tool?.function?.name?.split(PLUGIN_SCHEMA_SEPARATOR)?.[0];
-        return toolIdentifier !== identifier;
-      });
-    }
-  }
-};
 
 /**
  * Sub-agent dispatch is not available in shared visitor runs. This strip runs
@@ -505,8 +721,8 @@ const stripAlwaysBlockedIdentifiers = (toolSet: ShareGateToolSet): void => {
  * `resolveManifest`).
  *
  * `lobe-agent-management`'s dispatch API (`callAgent`) does NOT need an entry
- * here: the whole tool — dispatch included — is removed by
- * `SHARE_VISITOR_BLOCKED_IDENTIFIERS` above.
+ * here: the whole tool — dispatch included — is simply absent from
+ * `SHARE_VISITOR_ALLOWED_IDENTIFIERS` above, so it never survives that gate.
  */
 const SUB_AGENT_DISPATCH_APIS: Record<
   string,

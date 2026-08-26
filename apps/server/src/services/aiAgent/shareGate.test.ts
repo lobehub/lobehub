@@ -1,3 +1,5 @@
+import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
@@ -9,23 +11,33 @@ import {
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management';
 import {
+  AGENT_SIGNAL_REVIEW_IDENTIFIER,
   AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
   AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
+import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
+import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
   KnowledgeBaseManifest,
 } from '@lobechat/builtin-tool-knowledge-base';
-import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier, MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
   SkillMaintainerApiName,
   SkillMaintainerIdentifier,
   SkillMaintainerManifest,
 } from '@lobechat/builtin-tool-skill-maintainer';
 import { TaskApiName, TaskIdentifier, TaskManifest } from '@lobechat/builtin-tool-task';
+import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
+import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
+import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -828,5 +840,243 @@ describe('isShareBlockedDataToolCall', () => {
         ),
       ).toBe(true);
     });
+  });
+});
+
+/**
+ * The master allowlist this PR introduces (`SHARE_VISITOR_ALLOWED_IDENTIFIERS`,
+ * not exported — internal to shareGate.ts by design, see its JSDoc). Mirrored
+ * here so the suites below can assert against the REAL exported
+ * `@lobechat/builtin-tools` registry instead of a hand-picked identifier list:
+ * every builtin identifier NOT in this set is expected to be denied, so any
+ * future registration that forgets to update shareGate.ts's allowlist shows up
+ * here as a new "denied" entry — the test itself doesn't need to change, only
+ * a human has to decide whether the new tool belongs on the allowlist.
+ *
+ * `lobe-knowledge-base` / `lobe-user-memory` / `lobe-agent-documents` are
+ * intentionally excluded from this mirror — they ARE on the real allowlist,
+ * but their survival in `applyShareGateToToolSet` also depends on
+ * `DATA_TOOL_ACCESS_RULES`'s per-share grant (see the dedicated "data-tool
+ * access" suite above), so a generic "enabledToolIds says yes" gate assertion
+ * for them would incorrectly fail without also passing `allowReadMemory`/
+ * `filePermissionConfig`.
+ */
+const MIRRORED_ALLOWED_IDENTIFIERS = new Set<string>([
+  TopicReferenceIdentifier,
+  CalculatorIdentifier,
+  WebBrowsingManifest.identifier,
+  UserInteractionIdentifier,
+  LobeActivatorIdentifier,
+  PageAgentIdentifier,
+  BriefIdentifier,
+  ImageGenerationIdentifier,
+  VerifyToolIdentifier,
+  AGENT_SIGNAL_REVIEW_IDENTIFIER,
+  AcceptanceEvidenceIdentifier,
+  LobeAgentIdentifier,
+]);
+
+const DATA_TOOL_IDENTIFIERS = new Set<string>([
+  KnowledgeBaseIdentifier,
+  MemoryIdentifier,
+  AgentDocumentsIdentifier,
+]);
+
+describe('default-deny covers every registered builtin identifier not explicitly allowed', () => {
+  const allRealBuiltinIdentifiers = builtinTools.map((tool) => tool.identifier);
+  const deniedBuiltinIdentifiers = allRealBuiltinIdentifiers.filter(
+    (id) => !MIRRORED_ALLOWED_IDENTIFIERS.has(id) && !DATA_TOOL_IDENTIFIERS.has(id),
+  );
+
+  it('includes every tool a completed security audit found leaking creator data, plus every tool withheld for lack of positive safety evidence', () => {
+    // Confirmed leak paths.
+    expect(deniedBuiltinIdentifiers).toEqual(
+      expect.arrayContaining([
+        AgentManagementIdentifier,
+        SkillMaintainerIdentifier,
+        AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+        TaskIdentifier,
+        'lobe-creds',
+        'lobe-message',
+        'lobe-skill-store',
+        'lobe-agent-builder',
+        'lobe-skills',
+        'lobe-group-agent-builder',
+        'lobe-group-management',
+      ]),
+    );
+    // Denied for lack of positive safety evidence — see shareGate.ts's
+    // denied-bucket rationale comment for why each stays out.
+    expect(deniedBuiltinIdentifiers).toEqual(
+      expect.arrayContaining([
+        'lobe-local-system',
+        'lobe-browser',
+        'lobe-remote-device',
+        'lobe-cloud-sandbox',
+        'lobe-web-onboarding',
+        'lobe-goal',
+        'lobe-self-feedback-intent',
+        'agent-signal-reflection',
+        'agent-signal-feedback-intent',
+      ]),
+    );
+  });
+
+  it.each(deniedBuiltinIdentifiers)(
+    'blocks %s unconditionally at dispatch time, regardless of the share permissions granted',
+    (identifier) => {
+      expect(
+        isShareBlockedDataToolCall(
+          {
+            allowReadMemory: true,
+            filePermissionConfig: { agentFiles: 'read', knowledgeBase: 'read' },
+          },
+          identifier,
+          'anyApiName',
+          { anything: 'goes' },
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('strips every denied identifier from the assembled tool set even when the owner explicitly whitelists all of them', () => {
+    const gate = buildGate({ enabledToolIds: deniedBuiltinIdentifiers });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [...deniedBuiltinIdentifiers],
+      enabledToolIds: [...deniedBuiltinIdentifiers],
+      executorMap: Object.fromEntries(deniedBuiltinIdentifiers.map((id) => [id, 'server' as any])),
+      manifestMap: Object.fromEntries(
+        deniedBuiltinIdentifiers.map((id) => [
+          id,
+          { api: [], identifier: id, type: 'default' } as any,
+        ]),
+      ),
+      sourceMap: Object.fromEntries(deniedBuiltinIdentifiers.map((id) => [id, 'builtin' as any])),
+      tools: deniedBuiltinIdentifiers.map((id) => ({
+        function: { name: `${id}____someApi` },
+        type: 'function',
+      })),
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.activatableToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.sourceMap).toEqual({});
+    expect(toolSet.executorMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+
+  it('denies a hypothetical unknown identifier the same way — proving this is default-deny, not a hand-maintained blocklist', () => {
+    const unknownIdentifier = 'lobe-not-yet-registered-tool';
+
+    // Never registered in `@lobechat/builtin-tools`, so it is NOT governed by
+    // this allowlist at all — it is left to `filterPluginsByShareGate` /
+    // `shareConfig.enabledToolIds`, same as any MCP/market/custom plugin.
+    expect(isShareBlockedDataToolCall({}, unknownIdentifier, 'anyApiName')).toBe(false);
+
+    // A builtin identifier that is real (so `isGovernedByBuiltinAllowlist`
+    // matches it) but happens not to be in the mirrored allowed set stands in
+    // for "a tool registered after the allowlist was written, before anyone
+    // added it here" — every one of `deniedBuiltinIdentifiers` already proves
+    // this, e.g. the newest addition among them:
+    expect(deniedBuiltinIdentifiers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('allowed builtin identifiers survive the owner allowlist intersection', () => {
+  it.each([...MIRRORED_ALLOWED_IDENTIFIERS])(
+    'keeps %s enabled when the owner whitelists it, with no DATA_TOOL_ACCESS_RULES entry to further narrow it',
+    (identifier) => {
+      const gate = buildGate({ enabledToolIds: [identifier] });
+      const toolSet: ShareGateToolSet = {
+        activatableToolIds: [identifier],
+        enabledToolIds: [identifier],
+        executorMap: { [identifier]: 'server' as any },
+        manifestMap: { [identifier]: { api: [], identifier, type: 'default' } as any },
+        sourceMap: { [identifier]: 'builtin' as any },
+        tools: [{ function: { name: `${identifier}____someApi` }, type: 'function' }],
+      };
+
+      applyShareGateToToolSet(toolSet, gate);
+
+      expect(toolSet.enabledToolIds).toContain(identifier);
+      expect(toolSet.activatableToolIds).toContain(identifier);
+      expect(toolSet.manifestMap[identifier]).toBeDefined();
+      expect(toolSet.sourceMap[identifier]).toBeDefined();
+      expect(toolSet.executorMap[identifier]).toBeDefined();
+
+      expect(
+        isShareBlockedDataToolCall(
+          {
+            allowReadMemory: true,
+            filePermissionConfig: { agentFiles: 'read', knowledgeBase: 'read' },
+          },
+          identifier,
+          'someApiName',
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it('never allows a builtin identifier the owner did not whitelist, even though it is on the master allowlist', () => {
+    const gate = buildGate({ enabledToolIds: [] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [CalculatorIdentifier],
+      enabledToolIds: [CalculatorIdentifier],
+      executorMap: { [CalculatorIdentifier]: 'server' as any },
+      manifestMap: {
+        [CalculatorIdentifier]: {
+          api: [],
+          identifier: CalculatorIdentifier,
+          type: 'default',
+        } as any,
+      },
+      sourceMap: { [CalculatorIdentifier]: 'builtin' as any },
+      tools: [],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+  });
+});
+
+describe('non-builtin identifiers (MCP / market / custom plugins) are governed only by the owner allowlist, never by the builtin master allowlist', () => {
+  it('keeps a non-builtin identifier whitelisted by the owner, even though it is not a known builtin', () => {
+    const gate = buildGate({ enabledToolIds: ['mcp-github', 'composio-slack'] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: ['mcp-github', 'composio-slack'],
+      enabledToolIds: ['mcp-github', 'composio-slack'],
+      executorMap: { 'composio-slack': 'client' as any, 'mcp-github': 'client' as any },
+      manifestMap: {
+        'composio-slack': { api: [], identifier: 'composio-slack', type: 'default' } as any,
+        'mcp-github': { api: [], identifier: 'mcp-github', type: 'default' } as any,
+      },
+      sourceMap: { 'composio-slack': 'composio', 'mcp-github': 'plugin' } as any,
+      tools: [
+        { function: { name: 'mcp-github____createIssue' }, type: 'function' },
+        { function: { name: 'composio-slack____sendMessage' }, type: 'function' },
+      ],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    // Governed purely by the owner's `enabledToolIds` — never stripped for
+    // "not being a known builtin," and never exempted from that owner check
+    // either (see the `filterPluginsByShareGate` suite above for the
+    // unconfigured/empty-whitelist case).
+    expect(toolSet.enabledToolIds).toEqual(['mcp-github', 'composio-slack']);
+    expect(toolSet.manifestMap).toEqual({
+      'composio-slack': { api: [], identifier: 'composio-slack', type: 'default' },
+      'mcp-github': { api: [], identifier: 'mcp-github', type: 'default' },
+    });
+  });
+
+  it('never blocks a non-builtin identifier at dispatch time, regardless of the share permissions granted', () => {
+    expect(isShareBlockedDataToolCall({}, 'mcp-github', 'createIssue')).toBe(false);
+    expect(isShareBlockedDataToolCall({}, 'composio-slack', 'sendMessage')).toBe(false);
   });
 });
