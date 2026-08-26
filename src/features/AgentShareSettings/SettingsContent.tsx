@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_SHARE_MAX_TOPICS_PER_VISITOR } from '@lobechat/const';
 import { getActivePluginIds } from '@lobechat/types';
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Button, Select, Switch, toast } from '@lobehub/ui/base-ui';
@@ -196,8 +197,17 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
 
       <Section desc={t('share.settings.limits.desc')} title={t('share.settings.limits.title')}>
         <Flexbox gap={12}>
-          <SettingRow label={t('share.settings.limits.maxTopicsPerVisitor')}>
+          <SettingRow
+            label={t('share.settings.limits.maxTopicsPerVisitor')}
+            desc={t('share.settings.limits.maxTopicsPerVisitorHint', {
+              // i18next's generated interpolation types default `{{max}}` to
+              // `string` (no `{{max, number}}` format specifier), so pass a
+              // string even though the source constant is numeric.
+              max: String(AGENT_SHARE_MAX_TOPICS_PER_VISITOR),
+            })}
+          >
             <InputNumber
+              max={AGENT_SHARE_MAX_TOPICS_PER_VISITOR}
               min={1}
               precision={0}
               style={{ width: 160 }}

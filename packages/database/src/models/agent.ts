@@ -1515,38 +1515,64 @@ export class AgentModel {
 
     const { updatedAt: _, accessedAt: __, createdAt: ___, ...updateData } = mergedValue;
 
-    await this.db
-      .update(agents)
-      .set(updateData)
-      .where(and(eq(agents.id, agentId), this.ownership()));
-
     /**
      * A config write can turn an already-`link`-shared agent heterogeneous
      * (e.g. switching to Claude Code / Codex). `AiAgentService` fail-closes
      * every visitor run against a heterogeneous share
      * (`ShareHeterogeneousAgentUnsupported`, see `assertShareableAgent` in
-     * `agentShare.ts`), but that gate only runs at share-time — it never
-     * re-checks a share that was already public when the underlying agent
-     * config changes later. Without this, the owner's Share tab silently
-     * disappears (heterogeneous agents can't be configured for sharing) while
-     * existing recipients keep hitting a live-looking link whose every send
-     * fails. Reset the share to private here, at the single choke point every
-     * config write passes through, so the state is corrected regardless of
-     * which caller (UI, agent-builder tool, etc.) made the change.
+     * `apps/server/src/routers/lambda/agentShare.ts`), but that gate only
+     * runs at share-time — it never re-checks a share that was already public
+     * when the underlying agent config changes later. Without this, the
+     * owner's Share tab silently disappears (heterogeneous agents can't be
+     * configured for sharing) while existing recipients keep hitting a
+     * live-looking link whose every send fails. Reset the share to private
+     * here, at the single choke point every config write passes through, so
+     * the state is corrected regardless of which caller (UI, agent-builder
+     * tool, etc.) made the change.
      *
      * Only touch `model` / `agencyConfig` writes — those are the only fields
      * `isHeterogeneousAgentConfig` looks at — so a normal title/plugin/etc.
      * update never pays for the extra query.
      */
-    if (
+    const mayNeedShareReset =
       (Object.hasOwn(data, 'model') || Object.hasOwn(data, 'agencyConfig')) &&
-      isHeterogeneousAgentConfig(mergedValue)
-    ) {
-      await this.db
-        .update(agentShares)
-        .set({ updatedAt: new Date(), visibility: 'private' })
-        .where(and(eq(agentShares.agentId, agentId), ne(agentShares.visibility, 'private')));
-    }
+      isHeterogeneousAgentConfig(mergedValue);
+
+    /**
+     * The config write and the conditional share reset above used to run as
+     * two separate autocommit statements, with no lock on the Agent row in
+     * between. `AgentShareModel.updateVisibility` (packages/database/src/
+     * models/agentShare.ts) takes a `FOR UPDATE` lock on the same
+     * `agents.id = agentId` row before publishing a share to `link`, but this
+     * write never joined that serialization point — so a concurrent
+     * `updateVisibility('link')` could read the still-homogeneous config,
+     * then land its `visibility = 'link'` write in the gap between this
+     * method's two statements, right after the reset above had just set it
+     * back to `private`. The result: a live share link on a Codex/Claude Code
+     * agent whose every visitor send is fail-closed. Locking the same row
+     * here (mirrors `AgentModel.delete`'s `.for('update')` pattern above, and
+     * `AgentShareModel.withOwnedPersonalAgentLock`) forces the two writers to
+     * serialize on the row instead of interleaving. See LOBE-11930.
+     */
+    await this.db.transaction(async (trx) => {
+      await trx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, agentId), this.ownership()))
+        .for('update');
+
+      await trx
+        .update(agents)
+        .set(updateData)
+        .where(and(eq(agents.id, agentId), this.ownership()));
+
+      if (mayNeedShareReset) {
+        await trx
+          .update(agentShares)
+          .set({ updatedAt: new Date(), visibility: 'private' })
+          .where(and(eq(agentShares.agentId, agentId), ne(agentShares.visibility, 'private')));
+      }
+    });
   };
 
   /**

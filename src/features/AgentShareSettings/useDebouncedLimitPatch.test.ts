@@ -114,6 +114,33 @@ describe('useDebouncedLimitPatch — agent switching', () => {
     expect(commitAgentB).not.toHaveBeenCalled();
   });
 
+  it('flushes agent A separately when agent B is edited before the debounce fires', () => {
+    // Regression for a patch that merged edits across agents: edit A's field,
+    // switch agents, then edit B's *other* field before the timer elapses.
+    // Each agent must receive a commit containing only its own field.
+    const commitAgentA = vi.fn();
+    const commitAgentB = vi.fn();
+    const { result, rerender } = renderHook(({ onCommit }) => useDebouncedLimitPatch(onCommit), {
+      initialProps: { onCommit: commitAgentA },
+    });
+
+    act(() => {
+      result.current('maxTopicsPerVisitor', 8);
+    });
+
+    rerender({ onCommit: commitAgentB });
+
+    act(() => {
+      result.current('maxTurnsPerTopic', 30);
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(commitAgentA).toHaveBeenCalledWith({ maxTopicsPerVisitor: 8 });
+    expect(commitAgentA).toHaveBeenCalledOnce();
+    expect(commitAgentB).toHaveBeenCalledWith({ maxTurnsPerTopic: 30 });
+    expect(commitAgentB).toHaveBeenCalledOnce();
+  });
+
   it('routes the error callback to the same agent as the commit', async () => {
     const commitAgentA = vi.fn().mockRejectedValue(new Error('nope'));
     const errorAgentA = vi.fn();

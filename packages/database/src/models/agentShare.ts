@@ -1,5 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import type { ShareVisibility } from '@lobechat/types';
+import { isHeterogeneousAgentConfig } from '@lobechat/const';
+import type { LobeAgentAgencyConfig, ShareVisibility } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, exists, isNull, notInArray, or, sql } from 'drizzle-orm';
 
@@ -71,6 +73,13 @@ export type AgentShareData = NonNullable<
   Awaited<ReturnType<(typeof AgentShareModel)['findByShareId']>>
 >;
 
+/** Minimal locked-row snapshot needed by callers of {@link AgentShareModel.withOwnedPersonalAgentLock}. */
+interface LockedAgentSnapshot {
+  agencyConfig: LobeAgentAgencyConfig | null;
+  id: string;
+  model: string | null;
+}
+
 export class AgentShareModel {
   private db: LobeChatDatabase;
   private userId: string;
@@ -99,15 +108,30 @@ export class AgentShareModel {
         ),
     );
 
-  /** Serialize share writes with scope transfers by locking the Agent row first. */
+  /**
+   * Serialize share writes with scope transfers by locking the Agent row
+   * first, and hand the mutation callback the locked snapshot's `model` /
+   * `agencyConfig`.
+   *
+   * This lock is the SAME physical Agent row that `AgentModel.updateConfig`
+   * (packages/database/src/models/agent.ts) locks before writing a config
+   * change and conditionally resetting a `link` share back to `private` when
+   * the merged config turns heterogeneous. Both sides taking `FOR UPDATE` on
+   * `agents.id = agentId` is what makes the two writers serialize instead of
+   * interleaving: without it, `updateVisibility('link')` could validate a
+   * still-homogeneous config, let a concurrent `updateConfig` reset the share
+   * to `private`, then blindly flip it back to `link` — a live share link on
+   * a Codex/Claude Code agent whose every visitor send is fail-closed by
+   * `AiAgentService`. See LOBE-11930.
+   */
   private withOwnedPersonalAgentLock = async <T>(
     agentId: string,
-    mutation: (tx: LobeChatDatabase) => Promise<T>,
+    mutation: (tx: LobeChatDatabase, agent: LockedAgentSnapshot) => Promise<T>,
   ): Promise<T | null> =>
     this.db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
       const [agent] = await tx
-        .select({ id: agents.id })
+        .select({ agencyConfig: agents.agencyConfig, id: agents.id, model: agents.model })
         .from(agents)
         .where(
           and(
@@ -120,7 +144,7 @@ export class AgentShareModel {
         .for('update');
 
       if (!agent) return null;
-      return mutation(tx);
+      return mutation(tx, agent as LockedAgentSnapshot);
     });
 
   /** Create a private share by default, or return the existing share for the agent. */
@@ -188,9 +212,35 @@ export class AgentShareModel {
         : null;
     });
 
-  /** Update share visibility for a personally owned agent. */
+  /**
+   * Update share visibility for a personally owned agent.
+   *
+   * Publishing (`link`) re-validates `isHeterogeneousAgentConfig` here, AFTER
+   * `withOwnedPersonalAgentLock` has taken the Agent row lock, using the
+   * `model` / `agencyConfig` read as part of that same locked SELECT — not a
+   * pre-lock read from the router. A pre-lock read (the previous approach:
+   * `assertShareableAgent` in `apps/server/src/routers/lambda/agentShare.ts`
+   * ran before this call) can observe a homogeneous config, then have
+   * `AgentModel.updateConfig` land a heterogeneous change and reset the share
+   * to `private` in between, and finally still flip it to `link` here — a
+   * stale-validation lost update. Re-reading `model`/`agencyConfig` under the
+   * lock closes that window: whichever of this call and `updateConfig` wins
+   * the row lock decides the outcome, and the other sees its committed
+   * result. See LOBE-11930.
+   *
+   * Only publishing (`link`) needs the check — reverting to `private` never
+   * exposes visitor execution, so it must stay reachable even if the agent
+   * config changed to a heterogeneous provider after the share was created.
+   */
   updateVisibility = async (agentId: string, visibility: ShareVisibility) =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+    this.withOwnedPersonalAgentLock(agentId, async (tx, agent) => {
+      if (visibility === 'link' && isHeterogeneousAgentConfig(agent)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+        });
+      }
+
       const [updated] = await tx
         .update(agentShares)
         .set({ updatedAt: new Date(), visibility })
