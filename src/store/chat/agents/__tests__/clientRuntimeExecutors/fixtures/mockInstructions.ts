@@ -64,6 +64,7 @@ export const createCallToolInstruction = (
 export const createRequestHumanApproveInstruction = (
   pendingTools: ChatToolPayload[] = [],
   options: {
+    parentMessageId?: string;
     reason?: string;
     skipCreateToolMessage?: boolean;
   } = {},
@@ -81,6 +82,7 @@ export const createRequestHumanApproveInstruction = (
       ];
 
   return {
+    ...(options.parentMessageId && { parentMessageId: options.parentMessageId }),
     pendingToolsCalling,
     reason: options.reason,
     skipCreateToolMessage: options.skipCreateToolMessage || false,
