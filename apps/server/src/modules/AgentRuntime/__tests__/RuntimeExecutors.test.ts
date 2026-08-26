@@ -227,6 +227,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
       query: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateMessagePlugin: vi.fn().mockResolvedValue({ success: true }),
       updateToolMessage: vi.fn().mockResolvedValue({ success: true }),
     };
 
@@ -3749,7 +3750,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           agentId: 'agent-123',
           content: '',
           parentId: 'assistant-msg-1',
-          pluginIntervention: { status: 'pending' },
+          pluginIntervention: expect.objectContaining({ status: 'pending' }),
           role: 'tool',
           tool_call_id: 'tool-call-1',
           topicId: 'topic-123',
@@ -3759,7 +3760,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         2,
         expect.objectContaining({
           parentId: 'assistant-msg-1',
-          pluginIntervention: { status: 'pending' },
+          pluginIntervention: expect.objectContaining({ status: 'pending' }),
           tool_call_id: 'tool-call-2',
         }),
       );
@@ -3817,6 +3818,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       await executors.request_human_approve!(
         {
+          parentMessageId: 'assistant-msg-1',
           pendingToolsCalling: makePendingTools(),
           skipCreateToolMessage: true,
           type: 'request_human_approve' as const,
@@ -3825,6 +3827,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       );
 
       expect(mockMessageModel.create).not.toHaveBeenCalled();
+      expect(mockMessageModel.updateMessagePlugin).toHaveBeenCalledTimes(2);
+      expect(mockMessageModel.updateMessagePlugin).toHaveBeenNthCalledWith(1, 'existing-tool-1', {
+        intervention: {
+          batchId: 'op-123:0:assistant-msg-1',
+          itemIndex: 0,
+          operationId: 'op-123',
+          status: 'pending',
+          stepIndex: 0,
+        },
+      });
       const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
         (call: any[]) => call[2]?.chunkType === 'tools_calling',
       );
