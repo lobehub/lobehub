@@ -174,6 +174,17 @@ export interface ToolExecutionContext {
    * via function-calling schema, so this per-call check is the actual
    * enforcement that a whitelisted-but-under-granted data tool cannot read
    * beyond, or ever write to, the creator's data.
+   *
+   * `knowledgeBaseIds` is the agent's own persisted knowledge-base
+   * assignment (never visitor-supplied). `lobe-knowledge-base`'s non-write
+   * APIs are creator-scoped, not agent-scoped by default: `listFiles` /
+   * `getFileDetail` browse the creator's whole resource library and
+   * `listKnowledgeBases` / `readKnowledge` likewise have no id that ties them
+   * to this agent's grant, so they stay blocked outright regardless of
+   * `filePermissionConfig.knowledgeBase`. Only `viewKnowledgeBase` takes a
+   * knowledge-base `id`, which `isShareBlockedDataToolCall` checks against
+   * this set so a visitor can view a knowledge base actually mounted on the
+   * shared agent, and nothing else the creator owns.
    */
   agentShare?: {
     /** Id of the shared agent this run belongs to. */
@@ -184,6 +195,8 @@ export interface ToolExecutionContext {
     enabledToolIds?: string[];
     /** Mirrors `shareConfig.filePermissionConfig`; gates knowledge-base / agent-documents tools. */
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+    /** Agent's assigned (`enabled`) knowledge-base ids; scopes `viewKnowledgeBase`'s `id` arg. */
+    knowledgeBaseIds?: string[];
     /** The signed-in visitor driving this run. */
     visitorUserId: string;
   };

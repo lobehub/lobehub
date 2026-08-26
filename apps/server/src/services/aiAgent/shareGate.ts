@@ -84,6 +84,13 @@ export const applyShareGateToAgentConfig = (
 interface ShareDataToolPermissions {
   allowReadMemory?: boolean;
   filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+  /**
+   * Agent's own persisted, `enabled` knowledge-base ids (never
+   * visitor-supplied — see `AgentShareGate`'s `knowledgeBaseIds` producer in
+   * `aiAgent/index.ts`). The only thing in `DATA_TOOL_ACCESS_RULES` that
+   * needs an id allowlist today: `viewKnowledgeBase`'s `id` argument.
+   */
+  knowledgeBaseIds?: string[];
 }
 
 type DataToolGrant = 'none' | 'read';
@@ -92,14 +99,40 @@ type DataToolGrant = 'none' | 'read';
  * Read/write surface of a builtin tool whose APIs act directly on the
  * creator's private data store (memory, knowledge bases, agent documents).
  *
- * Unlike ordinary plugins, these tools are gated by two independent axes:
- * whether the share grants ANY access at all (`grant`), and — since v1 share
+ * Unlike ordinary plugins, these tools are gated by three independent axes:
+ * whether the share grants ANY access at all (`grant`); — since v1 share
  * grants are `none` | `read` only, there is no write grant to honor — whether
- * a given API is a write regardless of grant (`writeApiNames`).
+ * a given API is a write regardless of grant (`writeApiNames`); and whether a
+ * "read" API can even be scoped to what the share actually grants at all
+ * (`alwaysBlockedApiNames`, `isArgsOutOfScope`) — some reads act on the
+ * caller's ENTIRE personal data store with no id parameter tying them to the
+ * agent's own assignment, so a `read` grant must not enable them.
  */
 interface DataToolAccessRule {
+  /**
+   * API names that read across the creator's whole personal store
+   * (independent of what this specific agent is assigned) with no id
+   * argument that could scope the call — e.g. `lobe-knowledge-base`'s
+   * `listFiles` / `getFileDetail` (the creator's whole resource library) and
+   * `listKnowledgeBases` / `readKnowledge` (every knowledge base / file the
+   * creator owns, not just what's mounted on this agent). Always blocked for
+   * a share visitor, even when `grant` is `read` — unlike `writeApiNames`,
+   * these ARE reads, but a read grant only ever means "read what this agent
+   * is assigned," never "read everything the creator owns."
+   */
+  alwaysBlockedApiNames?: string[];
   /** Resolve this share's grant for the tool from its permission fields. */
   grant: (permissions: ShareDataToolPermissions) => DataToolGrant;
+  /**
+   * For an API that DOES take an id scoping it to a specific resource (e.g.
+   * `viewKnowledgeBase`'s `id`): whether the id(s) `args` references fall
+   * outside what this share's permissions actually allow. Absent for APIs
+   * with no such id, or already covered by `writeApiNames` /
+   * `alwaysBlockedApiNames`. Must fail closed — an id that cannot be
+   * verified (missing, wrong type, or the allowlist itself is empty/absent)
+   * is out of scope.
+   */
+  isArgsOutOfScope?: (permissions: ShareDataToolPermissions, apiName: string, args: any) => boolean;
   /** API names that mutate creator data; stripped/blocked unconditionally. */
   writeApiNames: string[];
 }
@@ -133,8 +166,39 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
     ],
   },
   [KnowledgeBaseIdentifier]: {
+    // `listFiles` / `getFileDetail` browse the creator's whole resource
+    // library (files not yet in any knowledge base) — that library has no
+    // per-agent assignment concept at all, so no grant can scope it to "what
+    // this agent is assigned." `listKnowledgeBases` lists every knowledge
+    // base the creator owns, not just the ones mounted on this agent, and
+    // takes no id to scope it either. `readKnowledge` accepts arbitrary
+    // `file_*`/`docs_*` ids read straight from the creator's file/document
+    // store with no knowledge-base-membership check of its own — validating
+    // that server-side would require resolving each id's knowledge-base
+    // membership (a join `searchKnowledgeBase`'s own scoping already needs),
+    // which this gate does not have the DB access to do id-by-id. Blocking it
+    // is the fail-closed choice: `searchKnowledgeBase` (already agent/task-id
+    // scoped server-side, see `resolveAgentKnowledgeBaseIds` in
+    // `serverRuntimes/knowledgeBase.ts`) still returns real chunk/document
+    // text, so a `read` grant remains useful without this hole.
+    alwaysBlockedApiNames: [
+      KnowledgeBaseApiName.listFiles,
+      KnowledgeBaseApiName.getFileDetail,
+      KnowledgeBaseApiName.listKnowledgeBases,
+      KnowledgeBaseApiName.readKnowledge,
+    ],
     grant: (permissions) =>
       permissions.filePermissionConfig?.knowledgeBase === 'read' ? 'read' : 'none',
+    // `viewKnowledgeBase` DOES take an `id`, and the agent's own assignment
+    // is known (`ShareDataToolPermissions.knowledgeBaseIds`) — so unlike the
+    // APIs above, this one can be honestly scoped instead of blocked outright.
+    isArgsOutOfScope: (permissions, apiName, args) => {
+      if (apiName !== KnowledgeBaseApiName.viewKnowledgeBase) return false;
+      const id = args?.id;
+      if (typeof id !== 'string' || !id) return true;
+      const allowed = permissions.knowledgeBaseIds;
+      return !allowed || !allowed.includes(id);
+    },
     writeApiNames: [
       KnowledgeBaseApiName.createKnowledgeBase,
       KnowledgeBaseApiName.deleteKnowledgeBase,
@@ -171,11 +235,18 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
  * gated only by the C1 allowlist); an identifier WITH a rule but no
  * `permissions` (a non-share run never reaches here) is not this function's
  * concern — callers only invoke it when `agentShare` is set.
+ *
+ * `args` is the tool call's parsed arguments, needed only for
+ * `isArgsOutOfScope` rules (e.g. `viewKnowledgeBase`'s `id`). Omit it for
+ * call sites that only need the identifier/apiName-level check (grant /
+ * write / always-blocked) — an id-scoped API without `args` fails closed via
+ * `isArgsOutOfScope`'s own missing-id handling once `args` is supplied.
  */
 export const isShareBlockedDataToolCall = (
   permissions: ShareDataToolPermissions,
   identifier: string,
   apiName: string,
+  args?: any,
 ): boolean => {
   const rule = DATA_TOOL_ACCESS_RULES[identifier];
   if (!rule) return false;
@@ -183,7 +254,11 @@ export const isShareBlockedDataToolCall = (
   const grant = rule.grant(permissions);
   if (grant === 'none') return true;
 
-  return rule.writeApiNames.includes(apiName);
+  if (rule.writeApiNames.includes(apiName)) return true;
+  if (rule.alwaysBlockedApiNames?.includes(apiName)) return true;
+  if (args !== undefined && rule.isArgsOutOfScope?.(permissions, apiName, args)) return true;
+
+  return false;
 };
 
 /**
@@ -219,10 +294,20 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
       continue;
     }
 
+    // Under a `read` grant, strip both mutations (`writeApiNames`) AND the
+    // creator-wide reads that no grant can honestly scope to this agent
+    // (`alwaysBlockedApiNames`) — same treatment, since both are never
+    // offered to the model regardless of grant. `isArgsOutOfScope`-covered
+    // APIs (e.g. `viewKnowledgeBase`) are NOT stripped here: they stay
+    // offered because they CAN be in scope depending on the id the model
+    // picks, and that per-call id check only runs at dispatch time
+    // (`isShareBlockedDataToolCall`), not against a static manifest.
+    const blockedApiNames = new Set([...rule.writeApiNames, ...(rule.alwaysBlockedApiNames ?? [])]);
+
     const manifest = toolSet.manifestMap[identifier];
     toolSet.manifestMap[identifier] = {
       ...manifest,
-      api: manifest.api.filter((api) => !rule.writeApiNames.includes(api.name)),
+      api: manifest.api.filter((api) => !blockedApiNames.has(api.name)),
     };
 
     if (toolSet.tools) {
@@ -231,7 +316,7 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
         if (!name?.startsWith(`${identifier}${PLUGIN_SCHEMA_SEPARATOR}`)) return true;
 
         const apiName = name.slice(identifier.length + PLUGIN_SCHEMA_SEPARATOR.length);
-        return !rule.writeApiNames.includes(apiName);
+        return !blockedApiNames.has(apiName);
       });
     }
   }

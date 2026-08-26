@@ -46,12 +46,18 @@ export interface RuntimeExecutorContext {
    * `ServerToolTransport`) into `ToolExecutionContext.agentShare` so
    * `BuiltinToolsExecutor.execute` can re-check the memory tool's grant right
    * before dispatch — see `isShareBlockedDataToolCall` in `shareGate.ts`.
+   *
+   * `knowledgeBaseIds` mirrors the agent's persisted knowledge-base
+   * assignment so `isShareBlockedDataToolCall` can id-scope
+   * `viewKnowledgeBase`'s `id` argument to what the agent is actually
+   * mounted with, instead of any knowledge base the creator owns.
    */
   agentShare?: {
     agentId: string;
     allowReadMemory?: boolean;
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+    knowledgeBaseIds?: string[];
     visitorUserId: string;
   };
   /**

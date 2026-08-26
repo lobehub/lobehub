@@ -378,12 +378,22 @@ export interface OperationCreationParams {
    * can be re-applied at `BuiltinToolsExecutor.execute`, which is the actual
    * unbypassable chokepoint — the whitelist above only decides whether the
    * memory tool id is enabled, not whether it may read or write.
+   *
+   * `knowledgeBaseIds` is the agent's OWN persisted knowledge-base assignment
+   * (`agentConfig.knowledgeBases`, filtered to `enabled` ids) — never derived
+   * from visitor input. It scopes `lobe-knowledge-base.viewKnowledgeBase`'s
+   * `id` argument at dispatch time: `listFiles` / `getFileDetail` /
+   * `listKnowledgeBases` / `readKnowledge` read across the creator's whole
+   * personal library with no per-agent id to scope by, so they stay always
+   * blocked for share visitors (`alwaysBlockedApiNames`) even when this list
+   * is non-empty. See `shareGate.ts`'s `DATA_TOOL_ACCESS_RULES`.
    */
   agentShare?: {
     agentId: string;
     allowReadMemory?: boolean;
     enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+    knowledgeBaseIds?: string[];
     visitorUserId: string;
   };
   appContext: {
