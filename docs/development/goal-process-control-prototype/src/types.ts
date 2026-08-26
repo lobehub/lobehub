@@ -44,6 +44,8 @@ export interface GoalNode {
   dependsOn?: string[];
   attempts?: Attempt[];
   task?: OwnerTask;
+  /** When the current attempt started — drives the running clock. */
+  startedAt?: number;
   /** Last operation heartbeat (liveness). */
   lastActivity?: number;
   /** Last tool / assistant line from the owner Task's running topic. */

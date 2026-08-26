@@ -3,7 +3,7 @@ import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { createStyles } from 'antd-style';
 import { memo } from 'react';
 
-import { ago, clock } from '../../model/format';
+import { clock, elapsed } from '../../model/format';
 import type { GoalNode } from '../../types';
 import { useKindColors, useSharedStyles } from '../shared';
 
@@ -198,8 +198,8 @@ export const GraphNodeView = memo<NodeProps>(({ data }) => {
         <Flexbox horizontal align="center" gap={6} className={styles.task}>
           <span className={styles.dot} />
           <span className={shared.mono}>
-            {node.task.agent} · 第 {(node.attempts?.length ?? 0) + 1} 次 ·{' '}
-            {ago(clock.now - (node.lastActivity ?? clock.now))}
+            {node.task.agent} · 已运行{' '}
+            {elapsed(clock.now - (node.startedAt ?? node.lastActivity ?? clock.now))}
           </span>
         </Flexbox>
       )}

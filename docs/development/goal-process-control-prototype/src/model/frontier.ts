@@ -11,7 +11,8 @@ export const isStale = (goal: GoalInfo, n: GoalNode) =>
   !!n.lastActivity &&
   clock.now - n.lastActivity > min(goal.leaseTimeoutMin);
 
-export type FrontierItemKind = 'gate' | 'budget' | 'acceptance' | 'stale' | 'running' | 'ready';
+export type FrontierItemKind =
+  'gate' | 'budget' | 'acceptance' | 'stale' | 'running' | 'ready' | 'done';
 
 export interface FrontierItem {
   key: string;
@@ -19,8 +20,6 @@ export interface FrontierItem {
   node: GoalNode;
   /** 0 = needs you, 1 = running, 2 = ready */
   rank: number;
-  /** Ready items: 1-based order the coordinator would pick them in (it dispatches one per tick). */
-  order?: number;
 }
 
 export interface BlockedItem {
@@ -28,6 +27,9 @@ export interface BlockedItem {
   node: GoalNode;
   blockers: GoalNode[];
 }
+
+/** How many just-finished tasks stay in the list. */
+export const RECENT_DONE = 2;
 
 export interface Frontier {
   items: FrontierItem[];
@@ -44,6 +46,7 @@ export const computeFrontier = (state: GoalState): Frontier => {
   const byId = Object.fromEntries(state.nodes.map((n) => [n.id, n]));
   const items: FrontierItem[] = [];
   const blocked: BlockedItem[] = [];
+  const budgetPaused = state.goal.status === 'paused' && state.goal.pauseCause === 'cost';
   for (const n of state.nodes) {
     if (n.kind === 'decision' && n.status === 'waiting' && n.authority === 'user') {
       items.push({ key: n.id, kind: 'gate', node: n, rank: 0 });
@@ -56,8 +59,12 @@ export const computeFrontier = (state: GoalState): Frontier => {
       continue;
     }
     if (n.status === 'active') {
-      if (isStale(state.goal, n) && state.goal.status !== 'paused')
-        items.push({ key: n.id, kind: 'stale', node: n, rank: 0 });
+      // Budget exhausted: the running task IS the thing that needs you — one row, not two.
+      if (budgetPaused) {
+        items.push({ key: `budget:${n.id}`, kind: 'budget', node: n, rank: 0 });
+        continue;
+      }
+      if (isStale(state.goal, n)) items.push({ key: n.id, kind: 'stale', node: n, rank: 0 });
       else items.push({ key: n.id, kind: 'running', node: n, rank: 1 });
       continue;
     }
@@ -69,16 +76,20 @@ export const computeFrontier = (state: GoalState): Frontier => {
       else items.push({ key: n.id, kind: 'ready', node: n, rank: 2 });
     }
   }
-  if (state.goal.status === 'paused' && state.goal.pauseCause === 'cost') {
-    // budget top-up is asked on the Work that was running, not on a new node
-    const target =
-      state.nodes.find((n) => n.kind === 'work' && n.status === 'active') ?? state.nodes[0];
-    items.push({ key: `budget:${target.id}`, kind: 'budget', node: target, rank: 0 });
-  }
+  // Keep the last finished tasks visible so the list fades instead of items vanishing — a slice of
+  // "what just happened" you can still click into for review.
+  const done = state.nodes
+    .filter((n) => n.kind === 'work' && (n.status === 'resolved' || n.status === 'retired'))
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+    .slice(0, RECENT_DONE)
+    .map((n) => ({ key: `done:${n.id}`, kind: 'done' as const, node: n, rank: -1 }));
+
   items.sort((a, b) => a.rank - b.rank || (b.node.priority ?? 0) - (a.node.priority ?? 0));
-  let q = 0;
-  for (const it of items) if (it.kind === 'ready') it.order = ++q;
-  return { items, blocked, needsYou: items.filter((i) => i.rank === 0).length };
+  return {
+    items: [...done, ...items],
+    blocked,
+    needsYou: items.filter((i) => i.rank === 0).length,
+  };
 };
 
 export const goalSentence = (goal: GoalInfo, frontier: Frontier) => {

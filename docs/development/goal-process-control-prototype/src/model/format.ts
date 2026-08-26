@@ -25,6 +25,17 @@ export const short = (ms: number) =>
         ? `${Math.floor(ms / min(60))}h`
         : `${Math.floor(ms / min(60 * 24))}d`;
 
+/** Running duration in the Task-page style: 12s · 3m 12s · 1h 04m. */
+export const elapsed = (ms: number) => {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`;
+  return `${sec}s`;
+};
+
 export const usd = (n: number) => `$${n.toFixed(2)}`;
 
 export const hhmm = (t: number) => {

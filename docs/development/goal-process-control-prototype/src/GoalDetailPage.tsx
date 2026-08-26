@@ -65,6 +65,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
                 status: 'active',
                 lastActivity: now,
                 task: { id: 'T-90', agent: 'Kimi Code' },
+                startedAt: now,
                 lastLine: '正在准备工作目录…',
               }
             : n,
@@ -127,7 +128,13 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           if (n.id === d.workId)
             return optionId === 'retry'
               ? touch(
-                  { ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…' },
+                  {
+                    ...n,
+                    status: 'active',
+                    startedAt: now,
+                    lastActivity: now,
+                    lastLine: '正在启动下一次尝试…',
+                  },
                   'retry',
                   `决策门：再试一次${reason ? ` — ${reason}` : ''}`,
                 )
@@ -239,6 +246,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
     startNode: (id: string) => {
       patch(id, {
         status: 'active',
+        startedAt: now,
         lastActivity: now,
         task: { id: 'T-97', agent: 'Kimi Code' },
         lastLine: '正在启动第 1 次尝试…',

@@ -153,6 +153,7 @@ export const STEPS: Step[] = [
       const w = N(s, 'W1');
       w.status = 'active';
       w.task = { id: 'T-90', agent: 'Kimi Code' };
+      w.startedAt = at(1);
       w.lastActivity = at(1);
       w.lastLine = '正在准备工作目录 .records/nanogpt-full…';
       log(s, { t: at(1), kind: 'resume', who: '你', text: '开始执行' });
@@ -234,6 +235,7 @@ export const STEPS: Step[] = [
       const w5 = N(s, 'W5');
       w5.status = 'active';
       w5.task = { id: 'T-91', agent: 'Kimi Code' };
+      w5.startedAt = at(7);
       w5.lastActivity = at(7);
       w5.lastLine = '检索 nanoGPT README 与 train_shakespeare_char 的公开基线…';
       log(s, {
@@ -319,6 +321,7 @@ export const STEPS: Step[] = [
       const w2 = N(s, 'W2');
       w2.status = 'active';
       w2.task = { id: 'T-94', agent: 'Kimi Code' };
+      w2.startedAt = at(14);
       w2.lastActivity = at(14);
       w2.lastLine =
         '执行 python3 train.py config/train_shakespeare_char.py --device=mps --max_iters=5000 …';
@@ -572,6 +575,7 @@ export const STEPS: Step[] = [
       s.decision = null;
       const w = N(s, 'W2');
       w.status = 'active';
+      w.startedAt = at(110);
       w.lastActivity = at(110);
       w.lastLine = '按你的说明：从静止 checkpoint 与训练日志重建 21 个 eval 点，捕获 exit code…';
       w.humanTouches = [
@@ -642,6 +646,7 @@ export const STEPS: Step[] = [
       const w3 = N(s, 'W3');
       w3.status = 'active';
       w3.task = { id: 'T-96', agent: 'Kimi Code' };
+      w3.startedAt = at(126);
       w3.lastActivity = at(126);
       w3.lastLine =
         'torch.load(ckpt.pt) → sample.py --seed=1337 --num_samples=1 --max_new_tokens=500';
@@ -698,6 +703,7 @@ export const STEPS: Step[] = [
       const w6 = N(s, 'W6');
       w6.status = 'active';
       w6.task = { id: 'T-97', agent: 'Kimi Code' };
+      w6.startedAt = at(134);
       w6.lastActivity = at(134);
       w6.lastLine = '写入 README：命令、硬件（M5 Max/MPS）、耗时 58 min、SHA-256…';
       log(s, {
@@ -753,6 +759,7 @@ export const STEPS: Step[] = [
       const w4 = N(s, 'W4');
       w4.status = 'active';
       w4.task = { id: 'T-98', agent: 'verify-agent' };
+      w4.startedAt = at(141);
       w4.lastActivity = at(141);
       w4.lastLine = '独立复验：加载 checkpoint、核对 loss、检查采样长度与 summary.json…';
       s.goal.status = 'verifying';

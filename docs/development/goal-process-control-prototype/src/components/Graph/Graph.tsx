@@ -254,11 +254,6 @@ export const Graph = memo<GraphProps>((props) => {
             { label: '全图', value: 'all' },
           ]}
         />
-        {isDraft && (
-          <Text fontSize={12} type="secondary">
-            初始方案 · Agent 根据目标生成 · 开始前可以调整
-          </Text>
-        )}
         {hiddenCount > 0 && (
           <Text fontSize={12} type="secondary">
             还有 {hiddenCount} 个节点在更后面的阶段
