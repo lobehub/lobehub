@@ -74,6 +74,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
   `,
   section: css`
+    padding-block: 12px;
     padding-inline: 12px;
   `,
   subtitle: css`
