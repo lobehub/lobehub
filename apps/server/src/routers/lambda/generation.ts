@@ -63,7 +63,34 @@ export const generationRouter = router({
     }),
 
   getGenerationStatus: generationProcedure
-    .input(z.object({ asyncTaskId: z.string(), generationId: z.string() }))
+    .input(
+      z.object({
+        asyncTaskId: z.string(),
+        generationId: z.string(),
+        /**
+         * The polling caller's own chat topic, when known. Only the
+         * `lobe-image-generation` builtin tool passes this (forwarded from
+         * `ToolExecutionContext.topicId`, server-resolved — never
+         * model-suppliable); the standalone gallery/video pages never send it
+         * and keep their existing cross-topic-by-design behavior.
+         *
+         * When present, it MUST match the polled task's own
+         * `metadata.topicId` (stamped at creation time in
+         * `imageRouter.createImage`). `async_tasks` — and the `generations`
+         * row it resolves to, including its prompt and asset URL — is scoped
+         * only by `userId` (see `AsyncTaskModel`'s `ownership()`), so without
+         * this check a share visitor's run (which executes under the
+         * CREATOR's `userId`, see `AgentShareGate`) could poll ANY
+         * `generationId`/`asyncTaskId` pair the model guesses or reuses from
+         * a different conversation and read that other generation's prompt
+         * and image — including another visitor's share session, or the
+         * creator's own unrelated chats. Mismatch is treated identically to
+         * "not found" below so this can't be used to probe for the
+         * existence of another topic's generation either.
+         */
+        topicId: z.string().optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       // Check for timeout tasks before querying
       await ctx.asyncTaskModel.checkTimeoutTasks([input.asyncTaskId]);
@@ -71,6 +98,13 @@ export const generationRouter = router({
       const asyncTask = await ctx.asyncTaskModel.findById(input.asyncTaskId);
       if (!asyncTask) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Async task not found' });
+      }
+
+      if (input.topicId !== undefined) {
+        const taskTopicId = (asyncTask.metadata as { topicId?: string } | undefined)?.topicId;
+        if (taskTopicId !== input.topicId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Async task not found' });
+        }
       }
 
       const { status, error } = asyncTask;

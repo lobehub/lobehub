@@ -97,6 +97,65 @@ describe('imageGenerationRuntime', () => {
     });
   });
 
+  // Regression for the agent-share visitor→creator-data leak: `createImage`
+  // and `getGenerationStatus` both forward the operation's own `topicId` to
+  // the tRPC layer, which uses it to fail closed on a `generationId`/
+  // `asyncTaskId` pair from a different chat topic (see
+  // `apps/server/src/routers/lambda/generation.ts`'s `topicId` JSDoc). This
+  // only tests the forwarding — the actual scoping check is asserted in
+  // `generation.test.ts`.
+  it('forwards the run topicId to createImage and getGenerationStatus', async () => {
+    const createTopic = vi.fn().mockResolvedValue('topic-1');
+    const createImage = vi.fn().mockResolvedValue({
+      data: {
+        batch: { id: 'batch-1' },
+        generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+      },
+      success: true,
+    });
+    const getGenerationStatus = vi.fn().mockResolvedValue({
+      error: null,
+      generation: null,
+      status: 'pending',
+    });
+    callerMocks.generationTopic.mockReturnValue({ createTopic });
+    callerMocks.image.mockReturnValue({ createImage });
+    callerMocks.generation.mockReturnValue({ getGenerationStatus });
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledImageAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'image-model-1' }]),
+    });
+
+    const runtime = imageGenerationRuntime.factory({
+      toolManifestMap: {},
+      topicId: 'topic-own',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.generateImage({
+      prompt: 'A shared workspace illustration',
+      waitUntilComplete: false,
+    });
+
+    expect(createImage).toHaveBeenCalledWith(expect.objectContaining({ topicId: 'topic-own' }));
+
+    await runtime.getImageGenerationStatus({
+      asyncTaskId: 'task-1',
+      generationId: 'generation-1',
+    });
+
+    expect(getGenerationStatus).toHaveBeenCalledWith({
+      asyncTaskId: 'task-1',
+      generationId: 'generation-1',
+      topicId: 'topic-own',
+    });
+  });
+
   it('preserves model descriptions and complete parameter schemas', async () => {
     callerMocks.aiProvider.mockReturnValue({
       getAiProviderRuntimeState: vi.fn().mockResolvedValue({
