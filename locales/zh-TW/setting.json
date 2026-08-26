@@ -2798,6 +2798,7 @@
   "workspace.waitlistPage.enabledTitle": "工作空間已為您準備就緒",
   "workspace.waitlistPage.entryCta": "加入工作空間測試版",
   "workspace.waitlistPage.goHome": "返回 LobeHub",
+  "workspace.waitlistPage.learnMore": "了解更多關於 Workspace 的資訊",
   "workspace.waitlistPage.organizationLabel": "組織 / 團體（選填）",
   "workspace.waitlistPage.organizationPlaceholder": "公司、學校或家庭…",
   "workspace.waitlistPage.pendingSubtitle": "我們將分批開放訪問權限，並在您的訪問權限準備就緒時通過電子郵件通知您。",

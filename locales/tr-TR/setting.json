@@ -2798,6 +2798,7 @@
   "workspace.waitlistPage.enabledTitle": "Çalışma Alanı sizin için hazır",
   "workspace.waitlistPage.entryCta": "Çalışma Alanı Beta'ya Katıl",
   "workspace.waitlistPage.goHome": "LobeHub'a Geri Dön",
+  "workspace.waitlistPage.learnMore": "Workspace hakkında daha fazla bilgi edinin",
   "workspace.waitlistPage.organizationLabel": "Organizasyon / Grup (isteğe bağlı)",
   "workspace.waitlistPage.organizationPlaceholder": "Şirket, okul veya aile…",
   "workspace.waitlistPage.pendingSubtitle": "Erişimi gruplar halinde açıyoruz ve erişiminiz hazır olduğunda sizi e-posta ile bilgilendireceğiz.",

@@ -2798,6 +2798,7 @@
   "workspace.waitlistPage.enabledTitle": "ワークスペースの準備が整いました",
   "workspace.waitlistPage.entryCta": "ワークスペースベータに参加する",
   "workspace.waitlistPage.goHome": "LobeHubに戻る",
+  "workspace.waitlistPage.learnMore": "Workspace について詳しく知る",
   "workspace.waitlistPage.organizationLabel": "組織 / グループ（任意）",
   "workspace.waitlistPage.organizationPlaceholder": "会社、学校、家族など…",
   "workspace.waitlistPage.pendingSubtitle": "アクセスを段階的に開放しており、準備が整い次第メールでお知らせします。",

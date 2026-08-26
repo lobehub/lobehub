@@ -2798,6 +2798,7 @@
   "workspace.waitlistPage.enabledTitle": "Работното пространство е готово за вас",
   "workspace.waitlistPage.entryCta": "Присъединете се към бета версията на Работното пространство",
   "workspace.waitlistPage.goHome": "Обратно към LobeHub",
+  "workspace.waitlistPage.learnMore": "Научете повече за Workspace",
   "workspace.waitlistPage.organizationLabel": "Организация / Група (по избор)",
   "workspace.waitlistPage.organizationPlaceholder": "Компания, училище или семейство…",
   "workspace.waitlistPage.pendingSubtitle": "Отваряме достъпа на етапи и ще ви уведомим по имейл, веднага щом достъпът ви бъде готов.",
