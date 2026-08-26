@@ -8,6 +8,8 @@ import { AgentShareModel } from '@/database/models/agentShare';
 import { VISITOR_TOPIC_PAGE_SIZE } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AiAgentService } from '@/server/services/aiAgent';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
 
@@ -76,9 +78,39 @@ const assertShareableAgent = async (agentModel: AgentModel, agentId: string) => 
   }
 };
 
+/**
+ * Interrupt every in-flight visitor run on a shared agent, scheduled with
+ * `after()` so it never delays the revocation response.
+ *
+ * Called AFTER the revocation write below has already committed (both
+ * mutations run inside `AgentShareModel`'s own `FOR UPDATE` transaction, see
+ * `withOwnedPersonalAgentLock`). `interruptActiveShareRuns` touches the
+ * runtime — device gateway calls, `agentRuntimeService.interruptOperation`,
+ * operation/thread row writes — which are side effects that must never fire
+ * on a rollback, so they cannot run inside that transaction. Best-effort: a
+ * visitor's Stop button is already gone the instant the share row commits
+ * (`shareChat.interruptTask` re-resolves the share and gets `FORBIDDEN`), so
+ * this is the only thing left to stop an already-running operation instead
+ * of letting it keep spending the creator's share budget until it finishes
+ * on its own. See LOBE-11930.
+ */
+const interruptActiveShareRunsAfterResponse = (
+  serverDB: ConstructorParameters<typeof AiAgentService>[0],
+  ownerId: string,
+  agentId: string,
+) => {
+  after(() =>
+    new AiAgentService(serverDB, ownerId)
+      .interruptActiveShareRuns(agentId)
+      .catch((error) => console.error('[agentShare] interruptActiveShareRuns failed', error)),
+  );
+};
+
 export const agentShareRouter = router({
   disableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
-    return requireShare(await ctx.agentShareModel.deleteByAgentId(input.agentId));
+    const share = requireShare(await ctx.agentShareModel.deleteByAgentId(input.agentId));
+    interruptActiveShareRunsAfterResponse(ctx.serverDB, ctx.userId, input.agentId);
+    return share;
   }),
 
   enableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
@@ -120,9 +152,17 @@ export const agentShareRouter = router({
       // pre-lock check here (the previous approach) could be bypassed by a
       // concurrent `AgentModel.updateConfig` write. Not duplicated here to
       // avoid the two checks drifting apart.
-      return requireShare(
+      const share = requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),
       );
+
+      // Only `link` → `private` revokes visitor access; publishing (`link`)
+      // never needs to interrupt anything.
+      if (input.visibility === 'private') {
+        interruptActiveShareRunsAfterResponse(ctx.serverDB, ctx.userId, input.agentId);
+      }
+
+      return share;
     }),
 });
 

@@ -1,12 +1,7 @@
-import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
-import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
-import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
-import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
-import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -17,12 +12,10 @@ import {
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
-import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
-import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
-import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { builtinTools } from '@lobechat/builtin-tools';
+import {
+  AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
+  isBuiltinToolIdentifier,
+} from '@lobechat/builtin-tools';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
@@ -123,109 +116,24 @@ interface ShareDataToolPermissions {
  * with the file:line evidence for why its runtime cannot resolve to the
  * creator's data outside what this specific share/agent grants.
  *
- * Every entry below was verified against its actual server runtime
- * (`apps/server/src/services/toolExecution/serverRuntimes/*`), not just its
- * manifest — see the per-identifier comments for the file:line evidence.
- * Builtin identifiers NOT listed here are denied unconditionally, regardless
- * of `shareConfig.enabledToolIds` — see the denied-bucket rationale after
- * this declaration.
+ * Defined in `@lobechat/builtin-tools` (`AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`,
+ * along with `isBuiltinToolIdentifier` / `isAgentShareAllowedBuiltinIdentifier`)
+ * rather than here, so the owner-facing share settings tool picker
+ * (`AgentShareSettings/SettingsContent.tsx`) can import the EXACT same allowlist
+ * the server enforces instead of hand-copying identifiers that could drift —
+ * see that package's JSDoc for the per-identifier safety evidence and the
+ * denied-bucket rationale for every identifier NOT on the list.
  *
- * Governs ONLY builtin tool identifiers (checked via `isGovernedByBuiltinAllowlist`
+ * Governs ONLY builtin tool identifiers (checked via `isBuiltinToolIdentifier`
  * against the real `@lobechat/builtin-tools` registry). MCP servers, market
  * plugins, and custom plugins are a different population, gated exclusively
  * by `filterPluginsByShareGate` (the owner's `enabledToolIds` picker) — they
  * must never be matched against this set, in either direction: an unknown
  * non-builtin id must not be silently allowed through as "not a known
  * builtin, so no rule applies" NOR silently blocked as "not on the builtin
- * allowlist." See `isGovernedByBuiltinAllowlist`.
+ * allowlist." See `isBuiltinToolIdentifier`.
  */
-const SHARE_VISITOR_ALLOWED_IDENTIFIERS = new Set<string>([
-  // `getTopicContext` re-derives scope from `context.agentShare` and checks
-  // the resolved topic's `senderId`/`agentId` against the visitor/share
-  // before returning anything — see `isTopicVisibleToRun` in
-  // `serverRuntimes/topicReference.ts:44-51`. A missing/out-of-scope topic
-  // and a real out-of-scope topic return the identical "not found" response,
-  // so the tool can't even be used to probe for the existence of another of
-  // the creator's topics.
-  TopicReferenceIdentifier,
-  // Pure computation — `CalculatorExecutionRuntime` takes no db/user context
-  // at all (`serverRuntimes/calculator.ts`), so there is no creator data it
-  // could reach even in principle.
-  CalculatorIdentifier,
-  // `WebBrowsingExecutionRuntime`'s `searchService` hits a stateless public
-  // search API; the only write path (`createDocument`/`associateDocument`)
-  // requires `context.agentId` (`serverRuntimes/webBrowsing.ts:11-38`), which
-  // is server-resolved from the running share, not model-suppliable.
-  WebBrowsingManifest.identifier,
-  // Returns a static help/interaction payload — `UserInteractionExecutionRuntime`
-  // has no constructor arguments and no db/user access at all
-  // (`serverRuntimes/userInteraction.ts`).
-  UserInteractionIdentifier,
-  // `getToolManifests` only echoes back entries from `context.toolManifestMap`
-  // (already the trimmed, share-gated set); `activateSkill` delegates to its
-  // OWN embedded `SkillsExecutionRuntime`, which — unlike the standalone
-  // `lobe-skills` tool below — re-checks every skill id against
-  // `context.agentShare.enabledToolIds` before resolving it
-  // (`isSkillAllowedForShare` in `serverRuntimes/activator.ts:104-112`, applied
-  // to `findAll`/`findById`/`findByName`/the `builtinSkills` list alike).
-  LobeActivatorIdentifier,
-  // `documentId` is read from `ctx.documentId` (server-resolved per operation),
-  // never from model args (`serverRuntimes/pageAgent.ts:191`).
-  PageAgentIdentifier,
-  // Writes are tied to `context.agentId`/`context.taskId`
-  // (`serverRuntimes/brief.ts:38,62-65,87-92`), not a model-suppliable id.
-  BriefIdentifier,
-  // Writes (image persistence, document association) route through
-  // context-scoped callers keyed off `context.userId`/`context.agentVisibility`
-  // (`serverRuntimes/imageGeneration.ts:26-49`). The one model-supplied id pair
-  // — `getImageGenerationStatus`'s `generationId`/`asyncTaskId` — resolves
-  // against `async_tasks`, which is scoped only by `userId` (the creator, not
-  // this share), so a bare id lookup would let a visitor poll ANY generation
-  // the creator has ever made (a different topic, a different visitor's share
-  // session) and read its prompt/image. Closed by tagging the async task with
-  // its originating chat `topicId` at creation (`createImage`'s `topicId`
-  // field, `apps/server/src/routers/lambda/image/index.ts`) and requiring an
-  // exact match in `generationRouter.getGenerationStatus`
-  // (`apps/server/src/routers/lambda/generation.ts`) — both ids are
-  // `context.topicId`, server-resolved from the running operation, never
-  // model-suppliable, so this cannot be satisfied by any id the model picks.
-  ImageGenerationIdentifier,
-  // `lobe-verify`: `submitVerifyResult` never takes a model-suppliable
-  // operation/run id at all — it resolves `targetOperationId` from
-  // `context.operationId` (server-derived, `VerifyResultExecutionRuntime`
-  // constructor, `serverRuntimes/verifyResult.ts:34-38`) and its own
-  // `parentOperationId` walk, then fails closed with `NO_OPERATION`/`NO_RUN`
-  // when that context is absent (`serverRuntimes/verifyResult.ts:42-44,63-65`).
-  // The only model args are `checkItemId`/`verdict`, scoped to whatever
-  // `VerifyRunModel.findByOperation` resolves for THIS run — there is no id
-  // the model can pass to reach a different run's check.
-  VerifyToolIdentifier,
-  // `acceptance-evidence`: `submitEvidence` is the same shape —
-  // `AcceptanceEvidenceExecutionRuntime` is constructed with
-  // `context.operationId` (server-derived, never from `params`,
-  // `serverRuntimes/acceptanceEvidence.ts:14-20`), fails closed with
-  // `NO_OPERATION` when absent (`acceptanceEvidence.ts:23`), and resolves the
-  // target check item only within the run's own `VerifyRunModel.findByOperation`
-  // plan (`acceptanceEvidence.ts:41-52`). `documentId`/`fileId` in the model's
-  // `evidence` payload are checked for existence only (`DocumentModel`/
-  // `FileModel.findById`, scoped by `this.userId`, `acceptanceEvidence.ts:57-87`)
-  // and stored as opaque references on the check-result row — this tool never
-  // reads back or returns document/file content for an id it did not already
-  // receive from the model, so it cannot be used to exfiltrate the creator's
-  // other documents/files through ITS OWN response.
-  AcceptanceEvidenceIdentifier,
-  // `callSubAgent` is stripped unconditionally regardless of this allowlist
-  // (see `SUB_AGENT_DISPATCH_APIS`/`stripSubAgentDispatchApis` below) — the
-  // remaining APIs (`createPlan`, etc.) are self-scoped to the current agent.
-  LobeAgentIdentifier,
-  // Data-bearing tools whose whole-identifier grant AND per-API write/always-
-  // blocked surface is further narrowed by `DATA_TOOL_ACCESS_RULES` below —
-  // being on this allowlist only lets them survive to that narrower gate, it
-  // does not itself grant read or write access.
-  KnowledgeBaseIdentifier,
-  MemoryIdentifier,
-  AgentDocumentsIdentifier,
-]);
+const SHARE_VISITOR_ALLOWED_IDENTIFIERS = AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS;
 
 /**
  * Whether `identifier` belongs to the population this allowlist governs — the
@@ -237,9 +145,7 @@ const SHARE_VISITOR_ALLOWED_IDENTIFIERS = new Set<string>([
  * `shareConfig.enabledToolIds` — the pre-existing (and unaffected) gate for
  * that population.
  */
-const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
-const isGovernedByBuiltinAllowlist = (identifier: string): boolean =>
-  builtinIdentifierSet.has(identifier);
+const isGovernedByBuiltinAllowlist = isBuiltinToolIdentifier;
 
 type DataToolGrant = 'none' | 'read';
 
