@@ -335,6 +335,7 @@
   "share.settings.permissions.uploadAllowedComingSoon": "访客对话目前仅支持纯文本，文件上传即将支持",
   "share.settings.tools.desc": "访客仅可使用您在此选中的工具。",
   "share.settings.tools.empty": "该智能体尚未配置任何工具。",
+  "share.settings.tools.notAvailableToVisitors": "出于安全考虑，该工具不支持开放给访客，此处无法启用。",
   "share.settings.tools.title": "工具白名单",
   "share.updateError": "分享设置更新失败",
   "share.usage.desc": "访客与该分享智能体对话产生的用量。",

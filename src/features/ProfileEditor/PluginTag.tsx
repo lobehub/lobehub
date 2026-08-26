@@ -393,7 +393,6 @@ const PluginTag = memo<PluginTagProps>(
         closable={removable && !disabled && !selectable}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
-        style={selectable ? { cursor: 'pointer' } : undefined}
         variant={isDarkMode ? 'filled' : 'outlined'}
         icon={
           selectable ? (
@@ -409,12 +408,17 @@ const PluginTag = memo<PluginTagProps>(
             renderIcon()
           )
         }
+        style={
+          selectable
+            ? { cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }
+            : undefined
+        }
         title={
           showErrorState
             ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
             : undefined
         }
-        onClick={selectable ? onSelect : undefined}
+        onClick={selectable && !disabled ? onSelect : undefined}
         onClose={(e) => {
           if (disabled) return;
 
