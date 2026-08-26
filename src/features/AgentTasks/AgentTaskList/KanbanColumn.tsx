@@ -1,6 +1,6 @@
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -11,6 +11,7 @@ import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/i
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import TaskStatusIcon from '../features/TaskStatusIcon';
+import { getKanbanColumnHeaderVariant } from './kanbanBoardModel';
 import type { TaskGroupMeta } from './listViewOptions';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
@@ -207,6 +208,10 @@ const KanbanColumn = memo<KanbanColumnProps>(
     const statusIcon = COLUMN_STATUS_ICON[columnKey];
     const i18nKey = COLUMN_I18N_KEYS[columnKey];
     const label = i18nKey ? t(i18nKey as any) : t(`taskList.groupBy.${groupBy}` as any);
+    const headerVariant = getKanbanColumnHeaderVariant({
+      hasGroupMeta: !!groupMeta,
+      loading,
+    });
     const isDragActive = !!active;
 
     // Don't highlight if dragging a card that's already in this column
@@ -241,18 +246,32 @@ const KanbanColumn = memo<KanbanColumnProps>(
         )}
       >
         <div className={styles.header}>
-          {groupMeta ? (
-            <TaskGroupLabel group={groupMeta} />
+          {headerVariant === 'loading' ? (
+            <>
+              <Skeleton.Avatar
+                active
+                shape={'square'}
+                size={16}
+                style={{ borderRadius: 4, flex: 'none' }}
+              />
+              <Skeleton.Button active style={{ height: 14, minWidth: 64, width: 64 }} />
+              <Skeleton.Button active style={{ height: 12, minWidth: 20, width: 20 }} />
+            </>
+          ) : headerVariant === 'group' && groupMeta ? (
+            <>
+              <TaskGroupLabel group={groupMeta} />
+              <Text fontSize={12} type={'secondary'}>
+                {total}
+              </Text>
+            </>
           ) : (
             <>
               {statusIcon && <TaskStatusIcon size={18} status={statusIcon} />}
               <Text weight={500}>{label}</Text>
+              <Text fontSize={12} type={'secondary'}>
+                {total}
+              </Text>
             </>
-          )}
-          {!loading && (
-            <Text fontSize={12} type={'secondary'}>
-              {total}
-            </Text>
           )}
           <div className={cx(styles.headerActions, 'kanban-col-action')}>
             {menuItems.length > 0 && (

@@ -25,6 +25,19 @@ export interface KanbanAssigneeUpdate {
   assigneeUserId: string | null;
 }
 
+export type KanbanColumnHeaderVariant = 'fallback' | 'group' | 'loading';
+
+export const getKanbanColumnHeaderVariant = ({
+  hasGroupMeta,
+  loading,
+}: {
+  hasGroupMeta: boolean;
+  loading?: boolean;
+}): KanbanColumnHeaderVariant => {
+  if (loading) return 'loading';
+  return hasGroupMeta ? 'group' : 'fallback';
+};
+
 export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
   { droppable: true, key: 'backlog', targetStatus: 'backlog' },
   { droppable: false, key: 'running', targetStatus: null },
