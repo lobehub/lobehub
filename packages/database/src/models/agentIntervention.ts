@@ -17,7 +17,7 @@ import type {
   AgentInterventionSystemActionEligibility,
   ChatToolPayload,
 } from '@lobechat/types';
-import { and, asc, eq, gt, inArray, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import type { AgentInterventionItem, AgentInterventionResolutionItem } from '../schemas';
 import {
@@ -45,6 +45,11 @@ export const AGENT_INTERVENTION_SOURCE_TRANSITION_MISMATCH =
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const PG_UNIQUE_VIOLATION = '23505';
+
+type AgentInterventionOperationIdentity = Pick<
+  typeof agentOperations.$inferSelect,
+  'agentId' | 'appContext' | 'chatGroupId' | 'id' | 'status' | 'taskId' | 'threadId' | 'topicId'
+>;
 
 const isUniqueViolation = (error: unknown): boolean =>
   !!error &&
@@ -334,6 +339,29 @@ export interface CreateAgentInterventionBatchParams {
   systemActionEligibility: AgentInterventionSystemActionEligibility;
 }
 
+export interface AgentInterventionBatchSupersession {
+  activityKey: string;
+  batchId: string;
+  operationId: string;
+  toolCallIds: readonly string[];
+}
+
+export interface CreateAgentInterventionBatchWithSupersessionParams {
+  batch: CreateAgentInterventionBatchParams;
+  supersedes?: AgentInterventionBatchSupersession;
+}
+
+export interface AgentInterventionBatchSupersessionResult {
+  interventions: AgentInterventionItem[];
+  outcome: 'applied' | 'idempotent';
+  superseded?: {
+    activityKey: string;
+    batchId: string;
+    interventions: AgentInterventionItem[];
+    operationId: string;
+  };
+}
+
 export interface ClaimAgentInterventionBatchParams {
   action: AgentInterventionResolutionAction;
   actorId: string;
@@ -480,101 +508,315 @@ export class AgentInterventionModel {
     params: CreateAgentInterventionBatchParams,
   ): Promise<AgentInterventionItem[]> => {
     this.validateCreateBatch(params);
-    const activityKey = params.activityKey;
+    return this.db.transaction((tx) => this.createBatchInTransaction(tx, params));
+  };
+
+  /**
+   * Atomically replaces the still-pending remainder of a runtime batch after a
+   * partial decision re-parks under a new operation. The new parked batch is
+   * causal proof that the prior runtime continuation started, so an in-flight
+   * winning resolution may be completed here before its published hook arrives.
+   */
+  createBatchWithSupersession = async (
+    params: CreateAgentInterventionBatchWithSupersessionParams,
+  ): Promise<AgentInterventionBatchSupersessionResult> => {
+    const { batch, supersedes } = params;
+    this.validateCreateBatch(batch);
+    if (!supersedes) {
+      return this.db.transaction(async (tx) => {
+        const [ownedOperation] = await tx
+          .select({ id: agentOperations.id })
+          .from(agentOperations)
+          .where(
+            and(
+              eq(agentOperations.id, batch.operationId),
+              eq(agentOperations.userId, this.userId),
+              this.workspaceId
+                ? eq(agentOperations.workspaceId, this.workspaceId)
+                : isNull(agentOperations.workspaceId),
+            ),
+          )
+          .limit(1)
+          .for('update');
+        if (!ownedOperation) throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+        const existing = await tx
+          .select({ id: agentInterventions.id })
+          .from(agentInterventions)
+          .where(
+            and(
+              eq(agentInterventions.operationId, batch.operationId),
+              eq(agentInterventions.batchId, batch.batchId),
+              this.ownership(),
+            ),
+          )
+          .limit(1)
+          .for('update');
+        const interventions = await this.createBatchInTransaction(tx, batch, true);
+        return {
+          interventions,
+          outcome: existing.length > 0 ? 'idempotent' : 'applied',
+        };
+      });
+    }
+
+    const supersededToolCallIds = uniqueSorted(supersedes.toolCallIds);
+    const newToolCallIds = uniqueSorted(batch.items.map((item) => item.toolCallId));
+    if (
+      batch.source !== 'runtime' ||
+      batch.operationId === supersedes.operationId ||
+      batch.batchId === supersedes.batchId ||
+      batch.activityKey === supersedes.activityKey ||
+      supersededToolCallIds.length === 0 ||
+      supersededToolCallIds.length !== supersedes.toolCallIds.length ||
+      !sameJson(supersededToolCallIds, newToolCallIds)
+    ) {
+      throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    }
 
     return this.db.transaction(async (tx) => {
-      const [ownedOperation] = await tx
-        .select({ id: agentOperations.id })
+      const operationIds = uniqueSorted([supersedes.operationId, batch.operationId]);
+      const operations = await tx
+        .select({
+          agentId: agentOperations.agentId,
+          appContext: agentOperations.appContext,
+          chatGroupId: agentOperations.chatGroupId,
+          id: agentOperations.id,
+          status: agentOperations.status,
+          taskId: agentOperations.taskId,
+          threadId: agentOperations.threadId,
+          topicId: agentOperations.topicId,
+        })
         .from(agentOperations)
         .where(
           and(
-            eq(agentOperations.id, params.operationId),
+            inArray(agentOperations.id, operationIds),
             eq(agentOperations.userId, this.userId),
             this.workspaceId
               ? eq(agentOperations.workspaceId, this.workspaceId)
               : isNull(agentOperations.workspaceId),
           ),
         )
-        .limit(1)
+        .orderBy(asc(agentOperations.id))
         .for('update');
-      if (!ownedOperation) throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      if (operations.length !== operationIds.length) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
+      const oldOperation = operations.find(({ id }) => id === supersedes.operationId);
+      const newOperation = operations.find(({ id }) => id === batch.operationId);
+      if (
+        !oldOperation ||
+        !newOperation ||
+        !['waiting_for_human', 'done'].includes(oldOperation.status) ||
+        newOperation.status !== 'waiting_for_human' ||
+        !this.hasSameOperationContext(oldOperation, newOperation)
+      ) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
 
-      const existing = await tx
+      const lockedRows = await tx
         .select()
         .from(agentInterventions)
         .where(
           and(
-            eq(agentInterventions.operationId, params.operationId),
-            eq(agentInterventions.batchId, params.batchId),
+            this.ownership(),
+            or(
+              and(
+                eq(agentInterventions.operationId, supersedes.operationId),
+                eq(agentInterventions.batchId, supersedes.batchId),
+              ),
+              and(
+                eq(agentInterventions.operationId, batch.operationId),
+                eq(agentInterventions.batchId, batch.batchId),
+              ),
+            ),
+          ),
+        )
+        .orderBy(
+          asc(agentInterventions.operationId),
+          asc(agentInterventions.batchId),
+          asc(agentInterventions.itemIndex),
+          asc(agentInterventions.id),
+        )
+        .for('update');
+      const oldRows = lockedRows
+        .filter(
+          (row) => row.operationId === supersedes.operationId && row.batchId === supersedes.batchId,
+        )
+        .sort((left, right) => left.itemIndex - right.itemIndex);
+      const existingNewRows = lockedRows
+        .filter((row) => row.operationId === batch.operationId && row.batchId === batch.batchId)
+        .sort((left, right) => left.itemIndex - right.itemIndex);
+
+      if (
+        oldRows.length === 0 ||
+        oldRows.some(
+          (row, index) =>
+            !row.sealed ||
+            row.source !== 'runtime' ||
+            row.activityKey !== supersedes.activityKey ||
+            row.itemCount !== oldRows.length ||
+            row.itemIndex !== index,
+        )
+      ) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
+      if (existingNewRows.length > 0 && !this.isSameCreateBatch(existingNewRows, batch)) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
+
+      const oldPendingRows = oldRows.filter((row) => row.status === 'pending');
+      const activeOldRows = oldRows.filter((row) =>
+        ['resolving', 'published'].includes(row.status),
+      );
+      const activeResolutionIds = uniqueSorted(
+        activeOldRows.flatMap((row) => (row.resolutionId ? [row.resolutionId] : [])),
+      );
+
+      if (existingNewRows.length > 0) {
+        const movedRows = oldRows.filter((row) => supersededToolCallIds.includes(row.toolCallId));
+        if (
+          oldPendingRows.length > 0 ||
+          activeOldRows.length > 0 ||
+          movedRows.length !== supersededToolCallIds.length ||
+          movedRows.some((row) => row.status !== 'session_ended') ||
+          oldOperation.status !== 'done'
+        ) {
+          throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+        }
+        return {
+          interventions: existingNewRows,
+          outcome: 'idempotent',
+          superseded: {
+            activityKey: supersedes.activityKey,
+            batchId: supersedes.batchId,
+            interventions: oldRows,
+            operationId: supersedes.operationId,
+          },
+        };
+      }
+
+      if (
+        !sameJson(
+          uniqueSorted(oldPendingRows.map((row) => row.toolCallId)),
+          supersededToolCallIds,
+        ) ||
+        activeResolutionIds.length > 1 ||
+        activeOldRows.some((row) => !row.resolutionId)
+      ) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
+
+      const now = new Date();
+      if (activeResolutionIds.length === 1) {
+        const [resolution] = await tx
+          .select()
+          .from(agentInterventionResolutions)
+          .where(
+            and(
+              eq(agentInterventionResolutions.id, activeResolutionIds[0]),
+              this.resolutionOwnership(),
+            ),
+          )
+          .limit(1)
+          .for('update');
+        const activeIds = uniqueSorted(activeOldRows.map((row) => row.id));
+        if (
+          !resolution ||
+          resolution.source !== 'runtime' ||
+          resolution.operationId !== supersedes.operationId ||
+          resolution.batchId !== supersedes.batchId ||
+          !['resolving', 'published'].includes(resolution.status) ||
+          resolution.action.type === 'stop' ||
+          resolution.action.type === 'cancel_interaction' ||
+          !sameJson(uniqueSorted(resolution.selectedInterventionIds), activeIds)
+        ) {
+          throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+        }
+        await tx
+          .update(agentInterventionResolutions)
+          .set({
+            continuationStartedAt: now,
+            publishedAt: resolution.publishedAt ?? now,
+            status: 'completed',
+            terminalAt: now,
+            updatedAt: now,
+            version: sql`${agentInterventionResolutions.version} + 1`,
+          })
+          .where(eq(agentInterventionResolutions.id, resolution.id));
+        await tx
+          .update(agentInterventions)
+          .set({
+            resolvedAt: now,
+            status: terminalStatusForAction(resolution.action),
+            updatedAt: now,
+            version: sql`${agentInterventions.version} + 1`,
+          })
+          .where(
+            and(
+              eq(agentInterventions.resolutionId, resolution.id),
+              inArray(agentInterventions.status, ['resolving', 'published']),
+            ),
+          );
+      }
+
+      const movedRows = await tx
+        .update(agentInterventions)
+        .set({
+          resolvedAt: now,
+          status: 'session_ended',
+          updatedAt: now,
+          version: sql`${agentInterventions.version} + 1`,
+        })
+        .where(
+          and(
+            eq(agentInterventions.operationId, supersedes.operationId),
+            eq(agentInterventions.batchId, supersedes.batchId),
+            eq(agentInterventions.status, 'pending'),
+            inArray(agentInterventions.toolCallId, supersededToolCallIds),
+            this.ownership(),
+          ),
+        )
+        .returning();
+      if (movedRows.length !== supersededToolCallIds.length) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
+
+      await tx
+        .update(agentOperations)
+        .set({ completedAt: now, completionReason: 'done', status: 'done' })
+        .where(
+          and(
+            eq(agentOperations.id, supersedes.operationId),
+            eq(agentOperations.status, 'waiting_for_human'),
+            eq(agentOperations.userId, this.userId),
+            this.workspaceId
+              ? eq(agentOperations.workspaceId, this.workspaceId)
+              : isNull(agentOperations.workspaceId),
+          ),
+        );
+
+      const interventions = await this.createBatchInTransaction(tx, batch, true);
+      const supersededRows = await tx
+        .select()
+        .from(agentInterventions)
+        .where(
+          and(
+            eq(agentInterventions.operationId, supersedes.operationId),
+            eq(agentInterventions.batchId, supersedes.batchId),
             this.ownership(),
           ),
         )
         .orderBy(asc(agentInterventions.itemIndex));
-
-      if (existing.length > 0) {
-        const isSameBatch =
-          existing.length === params.items.length &&
-          existing.every((row, index) => {
-            const item = params.items[index];
-            return (
-              row.activityKey === activityKey &&
-              row.approvalMode === (params.approvalMode ?? null) &&
-              row.batchId === params.batchId &&
-              row.canonicalToolKey === (item.canonicalToolKey ?? null) &&
-              row.deadline.getTime() === params.deadline.getTime() &&
-              row.interactionKind === item.interactionKind &&
-              row.itemCount === params.items.length &&
-              row.itemIndex === index &&
-              row.provider === (item.provider ?? params.provider ?? null) &&
-              row.requestRevisionHash === item.requestRevisionHash &&
-              row.reviewTokenHash === item.reviewTokenHash &&
-              row.sealed &&
-              row.source === params.source &&
-              row.stepIndex === params.stepIndex &&
-              row.surface === item.surface &&
-              row.systemActionEligibility === params.systemActionEligibility &&
-              row.toolCallId === item.toolCallId &&
-              row.toolMessageId === (item.toolMessageId ?? null) &&
-              sameJson(uniqueSorted(row.allowedActions), uniqueSorted(item.allowedActions)) &&
-              sameJson(row.reviewContext, item.reviewContext) &&
-              sameJson(row.risk, item.risk ?? null) &&
-              sameJson(row.sanitizedRequest, item.sanitizedRequest)
-            );
-          });
-        if (!isSameBatch) throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
-        return existing;
-      }
-
-      try {
-        return await tx
-          .insert(agentInterventions)
-          .values(
-            params.items.map((item, itemIndex) => ({
-              ...item,
-              activityKey,
-              allowedActions: [...item.allowedActions],
-              approvalMode: params.approvalMode ?? null,
-              batchId: params.batchId,
-              deadline: params.deadline,
-              itemCount: params.items.length,
-              itemIndex,
-              provider: item.provider ?? params.provider ?? null,
-              sealed: true,
-              source: params.source,
-              stepIndex: params.stepIndex,
-              systemActionEligibility: params.systemActionEligibility,
-              userId: this.userId,
-              workspaceId: this.workspaceId ?? null,
-              operationId: params.operationId,
-            })),
-          )
-          .returning();
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT, { cause: error });
-        }
-        throw error;
-      }
+      return {
+        interventions,
+        outcome: 'applied',
+        superseded: {
+          activityKey: supersedes.activityKey,
+          batchId: supersedes.batchId,
+          interventions: supersededRows,
+          operationId: supersedes.operationId,
+        },
+      };
     });
   };
 
@@ -784,7 +1026,7 @@ export class AgentInterventionModel {
     publishedAt = new Date(),
   ): Promise<AgentInterventionBatchMutationResult> =>
     this.transitionResolution(resolutionRequestId, async (tx, resolution, rows) => {
-      if (resolution.status === 'published') {
+      if (resolution.status === 'published' || resolution.status === 'completed') {
         return { interventions: rows, outcome: 'idempotent', resolution };
       }
       if (resolution.status !== 'resolving') {
@@ -1041,6 +1283,143 @@ export class AgentInterventionModel {
       )
       .returning();
     return rows.map((row) => updated.find((item) => item.id === row.id) ?? row);
+  };
+
+  private createBatchInTransaction = async (
+    tx: Transaction,
+    params: CreateAgentInterventionBatchParams,
+    operationAlreadyLocked = false,
+  ): Promise<AgentInterventionItem[]> => {
+    if (!operationAlreadyLocked) {
+      const [ownedOperation] = await tx
+        .select({ id: agentOperations.id })
+        .from(agentOperations)
+        .where(
+          and(
+            eq(agentOperations.id, params.operationId),
+            eq(agentOperations.userId, this.userId),
+            this.workspaceId
+              ? eq(agentOperations.workspaceId, this.workspaceId)
+              : isNull(agentOperations.workspaceId),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (!ownedOperation) throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    }
+
+    const existing = await tx
+      .select()
+      .from(agentInterventions)
+      .where(
+        and(
+          eq(agentInterventions.operationId, params.operationId),
+          eq(agentInterventions.batchId, params.batchId),
+          this.ownership(),
+        ),
+      )
+      .orderBy(asc(agentInterventions.itemIndex))
+      .for('update');
+
+    if (existing.length > 0) {
+      if (!this.isSameCreateBatch(existing, params)) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+      }
+      return existing;
+    }
+
+    try {
+      return await tx
+        .insert(agentInterventions)
+        .values(
+          params.items.map((item, itemIndex) => ({
+            ...item,
+            activityKey: params.activityKey,
+            allowedActions: [...item.allowedActions],
+            approvalMode: params.approvalMode ?? null,
+            batchId: params.batchId,
+            deadline: params.deadline,
+            itemCount: params.items.length,
+            itemIndex,
+            operationId: params.operationId,
+            provider: item.provider ?? params.provider ?? null,
+            sealed: true,
+            source: params.source,
+            stepIndex: params.stepIndex,
+            systemActionEligibility: params.systemActionEligibility,
+            userId: this.userId,
+            workspaceId: this.workspaceId ?? null,
+          })),
+        )
+        .returning();
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT, { cause: error });
+      }
+      throw error;
+    }
+  };
+
+  private isSameCreateBatch = (
+    existing: AgentInterventionItem[],
+    params: CreateAgentInterventionBatchParams,
+  ): boolean =>
+    existing.length === params.items.length &&
+    existing.every((row, index) => {
+      const item = params.items[index];
+      return (
+        row.activityKey === params.activityKey &&
+        row.approvalMode === (params.approvalMode ?? null) &&
+        row.batchId === params.batchId &&
+        row.canonicalToolKey === (item.canonicalToolKey ?? null) &&
+        row.deadline.getTime() === params.deadline.getTime() &&
+        row.interactionKind === item.interactionKind &&
+        row.itemCount === params.items.length &&
+        row.itemIndex === index &&
+        row.provider === (item.provider ?? params.provider ?? null) &&
+        row.requestRevisionHash === item.requestRevisionHash &&
+        row.reviewTokenHash === item.reviewTokenHash &&
+        row.sealed &&
+        row.source === params.source &&
+        row.stepIndex === params.stepIndex &&
+        row.surface === item.surface &&
+        row.systemActionEligibility === params.systemActionEligibility &&
+        row.toolCallId === item.toolCallId &&
+        row.toolMessageId === (item.toolMessageId ?? null) &&
+        sameJson(uniqueSorted(row.allowedActions), uniqueSorted(item.allowedActions)) &&
+        sameJson(row.reviewContext, item.reviewContext) &&
+        sameJson(row.risk, item.risk ?? null) &&
+        sameJson(row.sanitizedRequest, item.sanitizedRequest)
+      );
+    });
+
+  private hasSameOperationContext = (
+    left: AgentInterventionOperationIdentity,
+    right: AgentInterventionOperationIdentity,
+  ): boolean => {
+    const leftContext = asRecord(left.appContext);
+    const rightContext = asRecord(right.appContext);
+    return (
+      left.agentId === right.agentId &&
+      left.chatGroupId === right.chatGroupId &&
+      left.taskId === right.taskId &&
+      left.threadId === right.threadId &&
+      left.topicId === right.topicId &&
+      sameJson(
+        {
+          documentId: leftContext.documentId ?? null,
+          groupId: leftContext.groupId ?? null,
+          scope: leftContext.scope ?? null,
+          sessionId: leftContext.sessionId ?? null,
+        },
+        {
+          documentId: rightContext.documentId ?? null,
+          groupId: rightContext.groupId ?? null,
+          scope: rightContext.scope ?? null,
+          sessionId: rightContext.sessionId ?? null,
+        },
+      )
+    );
   };
 
   private validateCreateBatch(params: CreateAgentInterventionBatchParams) {
@@ -1515,52 +1894,104 @@ export class AgentInterventionModel {
     return 'rolled_back';
   };
 
+  private retireResolvedRuntimeOperation = async (
+    tx: Transaction,
+    resolution: AgentInterventionResolutionItem,
+    at: Date,
+  ): Promise<void> => {
+    if (resolution.action.type === 'stop' || resolution.action.type === 'cancel_interaction') {
+      return;
+    }
+    const completedOperation = await tx
+      .update(agentOperations)
+      .set({ completedAt: at, completionReason: 'done', status: 'done' })
+      .where(
+        and(
+          eq(agentOperations.id, resolution.operationId),
+          eq(agentOperations.status, 'waiting_for_human'),
+          eq(agentOperations.userId, this.userId),
+          this.workspaceId
+            ? eq(agentOperations.workspaceId, this.workspaceId)
+            : isNull(agentOperations.workspaceId),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    if (completedOperation.length > 0) return;
+
+    const [operation] = await tx
+      .select({ status: agentOperations.status })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, resolution.operationId),
+          eq(agentOperations.userId, this.userId),
+          this.workspaceId
+            ? eq(agentOperations.workspaceId, this.workspaceId)
+            : isNull(agentOperations.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (operation?.status !== 'done') {
+      throw new Error(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    }
+  };
+
   private completeResolution = async (
     resolutionRequestId: string,
     source: AgentInterventionSource,
     at: Date,
   ): Promise<AgentInterventionBatchMutationResult> =>
-    this.transitionResolution(resolutionRequestId, async (tx, resolution, rows) => {
-      if (resolution.source !== source) {
-        throw new Error(AGENT_INTERVENTION_SOURCE_TRANSITION_MISMATCH);
-      }
-      const terminalResolutionStatus = source === 'runtime' ? 'completed' : 'acknowledged';
-      if (resolution.status === terminalResolutionStatus) {
-        return { interventions: rows, outcome: 'idempotent', resolution };
-      }
-      if (resolution.status !== 'published') {
-        return { interventions: rows, outcome: 'conflict', resolution };
-      }
-      const [updatedResolution] = await tx
-        .update(agentInterventionResolutions)
-        .set({
-          continuationStartedAt: source === 'runtime' ? at : undefined,
-          producerAckAt: source === 'heterogeneous' ? at : undefined,
-          status: terminalResolutionStatus,
-          terminalAt: at,
-          updatedAt: at,
-          version: sql`${agentInterventionResolutions.version} + 1`,
-        })
-        .where(eq(agentInterventionResolutions.id, resolution.id))
-        .returning();
-      const updatedRows = await tx
-        .update(agentInterventions)
-        .set({
-          producerAckAt: source === 'heterogeneous' ? at : undefined,
-          resolvedAt: at,
-          status: terminalStatusForAction(resolution.action),
-          updatedAt: at,
-          version: sql`${agentInterventions.version} + 1`,
-        })
-        .where(
-          and(
-            eq(agentInterventions.resolutionId, resolution.id),
-            eq(agentInterventions.status, 'published'),
-          ),
-        )
-        .returning();
-      return { interventions: updatedRows, outcome: 'applied', resolution: updatedResolution };
-    });
+    this.transitionResolution(
+      resolutionRequestId,
+      async (tx, resolution, rows) => {
+        if (resolution.source !== source) {
+          throw new Error(AGENT_INTERVENTION_SOURCE_TRANSITION_MISMATCH);
+        }
+        const terminalResolutionStatus = source === 'runtime' ? 'completed' : 'acknowledged';
+        if (resolution.status === terminalResolutionStatus) {
+          if (source === 'runtime') {
+            await this.retireResolvedRuntimeOperation(tx, resolution, at);
+          }
+          return { interventions: rows, outcome: 'idempotent', resolution };
+        }
+        if (resolution.status !== 'published') {
+          return { interventions: rows, outcome: 'conflict', resolution };
+        }
+        const [updatedResolution] = await tx
+          .update(agentInterventionResolutions)
+          .set({
+            continuationStartedAt: source === 'runtime' ? at : undefined,
+            producerAckAt: source === 'heterogeneous' ? at : undefined,
+            status: terminalResolutionStatus,
+            terminalAt: at,
+            updatedAt: at,
+            version: sql`${agentInterventionResolutions.version} + 1`,
+          })
+          .where(eq(agentInterventionResolutions.id, resolution.id))
+          .returning();
+        const updatedRows = await tx
+          .update(agentInterventions)
+          .set({
+            producerAckAt: source === 'heterogeneous' ? at : undefined,
+            resolvedAt: at,
+            status: terminalStatusForAction(resolution.action),
+            updatedAt: at,
+            version: sql`${agentInterventions.version} + 1`,
+          })
+          .where(
+            and(
+              eq(agentInterventions.resolutionId, resolution.id),
+              eq(agentInterventions.status, 'published'),
+            ),
+          )
+          .returning();
+        if (source === 'runtime') {
+          await this.retireResolvedRuntimeOperation(tx, resolution, at);
+        }
+        return { interventions: updatedRows, outcome: 'applied', resolution: updatedResolution };
+      },
+      { lockOperation: source === 'runtime' },
+    );
 
   private transitionResolution = async (
     resolutionRequestId: string,
@@ -1569,10 +2000,14 @@ export class AgentInterventionModel {
       resolution: AgentInterventionResolutionItem,
       rows: AgentInterventionItem[],
     ) => Promise<AgentInterventionBatchMutationResult>,
+    options?: { lockOperation?: boolean },
   ): Promise<AgentInterventionBatchMutationResult> =>
     this.db.transaction(async (tx) => {
       const [candidate] = await tx
-        .select({ id: agentInterventionResolutions.id })
+        .select({
+          id: agentInterventionResolutions.id,
+          operationId: agentInterventionResolutions.operationId,
+        })
         .from(agentInterventionResolutions)
         .where(
           and(
@@ -1582,6 +2017,24 @@ export class AgentInterventionModel {
         )
         .limit(1);
       if (!candidate) return { outcome: 'not_found' };
+
+      if (options?.lockOperation) {
+        const [operation] = await tx
+          .select({ id: agentOperations.id })
+          .from(agentOperations)
+          .where(
+            and(
+              eq(agentOperations.id, candidate.operationId),
+              eq(agentOperations.userId, this.userId),
+              this.workspaceId
+                ? eq(agentOperations.workspaceId, this.workspaceId)
+                : isNull(agentOperations.workspaceId),
+            ),
+          )
+          .limit(1)
+          .for('update');
+        if (!operation) return { outcome: 'not_found' };
+      }
 
       // Batch terminal transitions lock intervention rows before their linked
       // resolutions. Preserve that order here to avoid timeout/ACK deadlocks.

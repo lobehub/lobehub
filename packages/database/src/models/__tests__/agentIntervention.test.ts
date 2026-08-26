@@ -92,6 +92,36 @@ const snapshot = (rows: AgentInterventionItem[]) => ({
   expectedVersions: Object.fromEntries(rows.map((row) => [row.id, row.version])),
 });
 
+const createReparkBatchParams = (
+  rows: AgentInterventionItem[],
+  overrides: Partial<Parameters<typeof model.createBatch>[0]> = {},
+): Parameters<typeof model.createBatch>[0] => ({
+  activityKey: `repark-activity-${hashSequence + 1}`,
+  approvalMode: rows[0].approvalMode ?? undefined,
+  batchId: `repark-batch-${hashSequence + 1}`,
+  deadline: new Date(Date.now() + 10 * 60_000),
+  items: rows.map((row) => ({
+    allowedActions: row.allowedActions,
+    canonicalToolKey: row.canonicalToolKey ?? undefined,
+    interactionKind: row.interactionKind,
+    provider: row.provider ?? undefined,
+    requestRevisionHash: row.requestRevisionHash,
+    reviewContext: row.reviewContext,
+    reviewTokenHash: nextHash(),
+    risk: row.risk ?? undefined,
+    sanitizedRequest: row.sanitizedRequest,
+    surface: row.surface,
+    toolCallId: row.toolCallId,
+    toolMessageId: row.toolMessageId ?? undefined,
+  })),
+  operationId: secondOperationId,
+  provider: rows[0].provider ?? undefined,
+  source: 'runtime',
+  stepIndex: rows[0].stepIndex + 1,
+  systemActionEligibility: 'review_only',
+  ...overrides,
+});
+
 const claim = (
   rows: AgentInterventionItem[],
   action: Parameters<typeof model.claimBatch>[0]['action'],
@@ -160,6 +190,10 @@ const createRuntimeApprovalBatch = async (params?: {
 }) => {
   const count = params?.count ?? 1;
   const op = params?.operationId ?? operationId;
+  await serverDB
+    .update(agentOperations)
+    .set({ completedAt: null, completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+    .where(eq(agentOperations.id, op));
   const items = [];
   for (let index = 0; index < count; index++) {
     const toolCallId = `${op}-tool-${hashSequence + index + 1}`;
@@ -321,6 +355,27 @@ describe('AgentInterventionModel', () => {
         items: [{ ...params.items[0], allowedActions: ['cancel_interaction'] }],
       }),
     ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+  });
+
+  it('reports applied then idempotent when the atomic create has no predecessor', async () => {
+    const params: Parameters<typeof model.createBatch>[0] = {
+      activityKey: 'atomic-create-activity',
+      batchId: 'atomic-create-batch',
+      deadline: new Date(Date.now() + 60_000),
+      items: [questionItem({ toolCallId: 'atomic-create-tool' })],
+      operationId,
+      provider: 'claude-code',
+      source: 'heterogeneous',
+      stepIndex: 0,
+      systemActionEligibility: 'review_only',
+    };
+
+    expect(await model.createBatchWithSupersession({ batch: params })).toMatchObject({
+      outcome: 'applied',
+    });
+    expect(await model.createBatchWithSupersession({ batch: params })).toMatchObject({
+      outcome: 'idempotent',
+    });
   });
 
   it('keeps identical batch ids isolated by operation id', async () => {
@@ -923,6 +978,204 @@ describe('AgentInterventionModel', () => {
       scope: 'all',
       selectedInterventionIds: pending.map((row) => row.id),
     });
+  });
+
+  it('atomically supersedes a partial runtime batch even when the published hook is late', async () => {
+    const original = await createRuntimeApprovalBatch({ batchId: 'superseded-batch', count: 2 });
+    const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });
+    if (claimed.outcome !== 'applied') throw new Error('claim failed');
+    const pending = (await model.findBatch(operationId, 'superseded-batch')).interventions.filter(
+      (row) => row.status === 'pending',
+    );
+    await serverDB
+      .update(agentOperations)
+      .set({ completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+      .where(eq(agentOperations.id, secondOperationId));
+    const batch = createReparkBatchParams(pending, { batchId: 'replacement-batch' });
+    const supersedes = {
+      activityKey: original[0].activityKey,
+      batchId: original[0].batchId,
+      operationId: original[0].operationId,
+      toolCallIds: pending.map((row) => row.toolCallId),
+    };
+
+    const replaced = await model.createBatchWithSupersession({ batch, supersedes });
+    expect(replaced.outcome).toBe('applied');
+    expect(replaced.interventions).toHaveLength(1);
+    expect(replaced.interventions[0]).toMatchObject({
+      batchId: 'replacement-batch',
+      operationId: secondOperationId,
+      status: 'pending',
+      toolCallId: pending[0].toolCallId,
+    });
+    expect(replaced.superseded?.interventions.map((row) => row.status)).toEqual([
+      'resolved',
+      'session_ended',
+    ]);
+    expect(
+      (await model.findResolutionByRequestId(claimed.resolution.resolutionRequestId))?.status,
+    ).toBe('completed');
+    const operations = await serverDB
+      .select({ id: agentOperations.id, status: agentOperations.status })
+      .from(agentOperations);
+    expect(operations.find(({ id }) => id === operationId)?.status).toBe('done');
+    expect(operations.find(({ id }) => id === secondOperationId)?.status).toBe('waiting_for_human');
+
+    expect(
+      (await model.markResolutionPublished(claimed.resolution.resolutionRequestId)).outcome,
+    ).toBe('idempotent');
+    expect(
+      (await model.completeRuntimeResolution(claimed.resolution.resolutionRequestId)).outcome,
+    ).toBe('idempotent');
+    expect((await model.createBatchWithSupersession({ batch, supersedes })).outcome).toBe(
+      'idempotent',
+    );
+  });
+
+  it('supersedes the remaining rows after the prior published hook already completed', async () => {
+    const original = await createRuntimeApprovalBatch({ batchId: 'published-first', count: 2 });
+    const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });
+    if (claimed.outcome !== 'applied') throw new Error('claim failed');
+    await model.markResolutionPublished(claimed.resolution.resolutionRequestId);
+    await model.completeRuntimeResolution(claimed.resolution.resolutionRequestId);
+    const pending = (await model.findBatch(operationId, 'published-first')).interventions.filter(
+      (row) => row.status === 'pending',
+    );
+    await serverDB
+      .update(agentOperations)
+      .set({ completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+      .where(eq(agentOperations.id, secondOperationId));
+    const batch = createReparkBatchParams(pending, { batchId: 'published-first-replacement' });
+
+    const replaced = await model.createBatchWithSupersession({
+      batch,
+      supersedes: {
+        activityKey: original[0].activityKey,
+        batchId: original[0].batchId,
+        operationId: original[0].operationId,
+        toolCallIds: pending.map((row) => row.toolCallId),
+      },
+    });
+    expect(replaced.outcome).toBe('applied');
+    expect(replaced.superseded?.interventions.map((row) => row.status)).toEqual([
+      'resolved',
+      'session_ended',
+    ]);
+  });
+
+  it('fails supersession closed without leaving a partial replacement batch', async () => {
+    const original = await createRuntimeApprovalBatch({ batchId: 'conflicting-old', count: 2 });
+    const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });
+    if (claimed.outcome !== 'applied') throw new Error('claim failed');
+    const pending = (await model.findBatch(operationId, 'conflicting-old')).interventions.filter(
+      (row) => row.status === 'pending',
+    );
+    await serverDB
+      .update(agentOperations)
+      .set({ completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+      .where(eq(agentOperations.id, secondOperationId));
+    const batch = createReparkBatchParams(pending, { batchId: 'must-not-exist' });
+
+    await expect(
+      model.createBatchWithSupersession({
+        batch,
+        supersedes: {
+          activityKey: original[0].activityKey,
+          batchId: original[0].batchId,
+          operationId: original[0].operationId,
+          toolCallIds: ['not-the-pending-tool'],
+        },
+      }),
+    ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    expect((await model.findBatch(secondOperationId, 'must-not-exist')).interventions).toEqual([]);
+    expect(
+      (await model.findBatch(operationId, 'conflicting-old')).interventions.map(
+        (row) => row.status,
+      ),
+    ).toEqual(['resolving', 'pending']);
+  });
+
+  it('never supersedes a stopped runtime batch into a new parked batch', async () => {
+    const original = await createRuntimeApprovalBatch({ batchId: 'stopped-old', count: 2 });
+    const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });
+    if (claimed.outcome !== 'applied') throw new Error('claim failed');
+    await serverDB
+      .update(agentInterventionResolutions)
+      .set({ action: { haltScope: 'operation', type: 'stop' } })
+      .where(eq(agentInterventionResolutions.id, claimed.resolution.id));
+    const pending = (await model.findBatch(operationId, 'stopped-old')).interventions.filter(
+      (row) => row.status === 'pending',
+    );
+    await serverDB
+      .update(agentOperations)
+      .set({ completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+      .where(eq(agentOperations.id, secondOperationId));
+    const batch = createReparkBatchParams(pending, { batchId: 'must-not-repark-stop' });
+
+    await expect(
+      model.createBatchWithSupersession({
+        batch,
+        supersedes: {
+          activityKey: original[0].activityKey,
+          batchId: original[0].batchId,
+          operationId: original[0].operationId,
+          toolCallIds: pending.map((row) => row.toolCallId),
+        },
+      }),
+    ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    expect(
+      (await model.findBatch(secondOperationId, 'must-not-repark-stop')).interventions,
+    ).toEqual([]);
+  });
+
+  it('rejects a replacement operation from a different conversation context', async () => {
+    await serverDB
+      .update(agentOperations)
+      .set({ appContext: { scope: 'main', sessionId: 'agent-a' } })
+      .where(eq(agentOperations.id, operationId));
+    await serverDB
+      .update(agentOperations)
+      .set({ appContext: { scope: 'thread', sessionId: 'agent-a' } })
+      .where(eq(agentOperations.id, secondOperationId));
+    const original = await createRuntimeApprovalBatch({ batchId: 'context-old', count: 2 });
+    const claimed = await claim(original, { type: 'approve' }, { actorId: ownerId });
+    if (claimed.outcome !== 'applied') throw new Error('claim failed');
+    const pending = (await model.findBatch(operationId, 'context-old')).interventions.filter(
+      (row) => row.status === 'pending',
+    );
+    await serverDB
+      .update(agentOperations)
+      .set({ completionReason: 'waiting_for_human', status: 'waiting_for_human' })
+      .where(eq(agentOperations.id, secondOperationId));
+
+    await expect(
+      model.createBatchWithSupersession({
+        batch: createReparkBatchParams(pending, { batchId: 'wrong-context' }),
+        supersedes: {
+          activityKey: original[0].activityKey,
+          batchId: original[0].batchId,
+          operationId: original[0].operationId,
+          toolCallIds: pending.map((row) => row.toolCallId),
+        },
+      }),
+    ).rejects.toThrow(AGENT_INTERVENTION_IDENTITY_CONFLICT);
+    expect((await model.findBatch(secondOperationId, 'wrong-context')).interventions).toEqual([]);
+  });
+
+  it('retires the exact parked operation when a runtime continuation completes', async () => {
+    const rows = await createRuntimeApprovalBatch({ batchId: 'retire-operation' });
+    const claimed = await claim(rows, { type: 'reject_continue' }, { actorId: ownerId });
+    if (claimed.outcome !== 'applied') throw new Error('claim failed');
+    await model.markResolutionPublished(claimed.resolution.resolutionRequestId);
+    expect(
+      (await model.completeRuntimeResolution(claimed.resolution.resolutionRequestId)).outcome,
+    ).toBe('applied');
+    const [operation] = await serverDB
+      .select({ completedAt: agentOperations.completedAt, status: agentOperations.status })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, operationId));
+    expect(operation.status).toBe('done');
+    expect(operation.completedAt).toBeInstanceOf(Date);
   });
 
   it('times out items and the active outbox atomically, then records a late ACK only as audit', async () => {
