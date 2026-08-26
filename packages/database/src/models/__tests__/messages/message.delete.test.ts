@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { uuid } from '@/utils/uuid';
 
@@ -1034,6 +1034,157 @@ describe('MessageModel Delete Tests', () => {
       expect(topic.totalCost).toBeNull();
       expect(topic.usage).toBeNull();
       expect(topic.cost).toBeNull();
+    });
+  });
+
+  // Regression for LOBE-11930: message-level bulk deletes can wipe a
+  // share-visitor topic's messages without ever touching the topic row, so
+  // `TopicModel`'s own delete-time snapshot never fires for them. See
+  // `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
+  describe('share-visitor run interrupt (LOBE-11930)', () => {
+    it('deleteMessage reports an in-flight Agent Share visitor run on the message topic', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new MessageModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(agents).values({ id: 'share-agent-1', title: 'Share Agent', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'share-agent-1',
+        id: 'visitor-topic-single',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+        senderId: 'visitor-1',
+        title: 'Visitor',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'hi',
+        id: 'visitor-msg-1',
+        role: 'user',
+        topicId: 'visitor-topic-single',
+        userId,
+      });
+
+      await modelWithCallback.deleteMessage('visitor-msg-1');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'visitor-topic-single' },
+      ]);
+    });
+
+    it('deleteMessages reports an in-flight Agent Share visitor run among the batch topics', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new MessageModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(agents).values({ id: 'share-agent-2', title: 'Share Agent', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'share-agent-2',
+        id: 'visitor-topic-batch',
+        metadata: { runningOperation: { assistantMessageId: 'msg-2', operationId: 'op-2' } },
+        senderId: 'visitor-2',
+        title: 'Visitor',
+        userId,
+      });
+      await serverDB.insert(messages).values([
+        {
+          content: 'hi',
+          id: 'visitor-msg-2a',
+          role: 'user',
+          topicId: 'visitor-topic-batch',
+          userId,
+        },
+        {
+          content: 'hi again',
+          id: 'visitor-msg-2b',
+          role: 'assistant',
+          topicId: 'visitor-topic-batch',
+          userId,
+        },
+      ]);
+
+      await modelWithCallback.deleteMessages(['visitor-msg-2a', 'visitor-msg-2b']);
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-2', topicId: 'visitor-topic-batch' },
+      ]);
+    });
+
+    it('deleteMessagesBySession reports an in-flight Agent Share visitor run scoped to the session', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new MessageModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(sessions).values({ id: 'visitor-session-3', userId });
+      await serverDB.insert(topics).values({
+        id: 'visitor-topic-session',
+        metadata: { runningOperation: { assistantMessageId: 'msg-3', operationId: 'op-3' } },
+        senderId: 'visitor-3',
+        sessionId: 'visitor-session-3',
+        title: 'Visitor',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'hi',
+        id: 'visitor-msg-3',
+        role: 'user',
+        sessionId: 'visitor-session-3',
+        topicId: 'visitor-topic-session',
+        userId,
+      });
+
+      await modelWithCallback.deleteMessagesBySession('visitor-session-3', 'visitor-topic-session');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-3', topicId: 'visitor-topic-session' },
+      ]);
+    });
+
+    it('batchDeleteByAgentId reports an in-flight Agent Share visitor run scoped to the agent', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new MessageModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(agents).values({ id: 'share-agent-4', title: 'Share Agent', userId });
+      await serverDB.insert(topics).values({
+        agentId: 'share-agent-4',
+        id: 'visitor-topic-agent',
+        metadata: { runningOperation: { assistantMessageId: 'msg-4', operationId: 'op-4' } },
+        senderId: 'visitor-4',
+        title: 'Visitor',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        agentId: 'share-agent-4',
+        content: 'hi',
+        id: 'visitor-msg-4',
+        role: 'user',
+        topicId: 'visitor-topic-agent',
+        userId,
+      });
+
+      await modelWithCallback.batchDeleteByAgentId('share-agent-4');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-4', topicId: 'visitor-topic-agent' },
+      ]);
+    });
+
+    it('does not query for active share runs when no callback is configured', async () => {
+      // Sanity check for the perf short-circuit documented on
+      // `snapshotActiveShareRunsForTopics`: a plain `MessageModel` (no
+      // `onShareRunsInterrupted`) must still delete normally.
+      await serverDB
+        .insert(messages)
+        .values({ content: 'hi', id: 'plain-msg', role: 'user', userId });
+
+      await messageModel.deleteMessage('plain-msg');
+
+      const result = await serverDB.select().from(messages).where(eq(messages.id, 'plain-msg'));
+      expect(result).toHaveLength(0);
     });
   });
 });

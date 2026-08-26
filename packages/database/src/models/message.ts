@@ -85,6 +85,7 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { idGenerator } from '../utils/idGenerator';
 import { notShareVisitorMessage } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { type ActiveShareRun, TopicModel } from './topic';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
 
@@ -675,15 +676,47 @@ export const toVisitorMessage = (message: UIChatMessage): UIChatMessage =>
     }),
   }) as UIChatMessage;
 
+export interface MessageModelOptions {
+  /**
+   * Called with the snapshot of Agent Share visitor runs that were still
+   * in-flight on a message-level bulk/batch delete (`deleteMessage` /
+   * `deleteMessages` / `deleteMessagesBySession` / `deleteAllMessages` /
+   * `batchDeleteByAgentId`) — AFTER the deleting transaction has committed.
+   *
+   * WHY message-level deletes need their OWN copy of this contract instead of
+   * relying on `TopicModelOptions.onShareRunsInterrupted`: none of these
+   * methods ever delete the `topics` row (they only ever touch `messages`),
+   * so `TopicModel`'s own delete-time snapshot never fires for them — a
+   * share-visitor topic (`topics.senderId` set, see `notShareVisitorTopic`)
+   * can have every one of its messages wiped out from under an in-flight run
+   * while the topic row (and its `runningOperation` marker) survives
+   * untouched. Message rows carry no `senderId` of their own — messages
+   * persist under the CREATOR's account regardless of who sent them (see
+   * `toVisitorMessage`'s JSDoc) — so a creator-scoped `this.ownership()`
+   * predicate matches a visitor's messages exactly like any other message
+   * the creator owns, the same shape as the topic-level bug this mirrors.
+   * Same contract, same reason, as `TopicModelOptions
+   * .onShareRunsInterrupted` — kept in sync. See LOBE-11930.
+   */
+  onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
+}
+
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: MessageModelOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.onShareRunsInterrupted = options?.onShareRunsInterrupted;
   }
 
   private ownership = () =>
@@ -700,6 +733,34 @@ export class MessageModel {
 
   private agentsToSessionsOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
+
+  /**
+   * Snapshot any in-flight Agent Share visitor run among the given topic ids,
+   * BEFORE a message-level bulk/batch delete removes rows from them — see
+   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc for why every
+   * message-level delete method needs this instead of relying on
+   * `TopicModel`'s own delete-time snapshot.
+   *
+   * Short-circuits without querying when no callback is configured: most
+   * `MessageModel` instances (agent-runtime bookkeeping deleting its OWN
+   * just-created placeholder/error message mid-run, scheduled-run resume
+   * cleanup, etc.) never pass `onShareRunsInterrupted` and call
+   * `deleteMessage` on a hot path — those callers must not pay for a snapshot
+   * query whose result nobody will read.
+   */
+  private snapshotActiveShareRunsForTopics = async (
+    trx: Transaction,
+    topicIds: (string | null | undefined)[],
+  ): Promise<ActiveShareRun[]> => {
+    if (!this.onShareRunsInterrupted) return [];
+
+    const ids = [...new Set(topicIds.filter((id): id is string => !!id))];
+    if (ids.length === 0) return [];
+
+    return new TopicModel(trx as LobeChatDatabase, this.userId).findActiveVisitorRunTopicsByIds(
+      ids,
+    );
+  };
 
   // **************** Query *************** //
 
@@ -4063,8 +4124,19 @@ export class MessageModel {
     }
   };
 
+  /**
+   * Snapshots any in-flight Agent Share visitor run on this exact message's
+   * topic BEFORE the delete — same bug shape as `TopicModel.delete`'s single-
+   * topic delete (see that method's JSDoc): a creator's normal "delete this
+   * message" action never surfaces a visitor topic to click on, but the
+   * underlying id-scoped delete has no such guard, so fail closed rather than
+   * rely on that UI gap. See `MessageModelOptions.onShareRunsInterrupted`'s
+   * JSDoc and LOBE-11930.
+   */
   deleteMessage = async (id: string) => {
-    return this.db.transaction(async (tx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (tx) => {
       // 1. Query the complete information of the message to be deleted
       const message = await tx
         .select()
@@ -4074,6 +4146,8 @@ export class MessageModel {
 
       // If the message to be deleted is not found, return directly
       if (message.length === 0) return;
+
+      activeShareRuns = await this.snapshotActiveShareRunsForTopics(tx, [message[0].topicId]);
 
       const activeBranchSnapshots = await this.captureActiveBranchSnapshots(
         tx,
@@ -4120,12 +4194,23 @@ export class MessageModel {
         await recomputeTopicUsage(tx, this.userId, message[0].topicId, this.workspaceId);
       }
     });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
+  /**
+   * Snapshots in-flight Agent Share visitor runs among the topics touched by
+   * this exact id set BEFORE the delete — see `MessageModelOptions
+   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   */
   deleteMessages = async (ids: string[]) => {
     if (ids.length === 0) return;
 
-    return this.db.transaction(async (tx) => {
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (tx) => {
       // 1. Query all messages to be deleted with their parentId
       const toDelete = await tx
         .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
@@ -4133,6 +4218,11 @@ export class MessageModel {
         .where(and(this.ownership(), inArray(messages.id, ids)));
 
       if (toDelete.length === 0) return;
+
+      activeShareRuns = await this.snapshotActiveShareRunsForTopics(
+        tx,
+        toDelete.map((message) => message.topicId),
+      );
 
       // 2. Build id -> parentId map and deleteSet
       const parentMap = new Map<string, string | null>();
@@ -4205,6 +4295,10 @@ export class MessageModel {
         await recomputeTopicUsage(tx, this.userId, topicId, this.workspaceId);
       }
     });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   /**
@@ -4257,24 +4351,76 @@ export class MessageModel {
         ),
       );
 
+  /**
+   * Deletes every message matching a session/topic/group scope — the checked
+   * `message.removeMessagesByAssistant` / `message.removeMessagesByGroup`
+   * router paths.
+   *
+   * Snapshots in-flight Agent Share visitor runs among the topics this exact
+   * scope touches BEFORE the delete — this is the message-level twin of
+   * `TopicModel.batchDeleteBySessionId` / `batchDeleteByGroupId`'s bug: a
+   * visitor topic's messages could be wiped out from under an active run
+   * while the topic row (and its `runningOperation` marker) survives. See
+   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   */
   deleteMessagesBySession = async (
     sessionId?: string | null,
     topicId?: string | null,
     groupId?: string | null,
-  ) =>
-    this.db
-      .delete(messages)
-      .where(
-        and(
-          this.ownership(),
-          this.matchSession(sessionId),
-          this.matchTopic(topicId),
-          this.matchGroup(groupId),
-        ),
+  ) => {
+    const where = and(
+      this.ownership(),
+      this.matchSession(sessionId),
+      this.matchTopic(topicId),
+      this.matchGroup(groupId),
+    );
+
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (tx) => {
+      const affectedTopics = await tx
+        .selectDistinct({ topicId: messages.topicId })
+        .from(messages)
+        .where(where);
+      activeShareRuns = await this.snapshotActiveShareRunsForTopics(
+        tx,
+        affectedTopics.map((row) => row.topicId),
       );
 
+      return tx.delete(messages).where(where);
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
+  };
+
+  /**
+   * Deletes every message this user owns. Test-only today — no router or
+   * service path reaches this method — but wired with the same contract as
+   * every other bulk delete here so it doesn't become a silent regression the
+   * moment a caller does show up. See `MessageModelOptions
+   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   */
   deleteAllMessages = async () => {
-    return this.db.delete(messages).where(and(this.ownership()));
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (tx) => {
+      const affectedTopics = await tx
+        .selectDistinct({ topicId: messages.topicId })
+        .from(messages)
+        .where(this.ownership());
+      activeShareRuns = await this.snapshotActiveShareRunsForTopics(
+        tx,
+        affectedTopics.map((row) => row.topicId),
+      );
+
+      return tx.delete(messages).where(and(this.ownership()));
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   /**
@@ -4282,6 +4428,11 @@ export class MessageModel {
    * This will delete messages that have either:
    * 1. Direct agentId match (new data)
    * 2. SessionId match via agentsToSessions lookup (legacy data)
+   *
+   * Test-only today — no router or service path reaches this method — but
+   * wired with the same contract as every other bulk delete here so it
+   * doesn't become a silent regression the moment a caller does show up. See
+   * `MessageModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
    */
   batchDeleteByAgentId = async (agentId: string) => {
     // Get the associated sessionId for backward compatibility with legacy data
@@ -4298,7 +4449,26 @@ export class MessageModel {
       ? or(eq(messages.agentId, agentId), eq(messages.sessionId, associatedSessionId))
       : eq(messages.agentId, agentId);
 
-    return this.db.delete(messages).where(and(this.ownership(), agentCondition));
+    const where = and(this.ownership(), agentCondition);
+
+    let activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (tx) => {
+      const affectedTopics = await tx
+        .selectDistinct({ topicId: messages.topicId })
+        .from(messages)
+        .where(where);
+      activeShareRuns = await this.snapshotActiveShareRunsForTopics(
+        tx,
+        affectedTopics.map((row) => row.topicId),
+      );
+
+      return tx.delete(messages).where(where);
+    });
+
+    if (activeShareRuns.length > 0) this.onShareRunsInterrupted?.(activeShareRuns);
+
+    return result;
   };
 
   // **************** Helper *************** //

@@ -1206,6 +1206,28 @@ export class TopicModel {
   };
 
   /**
+   * Public, id-scoped sibling of `findActiveVisitorRunTopicsMatching`, for
+   * SIBLING models whose own bulk/batch writes can silently empty out a
+   * share-visitor topic's rows without ever touching the `topics` row itself
+   * — chiefly `MessageModel`'s message-level deletes (`deleteMessage`,
+   * `deleteMessages`, `deleteMessagesBySession`, `deleteAllMessages`,
+   * `batchDeleteByAgentId`). Those never delete the topic row, so nothing in
+   * THIS class's own delete methods ever runs a snapshot for them — the
+   * caller must resolve the exact set of topic ids its own write is about to
+   * affect BEFORE deleting, then hand that id list here.
+   *
+   * `findActiveVisitorRunTopicsMatching` itself stays private: an arbitrary
+   * `SQL` predicate is only safe to pass from code that also owns the
+   * corresponding delete's WHERE clause (this class), whereas an id list is a
+   * safe, narrow contract for any caller. See `TopicModelOptions
+   * .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+   */
+  findActiveVisitorRunTopicsByIds = async (topicIds: string[]): Promise<ActiveShareRun[]> => {
+    if (topicIds.length === 0) return [];
+    return this.findActiveVisitorRunTopicsMatching(inArray(topics.id, topicIds));
+  };
+
+  /**
    * Every share-visitor topic on this agent with a still-open
    * `runningOperation` marker — the set of in-flight visitor runs a share
    * revocation (visibility flipped off `link`, or the share row deleted) must

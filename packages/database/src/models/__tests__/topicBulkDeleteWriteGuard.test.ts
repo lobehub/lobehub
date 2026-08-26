@@ -43,11 +43,16 @@ const ALLOWED_FILES = new Set([
   // from, which this delete never touches — so there is no in-flight run this
   // delete could silently orphan.
   'models/agentCopyJob.ts',
-  // MessageModel: the contract's own home for `messages`. Message-level bulk
-  // deletes are tracked and fixed under the same LOBE-11930 effort — kept
-  // allowlisted here (rather than duplicating that work) so this guard's
-  // scope stays "did a NEW file bypass the contract", not "is every existing
-  // file already compliant".
+  // MessageModel: the contract's own home for `messages`
+  // (`deleteMessage`/`deleteMessages`/`deleteMessagesBySession`/
+  // `deleteAllMessages`/`batchDeleteByAgentId` all snapshot in-flight
+  // visitor runs via `TopicModel.findActiveVisitorRunTopicsByIds` and call
+  // `onShareRunsInterrupted` after commit — see `MessageModelOptions
+  // .onShareRunsInterrupted`'s JSDoc). File-level allowlisting (rather than a
+  // per-method check) mirrors `models/topic.ts` above: this guard's scope is
+  // "did a NEW raw delete bypass the contract", not "is every raw delete in
+  // an audited file individually re-verified here" — the model-level tests
+  // (`messages/message.delete.test.ts`) cover per-method correctness.
   'models/message.ts',
 ]);
 
