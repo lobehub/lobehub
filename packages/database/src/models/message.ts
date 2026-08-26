@@ -2442,13 +2442,18 @@ export class MessageModel {
   };
 
   /**
-   * Count messages up to a limit, useful for avoiding full table scans
+   * Count messages up to a limit, useful for avoiding full table scans.
+   *
+   * Excludes agent-share visitor messages: the sole current caller
+   * (`user.getUserState`) uses this to gate onboarding UI (PWA guide, trace)
+   * on the creator's own engagement, and a popular shared agent's visitor
+   * traffic isn't the creator's own activity (see `../utils/shareVisitor`).
    */
   countUpTo = async (n: number): Promise<number> => {
     const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(and(this.ownership()))
+      .where(and(this.ownership(), notShareVisitorMessage()))
       .limit(n);
 
     return result.length;

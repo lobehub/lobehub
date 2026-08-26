@@ -707,6 +707,25 @@ export class TopicModel {
   };
 
   /**
+   * Filters topic ids down to ones this caller owns, excluding agent-share
+   * visitor topics. Used by the memory-extraction "explicit topicIds" path
+   * (see `MemoryExtractionExecutor.filterTopicIdsForUser`) so a topic id
+   * reachable by callers can never make a share-visitor's conversation feed
+   * the creator's own memory extraction — visitor speech is not the
+   * creator's own (see `../utils/shareVisitor`).
+   */
+  filterOwnedTopicIds = async (ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(inArray(topics.id, ids), this.ownership(), this.notShareVisitor()));
+
+    return rows.map((row) => row.id);
+  };
+
+  /**
    * Find the unique topic an agent shares with a document for a given trigger
    * (e.g. the doc-anchored chat topic provisioned by
    * `agentDocument.getOrCreateChatTopic`). Joins through `topic_documents`.

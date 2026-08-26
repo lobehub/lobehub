@@ -1284,6 +1284,33 @@ describe('MessageModel Statistics Tests', () => {
       const result = await otherModel.countUpTo(10);
       expect(result).toBe(0);
     });
+
+    it("excludes agent-share visitor messages (onboarding gates must reflect the creator's own activity)", async () => {
+      // `countUpTo` backs `user.getUserState`'s `hasMoreThan4Messages` /
+      // `hasAnyMessages` onboarding gates. A popular shared agent's visitor
+      // traffic must not unlock those gates for a creator who never
+      // personally sent a message.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-count-up-to',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg-count-up-to',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-count-up-to',
+        },
+        { id: 'creator-msg-count-up-to', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.countUpTo(5);
+
+      expect(result).toBe(1);
+    });
   });
 
   describe('hasTopicMessages', () => {

@@ -1065,6 +1065,44 @@ describe('TopicModel', () => {
     });
   });
 
+  describe('filterOwnedTopicIds', () => {
+    it('keeps owned topics and drops ones owned by someone else', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'filter-mine', title: 'mine', userId },
+        { id: 'filter-theirs', title: 'theirs', userId: otherUserId },
+      ]);
+
+      const result = await topicModel.filterOwnedTopicIds(['filter-mine', 'filter-theirs']);
+
+      expect(result).toEqual(['filter-mine']);
+    });
+
+    it('excludes agent-share visitor topics even though they carry the caller userId', async () => {
+      // Explicit-topicIds requests must never let a visitor topic id feed the
+      // creator's memory extraction — see `MemoryExtractionExecutor.filterTopicIdsForUser`.
+      await serverDB.insert(topics).values([
+        { id: 'filter-creator-topic', title: 'creator', userId },
+        {
+          id: 'filter-visitor-topic',
+          title: 'visitor',
+          userId,
+          senderId: 'visitor-user-x',
+        },
+      ]);
+
+      const result = await topicModel.filterOwnedTopicIds([
+        'filter-creator-topic',
+        'filter-visitor-topic',
+      ]);
+
+      expect(result).toEqual(['filter-creator-topic']);
+    });
+
+    it('returns an empty array for an empty input', async () => {
+      expect(await topicModel.filterOwnedTopicIds([])).toEqual([]);
+    });
+  });
+
   describe('resetMemoryExtractStatus', () => {
     it('resets completed topics back to pending and clears the run state', async () => {
       await serverDB.insert(topics).values([
