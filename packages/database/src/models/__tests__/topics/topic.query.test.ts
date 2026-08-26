@@ -2344,4 +2344,57 @@ describe('TopicModel - Query', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('queryBySender', () => {
+    it('returns only the visitor-facing DTO, never creator-only fields', async () => {
+      const agentId = 'share-agent';
+      const visitorId = 'share-visitor';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent' });
+      await serverDB.insert(topics).values({
+        id: 'share-topic-1',
+        title: 'Shared Topic',
+        userId,
+        agentId,
+        senderId: visitorId,
+        status: 'completed',
+        model: 'gpt-4',
+        provider: 'openai',
+        cost: { total: 1.23 },
+        usage: { totalTokens: 999 },
+        metadata: { some: 'internal-detail' },
+      });
+
+      const result = await topicModel.queryBySender({ agentId, senderId: visitorId });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        createdAt: expect.any(Date),
+        id: 'share-topic-1',
+        title: 'Shared Topic',
+        updatedAt: expect.any(Date),
+      });
+      // Explicitly guard against regressions that widen the select back to `select()`.
+      expect(result[0]).not.toHaveProperty('userId');
+      expect(result[0]).not.toHaveProperty('model');
+      expect(result[0]).not.toHaveProperty('provider');
+      expect(result[0]).not.toHaveProperty('cost');
+      expect(result[0]).not.toHaveProperty('usage');
+      expect(result[0]).not.toHaveProperty('status');
+      expect(result[0]).not.toHaveProperty('metadata');
+    });
+
+    it('scopes results to the given senderId on the same agent', async () => {
+      const agentId = 'share-agent-2';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent 2' });
+      await serverDB.insert(topics).values([
+        { id: 'visitor-a-topic', title: 'A', userId, agentId, senderId: 'visitor-a' },
+        { id: 'visitor-b-topic', title: 'B', userId, agentId, senderId: 'visitor-b' },
+      ]);
+
+      const result = await topicModel.queryBySender({ agentId, senderId: 'visitor-a' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('visitor-a-topic');
+    });
+  });
 });

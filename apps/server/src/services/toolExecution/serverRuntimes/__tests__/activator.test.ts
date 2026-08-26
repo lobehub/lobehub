@@ -105,4 +105,86 @@ describe('activatorRuntime', () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe('activateSkill — agent share allowlist enforcement', () => {
+    beforeEach(() => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill'
+          ? {
+              content: '# User skill',
+              id: 'user-skill-id',
+              identifier: 'user-skill-identifier',
+              name: 'user-skill',
+            }
+          : undefined,
+      );
+    });
+
+    it('refuses to activate a skill outside the share allowlist', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        agentShare: {
+          agentId: 'agent-1',
+          enabledToolIds: ['some-other-skill-identifier'],
+          visitorUserId: 'visitor-1',
+        },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(false);
+    }, 20_000);
+
+    it('refuses to activate any skill when the share allowlist is empty', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        agentShare: { agentId: 'agent-1', enabledToolIds: [], visitorUserId: 'visitor-1' },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('activates a skill included in the share allowlist', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        agentShare: {
+          agentId: 'agent-1',
+          enabledToolIds: ['user-skill-identifier'],
+          visitorUserId: 'visitor-1',
+        },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'creator-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('activates a skill normally when the run is not a share (no agentShare context)', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(true);
+    });
+  });
 });

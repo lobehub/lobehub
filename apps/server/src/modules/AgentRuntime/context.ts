@@ -36,9 +36,15 @@ export interface RuntimeExecutorContext {
    * `filePermissionConfig` is threaded through so per-step context assembly
    * (e.g. always-on agent context documents) can apply the same fail-closed
    * file gate as `applyShareGateToAgentConfig` without re-deriving it.
+   *
+   * `enabledToolIds` mirrors `shareConfig.enabledToolIds` so tool runtimes
+   * that resolve their target outside `toolManifestMap` (e.g. `activateSkill`,
+   * `lobe-topic-reference`) can apply the same allowlist/ownership rule the
+   * assembled tool set already enforces.
    */
   agentShare?: {
     agentId: string;
+    enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     visitorUserId: string;
   };

@@ -207,6 +207,7 @@ export class ServerToolTransport implements ToolTransport {
                 context.parentMessageId,
               ),
               ...(agentVisibility !== undefined && { agentVisibility }),
+              agentShare: this.ctx.agentShare,
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
               clientIp: context.state.metadata?.clientIp,

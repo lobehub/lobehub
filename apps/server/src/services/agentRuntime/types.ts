@@ -367,9 +367,15 @@ export interface OperationCreationParams {
    * `applyShareGateToAgentConfig`) so per-step context building can re-apply
    * the same fail-closed rule to sources that are fetched independently of
    * `agentConfig` (e.g. always-on agent context documents).
+   *
+   * `enabledToolIds` mirrors `shareConfig.enabledToolIds` so tool runtimes
+   * that resolve their target outside `toolManifestMap` (e.g. `activateSkill`,
+   * `lobe-topic-reference`) can apply the same allowlist/ownership rule the
+   * assembled tool set already enforces.
    */
   agentShare?: {
     agentId: string;
+    enabledToolIds?: string[];
     filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
     visitorUserId: string;
   };
