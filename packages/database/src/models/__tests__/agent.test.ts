@@ -3412,6 +3412,49 @@ describe('AgentModel', () => {
 
       expect(result).toHaveLength(1);
     });
+
+    it('excludes agent-share visitor topics from the count and ranking order', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // `senderId` marks them as visitor traffic — they must not inflate or
+      // reorder the creator's own assistant usage ranking.
+      await serverDB.insert(agents).values([
+        { id: 'rv1', title: 'Popular Shared Agent', userId },
+        { id: 'rv2', title: 'Personally Used Agent', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        // rv1: 1 creator topic + 5 visitor topics — should rank behind rv2
+        // once visitor topics are excluded, not ahead of it.
+        { agentId: 'rv1', id: 'rv1-creator', userId },
+        { agentId: 'rv1', id: 'rv1-visitor-1', userId, senderId: 'visitor-a' },
+        { agentId: 'rv1', id: 'rv1-visitor-2', userId, senderId: 'visitor-a' },
+        { agentId: 'rv1', id: 'rv1-visitor-3', userId, senderId: 'visitor-b' },
+        { agentId: 'rv1', id: 'rv1-visitor-4', userId, senderId: 'visitor-b' },
+        { agentId: 'rv1', id: 'rv1-visitor-5', userId, senderId: 'visitor-c' },
+        // rv2: 3 creator topics
+        { agentId: 'rv2', id: 'rv2-creator-1', userId },
+        { agentId: 'rv2', id: 'rv2-creator-2', userId },
+        { agentId: 'rv2', id: 'rv2-creator-3', userId },
+      ]);
+
+      const result = await agentModel.rank();
+
+      const byId = new Map(result.map((r) => [r.id, r]));
+      expect(byId.get('rv1')).toMatchObject({ count: 1 });
+      expect(byId.get('rv2')).toMatchObject({ count: 3 });
+      expect(result.map((r) => r.id)).toEqual(['rv2', 'rv1']);
+    });
+
+    it('excludes an agent whose only topics are agent-share visitor topics', async () => {
+      await serverDB.insert(agents).values({ id: 'rv3', title: 'Visitor Only Agent', userId });
+      await serverDB.insert(topics).values([
+        { agentId: 'rv3', id: 'rv3-visitor-1', userId, senderId: 'visitor-a' },
+        { agentId: 'rv3', id: 'rv3-visitor-2', userId, senderId: 'visitor-b' },
+      ]);
+
+      const result = await agentModel.rank();
+
+      expect(result.map((r) => r.id)).not.toContain('rv3');
+    });
   });
 
   describe('listMessengerBindableAgents', () => {

@@ -51,7 +51,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { type FlowControl } from '@upstash/qstash';
 import type { Client } from '@upstash/workflow';
 import debug from 'debug';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { join } from 'pathe';
 import { z } from 'zod';
 
@@ -2139,19 +2139,19 @@ export class MemoryExtractionExecutor {
     };
   }
 
+  /**
+   * Ownership-checks explicit topicIds requests (the direct `chat_topic`
+   * execution path). Delegates to `TopicModel.filterOwnedTopicIds` instead of
+   * a bare workspace/id query so agent-share visitor topics are excluded the
+   * same way the paginated discovery path (`getTopicsForUser`) already
+   * excludes them — a topic id supplied here must never let a visitor's
+   * conversation feed the creator's memory extraction.
+   */
   async filterTopicIdsForUser(userId: string, topicIds: string[], workspaceId?: string) {
     if (!topicIds.length) return [];
 
     const db = await this.db;
-    const rows = await db.query.topics.findMany({
-      columns: { id: true },
-      where: and(
-        buildWorkspaceWhere({ userId, workspaceId }, topics),
-        inArray(topics.id, topicIds),
-      ),
-    });
-
-    return rows.map((row) => row.id);
+    return new TopicModel(db, userId, workspaceId).filterOwnedTopicIds(topicIds);
   }
 
   private recordJobMetrics(
