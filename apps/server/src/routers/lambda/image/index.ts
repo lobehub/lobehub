@@ -63,6 +63,22 @@ const createImageInputSchema = z.object({
     })
     .passthrough(),
   provider: z.string(),
+  /**
+   * The chat topic this generation was requested from, when the caller is the
+   * `lobe-image-generation` builtin tool (`serverRuntimes/imageGeneration.ts`
+   * forwards `ToolExecutionContext.topicId`, which is server-resolved from the
+   * running operation and never model-suppliable). Tagged onto the created
+   * async task's `metadata.topicId` so `getGenerationStatus` can later verify a
+   * model-supplied `generationId`/`asyncTaskId` pair actually belongs to the
+   * conversation polling it — otherwise a share visitor's `getImageGenerationStatus`
+   * call would resolve ANY async task the runtime's `AsyncTaskModel` accepts,
+   * i.e. every image generation the creator has ever made (async_tasks is only
+   * scoped by `userId`, see `packages/database/src/models/asyncTask.ts`), not
+   * just the one this run started. Absent for non-tool callers (the standalone
+   * gallery/video pages), which never pass it back to `getGenerationStatus`
+   * either, so their behavior is unchanged.
+   */
+  topicId: z.string().optional(),
 });
 export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
 
@@ -87,7 +103,7 @@ export const imageRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, provider, model, imageNum, params } = input;
+      const { generationTopicId, provider, model, imageNum, params, topicId } = input;
 
       log('Starting image creation process, input: %O', input);
 
@@ -261,14 +277,25 @@ export const imageRouter = router({
           const generationsWithTasks = await Promise.all(
             createdGenerations.map(async (generation, index) => {
               // Create asyncTask directly in transaction, carrying this
-              // generation's billing handle (if any) for the completion charge.
+              // generation's billing handle (if any) for the completion charge,
+              // plus the originating chat topic (if any) so
+              // `getGenerationStatus` can later verify a caller polling this
+              // task is actually the conversation that started it — see
+              // `topicId`'s JSDoc on `createImageInputSchema` above.
               // Presence check (not truthiness): handles are opaque, so falsy
               // values like 0 or '' must still be stored verbatim.
               const prechargeItem = prechargeItems?.[index];
+              const metadata =
+                prechargeItem === undefined && topicId === undefined
+                  ? undefined
+                  : {
+                      ...(prechargeItem === undefined ? {} : { precharge: prechargeItem }),
+                      ...(topicId === undefined ? {} : { topicId }),
+                    };
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
-                  metadata: prechargeItem === undefined ? undefined : { precharge: prechargeItem },
+                  metadata,
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,

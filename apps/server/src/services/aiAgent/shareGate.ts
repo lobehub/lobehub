@@ -175,10 +175,20 @@ const SHARE_VISITOR_ALLOWED_IDENTIFIERS = new Set<string>([
   // Writes are tied to `context.agentId`/`context.taskId`
   // (`serverRuntimes/brief.ts:38,62-65,87-92`), not a model-suppliable id.
   BriefIdentifier,
-  // No model-supplied ids; every write (image persistence, document
-  // association) routes through context-scoped callers keyed off
-  // `context.userId`/`context.agentVisibility`
-  // (`serverRuntimes/imageGeneration.ts:26-47`).
+  // Writes (image persistence, document association) route through
+  // context-scoped callers keyed off `context.userId`/`context.agentVisibility`
+  // (`serverRuntimes/imageGeneration.ts:26-49`). The one model-supplied id pair
+  // — `getImageGenerationStatus`'s `generationId`/`asyncTaskId` — resolves
+  // against `async_tasks`, which is scoped only by `userId` (the creator, not
+  // this share), so a bare id lookup would let a visitor poll ANY generation
+  // the creator has ever made (a different topic, a different visitor's share
+  // session) and read its prompt/image. Closed by tagging the async task with
+  // its originating chat `topicId` at creation (`createImage`'s `topicId`
+  // field, `apps/server/src/routers/lambda/image/index.ts`) and requiring an
+  // exact match in `generationRouter.getGenerationStatus`
+  // (`apps/server/src/routers/lambda/generation.ts`) — both ids are
+  // `context.topicId`, server-resolved from the running operation, never
+  // model-suppliable, so this cannot be satisfied by any id the model picks.
   ImageGenerationIdentifier,
   // `lobe-verify`: `submitVerifyResult` never takes a model-suppliable
   // operation/run id at all — it resolves `targetOperationId` from

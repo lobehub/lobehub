@@ -47,9 +47,26 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
             ? { visibility: context.agentVisibility }
             : {}),
         }),
-      createImage: (payload) => imageCaller.createImage(payload),
+      // Forward `context.topicId` (server-resolved from the running
+      // operation, never model-suppliable) so the created async task/
+      // generation row is tagged with the chat topic that requested it —
+      // see `topicId`'s JSDoc on `createImageInputSchema`
+      // (`apps/server/src/routers/lambda/image/index.ts`).
+      createImage: (payload) => imageCaller.createImage({ ...payload, topicId: context.topicId }),
+      // Same forwarding for the read side: without it, `getGenerationStatus`
+      // would resolve ANY `generationId`/`asyncTaskId` scoped only by
+      // `userId` (the creator, since a share run executes under the
+      // creator's credentials — see `AgentShareGate`), letting a model reuse
+      // or guess an id from a different topic/agent/visitor session and read
+      // that generation's prompt and image. See `topicId`'s JSDoc on
+      // `generationRouter.getGenerationStatus`
+      // (`apps/server/src/routers/lambda/generation.ts`).
       getGenerationStatus: async ({ asyncTaskId, generationId }) => {
-        const result = await generationCaller.getGenerationStatus({ asyncTaskId, generationId });
+        const result = await generationCaller.getGenerationStatus({
+          asyncTaskId,
+          generationId,
+          topicId: context.topicId,
+        });
         return {
           ...result,
           asyncTaskId,

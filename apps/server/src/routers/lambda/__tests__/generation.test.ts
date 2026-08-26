@@ -120,6 +120,125 @@ describe('generationRouter', () => {
       expect(result.error).toBeNull();
     });
 
+    it('should return generation status when the caller topicId matches the task metadata topicId', async () => {
+      const mockGeneration = {
+        id: 'gen-1',
+        asset: { url: 'https://example.com/image.jpg' },
+      };
+      const mockAsyncTask = {
+        id: 'task-1',
+        status: AsyncTaskStatus.Success,
+        error: null,
+        metadata: { topicId: 'topic-own' },
+      };
+      const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
+      const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
+      const mockFindByIdAndTransform = vi.fn().mockResolvedValue(mockGeneration);
+
+      vi.mocked(AsyncTaskModel).mockImplementation(
+        () =>
+          ({
+            checkTimeoutTasks: mockCheckTimeoutTasks,
+            findById: mockFindById,
+          }) as any,
+      );
+      vi.mocked(GenerationModel).mockImplementation(
+        () =>
+          ({
+            findByIdAndTransform: mockFindByIdAndTransform,
+          }) as any,
+      );
+
+      const caller = generationRouter.createCaller(mockCtx);
+
+      const result = await caller.getGenerationStatus({
+        generationId: 'gen-1',
+        asyncTaskId: 'task-1',
+        topicId: 'topic-own',
+      });
+
+      expect(result.status).toBe(AsyncTaskStatus.Success);
+      expect(result.generation).toEqual(mockGeneration);
+    });
+
+    // Regression for the agent-share visitor→creator-data leak: `async_tasks`
+    // (and the generation row it resolves to — prompt, image URL) is scoped
+    // only by `userId`. A share visitor's run executes under the CREATOR's
+    // `userId` (see `AgentShareGate`), so without this check a visitor could
+    // poll a `generationId`/`asyncTaskId` pair from a DIFFERENT chat topic
+    // (another of the creator's conversations, or another visitor's share
+    // session) and read that other generation's prompt/image. The
+    // `lobe-image-generation` tool always forwards its own `topicId`
+    // (`serverRuntimes/imageGeneration.ts`), so a mismatch here means the ids
+    // did not originate in the caller's own conversation.
+    it('should fail closed (NOT_FOUND) when the caller topicId does not match the task metadata topicId', async () => {
+      const mockAsyncTask = {
+        id: 'task-1',
+        status: AsyncTaskStatus.Success,
+        error: null,
+        metadata: { topicId: 'topic-foreign' },
+      };
+      const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
+      const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
+      const mockFindByIdAndTransform = vi.fn();
+
+      vi.mocked(AsyncTaskModel).mockImplementation(
+        () =>
+          ({
+            checkTimeoutTasks: mockCheckTimeoutTasks,
+            findById: mockFindById,
+          }) as any,
+      );
+      vi.mocked(GenerationModel).mockImplementation(
+        () =>
+          ({
+            findByIdAndTransform: mockFindByIdAndTransform,
+          }) as any,
+      );
+
+      const caller = generationRouter.createCaller(mockCtx);
+
+      await expect(
+        caller.getGenerationStatus({
+          generationId: 'gen-1',
+          asyncTaskId: 'task-1',
+          topicId: 'topic-visitor',
+        }),
+      ).rejects.toThrow(TRPCError);
+      // Must fail BEFORE the generation row is ever read — a mismatched
+      // topicId is not permitted to reach the creator's generation content.
+      expect(mockFindByIdAndTransform).not.toHaveBeenCalled();
+    });
+
+    it('should fail closed (NOT_FOUND) when the caller passes a topicId but the task carries none', async () => {
+      const mockAsyncTask = {
+        id: 'task-1',
+        status: AsyncTaskStatus.Success,
+        error: null,
+        metadata: {},
+      };
+      const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
+      const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
+
+      vi.mocked(AsyncTaskModel).mockImplementation(
+        () =>
+          ({
+            checkTimeoutTasks: mockCheckTimeoutTasks,
+            findById: mockFindById,
+          }) as any,
+      );
+
+      const caller = generationRouter.createCaller(mockCtx);
+
+      await expect(
+        caller.getGenerationStatus({
+          generationId: 'gen-1',
+          asyncTaskId: 'task-1',
+          topicId: 'topic-visitor',
+        }),
+      ).rejects.toThrow(TRPCError);
+    });
+
     it('should throw error when async task not found', async () => {
       const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
       const mockFindById = vi.fn().mockResolvedValue(null);
