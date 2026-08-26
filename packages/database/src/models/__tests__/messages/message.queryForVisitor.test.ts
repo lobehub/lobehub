@@ -57,6 +57,13 @@ describe('MessageModel.queryForVisitor', () => {
         id: 'visitor-dto-assistant-message',
         content: 'hello human',
         createdAt: new Date('2026-01-02'),
+        // Legacy-shaped metadata: pre-migration rows carried usage/cost
+        // under `metadata` instead of the dedicated `usage` column (see
+        // `MessageMetadata`'s JSDoc). Asserted below alongside the
+        // top-level/`extra` snapshot so this test actually exercises every
+        // place the creator's spend data can hide, not just the one the
+        // previous version of this test happened to check.
+        metadata: { cost: 0.42, usage: { totalTokens: 999 } } as any,
         model: 'gpt-4',
         provider: 'openai',
         role: 'assistant',
@@ -75,6 +82,14 @@ describe('MessageModel.queryForVisitor', () => {
       // The creator's account identity must never cross the share boundary.
       expect(message.sender).toBeNull();
       expect(message.usage).toBeUndefined();
+      expect(message.works).toBeUndefined();
+      // The creator's exact model/provider choice — top level AND the
+      // `extra` duplicate populated by `queryWithWhere`. The previous
+      // version of this test asserted `extra.model`/`extra.provider` only,
+      // which let the top-level duplicate (the actual Codex P2 finding on
+      // `message.ts:425`) reach the visitor DTO undetected.
+      expect(message.model).toBeUndefined();
+      expect(message.provider).toBeUndefined();
       expect(message.extra?.model).toBeUndefined();
       expect(message.extra?.provider).toBeUndefined();
     }
@@ -86,6 +101,9 @@ describe('MessageModel.queryForVisitor', () => {
     expect(userMessage?.role).toBe('user');
     expect(assistantMessage?.content).toBe('hello human');
     expect(assistantMessage?.role).toBe('assistant');
+    // Legacy `metadata.usage`/`metadata.cost` must not survive either.
+    expect((assistantMessage?.metadata as any)?.usage).toBeUndefined();
+    expect((assistantMessage?.metadata as any)?.cost).toBeUndefined();
   });
 
   it('still exposes the creator identity through the raw query() path (regression guard)', async () => {
@@ -130,12 +148,33 @@ describe('toVisitorMessage — nested messages', () => {
     };
 
     const sanitized = toVisitorMessage({
+      // `compareGroup` nodes carry the same bare model/provider snapshot
+      // under `children` as `pinnedMessages` (see `queryMessageGroupNodes`)
+      // — the previous version of this fixture never exercised this leak
+      // path at all, so it went unredacted until this fix.
+      children: [
+        {
+          content: 'candidate reply',
+          createdAt: 1,
+          id: 'candidate-1',
+          model: 'gpt-4',
+          provider: 'openai',
+          role: 'assistant',
+        },
+      ] as any,
       compressedMessages: [
         {
+          // Top-level `model`/`provider` are what `queryWithWhere` actually
+          // populates on every real row (see `message.ts` transform step) —
+          // the previous fixture only set them under `extra`, which is why
+          // the top-level leak (Codex P2 on `message.ts:425`) went
+          // undetected despite this test's name.
           content: 'compacted turn',
           createdAt: 1,
           extra: { model: 'gpt-4', provider: 'openai' },
           id: 'inner-1',
+          model: 'gpt-4',
+          provider: 'openai',
           role: 'assistant',
           sender: creatorSender,
           updatedAt: 1,
@@ -150,6 +189,8 @@ describe('toVisitorMessage — nested messages', () => {
           content: 'member turn',
           createdAt: 1,
           id: 'member-1',
+          model: 'gpt-4',
+          provider: 'openai',
           role: 'assistant',
           sender: creatorSender,
           updatedAt: 1,
@@ -172,13 +213,43 @@ describe('toVisitorMessage — nested messages', () => {
 
     expect(sanitized.compressedMessages?.[0].sender).toBeNull();
     expect(sanitized.compressedMessages?.[0].usage).toBeUndefined();
+    expect(sanitized.compressedMessages?.[0].model).toBeUndefined();
+    expect(sanitized.compressedMessages?.[0].provider).toBeUndefined();
     expect(sanitized.compressedMessages?.[0].extra?.model).toBeUndefined();
     expect(sanitized.compressedMessages?.[0].extra?.provider).toBeUndefined();
     expect(sanitized.members?.[0].sender).toBeNull();
     expect(sanitized.members?.[0].usage).toBeUndefined();
+    expect(sanitized.members?.[0].model).toBeUndefined();
+    expect(sanitized.members?.[0].provider).toBeUndefined();
     expect(sanitized.pinnedMessages?.[0].model).toBeNull();
     expect(sanitized.pinnedMessages?.[0].provider).toBeNull();
+    expect((sanitized.children?.[0] as any).model).toBeNull();
+    expect((sanitized.children?.[0] as any).provider).toBeNull();
     // Content is preserved — only creator-only metadata is stripped.
     expect(sanitized.compressedMessages?.[0].content).toBe('compacted turn');
+    expect((sanitized.children?.[0] as any).content).toBe('candidate reply');
+  });
+
+  it('never forwards the top-level model/provider snapshot on a plain message', () => {
+    // This is the exact shape `queryWithWhere` produces for every real row
+    // (top-level `model`/`provider` re-added after the `extra` spread — see
+    // `message.ts`'s transform step): the field the old version of this test
+    // suite never constructed, and therefore never caught leaking.
+    const sanitized = toVisitorMessage({
+      content: 'hello human',
+      createdAt: 1,
+      extra: { model: 'gpt-4', provider: 'openai' },
+      id: 'plain-1',
+      model: 'gpt-4',
+      provider: 'openai',
+      role: 'assistant',
+      updatedAt: 1,
+    } as any);
+
+    expect(sanitized.model).toBeUndefined();
+    expect(sanitized.provider).toBeUndefined();
+    expect(sanitized.extra?.model).toBeUndefined();
+    expect(sanitized.extra?.provider).toBeUndefined();
+    expect(sanitized.content).toBe('hello human');
   });
 });
