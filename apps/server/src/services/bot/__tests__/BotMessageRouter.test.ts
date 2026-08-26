@@ -74,6 +74,7 @@ const mockOnNewMention = vi.hoisted(() => vi.fn());
 const mockOnSubscribedMessage = vi.hoisted(() => vi.fn());
 const mockOnNewMessage = vi.hoisted(() => vi.fn());
 const mockOnSlashCommand = vi.hoisted(() => vi.fn());
+const mockThread = vi.hoisted(() => vi.fn());
 // Default state mocks for the participant tracking. Tests that
 // care about the multi-human transition reassign `mockGetList` to seed the
 // pre-existing participant list.
@@ -94,6 +95,7 @@ vi.mock('chat', () => ({
     onNewMessage: mockOnNewMessage,
     onSlashCommand: mockOnSlashCommand,
     onSubscribedMessage: mockOnSubscribedMessage,
+    thread: mockThread,
     webhooks: {},
   })),
   ConsoleLogger: vi.fn(),
@@ -454,6 +456,12 @@ describe('BotMessageRouter', () => {
     mockGetList.mockResolvedValue([]);
     mockAppendToList.mockResolvedValue(undefined);
     mockStateSetIfNotExists.mockResolvedValue(true);
+    mockThread.mockImplementation((id: string) => ({
+      id,
+      isDM: false,
+      setState: vi.fn().mockResolvedValue(undefined),
+      state: Promise.resolve(null),
+    }));
     // Reset pairing-store + provider-model mocks to safe defaults so a
     // previous test's stub doesn't leak into the next one.
     mockPeekPairingRequest.mockResolvedValue(null);
@@ -2355,7 +2363,16 @@ describe('BotMessageRouter', () => {
         dmPolicy: 'disabled',
         groupPolicy: 'open',
       });
-      const channel = makeChannel({ isDM: true });
+      // chat-sdk creates native slash Channels without the Telegram DM flag.
+      // The canonical Thread recovers it from the encoded conversation id.
+      const channel = makeChannel({ id: 'telegram:12345', isDM: false });
+      const thread = {
+        id: channel.id,
+        isDM: true,
+        setState: vi.fn().mockResolvedValue(undefined),
+        state: Promise.resolve(null),
+      };
+      mockThread.mockReturnValueOnce(thread);
       const event = {
         channel,
         text: '',
@@ -2368,6 +2385,7 @@ describe('BotMessageRouter', () => {
       expect(channel.post).toHaveBeenCalledTimes(1);
       expect(channel.post.mock.calls[0][0]).toMatch(/direct message/i);
       expect(channel.setState).not.toHaveBeenCalled();
+      expect(thread.setState).not.toHaveBeenCalled();
     });
 
     it('blocks a native slash command in a non-allowlisted group channel', async () => {
@@ -2797,12 +2815,12 @@ describe('BotMessageRouter', () => {
   });
 
   describe('/mode command (per-conversation agent/chat switch)', () => {
-    async function loadModeHandlers() {
+    async function loadModeHandlers(platform = 'telegram') {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({ applicationId: 'app-1', settings: { allowFrom: 'alice-id' } }),
       ]);
       const router = new BotMessageRouter();
-      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const webhookHandler = router.getWebhookHandler(platform, 'app-1');
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await webhookHandler(req);
 
@@ -2849,6 +2867,8 @@ describe('BotMessageRouter', () => {
     it('switches to agent mode via the native slash path', async () => {
       const { slashMode } = await loadModeHandlers();
       const channel = makeThread();
+      const thread = makeThread();
+      mockThread.mockReturnValueOnce(thread);
       const event = {
         channel,
         text: 'agent',
@@ -2857,8 +2877,78 @@ describe('BotMessageRouter', () => {
 
       await slashMode(event);
 
-      expect(channel.setState).toHaveBeenCalledWith({ toolMode: 'agent' }, undefined);
+      expect(mockThread).toHaveBeenCalledWith(channel.id);
+      expect(thread.setState).toHaveBeenCalledWith({ toolMode: 'agent' }, undefined);
+      expect(channel.setState).not.toHaveBeenCalled();
       expect(channel.post.mock.calls[0][0]).toContain('Agent Mode');
+    });
+
+    it('uses the canonical Telegram thread state for native /new', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'app-1', settings: { allowFrom: 'alice-id' } }),
+      ]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      await webhookHandler(
+        new Request('https://example.com/webhook', { body: '{}', method: 'POST' }),
+      );
+      const slashNewCall = mockOnSlashCommand.mock.calls.find((call) => call[0] === '/new');
+      if (!slashNewCall) throw new Error('/new slash handler not registered');
+
+      const slashNew = slashNewCall[1] as (event: any) => Promise<void>;
+      const channel = makeThread();
+      channel.id = 'telegram:12345';
+      const thread = makeThread({ toolMode: 'chat', topicId: 'topic-1' });
+      thread.id = channel.id;
+      thread.isDM = true;
+      mockThread.mockReturnValueOnce(thread);
+
+      await slashNew({
+        channel,
+        text: '',
+        user: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      });
+
+      expect(mockThread).toHaveBeenCalledWith('telegram:12345');
+      expect(thread.setState).toHaveBeenCalledWith(
+        { toolMode: 'chat', topicId: undefined },
+        { replace: true },
+      );
+      expect(channel.setState).not.toHaveBeenCalled();
+      expect(channel.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps Telegram forum topic ids intact when resolving slash-command state', async () => {
+      const { slashMode } = await loadModeHandlers();
+      const channel = makeThread();
+      channel.id = 'telegram:-100123:42';
+      const thread = makeThread();
+      thread.id = channel.id;
+      mockThread.mockReturnValueOnce(thread);
+
+      await slashMode({
+        channel,
+        text: 'chat',
+        user: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      });
+
+      expect(mockThread).toHaveBeenCalledWith('telegram:-100123:42');
+      expect(thread.setState).toHaveBeenCalledWith({ toolMode: 'chat' }, undefined);
+    });
+
+    it('preserves channel-backed slash-command state on non-Telegram platforms', async () => {
+      const { slashMode } = await loadModeHandlers('discord');
+      const channel = makeThread();
+      channel.id = 'discord:guild:channel';
+
+      await slashMode({
+        channel,
+        text: 'agent',
+        user: { isBot: false, userId: 'alice-id', userName: 'alice' },
+      });
+
+      expect(mockThread).not.toHaveBeenCalled();
+      expect(channel.setState).toHaveBeenCalledWith({ toolMode: 'agent' }, undefined);
     });
 
     it('reports the explicit mode on no-arg /mode without writing state', async () => {
