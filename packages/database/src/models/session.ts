@@ -13,6 +13,7 @@ import { merge } from '@/utils/merge';
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
 import { agents, agentsToSessions, sessionGroups, sessions } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { writeAgentConfigWithShareReset } from '../utils/agentConfigShareReset';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
@@ -540,10 +541,24 @@ export class SessionModel {
       }
     }
 
-    return this.db
-      .update(agents)
-      .set(mergedValue)
-      .where(and(eq(agents.id, session.agent.id), this.agentsOwnership()));
+    /**
+     * `updateSessionConfig` (apps/server/src/routers/lambda/session.ts)
+     * accepts an arbitrary passthrough patch — including `model` /
+     * `agencyConfig` — and used to land it here with a bare
+     * `tx.update(agents)`, bypassing `AgentModel.updateConfig`'s heterogeneous
+     * -share-reset invariant entirely (same class of bug as the OpenAPI
+     * `PATCH /api/v1/agents/:id` bypass — see LOBE-11930). Route through the
+     * shared `writeAgentConfigWithShareReset` choke point instead of
+     * duplicating the lock + reset SQL here.
+     */
+    await writeAgentConfigWithShareReset(this.db, {
+      agentId: session.agent.id,
+      resultingConfig: mergedValue,
+      touchesHeterogeneityFields:
+        Object.hasOwn(data, 'model') || Object.hasOwn(data, 'agencyConfig'),
+      updateData: mergedValue,
+      where: and(eq(agents.id, session.agent.id), this.agentsOwnership())!,
+    });
   };
 
   // **************** Helper *************** //

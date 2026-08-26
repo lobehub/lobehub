@@ -5,6 +5,7 @@ import { AgentModel } from '@/database/models/agent';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { writeAgentConfigWithShareReset } from '@/database/utils/agentConfigShareReset';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
@@ -141,87 +142,112 @@ export class AgentService extends BaseService {
         );
       }
 
-      return await this.db.transaction(async (tx) => {
-        // Build query conditions
-        const whereConditions = [eq(agents.id, request.id)];
-        const permissionWhere = this.buildPermissionWhere(agents, permissionResult.condition);
-        if (permissionWhere) whereConditions.push(permissionWhere);
+      // Build query conditions
+      const whereConditions = [eq(agents.id, request.id)];
+      const permissionWhere = this.buildPermissionWhere(agents, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
+      const rowWhere = and(...whereConditions)!;
 
-        // Check if the Agent exists
-        const existingAgent = await tx.query.agents.findFirst({
-          where: and(...whereConditions),
-        });
-
-        if (!existingAgent) {
-          throw this.createBusinessError(`Agent ID "${request.id}" not found`);
-        }
-
-        // Only update fields actually provided in the request to avoid overwriting existing values with undefined
-        const updateData: Record<string, unknown> = { updatedAt: new Date() };
-
-        if (request.agencyConfig !== undefined) {
-          // Merged, not replaced. The request schema exposes only the graph
-          // slice of `agencyConfig`, while the column also carries the member
-          // permission policies, device bindings and execution settings
-          // written elsewhere — so replacing the object would silently delete
-          // every one of them, including the topic-share policy that keeps a
-          // restricted agent's conversations from being published.
-          //
-          // An explicit `null` still clears the column, as it always did. What
-          // survives that clear depends on authority: this endpoint authorizes
-          // on `AGENT_UPDATE`, which workspace Admins hold for *everyone's*
-          // agents, while the policy keys are the agent creator's and the
-          // workspace primary owner's alone — the same gate `updateAgentConfig`
-          // applies. Without this an Admin could reset a `restricted` policy by
-          // clearing a column whose policy keys the schema cannot even express.
-          const canWritePolicies =
-            existingAgent.userId === this.userId ||
-            (!!existingAgent.workspaceId &&
-              (await isWorkspacePrimaryOwner({
-                db: tx,
-                userId: this.userId,
-                workspaceId: existingAgent.workspaceId,
-              })));
-
-          updateData.agencyConfig =
-            request.agencyConfig === null
-              ? resolveClearedAgencyConfig(existingAgent.agencyConfig, canWritePolicies)
-              : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
-        }
-        if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
-        if (request.chatConfig !== undefined) {
-          // Same reason as `agencyConfig` above: the schema exposes 13 of
-          // `LobeAgentChatConfig`'s fields, so replacing the object would drop
-          // the two dozen a caller has no way to send back.
-          updateData.chatConfig =
-            request.chatConfig === null
-              ? null
-              : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
-        }
-        if (request.description !== undefined) updateData.description = request.description ?? null;
-        if (request.model !== undefined) updateData.model = request.model ?? null;
-        if (request.provider !== undefined) updateData.provider = request.provider ?? null;
-        if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;
-        if (request.title !== undefined) updateData.title = request.title;
-
-        // Merge params instead of fully overwriting
-        if (request.params !== undefined) {
-          updateData.params = mergeJsonPatch(existingAgent.params, request.params);
-        }
-
-        // Update database
-        const [updatedAgent] = await tx
-          .update(agents)
-          .set(updateData)
-          .where(and(...whereConditions))
-          .returning();
-
-        this.log('info', 'agent updated successfully', {
-          id: updatedAgent.id,
-          slug: updatedAgent.slug,
-        });
-        return projectPublicAgent(updatedAgent);
+      // Check if the Agent exists. Read unlocked — the row lock only needs to
+      // guard the write below (see `writeAgentConfigWithShareReset`), mirroring
+      // `AgentModel.updateConfig`'s own unlocked-read/locked-write split.
+      const existingAgent = await this.db.query.agents.findFirst({
+        where: rowWhere,
       });
+
+      if (!existingAgent) {
+        throw this.createBusinessError(`Agent ID "${request.id}" not found`);
+      }
+
+      // Only update fields actually provided in the request to avoid overwriting existing values with undefined
+      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+      if (request.agencyConfig !== undefined) {
+        // Merged, not replaced. The request schema exposes only the graph
+        // slice of `agencyConfig`, while the column also carries the member
+        // permission policies, device bindings and execution settings
+        // written elsewhere — so replacing the object would silently delete
+        // every one of them, including the topic-share policy that keeps a
+        // restricted agent's conversations from being published.
+        //
+        // An explicit `null` still clears the column, as it always did. What
+        // survives that clear depends on authority: this endpoint authorizes
+        // on `AGENT_UPDATE`, which workspace Admins hold for *everyone's*
+        // agents, while the policy keys are the agent creator's and the
+        // workspace primary owner's alone — the same gate `updateAgentConfig`
+        // applies. Without this an Admin could reset a `restricted` policy by
+        // clearing a column whose policy keys the schema cannot even express.
+        const canWritePolicies =
+          existingAgent.userId === this.userId ||
+          (!!existingAgent.workspaceId &&
+            (await isWorkspacePrimaryOwner({
+              db: this.db,
+              userId: this.userId,
+              workspaceId: existingAgent.workspaceId,
+            })));
+
+        updateData.agencyConfig =
+          request.agencyConfig === null
+            ? resolveClearedAgencyConfig(existingAgent.agencyConfig, canWritePolicies)
+            : mergeJsonPatch(existingAgent.agencyConfig, request.agencyConfig);
+      }
+      if (request.avatar !== undefined) updateData.avatar = request.avatar ?? null;
+      if (request.chatConfig !== undefined) {
+        // Same reason as `agencyConfig` above: the schema exposes 13 of
+        // `LobeAgentChatConfig`'s fields, so replacing the object would drop
+        // the two dozen a caller has no way to send back.
+        updateData.chatConfig =
+          request.chatConfig === null
+            ? null
+            : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
+      }
+      if (request.description !== undefined) updateData.description = request.description ?? null;
+      if (request.model !== undefined) updateData.model = request.model ?? null;
+      if (request.provider !== undefined) updateData.provider = request.provider ?? null;
+      if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;
+      if (request.title !== undefined) updateData.title = request.title;
+
+      // Merge params instead of fully overwriting
+      if (request.params !== undefined) {
+        updateData.params = mergeJsonPatch(existingAgent.params, request.params);
+      }
+
+      // Write the config and reset any non-private share back to `private` if
+      // this write turns the agent heterogeneous, all under a single row lock.
+      // This endpoint used to write `agents` directly with `tx.update(agents)`,
+      // bypassing `AgentModel.updateConfig` (and its share-reset invariant)
+      // entirely, so `PATCH /api/v1/agents/:id` could switch a published
+      // homogeneous agent to Codex/Claude Code while its share stayed `link`.
+      // See `writeAgentConfigWithShareReset`'s JSDoc and LOBE-11930.
+      const updatedAgent = await writeAgentConfigWithShareReset(this.db, {
+        agentId: request.id,
+        // `updateData` may legitimately carry an explicit `null` for either
+        // field (a caller-requested clear), so branch on key presence rather
+        // than `??` — a `??` fallback would silently undo an intentional
+        // clear by resurrecting the pre-write value.
+        resultingConfig: {
+          agencyConfig: Object.hasOwn(updateData, 'agencyConfig')
+            ? (updateData.agencyConfig as typeof existingAgent.agencyConfig)
+            : existingAgent.agencyConfig,
+          model: Object.hasOwn(updateData, 'model')
+            ? (updateData.model as string | null)
+            : existingAgent.model,
+        },
+        touchesHeterogeneityFields:
+          request.agencyConfig !== undefined || request.model !== undefined,
+        updateData,
+        where: rowWhere,
+      });
+
+      if (!updatedAgent) {
+        throw this.createBusinessError(`Agent ID "${request.id}" not found`);
+      }
+
+      this.log('info', 'agent updated successfully', {
+        id: updatedAgent.id,
+        slug: updatedAgent.slug,
+      });
+      return projectPublicAgent(updatedAgent);
     } catch (error) {
       this.handleServiceError(error, 'update agent');
     }

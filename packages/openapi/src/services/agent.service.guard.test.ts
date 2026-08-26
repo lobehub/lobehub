@@ -13,3 +13,22 @@ describe('AgentService deletion guard wiring', () => {
     expect(source).not.toContain('await this.migrateAgentSessions(request.agentId');
   });
 });
+
+describe('AgentService update guard wiring', () => {
+  // LOBE-11930: `updateAgent` (backing `PATCH /api/v1/agents/:id`) used to
+  // write `agents.model` / `agents.agencyConfig` directly with
+  // `tx.update(agents)`, bypassing `AgentModel.updateConfig` — and with it,
+  // the row lock + share-reset invariant that keeps a `link` share from
+  // surviving a write that turns the agent heterogeneous (Codex / Claude
+  // Code). See `writeAgentConfigWithShareReset`'s JSDoc
+  // (packages/database/src/utils/agentConfigShareReset.ts) and the real
+  // Postgres regression tests there for the behavioral coverage; this test
+  // only guards that `updateAgent` keeps calling the shared choke point
+  // instead of regressing back to a raw direct write.
+  it('routes the agent write through the shared heterogeneous-share-reset helper', () => {
+    expect(source).toContain('writeAgentConfigWithShareReset');
+    expect(source).toContain(
+      "import { writeAgentConfigWithShareReset } from '@/database/utils/agentConfigShareReset';",
+    );
+  });
+});
