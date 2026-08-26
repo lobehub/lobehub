@@ -7,13 +7,8 @@ const port = Number(process.argv[3] ?? 8787);
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  if (!url.pathname.startsWith('/renderer/')) {
-    res.writeHead(404).end('not an ota path');
-    return;
-  }
-
-  const file = path.join(root, url.pathname.slice('/renderer/'.length));
-  if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) {
+  const file = path.resolve(root, `.${url.pathname}`);
+  if (!file.startsWith(`${root}${path.sep}`) || !existsSync(file) || !statSync(file).isFile()) {
     res.writeHead(404).end('not found');
     console.log(`404 ${url.pathname}`);
     return;
@@ -33,5 +28,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`renderer OTA feed: http://127.0.0.1:${port}/renderer/ -> ${root}`);
+  console.log(`renderer OTA feed: http://127.0.0.1:${port}/ -> ${root}`);
 });

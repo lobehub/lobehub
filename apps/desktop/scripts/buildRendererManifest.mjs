@@ -266,6 +266,8 @@ async function main() {
   if (!version) throw new Error('--version=r<N> is required');
   if (!privateKeyPem) throw new Error('RENDERER_OTA_PRIVATE_KEY env is required');
 
+  const rendererRoot = path.join(outDir, channel, appVersion, 'renderer');
+  const casDir = path.join(rendererRoot, 'files');
   const mainHash = args.mainHash ?? computeMainHash();
   const unsigned = buildManifest({ appVersion, mainHash, rendererDir, version });
   const { rm } = await import('node:fs/promises');
@@ -281,7 +283,6 @@ async function main() {
 
   if (bases.length > 0) {
     unsigned.deltas = [];
-    const casDir = path.join(outDir, 'files');
     for (const base of bases) {
       const { delta, downloadedBytes, fullBytes, patches } = await buildDelta({
         fromFiles: base.files,
@@ -304,7 +305,6 @@ async function main() {
 
   const manifest = signManifest(unsigned, privateKeyPem);
 
-  const casDir = path.join(outDir, 'files');
   mkdirSync(casDir, { recursive: true });
   for (const file of manifest.files) {
     const target = path.join(casDir, `${file.sha256}.bin`);
@@ -316,7 +316,7 @@ async function main() {
     await writeCasObject(casDir, file.sha256, readFileSync(path.join(rendererDir, file.path)));
   }
 
-  const feedDir = path.join(outDir, channel, mainHash);
+  const feedDir = rendererRoot;
   mkdirSync(path.join(feedDir, 'versions'), { recursive: true });
   writeFileSync(path.join(feedDir, 'latest.json'), JSON.stringify(manifest, null, 2));
   writeFileSync(
@@ -325,7 +325,7 @@ async function main() {
   );
 
   console.log(
-    `renderer-ota manifest: ${channel}/${mainHash}/latest.json (${manifest.files.length} files, version ${version})`,
+    `renderer-ota manifest: ${channel}/${appVersion}/renderer/latest.json (${manifest.files.length} files, version ${version})`,
   );
 }
 

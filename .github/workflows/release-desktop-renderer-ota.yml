@@ -3,12 +3,12 @@ name: Release Desktop Renderer OTA
 # ============================================
 # Renderer 热更 patch 发布
 # ============================================
-# 前提: renderer/<channel>/base.json 由全量发版流程写入 (desktop-publish-s3)。
+# 前提: <channel>/base.json 由全量发版流程写入 (desktop-publish-s3)。
 # 门禁: HEAD 的 mainHash 必须等于该 marker —— main 变了只能走全量发版,
 #       此工作流会直接跳过。
-# 产物: renderer/<channel>/<mainHash>/latest.json (签名 manifest + zstd tree delta)
-#       renderer/<channel>/<mainHash>/versions/rN.json (打下一版差分用的文件清单)
-#       renderer/files/<sha256>.bin (gzip CAS: 原文或 zstd --patch-from 补丁)
+# 产物: <channel>/<appVersion>/renderer/latest.json (签名 manifest + zstd tree delta)
+#       <channel>/<appVersion>/renderer/versions/rN.json (打下一版差分用的文件清单)
+#       <channel>/<appVersion>/renderer/files/<sha256>.bin (gzip CAS)
 # delta: r0 + 最近 2 个 rN，客户端只下一份对得上的 fromVersion
 # ============================================
 
@@ -47,14 +47,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Resolve update server base URL
+        env:
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+        run: |
+          set -euo pipefail
+          UPDATE_SERVER_BASE_URL="${UPDATE_SERVER_URL%/}"
+          case "$UPDATE_SERVER_BASE_URL" in
+            */stable|*/nightly|*/canary|*/beta) UPDATE_SERVER_BASE_URL="${UPDATE_SERVER_BASE_URL%/*}" ;;
+          esac
+          echo "UPDATE_SERVER_BASE_URL=$UPDATE_SERVER_BASE_URL" >> "$GITHUB_ENV"
+
       - name: Load shipped base
         id: base
         env:
-          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
-          BASE=$(curl -sf "$UPDATE_SERVER_URL/renderer/$CHANNEL/base.json" || true)
+          BASE=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/base.json" || true)
           if [ -z "$BASE" ]; then
             echo "::warning::no renderer OTA base metadata found; run a full release first"
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -64,10 +74,12 @@ jobs:
           MAIN_HASH=$(jq -er '.mainHash | select(type == "string" and test("^[0-9a-f]{64}$"))' <<< "$BASE")
           CLOUD_REF=$(jq -er '.cloudRef | select(type == "string" and test("^[0-9a-f]{40}$"))' <<< "$BASE")
           APP_VERSION=$(jq -er '.version | select(type == "string" and test("^[0-9A-Za-z.+-]+$"))' <<< "$BASE")
-          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
-          echo "cloud_ref=$CLOUD_REF" >> "$GITHUB_OUTPUT"
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_version=$APP_VERSION"
+            echo "cloud_ref=$CLOUD_REF"
+            echo "found=true"
+            echo "main_hash=$MAIN_HASH"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Setup build environment
         if: steps.base.outputs.found == 'true'
@@ -104,11 +116,10 @@ jobs:
         id: version
         if: steps.gate.outputs.allowed == 'true'
         env:
-          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
           CHANNEL: ${{ inputs.channel }}
-          MAIN_HASH: ${{ steps.gate.outputs.main_hash }}
         run: |
-          CURRENT=$(curl -sf "$UPDATE_SERVER_URL/renderer/$CHANNEL/$MAIN_HASH/latest.json" | node -e "
+          CURRENT=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/latest.json" | node -e "
             let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
               try { console.log(JSON.parse(d).version) } catch { console.log('r0') }
             })" || echo "r0")
@@ -132,7 +143,7 @@ jobs:
         if: steps.gate.outputs.allowed == 'true'
         env:
           RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
-          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
           CHANNEL: ${{ inputs.channel }}
           MAIN_HASH: ${{ steps.gate.outputs.main_hash }}
         run: |
@@ -146,8 +157,8 @@ jobs:
             --channel=${{ inputs.channel }} \
             --version=${{ steps.version.outputs.version }} \
             --mainHash=${{ steps.gate.outputs.main_hash }} \
-            --feed-url="$UPDATE_SERVER_URL/renderer/$CHANNEL/$MAIN_HASH" \
-            --cas-base-url="$UPDATE_SERVER_URL/renderer/files"
+            --feed-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer" \
+            --cas-base-url="$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/files"
 
       - name: Upload to S3
         if: steps.gate.outputs.allowed == 'true'
@@ -157,27 +168,29 @@ jobs:
           AWS_REGION: ${{ secrets.UPDATE_S3_REGION }}
           S3_BUCKET: ${{ secrets.UPDATE_S3_BUCKET }}
           S3_ENDPOINT: ${{ secrets.UPDATE_S3_ENDPOINT }}
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
           CHANNEL: ${{ inputs.channel }}
-          MAIN_HASH: ${{ steps.gate.outputs.main_hash }}
         run: |
-          ENDPOINT_ARG=""
+          ENDPOINT_ARGS=()
           if [ -n "$S3_ENDPOINT" ]; then
-            ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
+            ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
           fi
 
           # CAS objects first (immutable, skip existing), manifest last so a
           # client never sees a manifest whose files are not yet uploaded.
-          aws s3 sync renderer-ota-out/files "s3://$S3_BUCKET/renderer/files" \
+          RENDERER_ROOT="renderer-ota-out/$CHANNEL/$APP_VERSION/renderer"
+          S3_RENDERER_ROOT="s3://$S3_BUCKET/$CHANNEL/$APP_VERSION/renderer"
+          aws s3 sync "$RENDERER_ROOT/files" "$S3_RENDERER_ROOT/files" \
             --size-only \
             --content-encoding gzip \
             --content-type application/octet-stream \
             --cache-control public,max-age=31536000,immutable \
-            $ENDPOINT_ARG
-          aws s3 cp "renderer-ota-out/$CHANNEL/$MAIN_HASH/latest.json" \
-            "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/latest.json" \
-            --cache-control no-store $ENDPOINT_ARG
-          aws s3 cp "renderer-ota-out/$CHANNEL/$MAIN_HASH/versions/${{ steps.version.outputs.version }}.json" \
-            "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/versions/${{ steps.version.outputs.version }}.json" \
-            --cache-control no-store $ENDPOINT_ARG
+            "${ENDPOINT_ARGS[@]}"
+          aws s3 cp "$RENDERER_ROOT/latest.json" \
+            "$S3_RENDERER_ROOT/latest.json" \
+            --cache-control no-store "${ENDPOINT_ARGS[@]}"
+          aws s3 cp "$RENDERER_ROOT/versions/${{ steps.version.outputs.version }}.json" \
+            "$S3_RENDERER_ROOT/versions/${{ steps.version.outputs.version }}.json" \
+            --cache-control no-store "${ENDPOINT_ARGS[@]}"
 
-          echo "✅ Published renderer patch ${{ steps.version.outputs.version }} for $CHANNEL/$MAIN_HASH"
+          echo "✅ Published renderer patch ${{ steps.version.outputs.version }} for $CHANNEL/$APP_VERSION"

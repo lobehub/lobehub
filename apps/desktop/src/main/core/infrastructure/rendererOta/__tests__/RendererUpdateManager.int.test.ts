@@ -12,6 +12,7 @@ import { readPointer } from '../pointer';
 
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const PUBLIC_KEY_PEM = publicKey.export({ format: 'pem', type: 'spki' }).toString();
+const APP_VERSION = '1.0.0';
 const MAIN_HASH = 'a'.repeat(64);
 const SERVER = 'https://updates.test';
 
@@ -22,7 +23,7 @@ const { updaterConfigMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({
-  app: { getPath: () => userDataDir },
+  app: { getPath: () => userDataDir, getVersion: () => APP_VERSION },
 }));
 vi.mock('@/const/dir', () => ({
   get rendererDir() {
@@ -35,7 +36,7 @@ vi.mock('@/modules/updater/configs', () => ({
     return updaterConfigMock.buildChannel;
   },
   UPDATE_CHANNEL: 'stable',
-  UPDATE_SERVER_URL: 'https://updates.test',
+  UPDATE_SERVER_URL: 'https://updates.test/stable',
   coerceStoredUpdateChannel: (channel?: string) => (channel === 'canary' ? 'canary' : 'stable'),
 }));
 vi.mock('@/utils/logger', () => ({
@@ -72,7 +73,7 @@ const buildFeed = (version: string, files: Record<string, string>) => {
     return { path: filePath, sha256, size: content.byteLength };
   });
   const manifest = signManifest({
-    appVersion: '1.0.0',
+    appVersion: APP_VERSION,
     files: manifestFiles,
     mainHash: MAIN_HASH,
     version,
@@ -87,7 +88,7 @@ const stubFetch = (
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (url === `${SERVER}/renderer/${channel}/${MAIN_HASH}/latest.json`) {
+      if (url === `${SERVER}/${channel}/${APP_VERSION}/renderer/latest.json`) {
         if (!feed) return new Response('nope', { status: 404 });
         return Response.json(feed.manifest);
       }
@@ -156,6 +157,7 @@ describe('RendererUpdateManager full path', () => {
     });
 
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(fetchedUrls[0]).toBe(`${SERVER}/stable/${APP_VERSION}/renderer/latest.json`);
     const casFetches = fetchedUrls.filter((u: string) => u.includes('/renderer/files/'));
     expect(casFetches).toHaveLength(4);
 
@@ -245,8 +247,10 @@ describe('RendererUpdateManager full path', () => {
 
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     const casFetches = fetchedUrls.filter((u: string) => u.includes('/renderer/files/'));
-    expect(casFetches).toContain(`${SERVER}/renderer/files/${patchSha}.bin`);
-    expect(casFetches).not.toContain(`${SERVER}/renderer/files/${sharedFile.sha256}.bin`);
+    expect(casFetches).toContain(`${SERVER}/stable/${APP_VERSION}/renderer/files/${patchSha}.bin`);
+    expect(casFetches).not.toContain(
+      `${SERVER}/stable/${APP_VERSION}/renderer/files/${sharedFile.sha256}.bin`,
+    );
     expect(readPointer(channelDir(), MAIN_HASH).staged).toBe('r1');
     expect(readFileSync(path.join(channelDir(), 'versions', 'r1', 'chunk.bin'))).toEqual(newChunk);
   });
@@ -263,7 +267,7 @@ describe('RendererUpdateManager full path', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        if (url === `${SERVER}/renderer/stable/${MAIN_HASH}/latest.json`) {
+        if (url === `${SERVER}/stable/${APP_VERSION}/renderer/latest.json`) {
           return Response.json(feed.manifest);
         }
         const match = /\/renderer\/files\/([0-9a-f]{64})\.bin$/.exec(url);

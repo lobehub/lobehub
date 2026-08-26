@@ -44,7 +44,8 @@ RENDERER_OTA_PRIVATE_KEY="$(cat /tmp/ota-priv.pem)" \
 node scripts/renderer-ota-test/serveOta.mjs /tmp/ota-feed 8787
 ```
 
-注意 `--channel` 要和应用实际渠道一致 (dev 默认 stable; 日志 `feedUrl` 可确认)。
+注意 `--channel` 要和应用实际渠道一致 (dev 默认 stable; feed 路径为
+`/<channel>/<appVersion>/renderer`)。
 
 ## 4. 验收 happy path
 
