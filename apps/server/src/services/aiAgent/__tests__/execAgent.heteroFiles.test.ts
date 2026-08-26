@@ -858,6 +858,59 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
+  // Agent share C2: a share visitor must never reach the hetero dispatch —
+  // it hands off to a device-gateway session / cloud sandbox seeded with the
+  // CREATOR's own credentials (GitHub OAuth token, device/sandbox-capable
+  // operation JWT), entirely outside the shareGate's tool/memory/file
+  // restrictions and the share billing precheck in shareChat.ts.
+  describe('agent share visitor fail-closed gate (C2)', () => {
+    const shareGate = {
+      agentId: 'agent-1',
+      shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
+      visitorUserId: 'visitor-1',
+    };
+
+    it('rejects before any topic/message row is created (agencyConfig-declared hetero)', async () => {
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          prompt: 'Run the build',
+          shareGate,
+        } as any),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+
+      expect(topicMock.create).not.toHaveBeenCalled();
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+      expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    });
+
+    it('rejects a legacy model-id-declared hetero agent the same way', async () => {
+      heteroAgentConfig.agencyConfig = undefined as any;
+      heteroAgentConfig.model = 'claude-code';
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          prompt: 'Run the build',
+          shareGate,
+        } as any),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expect(topicMock.create).not.toHaveBeenCalled();
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+    });
+
+    it('does not affect a non-share hetero run', async () => {
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Run the build' });
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
+    });
+  });
+
   describe('image delivery to the dispatched CLI', () => {
     it('should resolve image attachments and pass imageList to the sandbox dispatch', async () => {
       mockResolveAttachmentsByFileIds.mockResolvedValue({

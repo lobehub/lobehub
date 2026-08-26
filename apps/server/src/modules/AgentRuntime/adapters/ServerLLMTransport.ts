@@ -235,8 +235,20 @@ export class ServerLLMTransport implements LLMTransport {
       provider,
       this.ctx.workspaceId,
       // Share-visitor runs bill the creator's agentShare budget instead of the
-      // executing user's personal budget (agent share C4).
-      this.ctx.agentShare ? { agentShare: { agentId: this.ctx.agentShare.agentId } } : undefined,
+      // executing user's personal budget (agent share C4). `visitorUserId`
+      // must ride along too — `this.ctx.userId` here is the *creator*
+      // (share runs execute as the creator so billing/model access resolve
+      // from the creator's plan), so it is the only place the real visitor
+      // id can reach the billing hooks for spend-log attribution (agent
+      // share M9).
+      this.ctx.agentShare
+        ? {
+            agentShare: {
+              agentId: this.ctx.agentShare.agentId,
+              visitorUserId: this.ctx.agentShare.visitorUserId,
+            },
+          }
+        : undefined,
     );
   }
 

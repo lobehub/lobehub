@@ -752,9 +752,13 @@ export class GatewayActionImpl {
         hasInterruptedAfterPersistence = true;
         // Cancel arrived after execAgentTask resolved — server task exists. Interrupt generation,
         // but keep reconciling the persisted message before returning to the caller.
-        // Share visitors have no interrupt endpoint yet — see the
-        // onOperationCancel note below.
-        if (!agentShareId)
+        if (agentShareId)
+          shareChatService
+            .interruptTask(agentShareId, result.topicId, result.operationId)
+            .catch((err) =>
+              console.error('[Gateway] share interruptTask after cancel failed:', err),
+            );
+        else
           aiAgentService
             .interruptTask({ operationId: result.operationId, topicId: result.topicId })
             .catch((err) => console.error('[Gateway] interruptTask after cancel failed:', err));
@@ -946,10 +950,12 @@ export class GatewayActionImpl {
     // depend on any metadata lookup. Fire-and-forget — errors are logged but
     // never block the local cancel flow.
     this.#get().onOperationCancel(gatewayOpId, async () => {
-      // Share visitors have no interrupt endpoint yet (aiAgent.interruptTask is
-      // owner-scoped and would 404) — their cancel is local-only; the server run
-      // finishes on its own. TODO(agent-share): add shareChat.interruptTask.
-      if (agentShareId) return;
+      if (agentShareId) {
+        await shareChatService
+          .interruptTask(agentShareId, result.topicId, result.operationId)
+          .catch((err) => console.error('[Gateway] share interruptTask failed:', err));
+        return;
+      }
       await aiAgentService
         .interruptTask({ operationId: result.operationId, topicId: result.topicId })
         .catch((err) => console.error('[Gateway] interruptTask failed:', err));
@@ -1186,8 +1192,12 @@ export class GatewayActionImpl {
     // Forward local-op cancellation to the server-side agent loop via tRPC.
     // See note in executeGatewayAgent for details.
     this.#get().onOperationCancel(gatewayOpId, async () => {
-      // Share visitors: cancel is local-only (no owner-scoped interrupt).
-      if (agentShareId) return;
+      if (agentShareId) {
+        await shareChatService
+          .interruptTask(agentShareId, topicId, operationId)
+          .catch((err) => console.error('[Gateway] share interruptTask failed:', err));
+        return;
+      }
       await aiAgentService
         .interruptTask({ operationId })
         .catch((err) => console.error('[Gateway] interruptTask failed:', err));

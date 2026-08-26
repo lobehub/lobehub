@@ -218,6 +218,7 @@ import { resolveServerSearchDecision } from './searchDecision';
 import {
   type AgentShareGate,
   applyShareGateToAgentConfig,
+  applyShareGateToToolSet,
   filterPluginsByShareGate,
 } from './shareGate';
 import { acquireTopicStartReservation } from './topicStartReservation';
@@ -2462,6 +2463,28 @@ export class AiAgentService {
       : undefined;
     let pinnedHeterogeneousTopicModel: HeterogeneousTopicModel | undefined;
 
+    // Share-visitor fail-closed gate (agent share C2) — reject a heterogeneous
+    // (Claude Code / Codex / …) agent BEFORE any topic/message row is written.
+    // The hetero dispatch below (§3.5) hands off to a device-gateway session or
+    // cloud sandbox seeded with the CREATOR's own credentials (GitHub OAuth
+    // token, a signed operation JWT with device/sandbox capabilities — see
+    // `sandboxRunner.ts`), entirely outside the shareGate's tool/memory/file
+    // restrictions and the share billing precheck in `shareChat.ts`. v1 has no
+    // way to scope a hetero run to the share whitelist, so a share visitor must
+    // never reach it. Checked here (using the agent-level config, before any
+    // topic-pinned model override) rather than at the later hetero-detection
+    // site (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
+    // message rows.
+    if (shareGate) {
+      const shareHeteroType = heterogeneousProvider?.type;
+      if (shareHeteroType || isHeterogeneousAgentModelId(model)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+        });
+      }
+    }
+
     if (!topicId) {
       if (resume) {
         throw new Error('Resume mode requires the parent message to belong to a topic');
@@ -4264,6 +4287,13 @@ export class AiAgentService {
           executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),
           executionEnvUnroutedReason:
             executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
+          // Agent share C3: hide `lobe-agent.callSubAgent` from a share
+          // visitor's turn, same as inside a sub-agent/group run — see
+          // `resolveLobeAgentManifest`. Belt-and-suspenders with the general
+          // shareGate tool-allowlist enforcement (`applyShareGateToToolSet`)
+          // below, which would already drop `lobe-agent` unless the share
+          // explicitly whitelists it.
+          isShareVisitor: !!shareGate,
           isSubAgent: appContext?.isSubAgent,
           scope: appContext?.scope ?? undefined,
         },
@@ -4819,6 +4849,30 @@ export class AiAgentService {
             toolIds: historicalActivatedToolIds,
           }).enabledToolIds
         : [];
+
+    // Final share-gate allowlist enforcement (agent share C1) — run once here,
+    // after every manifest/default/dynamic-activation source (installed
+    // plugins, LobeHub Skills, Composio, real-MCP connectors, always-on
+    // builtin defaults) has been merged into `toolManifestMap` /
+    // `toolsResult.enabledToolIds` / `tools` / `activatableToolIds` above.
+    // `filterPluginsByShareGate` earlier only trimmed the initial candidate
+    // id list — it does not stop `lobe-activator` from dynamically activating
+    // (and `ToolExecutionService` from executing, with the CREATOR's
+    // credentials) a creator-connected tool that was never in
+    // `shareConfig.enabledToolIds`. See `applyShareGateToToolSet` for why.
+    if (shareGate) {
+      applyShareGateToToolSet(
+        {
+          activatableToolIds,
+          enabledToolIds: toolsResult.enabledToolIds,
+          executorMap: toolExecutorMap,
+          manifestMap: toolManifestMap,
+          sourceMap: toolSourceMap,
+          tools,
+        },
+        shareGate,
+      );
+    }
 
     log('execAgent: prepared evalContext for executor');
 

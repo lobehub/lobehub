@@ -406,6 +406,114 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
+  // ─── LOBE-11930: shared-agent visitor runs must not leak the creator's
+  //     raw operation metadata / AgentState over the visitor's WS channel ───
+
+  describe('shared-agent visitor privacy (agent_runtime_init)', () => {
+    const pushInitPayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) =>
+          c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'agent_runtime_init',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    it('strips agentConfig/modelRuntimeConfig/userId/workspaceId when streamOwnerUserId is set (share run)', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        agentConfig: { systemRole: 'secret system prompt' },
+        modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+        workspaceId: 'ws-1',
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushInitPayload();
+      expect(data).toEqual({ status: 'idle' });
+      expect(data).not.toHaveProperty('agentConfig');
+      expect(data).not.toHaveProperty('modelRuntimeConfig');
+      expect(data).not.toHaveProperty('userId');
+      expect(data).not.toHaveProperty('workspaceId');
+      expect(data).not.toHaveProperty('streamOwnerUserId');
+    });
+
+    it('forwards the full metadata unchanged for a normal (non-share) creator run', async () => {
+      const initialState = {
+        agentConfig: { systemRole: 'my system prompt' },
+        modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
+        status: 'idle',
+        userId: 'creator-1',
+        workspaceId: 'ws-1',
+      };
+
+      await notifier.publishAgentRuntimeInit('op-owner', initialState);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(pushInitPayload()).toEqual(initialState);
+    });
+  });
+
+  describe('shared-agent visitor privacy (agent_runtime_end)', () => {
+    const pushEndPayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) =>
+          c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'agent_runtime_end',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    it('drops finalState (userMemory/agentConfig/systemRole/...) but keeps reason/reasonDetail/errorType/uiMessages for a share run', async () => {
+      const uiMessages = [{ content: 'hi', id: 'msg_1', role: 'assistant' }] as any;
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {
+          error: { type: 'InsufficientBudgetForModel' },
+          metadata: {
+            agentConfig: { systemRole: 'secret system prompt' },
+            agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+            userMemory: { persona: 'creator private persona' },
+          },
+          status: 'error',
+          systemRole: 'secret system prompt',
+          userInterventionConfig: { autoApprove: true },
+        },
+        operationId: 'op-share',
+        reason: 'error',
+        stepIndex: 3,
+        uiMessages,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushEndPayload();
+      expect(data).not.toHaveProperty('finalState');
+      expect(data.reason).toBe('error');
+      expect(data.errorType).toBe('InsufficientBudgetForModel');
+      expect(data.uiMessages).toEqual(uiMessages);
+      expect(JSON.stringify(data)).not.toContain('secret system prompt');
+      expect(JSON.stringify(data)).not.toContain('creator private persona');
+    });
+
+    it('keeps finalState (including metadata) unchanged for a normal (non-share) creator run', async () => {
+      const finalState = {
+        metadata: { userMemory: { persona: 'creator persona' } },
+        status: 'done',
+        systemRole: 'my system prompt',
+      };
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState,
+        operationId: 'op-owner',
+        reason: 'completed',
+        stepIndex: 3,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushEndPayload();
+      expect(data.finalState).toEqual(finalState);
+    });
+  });
+
   // ─── Read/subscribe methods: must delegate directly to inner ───
 
   describe('subscribeStreamEvents', () => {

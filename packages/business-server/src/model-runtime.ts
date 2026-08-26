@@ -5,9 +5,10 @@ export interface BusinessModelRuntimeContext {
   /**
    * Present when this LLM call serves a shared-agent visitor conversation.
    * A business implementation bills the agent's share budget (creator-funded)
-   * instead of the executing user's personal budget.
+   * instead of the executing user's personal budget. `visitorUserId` is the
+   * actual visitor driving the run, for attribution only.
    */
-  agentShare?: { agentId: string };
+  agentShare?: { agentId: string; visitorUserId?: string };
   /** OAuth client id when the request was authenticated via an OIDC access token. */
   oidcClientId?: string;
 }

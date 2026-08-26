@@ -1543,6 +1543,34 @@ describe('MessageModel Query Tests', () => {
       expect(result[0].id).toBe('2');
       expect(result[1].id).toBe('1');
     });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // topics.senderId marks the topic (and its messages) as visitor traffic.
+      // `queryAll` backs the creator-facing `message.listAll` lambda route and
+      // the CLI `message list` command, so visitor messages must not leak in.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-query-all',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg-query-all',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-query-all',
+        },
+        { id: 'creator-msg-query-all', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.queryAll();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-msg-query-all');
+    });
   });
 
   describe('findById', () => {

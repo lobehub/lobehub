@@ -2035,7 +2035,10 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(and(this.ownership()))
+      // Full creator-facing export (lambda `message.listAll`, CLI `message list`),
+      // so agent-share visitor messages must stay excluded — same reasoning as
+      // `analyticsConditions()` above.
+      .where(and(this.ownership(), notShareVisitorMessage()))
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);

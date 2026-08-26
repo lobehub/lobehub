@@ -16,6 +16,54 @@ const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency
 
 /**
+ * Whether `publishAgentRuntimeInit` is initializing a shared-agent visitor
+ * run. The op EXECUTES as the creator, but `streamOwnerUserId` (set only for
+ * agentShare runs — see `AgentRuntimeService.createOperation`) registers the
+ * Gateway WS channel under the *visitor's* id, so the visitor is the one
+ * receiving this push over the wire.
+ */
+const isShareVisitorInit = (initialState: any): boolean =>
+  typeof initialState?.streamOwnerUserId === 'string' && initialState.streamOwnerUserId.length > 0;
+
+/**
+ * Whether `publishAgentRuntimeEnd`'s `finalState` belongs to a shared-agent
+ * visitor run. `state.metadata.agentShare` is stamped once at operation
+ * creation (see `AgentRuntimeService.createOperation`'s `initialState.metadata`)
+ * and persists on the state through to the terminal event.
+ */
+const isShareVisitorEnd = (finalState: any): boolean =>
+  Boolean(finalState?.metadata?.agentShare?.visitorUserId);
+
+/**
+ * Public `agent_runtime_init` DTO pushed to the Gateway for shared-agent
+ * visitor runs. The full operation metadata (`agentConfig` — including the
+ * un-redacted system prompt, `modelRuntimeConfig`, the creator's `userId` /
+ * `workspaceId`) must never cross the WS boundary to the visitor, who can
+ * read raw frames straight off the connection. The client doesn't render
+ * anything from this event today — `runAgent.ts`'s `agent_runtime_init` case
+ * only logs it — so `status` is the only field forwarded.
+ */
+const buildPublicInitEventData = (initialState: any): { status?: unknown } => ({
+  status: initialState?.status,
+});
+
+/**
+ * Public `agent_runtime_end` DTO pushed to the Gateway for shared-agent
+ * visitor runs. `finalState` is the creator's full `AgentState` — including
+ * `metadata.userMemory`, `metadata.agentConfig`, `systemRole`,
+ * `userInterventionConfig`, `securityBlacklist`, etc. — none of which the
+ * client reads off this event (`gatewayEventHandler.ts` only consumes
+ * `reason` and `uiMessages`, both already-sanitized UI-facing values), so
+ * drop `finalState` wholesale instead of trying to allowlist inside it.
+ */
+const buildPublicEndEventData = <T extends { finalState?: unknown }>(
+  data: T,
+): Omit<T, 'finalState'> => {
+  const { finalState: _finalState, ...rest } = data;
+  return rest;
+};
+
+/**
  * Decorator that wraps an IStreamEventManager and additionally pushes events
  * to the Agent Gateway via HTTP. Runtime init is an awaited ordering barrier;
  * subsequent event delivery remains best-effort and mostly fire-and-forget.
@@ -132,7 +180,12 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       log('Gateway /api/operations/init failed: %O', error);
     }
     void this.pushEvent(operationId, {
-      data: initialState,
+      // Share-visitor runs must not receive the creator's raw operation
+      // metadata (agentConfig / system prompt, modelRuntimeConfig, userId,
+      // workspaceId) over their WS channel — see `buildPublicInitEventData`.
+      data: isShareVisitorInit(initialState)
+        ? buildPublicInitEventData(initialState)
+        : initialState,
       operationId,
       stepIndex: 0,
       timestamp: Date.now(),
@@ -149,18 +202,24 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
     const errorType = finalState?.error?.type || finalState?.error?.errorType;
 
+    // Forward `uiMessages` to the gateway push channel so terminal-state
+    // clients consuming /push-event get the canonical UIChatMessage[]
+    // snapshot — the final step has no later step_start to carry a fresh
+    // snapshot, so dropping it here would break the SoT contract.
+    const endEventData = {
+      errorType,
+      finalState,
+      reason,
+      reasonDetail: effectiveReasonDetail,
+      ...(uiMessages !== undefined && { uiMessages }),
+    };
+
     void this.pushEvent(operationId, {
-      // Forward `uiMessages` to the gateway push channel so terminal-state
-      // clients consuming /push-event get the canonical UIChatMessage[]
-      // snapshot — the final step has no later step_start to carry a fresh
-      // snapshot, so dropping it here would break the SoT contract.
-      data: {
-        errorType,
-        finalState,
-        reason,
-        reasonDetail: effectiveReasonDetail,
-        ...(uiMessages !== undefined && { uiMessages }),
-      },
+      // Share-visitor runs must not receive the creator's raw AgentState
+      // (metadata.userMemory / metadata.agentConfig, systemRole,
+      // userInterventionConfig, ...) over their WS channel — see
+      // `buildPublicEndEventData`.
+      data: isShareVisitorEnd(finalState) ? buildPublicEndEventData(endEventData) : endEventData,
       operationId,
       stepIndex,
       timestamp: Date.now(),

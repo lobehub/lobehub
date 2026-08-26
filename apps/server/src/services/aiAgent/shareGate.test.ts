@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentShareGate } from './shareGate';
-import { applyShareGateToAgentConfig, filterPluginsByShareGate } from './shareGate';
+import type { AgentShareGate, ShareGateToolSet } from './shareGate';
+import {
+  applyShareGateToAgentConfig,
+  applyShareGateToToolSet,
+  filterPluginsByShareGate,
+} from './shareGate';
 
 const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): AgentShareGate => ({
   agentId: 'agent-1',
@@ -74,5 +78,81 @@ describe('applyShareGateToAgentConfig', () => {
 
     expect(agentConfig.files).toHaveLength(1);
     expect(agentConfig.knowledgeBases).toEqual([]);
+  });
+});
+
+describe('applyShareGateToToolSet', () => {
+  // Simulates the fully-assembled operation tool set right before it's
+  // persisted as `toolSet` — i.e. AFTER LobeHub Skill / Composio / real-MCP
+  // connector manifests and the always-on builtin defaults have all been
+  // merged in by `execAgent`, unconditionally, from the creator's own config.
+  const buildToolSet = (): ShareGateToolSet => ({
+    activatableToolIds: ['web-search', 'composio-github', 'lobe-agent'],
+    enabledToolIds: ['web-search', 'lobe-activator'],
+    executorMap: { 'composio-github': 'client' as any },
+    manifestMap: {
+      'composio-github': { api: [], identifier: 'composio-github', type: 'default' } as any,
+      'lobe-activator': { api: [], identifier: 'lobe-activator', type: 'default' } as any,
+      'web-search': { api: [], identifier: 'web-search', type: 'default' } as any,
+    },
+    sourceMap: { 'composio-github': 'composio', 'web-search': 'builtin' } as any,
+    tools: [
+      { function: { name: 'web-search____search' }, type: 'function' },
+      { function: { name: 'composio-github____createIssue' }, type: 'function' },
+    ],
+  });
+
+  it('collapses the tool set to nothing when the whitelist is missing or empty', () => {
+    const gate = buildGate();
+    const toolSet = buildToolSet();
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.activatableToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.sourceMap).toEqual({});
+    expect(toolSet.executorMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+
+  it('keeps only whitelisted identifiers across every surface — including the creator-connected Composio/discovery entries the initial plugin filter never touched', () => {
+    const gate = buildGate({ enabledToolIds: ['web-search'] });
+    const toolSet = buildToolSet();
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    // `composio-github` and `lobe-activator` were never in shareConfig.enabledToolIds
+    // (only the plugin-id filter upstream ever saw `web-search`), yet they were
+    // still present in manifestMap/activatableToolIds — this is the discovery
+    // surface `lobe-activator` and `ToolExecutionService` would otherwise use.
+    expect(toolSet.enabledToolIds).toEqual(['web-search']);
+    expect(toolSet.activatableToolIds).toEqual(['web-search']);
+    expect(Object.keys(toolSet.manifestMap)).toEqual(['web-search']);
+    expect(Object.keys(toolSet.sourceMap)).toEqual(['web-search']);
+    expect(toolSet.executorMap).toEqual({});
+    expect(toolSet.tools).toEqual([
+      { function: { name: 'web-search____search' }, type: 'function' },
+    ]);
+  });
+
+  it('mutates the caller-owned arrays/objects in place (no reassignment required)', () => {
+    const gate = buildGate({ enabledToolIds: ['web-search'] });
+    const toolSet = buildToolSet();
+    const enabledToolIdsRef = toolSet.enabledToolIds;
+    const manifestMapRef = toolSet.manifestMap;
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toBe(enabledToolIdsRef);
+    expect(toolSet.manifestMap).toBe(manifestMapRef);
+  });
+
+  it('leaves a `tools: undefined` set untouched', () => {
+    const gate = buildGate({ enabledToolIds: ['web-search'] });
+    const toolSet = { ...buildToolSet(), tools: undefined };
+
+    expect(() => applyShareGateToToolSet(toolSet, gate)).not.toThrow();
+    expect(toolSet.tools).toBeUndefined();
   });
 });

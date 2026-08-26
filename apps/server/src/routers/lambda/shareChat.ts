@@ -227,6 +227,75 @@ export const shareChatRouter = router({
     }),
 
   /**
+   * Interrupt a running share operation — the visitor counterpart of
+   * `aiAgent.interruptTask`. Visitors have no owner-scoped access to
+   * `aiAgent.interruptTask` (its models are scoped to the caller, and share
+   * runs execute under the CREATOR's identity), so without this endpoint a
+   * visitor's Stop / tab-close cannot reach the server: the run keeps
+   * streaming and consuming the creator's share budget until it finishes on
+   * its own (see gateway.ts `onOperationCancel` for the client-side symptom).
+   *
+   * Authorization is intentionally stricter than `execAgent`/`getMessages`:
+   * it is not enough that the topic belongs to this visitor — the
+   * `operationId` must also match the operation CURRENTLY recorded as
+   * running on that topic. Without that check a visitor could pass an
+   * arbitrary operationId (topics/operations are creator-owned rows) and
+   * interrupt an unrelated run on the creator's account.
+   */
+  interruptTask: shareChatProcedure
+    .input(ShareTopicScopeSchema.extend({ operationId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const share = await AgentShareModel.findByShareIdWithAccessCheck(
+        ctx.serverDB,
+        input.shareId,
+        ctx.userId,
+      );
+
+      const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
+      const topic = await findVisitorTopicOrThrow(topicModel, {
+        agentId: share.agentId,
+        topicId: input.topicId,
+        visitorUserId: ctx.userId,
+      });
+
+      const runningOperationId = topic.metadata?.runningOperation?.operationId;
+      if (!runningOperationId || runningOperationId !== input.operationId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No matching running operation found on this topic',
+        });
+      }
+
+      // Creator-scoped service, same as `execAgent` — the run's operation /
+      // thread rows were written under the creator's identity, so the
+      // underlying `interruptTask` implementation must resolve them there.
+      const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId);
+
+      log(
+        'interruptTask: share=%s visitor=%s topic=%s operation=%s',
+        input.shareId,
+        ctx.userId,
+        input.topicId,
+        input.operationId,
+      );
+
+      try {
+        return await aiAgentService.interruptTask({
+          operationId: input.operationId,
+          topicId: input.topicId,
+        });
+      } catch (error: any) {
+        if (error instanceof TRPCError) throw error;
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to interrupt shared agent task: ${error.message}`,
+        });
+      }
+    }),
+
+  /**
    * Refresh the Gateway WS JWT for a running share operation — the visitor
    * counterpart of `aiAgent.refreshGatewayToken` (which cannot serve visitors:
    * its TopicModel is scoped to the caller, and share topics belong to the
