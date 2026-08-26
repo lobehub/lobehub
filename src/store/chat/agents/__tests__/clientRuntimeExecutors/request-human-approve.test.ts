@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createAssistantMessage,
   createMockStore,
+  createPendingToolMessage,
   createRequestHumanApproveInstruction,
 } from './fixtures';
 import { createInitialState, createTestContext, executeWithMockContext } from './helpers';
@@ -46,7 +47,7 @@ describe('request_human_approve executor', () => {
           role: 'tool',
           content: '',
           plugin: toolCalls[0],
-          pluginIntervention: { status: 'pending' },
+          pluginIntervention: expect.objectContaining({ status: 'pending' }),
           tool_call_id: 'tool_1',
           parentId: 'msg_assistant',
           groupId: assistantMessage.groupId,
@@ -250,8 +251,7 @@ describe('request_human_approve executor', () => {
     it('should skip message creation when skipCreateToolMessage is true', async () => {
       // Given
       const mockStore = createMockStore();
-      const assistantMessage = createAssistantMessage();
-      mockStore.dbMessagesMap['test-session_test-topic'] = [assistantMessage];
+      const assistantMessage = createAssistantMessage({ id: 'msg_assistant' });
 
       const context = createTestContext();
       const toolCalls: ChatToolPayload[] = [
@@ -263,8 +263,23 @@ describe('request_human_approve executor', () => {
           type: 'default',
         },
       ];
+      const durableToolMessage = createPendingToolMessage({
+        id: 'msg_tool_1',
+        parentId: assistantMessage.id,
+        plugin: toolCalls[0],
+        pluginIntervention: {
+          batchId: 'op_previous:1:msg_assistant',
+          itemIndex: 0,
+          operationId: 'op_previous',
+          status: 'pending',
+          stepIndex: 1,
+        },
+        tool_call_id: 'tool_1',
+      });
+      mockStore.dbMessagesMap['test-session_test-topic'] = [assistantMessage, durableToolMessage];
 
       const instruction = createRequestHumanApproveInstruction(toolCalls, {
+        parentMessageId: assistantMessage.id,
         skipCreateToolMessage: true,
       });
       const state = createInitialState();
@@ -340,7 +355,7 @@ describe('request_human_approve executor', () => {
               id: toolCall.id,
             }),
             tool_call_id: toolCall.id,
-            pluginIntervention: { status: 'pending' },
+            pluginIntervention: expect.objectContaining({ status: 'pending' }),
           }),
           expect.objectContaining({
             operationId: expect.any(String),
