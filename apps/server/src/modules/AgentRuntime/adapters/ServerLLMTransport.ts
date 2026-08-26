@@ -32,7 +32,10 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import {
+  buildAgentShareModelRuntimeContext,
+  initModelRuntimeFromDB,
+} from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
@@ -240,15 +243,10 @@ export class ServerLLMTransport implements LLMTransport {
       // (share runs execute as the creator so billing/model access resolve
       // from the creator's plan), so it is the only place the real visitor
       // id can reach the billing hooks for spend-log attribution (agent
-      // share M9).
-      this.ctx.agentShare
-        ? {
-            agentShare: {
-              agentId: this.ctx.agentShare.agentId,
-              visitorUserId: this.ctx.agentShare.visitorUserId,
-            },
-          }
-        : undefined,
+      // share M9). Routed through the shared helper so every other
+      // model-runtime call site (nested tool-runtime inference) builds the
+      // exact same shape — see `buildAgentShareModelRuntimeContext`'s JSDoc.
+      buildAgentShareModelRuntimeContext(this.ctx.agentShare),
     );
   }
 

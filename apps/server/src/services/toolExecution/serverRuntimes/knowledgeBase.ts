@@ -14,7 +14,7 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { userId, serverDB, agentId, agentVisibility, taskId, workspaceId } = context;
+    const { userId, serverDB, agentId, agentVisibility, taskId, workspaceId, agentShare } = context;
     if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Knowledge Base execution');
     }
@@ -30,6 +30,12 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       userId,
       workspaceId,
       agentVisibility,
+      // `searchKnowledgeBase`'s query-embedding call must bill the creator's
+      // agentShare budget on a share-visitor run — see
+      // `KnowledgeBaseSearchService`'s `agentShare` JSDoc.
+      agentShare
+        ? { agentId: agentShare.agentId, visitorUserId: agentShare.visitorUserId }
+        : undefined,
     );
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 

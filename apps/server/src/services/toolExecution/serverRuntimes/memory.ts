@@ -43,6 +43,7 @@ import {
 import { userSettings } from '@/database/schemas';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import {
+  buildAgentShareModelRuntimeContext,
   initModelRuntimeFromDB,
   initModelRuntimeWithUserPayload,
 } from '@/server/modules/ModelRuntime';
@@ -91,6 +92,12 @@ const getEmbeddingRuntime = async (
   serverDB: LobeChatDatabase,
   userId: string,
   workspaceId?: string,
+  // Threaded through even though every current caller (`addContextMemory` /
+  // `addActivityMemory` / ... / `updateIdentityMemory`) is a write API that
+  // `DATA_TOOL_ACCESS_RULES` always blocks for share visitors — defense in
+  // depth so this helper never silently bills the creator's ordinary budget
+  // if a future write path becomes visitor-reachable.
+  agentShare?: { agentId: string; visitorUserId: string } | null,
 ) => {
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
@@ -100,6 +107,7 @@ const getEmbeddingRuntime = async (
     userId,
     ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
     workspaceId,
+    buildAgentShareModelRuntimeContext(agentShare),
   );
 
   return { agentRuntime, embeddingModel };
@@ -127,6 +135,16 @@ const createEmbedder = (
 
 class MemoryServerRuntimeService implements MemoryRuntimeService {
   private agentId?: string;
+  /**
+   * Share-visitor billing marker (mirroring `ToolExecutionContext.agentShare`),
+   * present only when this run is a shared-agent visitor run. Forwarded into
+   * every `getEmbeddingRuntime`/`initModelRuntimeFromDB` call this service
+   * makes so `searchMemory`'s query-embedding call — the one memory API a
+   * share visitor can actually reach, see `allowReadMemory` in
+   * `shareGate.ts` — bills the creator's agentShare budget instead of their
+   * ordinary personal budget.
+   */
+  private agentShare?: { agentId: string; visitorUserId: string } | null;
   private emitOutcome?: typeof emitToolOutcomeSafely;
   private messageId?: string;
   private memoryModel: UserMemoryModel;
@@ -142,6 +160,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
 
   constructor(options: {
     agentId?: string;
+    agentShare?: { agentId: string; visitorUserId: string } | null;
     emitOutcome?: typeof emitToolOutcomeSafely;
     messageId?: string;
     memoryEffort: MemoryEffort;
@@ -156,6 +175,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     workspaceId?: string;
   }) {
     this.agentId = options.agentId;
+    this.agentShare = options.agentShare;
     this.emitOutcome = options.emitOutcome;
     this.messageId = options.messageId;
     this.memoryModel = options.memoryModel;
@@ -225,6 +245,11 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
           this.userId,
           defaultEmbeddingConfig.provider,
           this.workspaceId,
+          // `searchMemory` is the one memory API a share visitor can reach
+          // (`allowReadMemory` grant, see `shareGate.ts`) — its query
+          // embedding must bill the creator's agentShare budget, not their
+          // ordinary personal budget.
+          buildAgentShareModelRuntimeContext(this.agentShare),
         );
     const normalizedQueries = [
       ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
@@ -277,6 +302,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
         this.workspaceId,
+        this.agentShare,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -349,6 +375,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
         this.workspaceId,
+        this.agentShare,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -428,6 +455,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
         this.workspaceId,
+        this.agentShare,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -501,6 +529,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
         this.workspaceId,
+        this.agentShare,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -586,6 +615,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
         this.workspaceId,
+        this.agentShare,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -663,6 +693,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
         this.serverDB,
         this.userId,
         this.workspaceId,
+        this.agentShare,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -881,6 +912,9 @@ export const memoryRuntime: ServerRuntimeRegistration = {
 
     const service = new MemoryServerRuntimeService({
       agentId: context.agentId,
+      agentShare: context.agentShare
+        ? { agentId: context.agentShare.agentId, visitorUserId: context.agentShare.visitorUserId }
+        : undefined,
       emitOutcome: emitToolOutcomeSafely,
       messageId: context.messageId,
       memoryEffort,

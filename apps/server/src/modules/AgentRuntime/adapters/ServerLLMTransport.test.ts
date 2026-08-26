@@ -6,6 +6,21 @@ import { ServerLLMTransport } from './ServerLLMTransport';
 const mockInitModelRuntimeFromDB = vi.hoisted(() => vi.fn().mockResolvedValue({ chat: vi.fn() }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  // Real implementation is a pure fail-closed mapper (no I/O) — mirror it so
+  // the assertions below can check the resulting shape reaches
+  // `initModelRuntimeFromDB` exactly like the real helper produces.
+  buildAgentShareModelRuntimeContext: (
+    agentShare?: { agentId?: string | null; visitorUserId?: string | null } | null,
+  ) => {
+    if (!agentShare) return undefined;
+    const { agentId, visitorUserId } = agentShare;
+    if (!agentId || !visitorUserId) {
+      throw new Error(
+        "Share-visitor model runtime billing context is incomplete (missing agentId/visitorUserId); refusing to fall back to the creator's ordinary billing.",
+      );
+    }
+    return { agentShare: { agentId, visitorUserId } };
+  },
   initModelRuntimeFromDB: mockInitModelRuntimeFromDB,
 }));
 
