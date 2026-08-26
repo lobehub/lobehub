@@ -2503,7 +2503,6 @@ export class AiAgentService {
             {
               agentId: resolvedAgentId,
               db: this.db,
-              maxTopicsPerVisitor: shareGate.shareConfig.maxTopicsPerVisitor,
               ownerId: this.userId,
               visitorUserId: shareGate.visitorUserId,
               workspaceId: this.workspaceId,
@@ -2668,8 +2667,8 @@ export class AiAgentService {
       : shareGate
         ? await reserveShareVisitorTurn(
             {
+              agentId: shareGate.agentId,
               db: this.db,
-              maxTurnsPerTopic: shareGate.shareConfig.maxTurnsPerTopic,
               ownerId: this.userId,
               topicId,
               workspaceId: this.workspaceId,

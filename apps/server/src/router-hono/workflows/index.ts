@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 
 import agentEvalRunApp from './agent-eval-run';
+import agentShareApp from './agent-share';
 import agentSignalApp from './agent-signal';
 import expertiseHistoryApp from './expertise-history';
 import memoryUserMemoryApp from './memory-user-memory';
@@ -13,6 +14,7 @@ import verifyApp from './verify';
 const app = new Hono().basePath('/api/workflows');
 
 app.route('/agent-eval-run', agentEvalRunApp);
+app.route('/agent-share', agentShareApp);
 app.route('/agent-signal', agentSignalApp);
 app.route('/expertise-history', expertiseHistoryApp);
 app.route('/memory-user-memory', memoryUserMemoryApp);
