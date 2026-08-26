@@ -306,6 +306,46 @@ describe('user memory query layer', () => {
   });
 
   describe('searchMemory', () => {
+    it('uses external candidates only for the lexical leg and rechecks PostgreSQL rows', async () => {
+      const { activity } = await createActivityPair({ title: 'External lexical activity' });
+      const searchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'deleted-activity', score: 10 },
+          { id: activity.id, score: 8 },
+        ],
+        total: 2,
+      });
+      const model = new UserMemoryModel(serverDB, userId, {
+        candidateSearchEnabled: true,
+        searchCandidates,
+      });
+
+      const result = await model.searchMemory({
+        layers: [LayersEnum.Activity],
+        queries: ['external candidate'],
+        status: ['completed'],
+        topK: { activities: 5, contexts: 0, experiences: 0, identities: 0, preferences: 0 },
+      });
+
+      expect(result.activities.map(({ id }) => id)).toEqual([activity.id]);
+      expect(searchCandidates).toHaveBeenCalledWith({
+        entity: 'memoryActivities',
+        filters: { memoryStatus: ['completed'] },
+        pagination: { limit: 15 },
+        query: {
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'narrative',
+            'notes',
+            'feedback',
+          ],
+          text: 'external candidate',
+        },
+      });
+    });
+
     it('requires all requested tags to match during lexical filter-only search', async () => {
       const { activity: exactMatch } = await createActivityPair({
         memoryTags: ['atlas', 'urgent'],

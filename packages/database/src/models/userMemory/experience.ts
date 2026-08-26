@@ -2,18 +2,22 @@ import type { ExperienceListParams, ExperienceListResult } from '@lobechat/types
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
+import type { SearchCandidateSource } from '../../repositories/search';
 import type { NewUserMemoryExperience, UserMemoryExperience } from '../../schemas';
 import { userMemories, userMemoriesExperiences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
 
 export class UserMemoryExperienceModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private searchCandidateSource?: SearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, searchCandidateSource?: SearchCandidateSource) {
     this.userId = userId;
     this.db = db;
+    this.searchCandidateSource = searchCandidateSource;
   }
 
   private memoryWhere(table: { userId: any }) {
@@ -74,12 +78,29 @@ export class UserMemoryExperienceModel {
     const bm25MatchQuery = normalizedQuery
       ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
       : '';
+    const candidateResult =
+      normalizedQuery && this.searchCandidateSource?.candidateSearchEnabled
+        ? await this.searchCandidateSource.searchCandidates({
+            entity: 'memoryExperiences',
+            filters: {
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'situation', 'key_learning', 'action'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
 
     // Build WHERE conditions
     const conditions: Array<SQL | undefined> = [
       this.memoryWhere(userMemoriesExperiences),
+      candidateIds ? inJsonStringArray(userMemoriesExperiences.id, candidateIds) : undefined,
       // Full-text search across title, situation, keyLearning, action
-      normalizedQuery
+      normalizedQuery && !candidateIds
         ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesExperiences.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('situation', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('key_learning', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('action', ${bm25MatchQuery}, conjunction_mode => true)]))`
         : undefined,
       types && types.length > 0 ? inArray(userMemoriesExperiences.type, types) : undefined,

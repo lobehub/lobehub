@@ -54,6 +54,7 @@ import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapt
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
+import { createSearchRepo } from '@/server/services/searchBackend';
 
 import type { ToolExecutionMemoryEmbeddingRuntime } from '../types';
 import type { ServerRuntimeRegistration } from './types';
@@ -877,7 +878,11 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       // fallback to medium
     }
 
-    const memoryModel = new UserMemoryModel(context.serverDB, context.userId);
+    const searchRepo = await createSearchRepo({
+      db: context.serverDB,
+      userId: context.userId,
+    });
+    const memoryModel = new UserMemoryModel(context.serverDB, context.userId, searchRepo);
 
     const service = new MemoryServerRuntimeService({
       agentId: context.agentId,

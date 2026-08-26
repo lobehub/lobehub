@@ -10,23 +10,32 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import type { SearchCandidateSource } from '../repositories/search';
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
 import { agents, agentsToSessions, sessionGroups, sessions } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private searchCandidateSource?: SearchCandidateSource;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    searchCandidateSource?: SearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.searchCandidateSource = searchCandidateSource;
   }
 
   private ownership = () =>
@@ -604,6 +613,34 @@ export class SessionModel {
   }) => {
     const { keyword, pageSize = 9999, current = 0 } = params;
     const offset = current * pageSize;
+
+    if (this.searchCandidateSource?.candidateSearchEnabled) {
+      const { candidates } = await this.searchCandidateSource.searchCandidates({
+        entity: 'agents',
+        filters: {},
+        pagination: {},
+        query: { fields: ['title', 'description'], text: keyword },
+      });
+      const candidateIds = candidates.map(({ id }) => id);
+      if (candidateIds.length === 0) return [];
+
+      const results = await this.db.query.agents.findMany({
+        limit: pageSize,
+        offset,
+        orderBy: [asc(agents.id)],
+        where: and(this.agentsOwnership(), inJsonStringArray(agents.id, candidateIds)),
+        with: { agentsToSessions: { columns: {}, with: { session: true } } },
+      });
+
+      return results
+        .filter((item) => item.agentsToSessions && item.agentsToSessions.length > 0)
+        .map(
+          (item) =>
+            (item.agentsToSessions as Array<{ session: SessionItem | null | undefined }>)[0]
+              ?.session,
+        )
+        .filter((session) => session !== null && session !== undefined);
+    }
 
     try {
       const bm25Query = sanitizeBm25Query(keyword);

@@ -227,6 +227,7 @@ export class PostgresSearchBackend implements SearchBackend {
 
     const { entity, filters, pagination } = request;
     const limit = pagination.limit;
+    if (!limit) throw new Error('pg_search product search requires a positive limit');
 
     if (entity === 'agents') return this.searchAgents(query, limit);
     if (entity === 'chatGroups') return this.searchChatGroups(query, limit);

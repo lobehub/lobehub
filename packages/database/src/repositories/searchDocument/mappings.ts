@@ -23,6 +23,11 @@ export interface SearchIndexDefinition<Entity extends SearchDocumentEntity> {
 }
 
 const mixedText = { analyzer: 'lobehub_icu_english', type: 'text' } as const;
+const mixedTextWithRaw = {
+  analyzer: 'lobehub_icu_english',
+  fields: { raw: { type: 'keyword' } },
+  type: 'text',
+} as const;
 const icuText = {
   analyzer: 'lobehub_icu',
   fields: { raw: { type: 'keyword' } },
@@ -108,7 +113,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
         title: mixedText,
       },
     },
-    queryFields: ['title', 'description'],
+    queryFields: ['title', 'description', 'content'],
     sourceTable: 'chat_groups',
   } satisfies SearchIndexDefinition<'chatGroups'>,
   documents: {
@@ -182,7 +187,9 @@ export const SEARCH_INDEX_DEFINITIONS = {
         narrative: mixedText,
         notes: mixedText,
         parent_details: mixedText,
+        parent_memory_categories: keyword,
         parent_summary: mixedText,
+        parent_tags: keyword,
         parent_title: mixedText,
         starts_at: date,
         status: keyword,
@@ -209,10 +216,12 @@ export const SEARCH_INDEX_DEFINITIONS = {
       properties: {
         ...timestampProperties,
         captured_at: date,
-        current_status: mixedText,
+        current_status: mixedTextWithRaw,
         description: mixedText,
         id: keyword,
         parent_text: mixedText,
+        parent_memory_categories: keyword,
+        parent_tags: keyword,
         tags: keyword,
         title: mixedText,
         type: keyword,
@@ -234,7 +243,9 @@ export const SEARCH_INDEX_DEFINITIONS = {
         id: keyword,
         key_learning: mixedText,
         parent_details: mixedText,
+        parent_memory_categories: keyword,
         parent_summary: mixedText,
+        parent_tags: keyword,
         parent_title: mixedText,
         possible_outcome: mixedText,
         reasoning: mixedText,
@@ -268,7 +279,9 @@ export const SEARCH_INDEX_DEFINITIONS = {
         episodic_date: date,
         id: keyword,
         parent_details: mixedText,
+        parent_memory_categories: keyword,
         parent_summary: mixedText,
+        parent_tags: keyword,
         parent_title: mixedText,
         relationship: keyword,
         role: mixedText,
@@ -291,7 +304,9 @@ export const SEARCH_INDEX_DEFINITIONS = {
         conclusion_directives: mixedText,
         id: keyword,
         parent_details: mixedText,
+        parent_memory_categories: keyword,
         parent_summary: mixedText,
+        parent_tags: keyword,
         parent_title: mixedText,
         suggestions: mixedText,
         tags: keyword,
@@ -329,7 +344,7 @@ export const SEARCH_INDEX_DEFINITIONS = {
         workspace_id: keyword,
       },
     },
-    queryFields: ['content'],
+    queryFields: ['content', 'summary'],
     sourceTable: 'messages',
   } satisfies SearchIndexDefinition<'messages'>,
   personaDocuments: {

@@ -366,6 +366,60 @@ describe('SessionModel', () => {
     });
   });
 
+  describe('queryByKeyword with external candidates', () => {
+    it('hydrates only current-scope sessions and surfaces candidate failures', async () => {
+      await serverDB.insert(users).values({ id: 'candidate-other-user' });
+      await serverDB.insert(sessions).values([
+        { id: 'candidate-session-own', userId },
+        { id: 'candidate-session-own-secondary', userId },
+        { id: 'candidate-session-other', userId: 'candidate-other-user' },
+      ]);
+      await serverDB.insert(agents).values([
+        { id: 'candidate-agent-own', title: 'Own', userId },
+        { id: 'candidate-agent-other', title: 'Other', userId: 'candidate-other-user' },
+      ]);
+      await serverDB.insert(agentsToSessions).values([
+        { agentId: 'candidate-agent-own', sessionId: 'candidate-session-own', userId },
+        {
+          agentId: 'candidate-agent-own',
+          sessionId: 'candidate-session-own-secondary',
+          userId,
+        },
+        {
+          agentId: 'candidate-agent-other',
+          sessionId: 'candidate-session-other',
+          userId: 'candidate-other-user',
+        },
+      ]);
+      const searchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'candidate-agent-other', score: 10 },
+          { id: 'candidate-agent-deleted', score: 9 },
+          { id: 'candidate-agent-own', score: 8 },
+        ],
+        total: 3,
+      });
+      const model = new SessionModel(serverDB, userId, undefined, {
+        candidateSearchEnabled: true,
+        searchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate');
+      expect(result).toHaveLength(1);
+      expect(['candidate-session-own', 'candidate-session-own-secondary']).toContain(result[0]?.id);
+      expect(searchCandidates).toHaveBeenCalledWith({
+        entity: 'agents',
+        filters: {},
+        pagination: {},
+        query: { fields: ['title', 'description'], text: 'candidate' },
+      });
+
+      const providerError = new Error('candidate unavailable');
+      searchCandidates.mockRejectedValueOnce(providerError);
+      await expect(model.queryByKeyword('failure')).rejects.toBe(providerError);
+    });
+  });
+
   describe('create', () => {
     it('should create a new session', async () => {
       // Call the create method

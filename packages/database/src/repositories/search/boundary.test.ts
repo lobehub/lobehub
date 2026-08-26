@@ -75,7 +75,9 @@ describe('SearchRepo backend boundary', () => {
     };
     const repo = new SearchRepo(db, 'user-1', undefined, undefined, {
       backend,
-      onMeasurement: (measurement) => measurements.push(measurement),
+      onMeasurement: (measurement) => {
+        measurements.push(measurement);
+      },
     });
 
     await repo.search({ agentId: 'agent-1', query: 'message', type: 'message' });
@@ -193,7 +195,9 @@ describe('SearchRepo backend boundary', () => {
     const search = vi.fn<SearchBackend['search']>().mockRejectedValue(providerError);
     const repo = new SearchRepo(db, 'user-1', undefined, undefined, {
       backend: { key: 'candidate', search },
-      onMeasurement: (measurement) => measurements.push(measurement),
+      onMeasurement: (measurement) => {
+        measurements.push(measurement);
+      },
     });
 
     await expect(

@@ -21,6 +21,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
+import { createSearchRepo } from '@/server/services/searchBackend';
 
 import {
   assertCanUseConversationTargets,
@@ -51,6 +52,22 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
       topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const messageSearchProcedure = messageProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const searchRepo = await createSearchRepo({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, workspaceId, searchRepo),
     },
   });
 });
@@ -523,7 +540,7 @@ export const messageRouter = router({
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
-  searchMessages: messageProcedure
+  searchMessages: messageSearchProcedure
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.messageModel.queryByKeyword(input.keywords);

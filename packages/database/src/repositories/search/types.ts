@@ -174,7 +174,13 @@ export type SearchBackendEntity =
   | 'documents'
   | 'files'
   | 'knowledgeBases'
+  | 'memoryActivities'
+  | 'memoryContexts'
+  | 'memoryExperiences'
+  | 'memoryIdentities'
+  | 'memoryPreferences'
   | 'messages'
+  | 'personaDocuments'
   | 'topics'
   | 'userMemories';
 
@@ -189,20 +195,42 @@ export interface SearchBackendFilters {
   agentId?: string;
   documentKind?: 'folder' | 'knowledgeBaseDocument' | 'page';
   excludeKnowledgeBaseIds?: string[];
+  excludeVirtual?: boolean;
   knowledgeBaseIds?: string[];
+  memoryCategories?: string[];
+  memoryRelationships?: string[];
+  memoryStatus?: string[];
+  /** Hybrid search requires every tag; legacy list search preserves its any-tag contract. */
+  memoryTagMatch?: 'all' | 'any';
+  memoryTags?: string[];
+  memoryTimeRange?: {
+    end?: Date;
+    field?: 'capturedAt' | 'createdAt' | 'endsAt' | 'episodicDate' | 'startsAt' | 'updatedAt';
+    start?: Date;
+  };
+  memoryTypes?: string[];
+  topicScope?: {
+    agentId?: string | null;
+    containerId?: string | null;
+    groupId?: string | null;
+  };
 }
 
 export interface SearchBackendPagination {
-  limit: number;
+  /** Omitted for legacy/list paths whose public contract is currently unbounded. */
+  limit?: number;
 }
 
 export interface SearchBackendQuery {
+  /** Exact mapped fields for a candidate-only production path. */
+  fields?: string[];
   text: string;
 }
 
 export interface SearchBackendRequest {
   entity: SearchBackendEntity;
   filters: SearchBackendFilters;
+  mode?: 'candidates' | 'results';
   pagination: SearchBackendPagination;
   query: SearchBackendQuery;
   scope: SearchBackendScope;
@@ -225,6 +253,8 @@ export interface SearchBackendResponse<TItem extends SearchBackendItem = SearchB
   candidates: SearchBackendCandidate[];
   /** Hydrated, authorization-checked product items in display order. */
   items: TItem[];
+  /** Provider match count before PostgreSQL authorization hydration. */
+  total?: number;
 }
 
 export interface SearchBackend {
@@ -261,5 +291,19 @@ export type SearchBackendMeasurement =
 
 export interface SearchRepoOptions {
   backend?: SearchBackend;
+  /** Enables candidate-only paths for models that otherwise keep their existing pg_search query. */
+  candidateSearchEnabled?: boolean;
   onMeasurement?: (measurement: SearchBackendMeasurement) => Promise<void> | void;
+}
+
+export type SearchCandidateRequest = Omit<SearchBackendRequest, 'mode' | 'scope'>;
+
+export interface SearchCandidateResult {
+  candidates: SearchBackendCandidate[];
+  total: number;
+}
+
+export interface SearchCandidateSource {
+  candidateSearchEnabled: boolean;
+  searchCandidates: (request: SearchCandidateRequest) => Promise<SearchCandidateResult>;
 }

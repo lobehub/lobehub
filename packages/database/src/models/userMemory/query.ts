@@ -21,6 +21,11 @@ import {
 } from 'drizzle-orm';
 
 import type {
+  SearchBackendEntity,
+  SearchBackendFilters,
+  SearchCandidateSource,
+} from '../../repositories/search';
+import type {
   UserMemoryActivitiesWithoutVectors,
   UserMemoryContextsWithoutVectors,
   UserMemoryExperiencesWithoutVectors,
@@ -37,6 +42,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
 
 const DEFAULT_HYBRID_SEARCH_LIMIT = 5;
 const HYBRID_SEARCH_OVERFETCH_MULTIPLIER = 3;
@@ -70,11 +76,7 @@ export const buildBm25MatchCondition = (
 };
 
 export type SearchLayerKey =
-  | 'activities'
-  | 'contexts'
-  | 'experiences'
-  | 'identities'
-  | 'preferences';
+  'activities' | 'contexts' | 'experiences' | 'identities' | 'preferences';
 
 interface HybridLayerLimitRecord {
   activities?: number;
@@ -662,10 +664,50 @@ export class UserMemoryQueryModel {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
+    private readonly searchCandidateSource?: SearchCandidateSource,
   ) {}
 
   private memoryWhere(table: { userId: any }) {
     return eq(table.userId, this.userId);
+  }
+
+  private buildCandidateFilters(
+    entity: SearchBackendEntity,
+    params: SearchMemoryParams,
+  ): SearchBackendFilters {
+    const memoryTags = this.toSearchTags(params);
+
+    return {
+      ...(params.categories?.length ? { memoryCategories: params.categories } : {}),
+      ...(entity === 'memoryIdentities' && params.relationships?.length
+        ? { memoryRelationships: params.relationships }
+        : {}),
+      ...((entity === 'memoryActivities' || entity === 'memoryContexts') && params.status?.length
+        ? { memoryStatus: params.status }
+        : {}),
+      ...(memoryTags.length ? { memoryTags } : {}),
+      ...(params.timeRange ? { memoryTimeRange: params.timeRange } : {}),
+      ...(params.types?.length ? { memoryTypes: params.types } : {}),
+    };
+  }
+
+  private async searchExternalCandidates(params: {
+    entity: SearchBackendEntity;
+    fields: string[];
+    limit: number;
+    query: string;
+    searchParams: SearchMemoryParams;
+  }) {
+    if (!this.searchCandidateSource?.candidateSearchEnabled) return undefined;
+
+    const { candidates } = await this.searchCandidateSource.searchCandidates({
+      entity: params.entity,
+      filters: this.buildCandidateFilters(params.entity, params.searchParams),
+      pagination: { limit: params.limit },
+      query: { fields: params.fields, text: params.query },
+    });
+
+    return candidates.map(({ id }) => id);
   }
 
   /**
@@ -2089,6 +2131,22 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.searchExternalCandidates({
+          entity: 'memoryActivities',
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'narrative',
+            'notes',
+            'feedback',
+          ],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesActivities),
       this.memoryWhere(userMemories),
@@ -2108,13 +2166,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['narrative', 'notes', 'feedback'],
-              keyColumn: userMemoriesActivities.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesActivities.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['narrative', 'notes', 'feedback'],
+                keyColumn: userMemoriesActivities.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesActivities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2157,11 +2217,23 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.searchExternalCandidates({
+          entity: 'memoryContexts',
+          fields: ['parent_text', 'title', 'description', 'current_status'],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesContexts),
       this.memoryWhere(userMemories),
       params.categories?.length
         ? inArray(userMemories.memoryCategory, params.categories)
+        : undefined,
+      params.status?.length
+        ? inArray(userMemoriesContexts.currentStatus, params.status)
         : undefined,
       params.types?.length ? inArray(userMemoriesContexts.type, params.types) : undefined,
       this.buildTimeRangeCondition(
@@ -2173,13 +2245,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['title', 'description', 'current_status'],
-              keyColumn: userMemoriesContexts.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesContexts.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['title', 'description', 'current_status'],
+                keyColumn: userMemoriesContexts.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesContexts.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2261,6 +2335,24 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.searchExternalCandidates({
+          entity: 'memoryExperiences',
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'situation',
+            'reasoning',
+            'possible_outcome',
+            'action',
+            'key_learning',
+          ],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesExperiences),
       this.memoryWhere(userMemories),
@@ -2277,13 +2369,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['situation', 'key_learning', 'action', 'reasoning', 'possible_outcome'],
-              keyColumn: userMemoriesExperiences.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesExperiences.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['situation', 'key_learning', 'action', 'reasoning', 'possible_outcome'],
+                keyColumn: userMemoriesExperiences.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesExperiences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2322,6 +2416,21 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.searchExternalCandidates({
+          entity: 'memoryPreferences',
+          fields: [
+            'parent_title',
+            'parent_summary',
+            'parent_details',
+            'conclusion_directives',
+            'suggestions',
+          ],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesPreferences),
       this.memoryWhere(userMemories),
@@ -2338,13 +2447,15 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            {
-              fields: ['conclusion_directives', 'suggestions'],
-              keyColumn: userMemoriesPreferences.id,
-            },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesPreferences.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              {
+                fields: ['conclusion_directives', 'suggestions'],
+                keyColumn: userMemoriesPreferences.id,
+              },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesPreferences.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));
@@ -2380,6 +2491,15 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
   ) {
     const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    const candidateIds = normalizedQuery
+      ? await this.searchExternalCandidates({
+          entity: 'memoryIdentities',
+          fields: ['parent_title', 'parent_summary', 'parent_details', 'description', 'role'],
+          limit,
+          query: normalizedQuery,
+          searchParams: params,
+        })
+      : undefined;
     const conditions = [
       this.memoryWhere(userMemoriesIdentities),
       this.memoryWhere(userMemories),
@@ -2400,10 +2520,12 @@ export class UserMemoryQueryModel {
         params.timeRange,
       ),
       normalizedQuery
-        ? buildBm25MatchCondition(normalizedQuery, [
-            { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
-            { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
-          ])
+        ? candidateIds
+          ? inJsonStringArray(userMemoriesIdentities.id, candidateIds)
+          : buildBm25MatchCondition(normalizedQuery, [
+              { fields: ['title', 'summary', 'details'], keyColumn: userMemories.id },
+              { fields: ['description', 'role'], keyColumn: userMemoriesIdentities.id },
+            ])
         : undefined,
       this.buildExactTagFilterCondition(userMemoriesIdentities.tags, userMemories.tags, params),
     ].filter((condition): condition is SQL => Boolean(condition));

@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { Pool as NodePool } from 'pg';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import * as schema from '../../schemas';
@@ -40,6 +40,51 @@ beforeEach(async () => {
 
   // Initialize repo
   searchRepo = new SearchRepo(serverDB, userId);
+});
+
+describe('SearchRepo candidate search', () => {
+  it('forwards candidate-only requests through the selected backend without product hydration', async () => {
+    const backendSearch = vi.fn().mockResolvedValue({
+      candidates: [{ id: 'memory-context-1', score: 8 }],
+      items: [],
+      total: 1,
+    });
+    const repo = new SearchRepo(serverDB, userId, undefined, undefined, {
+      backend: { key: 'candidate', search: backendSearch },
+      candidateSearchEnabled: true,
+    });
+
+    await expect(
+      repo.searchCandidates({
+        entity: 'memoryContexts',
+        filters: {
+          memoryCategories: ['project'],
+          memoryTags: ['typescript'],
+          memoryTypes: ['workflow'],
+        },
+        pagination: { limit: 12 },
+        query: {
+          fields: ['parent_text', 'title', 'description', 'current_status'],
+          text: 'search phrase',
+        },
+      }),
+    ).resolves.toEqual({ candidates: [{ id: 'memory-context-1', score: 8 }], total: 1 });
+    expect(backendSearch).toHaveBeenCalledWith({
+      entity: 'memoryContexts',
+      filters: {
+        memoryCategories: ['project'],
+        memoryTags: ['typescript'],
+        memoryTypes: ['workflow'],
+      },
+      mode: 'candidates',
+      pagination: { limit: 12 },
+      query: {
+        fields: ['parent_text', 'title', 'description', 'current_status'],
+        text: 'search phrase',
+      },
+      scope: { callerAgentVisibility: undefined, userId, workspaceId: undefined },
+    });
+  });
 });
 
 // BM25 search requires pg_search extension (ParadeDB), not available in PGlite

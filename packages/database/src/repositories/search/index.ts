@@ -8,12 +8,15 @@ import type {
   SearchBackendRequest,
   SearchBackendResponse,
   SearchBackendScope,
+  SearchCandidateRequest,
+  SearchCandidateResult,
   SearchOptions,
   SearchRepoOptions,
   SearchResult,
   SearchResultType,
 } from './types';
 
+export * from './elasticsearch';
 export { PostgresSearchBackend } from './postgres';
 export * from './types';
 
@@ -35,6 +38,8 @@ interface SearchLimits {
  * PostgreSQL hydration, while this class preserves the public repository API.
  */
 export class SearchRepo {
+  readonly candidateSearchEnabled: boolean;
+
   private backend: NonNullable<SearchRepoOptions['backend']>;
   private onMeasurement?: SearchRepoOptions['onMeasurement'];
   private scope: SearchBackendScope;
@@ -48,6 +53,7 @@ export class SearchRepo {
   ) {
     this.scope = { callerAgentVisibility, userId, workspaceId };
     this.backend = options.backend ?? new PostgresSearchBackend(db, this.scope);
+    this.candidateSearchEnabled = options.candidateSearchEnabled ?? false;
     this.onMeasurement = options.onMeasurement;
   }
 
@@ -75,7 +81,7 @@ export class SearchRepo {
         .filter(([, value]) => value !== undefined && (!Array.isArray(value) || value.length > 0))
         .map(([key]) => key)
         .sort() as (keyof SearchBackendFilters)[],
-      limit: request.pagination.limit,
+      limit: request.pagination.limit ?? 0,
       queryLength: request.query.text.length,
       scope: request.scope.workspaceId ? 'workspace' : 'personal',
     };
@@ -191,6 +197,28 @@ export class SearchRepo {
 
     /** Each backend item already carries the existing hydrated response schema and display order. */
     return responses.flatMap((response) => response.items as DatabaseSearchResult[]);
+  }
+
+  /** Candidate-only retrieval for legacy and hybrid paths that own their PostgreSQL hydration. */
+  async searchCandidates(request: SearchCandidateRequest): Promise<SearchCandidateResult> {
+    if (!this.candidateSearchEnabled) {
+      throw new Error('Candidate-only search is not enabled for this repository');
+    }
+
+    const query = request.query.text.trim();
+    if (!query) return { candidates: [], total: 0 };
+
+    const response = await this.execute({
+      ...request,
+      mode: 'candidates',
+      query: { ...request.query, text: query },
+      scope: this.scope,
+    });
+
+    return {
+      candidates: response.candidates,
+      total: response.total ?? response.candidates.length,
+    };
   }
 
   async searchKnowledgeBaseDocuments(

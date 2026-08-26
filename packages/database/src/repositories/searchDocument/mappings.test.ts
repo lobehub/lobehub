@@ -22,8 +22,20 @@ describe('search index mappings', () => {
     const definition = SEARCH_INDEX_DEFINITIONS[entity];
 
     for (const field of definition.queryFields) {
-      expect(definition.mappings.properties[field].type).toBe('text');
+      expect(Object.entries(definition.mappings.properties)).toContainEqual([
+        field,
+        expect.objectContaining({ type: 'text' }),
+      ]);
     }
+  });
+
+  it('includes the conversation fields used by the formal Elasticsearch provider', () => {
+    expect(SEARCH_INDEX_DEFINITIONS.chatGroups.queryFields).toEqual([
+      'title',
+      'description',
+      'content',
+    ]);
+    expect(SEARCH_INDEX_DEFINITIONS.messages.queryFields).toEqual(['content', 'summary']);
   });
 
   it('provides deployment-neutral versioned alias and physical names', () => {

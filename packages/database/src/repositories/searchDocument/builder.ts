@@ -1,4 +1,4 @@
-import { asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -534,7 +534,9 @@ export class SearchDocumentBuilder {
             .select({
               details: userMemories.details,
               id: userMemories.id,
+              memoryCategory: userMemories.memoryCategory,
               summary: userMemories.summary,
+              tags: userMemories.tags,
               title: userMemories.title,
               userId: userMemories.userId,
             })
@@ -544,6 +546,10 @@ export class SearchDocumentBuilder {
 
     return rows.map((row) => {
       const userMemoryIds = normalizeIds(row.userMemoryIds ?? []);
+      const matchedParents = userMemoryIds.flatMap((id) => {
+        const parent = parentById.get(id);
+        return parent && parent.userId === row.userId ? [parent] : [];
+      });
       const parentText = userMemoryIds.flatMap((id) => {
         const parent = parentById.get(id);
         if (!parent || parent.userId !== row.userId) return [];
@@ -560,6 +566,10 @@ export class SearchDocumentBuilder {
         current_status: row.currentStatus,
         description: row.description,
         id: row.id,
+        parent_memory_categories: normalizeStringArray(
+          matchedParents.flatMap(({ memoryCategory }) => (memoryCategory ? [memoryCategory] : [])),
+        ),
+        parent_tags: normalizeStringArray(matchedParents.flatMap(({ tags }) => tags ?? [])),
         parent_text: parentText,
         tags: normalizeStringArray(row.tags),
         title: row.title,
@@ -578,8 +588,10 @@ export class SearchDocumentBuilder {
         conclusionDirectives: userMemoriesPreferences.conclusionDirectives,
         createdAt: userMemoriesPreferences.createdAt,
         id: userMemoriesPreferences.id,
+        parentMemoryCategory: userMemories.memoryCategory,
         parentDetails: userMemories.details,
         parentSummary: userMemories.summary,
+        parentTags: userMemories.tags,
         parentTitle: userMemories.title,
         suggestions: userMemoriesPreferences.suggestions,
         tags: userMemoriesPreferences.tags,
@@ -589,7 +601,13 @@ export class SearchDocumentBuilder {
         userMemoryId: userMemoriesPreferences.userMemoryId,
       })
       .from(userMemoriesPreferences)
-      .leftJoin(userMemories, eq(userMemories.id, userMemoriesPreferences.userMemoryId))
+      .leftJoin(
+        userMemories,
+        and(
+          eq(userMemories.id, userMemoriesPreferences.userMemoryId),
+          eq(userMemories.userId, userMemoriesPreferences.userId),
+        ),
+      )
       .where(
         selection.ids
           ? inArray(userMemoriesPreferences.id, selection.ids)
@@ -607,7 +625,9 @@ export class SearchDocumentBuilder {
         created_at: toDateTime(row.createdAt),
         id: row.id,
         parent_details: row.parentDetails,
+        parent_memory_categories: normalizeStringArray(row.parentMemoryCategory),
         parent_summary: row.parentSummary,
+        parent_tags: normalizeStringArray(row.parentTags),
         parent_title: row.parentTitle,
         suggestions: row.suggestions,
         tags: normalizeStringArray(row.tags),
@@ -629,8 +649,10 @@ export class SearchDocumentBuilder {
         id: userMemoriesActivities.id,
         narrative: userMemoriesActivities.narrative,
         notes: userMemoriesActivities.notes,
+        parentMemoryCategory: userMemories.memoryCategory,
         parentDetails: userMemories.details,
         parentSummary: userMemories.summary,
+        parentTags: userMemories.tags,
         parentTitle: userMemories.title,
         startsAt: userMemoriesActivities.startsAt,
         status: userMemoriesActivities.status,
@@ -641,7 +663,13 @@ export class SearchDocumentBuilder {
         userMemoryId: userMemoriesActivities.userMemoryId,
       })
       .from(userMemoriesActivities)
-      .leftJoin(userMemories, eq(userMemories.id, userMemoriesActivities.userMemoryId))
+      .leftJoin(
+        userMemories,
+        and(
+          eq(userMemories.id, userMemoriesActivities.userMemoryId),
+          eq(userMemories.userId, userMemoriesActivities.userId),
+        ),
+      )
       .where(
         selection.ids
           ? inArray(userMemoriesActivities.id, selection.ids)
@@ -662,7 +690,9 @@ export class SearchDocumentBuilder {
         narrative: row.narrative,
         notes: row.notes,
         parent_details: row.parentDetails,
+        parent_memory_categories: normalizeStringArray(row.parentMemoryCategory),
         parent_summary: row.parentSummary,
+        parent_tags: normalizeStringArray(row.parentTags),
         parent_title: row.parentTitle,
         starts_at: toNullableDateTime(row.startsAt),
         status: row.status,
@@ -683,8 +713,10 @@ export class SearchDocumentBuilder {
         description: userMemoriesIdentities.description,
         episodicDate: userMemoriesIdentities.episodicDate,
         id: userMemoriesIdentities.id,
+        parentMemoryCategory: userMemories.memoryCategory,
         parentDetails: userMemories.details,
         parentSummary: userMemories.summary,
+        parentTags: userMemories.tags,
         parentTitle: userMemories.title,
         relationship: userMemoriesIdentities.relationship,
         role: userMemoriesIdentities.role,
@@ -695,7 +727,13 @@ export class SearchDocumentBuilder {
         userMemoryId: userMemoriesIdentities.userMemoryId,
       })
       .from(userMemoriesIdentities)
-      .leftJoin(userMemories, eq(userMemories.id, userMemoriesIdentities.userMemoryId))
+      .leftJoin(
+        userMemories,
+        and(
+          eq(userMemories.id, userMemoriesIdentities.userMemoryId),
+          eq(userMemories.userId, userMemoriesIdentities.userId),
+        ),
+      )
       .where(
         selection.ids
           ? inArray(userMemoriesIdentities.id, selection.ids)
@@ -714,7 +752,9 @@ export class SearchDocumentBuilder {
         episodic_date: toNullableDateTime(row.episodicDate),
         id: row.id,
         parent_details: row.parentDetails,
+        parent_memory_categories: normalizeStringArray(row.parentMemoryCategory),
         parent_summary: row.parentSummary,
+        parent_tags: normalizeStringArray(row.parentTags),
         parent_title: row.parentTitle,
         relationship: row.relationship,
         role: row.role,
@@ -735,8 +775,10 @@ export class SearchDocumentBuilder {
         createdAt: userMemoriesExperiences.createdAt,
         id: userMemoriesExperiences.id,
         keyLearning: userMemoriesExperiences.keyLearning,
+        parentMemoryCategory: userMemories.memoryCategory,
         parentDetails: userMemories.details,
         parentSummary: userMemories.summary,
+        parentTags: userMemories.tags,
         parentTitle: userMemories.title,
         possibleOutcome: userMemoriesExperiences.possibleOutcome,
         reasoning: userMemoriesExperiences.reasoning,
@@ -748,7 +790,13 @@ export class SearchDocumentBuilder {
         userMemoryId: userMemoriesExperiences.userMemoryId,
       })
       .from(userMemoriesExperiences)
-      .leftJoin(userMemories, eq(userMemories.id, userMemoriesExperiences.userMemoryId))
+      .leftJoin(
+        userMemories,
+        and(
+          eq(userMemories.id, userMemoriesExperiences.userMemoryId),
+          eq(userMemories.userId, userMemoriesExperiences.userId),
+        ),
+      )
       .where(
         selection.ids
           ? inArray(userMemoriesExperiences.id, selection.ids)
@@ -767,7 +815,9 @@ export class SearchDocumentBuilder {
         id: row.id,
         key_learning: row.keyLearning,
         parent_details: row.parentDetails,
+        parent_memory_categories: normalizeStringArray(row.parentMemoryCategory),
         parent_summary: row.parentSummary,
+        parent_tags: normalizeStringArray(row.parentTags),
         parent_title: row.parentTitle,
         possible_outcome: row.possibleOutcome,
         reasoning: row.reasoning,

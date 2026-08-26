@@ -49,6 +49,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import type { UserMemoryEmbeddingRuntime } from '@/server/services/memory/userMemory/embedding';
 import { embedUserMemoryTexts } from '@/server/services/memory/userMemory/embedding';
 import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
+import { createSearchRepo } from '@/server/services/searchBackend';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
   activities: [],
@@ -256,6 +257,19 @@ const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
     },
   });
 });
+const memorySearchProcedure = memoryProcedure.use(async (opts) => {
+  const { ctx } = opts;
+  const searchRepo = await createSearchRepo({ db: ctx.serverDB, userId: ctx.userId });
+
+  return opts.next({
+    ctx: {
+      activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId, searchRepo),
+      experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId, searchRepo),
+      identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId, searchRepo),
+      memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId, searchRepo),
+    },
+  });
+});
 const memoryWriteProcedure = memoryProcedure.use(withScopedPermission('message:create'));
 
 export const userMemoriesRouter = router({
@@ -270,7 +284,7 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  queryActivities: memoryProcedure
+  queryActivities: memorySearchProcedure
     .input(
       z
         .object({
@@ -298,7 +312,7 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  queryExperiences: memoryProcedure
+  queryExperiences: memorySearchProcedure
     .input(
       z
         .object({
@@ -325,7 +339,7 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  queryIdentities: memoryProcedure
+  queryIdentities: memorySearchProcedure
     .input(
       z
         .object({
@@ -382,7 +396,7 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  queryMemories: memoryProcedure
+  queryMemories: memorySearchProcedure
     .input(
       z
         .object({
@@ -922,7 +936,7 @@ export const userMemoriesRouter = router({
    * Retrieve memories for a specific topic
    * Uses concatenated user messages (first 7000 chars) as the search query
    */
-  retrieveMemoryForTopic: memoryProcedure
+  retrieveMemoryForTopic: memorySearchProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Dev-only escape hatch: skip the embedding + memory search triggered by topic
@@ -961,7 +975,7 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  searchMemory: memoryProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
+  searchMemory: memorySearchProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
     try {
       return await searchUserMemories(ctx, input);
     } catch (error) {
@@ -1299,10 +1313,12 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  toolSearchMemory: memoryProcedure.input(searchMemorySchema).query(async ({ input, ctx }) => {
-    const result = await searchUserMemories(ctx, input);
-    return result;
-  }),
+  toolSearchMemory: memorySearchProcedure
+    .input(searchMemorySchema)
+    .query(async ({ input, ctx }) => {
+      const result = await searchUserMemories(ctx, input);
+      return result;
+    }),
 
   toolUpdateIdentityMemory: memoryWriteProcedure
     .input(UpdateIdentityActionSchema)
