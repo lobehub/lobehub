@@ -4,7 +4,6 @@ import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
-import { AGENT_SIGNAL_REVIEW_IDENTIFIER } from '@lobechat/builtin-tool-agent-signal';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
 import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
@@ -181,15 +180,29 @@ const SHARE_VISITOR_ALLOWED_IDENTIFIERS = new Set<string>([
   // `context.userId`/`context.agentVisibility`
   // (`serverRuntimes/imageGeneration.ts:26-47`).
   ImageGenerationIdentifier,
-  // `lobe-verify`, `agent-signal-review`, `acceptance-evidence`: each is
-  // scoped by `context.operationId`/`context.agentId` resolved server-side,
-  // and fails closed (`NO_OPERATION`/no-op) when that context is absent —
-  // `serverRuntimes/verifyResult.ts:35,42`,
-  // `serverRuntimes/acceptanceEvidence.ts:18,23`,
-  // `serverRuntimes/agentSignalReview.ts:37-41` (requires `agentId`, `userId`,
-  // `operationId`, `serverDB` all present, none from model args).
+  // `lobe-verify`: `submitVerifyResult` never takes a model-suppliable
+  // operation/run id at all — it resolves `targetOperationId` from
+  // `context.operationId` (server-derived, `VerifyResultExecutionRuntime`
+  // constructor, `serverRuntimes/verifyResult.ts:34-38`) and its own
+  // `parentOperationId` walk, then fails closed with `NO_OPERATION`/`NO_RUN`
+  // when that context is absent (`serverRuntimes/verifyResult.ts:42-44,63-65`).
+  // The only model args are `checkItemId`/`verdict`, scoped to whatever
+  // `VerifyRunModel.findByOperation` resolves for THIS run — there is no id
+  // the model can pass to reach a different run's check.
   VerifyToolIdentifier,
-  AGENT_SIGNAL_REVIEW_IDENTIFIER,
+  // `acceptance-evidence`: `submitEvidence` is the same shape —
+  // `AcceptanceEvidenceExecutionRuntime` is constructed with
+  // `context.operationId` (server-derived, never from `params`,
+  // `serverRuntimes/acceptanceEvidence.ts:14-20`), fails closed with
+  // `NO_OPERATION` when absent (`acceptanceEvidence.ts:23`), and resolves the
+  // target check item only within the run's own `VerifyRunModel.findByOperation`
+  // plan (`acceptanceEvidence.ts:41-52`). `documentId`/`fileId` in the model's
+  // `evidence` payload are checked for existence only (`DocumentModel`/
+  // `FileModel.findById`, scoped by `this.userId`, `acceptanceEvidence.ts:57-87`)
+  // and stored as opaque references on the check-result row — this tool never
+  // reads back or returns document/file content for an id it did not already
+  // receive from the model, so it cannot be used to exfiltrate the creator's
+  // other documents/files through ITS OWN response.
   AcceptanceEvidenceIdentifier,
   // `callSubAgent` is stripped unconditionally regardless of this allowlist
   // (see `SUB_AGENT_DISPATCH_APIS`/`stripSubAgentDispatchApis` below) — the
@@ -565,6 +578,38 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   `resolveAgentManagementManifest` returning `null` for `isShareVisitor`
  *   (defense in depth).
  *
+ * - `agent-signal-review`: registered by `agentSignalReviewRuntime`
+ *   (`serverRuntimes/agentSignalReview.ts:36-74`), which DOES bind `agentId`
+ *   server-side (from `context.agentId`, throwing if absent) before building
+ *   `createReviewRuntimePrimitives` — but that binding is only the DEFAULT,
+ *   not an enforced ceiling. Two independent, previously undocumented holes
+ *   were found by tracing `createReviewRuntimePrimitives`
+ *   (`apps/server/src/services/agentSignal/services/selfIteration/review/server.ts`),
+ *   contradicting an earlier "scoped by `context.operationId`, fails closed"
+ *   claim that was never actually traced for this identifier:
+ *   1. Cross-agent read: `listManagedSkills` (`server.ts:568-572`) and
+ *      `getManagedSkill` (`server.ts:556-567`) both destructure an optional
+ *      `agentId` straight out of the model's own tool-call arguments and
+ *      prefer it over the bound one — `skillDocumentService.listSkills({
+ *      agentId: targetAgentId ?? agentId })`. `SkillManagementDocumentService`
+ *      is constructed scoped only to `userId` (the creator), not to a single
+ *      agent, so a share visitor can name any OTHER agentId belonging to the
+ *      same creator and read that agent's private managed-skill catalog
+ *      (name, description, full body via `includeContent: true`) — data that
+ *      has nothing to do with the agent this share actually grants access to.
+ *   2. Unconditional creator-scoped mutations: `writeMemory` (`server.ts:689-727`)
+ *      always durably writes a memory via `runMemoryActionAgent` bound to the
+ *      run's `agentId`; `createSkillIfAbsent` (`server.ts:525-555`) and
+ *      `replaceSkillContentCAS` (`server.ts:612-672`) always create/overwrite a
+ *      managed skill document via `SkillManagementDocumentService`. None of
+ *      these are read-only, and `DATA_TOOL_ACCESS_RULES` has no entry for this
+ *      identifier — v1 share grants are `none`/`read` only, so there is no
+ *      grant that could legitimize any of the three even if the cross-agent
+ *      read above were fixed. Removed from the allowlist entirely rather than
+ *      narrowed: `AGENT_SIGNAL_REVIEW_TOOL_API_NAMES` is almost entirely
+ *      mutations or proposal-lifecycle writes (`shared/apiNames.ts:12-52`),
+ *      leaving no worthwhile read-only remainder to carve out.
+ *
  * - `lobe-skill-maintainer` / `agent-signal-skill-management`: hidden,
  *   system-only tools (`hidden: true` in `packages/builtin-tools/src/index.ts`)
  *   whose `plugins: [...]` entries belong to the internal Agent Signal
@@ -705,9 +750,13 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  * SAFE / allowed — see the per-entry comments on `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
  * above for `lobe-topic-reference`, `lobe-calculator`, `lobe-web-browsing`,
  * `lobe-user-interaction`, `lobe-activator`, `lobe-page-agent`, `lobe-brief`,
- * `lobe-image-generation`, `lobe-verify`, `agent-signal-review`,
- * `lobe-acceptance-evidence`, `lobe-agent`, `lobe-knowledge-base`,
- * `lobe-user-memory`, `lobe-agent-documents`.
+ * `lobe-image-generation`, `lobe-verify`, `lobe-acceptance-evidence`,
+ * `lobe-agent`, `lobe-knowledge-base`, `lobe-user-memory`,
+ * `lobe-agent-documents`.
+ *
+ * `agent-signal-review` is NOT on this list — see the "Confirmed leak paths"
+ * entry above; it was removed after tracing `createReviewRuntimePrimitives`
+ * found a cross-agent read plus unconditional creator-scoped mutations.
  */
 
 /**
