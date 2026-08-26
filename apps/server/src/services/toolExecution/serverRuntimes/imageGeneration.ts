@@ -31,6 +31,20 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
       clientIp: context.clientIp,
       userId: context.userId,
       workspaceId: context.workspaceId,
+      // Forward the share-visitor billing marker (narrowed to the two fields
+      // the Cloud billing layer needs) so `imageCaller.createImage` bills the
+      // creator's agentShare budget instead of `userId`'s ordinary balance —
+      // dropping it here would silently charge the creator personally for a
+      // share visitor's generation. See `AuthContext.agentShare`'s JSDoc
+      // (`packages/trpc/src/lambda/context.ts`).
+      ...(context.agentShare
+        ? {
+            agentShare: {
+              agentId: context.agentShare.agentId,
+              visitorUserId: context.agentShare.visitorUserId,
+            },
+          }
+        : {}),
     };
     const aiModelCaller = aiModelRouter.createCaller(callerContext);
     const aiProviderCaller = aiProviderRouter.createCaller(callerContext);

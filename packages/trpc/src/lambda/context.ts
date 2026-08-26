@@ -86,6 +86,17 @@ export interface OIDCAuth {
 
 export interface AuthContext {
   /**
+   * Share-visitor billing marker, forwarded only by the internal
+   * `.createCaller()` context that `imageGenerationRuntime` builds from
+   * `ToolExecutionContext.agentShare` (see its JSDoc in
+   * `services/toolExecution/types.ts`) — never populated for a real
+   * HTTP-authenticated request (`createLambdaContext` never sets it). Routers
+   * that bill a side effect (e.g. `image.createImage`) must forward this
+   * verbatim to the Cloud billing layer so a share visitor's cost lands on
+   * the creator's dedicated agentShare budget instead of ordinary billing.
+   */
+  agentShare?: { agentId: string; visitorUserId: string } | null;
+  /**
    * Set only when the request authenticated via an API key: the key's
    * capability scopes (`null` = full-access key). `undefined` means the
    * request used another auth method and scope enforcement does not apply.
