@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert, Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { useChatInputNotice } from './useChatInputNotice';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  action: css`
+    flex: none;
+    height: 24px;
+    padding-inline: 10px;
+  `,
   alert: css`
     flex: 0 1 auto;
 
@@ -48,6 +53,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       max-width: 100%;
     }
   `,
+  title: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    min-width: 0;
+  `,
+  titleText: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
 }));
 
 const ChatInputNotice = memo(() => {
@@ -58,11 +74,26 @@ const ChatInputNotice = memo(() => {
 
   return (
     <Alert
-      classNames={{ alert: cx(styles.alert) }}
+      classNames={{ alert: cx(styles.alert), title: styles.title }}
       style={{ fontSize: 12 }}
-      title={t(notice.key)}
       type={notice.type}
       variant={'borderless'}
+      title={
+        <>
+          <span className={styles.titleText}>{t(notice.key)}</span>
+          {notice.action === 'enableModel' && (
+            <Button
+              className={styles.action}
+              loading={notice.actionLoading}
+              size={'small'}
+              type={'primary'}
+              onClick={() => void notice.onAction?.()}
+            >
+              {t('input.modelDisabled.action')}
+            </Button>
+          )}
+        </>
+      }
     />
   );
 });

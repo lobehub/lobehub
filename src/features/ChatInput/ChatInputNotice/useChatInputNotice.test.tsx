@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatInputNotice } from './useChatInputNotice';
@@ -15,11 +15,16 @@ interface TestProviderWithModels {
   id: string;
 }
 
+interface TestBuiltinModel {
+  id: string;
+  providerId: string;
+  type: 'chat';
+}
+
 const testState = vi.hoisted(() => ({
   agent: {
     agencyConfig: undefined as
-      | { executionTarget?: string; heterogeneousProvider?: { type: string } }
-      | undefined,
+      { executionTarget?: string; heterogeneousProvider?: { type: string } } | undefined,
     isConfigLoading: false,
     model: 'gpt-4o',
     provider: 'openai',
@@ -29,11 +34,17 @@ const testState = vi.hoisted(() => ({
     isPreferenceLoading: false,
     model: undefined as string | undefined,
     provider: undefined as string | undefined,
+    selectModel: vi.fn(async () => {}),
     selectionPolicy: 'fixed' as 'fixed' | 'member',
   },
   aiInfra: {
+    builtinAiModelList: [] as TestBuiltinModel[],
     enabledChatModelList: [] as TestProviderWithModels[],
+    enabledAiProviders: [] as { id: string }[],
     isInitAiProviderRuntimeState: false,
+    modelRedirects: {} as Record<string, string>,
+    toggleProviderEnabled: vi.fn(async () => {}),
+    toggleProviderModelEnabled: vi.fn(async () => {}),
   },
   isDesktop: false,
   resourceAccess: {
@@ -65,6 +76,7 @@ vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
     // when there is no member override.
     model: testState.agentModelSelection.model ?? testState.agent.model,
     provider: testState.agentModelSelection.provider ?? testState.agent.provider,
+    selectModel: testState.agentModelSelection.selectModel,
     selectionPolicy: testState.agentModelSelection.selectionPolicy,
   }),
 }));
@@ -106,12 +118,18 @@ describe('useChatInputNotice', () => {
       isPreferenceLoading: false,
       model: undefined,
       provider: undefined,
+      selectModel: vi.fn(async () => {}),
       selectionPolicy: 'fixed',
     };
     testState.agent.model = 'gpt-4o';
     testState.agent.provider = 'openai';
+    testState.aiInfra.builtinAiModelList = [];
     testState.aiInfra.enabledChatModelList = [];
+    testState.aiInfra.enabledAiProviders = [];
     testState.aiInfra.isInitAiProviderRuntimeState = false;
+    testState.aiInfra.modelRedirects = {};
+    testState.aiInfra.toggleProviderEnabled.mockReset();
+    testState.aiInfra.toggleProviderModelEnabled.mockReset();
     testState.isDesktop = false;
     testState.resourceAccess = {
       canConfigureResource: true,
@@ -224,6 +242,49 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({ key: 'input.modelUnavailable', type: 'warning' });
+  });
+
+  it('offers to enable a model that still exists but is disabled', async () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+    testState.aiInfra.enabledChatModelList = [{ children: [{ id: 'gpt-4.1' }], id: 'openai' }];
+    testState.aiInfra.enabledAiProviders = [{ id: 'openai' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    expect(result.current).toMatchObject({
+      action: 'enableModel',
+      actionLoading: false,
+      key: 'input.modelDisabled',
+      type: 'warning',
+    });
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderEnabled).not.toHaveBeenCalled();
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
+  });
+
+  it('enables the owning provider before enabling its disabled model', async () => {
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+    testState.aiInfra.builtinAiModelList = [{ id: 'gpt-4o', providerId: 'openai', type: 'chat' }];
+
+    const { result } = renderHook(() => useChatInputNotice());
+
+    await act(async () => result.current?.onAction?.());
+
+    expect(testState.aiInfra.toggleProviderEnabled).toHaveBeenCalledWith('openai', true);
+    expect(testState.aiInfra.toggleProviderModelEnabled).toHaveBeenCalledWith({
+      enabled: true,
+      id: 'gpt-4o',
+      providerId: 'openai',
+      type: 'chat',
+    });
   });
 
   it('does not return unavailable model copy while the agent config is still loading', () => {

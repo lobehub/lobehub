@@ -1,6 +1,14 @@
+import { toast } from '@lobehub/ui/base-ui';
+import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useAgentModelSelection } from '@/features/ChatInput/hooks/useAgentModelSelection';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
+import {
+  resolveEnableTargetProviderId,
+  resolveStaleModelState,
+} from '@/features/ModelSelect/resolveStaleModelState';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -13,6 +21,7 @@ interface ResolveChatInputNoticeParams {
   isGroupContext?: boolean;
   isHeterogeneousAgent: boolean;
   isModelConfigReady: boolean;
+  isModelDisabled?: boolean;
   isResourceViewOnly?: boolean;
 }
 
@@ -31,6 +40,7 @@ export const resolveChatInputNotice = ({
   isAgentModelPending,
   isGroupContext,
   isHeterogeneousAgent,
+  isModelDisabled,
   isModelConfigReady,
   isResourceViewOnly,
 }: ResolveChatInputNoticeParams) => {
@@ -57,8 +67,12 @@ export const resolveChatInputNotice = ({
     !isAgentModelPending && // Example: an agent still references `gpt-4-32k`, or a model reclassified to
     // image/video; once absent from the chat selector, it should read as unavailable.
     !currentChatModel
-  )
+  ) {
+    if (isModelDisabled)
+      return { action: 'enableModel', key: 'input.modelDisabled', type: 'warning' } as const;
+
     return { action: undefined, key: 'input.modelUnavailable', type: 'warning' } as const;
+  }
 
   // Use-level General access (can chat, can't edit the shared config) is
   // deliberately NOT a notice: a standing "you can only use this agent" banner
@@ -68,10 +82,15 @@ export const resolveChatInputNotice = ({
 };
 
 /** Union of every notice shape `resolveChatInputNotice` can return. */
-export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNotice>>;
+export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNotice>> & {
+  actionLoading?: boolean;
+  onAction?: () => Promise<void>;
+};
 
 export const useChatInputNotice = (): ChatInputNotice | undefined => {
+  const { t } = useTranslation('chat');
   const agentId = useAgentId();
+  const [actionLoading, setActionLoading] = useState(false);
 
   const [isAgentConfigLoading, isHeterogeneousAgent] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
@@ -80,7 +99,8 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
 
   // Same source as the model trigger renders, so the notice can never judge a
   // different model than the one the user sees (member overrides included).
-  const { isPreferenceLoading, model, provider, selectionPolicy } = useAgentModelSelection(agentId);
+  const { isPreferenceLoading, model, provider, selectModel, selectionPolicy } =
+    useAgentModelSelection(agentId);
 
   // `isPreferenceLoading` is true for every workspace agent while the shared
   // preferences request is in flight, but the override only feeds the
@@ -89,18 +109,79 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   const isMemberOverridePending = selectionPolicy === 'member' && isPreferenceLoading;
 
   const enabledChatModelList = useEnabledChatModels();
+  const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
+  const enabledAiProviders = useAiInfraStore((s) => s.enabledAiProviders);
+  const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
+  const toggleProviderEnabled = useAiInfraStore((s) => s.toggleProviderEnabled);
+  const toggleProviderModelEnabled = useAiInfraStore((s) => s.toggleProviderModelEnabled);
   const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );
   const currentChatModel = findEnabledChatModel(enabledChatModelList, model, provider);
+  const staleModelState = isModelConfigReady
+    ? resolveStaleModelState(
+        { model, provider },
+        {
+          builtinAiModelList,
+          enabledList: enabledChatModelList,
+          modelRedirects,
+          modelType: 'chat',
+        },
+      )
+    : undefined;
   const { canUseResource, isGroupContext } = useChatInputResourceAccess();
 
-  return resolveChatInputNotice({
+  const notice = resolveChatInputNotice({
     currentChatModel,
     isAgentModelPending: isAgentConfigLoading || isMemberOverridePending,
     isGroupContext,
     isHeterogeneousAgent,
+    isModelDisabled: staleModelState?.status === 'notEnabled',
     isModelConfigReady,
     isResourceViewOnly: !canUseResource,
   });
+
+  const handleEnableModel = useCallback(async () => {
+    const providerId = resolveEnableTargetProviderId(
+      { model, provider },
+      {
+        enabledAiProviders,
+        enabledList: enabledChatModelList,
+        metaProviderId: staleModelState?.meta?.providerId,
+      },
+    );
+    if (!providerId) return;
+
+    setActionLoading(true);
+    try {
+      if (!enabledChatModelList.some((item) => item.id === providerId)) {
+        await toggleProviderEnabled(providerId, true);
+      }
+      await toggleProviderModelEnabled({
+        enabled: true,
+        id: model,
+        providerId,
+        type: 'chat',
+      });
+      if (providerId !== provider) await selectModel({ model, provider: providerId });
+    } catch {
+      toast.error(t('input.modelDisabled.actionFailed'));
+    } finally {
+      setActionLoading(false);
+    }
+  }, [
+    enabledAiProviders,
+    enabledChatModelList,
+    model,
+    provider,
+    selectModel,
+    staleModelState?.meta?.providerId,
+    t,
+    toggleProviderEnabled,
+    toggleProviderModelEnabled,
+  ]);
+
+  if (notice?.action !== 'enableModel') return notice;
+
+  return { ...notice, actionLoading, onAction: handleEnableModel };
 };

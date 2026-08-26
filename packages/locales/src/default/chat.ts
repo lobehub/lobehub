@@ -630,6 +630,9 @@ export default {
   'input.inputCompletionError.title': 'Input suggestions paused',
   'input.modelFixedTip':
     'The model is fixed in the Agent Profile and cannot be switched while chatting.',
+  'input.modelDisabled': 'The current model is disabled',
+  'input.modelDisabled.action': 'Enable',
+  'input.modelDisabled.actionFailed': 'Failed to enable the model. Please try again.',
   'input.modelUnavailable':
     'The current model is no longer available. Choose another model to continue.',
   'input.viewOnlyAgent': 'You can only view this agent',
