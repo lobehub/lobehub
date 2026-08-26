@@ -32,7 +32,8 @@ import { useChatStore } from '@/store/chat';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const { actionsPortalTarget, args, interactionMode, messageId, onInteractionAction } = props;
+  const { actionsPortalTarget, args, disabled, interactionMode, messageId, onInteractionAction } =
+    props;
 
   const persistedDraft = useConversationStore((s) => {
     const msg = dataSelectors.getDbMessageById(messageId)(s);
@@ -46,6 +47,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
   const form = useAskUserForm({
     args,
+    disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,

@@ -173,6 +173,42 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(false);
     });
 
+    it('fences a concurrent deterministic intervention initializer with the same id', async () => {
+      const topicId = 'topic-start-non-reentrant-intervention';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('grants exactly one non-reentrant initializer under a real concurrent row lock', async () => {
+      const topicId = 'topic-start-concurrent-non-reentrant-intervention';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      const results = await Promise.all([
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+      ]);
+
+      expect(results.sort()).toEqual([false, true]);
+    });
+
     it('waits while a foreground operation is running', async () => {
       const topicId = 'task-callback-running-operation';
       await serverDB.insert(topics).values({
@@ -542,6 +578,174 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'retry-callback')).resolves.toBe(
         true,
       );
+    });
+
+    it('repairs the exact intervention continuation anchor after queue ACK', async () => {
+      const topicId = 'intervention-anchor-repair';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-source',
+            operationId: 'operation-source',
+          },
+          taskCallbackReservation: {
+            messageId: 'operation-continuation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.repairAgentInterventionContinuation({
+          active: true,
+          assistantMessageId: 'assistant-continuation',
+          continuationOperationId: 'operation-continuation',
+          reservationId: 'operation-continuation',
+          scope: 'main',
+          sourceOperationId: 'operation-source',
+          startedAt: '2026-08-26T00:00:00.000Z',
+          topicId,
+        }),
+      ).resolves.toBe('repaired');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        assistantMessageId: 'assistant-continuation',
+        operationId: 'operation-continuation',
+        scope: 'main',
+      });
+      expect(topic?.metadata?.taskCallbackReservation).toBeNull();
+    });
+
+    it('releases an exact thread fence without changing the main running anchor', async () => {
+      const topicId = 'intervention-thread-reservation-release';
+      const mainRunningOperation = {
+        assistantMessageId: 'assistant-main',
+        operationId: 'operation-main',
+        scope: 'main',
+        startedAt: '2026-08-26T00:00:00.000Z',
+      };
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: mainRunningOperation,
+          taskCallbackReservation: {
+            messageId: 'operation-thread-continuation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.releaseTaskCallbackReservation(topicId, 'operation-thread-continuation'),
+      ).resolves.toBe('released');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toEqual(mainRunningOperation);
+      expect(topic?.metadata?.taskCallbackReservation).toBeNull();
+    });
+
+    it('does not release a foreign thread fence or change the main running anchor', async () => {
+      const topicId = 'intervention-thread-foreign-reservation';
+      const mainRunningOperation = {
+        assistantMessageId: 'assistant-main',
+        operationId: 'operation-main',
+      };
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: mainRunningOperation,
+          taskCallbackReservation: {
+            messageId: 'foreign-operation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.releaseTaskCallbackReservation(topicId, 'operation-thread-continuation'),
+      ).resolves.toBe('foreign');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toEqual(mainRunningOperation);
+      expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('foreign-operation');
+    });
+
+    it('does not repair across a foreign live topic reservation', async () => {
+      const topicId = 'intervention-anchor-foreign-reservation';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-source',
+            operationId: 'operation-source',
+          },
+          taskCallbackReservation: {
+            messageId: 'foreign-operation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.repairAgentInterventionContinuation({
+          active: true,
+          assistantMessageId: 'assistant-continuation',
+          continuationOperationId: 'operation-continuation',
+          reservationId: 'operation-continuation',
+          sourceOperationId: 'operation-source',
+          startedAt: '2026-08-26T00:00:00.000Z',
+          topicId,
+        }),
+      ).resolves.toBe('conflict');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation?.operationId).toBe('operation-source');
+      expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('foreign-operation');
+    });
+
+    it('clears a terminal intervention anchor without reactivating it', async () => {
+      const topicId = 'intervention-anchor-terminal';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-source',
+            operationId: 'operation-source',
+          },
+          taskCallbackReservation: {
+            messageId: 'operation-continuation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.repairAgentInterventionContinuation({
+          active: false,
+          assistantMessageId: 'assistant-continuation',
+          continuationOperationId: 'operation-continuation',
+          reservationId: 'operation-continuation',
+          sourceOperationId: 'operation-source',
+          startedAt: '2026-08-26T00:00:00.000Z',
+          topicId,
+        }),
+      ).resolves.toBe('terminal');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toBeNull();
+      expect(topic?.metadata?.taskCallbackReservation).toBeNull();
     });
 
     it('does not reserve another user topic', async () => {

@@ -46,6 +46,10 @@ import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
+import {
+  deriveAgentInterventionQueueDeduplicationId,
+  matchesAgentInterventionContinuationProvenance,
+} from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
@@ -551,6 +555,178 @@ export class AgentRuntimeService {
     return true;
   }
 
+  /** Load the authoritative runtime state for a deterministic intervention continuation. */
+  async loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
+    return this.coordinator.loadAgentState(operationId);
+  }
+
+  /**
+   * Re-enqueue a continuation whose durable state was written but whose first
+   * queue delivery may have been lost with the resolving HTTP process. The
+   * operation id and step index are stable, so the ordinary distributed step
+   * lock de-duplicates concurrent/repeated schedules.
+   */
+  async ensureInterventionContinuationStarted(
+    operationId: string,
+  ): Promise<'already_started' | 'missing' | 'scheduled'> {
+    const state = await this.coordinator.loadAgentState(operationId);
+    if (!state) return 'missing';
+
+    const provenance = state.metadata?.agentInterventionContinuation as
+      | {
+          resolutionRequestId?: unknown;
+          sourceOperationId?: unknown;
+          sourceToolMessageIds?: unknown;
+        }
+      | undefined;
+    const preparation = state.metadata?.agentInterventionPreparation as
+      | {
+          deduplicationId?: unknown;
+          resolutionRequestId?: unknown;
+          state?: unknown;
+          stepIndex?: unknown;
+        }
+      | undefined;
+    if (
+      typeof provenance?.resolutionRequestId !== 'string' ||
+      typeof provenance.sourceOperationId !== 'string' ||
+      !Array.isArray(provenance.sourceToolMessageIds) ||
+      !provenance.sourceToolMessageIds.every((id) => typeof id === 'string')
+    ) {
+      throw new Error(`Intervention continuation provenance missing: ${operationId}`);
+    }
+    if (
+      preparation?.state !== 'ready' ||
+      preparation.resolutionRequestId !== provenance.resolutionRequestId ||
+      typeof preparation.stepIndex !== 'number' ||
+      !Number.isSafeInteger(preparation.stepIndex) ||
+      preparation.stepIndex < 0
+    ) {
+      throw new Error(`Intervention continuation is not ready to schedule: ${operationId}`);
+    }
+    const stepIndex = preparation.stepIndex;
+    const deduplicationId = deriveAgentInterventionQueueDeduplicationId(operationId, stepIndex);
+    if (preparation.deduplicationId !== deduplicationId) {
+      throw new Error(`Intervention continuation dedupe provenance conflict: ${operationId}`);
+    }
+    const operation = await this.agentOperationModel.findById(operationId);
+    if (
+      !operation ||
+      !matchesAgentInterventionContinuationProvenance(
+        operation.metadata?.agentInterventionContinuation,
+        provenance as {
+          resolutionRequestId: string;
+          sourceOperationId: string;
+          sourceToolMessageIds: string[];
+        },
+      )
+    ) {
+      throw new Error(`Intervention continuation durable provenance conflict: ${operationId}`);
+    }
+    const durablePreparation = operation.metadata?.agentInterventionPreparation as
+      | {
+          deduplicationId?: unknown;
+          resolutionRequestId?: unknown;
+          state?: unknown;
+          stepIndex?: unknown;
+        }
+      | undefined;
+    if (
+      durablePreparation &&
+      (durablePreparation.state !== 'ready' ||
+        durablePreparation.resolutionRequestId !== provenance.resolutionRequestId ||
+        durablePreparation.stepIndex !== stepIndex ||
+        durablePreparation.deduplicationId !== deduplicationId)
+    ) {
+      throw new Error(`Intervention continuation durable preparation conflict: ${operationId}`);
+    }
+    if (!durablePreparation) {
+      const persisted = await this.agentOperationModel.recordAgentInterventionPreparation(
+        operationId,
+        {
+          deduplicationId,
+          resolutionRequestId: provenance.resolutionRequestId,
+          state: 'ready',
+          stepIndex,
+        },
+      );
+      if (!persisted) {
+        throw new Error(`Failed to backfill intervention preparation: ${operationId}`);
+      }
+    }
+    const dispatchMarker = operation.metadata?.agentInterventionDispatch as
+      | {
+          deduplicationId?: unknown;
+          messageId?: unknown;
+          resolutionRequestId?: unknown;
+          state?: unknown;
+        }
+      | undefined;
+    if (dispatchMarker) {
+      if (
+        dispatchMarker.state !== 'scheduled' ||
+        dispatchMarker.resolutionRequestId !== provenance.resolutionRequestId ||
+        dispatchMarker.deduplicationId !== deduplicationId
+      ) {
+        throw new Error(`Intervention continuation dispatch marker conflict: ${operationId}`);
+      }
+      return 'already_started';
+    }
+    if (!this.queueService) {
+      throw new Error(`Cannot schedule intervention continuation ${operationId}`);
+    }
+
+    // Missing provider ACK is never inferred from `state.status`: a worker may
+    // have raced the HTTP response and advanced this state to running/terminal.
+    // Re-publish with the same provider dedupe key to recover the ACK without a
+    // second actual delivery, then persist the authoritative dispatch marker.
+    const messageId = await this.queueService.scheduleMessage({
+      context: (state as AgentState & { initialContext: AgentRuntimeContext }).initialContext,
+      deduplicationId,
+      delay: 0,
+      endpoint: `${this.baseURL}/run`,
+      operationId,
+      priority: 'high',
+      retryDelay:
+        typeof state.metadata?.queueRetryDelay === 'string'
+          ? state.metadata.queueRetryDelay
+          : undefined,
+      retries:
+        typeof state.metadata?.queueRetries === 'number' ? state.metadata.queueRetries : undefined,
+      stepIndex,
+    });
+    await this.persistInterventionDispatchAck({
+      deduplicationId,
+      messageId,
+      operationId,
+      resolutionRequestId: provenance.resolutionRequestId,
+    });
+
+    return 'scheduled';
+  }
+
+  private async persistInterventionDispatchAck(params: {
+    deduplicationId: string;
+    messageId: string;
+    operationId: string;
+    resolutionRequestId: string;
+  }): Promise<void> {
+    const marker = {
+      deduplicationId: params.deduplicationId,
+      messageId: params.messageId,
+      resolutionRequestId: params.resolutionRequestId,
+      scheduledAt: new Date().toISOString(),
+      state: 'scheduled' as const,
+    };
+    const persisted = await this.agentOperationModel.recordAgentInterventionDispatch(
+      params.operationId,
+      marker,
+    );
+    if (!persisted) {
+      throw new Error(`Failed to persist intervention queue ACK: ${params.operationId}`);
+    }
+  }
+
   // ==================== Operation Management ====================
 
   /**
@@ -569,6 +745,8 @@ export class AgentRuntimeService {
       autoStart = true,
       stream,
       initialMessages = [],
+      interventionResolution,
+      onInterventionPrepared,
       appContext,
       toolSet,
       hooks,
@@ -600,13 +778,14 @@ export class AgentRuntimeService {
     // ends of the persistence lifecycle (start row here, terminal update
     // in dispatchHooks) and swallows DB errors so runtime startup is never
     // blocked.
-    await this.completionLifecycle.recordStart({
+    const operationStartPersisted = await this.completionLifecycle.recordStart({
       agentId: appContext?.agentId ?? null,
       appContext: {
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
         documentId: appContext?.documentId,
         groupId: appContext?.groupId,
         scope: appContext?.scope,
+        sessionId: appContext?.sessionId,
         sourceMessageId: appContext?.sourceMessageId,
       },
       chatGroupId: appContext?.groupId ?? null,
@@ -614,7 +793,16 @@ export class AgentRuntimeService {
       // Persist the Agent Signal run marker on the operation row so server-side
       // self-iteration tools can read it back (metadata.agentSignal) at tool-call
       // time — the trimmed appContext above intentionally drops it.
-      ...(appContext?.agentSignal ? { metadata: { agentSignal: appContext.agentSignal } } : {}),
+      ...(appContext?.agentSignal || interventionResolution
+        ? {
+            metadata: {
+              ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
+              ...(interventionResolution
+                ? { agentInterventionContinuation: interventionResolution }
+                : {}),
+            },
+          }
+        : {}),
       model: modelRuntimeConfig?.model,
       modelRuntimeConfig,
       operationId,
@@ -625,6 +813,22 @@ export class AgentRuntimeService {
       topicId: appContext?.topicId ?? null,
       trigger: appContext?.trigger,
     });
+    if (interventionResolution && !operationStartPersisted) {
+      throw new Error(
+        `Failed to durably persist intervention continuation ${operationId} before dispatch`,
+      );
+    }
+
+    if (interventionResolution) {
+      const durableOperation = await this.agentOperationModel.findById(operationId);
+      const persistedProvenance = durableOperation?.metadata?.agentInterventionContinuation;
+      if (
+        !durableOperation ||
+        !matchesAgentInterventionContinuationProvenance(persistedProvenance, interventionResolution)
+      ) {
+        throw new Error(`Intervention continuation operation identity conflict: ${operationId}`);
+      }
+    }
 
     const operationToolSet = toolSet;
     let operationCreated = false;
@@ -685,6 +889,9 @@ export class AgentRuntimeService {
           evalContext,
           evalRuntime,
           executionPlan,
+          ...(interventionResolution
+            ? { agentInterventionContinuation: interventionResolution }
+            : {}),
           // need be removed
           modelRuntimeConfig,
           queueRetries,
@@ -755,17 +962,55 @@ export class AgentRuntimeService {
         }
       }
 
+      if (interventionResolution) {
+        const preparedState = await this.coordinator.loadAgentState(operationId);
+        if (!preparedState) {
+          throw new Error(`Intervention continuation state disappeared: ${operationId}`);
+        }
+        const preparation = {
+          deduplicationId: deriveAgentInterventionQueueDeduplicationId(
+            operationId,
+            initialStepCount,
+          ),
+          resolutionRequestId: interventionResolution.resolutionRequestId,
+          state: 'ready' as const,
+          stepIndex: initialStepCount,
+        };
+        await this.coordinator.saveAgentState(operationId, {
+          ...preparedState,
+          metadata: {
+            ...preparedState.metadata,
+            agentInterventionPreparation: preparation,
+          },
+        });
+        const preparationPersisted =
+          await this.agentOperationModel.recordAgentInterventionPreparation(
+            operationId,
+            preparation,
+          );
+        if (!preparationPersisted) {
+          throw new Error(
+            `Failed to persist intervention continuation preparation: ${operationId}`,
+          );
+        }
+        onInterventionPrepared?.();
+      }
+
       throwIfAborted(signal, 'Agent execution aborted before first step scheduling');
 
       let messageId: string | undefined;
       let autoStarted = false;
 
       if (autoStart && this.queueService) {
+        const deduplicationId = interventionResolution
+          ? deriveAgentInterventionQueueDeduplicationId(operationId, initialStepCount)
+          : undefined;
         // Both local and queue modes use scheduleMessage
         // LocalQueueServiceImpl uses setTimeout + callback mechanism
         // QStashQueueServiceImpl schedules HTTP requests
         messageId = await this.queueService.scheduleMessage({
           context: initialContext,
+          deduplicationId,
           delay: 50, // Short delay for startup
           endpoint: `${this.baseURL}/run`,
           operationId,
@@ -774,6 +1019,14 @@ export class AgentRuntimeService {
           retries: queueRetries,
           stepIndex: initialStepCount,
         });
+        if (interventionResolution && deduplicationId) {
+          await this.persistInterventionDispatchAck({
+            deduplicationId,
+            messageId,
+            operationId,
+            resolutionRequestId: interventionResolution.resolutionRequestId,
+          });
+        }
         autoStarted = true;
         log('[%s] Scheduled first step (messageId: %s)', operationId, messageId);
       }
@@ -1477,12 +1730,10 @@ export class AgentRuntimeService {
         if (!shouldContinue) {
           const preSaveReason = this.determineCompletionReason(stepResult.newState);
           // Success-like reasons ONLY — a `waiting_for_human` park must NOT
-          // register: the approval resume continues the SAME operationId
-          // (`processHumanIntervention` reschedules it), so pre-park edits are
-          // covered by the real terminal completion's scan. Registering at the
-          // park would persist the `_fileWorksRegistered` marker into the park
-          // snapshot (skipping the terminal registration entirely) and freeze
-          // per-(op, file) versions at pre-approval content.
+          // register because it is not a completed deliverable boundary. The
+          // fresh approval continuation sees the complete authoritative
+          // history and performs the terminal scan after the decision runs;
+          // registering here would freeze pre-approval content too early.
           if (isSuccessLikeCompletionReason(preSaveReason)) {
             await this.completionLifecycle.registerFileWorks(operationId, stepResult.newState);
             logToolCallPc(operationId, stepIndex, 'post.file_works_registered', () => ({}));

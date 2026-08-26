@@ -10,6 +10,9 @@ const {
   mockFindMessagePlugin,
   mockMessageCreate,
   mockMessageQuery,
+  mockLoadInterventionContinuationState,
+  mockResolveHumanApproval,
+  mockRestoreHumanApproval,
   mockUpdateMessagePlugin,
   mockUpdatePluginState,
   mockUpdateToolMessage,
@@ -19,6 +22,9 @@ const {
   mockFindMessagePlugin: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
+  mockLoadInterventionContinuationState: vi.fn(),
+  mockResolveHumanApproval: vi.fn(),
+  mockRestoreHumanApproval: vi.fn(),
   mockUpdateMessagePlugin: vi.fn(),
   mockUpdatePluginState: vi.fn(),
   mockUpdateToolMessage: vi.fn(),
@@ -31,6 +37,7 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
+  HumanApprovalAlreadyResolvedError: class HumanApprovalAlreadyResolvedError extends Error {},
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
     getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
@@ -38,6 +45,8 @@ vi.mock('@/database/models/message', () => ({
     findById: mockFindById,
     findMessagePlugin: mockFindMessagePlugin,
     query: mockMessageQuery,
+    resolveHumanApproval: mockResolveHumanApproval,
+    restoreHumanApproval: mockRestoreHumanApproval,
     update: vi.fn().mockResolvedValue({}),
     updateMessagePlugin: mockUpdateMessagePlugin,
     updatePluginState: mockUpdatePluginState,
@@ -100,6 +109,8 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
     createOperation: mockCreateOperation,
+    ensureInterventionContinuationStarted: vi.fn().mockResolvedValue('scheduled'),
+    loadInterventionContinuationState: mockLoadInterventionContinuationState,
   })),
 }));
 
@@ -164,6 +175,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     apiName: 'askUserQuestion',
     arguments: '{"question":"favorite color?"}',
     identifier: 'lobe-agent',
+    intervention: { status: 'pending' },
     toolCallId: 'call_ask',
     type: 'builtin',
   };
@@ -176,10 +188,15 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       operationId: 'op-123',
       success: true,
     });
-    mockFindById.mockResolvedValue(pendingToolMessage);
+    mockFindById.mockImplementation(async (id: string) =>
+      id === pendingToolMessage.id ? pendingToolMessage : undefined,
+    );
     mockFindMessagePlugin.mockResolvedValue(pendingToolPlugin);
     mockMessageQuery.mockResolvedValue([{ content: 'hi', id: 'history-1', role: 'user' }]);
     mockMessageCreate.mockResolvedValue({ id: 'assistant-msg-new' });
+    mockResolveHumanApproval.mockResolvedValue('applied');
+    mockLoadInterventionContinuationState.mockResolvedValue(null);
+    mockRestoreHumanApproval.mockResolvedValue(undefined);
     mockUpdateMessagePlugin.mockResolvedValue(undefined);
     mockUpdatePluginState.mockResolvedValue(undefined);
     mockUpdateToolMessage.mockResolvedValue(undefined);
@@ -203,14 +220,18 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    // The human answer becomes the tool message's result content.
-    expect(mockUpdateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
-      content: 'My favorite color is blue',
-    });
-    // Intervention is marked approved so the pending state clears.
-    expect(mockUpdateMessagePlugin).toHaveBeenCalledWith('tool-msg-1', {
-      intervention: { status: 'approved' },
-    });
+    // Content, intervention, and optional form state share one row-locking
+    // first-winner boundary.
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({
+        content: 'My favorite color is blue',
+        id: 'tool-msg-1',
+        intervention: {
+          resolutionRequestId: expect.stringMatching(/^legacy_/),
+          status: 'approved',
+        },
+      }),
+    ]);
 
     // Resumes from `tool_result` — NOT `human_approved_tool` (which would
     // re-dispatch the tool and overwrite the answer).
@@ -240,9 +261,11 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    expect(mockUpdatePluginState).toHaveBeenCalledWith('tool-msg-1', {
-      askUserAnswers: { 'favorite color?': 'blue' },
-    });
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({
+        pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
+      }),
+    ]);
   });
 
   it('does not persist pluginState when omitted', async () => {
@@ -255,7 +278,9 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    expect(mockUpdatePluginState).not.toHaveBeenCalled();
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({ pluginState: undefined }),
+    ]);
   });
 
   describe('validation guards', () => {
