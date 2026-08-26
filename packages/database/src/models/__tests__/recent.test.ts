@@ -165,6 +165,34 @@ describe('RecentModel', () => {
         expect(result[0].id).toBe('topic-real');
       });
 
+      it('excludes agent-share visitor topics', async () => {
+        // Agent-share visitor topics keep the creator's userId, but a non-null
+        // senderId marks them as visitor traffic that must not surface in the
+        // creator's own Recent feed.
+        await serverDB.insert(agents).values({ id: 'agent-share-recent', userId, virtual: false });
+
+        await serverDB.insert(topics).values([
+          {
+            id: 'topic-visitor-recent',
+            userId,
+            agentId: 'agent-share-recent',
+            senderId: 'visitor-user-x',
+            title: 'visitor topic',
+            updatedAt: minutesAgo(1),
+          },
+          {
+            id: 'topic-creator-recent',
+            userId,
+            agentId: 'agent-share-recent',
+            title: 'creator topic',
+            updatedAt: minutesAgo(5),
+          },
+        ]);
+
+        const result = await recentModel.queryRecent();
+        expect(result.map((r) => r.id)).toEqual(['topic-creator-recent']);
+      });
+
       it('excludes topics on virtual agents that are not in a group', async () => {
         await serverDB.insert(agents).values({ id: 'agent-virtual', userId, virtual: true });
 

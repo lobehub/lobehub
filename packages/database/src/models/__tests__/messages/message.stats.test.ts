@@ -65,6 +65,32 @@ describe('MessageModel Statistics Tests', () => {
       expect(result).toBe(2);
     });
 
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // topics.senderId marks the topic (and its messages) as visitor traffic
+      // that must not count toward the creator's own analytics.
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-count',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-msg-1',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-count',
+        },
+        { id: 'creator-msg-1', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.count();
+
+      expect(result).toBe(1);
+    });
+
     describe('count with date filters', () => {
       beforeEach(async () => {
         // Create test data with messages on different dates
@@ -269,6 +295,30 @@ describe('MessageModel Statistics Tests', () => {
       const result = await messageModel.countWords({ endDate: '2023-02-01' });
 
       // Only 'old message' should be counted = 11 characters
+      expect(result).toEqual(11);
+    });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-words',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-words-1',
+          userId,
+          role: 'user',
+          content: 'visitor words here',
+          topicId: 'topic-visitor-words',
+        },
+        { id: 'creator-words-1', userId, role: 'user', content: 'hello world' },
+      ]);
+
+      const result = await messageModel.countWords();
+
+      // Only the creator's own message ('hello world' = 11 characters) is counted
       expect(result).toEqual(11);
     });
   });
@@ -505,6 +555,47 @@ describe('MessageModel Statistics Tests', () => {
         expect(item.level).toBe(0);
       });
     });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const oneDayAgoDate = today.subtract(1, 'day').format('YYYY-MM-DD');
+
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-heatmap',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-heatmap-1',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-heatmap',
+          createdAt: today.subtract(1, 'day').toDate(),
+        },
+        {
+          id: 'creator-heatmap-1',
+          userId,
+          role: 'user',
+          content: 'creator message',
+          createdAt: today.subtract(1, 'day').toDate(),
+        },
+      ]);
+
+      const result = await messageModel.getHeatmaps();
+
+      const oneDayAgo = result.find((item) => item.date === oneDayAgoDate);
+      // Only the creator's own message is counted; the visitor message is excluded
+      expect(oneDayAgo?.count).toBe(1);
+
+      vi.useRealTimers();
+    });
   });
 
   describe('getTokenHeatmaps', () => {
@@ -675,6 +766,48 @@ describe('MessageModel Statistics Tests', () => {
 
       vi.useRealTimers();
     });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const dayKey = today.subtract(2, 'day').format('YYYY-MM-DD');
+      const createdAt = today.subtract(2, 'day').toDate();
+
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-token-heatmap',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-token-1',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 500 } },
+          topicId: 'topic-visitor-token-heatmap',
+          createdAt,
+        },
+        {
+          id: 'creator-token-1',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 100 } },
+          createdAt,
+        },
+      ]);
+
+      const result = await messageModel.getTokenHeatmaps();
+      const day = result.find((item) => item.date === dayKey);
+
+      // Only the creator's own tokens (100) are counted; the visitor's 500 tokens are excluded
+      expect(day?.count).toBe(100);
+
+      vi.useRealTimers();
+    });
   });
 
   describe('rankModels', () => {
@@ -744,6 +877,37 @@ describe('MessageModel Statistics Tests', () => {
       expect(result[0]).toEqual({ id: 'gpt-3.5', count: 3 }); // most used
       expect(result[1]).toEqual({ id: 'claude', count: 1 });
       expect(result[2]).toEqual({ id: 'gpt-4', count: 1 });
+    });
+
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-rank',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-rank-1',
+          userId,
+          role: 'assistant',
+          content: 'visitor message',
+          model: 'gpt-4',
+          topicId: 'topic-visitor-rank',
+        },
+        {
+          id: 'creator-rank-1',
+          userId,
+          role: 'assistant',
+          content: 'creator message',
+          model: 'gpt-3.5',
+        },
+      ]);
+
+      const result = await messageModel.rankModels();
+
+      // The visitor's gpt-4 usage must not surface; only the creator's gpt-3.5 does
+      expect(result).toEqual([{ id: 'gpt-3.5', count: 1 }]);
     });
   });
 
@@ -925,6 +1089,34 @@ describe('MessageModel Statistics Tests', () => {
       // otherUser only has the single leaked message in s-t1
       expect(stats.topics).toBe(1);
       expect(stats.totalMessages).toBe(1);
+    });
+  });
+
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('queryByKeyword', () => {
+    it('excludes messages inside an agent-share visitor topic', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-keyword',
+        userId,
+        senderId: 'visitor-user-x',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'visitor-keyword-1',
+          userId,
+          role: 'user',
+          content: 'searchterm from visitor',
+          topicId: 'topic-visitor-keyword',
+        },
+        { id: 'creator-keyword-1', userId, role: 'user', content: 'searchterm from creator' },
+      ]);
+
+      const result = await messageModel.queryByKeyword('searchterm');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('creator-keyword-1');
     });
   });
 

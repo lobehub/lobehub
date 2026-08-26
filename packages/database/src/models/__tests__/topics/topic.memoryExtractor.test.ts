@@ -74,4 +74,68 @@ describe('TopicModel - countTopicsForMemoryExtractor', () => {
 
     expect(total).toBe(2);
   });
+
+  it('excludes agent-share visitor topics from the count', async () => {
+    await serverDB.insert(topics).values([
+      // normal creator topic — kept
+      {
+        id: 't1',
+        createdAt: new Date('2023-01-01'),
+        metadata: {},
+        userId,
+      },
+      // agent-share visitor topic: userId is still the creator, but senderId
+      // marks it as a visitor conversation that must not feed memory extraction
+      {
+        id: 't2-visitor',
+        createdAt: new Date('2023-01-02'),
+        metadata: {},
+        senderId: 'visitor-user-x',
+        userId,
+      },
+    ]);
+
+    const total = await topicModel.countTopicsForMemoryExtractor({
+      ignoreExtracted: true,
+    });
+
+    expect(total).toBe(1);
+  });
+});
+
+describe('TopicModel - listTopicsForMemoryExtractor', () => {
+  beforeEach(async () => {
+    await serverDB.delete(users);
+    await serverDB.insert(users).values({ id: userId });
+  });
+
+  afterEach(async () => {
+    await serverDB.delete(users);
+  });
+
+  it('excludes agent-share visitor topics from the list', async () => {
+    await serverDB.insert(topics).values([
+      // normal creator topic — kept
+      {
+        id: 't1',
+        createdAt: new Date('2023-01-01'),
+        metadata: {},
+        userId,
+      },
+      // agent-share visitor topic: userId is still the creator, but senderId
+      // marks it as a visitor conversation that must not feed memory extraction
+      {
+        id: 't2-visitor',
+        createdAt: new Date('2023-01-02'),
+        metadata: {},
+        senderId: 'visitor-user-x',
+        userId,
+      },
+    ]);
+
+    const result = await topicModel.listTopicsForMemoryExtractor({ ignoreExtracted: true });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('t1');
+  });
 });

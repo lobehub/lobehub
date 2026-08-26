@@ -21,6 +21,7 @@ import {
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
+import { notShareVisitorTopic } from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
@@ -242,6 +243,7 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, topics),
+            notShareVisitorTopic(),
             isUnread,
             isMainSidebarTopic,
             sql`${topics.agentId} is not null`,
@@ -254,6 +256,7 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, topics),
+            notShareVisitorTopic(),
             isUnread,
             isMainSidebarTopic,
             sql`${topics.groupId} is not null`,
