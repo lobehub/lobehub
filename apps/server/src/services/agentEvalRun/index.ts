@@ -146,7 +146,16 @@ export class AgentEvalRunService {
     this.experimentModel = new AgentEvalExperimentModel(db, userId, workspaceId);
     this.runTopicModel = new AgentEvalRunTopicModel(db, userId, workspaceId);
     this.testCaseModel = new AgentEvalTestCaseModel(db, userId, workspaceId);
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+    // `onShareRunsInterrupted`: `resolveTrajectoryResumeTarget`'s dangling-
+    // message cleanup below calls `MessageModel.deleteMessages`, the same
+    // share-visitor gap `deleteRun`'s `TopicModel.batchDelete` closes below —
+    // wiring it here too keeps every bulk delete on this service on one
+    // contract instead of assuming eval-run topics can never carry a
+    // `senderId`. See `MessageModelOptions.onShareRunsInterrupted`'s JSDoc
+    // and LOBE-11930.
+    this.messageModel = new MessageModel(db, userId, workspaceId, {
+      onShareRunsInterrupted: interruptSnapshottedShareRuns(db, userId),
+    });
     this.threadModel = new ThreadModel(db, userId, workspaceId);
     // `onShareRunsInterrupted`: `deleteRun`'s cleanup below reuses
     // `TopicModel.batchDelete`, the same shared bulk-delete surface the

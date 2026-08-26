@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { uuid } from '@/utils/uuid';
 
@@ -426,6 +426,38 @@ describe('MessageModel Update Tests', () => {
         .where(eq(messages.userId, otherUserId));
 
       expect(otherResult).toHaveLength(1);
+    });
+
+    // Regression for LOBE-11930: `deleteAllMessages` is test-only today (no
+    // router/service reaches it), but must still honor the same
+    // share-visitor snapshot contract as every other bulk delete in this
+    // model — see `MessageModelOptions.onShareRunsInterrupted`'s JSDoc.
+    it('reports an in-flight Agent Share visitor run across the user-wide sweep', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new MessageModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(topics).values({
+        id: 'visitor-topic-all',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-all' } },
+        senderId: 'visitor-all',
+        title: 'Visitor',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'hi',
+        id: 'visitor-msg-all',
+        role: 'user',
+        topicId: 'visitor-topic-all',
+        userId,
+      });
+
+      await modelWithCallback.deleteAllMessages();
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-all', topicId: 'visitor-topic-all' },
+      ]);
     });
 
     it('should handle database errors gracefully', async () => {

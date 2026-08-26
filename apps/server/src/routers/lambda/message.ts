@@ -19,6 +19,7 @@ import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import { FileService } from '@/server/services/file';
 import { type MessageBatchOperation, MessageService } from '@/server/services/message';
 
@@ -44,12 +45,22 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
 
+  // `onShareRunsInterrupted` covers every message-level bulk/batch delete
+  // below (`removeMessage`, `removeMessages`, `removeMessagesByAssistant`,
+  // `removeMessagesByGroup`) — each snapshots in-flight Agent Share visitor
+  // runs itself, BEFORE its own delete, and hands the snapshot here once its
+  // transaction has committed. See `MessageModelOptions
+  // .onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+  const messageModelOptions = {
+    onShareRunsInterrupted: interruptSnapshottedShareRuns(ctx.serverDB, ctx.userId),
+  };
+
   return opts.next({
     ctx: {
       compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
-      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId, messageModelOptions),
+      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId, messageModelOptions),
       topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });

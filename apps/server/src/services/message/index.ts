@@ -9,7 +9,7 @@ import {
 } from '@lobechat/types';
 import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
-import { MessageModel } from '@/database/models/message';
+import { MessageModel, type MessageModelOptions } from '@/database/models/message';
 
 import { FileService } from '../file';
 
@@ -95,8 +95,17 @@ export class MessageService {
   private fileService: FileService;
   private compressionRepository: CompressionRepository;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    // Forwarded straight into `MessageModel` so the trpc `removeMessage(s)`
+    // mutations (this service's only delete callers) close the same
+    // message-level share-visitor gap as `TopicModel`'s bulk sweeps — see
+    // `MessageModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
+    messageModelOptions?: MessageModelOptions,
+  ) {
+    this.messageModel = new MessageModel(db, userId, workspaceId, messageModelOptions);
     this.fileService = new FileService(db, userId, workspaceId);
     this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
   }
