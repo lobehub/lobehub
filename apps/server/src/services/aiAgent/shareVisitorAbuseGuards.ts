@@ -2,7 +2,6 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { CreateMessageParams, DBMessageItem } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { sql } from 'drizzle-orm';
 
 import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel } from '@/database/models/message';
@@ -24,15 +23,30 @@ import type { TopicItem } from '@/database/schemas';
  * pre-insert count and all insert — Codex P1, LOBE-11930 review round
  * (`shareChat.ts:129`).
  *
- * `pg_advisory_xact_lock(hashtext(...))` inside a single transaction is the
- * same idiom `OnboardingService.sendOnboardingFirstMessage` uses to make its
- * own topic-provisioning idempotent under concurrency
- * (`apps/server/src/services/onboarding/index.ts:587-613`, serializing per
- * `userId:agentId`) — here keyed by `agentId:visitorUserId` to match
- * `TopicModel.countBySender`'s own scope. The recount and the INSERT both run
- * inside that one locked transaction, so whichever of two concurrent callers
- * loses the lock re-reads the FIRST caller's already-committed topic and
- * correctly rejects instead of also inserting.
+ * `AgentShareModel.lockOwnedAgentRow` takes `FOR UPDATE` on the SAME
+ * `agents.id` row every other share-mutation path locks (`create`,
+ * `updateConfig`, `updateVisibility`, `deleteByAgentId`,
+ * `assertRunnableForVisitor` — see that method's JSDoc and
+ * `withOwnedPersonalAgentLock`'s JSDoc for the full family). The recount and
+ * the INSERT both run inside that one locked transaction, so whichever of two
+ * concurrent callers loses the lock re-reads the FIRST caller's
+ * already-committed topic and correctly rejects instead of also inserting.
+ *
+ * This used to be a separate `pg_advisory_xact_lock(hashtext(...))` keyed by
+ * `agentId:visitorUserId` (the idiom `OnboardingService.sendOnboardingFirstMessage`
+ * still uses for its own topic-provisioning idempotency,
+ * `apps/server/src/services/onboarding/index.ts:587-613`) instead of this row
+ * lock. That advisory lock only ever serialized concurrent VISITOR requests
+ * against each other — it was a lock disjoint from anything `updateConfig`
+ * takes, so a cap read inside it could still straddle a concurrent
+ * `updateConfig` reduction: read the OLD (higher) cap, then have the owner's
+ * write commit a LOWER one, then insert against the stale number anyway
+ * (Codex P2, LOBE-11930 review round, `shareVisitorAbuseGuards.ts:71`).
+ * Reusing the Agent row lock closes that gap for free — see
+ * `withOwnedPersonalAgentLock`'s JSDoc for why the advisory lock is not kept
+ * ALONGSIDE this one, and for the deadlock analysis of taking this lock from
+ * a transaction this function opens itself rather than one `AgentShareModel`
+ * opens internally.
  *
  * The cap itself is read via `AgentShareModel.readCurrentVisitorCaps` from
  * INSIDE this same locked transaction — deliberately NOT accepted as a
@@ -61,10 +75,13 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
 
-    // hashtext() returns int4; pg_advisory_xact_lock takes bigint, so cast.
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`agent-share-topic:${agentId}:${visitorUserId}`})::bigint)`,
-    );
+    // Fail closed: a deleted/transferred/no-longer-owned agent never gets a
+    // new visitor topic, same as every other share-mutation path locking
+    // this row — see `lockOwnedAgentRow`'s JSDoc.
+    const locked = await AgentShareModel.lockOwnedAgentRow(tx, agentId, ownerId);
+    if (!locked) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+    }
 
     // Fresh read under the lock, not a caller-supplied value — see this
     // function's JSDoc for the stale-cap flood this closes.
@@ -116,11 +133,24 @@ export const reserveShareVisitorTopic = (
  * arbitrary amount (same review round, requirement to fix the whole class of
  * count-then-act guards, not just the one Codex named).
  *
- * Locked per `topicId` (not per visitor) because the cap is per-topic:
- * `pg_advisory_xact_lock(hashtext('agent-share-turn:' + topicId))`, same
- * cast-to-bigint idiom as every other advisory-lock call site in this
- * codebase (`onboarding/index.ts`, `goalGraph.ts`, `taskResultBridge/index.ts`,
- * `document/index.ts`).
+ * Locked via `AgentShareModel.lockOwnedAgentRow` — the SAME `agents.id FOR
+ * UPDATE` row {@link reserveShareVisitorTopicOrThrow} and every other
+ * share-mutation path lock, not a topic-scoped lock. This used to be a
+ * separate, finer-grained `pg_advisory_xact_lock(hashtext('agent-share-turn:'
+ * + topicId))` (same cast-to-bigint idiom as `onboarding/index.ts`,
+ * `goalGraph.ts`, `taskResultBridge/index.ts`, `document/index.ts`), keyed
+ * per `topicId` so it only serialized concurrent sends to the SAME topic.
+ * That lock never conflicted with a concurrent `updateConfig`, so a cap read
+ * under it could still straddle a concurrent cap reduction — see
+ * {@link reserveShareVisitorTopicOrThrow}'s JSDoc for the full before/after
+ * and the deadlock analysis. The trade-off from reusing the Agent row lock
+ * is coarser contention (this now serializes against every OTHER topic's
+ * turn-reservation and topic-reservation for the same agent, not just this
+ * one topic's), which is acceptable: these transactions are a single
+ * count-then-insert each, no external I/O, and `assertRunnableForVisitor`
+ * already takes this exact row lock once per run start on the very same
+ * request path — this is not a new contention point, only the same one
+ * applied consistently.
  *
  * Same stale-snapshot fix as {@link reserveShareVisitorTopicOrThrow}: the cap
  * is read fresh via `AgentShareModel.readCurrentVisitorCaps` from inside this
@@ -142,9 +172,12 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
   return db.transaction(async (trx) => {
     const tx = trx as unknown as LobeChatDatabase;
 
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`agent-share-turn:${topicId}`})::bigint)`,
-    );
+    // Fail closed: same ownership/existence check as the topic guard — see
+    // `reserveShareVisitorTopicOrThrow`'s JSDoc.
+    const locked = await AgentShareModel.lockOwnedAgentRow(tx, agentId, ownerId);
+    if (!locked) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
+    }
 
     // Fresh read under the lock, not a caller-supplied value — see this
     // function's JSDoc for the stale-cap flood this closes.
