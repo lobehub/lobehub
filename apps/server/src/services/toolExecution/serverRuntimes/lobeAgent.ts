@@ -26,7 +26,10 @@ import { parseDataUri } from '@lobechat/utils/uriParser';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import {
+  buildAgentShareModelRuntimeContext,
+  initModelRuntimeFromDB,
+} from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 
 import type { ToolExecutionContext } from '../types';
@@ -37,20 +40,22 @@ import type { ServerRuntimeRegistration } from './types';
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
   /**
+   * Full share-visitor billing marker (mirroring
+   * `ToolExecutionContext.agentShare`), present only on shared-agent visitor
+   * runs. `analyzeMedia`'s nested `initModelRuntimeFromDB` call forwards this
+   * through `buildAgentShareModelRuntimeContext` so the multimodal-analysis
+   * inference it triggers bills the creator's agentShare budget instead of
+   * their ordinary personal budget — see the agent share P1 note on
+   * `analyzeMedia` below. `isShareVisitor` (derived from this) additionally
+   * drives the plan-runtime topic restriction.
+   */
+  agentShare?: { agentId: string; visitorUserId: string } | null;
+  /**
    * Visibility of the executing agent. Forwarded to the plan runtime so plan
    * documents inherit private-agent visibility.
    */
   agentVisibility?: 'private' | 'public' | null;
   groupId?: string | null;
-  /**
-   * Set (mirroring `ToolExecutionContext.agentShare`) when this run is a
-   * shared-agent visitor run. Forwarded to `createServerPlanRuntimeService`
-   * as `restrictToTopicId` so `updatePlan`'s model-suppliable `planId` is
-   * resolved only within the visitor's own topic — see the Codex P1 note on
-   * `createServerPlanRuntimeService`'s `restrictToTopicId` param in
-   * `lobeAgentPlan.ts`.
-   */
-  isShareVisitor?: boolean;
   messageId: string;
   /** The current Agent Run (`agent_operations.id`). */
   operationId?: string;
@@ -132,6 +137,7 @@ interface ServerMediaSourceMessage extends MediaSourceMessage {
 
 class LobeAgentExecutionRuntime {
   private agentId?: string | null;
+  private agentShare?: { agentId: string; visitorUserId: string } | null;
   private db: LobeChatDatabase;
   private groupId?: string | null;
   private userId: string;
@@ -148,6 +154,7 @@ class LobeAgentExecutionRuntime {
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
+    this.agentShare = context.agentShare;
     this.db = context.serverDB;
     this.groupId = context.groupId;
     this.messageId = context.messageId;
@@ -165,7 +172,7 @@ class LobeAgentExecutionRuntime {
         // Fail closed even when a share-visitor run somehow carries no
         // `topicId`: an empty string never matches a real topic id, so
         // `isAssociated` — and therefore `findPlanById` — returns nothing.
-        context.isShareVisitor ? (context.topicId ?? '') : undefined,
+        context.agentShare ? (context.topicId ?? '') : undefined,
       ),
     );
   }
@@ -449,7 +456,24 @@ class LobeAgentExecutionRuntime {
 
     let content = '';
     let usage: unknown;
-    const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
+    // Codex P1: this nested inference must bill the same target as the
+    // top-level `call_llm` step. `ServerLLMTransport` forwards
+    // `agentShare` through `buildAgentShareModelRuntimeContext` for every
+    // ordinary step of a share-visitor run; without the same call here, a
+    // visitor could repeat `analyzeMedia` to run unmetered multimodal
+    // inference against the creator's ordinary billing instead of the
+    // share budget the creator actually configured. `buildAgentShareModelRuntimeContext`
+    // throws (rather than returning `undefined`) if `this.agentShare` is
+    // present but malformed, so a broken share marker refuses the call
+    // instead of silently falling back to the creator's personal budget.
+    const shareBillingContext = buildAgentShareModelRuntimeContext(this.agentShare);
+    const runtime = await initModelRuntimeFromDB(
+      this.db,
+      this.userId,
+      provider,
+      this.workspaceId,
+      shareBillingContext,
+    );
     const payload = {
       messages: [
         {
@@ -508,9 +532,11 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
 
     return new LobeAgentExecutionRuntime({
       agentId: context.agentId,
+      agentShare: context.agentShare
+        ? { agentId: context.agentShare.agentId, visitorUserId: context.agentShare.visitorUserId }
+        : undefined,
       agentVisibility: context.agentVisibility,
       groupId: context.groupId,
-      isShareVisitor: !!context.agentShare,
       messageId: context.messageId,
       operationId: context.operationId,
       serverDB: context.serverDB,

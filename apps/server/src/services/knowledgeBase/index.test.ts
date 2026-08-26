@@ -19,7 +19,23 @@ vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/database/repositories/search', () => ({ SearchRepo: vi.fn() }));
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
-vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  // Real implementation is a pure fail-closed mapper (no I/O) — mirror it so
+  // tests can assert the resulting shape reaches `initModelRuntimeFromDB`.
+  buildAgentShareModelRuntimeContext: (
+    agentShare?: { agentId?: string | null; visitorUserId?: string | null } | null,
+  ) => {
+    if (!agentShare) return undefined;
+    const { agentId, visitorUserId } = agentShare;
+    if (!agentId || !visitorUserId) {
+      throw new Error(
+        "Share-visitor model runtime billing context is incomplete (missing agentId/visitorUserId); refusing to fall back to the creator's ordinary billing.",
+      );
+    }
+    return { agentShare: { agentId, visitorUserId } };
+  },
+  initModelRuntimeFromDB: vi.fn(),
+}));
 vi.mock('@/database/utils/workspace', () => ({
   buildWorkspaceWhere: vi.fn(() => 'WORKSPACE_SCOPE'),
 }));

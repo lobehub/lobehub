@@ -476,6 +476,56 @@ export const initModelRuntimeWithUserPayload = (
  * const response = await modelRuntime.chat({ messages, model });
  * ```
  */
+/**
+ * Minimal shared-agent-visitor marker needed to bill an LLM/embedding call
+ * against the creator's agentShare budget instead of their personal budget.
+ * Deliberately narrower than `ToolExecutionContext['agentShare']` /
+ * `RuntimeExecutorContext['agentShare']` (which also carry grant/permission
+ * fields irrelevant to billing) so any call site — `ServerLLMTransport` for
+ * ordinary steps, or a tool runtime issuing a nested/secondary model call
+ * (multimodal analysis, memory search embeddings, knowledge-base search
+ * embeddings, …) — can pass its own richer context object straight in.
+ */
+export interface ShareVisitorBillingMarker {
+  agentId: string;
+  visitorUserId: string;
+}
+
+/**
+ * Single source of truth for turning a share-visitor marker into the
+ * `BusinessModelRuntimeContext` that `initModelRuntimeFromDB` forwards to
+ * `getBusinessModelRuntimeHooks`. Every code path that resolves a
+ * `ModelRuntime` while executing on behalf of a share visitor — not just the
+ * top-level `call_llm` step `ServerLLMTransport` drives, but any nested
+ * inference a tool runtime triggers internally (`lobe-agent`'s `analyzeMedia`,
+ * the memory tool's `searchMemory` query embedding, the knowledge-base tool's
+ * `searchKnowledgeBase` query embedding, …) — MUST route through this helper
+ * instead of re-deriving the `{ agentShare: {...} }` shape inline, so a future
+ * nested call site can't silently omit it and bill the creator's ordinary
+ * budget instead of the share budget (see agent share P1 follow-up on
+ * `analyzeMedia`).
+ *
+ * Fails closed: a caller only has a marker to pass here once it already knows
+ * the run is a share-visitor run, so a marker missing `agentId`/
+ * `visitorUserId` means the caller's own context is broken, not that this is
+ * a non-share run. Throwing instead of falling through to `undefined` stops
+ * that broken state from silently billing the creator's personal budget.
+ */
+export const buildAgentShareModelRuntimeContext = (
+  agentShare?: ShareVisitorBillingMarker | null,
+): BusinessModelRuntimeContext | undefined => {
+  if (!agentShare) return undefined;
+
+  const { agentId, visitorUserId } = agentShare;
+  if (!agentId || !visitorUserId) {
+    throw new Error(
+      "Share-visitor model runtime billing context is incomplete (missing agentId/visitorUserId); refusing to fall back to the creator's ordinary billing.",
+    );
+  }
+
+  return { agentShare: { agentId, visitorUserId } };
+};
+
 export const initModelRuntimeFromDB = async (
   db: LobeChatDatabase,
   userId: string,

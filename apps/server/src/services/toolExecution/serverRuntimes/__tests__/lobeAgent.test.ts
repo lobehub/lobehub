@@ -65,6 +65,21 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  // Real implementation is a pure fail-closed mapper (no I/O), so mirror it
+  // instead of stubbing — tests below assert the resulting shape/refusal
+  // behavior reaches `initModelRuntimeFromDB`'s call args.
+  buildAgentShareModelRuntimeContext: (
+    agentShare?: { agentId?: string | null; visitorUserId?: string | null } | null,
+  ) => {
+    if (!agentShare) return undefined;
+    const { agentId, visitorUserId } = agentShare;
+    if (!agentId || !visitorUserId) {
+      throw new Error(
+        "Share-visitor model runtime billing context is incomplete (missing agentId/visitorUserId); refusing to fall back to the creator's ordinary billing.",
+      );
+    }
+    return { agentShare: { agentId, visitorUserId } };
+  },
   initModelRuntimeFromDB: (...args: any[]) => mockInitModelRuntimeFromDB(...args),
 }));
 
@@ -328,6 +343,74 @@ describe('lobeAgentRuntime', () => {
     });
   });
 
+  describe('analyzeMedia share billing (agent share P1 — nested multimodal inference)', () => {
+    it('forwards the share billing context so a nested multimodal call bills the agentShare budget', async () => {
+      const runtime = lobeAgentRuntime.factory({
+        ...baseContext,
+        agentShare: {
+          agentId: 'agent-1',
+          visitorUserId: 'visitor-1',
+        } as any,
+      });
+
+      const result = await runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/generated.png'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockInitModelRuntimeFromDB).toHaveBeenCalledWith(
+        baseContext.serverDB,
+        'user-1',
+        'test-provider',
+        undefined,
+        { agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' } },
+      );
+    });
+
+    it('does not attach a share billing context for an ordinary (non-share) run', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+
+      await runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/generated.png'],
+      });
+
+      expect(mockInitModelRuntimeFromDB).toHaveBeenCalledWith(
+        baseContext.serverDB,
+        'user-1',
+        'test-provider',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('refuses the nested call instead of falling back to ordinary billing when the share marker is malformed', async () => {
+      const runtime = lobeAgentRuntime.factory({
+        ...baseContext,
+        // Missing `visitorUserId` — a broken upstream wiring, not "no share".
+        agentShare: { agentId: 'agent-1' } as any,
+      });
+
+      // Thrown synchronously (before any model call), not returned as a
+      // `{ success: false }` tool result — `BuiltinToolsExecutor.execute`'s
+      // outer try/catch is what turns this into a failed tool result for the
+      // model; this test only asserts the runtime itself refuses rather than
+      // silently falling back to the creator's ordinary billing.
+      await expect(
+        runtime.analyzeMedia({
+          question: 'what is this?',
+          urls: ['https://example.com/generated.png'],
+        }),
+      ).rejects.toThrow(/incomplete/);
+
+      // The runtime never reaches `initModelRuntimeFromDB` — refusing happens
+      // before any model call (and therefore before any spend), which is what
+      // makes this "fail closed" rather than "fail open onto ordinary billing".
+      expect(mockInitModelRuntimeFromDB).not.toHaveBeenCalled();
+    });
+  });
+
   it('should return a configuration error when multimodal model env is missing', async () => {
     mockToolsEnv.MULTIMODAL_UNDERSTANDING_MODEL = undefined;
     const runtime = lobeAgentRuntime.factory(baseContext);
@@ -441,6 +524,7 @@ describe('lobeAgentRuntime', () => {
       'user-1',
       'test-provider',
       'workspace-1',
+      undefined,
     );
   });
 

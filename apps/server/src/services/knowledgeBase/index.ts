@@ -16,7 +16,10 @@ import { type KnowledgeBaseDocumentHit, SearchRepo } from '@/database/repositori
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import {
+  buildAgentShareModelRuntimeContext,
+  initModelRuntimeFromDB,
+} from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
 
 export interface FileContentResult {
@@ -90,6 +93,16 @@ export class KnowledgeBaseSearchService {
   private searchRepo: SearchRepo;
   private documentServiceInstance?: DocumentService;
   private callerAgentVisibility?: 'private' | 'public' | null;
+  /**
+   * Share-visitor billing marker, present only when this search is running
+   * on behalf of a shared-agent visitor's `searchKnowledgeBase` call (the one
+   * knowledge-base API a share visitor can reach — see the `read` grant in
+   * `shareGate.ts`'s `DATA_TOOL_ACCESS_RULES`). Forwarded into
+   * `semanticSearchForChat`'s query-embedding `initModelRuntimeFromDB` call
+   * so that inference bills the creator's agentShare budget instead of their
+   * ordinary personal budget.
+   */
+  private agentShare?: { agentId: string; visitorUserId: string } | null;
 
   private workspaceId?: string;
 
@@ -98,11 +111,13 @@ export class KnowledgeBaseSearchService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    agentShare?: { agentId: string; visitorUserId: string } | null,
   ) {
     this.serverDB = serverDB;
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
+    this.agentShare = agentShare;
     this.chunkModel = new ChunkModel(serverDB, userId, workspaceId);
     // Public-agent gate: `documentModel.ownership()` excludes caller-private
     // rows, so a workspace-shared agent cannot resolve chunks back to a
@@ -139,6 +154,7 @@ export class KnowledgeBaseSearchService {
         this.userId,
         provider,
         this.workspaceId,
+        buildAgentShareModelRuntimeContext(this.agentShare),
       );
 
       // slice content to make sure in the context window limit
