@@ -13,6 +13,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TaskModel } from '@/database/models/task';
+import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
@@ -62,6 +63,10 @@ vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn(),
+}));
+
 vi.mock('@/database/models/chatGroup', () => ({
   ChatGroupModel: vi.fn(),
 }));
@@ -84,6 +89,24 @@ vi.mock('@/database/models/workspaceUserSettings', () => ({
 
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(),
+}));
+
+const mockInterruptTask = vi.fn().mockResolvedValue({ success: true });
+
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn(() => ({
+    interruptTask: mockInterruptTask,
+  })),
+}));
+
+// `after()` schedules its callback fire-and-forget in production. Tests run
+// it eagerly (and await it below) so the interrupt side effect is
+// observable without racing the assertion.
+const afterTasks: Promise<unknown>[] = [];
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => Promise<unknown> | unknown) => {
+    afterTasks.push(Promise.resolve(work()));
+  },
 }));
 
 vi.mock('@/server/services/workspacePermission', () => ({
@@ -126,6 +149,7 @@ describe('agentRouter', () => {
   let mockCtx: any;
   let agentModelMock: any;
   let taskModelMock: any;
+  let topicModelMock: any;
   let chatGroupModelMock: any;
   let sessionModelMock: any;
   let fileModelMock: any;
@@ -179,6 +203,14 @@ describe('agentRouter', () => {
       countTasksBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
     };
     vi.mocked(TaskModel).mockImplementation(() => taskModelMock);
+
+    topicModelMock = {
+      findActiveVisitorRunTopics: vi.fn().mockResolvedValue([]),
+    };
+    vi.mocked(TopicModel).mockImplementation(() => topicModelMock);
+
+    afterTasks.length = 0;
+    mockInterruptTask.mockClear().mockResolvedValue({ success: true });
 
     chatGroupModelMock = {
       countGroupsBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
@@ -271,6 +303,26 @@ describe('agentRouter', () => {
         userId,
       });
       expect(agentModelMock.delete).toHaveBeenCalledWith('agent-1');
+    });
+
+    // Regression for LOBE-11930: deleting an agent cascades away the share's
+    // topics, so an in-flight visitor run must be interrupted using the
+    // operation snapshot taken BEFORE the delete — re-querying `topics` for
+    // this agentId afterward would find nothing.
+    it('interrupts an in-flight visitor run snapshotted before the delete cascade', async () => {
+      const trx = { execute: vi.fn() };
+      const transaction = vi.fn(async (callback) => callback(trx));
+      vi.mocked(getServerDB).mockResolvedValueOnce({ transaction } as never);
+      topicModelMock.findActiveVisitorRunTopics.mockResolvedValue([
+        { operationId: 'operation-1', topicId: 'topic-1' },
+      ]);
+
+      const caller = agentRouter.createCaller(mockCtx);
+      await caller.removeAgent({ agentId: 'agent-1' });
+      await Promise.all(afterTasks);
+
+      expect(topicModelMock.findActiveVisitorRunTopics).toHaveBeenCalledWith('agent-1');
+      expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'operation-1' });
     });
   });
 

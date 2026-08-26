@@ -169,6 +169,71 @@ export const runtimeManagedToolIds = [
   WebBrowsingManifest.identifier,
 ];
 
+/**
+ * Master allowlist of builtin tool identifiers a share visitor's run may ever
+ * touch, at BOTH the tool-set-assembly layer (server
+ * `applyShareGateToToolSet`) and the dispatch layer (server
+ * `isShareBlockedDataToolCall`) — see
+ * `apps/server/src/services/aiAgent/shareGate.ts`. Also the single source of
+ * truth for the agent-owner-facing share settings tool picker
+ * (`src/features/AgentShareSettings/SettingsContent.tsx`), which must show a
+ * builtin tool as unavailable-to-visitors rather than let the owner select
+ * (and the UI silently confirm) a grant the server gate can never honor.
+ *
+ * Exported from `@lobechat/builtin-tools` — not `apps/server` — specifically
+ * so the client settings UI can import the exact same Set the server gate
+ * enforces, instead of hand-copying identifiers that could drift. This
+ * package is already the shared boundary for cross-cutting builtin-tool
+ * identifier lists consumed by both the frontend (`createAgentToolsEngine`)
+ * and the server (`createServerAgentToolsEngine`) — see `defaultToolIds` /
+ * `chatModeAllowedToolIds` / `runtimeManagedToolIds` above.
+ *
+ * DEFAULT-DENY, not default-allow-minus-a-blocklist. A share visitor's run
+ * executes with the CREATOR's full credentials, and every builtin runtime
+ * defaults to creator-scoped — it is written for the creator's own
+ * conversation, where "the caller" and "the data owner" are the same person.
+ * A share visitor breaks that assumption (caller ≠ data owner), and nothing
+ * about a builtin tool's manifest or registration signals whether its
+ * runtime happens to re-derive its scope from a model-suppliable argument
+ * (unsafe for a visitor) or purely from server-side context like
+ * `context.agentId` / `context.operationId` (safe). Under this allowlist, a
+ * newly registered builtin tool — or a newly added API on an already-allowed
+ * one — is exposed to a share visitor ONLY once someone explicitly adds it
+ * here with file:line evidence for why its runtime cannot resolve to the
+ * creator's data outside what this specific share/agent grants.
+ *
+ * Every entry was verified against its actual server runtime
+ * (`apps/server/src/services/toolExecution/serverRuntimes/*`), not just its
+ * manifest. For the full per-identifier safety evidence AND the rationale
+ * for every DENIED identifier (`lobe-agent-management`, `lobe-task`,
+ * `lobe-creds`, `lobe-message`, `lobe-skill-store`, `lobe-agent-builder`,
+ * `lobe-skills`, `lobe-group-agent-builder`, `lobe-group-management`,
+ * `agent-signal-review`, and the hidden system-only self-iteration tools),
+ * see `apps/server/src/services/aiAgent/shareGate.ts`'s `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
+ * history / the denied-bucket doc block at the bottom of that file.
+ */
+export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
+  TopicReferenceManifest.identifier,
+  CalculatorManifest.identifier,
+  WebBrowsingManifest.identifier,
+  UserInteractionManifest.identifier,
+  LobeActivatorManifest.identifier,
+  PageAgentManifest.identifier,
+  BriefManifest.identifier,
+  ImageGenerationManifest.identifier,
+  VerifyToolManifest.identifier,
+  AcceptanceEvidenceManifest.identifier,
+  LobeAgentManifest.identifier,
+  // Data-bearing tools whose whole-identifier grant AND per-API write/always-
+  // blocked surface is further narrowed server-side by
+  // `DATA_TOOL_ACCESS_RULES` in `shareGate.ts` — being on this allowlist only
+  // lets them survive to that narrower gate, it does not itself grant read or
+  // write access.
+  KnowledgeBaseManifest.identifier,
+  MemoryManifest.identifier,
+  AgentDocumentsManifest.identifier,
+]);
+
 const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     discoverable: false,
@@ -443,3 +508,29 @@ const recommendedBuiltinIds = new Set(
 export const defaultUninstalledBuiltinTools = builtinTools
   .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
   .map((t) => t.identifier);
+
+const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
+
+/**
+ * Whether `identifier` belongs to the population `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`
+ * governs — the real builtin tool registry above, the same source the server
+ * gate (`hasServerRuntime`/`BuiltinToolsExecutor`) resolves against. MCP
+ * servers, market plugins, and custom plugins never appear in this registry,
+ * so they fall outside this allowlist's jurisdiction entirely.
+ */
+export const isBuiltinToolIdentifier = (identifier: string): boolean =>
+  builtinIdentifierSet.has(identifier);
+
+/**
+ * Whether `identifier` would survive the agent-share builtin-tool gate: true
+ * for anything outside this allowlist's jurisdiction (MCP/market/custom
+ * plugins — left entirely to the owner's `enabledToolIds` picker), and for a
+ * governed builtin identifier, true only when it is explicitly listed in
+ * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`.
+ *
+ * Shared by the server gate (`shareGate.ts`) and the owner-facing tool picker
+ * (`AgentShareSettings/SettingsContent.tsx`) so both sides agree on exactly
+ * which builtin tools a share visitor's run can ever reach.
+ */
+export const isAgentShareAllowedBuiltinIdentifier = (identifier: string): boolean =>
+  !isBuiltinToolIdentifier(identifier) || AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier);

@@ -1122,6 +1122,43 @@ export class TopicModel {
     return result[0].count;
   };
 
+  /**
+   * Every share-visitor topic on this agent with a still-open
+   * `runningOperation` marker — the set of in-flight visitor runs a share
+   * revocation (visibility flipped off `link`, or the share row deleted) must
+   * proactively interrupt.
+   *
+   * Scoped by `senderId IS NOT NULL` (the share-visitor marker, see
+   * `notShareVisitorTopic`) rather than by a specific visitor: revocation
+   * must stop every visitor's run, not just one. Only the root
+   * `runningOperation.operationId` is returned per topic — `AiAgentService
+   * .interruptTask` re-derives any hetero child operation from the same
+   * topic metadata, so callers can pass these pairs straight through without
+   * re-reading child operations here.
+   */
+  findActiveVisitorRunTopics = async (
+    agentId: string,
+  ): Promise<Array<{ operationId: string; topicId: string }>> => {
+    const rows = await this.db
+      .select({ id: topics.id, metadata: topics.metadata })
+      .from(topics)
+      .where(
+        and(
+          this.mine(),
+          eq(topics.agentId, agentId),
+          isNotNull(topics.senderId),
+          sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+        ),
+      );
+
+    return rows
+      .map((row) => ({
+        operationId: row.metadata?.runningOperation?.operationId,
+        topicId: row.id,
+      }))
+      .filter((row): row is { operationId: string; topicId: string } => Boolean(row.operationId));
+  };
+
   // **************** Create *************** //
 
   create = async (

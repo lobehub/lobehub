@@ -129,6 +129,7 @@ vi.mock('@/database/models/plugin', () => ({
 const topicMock = {
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
+  findActiveVisitorRunTopics: vi.fn().mockResolvedValue([]),
   findById: vi.fn().mockResolvedValue(undefined),
   releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
   tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
@@ -223,6 +224,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     recordStartSpy = vi.spyOn(CompletionLifecycle.prototype, 'recordStart').mockResolvedValue(true);
     topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
+    topicMock.findActiveVisitorRunTopics.mockResolvedValue([]);
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.releaseTaskCallbackReservation.mockResolvedValue(undefined);
     topicMock.tryReserveTaskCallback.mockResolvedValue(true);
@@ -1613,6 +1615,49 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       // Otherwise this child would never be recognized by
       // heteroIngest/heteroFinish at all.
       expect(findRunningOpSeed()).toBeDefined();
+    });
+  });
+
+  // Regression for LOBE-11930: revoking an Agent Share must proactively stop
+  // every in-flight visitor run instead of only re-authorizing cancellation
+  // for a visitor who may no longer be present (closed tab).
+  describe('interruptActiveShareRuns', () => {
+    it('interrupts every active visitor run found for the agent', async () => {
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
+        { operationId: 'op-1', topicId: 'topic-1' },
+        { operationId: 'op-2', topicId: 'topic-2' },
+      ]);
+      const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
+
+      await service.interruptActiveShareRuns('agent-1');
+
+      expect(topicMock.findActiveVisitorRunTopics).toHaveBeenCalledWith('agent-1');
+      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'op-1', topicId: 'topic-1' });
+      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'op-2', topicId: 'topic-2' });
+    });
+
+    it('does nothing when the agent has no active visitor run', async () => {
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([]);
+      const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
+
+      await service.interruptActiveShareRuns('agent-1');
+
+      expect(interruptTaskSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps interrupting the remaining runs when one interrupt fails', async () => {
+      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
+        { operationId: 'op-1', topicId: 'topic-1' },
+        { operationId: 'op-2', topicId: 'topic-2' },
+      ]);
+      const interruptTaskSpy = vi
+        .spyOn(service, 'interruptTask')
+        .mockRejectedValueOnce(new Error('device gateway unreachable'))
+        .mockResolvedValueOnce({ operationId: 'op-2', success: true });
+
+      await expect(service.interruptActiveShareRuns('agent-1')).resolves.toBeUndefined();
+
+      expect(interruptTaskSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

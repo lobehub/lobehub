@@ -2397,4 +2397,60 @@ describe('TopicModel - Query', () => {
       expect(result[0].id).toBe('visitor-a-topic');
     });
   });
+
+  // Regression for LOBE-11930: revoking a share must be able to find every
+  // in-flight visitor run so it can interrupt them — see
+  // `AiAgentService.interruptActiveShareRuns`.
+  describe('findActiveVisitorRunTopics', () => {
+    it('returns the running operationId for a share-visitor topic with a running operation', async () => {
+      const agentId = 'active-share-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Active Share Agent' });
+      await serverDB.insert(topics).values({
+        id: 'active-visitor-topic',
+        title: 'Active',
+        userId,
+        agentId,
+        senderId: 'visitor-active',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      const result = await topicModel.findActiveVisitorRunTopics(agentId);
+
+      expect(result).toEqual([{ operationId: 'op-1', topicId: 'active-visitor-topic' }]);
+    });
+
+    it('ignores share-visitor topics without a running operation', async () => {
+      const agentId = 'idle-share-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Idle Share Agent' });
+      await serverDB.insert(topics).values({
+        id: 'idle-visitor-topic',
+        title: 'Idle',
+        userId,
+        agentId,
+        senderId: 'visitor-idle',
+        metadata: {},
+      });
+
+      const result = await topicModel.findActiveVisitorRunTopics(agentId);
+
+      expect(result).toEqual([]);
+    });
+
+    it('ignores non-visitor (creator-owned) topics even with a running operation', async () => {
+      const agentId = 'creator-agent';
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Creator Agent' });
+      await serverDB.insert(topics).values({
+        id: 'creator-topic',
+        title: 'Creator',
+        userId,
+        agentId,
+        senderId: null,
+        metadata: { runningOperation: { assistantMessageId: 'msg-2', operationId: 'op-2' } },
+      });
+
+      const result = await topicModel.findActiveVisitorRunTopics(agentId);
+
+      expect(result).toEqual([]);
+    });
+  });
 });

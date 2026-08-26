@@ -30,6 +30,24 @@ vi.mock('@/database/models/agent', () => ({
   })),
 }));
 
+const mockInterruptActiveShareRuns = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn(() => ({
+    interruptActiveShareRuns: mockInterruptActiveShareRuns,
+  })),
+}));
+
+// `after()` schedules its callback fire-and-forget in production. Tests run
+// it eagerly (and await it below) so revocation's interrupt side effect is
+// observable without racing the assertion.
+const afterTasks: Promise<unknown>[] = [];
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => Promise<unknown> | unknown) => {
+    afterTasks.push(Promise.resolve(work()));
+  },
+}));
+
 const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
   await import('../agentShare');
 
@@ -43,6 +61,8 @@ const share = {
 describe('agentShareRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    afterTasks.length = 0;
+    mockInterruptActiveShareRuns.mockResolvedValue(undefined);
     mockCreate.mockResolvedValue(share);
     mockDeleteByAgentId.mockResolvedValue(share);
     mockGetByAgentId.mockResolvedValue(share);
@@ -130,6 +150,51 @@ describe('agentShareRouter', () => {
 
     expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'link');
     expect(mockDeleteByAgentId).toHaveBeenCalledWith('agent-1');
+  });
+
+  // Regression for LOBE-11930: revoking a share (link -> private, or
+  // disabling it outright) must proactively interrupt any visitor run that
+  // is still executing, not just stop authorizing future cancellation —
+  // see `AiAgentService.interruptActiveShareRuns`.
+  describe('revocation interrupts active visitor runs', () => {
+    it('interrupts active runs when flipping link -> private', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' });
+      await Promise.all(afterTasks);
+
+      expect(mockInterruptActiveShareRuns).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('does not interrupt anything when publishing (private -> link)', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.updateVisibility({ agentId: 'agent-1', visibility: 'link' });
+      await Promise.all(afterTasks);
+
+      expect(mockInterruptActiveShareRuns).not.toHaveBeenCalled();
+    });
+
+    it('interrupts active runs when disabling a share outright', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.disableShare({ agentId: 'agent-1' });
+      await Promise.all(afterTasks);
+
+      expect(mockInterruptActiveShareRuns).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('does not interrupt anything when the revoking mutation itself fails', async () => {
+      mockUpdateVisibility.mockResolvedValue(null);
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await expect(
+        caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await Promise.all(afterTasks);
+
+      expect(mockInterruptActiveShareRuns).not.toHaveBeenCalled();
+    });
   });
 
   it('returns NOT_FOUND when an existing share is required', async () => {

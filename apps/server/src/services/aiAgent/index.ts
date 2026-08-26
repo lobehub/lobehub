@@ -6745,6 +6745,65 @@ export class AiAgentService {
   }
 
   /**
+   * Interrupt every in-flight visitor run on a shared agent — the active
+   * counterpart of revoking an Agent Share.
+   *
+   * A share revocation (link → private, or deleting the share) only flips
+   * the `agent_shares` row: `findByShareIdWithAccessCheck` starts rejecting
+   * NEW requests immediately, but an operation already created before the
+   * flip keeps its tool snapshot and gateway channel and keeps running under
+   * the CREATOR's credentials/budget — nothing tears it down on its own. The
+   * visitor's own Stop button stops working in the same instant (it calls
+   * `shareChat.interruptTask`, which re-resolves the now-private share and
+   * gets `FORBIDDEN`), so closing the tab is the only visitor-side signal,
+   * and that signal never reaches the server. Revocation must therefore
+   * proactively stop these runs itself rather than only re-authorizing
+   * cancellation for a visitor who may no longer be present to call it.
+   *
+   * This is the SAME `interruptTask` every other cancellation path in this
+   * service uses (Stop button, reconnect, task/bot stop) — reused verbatim
+   * per affected topic so hetero remote-process cancellation and Thread
+   * status settlement stay in one place instead of a second, drifting
+   * implementation.
+   *
+   * Deliberately called by routers AFTER the revocation write has already
+   * committed (see `agentShareRouter.disableShare` / `updateVisibility`,
+   * both of which run inside `AgentShareModel`'s own `FOR UPDATE`
+   * transaction). Interrupting touches the runtime (device gateway calls,
+   * `agentRuntimeService.interruptOperation`) and writes operation/thread
+   * rows outside that transaction — those are side effects that must never
+   * fire on a rollback, so they can't run inside it. Best-effort per topic:
+   * one failed interrupt (e.g. a transient device-gateway error) must not
+   * stop the others from being attempted, and must never re-open the
+   * already-committed revocation.
+   */
+  async interruptActiveShareRuns(agentId: string): Promise<void> {
+    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
+    if (activeRuns.length === 0) return;
+
+    log(
+      'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s)',
+      agentId,
+      activeRuns.length,
+    );
+
+    await Promise.all(
+      activeRuns.map(async ({ operationId, topicId }) => {
+        try {
+          await this.interruptTask({ operationId, topicId });
+        } catch (error) {
+          log(
+            'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
+            operationId,
+            topicId,
+            error,
+          );
+        }
+      }),
+    );
+  }
+
+  /**
    * Stop a run that is parked waiting for tool approval: settle the pending
    * tool rows and terminate the operation, WITHOUT executing anything and
    * without continuing the model.
