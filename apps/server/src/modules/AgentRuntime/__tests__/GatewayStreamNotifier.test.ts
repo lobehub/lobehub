@@ -463,8 +463,17 @@ describe('GatewayStreamNotifier', () => {
       return JSON.parse(pushCall![1].body).event.data;
     };
 
-    it('drops finalState (userMemory/agentConfig/systemRole/...) but keeps reason/reasonDetail/errorType/uiMessages for a share run', async () => {
-      const uiMessages = [{ content: 'hi', id: 'msg_1', role: 'assistant' }] as any;
+    it('drops finalState (userMemory/agentConfig/systemRole/...) but keeps reason/reasonDetail/errorType for a share run, and scrubs uiMessages of creator identity', async () => {
+      const uiMessages = [
+        {
+          content: 'hi',
+          extra: { model: 'gpt-4', provider: 'openai' },
+          id: 'msg_1',
+          role: 'assistant',
+          sender: { id: 'creator-1', nickname: 'Creator' },
+          usage: { totalTokens: 42 },
+        },
+      ] as any;
 
       await notifier.publishAgentRuntimeEnd({
         finalState: {
@@ -489,9 +498,45 @@ describe('GatewayStreamNotifier', () => {
       expect(data).not.toHaveProperty('finalState');
       expect(data.reason).toBe('error');
       expect(data.errorType).toBe('InsufficientBudgetForModel');
-      expect(data.uiMessages).toEqual(uiMessages);
+      expect(data.uiMessages).toHaveLength(1);
+      expect(data.uiMessages[0]).toMatchObject({
+        content: 'hi',
+        id: 'msg_1',
+        role: 'assistant',
+        sender: null,
+      });
+      expect(data.uiMessages[0].usage).toBeUndefined();
+      expect(data.uiMessages[0].extra?.model).toBeUndefined();
+      expect(data.uiMessages[0].extra?.provider).toBeUndefined();
       expect(JSON.stringify(data)).not.toContain('secret system prompt');
       expect(JSON.stringify(data)).not.toContain('creator private persona');
+      expect(JSON.stringify(data)).not.toContain('Creator');
+      expect(JSON.stringify(data)).not.toContain('gpt-4');
+    });
+
+    it('keeps uiMessages (including sender/usage/model) unchanged for a normal (non-share) creator run', async () => {
+      const uiMessages = [
+        {
+          content: 'hi',
+          extra: { model: 'gpt-4', provider: 'openai' },
+          id: 'msg_1',
+          role: 'assistant',
+          sender: { id: 'creator-1', nickname: 'Creator' },
+          usage: { totalTokens: 42 },
+        },
+      ] as any;
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: { status: 'done' },
+        operationId: 'op-owner',
+        reason: 'completed',
+        stepIndex: 3,
+        uiMessages,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushEndPayload();
+      expect(data.uiMessages).toEqual(uiMessages);
     });
 
     it('keeps finalState (including metadata) unchanged for a normal (non-share) creator run', async () => {
@@ -568,6 +613,142 @@ describe('GatewayStreamNotifier', () => {
 
       const data = pushStepCompletePayload();
       expect(data.finalState).toEqual(finalState);
+    });
+  });
+
+  // step_start carries neither `streamOwnerUserId` (only on the init event's
+  // `initialState`) nor `finalState` (only on end / step_complete), so it can
+  // only be sanitized via the per-operation share-visitor flag `pushEvent`
+  // tracks from `publishAgentRuntimeInit` / `publishAgentRuntimeEnd`.
+  describe('shared-agent visitor privacy (step_start uiMessages)', () => {
+    const pushStepStartPayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) =>
+          c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'step_start',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    const uiMessage = {
+      content: 'hi',
+      extra: { model: 'gpt-4', provider: 'openai' },
+      id: 'msg_1',
+      role: 'assistant',
+      sender: { id: 'creator-1', nickname: 'Creator' },
+      usage: { totalTokens: 42 },
+    } as any;
+
+    it('scrubs sender/usage/extra.model/extra.provider off uiMessages for a share run', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        status: 'idle',
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-share', {
+        data: { uiMessages: [uiMessage] },
+        stepIndex: 1,
+        type: 'step_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStepStartPayload();
+      expect(data.uiMessages).toHaveLength(1);
+      expect(data.uiMessages[0]).toMatchObject({
+        content: 'hi',
+        id: 'msg_1',
+        role: 'assistant',
+        sender: null,
+      });
+      expect(data.uiMessages[0].usage).toBeUndefined();
+      expect(data.uiMessages[0].extra?.model).toBeUndefined();
+      expect(data.uiMessages[0].extra?.provider).toBeUndefined();
+      expect(JSON.stringify(data)).not.toContain('Creator');
+      expect(JSON.stringify(data)).not.toContain('gpt-4');
+    });
+
+    it('keeps uiMessages (including sender/usage/model) unchanged for a normal (non-share) creator run', async () => {
+      await notifier.publishAgentRuntimeInit('op-owner', {
+        status: 'idle',
+        userId: 'creator-1',
+      });
+
+      await notifier.publishStreamEvent('op-owner', {
+        data: { uiMessages: [uiMessage] },
+        stepIndex: 1,
+        type: 'step_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStepStartPayload();
+      expect(data.uiMessages).toEqual([uiMessage]);
+    });
+
+    it('queue worker path: scrubs uiMessages when the persisted resolver reports a share run for an op it never initialized', async () => {
+      const resolveShareVisitor = vi.fn(async (op: string) => op === 'op-share-q');
+      const workerNotifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        resolveShareVisitor,
+      );
+
+      await workerNotifier.publishStreamEvent('op-share-q', {
+        data: { uiMessages: [uiMessage] },
+        stepIndex: 1,
+        type: 'step_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(resolveShareVisitor).toHaveBeenCalledWith('op-share-q');
+      const data = pushStepStartPayload();
+      expect(data.uiMessages[0].sender).toBeNull();
+      expect(data.uiMessages[0].usage).toBeUndefined();
+    });
+
+    it('queue worker path: fails closed (still scrubs) when the persisted resolver rejects', async () => {
+      const resolveShareVisitor = vi.fn(async () => {
+        throw new Error('metadata read failed');
+      });
+      const workerNotifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        resolveShareVisitor,
+      );
+
+      await workerNotifier.publishStreamEvent('op-unknown-q', {
+        data: { uiMessages: [uiMessage] },
+        stepIndex: 1,
+        type: 'step_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStepStartPayload();
+      expect(data.uiMessages[0].sender).toBeNull();
+    });
+
+    it('queue worker path: does not scrub uiMessages when the persisted resolver reports a normal run', async () => {
+      const resolveShareVisitor = vi.fn(async () => false);
+      const workerNotifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        resolveShareVisitor,
+      );
+
+      await workerNotifier.publishStreamEvent('op-plain-q', {
+        data: { uiMessages: [uiMessage] },
+        stepIndex: 1,
+        type: 'step_start' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStepStartPayload();
+      expect(data.uiMessages).toEqual([uiMessage]);
     });
   });
 
