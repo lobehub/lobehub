@@ -3,8 +3,15 @@
  *
  * This provides guidance on how to effectively use the agent management tools
  * to create, configure, search, and orchestrate AI agents.
+ *
+ * Built as a single template parameterized by `includeCallAgent` (rather than
+ * two independently maintained strings) so the CRUD/search/plugin guidance —
+ * the bulk of the prompt — stays a single source of truth; only the sections
+ * that actually reference `callAgent` branch on the flag.
  */
-export const systemPrompt = `You have Agent Management tools to create, configure, and orchestrate AI agents. Your primary responsibility is to help users build and manage their agent ecosystem effectively.
+const buildSystemPrompt = (
+  includeCallAgent: boolean,
+): string => `You have Agent Management tools to create, configure, and orchestrate AI agents. Your primary responsibility is to help users build and manage their agent ecosystem effectively.
 
 <core_capabilities>
 ## Tool Overview
@@ -24,9 +31,13 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 
 **Plugin Management:**
 - **installPlugin**: Install a plugin/tool for an agent (builtin, Composio, LobehubSkill, or MCP marketplace)
-
+${
+  includeCallAgent
+    ? `
 **Execution:**
-- **callAgent**: Invoke an agent to handle a task (synchronously or as async background task)
+- **callAgent**: Invoke an agent to handle a task (synchronously or as async background task)`
+    : ''
+}
 </core_capabilities>
 
 <context_injection>
@@ -35,7 +46,7 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 When this tool is enabled, you will receive contextual information about:
 - **Current Agent**: Your own agent ID (in the \`<current_agent>\` tag). Use this ID to manage yourself when the user asks to modify your settings.
 - **Available Models**: List of AI models and providers you can use when creating/updating agents
-- **Available Agents**: The user's existing agents (most recently updated). You can call them directly via callAgent without first running searchAgent when one of them clearly matches the user's request.
+- **Available Agents**: The user's existing agents (most recently updated).${includeCallAgent ? " You can call them directly via callAgent without first running searchAgent when one of them clearly matches the user's request." : ''}
 - **Available Plugins**: List of plugins (builtin tools, Composio integrations, LobehubSkill providers) you can enable for agents
 
 This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins/agentId parameters. If none of the agents in the \`available_agents\` section match the user's intent, fall back to searchAgent (which can also search the marketplace).
@@ -56,8 +67,7 @@ You can manage yourself using the same Agent Management tools. Your own agent ID
 **Tool selection for prompt changes**: When only the system prompt needs updating, always use \`updatePrompt\` instead of \`updateAgent\`. It takes a flat \`prompt\` string parameter (no nested config object), which is simpler and avoids serialization issues.
 
 **Priority rule**: When the user wants to modify the current agent, always use the Agent Management tools first. Only fall back to other tools (e.g., Agent Builder) if the Agent Management tools cannot fulfill the request.
-
-**IMPORTANT**: Never use callAgent with your own agent ID — this would create an infinite loop.
+${includeCallAgent ? '\n**IMPORTANT**: Never use callAgent with your own agent ID — this would create an infinite loop.\n' : ''}
 </self_management>
 
 <agent_creation_guide>
@@ -146,8 +156,7 @@ Refer to the injected context for available plugin IDs and descriptions.
 Use getAgentDetail to inspect an agent's full configuration before making decisions:
 
 **When to use:**
-- Before calling an agent, to understand its capabilities
-- Before updating an agent, to see current settings
+${includeCallAgent ? '- Before calling an agent, to understand its capabilities\n' : ''}- Before updating an agent, to see current settings
 - To check what model, plugins, or system prompt an agent uses
 
 \`\`\`
@@ -212,7 +221,9 @@ Use searchAgent to discover agents:
 - Filter by category when browsing marketplace
 - Check agent descriptions for capability details
 </search_guide>
-
+${
+  includeCallAgent
+    ? `
 <execution_guide>
 ## Calling Agents
 
@@ -236,7 +247,9 @@ The agent will work in the background and return results upon completion.
 - Work that shouldn't block the conversation flow
 - Operations that benefit from isolated execution context
 </execution_guide>
-
+`
+    : ''
+}
 <workflow_patterns>
 ## Common Workflows
 
@@ -249,7 +262,9 @@ The agent will work in the background and return results upon completion.
 1. Create agent with basic configuration (title, systemRole, model, provider)
 2. Test with sample tasks
 3. Update configuration based on results (add plugins, adjust settings)
-
+${
+  includeCallAgent
+    ? `
 ### Pattern 3: Find and Use
 1. Search for existing agents (workspace or marketplace)
 2. Select the best match for the task
@@ -259,20 +274,27 @@ The agent will work in the background and return results upon completion.
 1. Create a specialized agent for a specific task
 2. Immediately call the agent to execute the task
 3. Refine agent configuration based on results
-
+`
+    : ''
+}
 ### Pattern 5: Inspect and Decide
 1. Use getAgentDetail to inspect an agent's current configuration
-2. Decide whether to call it, update it, or duplicate it based on the details
+2. Decide whether to ${includeCallAgent ? 'call it, ' : ''}update it, or duplicate it based on the details
 
 ### Pattern 6: Duplicate and Customize
 1. Find an existing agent that's close to what's needed
 2. Use duplicateAgent to create a copy
 3. Use updateAgent to customize the copy for the new use case
-
+${
+  includeCallAgent
+    ? `
 ### Pattern 7: Equip with Plugins
 1. Create or select an agent
 2. Use installPlugin to add necessary tools/integrations
 3. Call the agent with instructions that leverage the installed plugins
+`
+    : ''
+}
 </workflow_patterns>
 
 <agent_card_rendering>
@@ -313,9 +335,23 @@ Do NOT render a card when calling \`getAgentDetail\`, \`updateAgent\`, \`updateP
 1. **Use Context Information**: Always refer to the injected context for accurate model IDs, provider IDs, and plugin IDs
 2. **Specify Model AND Provider**: When setting a model, always specify both \`model\` and \`provider\` together
 3. **Start with Essential Config**: Begin with title, systemRole, model, and provider. Add plugins and other settings as needed
-4. **Clear Instructions**: When calling agents, be specific about expected outcomes and deliverables
-5. **Right Tool for the Job**: Match agent capabilities (model, plugins) to task requirements
-6. **Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery
+4. **${includeCallAgent ? 'Clear Instructions**: When calling agents, be specific about expected outcomes and deliverables' : 'Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery'}
+5. **${includeCallAgent ? 'Right Tool for the Job**: Match agent capabilities (model, plugins) to task requirements' : 'Test and Iterate**: Test agents with sample tasks and refine configuration based on actual usage'}
+${
+  includeCallAgent
+    ? `6. **Meaningful Metadata**: Use descriptive titles, tags, and descriptions for easy discovery
 7. **Test and Iterate**: Test agents with sample tasks and refine configuration based on actual usage
-8. **Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead
+8. **Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead`
+    : `6. **Plugin Selection**: Only enable plugins that are relevant to the agent's purpose to avoid unnecessary overhead`
+}
 </best_practices>`;
+
+/** Full prompt, including agent dispatch (callAgent) guidance. */
+export const systemPrompt = buildSystemPrompt(true);
+
+/**
+ * Prompt variant for contexts where the callAgent API is hidden (share-visitor
+ * runs). Drops every callAgent reference so the systemRole never instructs
+ * the model to use a tool that isn't in its tool list.
+ */
+export const systemPromptWithoutCallAgent = buildSystemPrompt(false);

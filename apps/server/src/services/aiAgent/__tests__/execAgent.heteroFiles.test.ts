@@ -858,11 +858,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
-  // Agent share C2: a share visitor must never reach the hetero dispatch —
-  // it hands off to a device-gateway session / cloud sandbox seeded with the
-  // CREATOR's own credentials (GitHub OAuth token, device/sandbox-capable
-  // operation JWT), entirely outside the shareGate's tool/memory/file
-  // restrictions and the share billing precheck in shareChat.ts.
+  // Agent share C2: heterogeneous (Claude Code / Codex / …) agents are not
+  // available for shared visitor runs.
   describe('agent share visitor fail-closed gate (C2)', () => {
     const shareGate = {
       agentId: 'agent-1',
@@ -910,14 +907,10 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
     });
 
-    // Bypass A (residual from the C2 fix): the initial gate above runs on the
-    // AGENT's own model/provider, before a reused topic's pinned model is
-    // honored (`topics.model`/`provider`, writable via the generic topic
-    // update endpoint). A native agent whose visitor reuses a topic already
-    // pinned to a heterogeneous model must still be rejected — otherwise
-    // `model` gets overwritten post-gate and the later hetero-dispatch check
-    // (`isHeteroAgent`) sends the run to the device gateway / cloud sandbox
-    // anyway.
+    // Heterogeneous agents are not available for shared visitor runs. The
+    // initial gate runs on the agent's own model/provider, before a reused
+    // topic's pinned model is honored, so this must be re-checked after the
+    // pinned-model override too.
     it('rejects a native agent reusing a topic pinned to a heterogeneous model', async () => {
       heteroAgentConfig.agencyConfig = undefined as any;
       heteroAgentConfig.model = 'gpt-4o';

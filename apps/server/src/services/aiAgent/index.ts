@@ -2465,15 +2465,10 @@ export class AiAgentService {
 
     // Share-visitor fail-closed gate (agent share C2) — reject a heterogeneous
     // (Claude Code / Codex / …) agent BEFORE any topic/message row is written.
-    // The hetero dispatch below (§3.5) hands off to a device-gateway session or
-    // cloud sandbox seeded with the CREATOR's own credentials (GitHub OAuth
-    // token, a signed operation JWT with device/sandbox capabilities — see
-    // `sandboxRunner.ts`), entirely outside the shareGate's tool/memory/file
-    // restrictions and the share billing precheck in `shareChat.ts`. v1 has no
-    // way to scope a hetero run to the share whitelist, so a share visitor must
-    // never reach it. Checked here (using the agent-level config, before any
-    // topic-pinned model override) rather than at the later hetero-detection
-    // site (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
+    // Heterogeneous agents are not available for shared visitor runs. Checked
+    // here (using the agent-level config, before any topic-pinned model
+    // override) rather than at the later hetero-detection site
+    // (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
     // message rows.
     if (shareGate) {
       const shareHeteroType = heterogeneousProvider?.type;
@@ -2591,16 +2586,8 @@ export class AiAgentService {
         );
       }
 
-      // Re-run the share-visitor fail-closed gate (agent share C2) AFTER the
-      // topic-pinned model override above. The initial check ran on
-      // `agentConfig`'s own model/provider, before this override — a reused
-      // topic can carry a heterogeneous model/provider pinned via the generic
-      // topic-update endpoint (`topics.model`/`provider`, see lambda/topic.ts),
-      // which is honored unconditionally above and feeds directly into the
-      // hetero-dispatch detection below (`isHeteroAgent`). Without this second
-      // check, a native agent share whose visitor reuses such a topic would
-      // slip past the earlier gate and reach the hetero runtime (device
-      // gateway / cloud sandbox seeded with the CREATOR's own credentials).
+      // Re-assert the share restriction after topic overrides are applied.
+      // Heterogeneous agents are not available for shared visitor runs.
       if (shareGate && isHeterogeneousAgentModelId(model)) {
         throw new TRPCError({
           code: 'FORBIDDEN',

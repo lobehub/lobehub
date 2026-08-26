@@ -57,9 +57,8 @@ describe('resolveLobeAgentManifest', () => {
   });
 
   it('hides callSubAgent (api + systemRole) in a share-visitor run regardless of scope', () => {
-    // Agent share C3: `callSubAgent`'s child run has no shareGate of its own,
-    // so it would give a share visitor the creator's unrestricted tool/file/
-    // memory surface — must be hidden the same way a nested sub-agent is.
+    // Sub-agent dispatch is not available in shared visitor runs, so it is
+    // hidden the same way a nested sub-agent hides it.
     const result = resolveLobeAgentManifest({ isShareVisitor: true, scope: 'main' })!;
 
     expect(apiNames(result)).not.toContain(LobeAgentApiName.callSubAgent);

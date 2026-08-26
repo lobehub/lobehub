@@ -19,9 +19,7 @@ describe('resolveAgentManagementManifest', () => {
   });
 
   it('hides callAgent in a share-visitor run regardless of scope', () => {
-    // Agent share C3: callAgent dispatches through the same ctx.subAgent
-    // runner as lobe-agent.callSubAgent — its child run has no shareGate of
-    // its own, so it must be hidden from a share visitor the same way.
+    // Sub-agent dispatch is not available for shared visitor runs.
     const result = resolveAgentManagementManifest({ isShareVisitor: true, scope: 'main' })!;
 
     const names = apiNames(result);
