@@ -3,11 +3,12 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { pushTokens, users } from '../../schemas';
+import { pushLiveActivities, pushTokens, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
   deletePushTokenByExpoTokenAndDevice,
   deletePushTokensByExpoTokens,
+  PushLiveActivityModel,
   PushTokenModel,
 } from '../pushToken';
 
@@ -16,6 +17,7 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'push-token-model-test-user-id';
 const otherUserId = 'push-token-model-test-other-user';
 const model = new PushTokenModel(serverDB, userId);
+const liveActivityModel = new PushLiveActivityModel(serverDB, userId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -86,6 +88,74 @@ describe('PushTokenModel', () => {
 
       const tokens = await model.listByUserId();
       expect(tokens).toHaveLength(2);
+    });
+
+    it('persists the sandbox ActivityKit start token and updates it on registration', async () => {
+      await model.upsert({
+        apnsEnvironment: 'sandbox',
+        deviceId: 'iphone',
+        expoToken: 'ExponentPushToken[ios]',
+        liveActivityPushToStartToken: 'start-token-1',
+        platform: 'ios',
+      });
+
+      const updated = await model.upsert({
+        apnsEnvironment: 'sandbox',
+        deviceId: 'iphone',
+        expoToken: 'ExponentPushToken[ios]',
+        liveActivityPushToStartToken: 'start-token-2',
+        platform: 'ios',
+      });
+
+      expect(updated).toMatchObject({
+        apnsEnvironment: 'sandbox',
+        liveActivityPushToStartToken: 'start-token-2',
+      });
+    });
+  });
+
+  describe('updateLiveActivityRegistration', () => {
+    it('rotates ActivityKit registration only for an existing owned device', async () => {
+      await model.upsert({
+        deviceId: 'iphone',
+        expoToken: 'ExponentPushToken[ios]',
+        platform: 'ios',
+      });
+
+      const updated = await model.updateLiveActivityRegistration('iphone', {
+        apnsEnvironment: 'production',
+        liveActivityPushToStartToken: 'push-to-start-token',
+      });
+
+      expect(updated).toMatchObject({
+        apnsEnvironment: 'production',
+        deviceId: 'iphone',
+        liveActivityPushToStartToken: 'push-to-start-token',
+        userId,
+      });
+    });
+
+    it('does not create a row or update another owner for an unknown device', async () => {
+      const otherModel = new PushTokenModel(serverDB, otherUserId);
+      await otherModel.upsert({
+        deviceId: 'shared-device',
+        expoToken: 'ExponentPushToken[other]',
+        platform: 'ios',
+      });
+
+      await expect(
+        model.updateLiveActivityRegistration('shared-device', {
+          apnsEnvironment: 'sandbox',
+          liveActivityPushToStartToken: 'must-not-leak',
+        }),
+      ).resolves.toBeUndefined();
+
+      await expect(otherModel.listByUserId()).resolves.toEqual([
+        expect.objectContaining({
+          apnsEnvironment: null,
+          liveActivityPushToStartToken: null,
+        }),
+      ]);
     });
   });
 
@@ -211,5 +281,86 @@ describe('PushTokenModel', () => {
         .where(eq(pushTokens.userId, userId));
       expect(remaining).toHaveLength(0);
     });
+  });
+});
+
+describe('PushLiveActivityModel', () => {
+  const register = (overrides: Partial<Parameters<typeof liveActivityModel.upsert>[0]> = {}) =>
+    liveActivityModel.upsert({
+      activityId: 'native-activity-1',
+      activityKey: 'intervention-1',
+      apnsEnvironment: 'sandbox',
+      deviceId: 'iphone',
+      operationId: 'shared-operation',
+      pushToken: 'activity-update-token-1',
+      ...overrides,
+    });
+
+  it('keeps separate callbacks from the same operation by opaque activity key', async () => {
+    await register();
+    await register({
+      activityId: 'native-activity-2',
+      activityKey: 'intervention-2',
+      pushToken: 'activity-update-token-2',
+    });
+
+    const first = await liveActivityModel.listByActivityKey('intervention-1');
+    const second = await liveActivityModel.listByActivityKey('intervention-2');
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      activityKey: 'intervention-1',
+      operationId: 'shared-operation',
+    });
+    expect(second).toHaveLength(1);
+  });
+
+  it('upserts one device/activity key without overwriting another callback', async () => {
+    const first = await register();
+    const refreshed = await register({
+      activityId: 'native-activity-refreshed',
+      pushToken: 'activity-update-token-refreshed',
+    });
+
+    expect(refreshed.id).toBe(first.id);
+    expect(refreshed).toMatchObject({
+      activityId: 'native-activity-refreshed',
+      pushToken: 'activity-update-token-refreshed',
+    });
+    const rows = await serverDB
+      .select()
+      .from(pushLiveActivities)
+      .where(eq(pushLiveActivities.activityKey, 'intervention-1'));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('lists and unregisters only the requested activity key', async () => {
+    await register();
+    await register({
+      activityId: 'native-activity-2',
+      activityKey: 'intervention-2',
+      pushToken: 'activity-update-token-2',
+    });
+
+    await liveActivityModel.unregister('intervention-1');
+
+    await expect(liveActivityModel.listByActivityKey('intervention-1')).resolves.toEqual([]);
+    await expect(liveActivityModel.listByActivityKey('intervention-2')).resolves.toHaveLength(1);
+  });
+
+  it('does not expose another user activity registration with the same key', async () => {
+    await register();
+    const otherModel = new PushLiveActivityModel(serverDB, otherUserId);
+    await otherModel.upsert({
+      activityId: 'other-native-activity',
+      activityKey: 'intervention-1',
+      apnsEnvironment: 'production',
+      deviceId: 'other-iphone',
+      operationId: 'other-operation',
+      pushToken: 'other-update-token',
+    });
+
+    await expect(liveActivityModel.listByActivityKey('intervention-1')).resolves.toHaveLength(1);
+    await liveActivityModel.unregister('intervention-1');
+    await expect(otherModel.listByActivityKey('intervention-1')).resolves.toHaveLength(1);
   });
 });
