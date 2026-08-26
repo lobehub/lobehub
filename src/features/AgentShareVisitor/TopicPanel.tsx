@@ -1,14 +1,19 @@
 'use client';
 
-import { ActionIcon, Center, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox, SkeletonTitle, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useChatStore } from '@/store/chat';
 
+import { getTopicPanelViewState } from './topicPanelViewState';
 import { useVisitorTopics } from './useVisitorTopics';
+
+/** Placeholder rows shown while the visitor's topic list is loading, sized like a typical topic title. */
+const LOADING_ROW_WIDTHS = ['80%', '55%', '68%'];
 
 /**
  * The visitor's topic list under the current share (server-scoped by
@@ -19,7 +24,8 @@ const TopicPanel = memo<{ onSelect?: () => void; shareId: string; showTitle?: bo
   ({ onSelect, shareId, showTitle = true }) => {
     const { t } = useTranslation('agent');
     const activeTopicId = useChatStore((s) => s.activeTopicId);
-    const { data: topics } = useVisitorTopics(shareId);
+    const { data: topics, error, isLoading, mutate } = useVisitorTopics(shareId);
+    const viewState = getTopicPanelViewState(topics, error, isLoading);
 
     const selectTopic = (topicId?: string) => {
       useChatStore.setState({ activeTopicId: topicId }, false, 'AgentShareVisitor/selectTopic');
@@ -41,14 +47,26 @@ const TopicPanel = memo<{ onSelect?: () => void; shareId: string; showTitle?: bo
             onClick={() => selectTopic(undefined)}
           />
         </Flexbox>
-        {!topics?.length ? (
+        {viewState === 'error' ? (
+          <Center flex={1}>
+            <AsyncError error={error} variant={'inline'} onRetry={() => mutate()} />
+          </Center>
+        ) : viewState === 'loading' ? (
+          <Flexbox gap={4}>
+            {LOADING_ROW_WIDTHS.map((width, index) => (
+              <Flexbox key={index} paddingBlock={6} paddingInline={8}>
+                <SkeletonTitle style={{ marginBottom: 0, width }} />
+              </Flexbox>
+            ))}
+          </Flexbox>
+        ) : viewState === 'empty' ? (
           <Center flex={1}>
             <Text fontSize={12} type={'secondary'}>
               {t('share.visitor.topics.empty')}
             </Text>
           </Center>
         ) : (
-          topics.map((topic) => {
+          (topics ?? []).map((topic) => {
             const active = topic.id === activeTopicId;
             return (
               <Flexbox

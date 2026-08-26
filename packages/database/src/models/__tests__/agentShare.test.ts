@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -16,6 +17,7 @@ const agentId = 'agent-share-test-agent';
 const otherAgentId = 'agent-share-test-other-agent';
 const workspaceAgentId = 'agent-share-test-workspace-agent';
 const workspaceId = 'agent-share-test-workspace';
+const builtinAgentId = 'agent-share-test-builtin-agent';
 
 const agentShareModel = new AgentShareModel(serverDB, userId);
 const otherAgentShareModel = new AgentShareModel(serverDB, otherUserId);
@@ -43,6 +45,12 @@ describe('AgentShareModel', () => {
         },
         { id: otherAgentId, title: 'Other Agent', userId: otherUserId },
         { id: workspaceAgentId, userId, workspaceId },
+        {
+          id: builtinAgentId,
+          slug: BUILTIN_AGENT_SLUGS.webOnboarding,
+          title: 'Web Onboarding',
+          userId,
+        },
       ]);
     });
   });
@@ -101,6 +109,18 @@ describe('AgentShareModel', () => {
       await expect(agentShareModel.create(workspaceAgentId)).rejects.toMatchObject({
         code: 'FORBIDDEN',
       });
+    });
+
+    it('rejects a reserved builtin agent even when personally owned', async () => {
+      await expect(agentShareModel.create(builtinAgentId)).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+
+      const rows = await serverDB
+        .select()
+        .from(agentShares)
+        .where(eq(agentShares.agentId, builtinAgentId));
+      expect(rows).toHaveLength(0);
     });
   });
 
@@ -305,6 +325,22 @@ describe('AgentShareModel', () => {
         .returning();
 
       expect(await AgentShareModel.findByShareId(serverDB, share.id)).toBeNull();
+    });
+
+    it('does not expose an already-persisted share on a reserved builtin agent', async () => {
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: builtinAgentId,
+          shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
+          visibility: 'link',
+        })
+        .returning();
+
+      expect(await AgentShareModel.findByShareId(serverDB, share.id)).toBeNull();
+      await expect(
+        AgentShareModel.findByShareIdWithAccessCheck(serverDB, share.id, otherUserId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
     it('returns null for an unknown UUID', async () => {

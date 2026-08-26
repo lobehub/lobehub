@@ -1,12 +1,32 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { ShareVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, exists, isNull, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, notInArray, or, sql } from 'drizzle-orm';
 
 import type { AgentShareConfig, AgentShareConfigPatch } from '../schemas';
 import { agents, agentShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { isUuid } from '../utils/uuid';
+
+/**
+ * Builtin agents (Inbox, Agent Builder, Web Onboarding, ...) are per-user
+ * provisioned system agents, not agents a user authored and owns to share.
+ * `AgentShareModel.ownership` otherwise matches any personal (non-workspace)
+ * agent row, and `AgentModel.getBuiltinAgent` creates exactly such a row for
+ * every builtin slug on first use — so without this exclusion a user could
+ * open `/agent/<builtin-id>/share` and auto-create a resolvable share for it.
+ * Some builtin runtimes (e.g. web-onboarding, see
+ * `serverCallLlmContextBuilder.ts`) unconditionally inject the owner's
+ * persona, SOUL document, and onboarding profile into context regardless of
+ * the share's own memory/file permission gates, so this must be blocked at
+ * the share boundary itself rather than relying on those gates.
+ */
+const RESERVED_AGENT_SHARE_SLUGS: string[] = Object.values(BUILTIN_AGENT_SLUGS);
+
+/** Fail-closed guard reused by every ownership/resolution query below. */
+const excludeReservedAgentSlug = () =>
+  or(isNull(agents.slug), notInArray(agents.slug, RESERVED_AGENT_SHARE_SLUGS));
 
 const DEFAULT_AGENT_SHARE_CONFIG = {
   allowReadMemory: false,
@@ -60,7 +80,10 @@ export class AgentShareModel {
     this.userId = userId;
   }
 
-  /** Agent sharing is personal-only; workspace agents fail this predicate. */
+  /**
+   * Agent sharing is personal-only; workspace agents fail this predicate.
+   * Reserved builtin slugs also fail it (see `excludeReservedAgentSlug`).
+   */
   private ownership = () =>
     exists(
       this.db
@@ -71,6 +94,7 @@ export class AgentShareModel {
             eq(agents.id, agentShares.agentId),
             eq(agents.userId, this.userId),
             isNull(agents.workspaceId),
+            excludeReservedAgentSlug(),
           ),
         ),
     );
@@ -86,7 +110,12 @@ export class AgentShareModel {
         .select({ id: agents.id })
         .from(agents)
         .where(
-          and(eq(agents.id, agentId), eq(agents.userId, this.userId), isNull(agents.workspaceId)),
+          and(
+            eq(agents.id, agentId),
+            eq(agents.userId, this.userId),
+            isNull(agents.workspaceId),
+            excludeReservedAgentSlug(),
+          ),
         )
         .for('update');
 
@@ -206,7 +235,9 @@ export class AgentShareModel {
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(and(eq(agentShares.id, shareId), isNull(agents.workspaceId)))
+      .where(
+        and(eq(agentShares.id, shareId), isNull(agents.workspaceId), excludeReservedAgentSlug()),
+      )
       .limit(1);
 
     if (!share) return null;

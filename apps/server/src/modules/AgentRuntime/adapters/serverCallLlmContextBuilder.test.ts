@@ -79,6 +79,25 @@ vi.mock('@/server/modules/Mecha/ContextEngineering', () => ({
   serverMessagesEngine: serverMessagesEngineMock,
 }));
 
+const onboardingGetStateMock = vi.hoisted(() => vi.fn());
+const onboardingGetInboxAgentIdMock = vi.hoisted(() => vi.fn());
+const onboardingGetInitialUserInfoMock = vi.hoisted(() => vi.fn());
+const getLatestPersonaDocumentMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/server/services/onboarding', () => ({
+  OnboardingService: vi.fn().mockImplementation(() => ({
+    getInboxAgentId: onboardingGetInboxAgentIdMock,
+    getInitialUserInfo: onboardingGetInitialUserInfoMock,
+    getState: onboardingGetStateMock,
+  })),
+}));
+
+vi.mock('@/database/models/userMemory/persona', () => ({
+  UserPersonaModel: vi.fn().mockImplementation(() => ({
+    getLatestPersonaDocument: getLatestPersonaDocumentMock,
+  })),
+}));
+
 // Imported after the mocks above so the module under test picks them up.
 const { buildServerCallLlmContext } = await import('./serverCallLlmContextBuilder');
 
@@ -138,6 +157,14 @@ beforeEach(() => {
   credsListMock.mockResolvedValue({ data: [] });
   getAgentContextDocumentsMock.mockResolvedValue([]);
   messageQueryMock.mockResolvedValue([]);
+  onboardingGetStateMock.mockResolvedValue({
+    discoveryUserMessageCount: 1,
+    phase: 'discovery',
+    remainingDiscoveryExchanges: 2,
+  });
+  onboardingGetInboxAgentIdMock.mockResolvedValue(null);
+  onboardingGetInitialUserInfoMock.mockResolvedValue(undefined);
+  getLatestPersonaDocumentMock.mockResolvedValue({ persona: 'Creator persona' });
 });
 
 describe("buildServerCallLlmContext — refer_topic share gate limits topic references to the visitor's own topics", () => {
@@ -335,5 +362,68 @@ describe('buildServerCallLlmContext — agent context documents share gate (fail
     });
 
     expect(getAgentContextDocumentsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildServerCallLlmContext — onboarding context share gate (fail closed)', () => {
+  const onboardingAgentConfig = { chatConfig: {}, slug: 'web-onboarding', systemRole: 'test' };
+
+  it("builds onboarding context for the creator's own run", async () => {
+    await buildServerCallLlmContext({
+      ctx: baseCtx({ agentConfig: onboardingAgentConfig as any }),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    // The creator's own onboarding data is read as before — the gate below is
+    // the only thing that changes for a share run.
+    expect(onboardingGetStateMock).toHaveBeenCalled();
+    expect(getLatestPersonaDocumentMock).toHaveBeenCalled();
+  });
+
+  it('never builds onboarding context for a share visitor run', async () => {
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentConfig: onboardingAgentConfig as any,
+        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+      }),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    expect(onboardingGetStateMock).not.toHaveBeenCalled();
+    expect(getLatestPersonaDocumentMock).not.toHaveBeenCalled();
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.onboardingContext).toBeUndefined();
+  });
+
+  it('does not build onboarding context for a share run that whitelisted lobe-web-onboarding', async () => {
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: {
+          agentId: AGENT_ID,
+          filePermissionConfig: { agentFiles: 'read' },
+          visitorUserId: VISITOR_USER_ID,
+        },
+      }),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: {
+        ...emptyTooling,
+        resolved: { ...emptyTooling.resolved, enabledToolIds: ['lobe-web-onboarding'] } as any,
+      },
+    });
+
+    expect(onboardingGetStateMock).not.toHaveBeenCalled();
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.onboardingContext).toBeUndefined();
   });
 });
