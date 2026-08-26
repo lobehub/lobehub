@@ -16,6 +16,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { type AgentShareLimitDraft, clearCommittedLimitDraft } from './limitDraft';
 import { Section, SettingRow } from './SectionLayout';
 import {
+  getShareToolCandidateIds,
   getVisitorVisibleEnabledToolIds,
   isToolAvailableToVisitors,
 } from './toolVisitorAvailability';
@@ -42,7 +43,13 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
   const shareConfig = shareInfo?.shareConfig;
 
   const agentConfig = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const candidateToolIds = getActivePluginIds(agentConfig?.plugins);
+  // Includes runtime-managed tools (Knowledge Base, Memory, Web Browsing, ...)
+  // that `AgentToolsEngine` enables independently of `agentConfig.plugins` —
+  // see `getShareToolCandidateIds`'s doc comment. Without this, e.g. the
+  // Memory tool could never appear here, so the owner could never add it to
+  // `enabledToolIds` and the "Allow reading memory" permission above would
+  // silently have no effect.
+  const candidateToolIds = getShareToolCandidateIds(getActivePluginIds(agentConfig?.plugins));
 
   const handleConfigChange = useCallback(
     async (patch: AgentShareConfigPatch) => {
@@ -135,7 +142,10 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
         title={t('share.settings.permissions.title')}
       >
         <Flexbox gap={12}>
-          <SettingRow label={t('share.settings.permissions.allowReadMemory')}>
+          <SettingRow
+            desc={t('share.settings.permissions.allowReadMemoryHint')}
+            label={t('share.settings.permissions.allowReadMemory')}
+          >
             <Switch
               checked={shareConfig.allowReadMemory ?? false}
               onChange={(checked) => handleConfigChange({ allowReadMemory: checked })}
@@ -153,7 +163,10 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
               }
             />
           </SettingRow>
-          <SettingRow label={t('share.settings.permissions.knowledgeBase')}>
+          <SettingRow
+            desc={t('share.settings.permissions.knowledgeBaseHint')}
+            label={t('share.settings.permissions.knowledgeBase')}
+          >
             <Select
               options={fileAccessOptions}
               style={{ width: 160 }}
