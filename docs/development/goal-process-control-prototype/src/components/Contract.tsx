@@ -15,7 +15,7 @@ export const Contract = memo<{ goal: GoalInfo }>(({ goal }) => {
         <Text fontSize={13}>{goal.requirement}</Text>
         <Button size="small" type="text">
           编辑{' '}
-          <NewTag title="Graph 型 Goal 的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
+          <NewTag title="Graph 型目标的 requirement 无更新接口；task 型走 acceptance.saveGoal" />
         </Button>
       </Flexbox>
       <Flexbox gap={6}>

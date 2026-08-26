@@ -1,4 +1,4 @@
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Drawer, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -8,17 +8,18 @@ import { Contract } from './components/Contract';
 import { Findings } from './components/Findings';
 import { FrontierList } from './components/Frontier/FrontierList';
 import { GoalHeader } from './components/GoalHeader';
-import { Graph } from './components/Graph/Graph';
-import { NodeDetail } from './components/Graph/NodeDetail';
+import { Graph, type GraphView } from './components/Graph/Graph';
+import { NodeDetail, NodeDetailTitle } from './components/Graph/NodeDetail';
 import { useSharedStyles } from './components/shared';
 import { STEPS, buildStep } from './data/steps';
 import { clock, usd } from './model/format';
 import { computeFrontier, isStale } from './model/frontier';
 import type { GoalState } from './types';
 
-// The page body, in TaskDetailPage order: header → frontier → graph (+ node panel) → findings →
-// contract → activity. State here is the replayed step plus local optimistic mutations from the
-// actions; production reads the goal graph snapshot and calls goal.* / acceptance.* procedures.
+// The page body, in TaskDetailPage order: header → 当前任务 → 探索图 → 结论 → 目标与验收标准 → 活动.
+// Node detail / edit opens in a right-side Drawer. State here is the replayed step plus local
+// optimistic mutations from the actions; production reads the goal graph snapshot and calls
+// goal.* / acceptance.* procedures.
 
 const useStyles = createStyles(({ css }) => ({
   column: css`
@@ -27,10 +28,6 @@ const useStyles = createStyles(({ css }) => ({
     margin-inline: auto;
     padding-block: 24px 120px;
     padding-inline: 16px;
-  `,
-  wide: css`
-    width: 100%;
-    max-width: 1400px;
   `,
 }));
 
@@ -65,19 +62,24 @@ const Section = memo<{
 });
 
 export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
-  const { styles, cx } = useStyles();
+  const { styles } = useStyles();
   const [state, setState] = useState<GoalState>(() => buildStep(step));
   const [hotId, setHotId] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ id: string; edit?: boolean } | null>(null);
-  const [wide, setWide] = useState(false);
+  const [graphView, setGraphView] = useState<GraphView>('stage');
+  const [fullscreen, setFullscreen] = useState(false);
   const frontier = useMemo(() => computeFrontier(state), [state]);
   const freshIds = useMemo(() => new Set(STEPS[step].fresh), [step]);
   const now = clock.now;
-  const select = (id: string, edit?: boolean) =>
-    setSelected(selected?.id === id && !edit ? null : { id, edit });
+  const select = (id: string, edit?: boolean) => setSelected({ id, edit });
   const push = (e: GoalState['log'][number]) => setState((s) => ({ ...s, log: [...s.log, e] }));
   const patch = (id: string, p: Partial<GoalState['nodes'][number]>) =>
     setState((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }));
+  const touch = (
+    n: GoalState['nodes'][number],
+    kind: NonNullable<GoalState['nodes'][number]['humanTouches']>[number]['kind'],
+    text: string,
+  ) => ({ ...n, humanTouches: [...(n.humanTouches ?? []), { t: now, kind, text }] });
 
   const actions = {
     start: () => {
@@ -152,28 +154,12 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
             };
           if (n.id === d.workId)
             return optionId === 'retry'
-              ? {
-                  ...n,
-                  status: 'active',
-                  lastActivity: now,
-                  lastLine: '正在启动下一次尝试…',
-                  humanTouches: [
-                    ...(n.humanTouches ?? []),
-                    {
-                      t: now,
-                      kind: 'retry',
-                      text: `决策门：再试一次${reason ? ` — ${reason}` : ''}`,
-                    },
-                  ],
-                }
-              : {
-                  ...n,
-                  status: 'retired',
-                  humanTouches: [
-                    ...(n.humanTouches ?? []),
-                    { t: now, kind: 'retire', text: '决策门：放弃这项 Work' },
-                  ],
-                };
+              ? touch(
+                  { ...n, status: 'active', lastActivity: now, lastLine: '正在启动下一次尝试…' },
+                  'retry',
+                  `决策门：再试一次${reason ? ` — ${reason}` : ''}`,
+                )
+              : touch({ ...n, status: 'retired' }, 'retire', '决策门：放弃这项任务');
           return n;
         }),
       }));
@@ -181,7 +167,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         t: now,
         kind: 'decision',
         who: '你',
-        text: optionId === 'retry' ? '决定：再试一次' : '决定：放弃这项 Work',
+        text: optionId === 'retry' ? '决定：再试一次' : '决定：放弃这项任务',
         nodeId: d.nodeId,
       });
     },
@@ -192,25 +178,11 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         goal: { ...s.goal, status: 'achieved', completedAt: now },
         nodes: s.nodes.map((n) =>
           n.delivered
-            ? {
-                ...n,
-                delivered: false,
-                status: 'resolved',
-                humanTouches: [
-                  ...(n.humanTouches ?? []),
-                  { t: now, kind: 'accept', text: '确认验收：Goal 达成' },
-                ],
-              }
+            ? touch({ ...n, delivered: false, status: 'resolved' }, 'accept', '确认验收：目标达成')
             : n,
         ),
       }));
-      push({
-        t: now,
-        kind: 'achieved',
-        who: '你',
-        text: '确认完成：Goal 达成',
-        nodeId: target?.id,
-      });
+      push({ t: now, kind: 'achieved', who: '你', text: '确认完成：目标达成', nodeId: target?.id });
     },
     reject: (comment: string) => {
       const target = state.nodes.find((n) => n.delivered);
@@ -219,17 +191,17 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
         goal: { ...s.goal, status: 'running', lastActivity: now },
         nodes: s.nodes.map((n) =>
           n.delivered
-            ? {
-                ...n,
-                delivered: false,
-                status: 'active',
-                lastActivity: now,
-                lastLine: `按你的反馈重新验收：${comment}`,
-                humanTouches: [
-                  ...(n.humanTouches ?? []),
-                  { t: now, kind: 'reject', text: `还不够，再来一轮：${comment}` },
-                ],
-              }
+            ? touch(
+                {
+                  ...n,
+                  delivered: false,
+                  status: 'active',
+                  lastActivity: now,
+                  lastLine: `按你的反馈重新验收：${comment}`,
+                },
+                'reject',
+                `还不够，再来一轮：${comment}`,
+              )
             : n,
         ),
       }));
@@ -253,15 +225,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           lastActivity: now,
         },
         nodes: s.nodes.map((n) =>
-          n.id === target?.id
-            ? {
-                ...n,
-                humanTouches: [
-                  ...(n.humanTouches ?? []),
-                  { t: now, kind: 'budget', text: `预算 → ${usd(cap)}，继续` },
-                ],
-              }
-            : n,
+          n.id === target?.id ? touch(n, 'budget', `预算 → ${usd(cap)}，继续`) : n,
         ),
       }));
       push({
@@ -286,7 +250,7 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
                     n: (n.attempts?.length ?? 0) + 1,
                     started: (n.lastActivity ?? now) - 20 * 60_000,
                     ended: now,
-                    outcome: 'abandoned',
+                    outcome: 'abandoned' as const,
                     cost: 0.3,
                     reason: '执行 Agent 失联，由系统回收；不计入失败次数',
                     taskId: n.task?.id,
@@ -316,8 +280,8 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
   const findingsCount = state.nodes.filter((n) => n.kind === 'finding').length;
 
   return (
-    <div className={cx(styles.column, wide && styles.wide)}>
-      <Flexbox gap={24}>
+    <div className={styles.column}>
+      <Flexbox gap={28}>
         <GoalHeader
           state={state}
           frontier={frontier}
@@ -330,37 +294,24 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           state={state}
           frontier={frontier}
           hotId={hotId}
-          freshIds={freshIds}
           onHover={setHotId}
           onSelect={select}
           actions={actions}
         />
-        <Flexbox gap={12}>
-          <Graph
-            state={state}
-            frontier={frontier}
-            hotId={hotId}
-            selectedId={selected?.id ?? null}
-            freshIds={freshIds}
-            onHover={setHotId}
-            onSelect={(id) => select(id)}
-            wide={wide}
-            onToggleWide={() => setWide(!wide)}
-            isDraft={state.goal.status === 'planning'}
-          />
-          {selected && (
-            <NodeDetail
-              key={selected.id}
-              state={state}
-              frontier={frontier}
-              id={selected.id}
-              editing={selected.edit}
-              onClose={() => setSelected(null)}
-              onSelect={(id) => setSelected({ id })}
-              onStart={actions.startNode}
-            />
-          )}
-        </Flexbox>
+        <Graph
+          state={state}
+          frontier={frontier}
+          hotId={hotId}
+          selectedId={selected?.id ?? null}
+          freshIds={freshIds}
+          onHover={setHotId}
+          onSelect={(id) => select(id)}
+          view={graphView}
+          onViewChange={setGraphView}
+          fullscreen={fullscreen}
+          onFullscreen={setFullscreen}
+          isDraft={state.goal.status === 'planning'}
+        />
         <Section title="结论" count={findingsCount} defaultOpen={findingsCount > 0}>
           <Findings state={state} hotId={hotId} onHover={setHotId} onSelect={(id) => select(id)} />
         </Section>
@@ -376,6 +327,28 @@ export const GoalDetailPage = memo<{ step: number }>(({ step }) => {
           />
         </Section>
       </Flexbox>
+      <Drawer
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        placement="right"
+        width={480}
+        mask={false}
+        title={
+          selected ? <NodeDetailTitle state={state} frontier={frontier} id={selected.id} /> : null
+        }
+      >
+        {selected && (
+          <NodeDetail
+            key={selected.id}
+            state={state}
+            frontier={frontier}
+            id={selected.id}
+            editing={selected.edit}
+            onSelect={(id) => setSelected({ id })}
+            onStart={actions.startNode}
+          />
+        )}
+      </Drawer>
     </div>
   );
 });

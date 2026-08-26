@@ -1,5 +1,17 @@
-import { Avatar, Tooltip } from '@lobehub/ui';
+import { Avatar, Icon, Tooltip } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Circle,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleSlash,
+  CircleX,
+  Clock,
+  HandIcon,
+  PauseCircle,
+} from 'lucide-react';
 import { memo } from 'react';
 
 import type { NodeKind } from '../types';
@@ -12,10 +24,11 @@ export const KIND_LABEL: Record<NodeKind, string> = {
   decision: 'DECISION',
 };
 
+/** User-facing names. The domain says Work; the surface says 任务. */
 export const KIND_CN: Record<NodeKind, string> = {
-  goal: 'Goal',
+  goal: '目标',
   problem: '问题',
-  work: 'Work',
+  work: '任务',
   finding: '结论',
   decision: '决策',
 };
@@ -83,10 +96,10 @@ export const useSharedStyles = createStyles(({ css, token }) => ({
     color: ${token.colorTextSecondary};
     white-space: pre-wrap;
   `,
-  spin: css`
-    animation: goal-spin 1.2s linear infinite;
+  ring: css`
+    animation: goal-ring 0.9s linear infinite;
 
-    @keyframes goal-spin {
+    @keyframes goal-ring {
       to {
         transform: rotate(360deg);
       }
@@ -113,6 +126,76 @@ export const KindDot = memo<{ kind: NodeKind }>(({ kind }) => {
   const colors = useKindColors();
   return <span className={styles.kindDot} style={{ background: colors[kind]?.line }} />;
 });
+
+// ── Execution status glyphs — mirrors src/components/ExecutionStatus.ts (TASK_STATUS_VISUALS).
+// On move: replace with `TaskStatusIcon` / `RunningGlyph` from the app; keep the same semantics.
+
+export type ExecStatus =
+  | 'backlog'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'waitingForHuman'
+  | 'scheduled'
+  | 'paused'
+  | 'canceled'
+  | 'idle';
+
+const STATUS_VISUALS: Record<ExecStatus, { color: string; icon: LucideIcon }> = {
+  backlog: { color: 'var(--ant-color-text-quaternary)', icon: CircleDashed },
+  canceled: { color: 'var(--ant-color-text-secondary)', icon: CircleSlash },
+  completed: { color: 'var(--ant-color-success)', icon: CircleCheck },
+  failed: { color: 'var(--ant-color-error)', icon: CircleX },
+  idle: { color: 'var(--ant-color-text-tertiary)', icon: Circle },
+  running: { color: 'var(--ant-color-warning)', icon: CircleDot },
+  scheduled: { color: 'var(--ant-color-warning)', icon: Clock },
+  waitingForHuman: { color: 'var(--ant-color-info)', icon: HandIcon },
+  paused: { color: 'var(--ant-color-text-secondary)', icon: PauseCircle },
+};
+
+/** The app's RingLoadingIcon look: warning arc over a translucent warning track. */
+const RingSpinner = memo<{ size: number }>(({ size }) => {
+  const { styles } = useSharedStyles();
+  const r = (size - 2) / 2;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={styles.ring}
+      style={{ display: 'block' }}
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--ant-color-warning)"
+        strokeOpacity={0.35}
+        strokeWidth={2}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--ant-color-warning)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray={`${Math.PI * r * 0.6} ${Math.PI * r * 1.4}`}
+      />
+    </svg>
+  );
+});
+
+/** One glyph per execution semantic; `live` swaps the static running dot for the ring spinner. */
+export const StatusGlyph = memo<{ status: ExecStatus; live?: boolean; size?: number }>(
+  ({ status, live, size = 16 }) => {
+    if (status === 'running' && live) return <RingSpinner size={size} />;
+    const meta = STATUS_VISUALS[status];
+    return <Icon icon={meta.icon} size={size} color={meta.color} />;
+  },
+);
 
 const AGENT_AVATAR: Record<string, string> = {
   'Kimi Code': '🌙',

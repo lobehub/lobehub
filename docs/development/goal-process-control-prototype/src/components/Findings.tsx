@@ -13,7 +13,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-/** What the system currently believes — latest Findings, each traceable to the Work that produced it. */
+/** What the system currently believes — latest Findings, each traceable to the task that produced it. */
 export const Findings = memo<{
   state: GoalState;
   hotId: string | null;

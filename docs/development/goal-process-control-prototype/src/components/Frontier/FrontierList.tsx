@@ -5,70 +5,75 @@ import {
   Flexbox,
   Icon,
   InputNumber,
+  Tag,
   Text,
   TextArea,
   Tooltip,
 } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStyles } from 'antd-style';
-import {
-  AlertTriangle,
-  Check,
-  CircleDashed,
-  Clock,
-  Coins,
-  Loader,
-  Pause,
-  Pencil,
-  Plus,
-  RotateCcw,
-  ShieldCheck,
-  WifiOff,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 
-import { ago, clock, short, usd } from '../../model/format';
+import { clock, short, usd } from '../../model/format';
 import type { Frontier, FrontierItem } from '../../model/frontier';
-import { nodeStateText } from '../../model/frontier';
-import type { GoalNode, GoalState } from '../../types';
-import { ActorAvatar, NewTag, useSharedStyles } from '../shared';
+import type { GoalState } from '../../types';
+import { ActorAvatar, type ExecStatus, NewTag, StatusGlyph, useSharedStyles } from '../shared';
 
-// Rows mirror AgentTaskItem (src/features/AgentTasks/features/AgentTaskItem.tsx): a clickable Block,
-// status glyph · title · meta on the right, dashed dividers between rows. Decisions are the same row
-// with their two buttons on the right; details live in the node panel under the graph, not inline.
+// "当前任务" — one row per thing that can move now, in the AgentTaskItem shape:
+// [#n] [status glyph] title [status Tag] live text … [avatar] [time | actions]. Single line; details
+// open in the right-side panel. Domain "Work" is always called 任务 on the surface.
 
 const useStyles = createStyles(({ css, token }) => ({
   row: css`
-    position: relative;
-
     &:hover .row-actions {
       opacity: 1;
     }
-  `,
-  rowHot: css`
-    box-shadow: inset 3px 0 0 ${token.colorPrimary};
   `,
   hoverActions: css`
     opacity: 0;
     transition: opacity 0.15s;
   `,
-  glyph: css`
-    display: flex;
+  num: css`
     flex: none;
-    align-items: center;
-    justify-content: center;
 
-    width: 16px;
+    min-width: 22px;
+
+    font-family: ${token.fontFamilyCode};
+    font-size: 12px;
+    color: ${token.colorTextQuaternary};
   `,
-  second: css`
+  live: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
     font-size: 12px;
     color: ${token.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
-  blocked: css`
-    padding-block: 8px 4px;
+  blockedHead: css`
+    cursor: pointer;
+    user-select: none;
+
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 8px;
     padding-inline: 12px;
+
     font-size: 12px;
     color: ${token.colorTextTertiary};
+
+    &:hover {
+      color: ${token.colorTextSecondary};
+    }
+  `,
+  dim: css`
+    opacity: 0.6;
   `,
 }));
 
@@ -85,83 +90,91 @@ interface FrontierListProps {
   state: GoalState;
   frontier: Frontier;
   hotId: string | null;
-  freshIds: Set<string>;
   onHover: (id: string | null) => void;
   onSelect: (id: string, edit?: boolean) => void;
   actions: FrontierActions;
 }
 
-const Glyph = ({ item, paused }: { item: FrontierItem; paused: boolean }) => {
-  const { styles } = useSharedStyles();
+const glyphOf = (item: FrontierItem, paused: boolean): { status: ExecStatus; live?: boolean } => {
   switch (item.kind) {
     case 'gate':
-      return <Icon icon={AlertTriangle} size={16} color="var(--ant-color-warning)" />;
     case 'acceptance':
-      return <Icon icon={ShieldCheck} size={16} color="var(--ant-color-warning)" />;
     case 'budget':
-      return <Icon icon={Coins} size={16} color="var(--ant-color-warning)" />;
+      return { status: 'waitingForHuman' };
     case 'stale':
-      return <Icon icon={WifiOff} size={16} color="var(--ant-color-error)" />;
+      return { status: 'failed' };
     case 'running':
-      return paused ? (
-        <Icon icon={Pause} size={16} color="var(--ant-color-text-tertiary)" />
-      ) : (
-        <Icon icon={Loader} size={16} className={styles.spin} color="var(--ant-color-info)" />
-      );
+      return paused ? { status: 'paused' } : { status: 'running', live: true };
     default:
-      return <Icon icon={CircleDashed} size={16} color="var(--ant-color-text-quaternary)" />;
+      return { status: 'backlog' };
   }
 };
 
-const rowTitle = (state: GoalState, item: FrontierItem) => {
+const tagOf = (state: GoalState, item: FrontierItem): { text: string; color?: string } => {
+  const n = item.node;
+  const { goal } = state;
+  switch (item.kind) {
+    case 'gate':
+      return { text: '等你决定', color: 'warning' };
+    case 'acceptance':
+      return { text: '等你确认', color: 'warning' };
+    case 'budget':
+      return { text: '预算用完', color: 'warning' };
+    case 'stale':
+      return { text: '失联', color: 'error' };
+    case 'running':
+      return goal.status === 'paused'
+        ? { text: '已停止' }
+        : { text: `进行中 · 第 ${(n.attempts?.length ?? 0) + 1} 次`, color: 'processing' };
+    default:
+      return { text: goal.status === 'planning' ? '排队中' : `排队第 ${item.queue}` };
+  }
+};
+
+const titleOf = (state: GoalState, item: FrontierItem) => {
   const { goal } = state;
   if (item.kind === 'budget')
     return `费用预算用完了（${usd(goal.spent)} / ${usd(goal.maxTotalCost ?? 0)}）`;
   if (item.kind === 'acceptance') {
     const passed = goal.checks.filter((c) => c.state === 'passed').length;
-    return `验收通过 ${passed}/${goal.checks.length}，这个 Goal 算完成了吗？`;
+    return `验收通过 ${passed}/${goal.checks.length}，这个目标算完成了吗？`;
   }
   return item.node.title;
 };
 
-/** The second line: where the row's live text comes from is the owner Task's topic + heartbeat. */
-const secondLine = (state: GoalState, item: FrontierItem, frontier: Frontier) => {
+/** Inline live text after the tag — from the owner Task's topic (last line) / the verifier reason. */
+const liveOf = (state: GoalState, item: FrontierItem) => {
   const n = item.node;
-  const { goal } = state;
   switch (item.kind) {
+    case 'running':
+      return state.goal.status === 'paused' ? '' : `${n.task?.agent}：${n.lastLine ?? ''}`;
+    case 'stale':
+      return `${n.task?.agent} 已 ${short(clock.now - (n.lastActivity ?? clock.now))} 没有心跳 · 下一次推进会自动重开`;
     case 'gate': {
       const d = state.decision;
-      const w = d ? state.nodes.find((x) => x.id === d.workId) : undefined;
-      return d && w
-        ? `「${w.title}」已试 ${w.attempts?.filter((a) => a.outcome !== 'abandoned').length} 次 · ${d.why.split('；')[0]}`
-        : n.body;
+      return d ? d.why.split('；')[0] : '';
     }
-    case 'acceptance':
-      return '独立 verifier 重新加载了 checkpoint、核对了 loss 和采样长度；确认后记为已达成，不够就带反馈再来一轮。';
     case 'budget':
-      return `已花 ${usd(goal.spent)}，上限 ${usd(goal.maxTotalCost ?? 0)} · 已停下，不会再开始新的尝试`;
-    case 'stale':
-      return `${n.task?.agent} 已 ${ago(clock.now - (n.lastActivity ?? clock.now)).replace('前', '')}没有心跳 · 下一次推进会自动重开，不算失败次数`;
-    case 'running':
-      if (goal.status === 'paused')
-        return `已停止 · 第 ${(n.attempts?.length ?? 0) + 1} 次尝试会在继续后接着跑`;
-      return `${n.task?.agent} · 第 ${(n.attempts?.length ?? 0) + 1} 次尝试 · 最近：${n.lastLine ?? ''}`;
+      return '已停下，不会再开始新的尝试';
+    case 'acceptance':
+      return '独立 verifier 复验了 checkpoint、loss 与采样';
     default:
-      return goal.status === 'planning'
-        ? '没有前置依赖，开始后由 Agent 领取'
-        : `依赖已满足 · 排队第 ${item.queue}${frontier.items.some((i) => i.kind === 'running') ? '，等当前尝试结束' : ''}`;
+      return '';
   }
 };
 
 export const FrontierList = memo<FrontierListProps>(
-  ({ state, frontier, hotId, freshIds, onHover, onSelect, actions }) => {
+  ({ state, frontier, hotId, onHover, onSelect, actions }) => {
     const { styles, cx } = useStyles();
     const { styles: shared } = useSharedStyles();
     const { goal } = state;
-    const [rejectFor, setRejectFor] = useState<string | null>(null);
+    const [rejectOpen, setRejectOpen] = useState(false);
     const [comment, setComment] = useState('');
     const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
+    const [showBlocked, setShowBlocked] = useState(false);
     const paused = goal.status === 'paused';
+
+    const stop = (e: React.MouseEvent) => e.stopPropagation();
 
     const rightCluster = (item: FrontierItem) => {
       const n = item.node;
@@ -178,7 +191,7 @@ export const FrontierList = memo<FrontierListProps>(
                     <Button
                       size="small"
                       onClick={(e) => {
-                        e.stopPropagation();
+                        stop(e);
                         actions.decide(o.id);
                       }}
                     >
@@ -191,7 +204,7 @@ export const FrontierList = memo<FrontierListProps>(
                   type="primary"
                   size="small"
                   onClick={(e) => {
-                    e.stopPropagation();
+                    stop(e);
                     actions.decide(rec.id);
                   }}
                 >
@@ -207,8 +220,8 @@ export const FrontierList = memo<FrontierListProps>(
               <Button
                 size="small"
                 onClick={(e) => {
-                  e.stopPropagation();
-                  setRejectFor(n.id);
+                  stop(e);
+                  setRejectOpen(true);
                 }}
               >
                 还不够
@@ -217,7 +230,7 @@ export const FrontierList = memo<FrontierListProps>(
                 type="primary"
                 size="small"
                 onClick={(e) => {
-                  e.stopPropagation();
+                  stop(e);
                   actions.accept();
                 }}
               >
@@ -236,13 +249,13 @@ export const FrontierList = memo<FrontierListProps>(
                 prefix="$"
                 onChange={(v) => setBudget(Number(v ?? 0))}
                 style={{ width: 96 }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={stop}
               />
               <Button
                 type="primary"
                 size="small"
                 onClick={(e) => {
-                  e.stopPropagation();
+                  stop(e);
                   actions.addBudget(budget);
                 }}
               >
@@ -257,7 +270,7 @@ export const FrontierList = memo<FrontierListProps>(
               size="small"
               icon={<Icon icon={RotateCcw} />}
               onClick={(e) => {
-                e.stopPropagation();
+                stop(e);
                 actions.reclaim();
               }}
             >
@@ -275,40 +288,86 @@ export const FrontierList = memo<FrontierListProps>(
           );
         default:
           return (
-            <>
-              <ActionIcon
-                icon={Pencil}
-                size="small"
-                title="编辑这项 Work"
-                className={cx('row-actions', styles.hoverActions)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect(n.id, true);
-                }}
-              />
-              <Text fontSize={12} className={cx(shared.muted, shared.mono)}>
-                {item.queue ? `#${item.queue}` : ''}
-              </Text>
-            </>
+            <ActionIcon
+              icon={Pencil}
+              size="small"
+              title="编辑这项任务"
+              className={cx('row-actions', styles.hoverActions)}
+              onClick={(e) => {
+                stop(e);
+                onSelect(n.id, true);
+              }}
+            />
           );
       }
     };
 
-    const stateTone = (item: FrontierItem) =>
-      item.rank === 0
-        ? item.kind === 'stale'
-          ? 'danger'
-          : 'warning'
-        : item.kind === 'running' && !paused
-          ? 'info'
-          : 'secondary';
+    const Row = ({ item, index, dim }: { item: FrontierItem; index: number; dim?: boolean }) => {
+      const n = item.node;
+      const g = glyphOf(item, paused);
+      const tag = tagOf(state, item);
+      const live = liveOf(state, item);
+      return (
+        <Block
+          clickable
+          variant="borderless"
+          padding={12}
+          className={cx(styles.row, dim && styles.dim)}
+          onClick={() => onSelect(n.id)}
+          onMouseEnter={() => onHover(n.id)}
+          onMouseLeave={() => onHover(null)}
+        >
+          <Flexbox horizontal gap={10} align="center">
+            <span className={styles.num}>#{index}</span>
+            <StatusGlyph status={g.status} live={g.live} />
+            <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0, maxWidth: '60%' }}>
+              {titleOf(state, item)}
+            </Text>
+            <Tag size="small" color={tag.color as any}>
+              {tag.text}
+            </Tag>
+            <span className={styles.live}>{live}</span>
+            <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
+              {rightCluster(item)}
+            </Flexbox>
+          </Flexbox>
+          {item.kind === 'acceptance' && rejectOpen && (
+            <Flexbox gap={8} style={{ marginTop: 10, paddingLeft: 48 }} onClick={stop}>
+              <TextArea
+                autoFocus
+                placeholder="哪里不够？会作为下一轮的输入"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                autoSize={{ minRows: 2, maxRows: 4 }}
+              />
+              <Flexbox horizontal gap={8} justify="flex-end">
+                <Button size="small" onClick={() => setRejectOpen(false)}>
+                  取消
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  disabled={!comment.trim()}
+                  onClick={() => {
+                    actions.reject(comment);
+                    setRejectOpen(false);
+                  }}
+                >
+                  带反馈再来一轮
+                </Button>
+              </Flexbox>
+            </Flexbox>
+          )}
+        </Block>
+      );
+    };
 
     return (
       <Flexbox gap={8}>
         <Flexbox horizontal justify="space-between" align="baseline">
           <Flexbox horizontal gap={8} align="baseline">
             <Text fontSize={16} weight={600}>
-              接下来
+              当前任务
             </Text>
             <Text fontSize={12} className={shared.muted}>
               {goal.status === 'planning'
@@ -317,7 +376,7 @@ export const FrontierList = memo<FrontierListProps>(
             </Text>
           </Flexbox>
           <Button size="small" type="text" icon={<Icon icon={Plus} />}>
-            添加 Work
+            添加任务
           </Button>
         </Flexbox>
 
@@ -327,114 +386,77 @@ export const FrontierList = memo<FrontierListProps>(
               <Flexbox padding={12} gap={2}>
                 <Text weight={500}>
                   {goal.status === 'achieved'
-                    ? '没有需要推进的了，Goal 已达成'
-                    : '当前没有可推进的节点'}
+                    ? '没有需要推进的了，目标已达成'
+                    : '当前没有可推进的任务'}
                 </Text>
                 <Text fontSize={12} type="secondary">
                   {goal.status === 'achieved'
-                    ? '结论都在下面的图里；可以基于任何结论再开一条新的 Work。'
-                    : '所有节点都在等待或已终态。'}
+                    ? '结论都在下面的图里；可以基于任何结论再开一条新任务。'
+                    : '所有任务都在等待或已终态。'}
                 </Text>
               </Flexbox>
             )}
-            {frontier.items.map((item, i) => {
-              const n = item.node;
-              const hot = hotId === n.id;
-              const stateText =
-                item.kind === 'gate'
-                  ? '等你决定'
-                  : item.kind === 'acceptance'
-                    ? '等你确认'
-                    : item.kind === 'budget'
-                      ? '需要你'
-                      : nodeStateText(goal, n, frontier);
-              return (
-                <Fragment key={item.key}>
-                  {i > 0 && <Divider dashed style={{ margin: 0 }} />}
-                  <Block
-                    clickable
-                    padding={12}
-                    className={cx(styles.row, hot && styles.rowHot)}
-                    onClick={() => onSelect(n.id)}
-                    onMouseEnter={() => onHover(n.id)}
-                    onMouseLeave={() => onHover(null)}
-                  >
-                    <Flexbox horizontal gap={12} align="center">
-                      <div className={styles.glyph}>
-                        <Glyph item={item} paused={paused} />
-                      </div>
-                      <Flexbox gap={2} flex={1} style={{ minWidth: 0 }}>
-                        <Flexbox horizontal gap={8} align="center">
-                          <Text weight={500} ellipsis style={{ minWidth: 0 }}>
-                            {rowTitle(state, item)}
-                          </Text>
-                          <Text fontSize={12} type={stateTone(item)} style={{ flexShrink: 0 }}>
-                            {stateText}
-                          </Text>
-                        </Flexbox>
-                        <Text ellipsis className={styles.second}>
-                          {secondLine(state, item, frontier)}
-                        </Text>
-                      </Flexbox>
-                      <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
-                        {rightCluster(item)}
-                      </Flexbox>
-                    </Flexbox>
-                    {rejectFor === n.id && (
-                      <Flexbox
-                        gap={8}
-                        style={{ marginTop: 10, paddingLeft: 28 }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <TextArea
-                          autoFocus
-                          placeholder="哪里不够？会作为下一轮的输入"
-                          value={comment}
-                          onChange={(e) => setComment(e.target.value)}
-                          autoSize={{ minRows: 2, maxRows: 4 }}
-                        />
-                        <Flexbox horizontal gap={8} justify="flex-end">
-                          <Button size="small" onClick={() => setRejectFor(null)}>
-                            取消
-                          </Button>
-                          <Button
-                            size="small"
-                            type="primary"
-                            disabled={!comment.trim()}
-                            onClick={() => {
-                              actions.reject(comment);
-                              setRejectFor(null);
-                            }}
-                          >
-                            带反馈再来一轮
-                          </Button>
-                        </Flexbox>
-                      </Flexbox>
-                    )}
-                  </Block>
-                </Fragment>
-              );
-            })}
+            {frontier.items.map((item, i) => (
+              <Fragment key={item.key}>
+                {i > 0 && <Divider dashed style={{ margin: 0 }} />}
+                <Row item={item} index={i + 1} />
+              </Fragment>
+            ))}
           </Block>
           {frontier.blocked.length > 0 && (
             <>
               <Divider dashed style={{ margin: 0 }} />
-              <Flexbox horizontal gap={6} align="center" wrap="wrap" className={styles.blocked}>
-                <Icon icon={Clock} size={12} />
-                <span>还有 {frontier.blocked.length} 项在等依赖：</span>
-                {frontier.blocked.map((b, i) => (
-                  <span
-                    key={b.key}
-                    style={{ cursor: 'pointer' }}
-                    onMouseEnter={() => onHover(b.node.id)}
-                    onMouseLeave={() => onHover(null)}
-                    onClick={() => onSelect(b.node.id, true)}
-                  >
-                    <u>{b.node.title}</u>（等{b.blockers.map((x) => x.title.slice(0, 8)).join('、')}
-                    …）{i < frontier.blocked.length - 1 ? '、' : ''}
+              <div className={styles.blockedHead} onClick={() => setShowBlocked(!showBlocked)}>
+                <Icon icon={showBlocked ? ChevronDown : ChevronRight} size={12} />
+                <span>还有 {frontier.blocked.length} 项在等依赖</span>
+                {!showBlocked && (
+                  <span className={styles.live} style={{ marginLeft: 4 }}>
+                    {frontier.blocked.map((b) => b.node.title).join(' · ')}
                   </span>
-                ))}
-              </Flexbox>
+                )}
+              </div>
+              {showBlocked && (
+                <Block variant="borderless" gap={0} padding={2}>
+                  {frontier.blocked.map((b, i) => (
+                    <Fragment key={b.key}>
+                      {i > 0 && <Divider dashed style={{ margin: 0 }} />}
+                      <Block
+                        clickable
+                        variant="borderless"
+                        padding={12}
+                        className={cx(styles.row, styles.dim)}
+                        onClick={() => onSelect(b.node.id, true)}
+                        onMouseEnter={() => onHover(b.node.id)}
+                        onMouseLeave={() => onHover(null)}
+                      >
+                        <Flexbox horizontal gap={10} align="center">
+                          <span className={styles.num}>#{frontier.items.length + i + 1}</span>
+                          <StatusGlyph status="backlog" />
+                          <Text weight={500} ellipsis style={{ flexShrink: 1, minWidth: 0 }}>
+                            {b.node.title}
+                          </Text>
+                          <Tag size="small">
+                            等「{b.blockers[0].title.slice(0, 12)}
+                            {b.blockers[0].title.length > 12 ? '…' : ''}」
+                            {b.blockers.length > 1 ? ` 等 ${b.blockers.length} 项` : ''}
+                          </Tag>
+                          <span className={styles.live} />
+                          <ActionIcon
+                            icon={Pencil}
+                            size="small"
+                            title="编辑这项任务"
+                            className={cx('row-actions', styles.hoverActions)}
+                            onClick={(e) => {
+                              stop(e);
+                              onSelect(b.node.id, true);
+                            }}
+                          />
+                        </Flexbox>
+                      </Block>
+                    </Fragment>
+                  ))}
+                </Block>
+              )}
             </>
           )}
         </div>
@@ -442,5 +464,3 @@ export const FrontierList = memo<FrontierListProps>(
     );
   },
 );
-
-export type { GoalNode };

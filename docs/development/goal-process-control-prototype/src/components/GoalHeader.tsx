@@ -54,7 +54,7 @@ const RunPauseAction = ({
   if (['achieved', 'failed', 'canceled'].includes(goal.status))
     return (
       <Button size="small" icon={<Icon icon={RotateCcw} />}>
-        重新打开 <NewTag title="终态 Goal 无 reopen 事件" />
+        重新打开 <NewTag title="终态目标无 reopen 事件" />
       </Button>
     );
   if (goal.status === 'planning')
@@ -76,7 +76,7 @@ const RunPauseAction = ({
       </Button>
       <Modal
         open={open}
-        title="暂停这个 Goal？"
+        title="暂停这个目标？"
         okText="暂停"
         cancelText="取消"
         onCancel={() => setOpen(false)}
@@ -186,7 +186,7 @@ export const GoalHeader = memo<GoalHeaderProps>(
                         />
                       </Flexbox>
                       <Flexbox horizontal justify="space-between" align="center">
-                        <Text fontSize={13}>单项 Work 最多尝试</Text>
+                        <Text fontSize={13}>单项任务最多尝试</Text>
                         <InputNumber
                           value={perWork}
                           min={1}
@@ -196,7 +196,7 @@ export const GoalHeader = memo<GoalHeaderProps>(
                       </Flexbox>
                     </Flexbox>
                     <Text fontSize={12} type="secondary">
-                      超过任一上限时 Goal 会自动停下并来问你，不会静默继续花钱。
+                      超过任一上限时目标会自动停下并来问你，不会静默继续花钱。
                     </Text>
                     <Flexbox horizontal justify="flex-end" gap={8}>
                       <Button size="small" onClick={() => setBudgetOpen(false)}>

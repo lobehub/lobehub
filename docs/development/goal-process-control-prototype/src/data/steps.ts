@@ -86,7 +86,7 @@ const INITIAL = (): GoalState => ({
       id: 'W4',
       kind: 'work',
       ref: 'W-6',
-      title: '完成整体 Goal 验收',
+      title: '完成整体验收',
       status: 'proposed',
       cost: 0,
       dependsOn: ['W3'],
@@ -129,14 +129,14 @@ export const STEPS: Step[] = [
   {
     t: 0,
     label: '创建 Goal，Agent 给出初始方案',
-    note: '你写下目标、验收要求和预算。Agent 的第一轮把它拆成 1 个问题 + 5 项 Work 和依赖，这就是探索图的初始方案；开始前可以改。什么都还没派发。',
+    note: '你写下目标、验收要求和预算。Agent 的第一轮把它拆成 1 个问题 + 5 项任务 和依赖，这就是探索图的初始方案；开始前可以改。什么都还没派发。',
     fresh: ['G', 'P1', 'W1', 'W5', 'W2', 'W3', 'W4'],
     apply: (s) => {
       log(s, {
         t: at(0),
         kind: 'create',
         who: 'Agent',
-        text: '根据目标生成初始方案：1 个问题、5 项 Work、4 条依赖',
+        text: '根据目标生成初始方案：1 个问题、5 项任务、4 条依赖',
         nodeId: 'G',
       });
     },
@@ -144,7 +144,7 @@ export const STEPS: Step[] = [
   {
     t: 1,
     label: '开始执行',
-    note: '第一次推进：挑出没有依赖、优先级最高的「获取源码」，为它创建负责人 Task（T-90）和 Work 级验收契约，交给 Kimi Code。',
+    note: '第一次推进：挑出没有依赖、优先级最高的「获取源码」，为它创建负责人 Task（T-90）和 任务级验收契约，交给 Kimi Code。',
     fresh: ['W1'],
     apply: (s) => {
       s.goal.status = 'running';
@@ -313,7 +313,7 @@ export const STEPS: Step[] = [
         t: at(14),
         kind: 'decision',
         who: 'Agent',
-        text: '决策：验收阈值定为 ≤ 1.8 且降幅 ≥ 30%；新增 Work「写训练复现说明」',
+        text: '决策：验收阈值定为 ≤ 1.8 且降幅 ≥ 30%；新增任务「写训练复现说明」',
         nodeId: 'D0',
       });
       const w2 = N(s, 'W2');
@@ -442,7 +442,7 @@ export const STEPS: Step[] = [
   {
     t: 100,
     label: '预算用完，停下来问你',
-    note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，来问你。这不是一个新节点：预算是针对正在跑的这项 Work 的人工介入，之后会记在它身上。',
+    note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，来问你。这不是一个新节点：预算是针对正在跑的这项任务 的人工介入，之后会记在它身上。',
     fresh: ['W2'],
     apply: (s) => {
       const w = N(s, 'W2');
@@ -464,7 +464,7 @@ export const STEPS: Step[] = [
   {
     t: 101,
     label: '你追加预算',
-    note: '你把上限调到 $10 并继续；当前尝试接着跑。「从零训练」这个 Work 从此带上"你"角标——有人参与过。',
+    note: '你把上限调到 $10 并继续；当前尝试接着跑。「从零训练」这项任务 从此带上"你"角标——有人参与过。',
     fresh: ['W2'],
     apply: (s) => {
       s.goal.maxTotalCost = 10;
@@ -533,9 +533,9 @@ export const STEPS: Step[] = [
           },
           {
             id: 'retire',
-            label: '放弃这项 Work',
+            label: '放弃这项任务',
             consequence:
-              '标为已放弃；依赖它的「采样」和「整体验收」无法继续，Goal 很可能以失败结束。',
+              '标为已放弃；依赖它的「采样」和「整体验收」无法继续，目标很可能以失败结束。',
           },
         ],
         recommended: 'retry',
@@ -714,7 +714,7 @@ export const STEPS: Step[] = [
   {
     t: 141,
     label: '所有 Work 完成 → 整体验收开始',
-    note: 'README 通过。所有原始 Work 终态后，系统生成最后一项「完成整体 Goal 验收」，用完整的目标要求做契约，由独立 verifier 复验全部产物。',
+    note: 'README 通过。所有原始任务 终态后，系统生成最后一项「完成整体验收」，用完整的目标要求做契约，由独立 verifier 复验全部产物。',
     fresh: ['F6', 'W4'],
     apply: (s) => {
       const w6 = N(s, 'W6');
@@ -762,7 +762,7 @@ export const STEPS: Step[] = [
         t: at(141),
         kind: 'start',
         who: '系统',
-        text: '所有 Work 终态，生成整体验收并派给 verify-agent（T-98）',
+        text: '所有任务终态，生成整体验收并派给 verify-agent（T-98）',
         nodeId: 'W4',
       });
     },
@@ -770,7 +770,7 @@ export const STEPS: Step[] = [
   {
     t: 150,
     label: '验收通过，等你确认',
-    note: '3/3 项通过。按 D1 的建议，Goal 级验收由你关闭：确认完成，或带反馈再来一轮。这是整个流程里第三次、也是最后一次找你（前两次：预算、决策门）。',
+    note: '3/3 项通过。按 D1 的建议，目标级验收由你关闭：确认完成，或带反馈再来一轮。这是整个流程里第三次、也是最后一次找你（前两次：预算、决策门）。',
     fresh: ['W4'],
     apply: (s) => {
       const w = N(s, 'W4');
@@ -803,7 +803,7 @@ export const STEPS: Step[] = [
   {
     t: 151,
     label: '你确认完成',
-    note: 'Goal 达成。"接下来"空了；图完整留存——决策门是橙色节点，有人参与过的 Work 带"你"角标（预算、决策、验收确认都记在 Work 上），随时可以回溯。',
+    note: '目标达成。"接下来"空了；图完整留存——决策门是橙色节点，有人参与过的任务 带"你"角标（预算、决策、验收确认都记在任务上），随时可以回溯。',
     fresh: ['W4', 'G'],
     apply: (s) => {
       const w = N(s, 'W4');
@@ -812,7 +812,7 @@ export const STEPS: Step[] = [
       w.lastLine = undefined;
       w.humanTouches = [
         ...(w.humanTouches ?? []),
-        { t: at(151), kind: 'accept', text: '确认验收：Goal 达成' },
+        { t: at(151), kind: 'accept', text: '确认验收：目标达成' },
       ];
       s.goal.status = 'achieved';
       s.goal.completedAt = at(151);
@@ -821,7 +821,7 @@ export const STEPS: Step[] = [
         t: at(151),
         kind: 'achieved',
         who: '你',
-        text: '确认完成：Goal 达成',
+        text: '确认完成：目标达成',
         nodeId: 'W4',
       });
     },

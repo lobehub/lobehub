@@ -120,9 +120,9 @@ const ErrorState = ({ onRetry }: { onRetry: () => void }) => {
     <div className={styles.column}>
       <Block variant="outlined" padding={32} align="center" gap={8}>
         <Icon icon={AlertTriangle} size={24} />
-        <Text weight={600}>这个 Goal 暂时加载不出来</Text>
+        <Text weight={600}>这个目标暂时加载不出来</Text>
         <Text type="secondary" fontSize={13}>
-          网络或服务出了点问题，Goal 本身没有受影响。
+          网络或服务出了点问题，目标本身没有受影响。
         </Text>
         <Button size="small" onClick={onRetry}>
           重新加载
@@ -243,7 +243,7 @@ export const App = memo(() => {
               </Text>
             </Flexbox>
             <Flexbox horizontal gap={2} align="center" style={{ marginLeft: 'auto' }}>
-              <Tooltip title="添加 Work · 编辑目标 [NEW] · 复制 ID · 复制链接 · 结束 Goal [NEW] · 删除">
+              <Tooltip title="添加任务 · 编辑目标 [NEW] · 复制 ID · 复制链接 · 结束目标 [NEW] · 删除">
                 <ActionIcon icon={MoreHorizontal} size="small" />
               </Tooltip>
               <Tooltip title="打开右侧 Agent 面板（与 Task 页相同的 AgentTaskManager）">

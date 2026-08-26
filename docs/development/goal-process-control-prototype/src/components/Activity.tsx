@@ -1,27 +1,15 @@
 import { Button, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import {
-  Check,
-  Coins,
-  Flag,
-  GitBranch,
-  Lightbulb,
-  MessageSquare,
-  Pause,
-  Play,
-  Sparkles,
-  Trophy,
-  WifiOff,
-  X,
-} from 'lucide-react';
 import { memo, useState } from 'react';
 
+import { ACTIVITY_META } from '../model/activity';
 import { ago, clock } from '../model/format';
-import type { ActivityEvent, ActivityKind, GoalState } from '../types';
+import type { ActivityEvent, GoalState } from '../types';
 import { ActorAvatar, KindDot, useSharedStyles } from './shared';
 
-// Linear-style activity feed: icon · actor · what happened · node chip · time, newest first, with the
-// comment box on top like TaskActivities. Node chips highlight the graph on hover and select on click.
+// Linear-style activity feed, driven entirely by ActivityEvent.kind (see model/activity.ts):
+// kind → icon + tone; who → avatar; nodeId → chip that highlights the graph. Comment box on top,
+// like TaskActivities.
 
 const useStyles = createStyles(({ css, token }) => ({
   feed: css`
@@ -45,9 +33,7 @@ const useStyles = createStyles(({ css, token }) => ({
     display: flex;
     gap: 12px;
     align-items: flex-start;
-
     padding-block: 6px;
-    padding-inline: 0;
   `,
   icon: css`
     position: relative;
@@ -85,7 +71,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
     max-width: 320px;
     height: 20px;
-    padding-block: 0;
     padding-inline: 6px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusXS}px;
@@ -108,22 +93,6 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-const ICON: Record<ActivityKind, { icon: any; tone?: 'ok' | 'bad' | 'warn' }> = {
-  create: { icon: Sparkles },
-  start: { icon: Play },
-  progress: { icon: Play },
-  pass: { icon: Check, tone: 'ok' },
-  fail: { icon: X, tone: 'bad' },
-  abandon: { icon: WifiOff, tone: 'bad' },
-  finding: { icon: Lightbulb, tone: 'ok' },
-  decision: { icon: GitBranch, tone: 'warn' },
-  budget: { icon: Coins, tone: 'warn' },
-  pause: { icon: Pause, tone: 'warn' },
-  resume: { icon: Play },
-  comment: { icon: MessageSquare },
-  achieved: { icon: Trophy, tone: 'ok' },
-};
-
 interface ActivityProps {
   state: GoalState;
   onHover: (id: string | null) => void;
@@ -145,7 +114,7 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
         <TextArea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="给这个 Goal 留一条说明（进入活动记录，并作为后续尝试的上下文）"
+          placeholder="给这个目标留一条说明（进入活动记录，并作为后续尝试的上下文）"
           autoSize={{ minRows: 1, maxRows: 3 }}
           style={{ flex: 1 }}
         />
@@ -167,7 +136,7 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
           </Text>
         )}
         {events.map((e, i) => {
-          const meta = ICON[e.kind];
+          const meta = ACTIVITY_META[e.kind];
           const node = nodeOf(e);
           return (
             <div key={i} className={styles.row}>
@@ -178,6 +147,7 @@ export const Activity = memo<ActivityProps>(({ state, onHover, onSelect, onComme
                   meta.tone === 'bad' && styles.iconBad,
                   meta.tone === 'warn' && styles.iconWarn,
                 )}
+                title={meta.label}
               >
                 <Icon icon={meta.icon} size={12} />
               </div>
