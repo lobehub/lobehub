@@ -3,6 +3,7 @@ import {
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER } from '@lobechat/builtin-tool-agent-signal';
 import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
@@ -13,6 +14,7 @@ import {
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { SkillMaintainerIdentifier } from '@lobechat/builtin-tool-skill-maintainer';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 
 import type { AgentShareConfig } from '@/database/schemas';
@@ -385,10 +387,7 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  * Builtin tool identifiers whose ENTIRE API surface must never reach a share
  * visitor's model or tool set — as opposed to `DATA_TOOL_ACCESS_RULES`, which
  * trims a tool down to a scoped subset, or `SUB_AGENT_DISPATCH_APIS`, which
- * hides only one dispatch API. These tools have no honest per-API scoping to
- * keep at all: every API runs against the CREATOR's private data with a
- * visitor-suppliable id argument that is never checked against the shared
- * agent itself.
+ * hides only one dispatch API.
  *
  * - `lobe-agent-management`: executes in `agentManagementRuntime`
  *   (`apps/server/src/services/toolExecution/serverRuntimes/agentManagement.ts`)
@@ -405,8 +404,38 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   returning `null` for `isShareVisitor` (defense in depth: this strip is
  *   unconditional here too, independent of whether that context-aware path
  *   ran) and by the dispatch-time block in `isShareBlockedDataToolCall`.
+ *
+ * - `lobe-skill-maintainer` / `agent-signal-skill-management`: hidden,
+ *   system-only tools (`hidden: true` in `packages/builtin-tools/src/index.ts`)
+ *   whose `plugins: [...]` entries belong to the internal Agent Signal
+ *   self-iteration agents (`@lobechat/builtin-agents`), not a creator's own
+ *   conversational agent — under the current toolset-assembly path
+ *   (`apps/server/src/services/aiAgent/index.ts`) neither identifier can reach
+ *   a live share-visitor operation's `toolManifestMap`/`enabledToolIds` today.
+ *   Unlike `lobe-agent-management`, their `agentId` IS genuinely context-scoped,
+ *   not model-suppliable: `SkillMaintainerExecutionRuntime.resolveAgentId`
+ *   (`packages/builtin-tool-skill-maintainer/src/ExecutionRuntime/index.ts:66-69`)
+ *   reads only `context.agentId` — the agent executing the tool call — and the
+ *   `{ ...args, agentId }` spread order (same file, e.g. line 93) overwrites
+ *   any `agentId` a model tries to smuggle into `args`; `agentSignalSkillManagementRuntime`
+ *   (`apps/server/src/services/toolExecution/serverRuntimes/agentSignalSkillManagement.ts:21-33`)
+ *   likewise binds `agentId` from `context` at factory time, and its manifest
+ *   APIs (`RESOURCE_TOOL_APIS` in `packages/builtin-tool-agent-signal/src/shared/schemas.ts`)
+ *   never declare an `agentId` parameter at all. Both are still listed here as
+ *   defense in depth: every API on both tools (`createSkill` /
+ *   `replaceSkillIndex` / `renameSkill` / `createSkillIfAbsent` /
+ *   `replaceSkillContentCAS`) WRITES agent-document rows under the creator's
+ *   account via `SkillManagementDocumentService` (`AgentDocumentModel(db,
+ *   userId, workspaceId)`), and a v1 share's `filePermissionConfig` only ever
+ *   grants `'read'` or `'none'` — there is no write grant to honor, so any
+ *   accidental future path that lets a share-visitor operation pick up either
+ *   plugin id must still resolve to "blocked," not "scoped-so-it's-fine."
  */
-const SHARE_VISITOR_BLOCKED_IDENTIFIERS = new Set<string>([AgentManagementIdentifier]);
+const SHARE_VISITOR_BLOCKED_IDENTIFIERS = new Set<string>([
+  AgentManagementIdentifier,
+  SkillMaintainerIdentifier,
+  AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+]);
 
 const stripAlwaysBlockedIdentifiers = (toolSet: ShareGateToolSet): void => {
   for (const identifier of SHARE_VISITOR_BLOCKED_IDENTIFIERS) {

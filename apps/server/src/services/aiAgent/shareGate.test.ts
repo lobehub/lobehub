@@ -9,12 +9,22 @@ import {
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management';
 import {
+  AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+  AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES,
+  agentSignalSkillManagementManifest,
+} from '@lobechat/builtin-tool-agent-signal';
+import {
   KnowledgeBaseApiName,
   KnowledgeBaseIdentifier,
   KnowledgeBaseManifest,
 } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier, MemoryManifest } from '@lobechat/builtin-tool-memory';
+import {
+  SkillMaintainerApiName,
+  SkillMaintainerIdentifier,
+  SkillMaintainerManifest,
+} from '@lobechat/builtin-tool-skill-maintainer';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -255,6 +265,54 @@ describe('applyShareGateToToolSet', () => {
       expect(toolSet.activatableToolIds).not.toContain(AgentManagementIdentifier);
       expect(toolSet.tools).toEqual([]);
     });
+  });
+
+  describe('hidden Agent Signal skill-management tools are fully blocked for share visitors', () => {
+    // `lobe-skill-maintainer` and `agent-signal-skill-management` are hidden,
+    // system-only tools whose every API writes agent-document rows under the
+    // creator's account (`SkillManagementDocumentService` →
+    // `AgentDocumentModel(db, userId, workspaceId)`), and a v1 share never
+    // grants write access. `agentId` on both is genuinely context-scoped (not
+    // model-suppliable — see the `SHARE_VISITOR_BLOCKED_IDENTIFIERS` JSDoc),
+    // but they are listed anyway as defense in depth: reproduces the real
+    // manifests as if whitelisted, to prove the identifier-level strip covers
+    // them regardless of how they got into the tool set.
+    it.each([
+      { apiNames: Object.values(SkillMaintainerApiName), identifier: SkillMaintainerIdentifier },
+      {
+        apiNames: [...AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES],
+        identifier: AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+      },
+    ])(
+      'removes $identifier entirely from every surface, even when explicitly whitelisted',
+      ({ identifier, apiNames }) => {
+        const manifest =
+          identifier === SkillMaintainerIdentifier
+            ? SkillMaintainerManifest
+            : agentSignalSkillManagementManifest;
+        const gate = buildGate({ enabledToolIds: [identifier] });
+        const toolSet: ShareGateToolSet = {
+          activatableToolIds: [identifier],
+          enabledToolIds: [identifier],
+          executorMap: { [identifier]: 'server' as any },
+          manifestMap: { [identifier]: manifest },
+          sourceMap: { [identifier]: 'builtin' } as any,
+          tools: apiNames.map((apiName) => ({
+            function: { name: `${identifier}____${apiName}` },
+            type: 'function',
+          })),
+        };
+
+        applyShareGateToToolSet(toolSet, gate);
+
+        expect(toolSet.manifestMap[identifier]).toBeUndefined();
+        expect(toolSet.sourceMap[identifier]).toBeUndefined();
+        expect(toolSet.executorMap[identifier]).toBeUndefined();
+        expect(toolSet.enabledToolIds).not.toContain(identifier);
+        expect(toolSet.activatableToolIds).not.toContain(identifier);
+        expect(toolSet.tools).toEqual([]);
+      },
+    );
   });
 
   describe('data-tool access (memory / knowledge base / agent documents)', () => {
@@ -535,6 +593,39 @@ describe('isShareBlockedDataToolCall', () => {
           AgentManagementApiName.searchAgent,
         ),
       ).toBe(true);
+    });
+  });
+
+  describe('hidden Agent Signal skill-management tools are fully blocked at dispatch time', () => {
+    // Same unbypassable-dispatch reasoning as the `lobe-agent-management`
+    // suite above, applied to the two hidden skill-management tools
+    // (`lobe-skill-maintainer`, `agent-signal-skill-management`). Their
+    // `agentId` is genuinely context-scoped (never taken from `args` — see the
+    // `SHARE_VISITOR_BLOCKED_IDENTIFIERS` JSDoc in shareGate.ts), so this is
+    // pure defense in depth: even a context-scoped write to the CREATOR's own
+    // shared-agent document store is still a write, and v1 shares never grant
+    // write access. Built from the REAL exported API name lists so a future
+    // API addition to either tool is covered automatically.
+    it.each([
+      { apiNames: Object.values(SkillMaintainerApiName), identifier: SkillMaintainerIdentifier },
+      {
+        apiNames: [...AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES],
+        identifier: AGENT_SIGNAL_SKILL_MANAGEMENT_IDENTIFIER,
+      },
+    ])('blocks every API on $identifier unconditionally', ({ identifier, apiNames }) => {
+      for (const apiName of apiNames) {
+        expect(
+          isShareBlockedDataToolCall(
+            {
+              allowReadMemory: true,
+              filePermissionConfig: { agentFiles: 'read', knowledgeBase: 'read' },
+            },
+            identifier,
+            apiName,
+            { agentId: 'attempted-agent-id-override', skillDocumentId: 'sd-1' },
+          ),
+        ).toBe(true);
+      }
     });
   });
 
