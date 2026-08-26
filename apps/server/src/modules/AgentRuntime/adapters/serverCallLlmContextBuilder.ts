@@ -193,7 +193,22 @@ export const buildServerCallLlmContext = async ({
     );
   });
 
-  if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
+  // Onboarding context is the creator's own persona, SOUL document and initial
+  // user info — personal profile data with no share permission that could ever
+  // grant it, so a share visitor run never builds it. Two paths reach here: the
+  // builtin `web-onboarding` agent, and any shared agent whose whitelist
+  // includes `lobe-web-onboarding`. Gating on `ctx.agentShare` closes both, and
+  // stays correct even though `AgentShareModel` already refuses to share a
+  // reserved builtin agent.
+  const onboardingContextAllowedForShare = !ctx.agentShare;
+
+  if (
+    isOnboardingAgent &&
+    onboardingContextAllowedForShare &&
+    !alreadyHasOnboardingContext &&
+    ctx.serverDB &&
+    ctx.userId
+  ) {
     try {
       const { formatWebOnboardingStateMessage } =
         await import('@lobechat/builtin-tool-web-onboarding/utils');
