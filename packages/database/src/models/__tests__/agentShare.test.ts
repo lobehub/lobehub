@@ -292,6 +292,38 @@ describe('AgentShareModel', () => {
     });
   });
 
+  describe('publish gate (heterogeneous config re-check under the row lock)', () => {
+    it('rejects publishing to link once the agent config is heterogeneous', async () => {
+      await agentShareModel.create(agentId);
+      await serverDB
+        .update(agents)
+        .set({ agencyConfig: { heterogeneousProvider: { type: 'codex' } } })
+        .where(eq(agents.id, agentId));
+
+      await expect(agentShareModel.updateVisibility(agentId, 'link')).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+
+      const [persisted] = await serverDB
+        .select({ visibility: agentShares.visibility })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId));
+      expect(persisted.visibility).toBe('private');
+    });
+
+    it('still allows reverting a heterogeneous agent share back to private', async () => {
+      await agentShareModel.create(agentId, 'link');
+      await serverDB
+        .update(agents)
+        .set({ agencyConfig: { heterogeneousProvider: { type: 'codex' } } })
+        .where(eq(agents.id, agentId));
+
+      const updated = await agentShareModel.updateVisibility(agentId, 'private');
+      expect(updated?.visibility).toBe('private');
+    });
+  });
+
   describe('public lookup', () => {
     it('returns the minimum public agent metadata', async () => {
       const created = await agentShareModel.create(agentId, 'link');

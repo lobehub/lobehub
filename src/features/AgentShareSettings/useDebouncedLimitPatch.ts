@@ -54,6 +54,15 @@ export const useDebouncedLimitPatch = (
 
   return useCallback(
     (field: AgentShareLimitField, value: number | null) => {
+      // The settings surface is reused across agents. If a patch is still
+      // pending for a different agent's `onCommit` when a new edit comes in,
+      // flush it now — otherwise the merge below would fold this edit into
+      // the previous agent's patch and both fields would land on whichever
+      // agent's callback happens to be captured last.
+      if (pendingCommitRef.current && pendingCommitRef.current.onCommit !== onCommitRef.current) {
+        flush();
+      }
+
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
         const nextPatch = { ...pendingPatchRef.current };
         delete nextPatch[field];

@@ -114,13 +114,12 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
-      // Only publishing (`link`) needs the check — reverting to `private` never
-      // exposes visitor execution, so it must stay reachable even if the agent
-      // config changed to a heterogeneous provider after the share was created.
-      if (input.visibility === 'link') {
-        await assertShareableAgent(ctx.agentModel, input.agentId);
-      }
-
+      // The authoritative heterogeneity check now lives in
+      // `AgentShareModel.updateVisibility` itself, re-read from the Agent row
+      // AFTER that model takes its row lock — see the JSDoc there for why a
+      // pre-lock check here (the previous approach) could be bypassed by a
+      // concurrent `AgentModel.updateConfig` write. Not duplicated here to
+      // avoid the two checks drifting apart.
       return requireShare(
         await ctx.agentShareModel.updateVisibility(input.agentId, input.visibility),
       );

@@ -321,6 +321,7 @@
   "share.privacyWarning.title": "通过链接分享此智能体？",
   "share.settings.limits.desc": "限制每位访客可以使用该分享智能体的额度。",
   "share.settings.limits.maxTopicsPerVisitor": "每位访客最大会话数",
+  "share.settings.limits.maxTopicsPerVisitorHint": "每位访客最多 {{max}} 个会话。",
   "share.settings.limits.maxTurnsPerTopic": "每个会话最大轮数",
   "share.settings.limits.title": "访客上限",
   "share.settings.permissions.agentFiles": "智能体文件",

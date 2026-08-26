@@ -1,3 +1,4 @@
+import { AGENT_SHARE_MAX_TOPICS_PER_VISITOR } from '@lobechat/const';
 import type {
   ChatTopicMetadata,
   ChatTopicStatus,
@@ -119,8 +120,12 @@ export interface VisitorTopicItem {
 /**
  * Page size of the visitor topic list. The visitor surface has no cursor, so
  * `maxTopicsPerVisitor` is validated against this bound.
+ *
+ * Re-exports `AGENT_SHARE_MAX_TOPICS_PER_VISITOR` from `@lobechat/const` so
+ * the server schema and the (client-safe) settings UI share one source of
+ * truth without the UI pulling drizzle into its bundle.
  */
-export const VISITOR_TOPIC_PAGE_SIZE = 50;
+export const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_MAX_TOPICS_PER_VISITOR;
 
 export interface CreateTopicParams {
   agentId?: string | null;

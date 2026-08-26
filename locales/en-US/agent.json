@@ -321,6 +321,7 @@
   "share.privacyWarning.title": "Share this agent via link?",
   "share.settings.limits.desc": "Caps how much each visitor can use this shared agent.",
   "share.settings.limits.maxTopicsPerVisitor": "Max conversations per visitor",
+  "share.settings.limits.maxTopicsPerVisitorHint": "Up to {{max}} conversations per visitor.",
   "share.settings.limits.maxTurnsPerTopic": "Max turns per conversation",
   "share.settings.limits.title": "Visitor Limits",
   "share.settings.permissions.agentFiles": "Agent files",

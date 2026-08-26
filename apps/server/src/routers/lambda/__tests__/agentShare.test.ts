@@ -158,6 +158,18 @@ describe('agentShareRouter', () => {
   // `AiAgentService.execAgent`) — these mutations must fail-closed before
   // that state can be reached at all, regardless of which client path (tab
   // switcher or direct route) triggered them.
+  //
+  // Only `enableShare` still runs its check here in the router, via a
+  // pre-lock `getAgentConfigById` read (`enableShare` only ever creates a
+  // `private` share, so a stale read is harmless). `updateVisibility('link')`
+  // used to run the same kind of pre-lock check here too, but that made it
+  // vulnerable to a race with `AgentModel.updateConfig` (see LOBE-11930):
+  // the check could pass, `updateConfig` could reset a share to `private` in
+  // between, and this call would still flip it back to `link`. That check now
+  // lives in `AgentShareModel.updateVisibility` itself, re-read from the
+  // Agent row AFTER the row lock is held — see the model's JSDoc, the
+  // real-Postgres coverage in `agentShare.test.ts`, and the concurrent
+  // regression test in `agentShare.publish.race.test.ts`.
   describe('heterogeneous agent share gate', () => {
     it('rejects enableShare for an agent pinned via agencyConfig.heterogeneousProvider', async () => {
       mockGetAgentConfigById.mockResolvedValue({
@@ -184,7 +196,9 @@ describe('agentShareRouter', () => {
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    it('rejects switching visibility to link for a heterogeneous agent', async () => {
+    it('forwards updateVisibility(link) straight to the model without a pre-lock check', async () => {
+      // getAgentConfigById is intentionally NOT consulted for updateVisibility
+      // any more — the model re-checks under its own row lock instead.
       mockGetAgentConfigById.mockResolvedValue({
         agencyConfig: { heterogeneousProvider: { type: 'codex' } },
         model: 'codex',
@@ -193,11 +207,9 @@ describe('agentShareRouter', () => {
 
       await expect(
         caller.updateVisibility({ agentId: 'agent-1', visibility: 'link' }),
-      ).rejects.toMatchObject({
-        code: 'FORBIDDEN',
-        message: 'ShareHeterogeneousAgentUnsupported',
-      });
-      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+      ).resolves.toEqual(share);
+      expect(mockGetAgentConfigById).not.toHaveBeenCalled();
+      expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'link');
     });
 
     it('still allows reverting a heterogeneous agent share back to private', async () => {
