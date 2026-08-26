@@ -138,15 +138,24 @@ export interface UserInterventionConfig {
    * - auto-run: Automatically approve all tools without user consent
    * - allow-list: Only approve tools in the allow list
    * - manual: Use tool's own humanIntervention config (default)
-   * - headless: Fully automated mode for async tasks - all tools execute automatically,
-   *             security blacklist tools are skipped (not blocked)
+   * - headless: Fully automated mode for TRUSTED async tasks - all tools execute
+   *             automatically (including overridable `required` policies),
+   *             security blacklist tools are skipped (not blocked). Only safe
+   *             when the operator who queued the task is the one being trusted.
+   * - reject: Fail-closed mode for UNTRUSTED headless runs where nobody is present
+   *           to grant consent (e.g. an Agent Share visitor run, which executes
+   *           under the share creator's credentials with no visitor-facing
+   *           approval UI). Uses the same "which tools need intervention" rules
+   *           as `manual` (tool's own humanIntervention config), but instead of
+   *           parking for human approval or auto-running like `headless`, it
+   *           immediately rejects the call with a message back to the model.
    */
-  approvalMode: 'auto-run' | 'allow-list' | 'manual' | 'headless';
+  approvalMode: 'auto-run' | 'allow-list' | 'manual' | 'headless' | 'reject';
 }
 
 export const UserInterventionConfigSchema = z.object({
   allowList: z.array(z.string()).optional(),
-  approvalMode: z.enum(['auto-run', 'allow-list', 'manual', 'headless']),
+  approvalMode: z.enum(['auto-run', 'allow-list', 'manual', 'headless', 'reject']),
 });
 
 /**

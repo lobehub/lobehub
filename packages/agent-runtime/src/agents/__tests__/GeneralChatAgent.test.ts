@@ -2828,6 +2828,87 @@ describe('GeneralChatAgent', () => {
       ]);
     });
 
+    it('should reject (not auto-execute or park) an approval-requiring tool call when approvalMode is reject', async () => {
+      // `reject` models an untrusted headless run with nobody present to grant
+      // consent — e.g. an Agent Share visitor run, which executes under the
+      // creator's credentials but has no visitor-facing approval UI (see
+      // apps/server/src/services/aiAgent/index.ts forcing this mode whenever
+      // `shareGate` is set). It must fail closed: a connector mutation whose
+      // manifest requires approval ('required' policy) must be REJECTED with a
+      // clear message back to the model, not silently auto-run (like
+      // `headless`) and not parked waiting for a human that will never answer
+      // (like `manual`/`allow-list`).
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const safeTool: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'web-search',
+        apiName: 'search',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const mutatingConnectorTool: ChatToolPayload = {
+        id: 'call-2',
+        identifier: 'github-connector',
+        apiName: 'deleteRepo',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          'web-search': {
+            identifier: 'web-search',
+            humanIntervention: 'never', // Safe tool
+          },
+          'github-connector': {
+            identifier: 'github-connector',
+            humanIntervention: 'required', // Overridable, but nobody can approve
+          },
+        },
+        userInterventionConfig: {
+          approvalMode: 'reject',
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [safeTool, mutatingConnectorTool],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // Safe tool still executes; the approval-requiring connector mutation is
+      // rejected outright via `resolve_blocked_tools` with a dedicated message,
+      // instead of `request_human_approve` (which would park forever) or
+      // silent auto-execution (which would leak a mutation to the model as if
+      // it succeeded).
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: safeTool,
+          },
+        },
+        {
+          type: 'resolve_blocked_tools',
+          payload: {
+            blockedContent: expect.stringContaining('no user present'),
+            blockedReason: 'human_intervention_unavailable',
+            parentMessageId: 'msg-1',
+            toolsCalling: [mutatingConnectorTool],
+          },
+        },
+      ]);
+    });
+
     it('should always require intervention for tools with "always" policy even in auto-run mode', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
