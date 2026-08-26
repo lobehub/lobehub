@@ -215,6 +215,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block-end: ${MINIMAL_LIFT}px;
   `,
   portrait: css`
+    pointer-events: none;
     grid-area: 1 / 2;
     transition: transform ${RAIL_TRANSITION_DURATION}ms ease-out;
 
