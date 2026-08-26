@@ -97,14 +97,17 @@ const normalizeAgentShareConfig = (config: AgentShareConfig | null): AgentShareC
  *   value it read was still `AgentShareGate.shareConfig` — a snapshot taken
  *   ONCE at `findByShareIdWithAccessCheck`, long before
  *   `reserveShareVisitorTopicOrThrow` / `reserveShareVisitorTurnOrThrow`
- *   actually take their advisory lock and recount (thousands of lines of
+ *   actually take the Agent row lock and recount (thousands of lines of
  *   agent-config/tool/knowledge-base resolution later — see those functions'
  *   JSDoc). A concurrent flood already past that initial read would keep
  *   inserting against the OLD, higher cap even after the owner lowered it.
  *   The actual fix for that gap is `AgentShareModel.readCurrentVisitorCaps`,
  *   called by those guard functions from INSIDE their locked transaction
- *   instead of trusting a caller-supplied number — see its JSDoc. With that
- *   fix, "re-read fresh" is literally true, which is what makes it safe to
+ *   instead of trusting a caller-supplied number — see its JSDoc, and
+ *   `lockOwnedAgentRow`'s JSDoc for why that lock is now the SAME
+ *   `agents.id FOR UPDATE` every other share mutation takes, not a separate
+ *   advisory lock. With that fix, "re-read fresh" is literally true, which is
+ *   what makes it safe to
  *   leave these two fields OUT of a mechanism (generation bump + whole-run
  *   invalidation) designed for a different problem: they were never a
  *   run-duration grant to invalidate, only a per-write cap to enforce
@@ -193,6 +196,49 @@ export class AgentShareModel {
     );
 
   /**
+   * Take `FOR UPDATE` on the owned Agent row from an ALREADY-OPEN
+   * transaction, without opening one of its own — the primitive
+   * `withOwnedPersonalAgentLock` below builds on for instance mutations, and
+   * that `reserveShareVisitorTopicOrThrow` / `reserveShareVisitorTurnOrThrow`
+   * (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`) call
+   * directly, since those guards must hold this lock alongside their OWN
+   * topic/message recount-and-insert work in a single transaction they
+   * manage themselves.
+   *
+   * This is the SAME physical row every other share-mutation path locks
+   * (`create`, `updateConfig`, `updateVisibility`, `deleteByAgentId`,
+   * `assertRunnableForVisitor`) — see `withOwnedPersonalAgentLock`'s JSDoc for
+   * why one shared row is the serialization point for this whole family,
+   * including, as of LOBE-11930's cap-vs-config-reduction fix, the visitor
+   * abuse guards.
+   *
+   * Returns `null` (never locks) when the agent does not exist, is not
+   * personally owned by `ownerId`, is workspace-scoped, or is a reserved
+   * builtin slug — callers must fail closed on `null`, mirroring every other
+   * consumer of this same ownership predicate.
+   */
+  static lockOwnedAgentRow = async (
+    tx: LobeChatDatabase,
+    agentId: string,
+    ownerId: string,
+  ): Promise<LockedAgentSnapshot | null> => {
+    const [agent] = await tx
+      .select({ agencyConfig: agents.agencyConfig, id: agents.id, model: agents.model })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.id, agentId),
+          eq(agents.userId, ownerId),
+          isNull(agents.workspaceId),
+          excludeReservedAgentSlug(),
+        ),
+      )
+      .for('update');
+
+    return (agent as LockedAgentSnapshot | undefined) ?? null;
+  };
+
+  /**
    * Serialize share writes with scope transfers by locking the Agent row
    * first, and hand the mutation callback the locked snapshot's `model` /
    * `agencyConfig`.
@@ -207,6 +253,32 @@ export class AgentShareModel {
    * to `private`, then blindly flip it back to `link` — a live share link on
    * a Codex/Claude Code agent whose every visitor send is fail-closed by
    * `AiAgentService`. See LOBE-11930.
+   *
+   * As of the cap-vs-config-reduction fix (LOBE-11930 Codex P2,
+   * `shareVisitorAbuseGuards.ts:71`), this is also the ONLY lock in the whole
+   * share-mutation family — no advisory lock runs alongside it anywhere. The
+   * visitor abuse guards used to take a separate `pg_advisory_xact_lock`
+   * keyed per `agentId:visitorUserId` (topic cap) or per `topicId` (turn cap)
+   * to serialize concurrent visitor requests against EACH OTHER, but that
+   * lock was disjoint from this one: it never conflicted with a concurrent
+   * `updateConfig`/`updateVisibility`/`deleteByAgentId` write, so a cap read
+   * inside the advisory lock could still straddle a concurrent cap
+   * reduction — read the OLD value, then have the owner's `updateConfig`
+   * commit a lower one, then insert against the stale number anyway. Reusing
+   * THIS row lock in the guards (via `lockOwnedAgentRow` above) closes that
+   * gap for free: a cap read can no longer be concurrent with a config write
+   * on the same agent, because both now contend for the same row. The
+   * guards' own recount-then-insert was already what the advisory lock
+   * existed to serialize (concurrent visitor requests to each other), and the
+   * row lock provides that too — just at agent granularity rather than
+   * per-visitor/per-topic. Keeping a second, finer-grained lock alongside
+   * this one would only have protected visitor-vs-visitor concurrency, which
+   * this row lock already covers; it would not have added any additional
+   * safety against the config-reduction race the second lock exists for, so
+   * dropping it is not a shortcut — it removes a lock that had stopped
+   * earning its place. See `shareVisitorAbuseGuards.ts` for the full
+   * before/after and the deadlock analysis for stacking this lock into an
+   * already-open transaction.
    */
   private withOwnedPersonalAgentLock = async <T>(
     agentId: string,
@@ -214,21 +286,10 @@ export class AgentShareModel {
   ): Promise<T | null> =>
     this.db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
-      const [agent] = await tx
-        .select({ agencyConfig: agents.agencyConfig, id: agents.id, model: agents.model })
-        .from(agents)
-        .where(
-          and(
-            eq(agents.id, agentId),
-            eq(agents.userId, this.userId),
-            isNull(agents.workspaceId),
-            excludeReservedAgentSlug(),
-          ),
-        )
-        .for('update');
+      const agent = await AgentShareModel.lockOwnedAgentRow(tx, agentId, this.userId);
 
       if (!agent) return null;
-      return mutation(tx, agent as LockedAgentSnapshot);
+      return mutation(tx, agent);
     });
 
   /** Create a private share by default, or return the existing share for the agent. */
@@ -409,21 +470,27 @@ export class AgentShareModel {
    * WHY this must be a fresh read and not a value threaded through from
    * earlier in the request: `reserveShareVisitorTopicOrThrow` /
    * `reserveShareVisitorTurnOrThrow`
-   * (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`) take an
-   * advisory lock and recount existing topics/messages immediately before
-   * the real INSERT — but `shareChat.ts`'s `execAgent` resolves the share
-   * (and therefore these caps) exactly ONCE, at `findByShareIdWithAccessCheck`,
-   * long before that lock is taken. `AiAgentService.execAgentWithReservation`
-   * does thousands of lines of agent-config/tool/knowledge-base resolution in
-   * between (real I/O, not instant). A caller that passed the SNAPSHOTTED cap
-   * into those guard functions would let an owner's cap REDUCTION lose to
-   * every request already past that initial read: the locked recount would
-   * only ever enforce whatever number it was TOLD, not the number the owner
-   * currently has configured — during an active flood, lowering 50 topics to
-   * 1 would still let every already-in-flight request reach 50. Calling this
-   * method from INSIDE the SAME locked transaction those guard functions hold
-   * closes that gap: the recount always compares against the cap as of RIGHT
-   * NOW, not as of request entry.
+   * (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`) take
+   * `AgentShareModel.lockOwnedAgentRow`'s `agents.id FOR UPDATE` lock and
+   * recount existing topics/messages immediately before the real INSERT —
+   * but `shareChat.ts`'s `execAgent` resolves the share (and therefore these
+   * caps) exactly ONCE, at `findByShareIdWithAccessCheck`, long before that
+   * lock is taken. `AiAgentService.execAgentWithReservation` does thousands
+   * of lines of agent-config/tool/knowledge-base resolution in between (real
+   * I/O, not instant). A caller that passed the SNAPSHOTTED cap into those
+   * guard functions would let an owner's cap REDUCTION lose to every request
+   * already past that initial read: the locked recount would only ever
+   * enforce whatever number it was TOLD, not the number the owner currently
+   * has configured — during an active flood, lowering 50 topics to 1 would
+   * still let every already-in-flight request reach 50. Calling this method
+   * from INSIDE the SAME locked transaction those guard functions hold closes
+   * that gap: the recount always compares against the cap as of RIGHT NOW,
+   * not as of request entry. Locking the Agent row (rather than a separate
+   * advisory lock keyed per visitor/topic) additionally guarantees this read
+   * can never straddle a CONCURRENT `updateConfig` write either: both now
+   * contend for the same row, so whichever transaction commits first is the
+   * one this read is guaranteed to observe — see `lockOwnedAgentRow`'s and
+   * `withOwnedPersonalAgentLock`'s JSDoc for the full before/after.
    *
    * This is deliberately a much lighter fix than the generation-bump +
    * whole-run invalidation `isConfigTightening` drives for `allowReadMemory` /
