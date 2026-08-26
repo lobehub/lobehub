@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "Aucun dépôt sélectionné",
   "heteroAgent.cloudRepo.sectionTitle": "Dépôts",
   "heteroAgent.codexQuota.doesNotExpire": "N'expire pas",
+  "heteroAgent.codexQuota.errorConnection": "Impossible de joindre le point de terminaison du quota Codex. Vérifiez votre réseau ou les paramètres du proxy LobeHub.",
+  "heteroAgent.codexQuota.errorGeneric": "Impossible de charger le quota Codex. Veuillez réessayer plus tard.",
   "heteroAgent.codexQuota.expiresIn": "Expire dans {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "Expire bientôt",
   "heteroAgent.codexQuota.fiveHour": "5 heures",

@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "لم يتم تحديد أي مستودع",
   "heteroAgent.cloudRepo.sectionTitle": "المستودعات",
   "heteroAgent.codexQuota.doesNotExpire": "لا تنتهي صلاحيتها",
+  "heteroAgent.codexQuota.errorConnection": "تعذر الوصول إلى نقطة نهاية حصة Codex. تحقق من إعدادات الشبكة أو وكيل LobeHub.",
+  "heteroAgent.codexQuota.errorGeneric": "تعذر تحميل حصة Codex. حاول مرة أخرى لاحقًا.",
   "heteroAgent.codexQuota.expiresIn": "ينتهي في {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "تنتهي قريبًا",
   "heteroAgent.codexQuota.fiveHour": "5 ساعات",

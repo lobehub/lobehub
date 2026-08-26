@@ -878,6 +878,7 @@
   "lobehub.mimo-v2.5.description": "小米 MiMo-V2.5 是一个多模态智能代理模型，能够理解图像、视频、音频和文本。它以大约一半的推理成本提供专业级智能代理性能，同时响应速度更快，多模态感知能力比 MiMo-V2-Omni 更强。",
   "lobehub.o3.description": "o3 是一个强大的全能模型，在数学、科学、编程和视觉推理方面设立了新的标杆。它擅长技术写作和指令跟随，并能分析文本、代码和图像以解决多步骤问题。",
   "lobehub.o4-mini.description": "o4-mini 是最新的小型 o 系列模型，专为快速、高效的推理任务优化，在编程和视觉任务中表现出色。",
+  "lobehub.ox-alpha.description": "Ox Alpha 已被揭示为 GLM-5.3-Flash。请求会自动重定向到 GLM-5.3-Flash。",
   "lobehub.qwen3.7-max.description": "Qwen3.7-Max 是阿里云的旗舰智能代理时代模型，适用于复杂编码、推理、办公自动化和长时间自主工作流。",
   "lobehub.qwen3.7-plus.description": "Qwen3.7-Plus 是 Qwen3.7 系列中性价比高的多模态模型，结合了强大的文本能力和升级的视觉语言理解能力，适用于编码、工具使用、GUI 任务和生产力工作流。",
   "lobehub.qwen3.8-max-preview.description": "Qwen3.8-Max-Preview 是阿里巴巴下一代 2.4T 参数旗舰模型的预览版，在编码和专业生产力方面相比 Qwen3.7-Max 取得了重大突破，并在全栈开发和数据分析等复杂的长周期任务上表现领先。",

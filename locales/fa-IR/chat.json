@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "هیچ مخزنی انتخاب نشده است",
   "heteroAgent.cloudRepo.sectionTitle": "مخازن",
   "heteroAgent.codexQuota.doesNotExpire": "منقضی نمی‌شود",
+  "heteroAgent.codexQuota.errorConnection": "اتصال به نقطه پایانی سهمیه Codex امکان‌پذیر نبود. تنظیمات شبکه یا پروکسی LobeHub خود را بررسی کنید.",
+  "heteroAgent.codexQuota.errorGeneric": "بارگذاری سهمیه Codex امکان‌پذیر نبود. لطفاً بعداً دوباره تلاش کنید.",
   "heteroAgent.codexQuota.expiresIn": "منقضی می‌شود در {{duration}}",
   "heteroAgent.codexQuota.expiresSoon": "به‌زودی منقضی می‌شود",
   "heteroAgent.codexQuota.fiveHour": "۵ ساعته",
