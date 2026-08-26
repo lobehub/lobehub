@@ -17,7 +17,7 @@ import {
   AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
-import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
+import { BriefApiName, BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
 import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import {
@@ -869,7 +869,6 @@ const MIRRORED_ALLOWED_IDENTIFIERS = new Set<string>([
   UserInteractionIdentifier,
   LobeActivatorIdentifier,
   PageAgentIdentifier,
-  BriefIdentifier,
   ImageGenerationIdentifier,
   VerifyToolIdentifier,
   AcceptanceEvidenceIdentifier,
@@ -904,6 +903,7 @@ describe('default-deny covers every registered builtin identifier not explicitly
         'lobe-skills',
         'lobe-group-agent-builder',
         'lobe-group-management',
+        BriefIdentifier,
       ]),
     );
     // Denied for lack of positive safety evidence — see shareGate.ts's
@@ -1086,6 +1086,62 @@ describe('agent-signal-review: cross-agent read and mutation stay blocked for sh
       tools: [
         {
           function: { name: `${AGENT_SIGNAL_REVIEW_IDENTIFIER}____listManagedSkills` },
+          type: 'function',
+        },
+      ],
+    };
+
+    applyShareGateToToolSet(toolSet, gate);
+
+    expect(toolSet.enabledToolIds).toEqual([]);
+    expect(toolSet.manifestMap).toEqual({});
+    expect(toolSet.tools).toEqual([]);
+  });
+});
+
+/**
+ * Regression coverage for the `lobe-brief` removal (codex P1 finding on
+ * `packages/builtin-tools/src/index.ts:219`): `createBrief`
+ * (`briefRuntime.createBrief`, `apps/server/src/services/toolExecution/
+ * serverRuntimes/brief.ts:60-68`) unconditionally persists a new brief via
+ * `BriefModel.create`, constructed with the CREATOR's `userId`, and the
+ * manifest never marks it as requiring intervention — only `requestCheckpoint`
+ * does (`packages/builtin-tool-brief/src/manifest.ts`). Asserted against the
+ * REAL exported `BriefApiName` so a future re-allowlisting attempt has to
+ * consciously re-derive safety instead of silently reopening the hole.
+ */
+describe('lobe-brief: unconditional persistence with no humanIntervention marker stays blocked for share visitors', () => {
+  const fullyGrantedPermissions = {
+    allowReadMemory: true,
+    filePermissionConfig: { agentFiles: 'read' as const, knowledgeBase: 'read' as const },
+  };
+
+  it('is absent from the master allowlist entirely', () => {
+    expect(MIRRORED_ALLOWED_IDENTIFIERS.has(BriefIdentifier)).toBe(false);
+  });
+
+  it.each(Object.values(BriefApiName))(
+    'blocks %s unconditionally at dispatch time, even under a fully-granted share',
+    (apiName) => {
+      expect(isShareBlockedDataToolCall(fullyGrantedPermissions, BriefIdentifier, apiName)).toBe(
+        true,
+      );
+    },
+  );
+
+  it('strips the identifier from the assembled tool set even when the owner whitelists it', () => {
+    const gate = buildGate({ enabledToolIds: [BriefIdentifier] });
+    const toolSet: ShareGateToolSet = {
+      activatableToolIds: [BriefIdentifier],
+      enabledToolIds: [BriefIdentifier],
+      executorMap: { [BriefIdentifier]: 'server' as any },
+      manifestMap: {
+        [BriefIdentifier]: { api: [], identifier: BriefIdentifier, type: 'default' } as any,
+      },
+      sourceMap: { [BriefIdentifier]: 'builtin' as any },
+      tools: [
+        {
+          function: { name: `${BriefIdentifier}____${BriefApiName.createBrief}` },
           type: 'function',
         },
       ],
