@@ -50,6 +50,7 @@ export const MORE_FILE_PREVIEW_REQUEST_URL =
 export const AGENTS_INDEX_GITHUB = 'https://github.com/lobehub/lobe-chat-agents';
 export const AGENTS_INDEX_GITHUB_ISSUE = urlJoin(AGENTS_INDEX_GITHUB, 'issues/new');
 export const AGENTS_OFFICIAL_URL = 'https://lobehub.com/agent';
+export const WORKSPACE_OFFICIAL_URL = 'https://lobehub.com/workspace';
 
 export const AGENT_CHAT_URL = (agentId: string, mobile?: boolean) => {
   if (mobile) return `/agent/${agentId}`;

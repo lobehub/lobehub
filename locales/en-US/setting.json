@@ -2798,6 +2798,7 @@
   "workspace.waitlistPage.enabledTitle": "Workspace is ready for you",
   "workspace.waitlistPage.entryCta": "Join Workspace Beta",
   "workspace.waitlistPage.goHome": "Back to LobeHub",
+  "workspace.waitlistPage.learnMore": "Learn more about Workspace",
   "workspace.waitlistPage.organizationLabel": "Organization / Group (optional)",
   "workspace.waitlistPage.organizationPlaceholder": "Company, school, or family…",
   "workspace.waitlistPage.pendingSubtitle": "We're opening access in batches and will notify you by email as soon as your access is ready.",
