@@ -1,12 +1,12 @@
 'use client';
 
 import type { SharedAgentData } from '@lobechat/types';
-import { memo, useLayoutEffect, useState } from 'react';
+import { memo } from 'react';
 
-import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
 import ReadOnlyConversationArea from './ReadOnlyConversationArea';
+import { useVisitorConversationSeed } from './useVisitorConversationSeed';
 import { useVisitorTopics } from './useVisitorTopics';
 import VisitorComposer from './VisitorComposer';
 
@@ -16,36 +16,10 @@ import VisitorComposer from './VisitorComposer';
  * composer wired to the gateway transport via `agentShareId`.
  */
 const VisitorConversation = memo<{ data: SharedAgentData }>(({ data }) => {
-  const { agentId, agentMeta, shareId } = data;
-  const [seeded, setSeeded] = useState(false);
+  const { agentId, shareId } = data;
+  const seeded = useVisitorConversationSeed(data);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const { mutate: refreshVisitorTopics } = useVisitorTopics(shareId);
-
-  useLayoutEffect(() => {
-    // Visitors cannot call the owner-scoped agent-config API, so seed a
-    // minimal `agentMap` entry from the share metadata by hand — mere
-    // presence is what flips `isAgentConfigLoading*` off for the welcome
-    // header and chat input skeletons. Merged via the store's dispatcher
-    // (the `/share/t` precedent) so nulls never clobber existing fields.
-    useAgentStore.getState().internal_dispatchAgentMap(agentId, {
-      avatar: agentMeta.avatar ?? undefined,
-      backgroundColor: agentMeta.backgroundColor ?? undefined,
-      name: agentMeta.name ?? undefined,
-      title: agentMeta.title ?? undefined,
-    });
-    useAgentStore.setState({ activeAgentId: agentId }, false, 'AgentShareVisitor/seedSharedAgent');
-    useChatStore.setState(
-      {
-        activeAgentId: agentId,
-        activeGroupId: undefined,
-        activeThreadId: undefined,
-        activeTopicId: undefined,
-      },
-      false,
-      'AgentShareVisitor/sync',
-    );
-    setSeeded(true);
-  }, [agentId, agentMeta]);
 
   // The message surface reads the active ids on first render — mounting it before
   // the seed lands would fetch against a stale topic left by the main app.

@@ -444,6 +444,7 @@ export default {
   'share.visitor.errors.providerNotSupported':
     'This shared agent is not available right now. Please contact its owner.',
   'share.visitor.errors.retry': 'Retry',
+  'share.visitor.errors.retryCheckFailed': "Couldn't check the share status. Please try again.",
   'share.visitor.errors.topicLimit':
     'You have reached the conversation limit on this shared agent.',
   'share.visitor.errors.turnLimit':

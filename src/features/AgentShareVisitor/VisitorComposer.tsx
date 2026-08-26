@@ -8,12 +8,13 @@ import { SendHorizonal } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
 import { shouldSubmitOnEnter } from './composerEnterGuard';
-import { refreshSharedAgentStatus } from './useSharedAgent';
+import { useBudgetStatusRetry } from './useBudgetStatusRetry';
 
 interface VisitorComposerProps {
   agentId: string;
@@ -57,7 +58,10 @@ const VisitorComposer = memo<VisitorComposerProps>(
     const [value, setValue] = useState('');
     const [errorKey, setErrorKey] = useState<string>();
     const [sending, setSending] = useState(false);
-    const [checkingBlock, setCheckingBlock] = useState(false);
+    const { checkingBlock, retryBlockedCheck, retryCheckError } = useBudgetStatusRetry(
+      shareId,
+      blockedKey,
+    );
     const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
     const isStreaming = useChatStore(
@@ -100,19 +104,6 @@ const VisitorComposer = memo<VisitorComposerProps>(
       }
     };
 
-    // Re-check the share's status (e.g. budget) without counting another page
-    // view, so a visitor blocked by an exhausted budget can find out the
-    // owner topped up without reloading the whole page.
-    const retryBlockedCheck = async () => {
-      if (!blockedKey || checkingBlock) return;
-      setCheckingBlock(true);
-      try {
-        await refreshSharedAgentStatus(shareId);
-      } finally {
-        setCheckingBlock(false);
-      }
-    };
-
     return (
       <Flexbox gap={4} paddingBlock={8} paddingInline={12}>
         {displayedErrorKey && (
@@ -120,7 +111,10 @@ const VisitorComposer = memo<VisitorComposerProps>(
             <span style={{ color: cssVar.colorError, fontSize: 12 }}>
               {t(displayedErrorKey as any)}
             </span>
-            {blockedKey && (
+            {/* Once the retry check itself has failed, the AsyncError row below
+              takes over the retry action so the visitor gets feedback specific
+              to that failure instead of a silently-reset spinner. */}
+            {blockedKey && !retryCheckError && (
               <Button
                 loading={checkingBlock}
                 size="small"
@@ -131,6 +125,15 @@ const VisitorComposer = memo<VisitorComposerProps>(
               </Button>
             )}
           </Flexbox>
+        )}
+        {blockedKey && !!retryCheckError && (
+          <AsyncError
+            error={retryCheckError}
+            retrying={checkingBlock}
+            title={t('share.visitor.errors.retryCheckFailed')}
+            variant="inline"
+            onRetry={() => void retryBlockedCheck()}
+          />
         )}
         <Flexbox
           horizontal
