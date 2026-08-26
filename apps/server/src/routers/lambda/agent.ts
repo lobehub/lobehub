@@ -46,6 +46,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
@@ -123,7 +124,12 @@ const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 
   return opts.next({
     ctx: {
-      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      // `onShareReset` closes LOBE-11930 hole 2 for direct `AgentModel`
+      // writes (e.g. `updateAgentPinned`) that happen to touch `model` /
+      // `agencyConfig` — see `scheduleShareRunInterruptOnReset`'s JSDoc.
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId, {
+        onShareReset: scheduleShareRunInterruptOnReset(ctx.serverDB, ctx.userId),
+      }),
       agentService: new AgentService(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       editLockService: new EditLockService(ctx.userId),

@@ -108,6 +108,7 @@ import {
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
@@ -226,6 +227,20 @@ import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * Bounds the retry window `interruptActiveShareRuns` polls
+ * `findActiveVisitorRunTopics` over — see that method's JSDoc for why a
+ * single query can miss an operation created in the moments right after
+ * revocation. ~4 attempts x 750ms covers the `createOperation` dispatch
+ * window without meaningfully delaying the revocation caller's `after()`
+ * callback.
+ */
+const INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS = 4;
+const INTERRUPT_SHARE_RUNS_RETRY_DELAY_MS = 750;
+
+const delay = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
   type === 'claude-code' || type === 'codex';
@@ -5460,6 +5475,22 @@ export class AiAgentService {
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
+      // Agent Share visitor runs must not create an operation once the owner
+      // has already revoked the share (or a config write turned it
+      // heterogeneous, resetting it — see `writeAgentConfigWithShareReset`).
+      // `findByShareIdWithAccessCheck` (checked once, at `shareChat.execAgent`'s
+      // entry) is long out of date by this point — the several thousand lines
+      // above resolve agent config, tools, and knowledge bases, and persist
+      // messages. Placed here — inside this try, right before the runtime
+      // dispatch it guards, and NOT earlier — so a rejection lands in the
+      // SAME error path `createOperation` failures already use (message
+      // updated with an error card, no operation created), instead of a raw
+      // unhandled throw. See `AgentShareModel.assertRunnableForVisitor`'s
+      // JSDoc for the exact race this closes and LOBE-11930 hole 1.
+      if (shareGate) {
+        await new AgentShareModel(this.db, this.userId).assertRunnableForVisitor(shareGate.agentId);
+      }
+
       const result = await this.agentRuntimeService.createOperation({
         activeDeviceId,
         activeDeviceScope,
@@ -6813,31 +6844,56 @@ export class AiAgentService {
    * one failed interrupt (e.g. a transient device-gateway error) must not
    * stop the others from being attempted, and must never re-open the
    * already-committed revocation.
+   *
+   * Polls `findActiveVisitorRunTopics` a bounded number of times instead of
+   * querying once: a request that passed its own live-visibility recheck
+   * (`AgentShareModel.assertRunnableForVisitor`, taken under the SAME row
+   * lock this revocation just released) a moment earlier can still finish
+   * creating its operation and write `topics.metadata.runningOperation`
+   * shortly AFTER this function's first query — holding a DB lock across
+   * that gap isn't viable (it spans tool/knowledge-base resolution and the
+   * `agentRuntimeService.createOperation` dispatch itself). Retrying over a
+   * short bounded window catches an operation that starts in the moments
+   * after revocation instead of leaving it to run unbounded on the
+   * creator's budget. See LOBE-11930 hole 1.
    */
   async interruptActiveShareRuns(agentId: string): Promise<void> {
-    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
-    if (activeRuns.length === 0) return;
+    const interruptedOperationIds = new Set<string>();
 
-    log(
-      'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s)',
-      agentId,
-      activeRuns.length,
-    );
+    for (let attempt = 0; attempt < INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS; attempt += 1) {
+      const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
+      const newRuns = activeRuns.filter((run) => !interruptedOperationIds.has(run.operationId));
 
-    await Promise.all(
-      activeRuns.map(async ({ operationId, topicId }) => {
-        try {
-          await this.interruptTask({ operationId, topicId });
-        } catch (error) {
-          log(
-            'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
-            operationId,
-            topicId,
-            error,
-          );
-        }
-      }),
-    );
+      if (newRuns.length > 0) {
+        log(
+          'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s) (attempt %d/%d)',
+          agentId,
+          newRuns.length,
+          attempt + 1,
+          INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS,
+        );
+
+        await Promise.all(
+          newRuns.map(async ({ operationId, topicId }) => {
+            interruptedOperationIds.add(operationId);
+            try {
+              await this.interruptTask({ operationId, topicId });
+            } catch (error) {
+              log(
+                'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
+                operationId,
+                topicId,
+                error,
+              );
+            }
+          }),
+        );
+      }
+
+      if (attempt < INTERRUPT_SHARE_RUNS_MAX_ATTEMPTS - 1) {
+        await delay(INTERRUPT_SHARE_RUNS_RETRY_DELAY_MS);
+      }
+    }
   }
 
   /**

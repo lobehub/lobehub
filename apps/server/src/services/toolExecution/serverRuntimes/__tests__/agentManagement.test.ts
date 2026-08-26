@@ -87,7 +87,13 @@ describe('agentManagementRuntime', () => {
   it('scopes agent and plugin models to workspace context', () => {
     createWorkspaceRuntime();
 
-    expect(AgentModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
+    // 4th arg wires `onShareReset` (LOBE-11930 hole 2) so a mid-run
+    // `updateAgentConfig`/`update` call that turns the agent heterogeneous
+    // schedules the Agent Share visitor-run interrupt — see
+    // `scheduleShareRunInterruptOnReset`.
+    expect(AgentModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1', {
+      onShareReset: expect.any(Function),
+    });
     expect(PluginModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
   });
 

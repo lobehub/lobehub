@@ -221,15 +221,34 @@ export class AgentOwnedByGroupError extends Error {
   }
 }
 
+export interface AgentModelOptions {
+  /**
+   * Forwarded to `writeAgentConfigWithShareReset` from `update()` /
+   * `updateConfig()` — see that function's `onShareReset` JSDoc. Optional and
+   * defaulted to a no-op so every EXISTING `new AgentModel(...)` call site
+   * keeps its current behavior; only construction sites that can reach the
+   * server layer (tRPC procedures, tool executors) pass a real callback. See
+   * LOBE-11930 hole 2.
+   */
+  onShareReset?: (agentId: string) => void;
+}
+
 export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private onShareReset?: (agentId: string) => void;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options?: AgentModelOptions,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.onShareReset = options?.onShareReset;
   }
 
   /**
@@ -1154,6 +1173,7 @@ export class AgentModel {
 
     return writeAgentConfigWithShareReset(this.db, {
       agentId,
+      onShareReset: this.onShareReset,
       resultingConfig: {
         agencyConfig: Object.hasOwn(sanitizedData, 'agencyConfig')
           ? (sanitizedData.agencyConfig as LobeAgentAgencyConfig | null | undefined)
@@ -1569,6 +1589,7 @@ export class AgentModel {
      */
     await writeAgentConfigWithShareReset(this.db, {
       agentId,
+      onShareReset: this.onShareReset,
       resultingConfig: mergedValue,
       touchesHeterogeneityFields:
         Object.hasOwn(data, 'model') || Object.hasOwn(data, 'agencyConfig'),
