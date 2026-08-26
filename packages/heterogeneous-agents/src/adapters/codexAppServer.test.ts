@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
+import { parsePatch } from 'diff';
 import { describe, expect, it } from 'vitest';
 
 import { CodexAdapter } from './codex';
@@ -156,6 +157,64 @@ describe('CodexAppServerAdapter', () => {
     expect(result.content).toHaveLength(25_078);
     expect(result.pluginState.output).toBe(result.content);
     expect(result.pluginState.stdout).toBe(result.content);
+  });
+
+  it('normalizes native file changes into complete single-file patches', () => {
+    const adapter = new CodexAppServerAdapter();
+    const events = adapter.adapt('item/completed', {
+      completedAtMs: 2,
+      item: {
+        changes: [
+          {
+            diff: '@@ -1 +1 @@\n-old\n+new\n',
+            kind: { move_path: null, type: 'update' },
+            path: '/workspace/updated.ts',
+          },
+          {
+            diff: 'first\nsecond\n',
+            kind: { type: 'add' },
+            path: 'src/added.ts',
+          },
+          {
+            diff: 'removed\n',
+            kind: { type: 'delete' },
+            path: 'src/deleted.ts',
+          },
+          {
+            diff: '@@ -1 +1 @@\n-before\n+after\n\n\nMoved to: src/after.ts',
+            kind: { move_path: 'src/after.ts', type: 'update' },
+            path: 'src/before.ts',
+          },
+        ],
+        id: 'file-change-1',
+        status: 'completed',
+        type: 'fileChange',
+      },
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const changes = events.find(({ type }) => type === 'tool_result')?.data.pluginState
+      ?.changes as Array<{ diffText: string; kind: string }>;
+
+    expect(changes.map(({ kind }) => kind)).toEqual(['update', 'add', 'delete', 'rename']);
+    expect(changes[0].diffText).toContain(
+      'diff --git a/workspace/updated.ts b/workspace/updated.ts\n--- a/workspace/updated.ts\n+++ b/workspace/updated.ts\n@@ -1 +1 @@',
+    );
+    expect(changes[1].diffText).toContain('--- /dev/null');
+    expect(changes[1].diffText).toContain('+++ b/src/added.ts');
+    expect(changes[1].diffText).toContain('+first\n+second');
+    expect(changes[2].diffText).toContain('--- a/src/deleted.ts');
+    expect(changes[2].diffText).toContain('+++ /dev/null');
+    expect(changes[2].diffText).toContain('-removed');
+    expect(changes[3].diffText).toContain('diff --git a/src/before.ts b/src/after.ts');
+    expect(changes[3].diffText).not.toContain('Moved to:');
+
+    for (const { diffText } of changes) {
+      const parsed = parsePatch(diffText);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].oldFileName).toBeTypeOf('string');
+      expect(parsed[0].newFileName).toBeTypeOf('string');
+    }
   });
 
   it.each([
