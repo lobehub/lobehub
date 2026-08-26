@@ -1,5 +1,16 @@
+import {
+  AgentDocumentsApiName,
+  AgentDocumentsIdentifier,
+  AgentDocumentsManifest,
+} from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import {
+  KnowledgeBaseApiName,
+  KnowledgeBaseIdentifier,
+  KnowledgeBaseManifest,
+} from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { MemoryApiName, MemoryIdentifier, MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -7,6 +18,7 @@ import {
   applyShareGateToAgentConfig,
   applyShareGateToToolSet,
   filterPluginsByShareGate,
+  isShareBlockedDataToolCall,
 } from './shareGate';
 
 const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): AgentShareGate => ({
@@ -216,5 +228,224 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.manifestMap['lobe-agent-management'].systemRole).not.toMatch(
       /whether to call it/,
     );
+  });
+
+  describe('data-tool access (memory / knowledge base / agent documents)', () => {
+    // Reproduces the fully-assembled tool set for a share that whitelisted all
+    // three data-bearing tools (`enabledToolIds` says "id is enabled") but
+    // never granted read access to any of them (`allowReadMemory` unset,
+    // `filePermissionConfig` unset) — the exact shape that let a share
+    // visitor execute these tools read-write under the creator's own
+    // credentials before this gate existed. Built from the REAL exported
+    // manifests so a rename/addition of an API is caught by these assertions
+    // instead of silently reopening the hole.
+    const buildDataToolSet = (): ShareGateToolSet => ({
+      activatableToolIds: [MemoryIdentifier, KnowledgeBaseIdentifier, AgentDocumentsIdentifier],
+      enabledToolIds: [MemoryIdentifier, KnowledgeBaseIdentifier, AgentDocumentsIdentifier],
+      executorMap: {
+        [AgentDocumentsIdentifier]: 'server' as any,
+        [KnowledgeBaseIdentifier]: 'server' as any,
+        [MemoryIdentifier]: 'server' as any,
+      },
+      manifestMap: {
+        [AgentDocumentsIdentifier]: AgentDocumentsManifest,
+        [KnowledgeBaseIdentifier]: KnowledgeBaseManifest,
+        [MemoryIdentifier]: MemoryManifest,
+      },
+      sourceMap: {
+        [AgentDocumentsIdentifier]: 'builtin',
+        [KnowledgeBaseIdentifier]: 'builtin',
+        [MemoryIdentifier]: 'builtin',
+      } as any,
+      tools: [
+        ...MemoryManifest.api.map((api) => ({
+          function: { name: `${MemoryIdentifier}____${api.name}` },
+          type: 'function',
+        })),
+        ...KnowledgeBaseManifest.api.map((api) => ({
+          function: { name: `${KnowledgeBaseIdentifier}____${api.name}` },
+          type: 'function',
+        })),
+        ...AgentDocumentsManifest.api.map((api) => ({
+          function: { name: `${AgentDocumentsIdentifier}____${api.name}` },
+          type: 'function',
+        })),
+      ],
+    });
+
+    it('drops memory/knowledge-base/agent-documents entirely when the whitelist enables them but the share grants no access', () => {
+      const gate = buildGate({
+        enabledToolIds: [MemoryIdentifier, KnowledgeBaseIdentifier, AgentDocumentsIdentifier],
+        // No `allowReadMemory`, no `filePermissionConfig` — an unconfigured
+        // grant is `none`, same as an explicit 'none'.
+      });
+      const toolSet = buildDataToolSet();
+
+      applyShareGateToToolSet(toolSet, gate);
+
+      for (const identifier of [
+        MemoryIdentifier,
+        KnowledgeBaseIdentifier,
+        AgentDocumentsIdentifier,
+      ]) {
+        expect(toolSet.manifestMap[identifier]).toBeUndefined();
+        expect(toolSet.sourceMap[identifier]).toBeUndefined();
+        expect(toolSet.executorMap[identifier]).toBeUndefined();
+        expect(toolSet.enabledToolIds).not.toContain(identifier);
+        expect(toolSet.activatableToolIds).not.toContain(identifier);
+      }
+      expect(toolSet.tools).toEqual([]);
+    });
+
+    it('keeps read APIs but strips every write API once the share grants read access', () => {
+      const gate = buildGate({
+        allowReadMemory: true,
+        enabledToolIds: [MemoryIdentifier, KnowledgeBaseIdentifier, AgentDocumentsIdentifier],
+        filePermissionConfig: {
+          agentFiles: 'read',
+          knowledgeBase: 'read',
+          uploadAllowed: false,
+        },
+      });
+      const toolSet = buildDataToolSet();
+
+      applyShareGateToToolSet(toolSet, gate);
+
+      const memoryApis = toolSet.manifestMap[MemoryIdentifier].api.map((api) => api.name);
+      const knowledgeApis = toolSet.manifestMap[KnowledgeBaseIdentifier].api.map((api) => api.name);
+      const documentApis = toolSet.manifestMap[AgentDocumentsIdentifier].api.map((api) => api.name);
+
+      // Read APIs survive.
+      expect(memoryApis).toEqual(
+        expect.arrayContaining([
+          MemoryApiName.searchUserMemory,
+          MemoryApiName.queryTaxonomyOptions,
+        ]),
+      );
+      expect(knowledgeApis).toEqual(
+        expect.arrayContaining([
+          KnowledgeBaseApiName.listKnowledgeBases,
+          KnowledgeBaseApiName.viewKnowledgeBase,
+          KnowledgeBaseApiName.searchKnowledgeBase,
+          KnowledgeBaseApiName.readKnowledge,
+        ]),
+      );
+      expect(documentApis).toEqual(
+        expect.arrayContaining([
+          AgentDocumentsApiName.listDocuments,
+          AgentDocumentsApiName.readDocument,
+        ]),
+      );
+
+      // Every write API is gone — from the manifest AND the function-calling
+      // `tools` schema — regardless of the 'read' grant (v1 shares have no
+      // write grant to honor).
+      const memoryWriteApis = [
+        MemoryApiName.addActivityMemory,
+        MemoryApiName.addContextMemory,
+        MemoryApiName.addExperienceMemory,
+        MemoryApiName.addIdentityMemory,
+        MemoryApiName.addPreferenceMemory,
+        MemoryApiName.removeIdentityMemory,
+        MemoryApiName.updateIdentityMemory,
+      ];
+      const knowledgeWriteApis = [
+        KnowledgeBaseApiName.createKnowledgeBase,
+        KnowledgeBaseApiName.deleteKnowledgeBase,
+        KnowledgeBaseApiName.createDocument,
+        KnowledgeBaseApiName.addFiles,
+        KnowledgeBaseApiName.removeFiles,
+      ];
+      const documentWriteApis = [
+        AgentDocumentsApiName.createDocument,
+        AgentDocumentsApiName.copyDocument,
+        AgentDocumentsApiName.modifyNodes,
+        AgentDocumentsApiName.removeDocument,
+        AgentDocumentsApiName.renameDocument,
+        AgentDocumentsApiName.replaceDocumentContent,
+        AgentDocumentsApiName.updateLoadRule,
+      ];
+
+      for (const apiName of memoryWriteApis) expect(memoryApis).not.toContain(apiName);
+      for (const apiName of knowledgeWriteApis) expect(knowledgeApis).not.toContain(apiName);
+      for (const apiName of documentWriteApis) expect(documentApis).not.toContain(apiName);
+
+      const toolNames = toolSet.tools!.map((tool) => tool.function.name);
+      for (const apiName of [...memoryWriteApis, ...knowledgeWriteApis, ...documentWriteApis]) {
+        expect(toolNames.some((name) => name.endsWith(`____${apiName}`))).toBe(false);
+      }
+
+      // The identifiers themselves stay enabled (they were whitelisted and
+      // granted read access).
+      expect(toolSet.enabledToolIds).toEqual(
+        expect.arrayContaining([
+          MemoryIdentifier,
+          KnowledgeBaseIdentifier,
+          AgentDocumentsIdentifier,
+        ]),
+      );
+    });
+  });
+});
+
+describe('isShareBlockedDataToolCall', () => {
+  it('blocks every API when the grant is none (unset permissions)', () => {
+    expect(isShareBlockedDataToolCall({}, MemoryIdentifier, MemoryApiName.searchUserMemory)).toBe(
+      true,
+    );
+    expect(
+      isShareBlockedDataToolCall({}, KnowledgeBaseIdentifier, KnowledgeBaseApiName.listFiles),
+    ).toBe(true);
+    expect(
+      isShareBlockedDataToolCall({}, AgentDocumentsIdentifier, AgentDocumentsApiName.listDocuments),
+    ).toBe(true);
+  });
+
+  it('blocks writes but allows reads once granted', () => {
+    const permissions = {
+      allowReadMemory: true,
+      filePermissionConfig: { agentFiles: 'read' as const, knowledgeBase: 'read' as const },
+    };
+
+    expect(
+      isShareBlockedDataToolCall(permissions, MemoryIdentifier, MemoryApiName.searchUserMemory),
+    ).toBe(false);
+    expect(
+      isShareBlockedDataToolCall(permissions, MemoryIdentifier, MemoryApiName.addContextMemory),
+    ).toBe(true);
+
+    expect(
+      isShareBlockedDataToolCall(
+        permissions,
+        KnowledgeBaseIdentifier,
+        KnowledgeBaseApiName.searchKnowledgeBase,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedDataToolCall(
+        permissions,
+        KnowledgeBaseIdentifier,
+        KnowledgeBaseApiName.createKnowledgeBase,
+      ),
+    ).toBe(true);
+
+    expect(
+      isShareBlockedDataToolCall(
+        permissions,
+        AgentDocumentsIdentifier,
+        AgentDocumentsApiName.readDocument,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedDataToolCall(
+        permissions,
+        AgentDocumentsIdentifier,
+        AgentDocumentsApiName.removeDocument,
+      ),
+    ).toBe(true);
+  });
+
+  it('never blocks tools outside the data-tool registry', () => {
+    expect(isShareBlockedDataToolCall({}, 'web-search', 'search')).toBe(false);
   });
 });

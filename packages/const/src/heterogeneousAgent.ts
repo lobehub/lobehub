@@ -30,3 +30,20 @@ const HETEROGENEOUS_AGENT_MODEL_ID_SET = new Set<string>(HETEROGENEOUS_AGENT_MOD
 export const isHeterogeneousAgentModelId = (
   model?: string | null,
 ): model is HeterogeneousAgentModelId => !!model && HETEROGENEOUS_AGENT_MODEL_ID_SET.has(model);
+
+/**
+ * Whether an agent's persisted `model` / `agencyConfig` makes it heterogeneous
+ * (routed through the external-CLI / device gateway) rather than the cloud LLM
+ * path. Two independent sources decide this — an explicit
+ * `agencyConfig.heterogeneousProvider` and the legacy `model` fallback above —
+ * so every gate that cares about "is this agent heterogeneous" must check both.
+ * Centralized here so callers (e.g. the agent-share gate and the agent-config
+ * write path) can't drift apart by re-deriving the check independently.
+ */
+export const isHeterogeneousAgentConfig = (
+  agent?: {
+    agencyConfig?: { heterogeneousProvider?: { type?: string | null } | null } | null;
+    model?: string | null;
+  } | null,
+): boolean =>
+  !!agent?.agencyConfig?.heterogeneousProvider?.type || isHeterogeneousAgentModelId(agent?.model);

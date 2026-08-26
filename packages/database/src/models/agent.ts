@@ -1,5 +1,9 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
+import {
+  INBOX_SESSION_ID,
+  isHeterogeneousAgentConfig,
+  isHeterogeneousAgentModelId,
+} from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
@@ -1511,10 +1515,38 @@ export class AgentModel {
 
     const { updatedAt: _, accessedAt: __, createdAt: ___, ...updateData } = mergedValue;
 
-    return this.db
+    await this.db
       .update(agents)
       .set(updateData)
       .where(and(eq(agents.id, agentId), this.ownership()));
+
+    /**
+     * A config write can turn an already-`link`-shared agent heterogeneous
+     * (e.g. switching to Claude Code / Codex). `AiAgentService` fail-closes
+     * every visitor run against a heterogeneous share
+     * (`ShareHeterogeneousAgentUnsupported`, see `assertShareableAgent` in
+     * `agentShare.ts`), but that gate only runs at share-time — it never
+     * re-checks a share that was already public when the underlying agent
+     * config changes later. Without this, the owner's Share tab silently
+     * disappears (heterogeneous agents can't be configured for sharing) while
+     * existing recipients keep hitting a live-looking link whose every send
+     * fails. Reset the share to private here, at the single choke point every
+     * config write passes through, so the state is corrected regardless of
+     * which caller (UI, agent-builder tool, etc.) made the change.
+     *
+     * Only touch `model` / `agencyConfig` writes — those are the only fields
+     * `isHeterogeneousAgentConfig` looks at — so a normal title/plugin/etc.
+     * update never pays for the extra query.
+     */
+    if (
+      (Object.hasOwn(data, 'model') || Object.hasOwn(data, 'agencyConfig')) &&
+      isHeterogeneousAgentConfig(mergedValue)
+    ) {
+      await this.db
+        .update(agentShares)
+        .set({ updatedAt: new Date(), visibility: 'private' })
+        .where(and(eq(agentShares.agentId, agentId), ne(agentShares.visibility, 'private')));
+    }
   };
 
   /**
