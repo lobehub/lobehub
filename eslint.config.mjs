@@ -115,6 +115,8 @@ export default eslint(
       '.temp',
       '.local',
       'docs/.local',
+      // design prototypes (run in-browser via babel, deliberately use createStyles)
+      'docs/development/*-prototype/**',
       // cache directories
       '.cache',
       // AI coding tools directories
