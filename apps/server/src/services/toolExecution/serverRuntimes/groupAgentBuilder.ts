@@ -556,11 +556,26 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         }
       },
 
+      // `params.groupId` (an optional manifest argument documented as "target a
+      // specific group") must NOT be threaded through as a `resolveGroupId`
+      // override here: unlike every sibling API in this file, `updateGroup` and
+      // `updateGroupPrompt` used to let it override the context group, and
+      // `assertGroupEditable` is a no-op in personal mode (`if (!workspaceId)
+      // return;`). That let a model-supplied `groupId` — reachable via prompt
+      // injection, e.g. malicious content pasted into the chat — rename or
+      // reconfigure *any other group the same user owns*, not just the group
+      // actually being edited (`ctx.editingGroupId`). Chat-group DB scoping
+      // (`ChatGroupModel.ownership()`) already blocks cross-*user* access, so
+      // this was never a cross-tenant IDOR, but it broke the single-group
+      // confinement this file's header documents ("the edited group rides on
+      // `ctx.editingGroupId`, NOT `ctx.groupId`") and let an injected
+      // instruction redirect writes across a user's own groups. Always resolve
+      // from context, exactly like every other API below.
       updateGroup: async (
         params: UpdateGroupParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx, params.groupId);
+        const groupId = resolveGroupId(ctx);
         if (!groupId) return noGroupContext();
 
         const { config, meta } = params;
@@ -639,11 +654,13 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         }
       },
 
+      // See the `updateGroup` comment above: `params.groupId` must never override
+      // the context group here either, for the same reason.
       updateGroupPrompt: async (
         params: UpdateGroupPromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const groupId = resolveGroupId(ctx, params.groupId);
+        const groupId = resolveGroupId(ctx);
         if (!groupId) return noGroupContext();
 
         try {

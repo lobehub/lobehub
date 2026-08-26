@@ -286,5 +286,62 @@ describe('groupAgentBuilderRuntime', () => {
         success: true,
       });
     });
+
+    // Regression for the audit finding: `assertGroupEditable` no-ops without a
+    // workspace, so in personal mode a model-supplied `params.groupId` used to
+    // override the context group entirely, letting the model redirect the write
+    // to any other group the caller owns just by naming its id. The fix drops
+    // the override — `params.groupId` must be ignored, always resolving from
+    // `ctx.editingGroupId` like every sibling API in this file.
+    it('ignores a model-supplied groupId and never targets a different group', async () => {
+      mockFindById.mockResolvedValue({ content: 'old', id: 'cg_1', visibility: 'public' });
+
+      const result = await createRuntime().updateGroupPrompt(
+        { groupId: 'cg_other_owned_by_same_user', prompt: 'hijacked context' },
+        groupCtx,
+      );
+
+      expect(mockFindById).toHaveBeenCalledWith('cg_1');
+      expect(mockUpdateGroup).toHaveBeenCalledWith('cg_1', {
+        content: 'hijacked context',
+        editorData: null,
+      });
+      expect(mockFindById).not.toHaveBeenCalledWith('cg_other_owned_by_same_user');
+      expect(mockUpdateGroup).not.toHaveBeenCalledWith(
+        'cg_other_owned_by_same_user',
+        expect.anything(),
+      );
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('updateGroup', () => {
+    it('updates metadata on the edited group', async () => {
+      mockFindById.mockResolvedValue({ config: {}, id: 'cg_1', visibility: 'public' });
+
+      const result = await createRuntime().updateGroup({ meta: { title: 'New Title' } }, groupCtx);
+
+      expect(mockUpdateGroup).toHaveBeenCalledWith('cg_1', { title: 'New Title' });
+      expect(result.success).toBe(true);
+    });
+
+    // Same regression as `updateGroupPrompt` above, for the sibling API.
+    it('ignores a model-supplied groupId and never targets a different group', async () => {
+      mockFindById.mockResolvedValue({ config: {}, id: 'cg_1', visibility: 'public' });
+
+      const result = await createRuntime().updateGroup(
+        { groupId: 'cg_other_owned_by_same_user', meta: { title: 'Hijacked Title' } },
+        groupCtx,
+      );
+
+      expect(mockFindById).toHaveBeenCalledWith('cg_1');
+      expect(mockUpdateGroup).toHaveBeenCalledWith('cg_1', { title: 'Hijacked Title' });
+      expect(mockFindById).not.toHaveBeenCalledWith('cg_other_owned_by_same_user');
+      expect(mockUpdateGroup).not.toHaveBeenCalledWith(
+        'cg_other_owned_by_same_user',
+        expect.anything(),
+      );
+      expect(result.success).toBe(true);
+    });
   });
 });
