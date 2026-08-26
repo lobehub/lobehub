@@ -100,7 +100,18 @@ export const shareChatRouter = router({
       const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
       const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
 
-      // Double caps, checked before dispatch so a blocked run never bills.
+      // Fast, UX-only pre-check for both caps — mirrors the budget precheck
+      // above, and for the same reason: reject an obviously-over-cap request
+      // BEFORE paying for agent-config/tool resolution, instead of only at
+      // dispatch. This is NOT the enforcement: it is a plain unlocked count,
+      // so a burst of concurrent requests can all read the same pre-insert
+      // count and all pass. The atomic, authoritative gate is
+      // `reserveShareVisitorTopicOrThrow` / `reserveShareVisitorTurnOrThrow`
+      // (`apps/server/src/services/aiAgent/shareVisitorAbuseGuards.ts`),
+      // which locks and re-checks the same counters immediately around the
+      // real topic/message INSERT inside `AiAgentService.execAgent` — see
+      // those functions' JSDoc for the race this two-layer split closes
+      // (LOBE-11930, Codex P1 on this file).
       if (input.topicId) {
         await findVisitorTopicOrThrow(topicModel, {
           agentId: share.agentId,
