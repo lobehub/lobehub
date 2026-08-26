@@ -135,20 +135,18 @@ export interface AgentGroupRepositoryOptions {
    * construction sites that can reach the server layer (tRPC procedures) pass
    * a real callback. See LOBE-11930.
    *
-   * `targetWorkspaceId` is passed through on every call here (this
-   * repository has no OTHER writer of `agentShares`, unlike
-   * `AgentModelOptions.onShareReset`): `transferToWorkspace` moves the
-   * group's topics into that workspace in the SAME transaction, so the
-   * post-commit `interruptActiveShareRuns` re-query this callback schedules
-   * has to run against the NEW scope — see that option's full JSDoc in
-   * `packages/database/src/models/agent.ts` for why re-querying (rather than
-   * snapshotting inside the transaction) is correct here.
+   * NO `targetWorkspaceId` parameter — matches `AgentModelOptions.onShareReset`'s
+   * signature exactly. The post-commit `interruptActiveShareRuns` re-query
+   * this callback schedules matches on `agentId` alone
+   * (`TopicModel.findActiveVisitorRunTopicsByAgentId`), not on the workspace
+   * `transferToWorkspace` just moved the group's topics into: a SECOND
+   * transfer landing before the deferred callback runs would move them again
+   * while scheduling no new callback of its own (the share is already
+   * `private`), so a workspace-scoped re-query would go stale. See
+   * `AgentModelOptions.onShareReset`'s full JSDoc in
+   * `packages/database/src/models/agent.ts` and LOBE-11930.
    */
-  onShareReset?: (
-    agentId: string,
-    revocationGeneration: number,
-    targetWorkspaceId?: string | null,
-  ) => void;
+  onShareReset?: (agentId: string, revocationGeneration: number) => void;
 }
 
 /**
@@ -158,11 +156,7 @@ export class AgentGroupRepository {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
-  private onShareReset?: (
-    agentId: string,
-    revocationGeneration: number,
-    targetWorkspaceId?: string | null,
-  ) => void;
+  private onShareReset?: (agentId: string, revocationGeneration: number) => void;
 
   constructor(
     db: LobeChatDatabase,
@@ -1518,12 +1512,12 @@ export class AgentGroupRepository {
     // Fired only after the transaction above has committed, once per owned
     // member agent whose share was actually reset — see
     // `shareResetGenerations`'s JSDoc above and
-    // `writeAgentConfigWithShareReset`'s `onShareReset` timing.
-    // `targetWorkspaceId` is passed through so the post-commit interrupt
-    // re-queries the moved topics in their new scope — see
-    // `AgentGroupRepositoryOptions.onShareReset`'s JSDoc.
+    // `writeAgentConfigWithShareReset`'s `onShareReset` timing. NO
+    // `targetWorkspaceId` — the post-commit interrupt re-queries by `agentId`
+    // alone now, so it stays correct even across a later, second transfer.
+    // See `AgentGroupRepositoryOptions.onShareReset`'s JSDoc.
     for (const [resetAgentId, revocationGeneration] of shareResetGenerations) {
-      this.onShareReset?.(resetAgentId, revocationGeneration, targetWorkspaceId);
+      this.onShareReset?.(resetAgentId, revocationGeneration);
     }
 
     return result;
