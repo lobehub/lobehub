@@ -139,6 +139,70 @@ const claim = (
     ...overrides,
   });
 
+const createCustomResolution = async (resolutionRequestId = randomUUID()) => {
+  const [row] = await createQuestionBatch({
+    batchId: `custom-execution-${hashSequence + 1}`,
+    items: [
+      questionItem({
+        allowedActions: ['submit_custom'],
+        interactionKind: 'custom',
+        sanitizedRequest: {
+          apiName: 'installMarketplaceItem',
+          fields: [{ id: 'confirm', label: 'Install', required: true, type: 'boolean' }],
+        },
+        toolCallId: `custom-execution-tool-${hashSequence + 1}`,
+      }),
+    ],
+  });
+  const claimed = await claim(
+    [row],
+    {
+      expectedRevisionHash: row.requestRevisionHash,
+      result: { confirm: true },
+      type: 'submit_custom',
+    },
+    { resolutionRequestId },
+  );
+  if (claimed.outcome !== 'applied') throw new Error('custom resolution claim failed');
+  return { resolution: claimed.resolution, row };
+};
+
+const createMixedCustomResolution = async (resolutionRequestId = randomUUID()) => {
+  const rows = await model.createBatch({
+    activityKey: `mixed-custom-execution-activity-${hashSequence + 1}`,
+    batchId: `mixed-custom-execution-${hashSequence + 1}`,
+    deadline: new Date(Date.now() + 10 * 60_000),
+    items: [
+      questionItem({
+        allowedActions: ['submit_custom'],
+        interactionKind: 'custom',
+        sanitizedRequest: {
+          apiName: 'installMarketplaceItem',
+          fields: [{ id: 'confirm', label: 'Install', required: true, type: 'boolean' }],
+        },
+        toolCallId: `mixed-custom-execution-tool-${hashSequence + 1}`,
+      }),
+      questionItem({ toolCallId: `mixed-custom-sibling-${hashSequence + 1}` }),
+    ],
+    operationId,
+    provider: 'claude-code',
+    source: 'heterogeneous',
+    stepIndex: 0,
+    systemActionEligibility: 'review_only',
+  });
+  const claimed = await claim(
+    rows,
+    {
+      expectedRevisionHash: rows[0].requestRevisionHash,
+      result: { confirm: true },
+      type: 'submit_custom',
+    },
+    { resolutionRequestId, selectedInterventionIds: [rows[0].id] },
+  );
+  if (claimed.outcome !== 'applied') throw new Error('mixed custom resolution claim failed');
+  return { resolution: claimed.resolution, rows };
+};
+
 const seedToolMessage = async (params: {
   argumentsText: string;
   toolCallId: string;
@@ -461,6 +525,452 @@ describe('AgentInterventionModel', () => {
     expect(result.outcome).toBe('applied');
     const state = await model.findBatch(operationId, 'custom-batch');
     expect(state.interventions.map((row) => row.status)).toEqual(['resolving', 'pending']);
+  });
+
+  describe('custom execution ledger', () => {
+    const inputHash = 'b'.repeat(64);
+    const otherInputHash = 'c'.repeat(64);
+    const leaseDurationMs = 60_000;
+
+    it('initializes only custom resolutions as private pending executions', async () => {
+      const { resolution } = await createCustomResolution();
+      expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
+        customExecutionAttempt: 0,
+        customExecutionInputHash: null,
+        customExecutionLeaseExpiresAt: null,
+        customExecutionLeaseToken: null,
+        customExecutionResult: null,
+        customExecutionState: 'pending',
+      });
+
+      const rows = await createQuestionBatch({ batchId: 'non-custom-execution' });
+      const ordinary = await claim(rows, { answers: { mode: 'safe' }, type: 'submit_answers' });
+      if (ordinary.outcome !== 'applied') throw new Error('ordinary resolution claim failed');
+      expect(
+        await model.findResolutionByRequestId(ordinary.resolution.resolutionRequestId),
+      ).toMatchObject({
+        customExecutionAttempt: null,
+        customExecutionInputHash: null,
+        customExecutionLeaseExpiresAt: null,
+        customExecutionLeaseToken: null,
+        customExecutionResult: null,
+        customExecutionState: null,
+      });
+    });
+
+    it('atomically grants one lease for concurrent claims of the same resolution', async () => {
+      const { resolution } = await createCustomResolution();
+      const now = new Date('2026-08-26T10:00:00.000Z');
+      const results = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          model.claimCustomExecution(
+            {
+              inputHash,
+              leaseDurationMs,
+              resolutionRequestId: resolution.resolutionRequestId,
+            },
+            now,
+          ),
+        ),
+      );
+
+      expect(results.filter(({ outcome }) => outcome === 'applied')).toHaveLength(1);
+      expect(results.filter(({ outcome }) => outcome === 'in_progress')).toHaveLength(7);
+      const applied = results.find(({ outcome }) => outcome === 'applied');
+      expect(applied).toMatchObject({ attempt: 1, outcome: 'applied' });
+    });
+
+    it('returns in_progress without exposing the live lease token', async () => {
+      const { resolution } = await createCustomResolution();
+      const now = new Date('2026-08-26T10:00:00.000Z');
+      const params = {
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      expect(await model.claimCustomExecution(params, now)).toMatchObject({
+        attempt: 1,
+        outcome: 'applied',
+      });
+
+      const live = await model.claimCustomExecution(params, new Date(now.getTime() + 59_999));
+      expect(live).toMatchObject({ attempt: 1, outcome: 'in_progress' });
+      expect(live).not.toHaveProperty('leaseToken');
+    });
+
+    it('does not claim a pending execution after its resolution rolls back', async () => {
+      const { resolution } = await createCustomResolution();
+      expect((await model.rollbackResolution(resolution.resolutionRequestId)).outcome).toBe(
+        'applied',
+      );
+
+      expect(
+        await model.claimCustomExecution({
+          inputHash,
+          leaseDurationMs,
+          resolutionRequestId: resolution.resolutionRequestId,
+        }),
+      ).toEqual({ outcome: 'conflict' });
+      expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
+        customExecutionAttempt: 0,
+        customExecutionState: 'pending',
+        status: 'rolled_back',
+      });
+    });
+
+    it('allows terminal transition before execution and rejects the later claim', async () => {
+      const { resolution, row } = await createCustomResolution();
+      const terminalRows = await model.markBatchTerminal(
+        row.operationId,
+        row.batchId,
+        'session_ended',
+      );
+      expect(terminalRows[0].status).toBe('session_ended');
+      expect(
+        await model.claimCustomExecution({
+          inputHash,
+          leaseDurationMs,
+          resolutionRequestId: resolution.resolutionRequestId,
+        }),
+      ).toEqual({ outcome: 'conflict' });
+      expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
+        customExecutionState: 'pending',
+        status: 'session_ended',
+      });
+    });
+
+    it('protects an executing winner while terminalizing its pending sibling', async () => {
+      const { resolution, rows } = await createMixedCustomResolution();
+      const now = new Date('2026-08-26T10:00:00.000Z');
+      const params = {
+        inputHash,
+        leaseDurationMs: 1000,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const claimed = await model.claimCustomExecution(params, now);
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+
+      await model.markBatchTerminal(
+        rows[0].operationId,
+        rows[0].batchId,
+        'session_ended',
+        new Date(now.getTime() + 2000),
+      );
+      const state = await model.findBatch(rows[0].operationId, rows[0].batchId);
+      expect(state.interventions.map(({ status }) => status)).toEqual([
+        'resolving',
+        'session_ended',
+      ]);
+      expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
+        customExecutionAttempt: 1,
+        customExecutionLeaseToken: claimed.leaseToken,
+        customExecutionState: 'executing',
+        status: 'resolving',
+      });
+      expect(
+        await model.claimCustomExecution(params, new Date(now.getTime() + 2000)),
+      ).toMatchObject({ attempt: 2, outcome: 'applied' });
+    });
+
+    it('replays the exact completed result and conflicts on input or result drift', async () => {
+      const { resolution, row } = await createCustomResolution();
+      const claimed = await model.claimCustomExecution({
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      });
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+
+      const result = {
+        content: 'Installed two agents',
+        pluginState: { agentIds: ['agent-a', 'agent-b'], source: 'marketplace' },
+      };
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'completed', result });
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result: {
+            content: 'Installed two agents',
+            pluginState: { source: 'marketplace', agentIds: ['agent-a', 'agent-b'] },
+          },
+        }),
+      ).toEqual({ outcome: 'completed', result });
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result: { ...result, content: 'Different result' },
+        }),
+      ).toEqual({ outcome: 'conflict' });
+      expect(
+        await model.claimCustomExecution({
+          inputHash,
+          leaseDurationMs,
+          resolutionRequestId: resolution.resolutionRequestId,
+        }),
+      ).toEqual({ outcome: 'completed', result });
+      expect(
+        await model.claimCustomExecution({
+          inputHash: otherInputHash,
+          leaseDurationMs,
+          resolutionRequestId: resolution.resolutionRequestId,
+        }),
+      ).toEqual({ outcome: 'conflict' });
+
+      const publicState = await model.findBatch(row.operationId, row.batchId);
+      expect(publicState.resolutions[0]).not.toHaveProperty('customExecutionAttempt');
+      expect(publicState.resolutions[0]).not.toHaveProperty('customExecutionInputHash');
+      expect(publicState.resolutions[0]).not.toHaveProperty('customExecutionLeaseExpiresAt');
+      expect(publicState.resolutions[0]).not.toHaveProperty('customExecutionLeaseToken');
+      expect(publicState.resolutions[0]).not.toHaveProperty('customExecutionResult');
+      expect(publicState.resolutions[0]).not.toHaveProperty('customExecutionState');
+    });
+
+    it('takes over an expired lease and fences the stale completion', async () => {
+      const { resolution } = await createCustomResolution();
+      const now = new Date('2026-08-26T10:00:00.000Z');
+      const params = {
+        inputHash,
+        leaseDurationMs: 1000,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const first = await model.claimCustomExecution(params, now);
+      if (first.outcome !== 'applied') throw new Error('first execution lease claim failed');
+      const second = await model.claimCustomExecution(params, new Date(now.getTime() + 1000));
+      if (second.outcome !== 'applied') throw new Error('lease takeover failed');
+
+      expect(second).toMatchObject({ attempt: 2, outcome: 'applied' });
+      expect(second.leaseToken).not.toBe(first.leaseToken);
+      const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: first.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'conflict' });
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: second.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'completed', result });
+    });
+
+    it('protects a completed winner from terminal teardown and replays its result', async () => {
+      const { resolution, rows } = await createMixedCustomResolution();
+      const params = {
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const claimed = await model.claimCustomExecution(params);
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+      const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'completed', result });
+
+      await model.markBatchTerminal(
+        rows[0].operationId,
+        rows[0].batchId,
+        'timed_out',
+        new Date(Math.max(...rows.map(({ deadline }) => deadline.getTime())) + 1),
+      );
+      const state = await model.findBatch(rows[0].operationId, rows[0].batchId);
+      expect(state.interventions.map(({ status }) => status)).toEqual(['resolving', 'timed_out']);
+      expect(state.resolutions[0]).toMatchObject({ status: 'resolving' });
+      expect(await model.claimCustomExecution(params)).toEqual({ outcome: 'completed', result });
+    });
+
+    it('keeps a heterogeneous completed result replayable after producer ACK', async () => {
+      const { resolution } = await createCustomResolution();
+      const params = {
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const claimed = await model.claimCustomExecution(params);
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+      const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'completed', result });
+
+      expect((await model.markResolutionPublished(resolution.resolutionRequestId)).outcome).toBe(
+        'applied',
+      );
+      expect(
+        (await model.acknowledgeProducerResolution(resolution.resolutionRequestId)).outcome,
+      ).toBe('applied');
+      expect(await model.claimCustomExecution(params)).toEqual({ outcome: 'completed', result });
+      expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
+        customExecutionState: 'completed',
+        status: 'acknowledged',
+      });
+    });
+
+    it('keeps the original execution active when its claim wins before rollback', async () => {
+      const { resolution } = await createCustomResolution();
+      const params = {
+        inputHash,
+        leaseDurationMs: 1000,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const now = new Date('2026-08-26T10:00:00.000Z');
+      const claimed = await model.claimCustomExecution(params, now);
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+      const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
+
+      expect((await model.rollbackResolution(resolution.resolutionRequestId)).outcome).toBe(
+        'conflict',
+      );
+      expect(
+        await model.claimCustomExecution(params, new Date(now.getTime() + 1000)),
+      ).toMatchObject({ attempt: 2, outcome: 'applied' });
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'conflict' });
+    });
+
+    it('replays the durable result when completion wins before rollback', async () => {
+      const { resolution, row } = await createCustomResolution();
+      const params = {
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const claimed = await model.claimCustomExecution(params);
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+      const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
+      const completion = {
+        inputHash,
+        leaseToken: claimed.leaseToken,
+        resolutionRequestId: resolution.resolutionRequestId,
+        result,
+      };
+
+      expect(await model.completeCustomExecution(completion)).toEqual({
+        outcome: 'completed',
+        result,
+      });
+      expect((await model.rollbackResolution(resolution.resolutionRequestId)).outcome).toBe(
+        'conflict',
+      );
+      expect(await model.completeCustomExecution(completion)).toEqual({
+        outcome: 'completed',
+        result,
+      });
+      expect(await model.claimCustomExecution(params)).toEqual({ outcome: 'completed', result });
+
+      const currentRows = (await model.findBatch(row.operationId, row.batchId)).interventions;
+      expect(
+        await claim(
+          currentRows,
+          {
+            expectedRevisionHash: currentRows[0].requestRevisionHash,
+            result: { confirm: true },
+            type: 'submit_custom',
+          },
+          { resolutionRequestId: randomUUID() },
+        ),
+      ).toMatchObject({ outcome: 'conflict' });
+    });
+
+    it('rejects terminal writes from old instances once custom execution has started', async () => {
+      const { resolution } = await createCustomResolution();
+      const claimed = await model.claimCustomExecution({
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      });
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+
+      const oldTerminalWrite = (status: 'rolled_back' | 'session_ended' | 'timed_out') =>
+        serverDB
+          .update(agentInterventionResolutions)
+          .set({ status })
+          .where(eq(agentInterventionResolutions.id, resolution.id));
+      for (const status of ['rolled_back', 'session_ended', 'timed_out'] as const) {
+        await expect(oldTerminalWrite(status)).rejects.toThrow();
+      }
+
+      const result = { content: 'Installed', pluginState: { agentId: 'agent-a' } };
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: claimed.leaseToken,
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'completed', result });
+      for (const status of ['rolled_back', 'session_ended', 'timed_out'] as const) {
+        await expect(oldTerminalWrite(status)).rejects.toThrow();
+      }
+      expect(await model.findResolutionByRequestId(resolution.resolutionRequestId)).toMatchObject({
+        customExecutionState: 'completed',
+        status: 'resolving',
+      });
+    });
+
+    it('rejects the wrong lease, wrong owner, invalid hash, and out-of-bounds duration', async () => {
+      const { resolution } = await createCustomResolution();
+      const params = {
+        inputHash,
+        leaseDurationMs,
+        resolutionRequestId: resolution.resolutionRequestId,
+      };
+      const claimed = await model.claimCustomExecution(params);
+      if (claimed.outcome !== 'applied') throw new Error('execution lease claim failed');
+      const result = { content: 'Installed', pluginState: {} };
+
+      expect(
+        await model.completeCustomExecution({
+          inputHash,
+          leaseToken: randomUUID(),
+          resolutionRequestId: resolution.resolutionRequestId,
+          result,
+        }),
+      ).toEqual({ outcome: 'conflict' });
+      expect(await otherUserModel.claimCustomExecution(params)).toEqual({ outcome: 'conflict' });
+      expect(await model.claimCustomExecution({ ...params, inputHash: 'not-a-sha256' })).toEqual({
+        outcome: 'conflict',
+      });
+      expect(await model.claimCustomExecution({ ...params, leaseDurationMs: 999 })).toEqual({
+        outcome: 'conflict',
+      });
+      expect(await model.claimCustomExecution({ ...params, leaseDurationMs: 900_001 })).toEqual({
+        outcome: 'conflict',
+      });
+    });
   });
 
   it('preserves bounded marketplace picker detail and whitelists selected agent ids', async () => {

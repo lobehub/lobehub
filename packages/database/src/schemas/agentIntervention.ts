@@ -2,6 +2,8 @@ import type {
   AgentInterventionAllowedAction,
   AgentInterventionApprovalMode,
   AgentInterventionArgumentEffectStatus,
+  AgentInterventionCustomExecutionResult,
+  AgentInterventionCustomExecutionState,
   AgentInterventionExpectedRequestRevisionHashes,
   AgentInterventionExpectedVersions,
   AgentInterventionKind,
@@ -28,6 +30,7 @@ import {
   text,
   uniqueIndex,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { createdAt, timestamptz, updatedAt } from './_helpers';
@@ -72,6 +75,21 @@ export const agentInterventionResolutions = pgTable(
       .notNull(),
     expectedItemCount: integer('expected_item_count').notNull(),
     action: jsonb('action').$type<AgentInterventionResolutionAction>().notNull(),
+
+    /** Private SHA-256 identity of the custom execution input. */
+    customExecutionInputHash: varchar('custom_execution_input_hash', { length: 64 }),
+    /** Independent from the resolution delivery/outbox lifecycle above. */
+    customExecutionState:
+      text('custom_execution_state').$type<AgentInterventionCustomExecutionState>(),
+    /** Monotonic lease attempt, starting at zero while pending. */
+    customExecutionAttempt: integer('custom_execution_attempt'),
+    /** Opaque fencing token retained after completion for idempotent replay. */
+    customExecutionLeaseToken: uuid('custom_execution_lease_token'),
+    customExecutionLeaseExpiresAt: timestamptz('custom_execution_lease_expires_at'),
+    /** Private executor result; never selected into Review or notification DTOs. */
+    customExecutionResult:
+      jsonb('custom_execution_result').$type<AgentInterventionCustomExecutionResult>(),
+
     rememberToolKey: text('remember_tool_key'),
     rememberEffectStatus:
       text('remember_effect_status').$type<AgentInterventionRememberEffectStatus>(),
@@ -109,6 +127,45 @@ export const agentInterventionResolutions = pgTable(
     check(
       'agent_intervention_resolutions_expected_item_count_check',
       sql`${table.expectedItemCount} > 0`,
+    ),
+    check(
+      'agent_intervention_resolutions_custom_execution_input_hash_check',
+      sql`${table.customExecutionInputHash} IS NULL OR ${table.customExecutionInputHash} ~ '^[a-f0-9]{64}$'`,
+    ),
+    check(
+      'agent_intervention_resolutions_custom_execution_state_check',
+      sql`(
+        (${table.customExecutionState} IS NULL
+          AND ${table.customExecutionInputHash} IS NULL
+          AND ${table.customExecutionAttempt} IS NULL
+          AND ${table.customExecutionLeaseToken} IS NULL
+          AND ${table.customExecutionLeaseExpiresAt} IS NULL
+          AND ${table.customExecutionResult} IS NULL)
+        OR
+        (${table.customExecutionState} = 'pending'
+          AND ${table.customExecutionAttempt} = 0
+          AND ${table.customExecutionLeaseToken} IS NULL
+          AND ${table.customExecutionLeaseExpiresAt} IS NULL
+          AND ${table.customExecutionResult} IS NULL)
+        OR
+        (${table.customExecutionState} = 'executing'
+          AND ${table.customExecutionInputHash} IS NOT NULL
+          AND ${table.customExecutionAttempt} > 0
+          AND ${table.customExecutionLeaseToken} IS NOT NULL
+          AND ${table.customExecutionLeaseExpiresAt} IS NOT NULL
+          AND ${table.customExecutionResult} IS NULL)
+        OR
+        (${table.customExecutionState} = 'completed'
+          AND ${table.customExecutionInputHash} IS NOT NULL
+          AND ${table.customExecutionAttempt} > 0
+          AND ${table.customExecutionLeaseToken} IS NOT NULL
+          AND ${table.customExecutionLeaseExpiresAt} IS NOT NULL
+          AND ${table.customExecutionResult} IS NOT NULL)
+      )`,
+    ),
+    check(
+      'agent_intervention_resolutions_custom_execution_parent_status_check',
+      sql`${table.customExecutionState} NOT IN ('executing', 'completed') OR ${table.status} IN ('resolving', 'published', 'acknowledged', 'completed')`,
     ),
     check('agent_intervention_resolutions_version_check', sql`${table.version} > 0`),
   ],

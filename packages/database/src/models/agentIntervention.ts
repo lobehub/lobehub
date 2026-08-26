@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   AgentInterventionAllowedAction,
   AgentInterventionApprovalMode,
+  AgentInterventionCustomExecutionResult,
   AgentInterventionExpectedRequestRevisionHashes,
   AgentInterventionExpectedVersions,
   AgentInterventionKind,
@@ -17,7 +18,7 @@ import type {
   AgentInterventionSystemActionEligibility,
   ChatToolPayload,
 } from '@lobechat/types';
-import { and, asc, eq, gt, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, gt, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import type { AgentInterventionItem, AgentInterventionResolutionItem } from '../schemas';
 import {
@@ -45,6 +46,9 @@ export const AGENT_INTERVENTION_SOURCE_TRANSITION_MISMATCH =
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const PG_UNIQUE_VIOLATION = '23505';
+
+export const AGENT_INTERVENTION_CUSTOM_EXECUTION_MIN_LEASE_MS = 1000;
+export const AGENT_INTERVENTION_CUSTOM_EXECUTION_MAX_LEASE_MS = 15 * 60_000;
 
 type AgentInterventionOperationIdentity = Pick<
   typeof agentOperations.$inferSelect,
@@ -81,6 +85,12 @@ const uniqueSorted = (values: readonly string[]): string[] => [...new Set(values
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const isCustomExecutionResult = (value: unknown): value is AgentInterventionCustomExecutionResult =>
+  isPlainRecord(value) &&
+  hasOnlyKeys(value, ['content', 'pluginState']) &&
+  typeof value.content === 'string' &&
+  isPlainRecord(value.pluginState);
 
 const hasOnlyKeys = (record: Record<string, unknown>, allowedKeys: readonly string[]): boolean => {
   const allowed = new Set(allowedKeys);
@@ -306,9 +316,70 @@ export interface AgentInterventionResolutionLocator {
   workspaceId: null | string;
 }
 
+export interface ClaimAgentInterventionCustomExecutionParams {
+  inputHash: string;
+  leaseDurationMs: number;
+  resolutionRequestId: string;
+}
+
+export type AgentInterventionCustomExecutionClaimResult =
+  | {
+      attempt: number;
+      leaseExpiresAt: Date;
+      leaseToken: string;
+      outcome: 'applied';
+    }
+  | {
+      attempt: number;
+      leaseExpiresAt: Date;
+      outcome: 'in_progress';
+    }
+  | {
+      outcome: 'completed';
+      result: AgentInterventionCustomExecutionResult;
+    }
+  | { outcome: 'conflict' };
+
+export interface CompleteAgentInterventionCustomExecutionParams {
+  inputHash: string;
+  leaseToken: string;
+  resolutionRequestId: string;
+  result: AgentInterventionCustomExecutionResult;
+}
+
+export type AgentInterventionCustomExecutionCompletionResult =
+  | {
+      outcome: 'completed';
+      result: AgentInterventionCustomExecutionResult;
+    }
+  | { outcome: 'conflict' };
+
+type AgentInterventionPrivateExecutionField =
+  | 'customExecutionAttempt'
+  | 'customExecutionInputHash'
+  | 'customExecutionLeaseExpiresAt'
+  | 'customExecutionLeaseToken'
+  | 'customExecutionResult'
+  | 'customExecutionState';
+
+export type AgentInterventionResolutionPublicItem = Omit<
+  AgentInterventionResolutionItem,
+  AgentInterventionPrivateExecutionField
+>;
+
+const {
+  customExecutionAttempt: _customExecutionAttempt,
+  customExecutionInputHash: _customExecutionInputHash,
+  customExecutionLeaseExpiresAt: _customExecutionLeaseExpiresAt,
+  customExecutionLeaseToken: _customExecutionLeaseToken,
+  customExecutionResult: _customExecutionResult,
+  customExecutionState: _customExecutionState,
+  ...publicResolutionColumns
+} = getTableColumns(agentInterventionResolutions);
+
 export interface AgentInterventionBatchState {
   interventions: AgentInterventionItem[];
-  resolutions: AgentInterventionResolutionItem[];
+  resolutions: AgentInterventionResolutionPublicItem[];
 }
 
 export interface CreateAgentInterventionItemParams {
@@ -501,6 +572,179 @@ export class AgentInterventionModel {
       .where(eq(agentInterventionResolutions.resolutionRequestId, resolutionRequestId))
       .limit(1);
     return row;
+  };
+
+  /**
+   * Atomically claims a short custom-execution lease without holding a database
+   * transaction across the external side effect. A completed claim replays the
+   * exact durable private result; a live lease never exposes its fencing token.
+   */
+  claimCustomExecution = async (
+    params: ClaimAgentInterventionCustomExecutionParams,
+    now = new Date(),
+  ): Promise<AgentInterventionCustomExecutionClaimResult> => {
+    if (
+      !UUID_PATTERN.test(params.resolutionRequestId) ||
+      !HASH_PATTERN.test(params.inputHash) ||
+      !Number.isSafeInteger(params.leaseDurationMs) ||
+      params.leaseDurationMs < AGENT_INTERVENTION_CUSTOM_EXECUTION_MIN_LEASE_MS ||
+      params.leaseDurationMs > AGENT_INTERVENTION_CUSTOM_EXECUTION_MAX_LEASE_MS ||
+      Number.isNaN(now.getTime())
+    ) {
+      return { outcome: 'conflict' };
+    }
+
+    return this.db.transaction(async (tx) => {
+      const [resolution] = await tx
+        .select()
+        .from(agentInterventionResolutions)
+        .where(
+          and(
+            eq(agentInterventionResolutions.resolutionRequestId, params.resolutionRequestId),
+            this.resolutionOwnership(),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (!resolution || resolution.action.type !== 'submit_custom') {
+        return { outcome: 'conflict' };
+      }
+      if (
+        resolution.customExecutionInputHash &&
+        resolution.customExecutionInputHash !== params.inputHash
+      ) {
+        return { outcome: 'conflict' };
+      }
+
+      if (resolution.customExecutionState === 'completed') {
+        return resolution.customExecutionResult
+          ? { outcome: 'completed', result: resolution.customExecutionResult }
+          : { outcome: 'conflict' };
+      }
+      if (resolution.status !== 'resolving') {
+        return { outcome: 'conflict' };
+      }
+
+      if (resolution.customExecutionState === 'executing') {
+        if (
+          !resolution.customExecutionLeaseToken ||
+          !resolution.customExecutionLeaseExpiresAt ||
+          resolution.customExecutionAttempt === null
+        ) {
+          return { outcome: 'conflict' };
+        }
+        if (resolution.customExecutionLeaseExpiresAt.getTime() > now.getTime()) {
+          return {
+            attempt: resolution.customExecutionAttempt,
+            leaseExpiresAt: resolution.customExecutionLeaseExpiresAt,
+            outcome: 'in_progress',
+          };
+        }
+      } else if (
+        resolution.customExecutionState !== 'pending' &&
+        resolution.customExecutionState !== null
+      ) {
+        return { outcome: 'conflict' };
+      }
+
+      const attempt = (resolution.customExecutionAttempt ?? 0) + 1;
+      const leaseExpiresAt = new Date(now.getTime() + params.leaseDurationMs);
+      const leaseToken = randomUUID();
+      const [claimed] = await tx
+        .update(agentInterventionResolutions)
+        .set({
+          customExecutionAttempt: attempt,
+          customExecutionInputHash: params.inputHash,
+          customExecutionLeaseExpiresAt: leaseExpiresAt,
+          customExecutionLeaseToken: leaseToken,
+          customExecutionResult: null,
+          customExecutionState: 'executing',
+          updatedAt: now,
+          version: sql`${agentInterventionResolutions.version} + 1`,
+        })
+        .where(
+          and(
+            eq(agentInterventionResolutions.id, resolution.id),
+            this.resolutionOwnership(),
+            eq(agentInterventionResolutions.status, 'resolving'),
+          ),
+        )
+        .returning({ id: agentInterventionResolutions.id });
+      return claimed
+        ? { attempt, leaseExpiresAt, leaseToken, outcome: 'applied' }
+        : { outcome: 'conflict' };
+    });
+  };
+
+  /** Completes only the exact current fencing token and replays exact retries. */
+  completeCustomExecution = async (
+    params: CompleteAgentInterventionCustomExecutionParams,
+    now = new Date(),
+  ): Promise<AgentInterventionCustomExecutionCompletionResult> => {
+    if (
+      !UUID_PATTERN.test(params.resolutionRequestId) ||
+      !HASH_PATTERN.test(params.inputHash) ||
+      !UUID_PATTERN.test(params.leaseToken) ||
+      !isCustomExecutionResult(params.result) ||
+      Number.isNaN(now.getTime())
+    ) {
+      return { outcome: 'conflict' };
+    }
+
+    return this.db.transaction(async (tx) => {
+      const [resolution] = await tx
+        .select()
+        .from(agentInterventionResolutions)
+        .where(
+          and(
+            eq(agentInterventionResolutions.resolutionRequestId, params.resolutionRequestId),
+            this.resolutionOwnership(),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (
+        !resolution ||
+        resolution.action.type !== 'submit_custom' ||
+        resolution.customExecutionInputHash !== params.inputHash ||
+        resolution.customExecutionLeaseToken !== params.leaseToken
+      ) {
+        return { outcome: 'conflict' };
+      }
+
+      if (resolution.customExecutionState === 'completed') {
+        return resolution.customExecutionResult &&
+          sameJson(resolution.customExecutionResult, params.result)
+          ? { outcome: 'completed', result: resolution.customExecutionResult }
+          : { outcome: 'conflict' };
+      }
+      if (resolution.status !== 'resolving' || resolution.customExecutionState !== 'executing') {
+        return { outcome: 'conflict' };
+      }
+
+      const [completed] = await tx
+        .update(agentInterventionResolutions)
+        .set({
+          customExecutionResult: params.result,
+          customExecutionState: 'completed',
+          updatedAt: now,
+          version: sql`${agentInterventionResolutions.version} + 1`,
+        })
+        .where(
+          and(
+            eq(agentInterventionResolutions.id, resolution.id),
+            this.resolutionOwnership(),
+            eq(agentInterventionResolutions.customExecutionInputHash, params.inputHash),
+            eq(agentInterventionResolutions.customExecutionLeaseToken, params.leaseToken),
+            eq(agentInterventionResolutions.customExecutionState, 'executing'),
+            eq(agentInterventionResolutions.status, 'resolving'),
+          ),
+        )
+        .returning({ result: agentInterventionResolutions.customExecutionResult });
+      return completed?.result
+        ? { outcome: 'completed', result: completed.result }
+        : { outcome: 'conflict' };
+    });
   };
 
   /** Creates and seals a complete batch in one transaction. */
@@ -873,7 +1117,7 @@ export class AgentInterventionModel {
       resolutionIds.length === 0
         ? []
         : await this.db
-            .select()
+            .select(publicResolutionColumns)
             .from(agentInterventionResolutions)
             .where(
               and(
@@ -968,6 +1212,8 @@ export class AgentInterventionModel {
             argumentEffectStatus: argumentEffect ? 'applied' : null,
             actorId: params.actorId,
             batchId: params.batchId,
+            customExecutionAttempt: params.action.type === 'submit_custom' ? 0 : null,
+            customExecutionState: params.action.type === 'submit_custom' ? 'pending' : null,
             expectedItemCount: params.expectedItemCount,
             expectedRequestRevisionHashes: params.expectedRequestRevisionHashes,
             expectedVersions: params.expectedVersions,
@@ -1075,6 +1321,13 @@ export class AgentInterventionModel {
         return { interventions: rows, outcome: 'idempotent', resolution };
       }
       if (resolution.status !== 'resolving') {
+        return { interventions: rows, outcome: 'conflict', resolution };
+      }
+      if (
+        resolution.action.type === 'submit_custom' &&
+        resolution.customExecutionState !== null &&
+        resolution.customExecutionState !== 'pending'
+      ) {
         return { interventions: rows, outcome: 'conflict', resolution };
       }
 
@@ -1251,22 +1504,48 @@ export class AgentInterventionModel {
     const resolutionIds = uniqueSorted(
       openRows.flatMap((row) => (row.resolutionId ? [row.resolutionId] : [])),
     );
+    const protectedResolutionIds = new Set<string>();
     if (resolutionIds.length > 0) {
-      await tx
-        .update(agentInterventionResolutions)
-        .set({
-          status,
-          terminalAt: at,
-          updatedAt: at,
-          version: sql`${agentInterventionResolutions.version} + 1`,
+      const resolutions = await tx
+        .select({
+          customExecutionState: agentInterventionResolutions.customExecutionState,
+          id: agentInterventionResolutions.id,
         })
+        .from(agentInterventionResolutions)
         .where(
-          and(
-            inArray(agentInterventionResolutions.id, resolutionIds),
-            inArray(agentInterventionResolutions.status, ['resolving', 'published']),
-          ),
-        );
+          and(inArray(agentInterventionResolutions.id, resolutionIds), this.resolutionOwnership()),
+        )
+        .orderBy(asc(agentInterventionResolutions.id))
+        .for('update');
+      for (const resolution of resolutions) {
+        if (['executing', 'completed'].includes(resolution.customExecutionState ?? '')) {
+          protectedResolutionIds.add(resolution.id);
+        }
+      }
+      const terminalResolutionIds = resolutionIds.filter(
+        (resolutionId) => !protectedResolutionIds.has(resolutionId),
+      );
+      if (terminalResolutionIds.length > 0) {
+        await tx
+          .update(agentInterventionResolutions)
+          .set({
+            status,
+            terminalAt: at,
+            updatedAt: at,
+            version: sql`${agentInterventionResolutions.version} + 1`,
+          })
+          .where(
+            and(
+              inArray(agentInterventionResolutions.id, terminalResolutionIds),
+              inArray(agentInterventionResolutions.status, ['resolving', 'published']),
+            ),
+          );
+      }
     }
+    const terminalRows = openRows.filter(
+      (row) => !row.resolutionId || !protectedResolutionIds.has(row.resolutionId),
+    );
+    if (terminalRows.length === 0) return rows;
     const updated = await tx
       .update(agentInterventions)
       .set({
@@ -1278,7 +1557,7 @@ export class AgentInterventionModel {
       .where(
         inArray(
           agentInterventions.id,
-          openRows.map((row) => row.id),
+          terminalRows.map((row) => row.id),
         ),
       )
       .returning();

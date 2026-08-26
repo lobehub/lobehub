@@ -13,6 +13,12 @@ CREATE TABLE IF NOT EXISTS "agent_intervention_resolutions" (
 	"expected_request_revision_hashes" jsonb NOT NULL,
 	"expected_item_count" integer NOT NULL,
 	"action" jsonb NOT NULL,
+	"custom_execution_input_hash" varchar(64),
+	"custom_execution_state" text,
+	"custom_execution_attempt" integer,
+	"custom_execution_lease_token" uuid,
+	"custom_execution_lease_expires_at" timestamp with time zone,
+	"custom_execution_result" jsonb,
 	"remember_tool_key" text,
 	"remember_effect_status" text,
 	"original_arguments" text,
@@ -31,6 +37,36 @@ CREATE TABLE IF NOT EXISTS "agent_intervention_resolutions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "agent_intervention_resolutions_expected_item_count_check" CHECK ("agent_intervention_resolutions"."expected_item_count" > 0),
+	CONSTRAINT "agent_intervention_resolutions_custom_execution_input_hash_check" CHECK ("agent_intervention_resolutions"."custom_execution_input_hash" IS NULL OR "agent_intervention_resolutions"."custom_execution_input_hash" ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "agent_intervention_resolutions_custom_execution_state_check" CHECK ((
+        ("agent_intervention_resolutions"."custom_execution_state" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_input_hash" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_attempt" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_lease_token" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_lease_expires_at" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_result" IS NULL)
+        OR
+        ("agent_intervention_resolutions"."custom_execution_state" = 'pending'
+          AND "agent_intervention_resolutions"."custom_execution_attempt" = 0
+          AND "agent_intervention_resolutions"."custom_execution_lease_token" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_lease_expires_at" IS NULL
+          AND "agent_intervention_resolutions"."custom_execution_result" IS NULL)
+        OR
+        ("agent_intervention_resolutions"."custom_execution_state" = 'executing'
+          AND "agent_intervention_resolutions"."custom_execution_input_hash" IS NOT NULL
+          AND "agent_intervention_resolutions"."custom_execution_attempt" > 0
+          AND "agent_intervention_resolutions"."custom_execution_lease_token" IS NOT NULL
+          AND "agent_intervention_resolutions"."custom_execution_lease_expires_at" IS NOT NULL
+          AND "agent_intervention_resolutions"."custom_execution_result" IS NULL)
+        OR
+        ("agent_intervention_resolutions"."custom_execution_state" = 'completed'
+          AND "agent_intervention_resolutions"."custom_execution_input_hash" IS NOT NULL
+          AND "agent_intervention_resolutions"."custom_execution_attempt" > 0
+          AND "agent_intervention_resolutions"."custom_execution_lease_token" IS NOT NULL
+          AND "agent_intervention_resolutions"."custom_execution_lease_expires_at" IS NOT NULL
+          AND "agent_intervention_resolutions"."custom_execution_result" IS NOT NULL)
+      )),
+	CONSTRAINT "agent_intervention_resolutions_custom_execution_parent_status_check" CHECK ("agent_intervention_resolutions"."custom_execution_state" NOT IN ('executing', 'completed') OR "agent_intervention_resolutions"."status" IN ('resolving', 'published', 'acknowledged', 'completed')),
 	CONSTRAINT "agent_intervention_resolutions_version_check" CHECK ("agent_intervention_resolutions"."version" > 0)
 );
 --> statement-breakpoint

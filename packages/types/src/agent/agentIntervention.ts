@@ -85,6 +85,22 @@ export const AGENT_INTERVENTION_RESOLUTION_STATUSES = [
 export type AgentInterventionResolutionStatus =
   (typeof AGENT_INTERVENTION_RESOLUTION_STATUSES)[number];
 
+/** Private execution lifecycle for custom intervention side effects. */
+export const AGENT_INTERVENTION_CUSTOM_EXECUTION_STATES = [
+  'pending',
+  'executing',
+  'completed',
+] as const;
+
+export type AgentInterventionCustomExecutionState =
+  (typeof AGENT_INTERVENTION_CUSTOM_EXECUTION_STATES)[number];
+
+/** Durable private result replayed to the custom-intervention executor only. */
+export interface AgentInterventionCustomExecutionResult {
+  content: string;
+  pluginState: Record<string, unknown>;
+}
+
 export const AGENT_INTERVENTION_REMEMBER_EFFECT_STATUSES = [
   'applied',
   'retained',

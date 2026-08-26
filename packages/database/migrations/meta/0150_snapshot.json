@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "53d447f1-cb82-47b2-91dc-8dc1653cfe4a",
+  "id": "e371edb3-7839-41fa-a05e-7f7799570b09",
   "policies": {},
   "prevId": "f28b3c97-c7da-48f1-845c-bf90fa9d5df1",
   "roles": {},
@@ -3663,6 +3663,42 @@
           "primaryKey": false,
           "notNull": true
         },
+        "custom_execution_input_hash": {
+          "name": "custom_execution_input_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "custom_execution_state": {
+          "name": "custom_execution_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "custom_execution_attempt": {
+          "name": "custom_execution_attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "custom_execution_lease_token": {
+          "name": "custom_execution_lease_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "custom_execution_lease_expires_at": {
+          "name": "custom_execution_lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "custom_execution_result": {
+          "name": "custom_execution_result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "remember_tool_key": {
           "name": "remember_tool_key",
           "type": "text",
@@ -3872,6 +3908,18 @@
         "agent_intervention_resolutions_expected_item_count_check": {
           "name": "agent_intervention_resolutions_expected_item_count_check",
           "value": "\"agent_intervention_resolutions\".\"expected_item_count\" > 0"
+        },
+        "agent_intervention_resolutions_custom_execution_input_hash_check": {
+          "name": "agent_intervention_resolutions_custom_execution_input_hash_check",
+          "value": "\"agent_intervention_resolutions\".\"custom_execution_input_hash\" IS NULL OR \"agent_intervention_resolutions\".\"custom_execution_input_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "agent_intervention_resolutions_custom_execution_state_check": {
+          "name": "agent_intervention_resolutions_custom_execution_state_check",
+          "value": "(\n        (\"agent_intervention_resolutions\".\"custom_execution_state\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_input_hash\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_attempt\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_token\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_expires_at\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_result\" IS NULL)\n        OR\n        (\"agent_intervention_resolutions\".\"custom_execution_state\" = 'pending'\n          AND \"agent_intervention_resolutions\".\"custom_execution_attempt\" = 0\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_token\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_expires_at\" IS NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_result\" IS NULL)\n        OR\n        (\"agent_intervention_resolutions\".\"custom_execution_state\" = 'executing'\n          AND \"agent_intervention_resolutions\".\"custom_execution_input_hash\" IS NOT NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_attempt\" > 0\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_token\" IS NOT NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_expires_at\" IS NOT NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_result\" IS NULL)\n        OR\n        (\"agent_intervention_resolutions\".\"custom_execution_state\" = 'completed'\n          AND \"agent_intervention_resolutions\".\"custom_execution_input_hash\" IS NOT NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_attempt\" > 0\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_token\" IS NOT NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_lease_expires_at\" IS NOT NULL\n          AND \"agent_intervention_resolutions\".\"custom_execution_result\" IS NOT NULL)\n      )"
+        },
+        "agent_intervention_resolutions_custom_execution_parent_status_check": {
+          "name": "agent_intervention_resolutions_custom_execution_parent_status_check",
+          "value": "\"agent_intervention_resolutions\".\"custom_execution_state\" NOT IN ('executing', 'completed') OR \"agent_intervention_resolutions\".\"status\" IN ('resolving', 'published', 'acknowledged', 'completed')"
         },
         "agent_intervention_resolutions_version_check": {
           "name": "agent_intervention_resolutions_version_check",

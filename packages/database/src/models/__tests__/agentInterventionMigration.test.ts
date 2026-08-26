@@ -67,6 +67,31 @@ describe('Agent Intervention and ActivityKit migration', () => {
     );
   });
 
+  it('creates a bounded private custom-execution lease ledger with state invariants', () => {
+    expect(migrationSql).toContain('"custom_execution_input_hash" varchar(64)');
+    expect(migrationSql).toContain('"custom_execution_state" text');
+    expect(migrationSql).toContain('"custom_execution_attempt" integer');
+    expect(migrationSql).toContain('"custom_execution_lease_token" uuid');
+    expect(migrationSql).toContain('"custom_execution_lease_expires_at" timestamp with time zone');
+    expect(migrationSql).toContain('"custom_execution_result" jsonb');
+    expect(migrationSql).toContain(
+      'CONSTRAINT "agent_intervention_resolutions_custom_execution_input_hash_check"',
+    );
+    expect(migrationSql).toContain("~ '^[a-f0-9]{64}$'");
+    expect(migrationSql).toContain(
+      'CONSTRAINT "agent_intervention_resolutions_custom_execution_state_check"',
+    );
+    expect(migrationSql).toContain('"custom_execution_state" = \'pending\'');
+    expect(migrationSql).toContain('"custom_execution_state" = \'executing\'');
+    expect(migrationSql).toContain('"custom_execution_state" = \'completed\'');
+    expect(migrationSql).toContain(
+      'CONSTRAINT "agent_intervention_resolutions_custom_execution_parent_status_check"',
+    );
+    expect(migrationSql).toContain(
+      "\"custom_execution_state\" NOT IN ('executing', 'completed') OR \"agent_intervention_resolutions\".\"status\" IN ('resolving', 'published', 'acknowledged', 'completed')",
+    );
+  });
+
   it('adds sandbox-aware ActivityKit start/update token storage keyed by activity', () => {
     expect(migrationSql).toContain('CREATE TABLE IF NOT EXISTS "push_live_activities"');
     expect(migrationSql).toContain('"activity_key" text NOT NULL');
