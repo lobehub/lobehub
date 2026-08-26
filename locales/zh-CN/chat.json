@@ -649,6 +649,8 @@
   "heteroAgent.cloudRepo.notSet": "未选择仓库",
   "heteroAgent.cloudRepo.sectionTitle": "代码仓库",
   "heteroAgent.codexQuota.doesNotExpire": "永不过期",
+  "heteroAgent.codexQuota.errorConnection": "无法访问 Codex 额度接口，请检查网络或 LobeHub 代理设置。",
+  "heteroAgent.codexQuota.errorGeneric": "无法获取 Codex 额度，请稍后重试。",
   "heteroAgent.codexQuota.expiresIn": "{{duration}}后过期",
   "heteroAgent.codexQuota.expiresSoon": "即将过期",
   "heteroAgent.codexQuota.fiveHour": "5 小时",
