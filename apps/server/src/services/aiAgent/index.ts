@@ -221,6 +221,7 @@ import {
   applyShareGateToToolSet,
   filterPluginsByShareGate,
 } from './shareGate';
+import { reserveShareVisitorTopic, reserveShareVisitorTurn } from './shareVisitorAbuseGuards';
 import { acquireTopicStartReservation } from './topicStartReservation';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
@@ -2545,33 +2546,49 @@ export class AiAgentService {
         heterogeneousProvider?.type ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
-      const newTopic = await this.topicModel.create(
-        {
-          agentId: resolvedAgentId,
-          // Persist the group association when running inside a group conversation.
-          // Without it the topic is created group-less and only shows under the
-          // member agent's topic list — never in the group sidebar (which queries
-          // `topics.groupId`), so the conversation silently "disappears" from the
-          // group. execGroupAgent normally pre-creates the topic, but any path
-          // that reaches execAgent without a topicId (e.g. the async/queue run)
-          // must carry the groupId through too (group topic sidebar + ownership fix).
-          groupId: appContext?.groupId,
-          metadata,
-          // Snapshot the effective model as the topic's pinned model (config).
-          model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
-          provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
-          // Share-visitor runs: the topic row belongs to the creator
-          // (this.userId), but stamping the visitor's id keeps it out of the
-          // creator's listings and lets shareChat scope reads per visitor.
-          senderId: shareGate?.visitorUserId,
-          title:
-            title !== undefined
-              ? title
-              : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
-          trigger,
-        },
-        clientIds?.topicId,
-      );
+      const newTopicParams = {
+        agentId: resolvedAgentId,
+        // Persist the group association when running inside a group conversation.
+        // Without it the topic is created group-less and only shows under the
+        // member agent's topic list — never in the group sidebar (which queries
+        // `topics.groupId`), so the conversation silently "disappears" from the
+        // group. execGroupAgent normally pre-creates the topic, but any path
+        // that reaches execAgent without a topicId (e.g. the async/queue run)
+        // must carry the groupId through too (group topic sidebar + ownership fix).
+        groupId: appContext?.groupId,
+        metadata,
+        // Snapshot the effective model as the topic's pinned model (config).
+        model: heterogeneousTopicModelSnapshot?.model ?? (heteroSnapshotType ? undefined : model),
+        provider: heterogeneousTopicModelSnapshot?.provider ?? heteroSnapshotType ?? provider,
+        // Share-visitor runs: the topic row belongs to the creator
+        // (this.userId), but stamping the visitor's id keeps it out of the
+        // creator's listings and lets shareChat scope reads per visitor.
+        senderId: shareGate?.visitorUserId,
+        title:
+          title !== undefined
+            ? title
+            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
+        trigger,
+      };
+      // Share-visitor runs must reserve the `maxTopicsPerVisitor` slot and
+      // insert the topic in ONE locked transaction — see
+      // `reserveShareVisitorTopic`'s JSDoc for the race this closes
+      // (LOBE-11930, Codex P1 on `shareChat.ts:129`). Non-share runs (no
+      // per-visitor cap to enforce) keep the plain unlocked insert.
+      const newTopic = shareGate
+        ? await reserveShareVisitorTopic(
+            {
+              agentId: resolvedAgentId,
+              db: this.db,
+              maxTopicsPerVisitor: shareGate.shareConfig.maxTopicsPerVisitor,
+              ownerId: this.userId,
+              visitorUserId: shareGate.visitorUserId,
+              workspaceId: this.workspaceId,
+            },
+            newTopicParams,
+            clientIds?.topicId,
+          )
+        : await this.topicModel.create(newTopicParams, clientIds?.topicId);
       topicId = newTopic.id;
       log(
         'execAgent: created new topic %s with trigger %s, groupId %s, cronJobId %s',
@@ -2709,26 +2726,46 @@ export class AiAgentService {
       return fallbackId;
     };
     const userMessageParentId = await resolveUserMessageParentId();
+    const userMessageParams = {
+      agentId: conversationAgentId,
+      content: prompt,
+      files: runAttachments.fileIds,
+      // Group reads filter on messages.groupId (MessageModel.query group
+      // branch), so a group turn must stamp groupId or the message never
+      // shows when the topic is reopened (group topic sidebar + ownership fix).
+      groupId: appContext?.groupId ?? undefined,
+      metadata: requestTriggerMetadata,
+      parentId: userMessageParentId,
+      role: 'user' as const,
+      threadId: appContext?.threadId ?? undefined,
+      topicId,
+    };
+    // Share-visitor runs must reserve the `maxTurnsPerTopic` slot and insert
+    // the user message in ONE locked transaction — see
+    // `reserveShareVisitorTurn`'s JSDoc for the race this closes (same class
+    // of count-then-act bug as the topic cap above, LOBE-11930). Harmless
+    // no-op on a topic this same call just created (count is 0). Non-share
+    // runs (no per-turn cap) keep the plain unlocked insert.
     const userMessageRecord = runFromHistory
       ? undefined
-      : await this.messageModel.create(
-          {
-            agentId: conversationAgentId,
-            content: prompt,
-            files: runAttachments.fileIds,
-            // Group reads filter on messages.groupId (MessageModel.query group
-            // branch), so a group turn must stamp groupId or the message never
-            // shows when the topic is reopened (group topic sidebar + ownership fix).
-            groupId: appContext?.groupId ?? undefined,
-            metadata: requestTriggerMetadata,
-            parentId: userMessageParentId,
-            role: 'user',
-            threadId: appContext?.threadId ?? undefined,
-            topicId,
-          },
-          // The id the client's optimistic user row already renders under.
-          clientIds?.userMessageId,
-        );
+      : shareGate
+        ? await reserveShareVisitorTurn(
+            {
+              db: this.db,
+              maxTurnsPerTopic: shareGate.shareConfig.maxTurnsPerTopic,
+              ownerId: this.userId,
+              topicId,
+              workspaceId: this.workspaceId,
+            },
+            userMessageParams,
+            // The id the client's optimistic user row already renders under.
+            clientIds?.userMessageId,
+          )
+        : await this.messageModel.create(
+            userMessageParams,
+            // The id the client's optimistic user row already renders under.
+            clientIds?.userMessageId,
+          );
     if (userMessageRecord) {
       selfMessageIds.add(userMessageRecord.id);
       log('execAgent: created user message %s', userMessageRecord.id);
