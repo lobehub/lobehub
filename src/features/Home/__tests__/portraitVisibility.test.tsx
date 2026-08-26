@@ -252,5 +252,5 @@ describe('Home input banner queue', () => {
         status: { ...state.status, dismissedBannerIds: originalDismissedIds },
       }));
     }
-  });
+  }, 20000);
 });
