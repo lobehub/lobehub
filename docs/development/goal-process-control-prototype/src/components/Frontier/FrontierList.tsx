@@ -79,9 +79,28 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 12px;
     color: ${token.colorTextQuaternary};
   `,
-  budgetBody: css`
-    padding-block: 0 12px;
+  needsBody: css`
+    padding-block: 2px 14px;
     padding-inline: 46px 12px;
+  `,
+  label: css`
+    font-size: 12px;
+    font-weight: 600;
+    color: ${token.colorTextSecondary};
+  `,
+  option: css`
+    display: grid;
+    grid-template-columns: 104px 1fr;
+    gap: 8px;
+    align-items: baseline;
+  `,
+  attempt: css`
+    padding-block: 6px;
+    border-block-start: 1px dashed ${token.colorBorderSecondary};
+
+    &:first-of-type {
+      border-block-start: none;
+    }
   `,
 }));
 
@@ -159,11 +178,11 @@ const noteOf = (state: GoalState, item: FrontierItem) => {
   const n = item.node;
   switch (item.kind) {
     case 'stale':
-      return `${n.task?.agent} 已 ${short(clock.now - (n.lastActivity ?? clock.now))} 没有心跳 · 下一次推进会自动重开`;
     case 'gate':
-      return state.decision ? state.decision.why.split('；')[0] : '';
     case 'acceptance':
-      return '独立 verifier 复验了 checkpoint、loss 与采样';
+    case 'budget':
+      // Needs-you rows open a block below; nothing is squeezed onto the title line.
+      return '';
     case 'done':
       return n.attempts?.length ? `${n.attempts.length} 次尝试 · ${usd(n.cost ?? 0)}` : '';
     default:
@@ -178,6 +197,7 @@ export const FrontierList = memo<FrontierListProps>(
     const { goal } = state;
     const [rejectOpen, setRejectOpen] = useState(false);
     const [comment, setComment] = useState('');
+    const [reason, setReason] = useState('');
     const [budget, setBudget] = useState<number>((goal.maxTotalCost ?? 0) + 5);
     const [showBlocked, setShowBlocked] = useState(false);
 
@@ -203,7 +223,7 @@ export const FrontierList = memo<FrontierListProps>(
                       size="small"
                       onClick={(e) => {
                         stop(e);
-                        actions.decide(o.id);
+                        actions.decide(o.id, reason);
                       }}
                     >
                       {o.label}
@@ -216,7 +236,7 @@ export const FrontierList = memo<FrontierListProps>(
                   size="small"
                   onClick={(e) => {
                     stop(e);
-                    actions.decide(rec.id);
+                    actions.decide(rec.id, reason);
                   }}
                 >
                   {rec.label}
@@ -296,6 +316,177 @@ export const FrontierList = memo<FrontierListProps>(
       }
     };
 
+    /** Everything a human decision needs, opened in place: why, options with consequences, history. */
+    const NeedsYouBody = ({ item }: { item: FrontierItem }) => {
+      const n = item.node;
+      const attempts = n.attempts ?? [];
+      const Ledger = () =>
+        attempts.length === 0 ? null : (
+          <Flexbox gap={0}>
+            <span className={styles.label}>之前的尝试</span>
+            {attempts.map((a) => (
+              <Flexbox key={a.n} horizontal gap={10} align="baseline" className={styles.attempt}>
+                <Text
+                  fontSize={12}
+                  className={cx(shared.muted, shared.mono)}
+                  style={{ flexShrink: 0, width: 52 }}
+                >
+                  第 {a.n} 次
+                </Text>
+                <Text
+                  fontSize={12}
+                  type={
+                    a.outcome === 'passed'
+                      ? 'success'
+                      : a.outcome === 'failed'
+                        ? 'danger'
+                        : 'secondary'
+                  }
+                  style={{ flexShrink: 0 }}
+                >
+                  {a.outcome === 'passed' ? '通过' : a.outcome === 'failed' ? '未通过' : '失联'}
+                </Text>
+                <Text fontSize={12} type="secondary" style={{ flex: 1, minWidth: 0 }}>
+                  {a.reason}
+                </Text>
+                <Text
+                  fontSize={12}
+                  className={cx(shared.muted, shared.mono)}
+                  style={{ flexShrink: 0 }}
+                >
+                  {usd(a.cost)}
+                </Text>
+              </Flexbox>
+            ))}
+          </Flexbox>
+        );
+
+      switch (item.kind) {
+        case 'gate': {
+          const d = state.decision!;
+          return (
+            <Flexbox className={styles.needsBody} gap={12} onClick={stop}>
+              <Flexbox gap={4}>
+                <span className={styles.label}>为什么停下来</span>
+                <Text fontSize={13}>{d.why}</Text>
+              </Flexbox>
+              <Flexbox gap={6}>
+                <span className={styles.label}>每个选择意味着什么</span>
+                {d.options.map((o) => (
+                  <div key={o.id} className={styles.option}>
+                    <Text fontSize={13} weight={500}>
+                      {o.label}
+                      {o.id === d.recommended ? '（推荐）' : ''}
+                    </Text>
+                    <Text fontSize={13} type="secondary">
+                      {o.consequence}
+                    </Text>
+                  </div>
+                ))}
+              </Flexbox>
+              <Ledger />
+              <Flexbox gap={4}>
+                <span className={styles.label}>补充说明（可选，会写进下一次尝试的指令）</span>
+                <TextArea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="例如：不要重训，基于静止 checkpoint 补齐 train.log 缺口"
+                  autoSize={{ minRows: 1, maxRows: 3 }}
+                />
+              </Flexbox>
+            </Flexbox>
+          );
+        }
+        case 'acceptance':
+          return (
+            <Flexbox className={styles.needsBody} gap={12} onClick={stop}>
+              <Flexbox gap={4}>
+                <span className={styles.label}>独立 verifier 的判定</span>
+                {goal.checks.map((c) => (
+                  <Flexbox key={c.label} horizontal gap={8} align="center">
+                    <StatusGlyph
+                      status={c.state === 'passed' ? 'completed' : 'backlog'}
+                      size={14}
+                    />
+                    <Text fontSize={13}>{c.label}</Text>
+                  </Flexbox>
+                ))}
+                <Text fontSize={12} type="secondary">
+                  verifier 在同一目录重新加载了 checkpoint、核对 loss
+                  和采样长度。确认后目标记为已达成。
+                </Text>
+              </Flexbox>
+              {rejectOpen && (
+                <Flexbox gap={8}>
+                  <TextArea
+                    autoFocus
+                    placeholder="哪里不够？会作为下一轮的输入"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    autoSize={{ minRows: 2, maxRows: 4 }}
+                  />
+                  <Flexbox horizontal gap={8} justify="flex-end">
+                    <Button size="small" onClick={() => setRejectOpen(false)}>
+                      取消
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      disabled={!comment.trim()}
+                      onClick={() => {
+                        actions.reject(comment);
+                        setRejectOpen(false);
+                      }}
+                    >
+                      带反馈再来一轮
+                    </Button>
+                  </Flexbox>
+                </Flexbox>
+              )}
+            </Flexbox>
+          );
+        case 'budget':
+          return (
+            <Flexbox className={styles.needsBody} gap={12} onClick={stop}>
+              <Text fontSize={13} type="secondary">
+                这项任务把总费用推到了 {usd(goal.spent)}，超过上限 {usd(goal.maxTotalCost ?? 0)}
+                ；已停下，不会再开始新的尝试。追加预算后它会接着跑。
+              </Text>
+              <Ledger />
+              <Flexbox horizontal gap={8} align="center" wrap="wrap">
+                <InputNumber
+                  size="small"
+                  value={budget}
+                  min={goal.spent}
+                  step={1}
+                  prefix="$"
+                  onChange={(v) => setBudget(Number(v ?? 0))}
+                  style={{ width: 110 }}
+                />
+                <Button type="primary" size="small" onClick={() => actions.addBudget(budget)}>
+                  追加预算并继续
+                </Button>
+                <Button size="small" danger>
+                  就此结束
+                </Button>
+              </Flexbox>
+            </Flexbox>
+          );
+        case 'stale':
+          return (
+            <Flexbox className={styles.needsBody} gap={12} onClick={stop}>
+              <Text fontSize={13} type="secondary">
+                {n.task?.agent} 已 {short(clock.now - (n.lastActivity ?? clock.now))}{' '}
+                没有心跳。下一次推进会把这次尝试标为失联并自动重开（不计失败次数）；本机上由它拉起的进程不会被中断，重开的尝试会先审计已有产物。
+              </Text>
+              <Ledger />
+            </Flexbox>
+          );
+        default:
+          return null;
+      }
+    };
+
     const Row = ({ item }: { item: FrontierItem }) => {
       const n = item.node;
       const g = glyphOf(item, n);
@@ -342,58 +533,7 @@ export const FrontierList = memo<FrontierListProps>(
               {rightCluster(item)}
             </Flexbox>
           </Flexbox>
-          {item.kind === 'budget' && (
-            <Flexbox gap={8} className={styles.budgetBody} onClick={stop}>
-              <Text fontSize={13} type="secondary">
-                这项任务把总费用推到了 {usd(goal.spent)}，超过上限 {usd(goal.maxTotalCost ?? 0)}
-                ；已停下，不会再开始新的尝试。追加预算后它会接着跑。
-              </Text>
-              <Flexbox horizontal gap={8} align="center" wrap="wrap">
-                <InputNumber
-                  size="small"
-                  value={budget}
-                  min={goal.spent}
-                  step={1}
-                  prefix="$"
-                  onChange={(v) => setBudget(Number(v ?? 0))}
-                  style={{ width: 110 }}
-                />
-                <Button type="primary" size="small" onClick={() => actions.addBudget(budget)}>
-                  追加预算并继续
-                </Button>
-                <Button size="small" danger>
-                  就此结束
-                </Button>
-              </Flexbox>
-            </Flexbox>
-          )}
-          {item.kind === 'acceptance' && rejectOpen && (
-            <Flexbox gap={8} style={{ marginTop: 10, paddingLeft: 46 }} onClick={stop}>
-              <TextArea
-                autoFocus
-                placeholder="哪里不够？会作为下一轮的输入"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                autoSize={{ minRows: 2, maxRows: 4 }}
-              />
-              <Flexbox horizontal gap={8} justify="flex-end">
-                <Button size="small" onClick={() => setRejectOpen(false)}>
-                  取消
-                </Button>
-                <Button
-                  size="small"
-                  type="primary"
-                  disabled={!comment.trim()}
-                  onClick={() => {
-                    actions.reject(comment);
-                    setRejectOpen(false);
-                  }}
-                >
-                  带反馈再来一轮
-                </Button>
-              </Flexbox>
-            </Flexbox>
-          )}
+          {item.rank === 0 && <NeedsYouBody item={item} />}
         </Block>
       );
     };
