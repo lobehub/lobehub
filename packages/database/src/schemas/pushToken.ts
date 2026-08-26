@@ -75,7 +75,7 @@ export const pushLiveActivities = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     deviceId: text('device_id').notNull(),
-    /** Opaque durable request key (currently the intervention row id). */
+    /** Opaque durable key shared by one sealed intervention batch/activity. */
     activityKey: text('activity_key').notNull(),
     /** Diagnostic grouping only; never use it to update/end one activity. */
     operationId: text('operation_id').notNull(),

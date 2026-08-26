@@ -1,5 +1,6 @@
 export * from './agencyConfig';
 export * from './agentConfig';
+export * from './agentIntervention';
 export * from './chatConfig';
 export * from './displayName';
 export * from './document';
