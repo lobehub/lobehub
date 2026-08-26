@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
@@ -156,6 +157,10 @@ export class ExpertiseIngestionService {
    * before messages carried an agent — when the topic itself is the agent's. The naive
    * `COALESCE(messages.agentId, topics.agentId) = ?` form expresses the same thing but forces
    * Postgres to walk every message the user owns; both arms here start from an agent index.
+   *
+   * Share-visitor topics bill to this user but are the visitor's own conversation, so both
+   * arms also exclude them via `notShareVisitorMessage()` — otherwise the historical backfill
+   * below would ingest visitor topic content into this agent's durable expertise lessons.
    */
   private historicalTopicCandidates = (agentId: string) => {
     const scope = this.workspaceId
@@ -165,12 +170,21 @@ export class ExpertiseIngestionService {
     const byMessageAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
-      .where(and(scope, eq(messages.agentId, agentId), isNotNull(messages.topicId)));
+      .where(
+        and(
+          scope,
+          eq(messages.agentId, agentId),
+          isNotNull(messages.topicId),
+          notShareVisitorMessage(),
+        ),
+      );
     const byTopicAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
       .innerJoin(topics, eq(topics.id, messages.topicId))
-      .where(and(scope, isNull(messages.agentId), eq(topics.agentId, agentId)));
+      .where(
+        and(scope, isNull(messages.agentId), eq(topics.agentId, agentId), notShareVisitorMessage()),
+      );
 
     return byMessageAgent.union(byTopicAgent).as('historical_topic_candidates');
   };

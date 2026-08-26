@@ -125,6 +125,37 @@ describe('ExpertiseIngestionService historical topic resolution', () => {
     expect(thirdPage).toEqual([]);
   });
 
+  it('excludes share-visitor topics from the historical backfill', async () => {
+    // Share-visitor topics carry the creator's `userId` (billing) plus a
+    // non-null `senderId` (the visitor). The historical backfill must never
+    // ingest a visitor's conversation into the creator's durable expertise
+    // lessons.
+    await serverDB.insert(topics).values({
+      agentId: 'hist-agent',
+      id: 'topic-visitor',
+      senderId: 'expertise-history-visitor',
+      title: 'visitor',
+      userId,
+    });
+    await serverDB.insert(messages).values({
+      agentId: 'hist-agent',
+      content: 'visitor message',
+      createdAt: new Date('2026-01-07T00:00:00Z'),
+      id: 'msg-visitor-1',
+      role: 'user',
+      topicId: 'topic-visitor',
+      userId,
+    });
+
+    const service = new ExpertiseIngestionService(serverDB, userId);
+
+    await expect(service.countHistoricalTopics('hist-agent')).resolves.toBe(2);
+    const topicIds = (await service.listHistoricalTopics('hist-agent', { limit: 10 })).map(
+      (t) => t.topicId,
+    );
+    expect(topicIds).not.toContain('topic-visitor');
+  });
+
   it('scopes workspace queries to workspace messages only', async () => {
     await serverDB
       .update(messages)

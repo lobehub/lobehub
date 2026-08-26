@@ -21,6 +21,7 @@ import {
 
 import { messages, topics, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 
 export interface TopicSummaryCandidateCursor {
   id: string;
@@ -61,7 +62,14 @@ const getAutoSummaryWatermark = () =>
 const mergeAutoSummaryMetadata = (marker: NonNullable<ChatTopicMetadata['autoSummary']>) =>
   sql`COALESCE(${topics.metadata}, '{}'::jsonb) || ${JSON.stringify({ autoSummary: marker })}::jsonb`;
 
-/** System-scoped queries used only by the authenticated background summary workflow. */
+/**
+ * System-scoped queries used only by the authenticated background summary workflow.
+ *
+ * `listCandidates` must exclude share-visitor topics: they carry the creator's
+ * `userId` for billing but a non-null `senderId` for the visitor, so a plain
+ * ownership scan would generate creator-billed auto-summaries for conversations
+ * the creator never had, outside the share-budget gate.
+ */
 export class TopicSummaryModel {
   constructor(private readonly db: LobeChatDatabase) {}
 
@@ -97,6 +105,9 @@ export class TopicSummaryModel {
           or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
           or(isNull(topics.status), notInArray(topics.status, ['running', 'scheduled'])),
           force ? undefined : isTopicAutoSummaryEnabled,
+          // Share-visitor topics bill to the creator but are not the creator's
+          // own conversation — never auto-summarize them on the creator's behalf.
+          notShareVisitorTopic(),
         ),
       )
       .groupBy(topics.id, topics.userId, topics.workspaceId, topics.metadata)

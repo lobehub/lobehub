@@ -202,6 +202,57 @@ describe('AgentSignalReviewContextModel', () => {
         }),
       ]);
     });
+
+    it('excludes share-visitor topic tool activity from self-iteration context', async () => {
+      // Share-visitor topics carry the creator's `userId` (billing) plus a
+      // non-null `senderId` (the visitor). Nightly self-iteration must never
+      // ingest a visitor's tool arguments or failures as the creator's own.
+      const visitorTopicId = 'agent-signal-review-context-visitor-topic';
+
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        agentId,
+        id: visitorTopicId,
+        senderId: 'agent-signal-review-context-visitor',
+        title: 'Visitor tool activity topic',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        agentId,
+        content: 'visitor triggered tool call',
+        createdAt: new Date('2026-05-03T12:00:00.000Z'),
+        id: 'agent-signal-review-context-visitor-tool',
+        role: 'assistant',
+        topicId: visitorTopicId,
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'createDocument',
+        arguments: '{"title":"Visitor Skill"}',
+        id: 'agent-signal-review-context-visitor-tool',
+        identifier: 'lobe-agent-documents',
+        toolCallId: 'tool-call-review-context-visitor',
+        userId,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listToolActivity({
+        agentId,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([]);
+    });
   });
 
   describe('listDocumentActivity', () => {
@@ -367,6 +418,51 @@ describe('AgentSignalReviewContextModel', () => {
           topicId,
         }),
       ]);
+    });
+
+    it('excludes share-visitor topics from the nightly digest', async () => {
+      // Share-visitor topics carry the creator's `userId` (billing) plus a
+      // non-null `senderId` (the visitor). The nightly digest must never
+      // surface a visitor's title, summary, or failures as the creator's own.
+      const visitorTopicId = 'agent-signal-review-context-visitor-digest-topic';
+
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        agentId,
+        id: visitorTopicId,
+        senderId: 'agent-signal-review-context-visitor',
+        title: 'Visitor digest topic',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        agentId,
+        content: 'visitor assistant failed',
+        createdAt: new Date('2026-05-03T12:00:00.000Z'),
+        error: { message: 'visitor-triggered failure' },
+        id: 'agent-signal-review-context-visitor-digest-message',
+        role: 'assistant',
+        topicId: visitorTopicId,
+        userId,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listTopicActivity({
+        agentId,
+        limit: 10,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([]);
     });
   });
 
@@ -586,6 +682,50 @@ describe('AgentSignalReviewContextModel', () => {
       const result = await model.listSelfReflectionTopicActivity({
         agentId,
         topicId,
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it('excludes a share-visitor topic even when explicitly scoped by id', async () => {
+      // A visitor could hand back a scopeId/topicId that resolves to their own
+      // share topic. Self-reflection must fail closed rather than ingest it.
+      const visitorTopicId = 'agent-signal-review-context-visitor-reflection-topic';
+
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values([
+        {
+          chatConfig: { selfIteration: { enabled: true } },
+          id: agentId,
+          title: 'Review Context Agent',
+          userId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        agentId,
+        id: visitorTopicId,
+        senderId: 'agent-signal-review-context-visitor',
+        title: 'Visitor reflection topic',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        agentId,
+        content: 'visitor assistant failed',
+        createdAt: new Date('2026-05-03T12:00:00.000Z'),
+        error: { message: 'visitor-triggered failure' },
+        id: 'agent-signal-review-context-visitor-reflection-message',
+        role: 'assistant',
+        topicId: visitorTopicId,
+        userId,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      const result = await model.listSelfReflectionTopicActivity({
+        agentId,
+        topicId: visitorTopicId,
         windowEnd: new Date('2026-05-03T23:59:59.999Z'),
         windowStart: new Date('2026-05-03T00:00:00.000Z'),
       });
