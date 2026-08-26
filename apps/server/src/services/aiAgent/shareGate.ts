@@ -629,6 +629,27 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   IS allowed above; the two tools reach the same underlying skill catalog
  *   through differently-guarded paths).
  *
+ * - `lobe-brief`: `createBrief` (`briefRuntime.createBrief`,
+ *   `apps/server/src/services/toolExecution/serverRuntimes/brief.ts:60-68`)
+ *   unconditionally persists a new row via `BriefModel.create`, constructed
+ *   with `context.userId` — the CREATOR (`brief.ts:58`) — and the model-
+ *   supplied `title`/`summary`/`actions`/`type` verbatim. Nothing in the
+ *   manifest marks it as requiring intervention: `BriefManifest.api` only
+ *   sets `humanIntervention: 'required'` on `requestCheckpoint`
+ *   (`packages/builtin-tool-brief/src/manifest.ts:60-76`); `createBrief`
+ *   (`manifest.ts:14-58`) has no such marker, so a share's
+ *   `approvalMode: 'reject'` — which only gates intervention-required calls —
+ *   never engages for it. A share visitor can therefore create arbitrary
+ *   durable records in the creator's brief collection with no write grant to
+ *   authorize it (v1 share grants are `none`/`read` only). A non-persisting,
+ *   visitor-scoped `createBrief` was considered and rejected for v1: the
+ *   whole point of a brief is to durably notify the creator, so a
+ *   "non-persisting" variant would just be a fake success response, not a
+ *   real feature — not worth building versus simply withholding the tool.
+ *   Removed from the allowlist entirely rather than narrowed:
+ *   `requestCheckpoint` also unconditionally persists a brief AND pauses the
+ *   run's task (`brief.ts:82-100`), so there is no read-only remainder either.
+ *
  * - `lobe-group-agent-builder` / `lobe-group-management`: group-orchestration
  *   tools (member CRUD, dispatch) that operate on the creator's group-agent
  *   collection and membership, with no share-run scoping designed in — same
@@ -676,12 +697,13 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
  *   unsafe for `lobe-skill-maintainer`) as safe, so per the default-deny rule
  *   they stay out until that verification happens.
  *
- * SAFE / allowed — see the per-entry comments on `SHARE_VISITOR_ALLOWED_IDENTIFIERS`
- * above for `lobe-topic-reference`, `lobe-calculator`, `lobe-web-browsing`,
- * `lobe-user-interaction`, `lobe-activator`, `lobe-page-agent`, `lobe-brief`,
+ * SAFE / allowed — see `SHARE_VISITOR_ALLOWED_IDENTIFIERS`'s JSDoc above for
+ * `lobe-topic-reference`, `lobe-calculator`, `lobe-web-browsing`,
+ * `lobe-user-interaction`, `lobe-activator`, `lobe-page-agent`,
  * `lobe-image-generation`, `lobe-verify`, `lobe-acceptance-evidence`,
  * `lobe-agent`, `lobe-knowledge-base`, `lobe-user-memory`,
- * `lobe-agent-documents`.
+ * `lobe-agent-documents`. `lobe-brief` was removed — see "Confirmed leak
+ * paths" above.
  *
  * `agent-signal-review` is NOT on this list — see the "Confirmed leak paths"
  * entry above; it was removed after tracing `createReviewRuntimePrimitives`

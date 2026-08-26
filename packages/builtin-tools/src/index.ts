@@ -219,7 +219,6 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   UserInteractionManifest.identifier,
   LobeActivatorManifest.identifier,
   PageAgentManifest.identifier,
-  BriefManifest.identifier,
   ImageGenerationManifest.identifier,
   VerifyToolManifest.identifier,
   AcceptanceEvidenceManifest.identifier,

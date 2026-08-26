@@ -10,7 +10,20 @@ import { type ServerRuntimeRegistration } from './types';
 export const webBrowsingRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     const { userId, serverDB, agentId, agentVisibility } = context;
-    const canSaveDocuments = userId && serverDB && agentId;
+    // A share visitor's run executes with the CREATOR's own credentials
+    // (`context.userId` is the creator — see `AgentShareGate`), so without
+    // this guard `crawlSinglePage`/`crawlMultiPages` would unconditionally
+    // persist every crawled page as a new `documents` row (and associate it
+    // to the shared agent) regardless of what the share actually grants.
+    // `lobe-web-browsing` has no `DATA_TOOL_ACCESS_RULES` entry — it isn't
+    // gated by `filePermissionConfig` at all — and v1 share grants are
+    // `none`/`read` only, so there is no write grant that could authorize
+    // this persistence. Disable it for share runs instead: `search` and
+    // `crawlSinglePage`/`crawlMultiPages` still return the page content
+    // inline in the tool result either way, so the visitor loses nothing
+    // except the creator's Pages library silently accumulating
+    // visitor-triggered, attacker-URL-titled documents.
+    const canSaveDocuments = userId && serverDB && agentId && !context.agentShare;
 
     return new WebBrowsingExecutionRuntime({
       documentService: canSaveDocuments
