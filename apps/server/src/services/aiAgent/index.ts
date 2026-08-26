@@ -2790,9 +2790,24 @@ export class AiAgentService {
     // only applies to the server-side LLM pipeline, so it is intentionally NOT
     // enqueued for hetero runs (which hand off to an external CLI). Skip when this
     // invocation is itself an Agent Signal background run to avoid recursion.
+    //
+    // Share-visitor fail-closed gate (agent share C5) — never enqueue this event
+    // for a share-visitor turn. `enqueueAgentSignalSourceEvent` is always called
+    // with `userId: this.userId`, which is the share **creator** (this service
+    // is instantiated with `share.ownerId` for every visitor run — see
+    // `shareChat.ts`), never `shareGate.visitorUserId`. The `agent.user.message`
+    // event it produces is picked up by the `analyzeIntent` feedback-satisfaction
+    // policy (`policies/analyzeIntent/feedbackSatisfaction.ts`), which can reach
+    // the `userMemory` action (`policies/analyzeIntent/actions/userMemory.ts`)
+    // and WRITE to the creator's memory. `allowReadMemory` only grants reading
+    // the creator's memory through the visible memory tool — v1 has no write
+    // grant at all — so this gate must never be conditional on it: any share
+    // configuration would otherwise let a link visitor mutate the creator's
+    // account via this out-of-band channel.
     if (
       userMessageRecord &&
       !isHeteroAgent &&
+      !shareGate &&
       !shouldSuppressSignal({ appContext, slug: agentSlug ?? undefined })
     ) {
       void enqueueAgentSignalSourceEvent(
@@ -4496,8 +4511,24 @@ export class AiAgentService {
 
       const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
       const isLobeAiAgent = isLobeAiAgentSlug(agentSlug);
+      // Share-visitor fail-closed gate (agent share C5) — never expose the
+      // `declareSelfFeedbackIntent` tool to a share-visitor turn. This tool sits
+      // outside the normal `toolManifestMap` / `applyShareGateToToolSet`
+      // allowlist (it's injected directly into `tools` below), so the visitor's
+      // own model call can reach it even with an empty `enabledToolIds`. Its
+      // execution context (`SelfFeedbackIntentExecutionRuntime`) is stamped with
+      // `this.userId` — the share **creator**, since this service always runs as
+      // `share.ownerId` for visitor turns (see `shareChat.ts`) — and the
+      // resulting `agent.self_feedback_intent.declared` event dispatches a full
+      // autonomous background agent run under the creator's account
+      // (`services/agentSignal/services/selfIteration/feedback/handler.ts`),
+      // which can write to the creator's memory. Same root cause as the
+      // `agent.user.message` gate above; `allowReadMemory` is a read-only grant
+      // so this must not be conditional on it either.
       const shouldCheckUserSelfIterationGate =
-        !params.disableSelfFeedbackIntentTool && (agentSelfIterationEnabled || isLobeAiAgent);
+        !shareGate &&
+        !params.disableSelfFeedbackIntentTool &&
+        (agentSelfIterationEnabled || isLobeAiAgent);
       if (shouldCheckUserSelfIterationGate) {
         const featureUserEnabled = await isAgentSignalEnabledForUser(this.db, this.userId);
         const effectiveAgentSelfIterationEnabled = resolveAgentSelfIterationCapability({

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { AiAgentService } from '../index';
 
@@ -559,6 +560,83 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
     expect(callArgs.toolSet.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeDefined();
     expect(callArgs.toolSet.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBe('builtin');
+  });
+
+  // Agent share C5: a share-visitor prompt must never be able to reach a
+  // creator-scoped Agent Signal write action (e.g. `userMemory`). Both the
+  // `agent.user.message` event enqueue and the `declareSelfFeedbackIntent`
+  // tool injection are gated on `shareGate` regardless of `allowReadMemory`,
+  // since v1 grants no memory-write permission through any share config.
+  describe('agent share visitor fail-closed gate (C5)', () => {
+    const shareGate = {
+      agentId: 'agent-inbox',
+      shareConfig: { allowReadMemory: true, maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
+      visitorUserId: 'visitor-1',
+    };
+
+    it('does not enqueue the agent.user.message Agent Signal event for a share-visitor run', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-inbox',
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        slug: 'inbox',
+        systemRole: '',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-inbox',
+        prompt: 'Remember that I like tea',
+        shareGate,
+      } as any);
+
+      expect(enqueueAgentSignalSourceEvent).not.toHaveBeenCalled();
+    });
+
+    it('does not inject the self-feedback intent tool for a share-visitor run even when self-iteration is enabled', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: { selfIteration: { enabled: true } },
+        id: 'agent-inbox',
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        slug: 'inbox',
+        systemRole: '',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-inbox',
+        prompt: 'Remember that I like tea',
+        shareGate,
+      } as any);
+
+      const callArgs = mockCreateOperation.mock.calls[0][0];
+      expect(callArgs.toolSet.enabledToolIds).not.toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
+      expect(callArgs.toolSet.manifestMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeUndefined();
+      expect(callArgs.toolSet.sourceMap[SELF_FEEDBACK_INTENT_IDENTIFIER]).toBeUndefined();
+    });
+
+    it('still enqueues and injects for the same agent config outside a share run', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: { selfIteration: { enabled: true } },
+        id: 'agent-inbox',
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        slug: 'inbox',
+        systemRole: '',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-inbox',
+        prompt: 'Remember that I like tea',
+      });
+
+      expect(enqueueAgentSignalSourceEvent).toHaveBeenCalled();
+      const callArgs = mockCreateOperation.mock.calls[0][0];
+      expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
+    });
   });
 
   it('should inject page-agent runtime for regular agents in page scope', async () => {
