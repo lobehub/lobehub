@@ -267,4 +267,120 @@ describe('AgentModel.transferAgents share reset x visitor run reservation (real 
       .where(eq(agentShares.agentId, agent.id));
     expect(movedShare.visibility).toBe('private');
   }, 15_000);
+
+  // The Codex P1 this fix targets: personal -> workspace A -> workspace B,
+  // with the deferred `interruptActiveShareRuns` callback (scheduled by the
+  // FIRST transfer, still carrying ITS `revocationGeneration`) firing only
+  // AFTER the second move. The second transfer flips no `agentShares` row
+  // (already `private` after the first) and so schedules no callback of its
+  // own — the ONE callback that will ever exist for this revocation must
+  // still find the run wherever the SECOND transfer left it (workspace B),
+  // not the workspace the callback was originally scoped to (A). See
+  // `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc and
+  // `shareResetInterrupt.ts`'s JSDoc for the full rationale.
+  it('finds an already-running visitor operation after a SECOND transfer moves it again before the deferred sweep runs', async () => {
+    const secondWsId = 'agent-share-transfer-race-ws-2';
+    await serverDB.insert(workspaces).values([
+      {
+        id: secondWsId,
+        name: 'Transfer Race WS 2',
+        primaryOwnerId: ownerId,
+        slug: 'agent-share-transfer-race-ws-2',
+      },
+    ]);
+
+    const agentId = 'double-transfer-race';
+    const operationId = 'op-double-transfer-race';
+    const agentModel = new AgentModel(serverDB, ownerId);
+    const agentShareModel = new AgentShareModel(serverDB, ownerId);
+    const agent = await agentModel.create({ id: agentId, title: 'Double Transfer Agent' });
+    await agentShareModel.create(agent.id, 'link');
+    const [topic] = await serverDB
+      .insert(topics)
+      .values({ agentId: agent.id, senderId: visitorId, userId: ownerId })
+      .returning();
+
+    // The run confirms (starts) while the agent is still personal-scoped.
+    await agentShareModel.assertRunnableForVisitor({
+      agentId: agent.id,
+      expectedGeneration: 1,
+      operationId,
+      topicId: topic.id,
+      visitorUserId: visitorId,
+    });
+    const confirmed = await agentShareModel.confirmReservation({
+      operationId,
+      runningOperation: {
+        assistantMessageId: 'test-message',
+        operationId,
+        startedAt: new Date().toISOString(),
+      },
+      topicId: topic.id,
+    });
+    expect(confirmed).toBe(true);
+
+    // Transfer #1: personal -> workspace A. Only transfer that ever flips
+    // `agentShares.visibility`, so only transfer whose `onShareReset` fires.
+    let revocationGeneration: number | undefined;
+    let onShareResetCallCount = 0;
+    const firstTransferringModel = new AgentModel(serverDB, ownerId, undefined, {
+      onShareReset: (_agentId, generation) => {
+        onShareResetCallCount += 1;
+        revocationGeneration = generation;
+      },
+    });
+    await firstTransferringModel.transferAgent(agent.id, targetWsId, ownerId);
+    expect(revocationGeneration).toBe(2);
+
+    // Transfer #2: workspace A -> workspace B, BEFORE the deferred callback
+    // from transfer #1 has run — this test drives that sweep manually below,
+    // simulating the delay `after()` introduces in production. Scoped to
+    // workspace A, mirroring an owner/admin acting from within it.
+    const secondTransferringModel = new AgentModel(serverDB, ownerId, targetWsId, {
+      onShareReset: () => {
+        onShareResetCallCount += 1;
+      },
+    });
+    await secondTransferringModel.transferAgent(agent.id, secondWsId, ownerId);
+
+    // The second transfer must not have scheduled a callback of its own.
+    expect(onShareResetCallCount).toBe(1);
+
+    const [movedTopic] = await serverDB
+      .select({ workspaceId: topics.workspaceId })
+      .from(topics)
+      .where(eq(topics.id, topic.id));
+    expect(movedTopic?.workspaceId).toBe(secondWsId);
+
+    // Simulate the deferred callback finally running, still carrying
+    // transfer #1's `revocationGeneration` — exactly like
+    // `scheduleShareRunInterruptOnReset` -> `interruptActiveShareRuns`.
+    const revoked = await agentShareModel.revokeReservations(agent.id, revocationGeneration!);
+    expect(revoked).toEqual([]); // already confirmed, nothing left to revoke
+
+    const unscopedTopicModel = new TopicModel(serverDB, ownerId);
+    const active = await unscopedTopicModel.findActiveVisitorRunTopicsByAgentId(
+      agent.id,
+      revocationGeneration!,
+    );
+    // Found by `agentId` alone, in its ACTUAL current workspace (B) — a
+    // workspace-A-scoped query (the pre-fix behavior) would have found
+    // nothing here.
+    expect(active).toEqual([
+      {
+        metadata: expect.objectContaining({ runningOperation: expect.anything() }),
+        operationId,
+        topicId: topic.id,
+      },
+    ]);
+
+    // And the pre-fix, workspace-A-scoped query genuinely WOULD have missed
+    // it — demonstrating exactly what this fix closes.
+    const staleWorkspaceScopedTopicModel = new TopicModel(serverDB, ownerId, targetWsId);
+    const staleActive = await staleWorkspaceScopedTopicModel.findActiveVisitorRunTopics(
+      agent.id,
+      revocationGeneration!,
+    );
+    expect(staleActive).toEqual([]);
+  }, 15_000);
 });

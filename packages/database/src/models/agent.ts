@@ -232,23 +232,22 @@ export interface AgentModelOptions {
    * server layer (tRPC procedures, tool executors) pass a real callback. See
    * LOBE-11930 hole 2.
    *
-   * `targetWorkspaceId` is populated ONLY by `transferAgents` (undefined —
-   * i.e. "stay in personal scope" — from every other caller): a transfer
-   * moves the reset agent's topics into that workspace in the SAME
-   * transaction, and unlike `writeAgentConfigWithShareReset`'s reset (which
-   * leaves every row where it already was), the post-commit
-   * `interruptActiveShareRuns` re-query this callback schedules needs to run
-   * against the NEW scope, or it silently finds nothing. Re-querying — not
-   * snapshotting inside the transaction — stays correct here specifically
-   * because a transfer only MOVES rows, it never destroys them; contrast
-   * `onShareRunsInterrupted` below, whose snapshot exists because `delete()`
-   * DOES destroy them. See LOBE-11930.
+   * NO `targetWorkspaceId` parameter, even though `transferAgents` fires this
+   * from inside a scope change: the post-commit `interruptActiveShareRuns`
+   * re-query this callback schedules matches purely on `agentId`
+   * (`TopicModel.findActiveVisitorRunTopicsByAgentId`) rather than on the
+   * caller's current workspace. An earlier version threaded the transfer's
+   * `targetWorkspaceId` through so the re-query could scope `TopicModel` to
+   * it — but a SECOND transfer landing before the deferred callback fires
+   * moves the topic again while scheduling NO new callback (the share is
+   * already `private` after the first move, so the `ne(visibility,
+   * 'private')` guard below finds nothing to reset), leaving the one
+   * scheduled callback scoped to a now-stale workspace. `agentId` is the
+   * only identity that survives any number of transfers, so the re-query
+   * must key on it instead. See LOBE-11930 (the double-transfer window) and
+   * `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc.
    */
-  onShareReset?: (
-    agentId: string,
-    revocationGeneration: number,
-    targetWorkspaceId?: string | null,
-  ) => void;
+  onShareReset?: (agentId: string, revocationGeneration: number) => void;
 
   /**
    * Called with the snapshot of Agent Share visitor runs that were still
@@ -270,11 +269,7 @@ export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
-  private onShareReset?: (
-    agentId: string,
-    revocationGeneration: number,
-    targetWorkspaceId?: string | null,
-  ) => void;
+  private onShareReset?: (agentId: string, revocationGeneration: number) => void;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(
@@ -2732,13 +2727,13 @@ export class AgentModel {
 
     // Fired only after the transaction above has committed, once per agent
     // whose share was actually reset — see `shareResetGenerations`'s JSDoc
-    // above and `writeAgentConfigWithShareReset`'s `onShareReset` timing.
-    // `targetWorkspaceId` is passed through so the post-commit interrupt
-    // re-queries the agent's ALREADY-MOVED topics in their new scope instead
-    // of the stale personal one — see `AgentModelOptions.onShareReset`'s
+    // above and `writeAgentConfigWithShareReset`'s `onShareReset` timing. NO
+    // `targetWorkspaceId` — the post-commit interrupt re-queries by `agentId`
+    // alone now, so it stays correct even if the agent is transferred AGAIN
+    // before the deferred callback runs. See `AgentModelOptions.onShareReset`'s
     // JSDoc.
     for (const [resetAgentId, revocationGeneration] of shareResetGenerations) {
-      this.onShareReset?.(resetAgentId, revocationGeneration, targetWorkspaceId);
+      this.onShareReset?.(resetAgentId, revocationGeneration);
     }
 
     return result;

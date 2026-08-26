@@ -320,8 +320,18 @@ const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL
  * One in-flight Agent Share visitor run — the payload every delete/revoke
  * path snapshots before it cascades the underlying topic row away and hands
  * off to `AiAgentService.interruptTask`. See `findActiveVisitorRunTopics`.
+ *
+ * `metadata`, when populated (`findActiveVisitorRunTopicsByAgentId` only),
+ * lets `interruptTask` skip its own workspace-scoped `topicModel.findById`
+ * re-fetch for remote-hetero cancellation dispatch — see that method's
+ * `findActiveVisitorRunTopicsByAgentId` JSDoc for why a re-fetch scoped to a
+ * stale workspace would silently drop the dispatch.
  */
-export type ActiveShareRun = { operationId: string; topicId: string };
+export type ActiveShareRun = {
+  metadata?: ChatTopicMetadata | null;
+  operationId: string;
+  topicId: string;
+};
 
 export class TopicModel {
   private userId: string;
@@ -1185,6 +1195,69 @@ export class TopicModel {
         topicId: row.id,
       }))
       .filter((row): row is ActiveShareRun => Boolean(row.operationId));
+  };
+
+  /**
+   * Agent-scoped (NOT workspace/user-scoped) variant of
+   * `findActiveVisitorRunTopics`, for `AiAgentService.interruptActiveShareRuns`'s
+   * deferred post-commit sweep only — every other caller of the sibling
+   * method should keep using it, this one is deliberately narrower-purpose.
+   *
+   * WHY unscoped: that sweep runs inside `after()`, arbitrarily long after
+   * the write that produced `revocationGeneration` committed. Between
+   * schedule time and this query, the agent can have been transferred AGAIN
+   * (a second, unrelated `AgentModel.transferAgents` /
+   * `AgentGroupRepository.transferToWorkspace` call) — its topics'
+   * `workspaceId`/`userId` moved a second time. That second transfer bumps
+   * NO new generation and schedules NO new reset callback, because the share
+   * was already flipped to `private` by the FIRST move (the `ne(visibility,
+   * 'private')` guard both transfer paths use finds nothing left to reset) —
+   * see `scheduleShareRunInterruptOnReset`'s JSDoc. So the ONLY callback that
+   * will ever fire for this revocation is the one already scheduled, still
+   * carrying the FIRST transfer's `targetWorkspaceId`, and the topic is no
+   * longer there. `mine()` (`findActiveVisitorRunTopics`'s ownership filter)
+   * would silently return nothing for it.
+   *
+   * `agentId` is the one identity that never changes across any number of
+   * transfers. This sweep's authority comes from holding that id plus a
+   * generation cutoff authenticated under the `agents.id FOR UPDATE` lock
+   * that produced it (see `bumpAgentShareGeneration`) — not from the
+   * caller's own current tenant scope — so matching on `agentId` alone,
+   * with no `userId`/`workspaceId` filter at all, is both correct and
+   * sufficient regardless of how many times the agent has moved since. See
+   * LOBE-11930 (the double-transfer window).
+   *
+   * Also returns each row's raw `metadata` (unlike the sibling method) so
+   * `interruptActiveShareRuns` can pass it straight into `interruptTask`,
+   * letting that method skip its OWN workspace-scoped `topicModel.findById`
+   * lookup for remote-hetero cancellation dispatch — the same scope-drift
+   * window applies there too.
+   */
+  findActiveVisitorRunTopicsByAgentId = async (
+    agentId: string,
+    revocationGeneration?: number,
+  ): Promise<ActiveShareRun[]> => {
+    const rows = await this.db
+      .select({ id: topics.id, metadata: topics.metadata })
+      .from(topics)
+      .where(
+        and(
+          eq(topics.agentId, agentId),
+          isNotNull(topics.senderId),
+          sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+          revocationGeneration === undefined
+            ? undefined
+            : sql`COALESCE((${topics.metadata} -> 'runningOperation' ->> 'shareGeneration')::int, 0) < ${revocationGeneration}`,
+        ),
+      );
+
+    return rows
+      .map((row): ActiveShareRun => ({
+        metadata: row.metadata,
+        operationId: row.metadata?.runningOperation?.operationId as string,
+        topicId: row.id,
+      }))
+      .filter((row) => Boolean(row.operationId));
   };
 
   // **************** Create *************** //

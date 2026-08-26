@@ -59,6 +59,7 @@ import type {
   ChatAudioItem,
   ChatFileItem,
   ChatTopicBotContext,
+  ChatTopicMetadata,
   ChatVideoItem,
   ErrorType,
   ExecAgentParams,
@@ -6750,8 +6751,28 @@ export class AiAgentService {
     operationId?: string;
     threadId?: string;
     topicId?: string;
+    /**
+     * Pre-fetched topic metadata, bypassing this method's own
+     * `this.topicModel.findById(resolvedTopicId)` lookup below (used only
+     * for remote-hetero cancellation detection). `undefined` (the default
+     * for every OTHER caller) keeps the normal scoped re-fetch.
+     *
+     * WHY a caller would need this: `this.topicModel` is scoped to
+     * whichever `workspaceId` this `AiAgentService` was constructed with.
+     * `interruptActiveShareRuns`'s deferred post-commit sweep can run after
+     * the agent has been transferred into a DIFFERENT workspace than the one
+     * the service was built for (see `TopicModel
+     * .findActiveVisitorRunTopicsByAgentId`'s JSDoc for the exact window) —
+     * a scoped re-fetch there would silently find nothing and skip the
+     * remote SIGINT dispatch for a heterogeneous (Codex/Claude Code sandbox)
+     * run, even though the LOCAL `interruptOperation` call below still
+     * succeeds (it's keyed by `operationId` alone, not the topic row). That
+     * sweep already has the correct row in hand from its own agent-scoped
+     * query, so it passes it straight through instead of re-deriving it.
+     */
+    topicMetadata?: ChatTopicMetadata | null;
   }): Promise<{ operationId?: string; success: boolean; threadId?: string }> {
-    const { threadId, operationId, topicId } = params;
+    const { threadId, operationId, topicId, topicMetadata } = params;
 
     log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
 
@@ -6785,7 +6806,10 @@ export class AiAgentService {
     // This runs regardless of whether interruptOperation succeeds — the remote process
     // is independent of the local operation registry.
     if (resolvedTopicId) {
-      const topic = await this.topicModel.findById(resolvedTopicId);
+      const topic =
+        topicMetadata !== undefined
+          ? { metadata: topicMetadata }
+          : await this.topicModel.findById(resolvedTopicId);
       const runningOp = (topic?.metadata as any)?.runningOperation as
         | {
             deviceId?: string;
@@ -6945,11 +6969,15 @@ export class AiAgentService {
   async interruptActiveShareRuns(agentId: string, revocationGeneration: number): Promise<void> {
     const interruptedOperationIds = new Set<string>();
 
-    const interrupt = async (operationId: string, topicId: string) => {
+    const interrupt = async (
+      operationId: string,
+      topicId: string,
+      topicMetadata?: ChatTopicMetadata | null,
+    ) => {
       if (interruptedOperationIds.has(operationId)) return;
       interruptedOperationIds.add(operationId);
       try {
-        await this.interruptTask({ operationId, topicId });
+        await this.interruptTask({ operationId, topicId, topicMetadata });
       } catch (error) {
         log(
           'interruptActiveShareRuns: failed to interrupt operationId=%s topicId=%s: %O',
@@ -6983,7 +7011,15 @@ export class AiAgentService {
     // 2. A single (not retried) query for already-confirmed/running
     // operations THAT PREDATE THIS REVOCATION — safe per this method's
     // JSDoc.
-    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(
+    //
+    // `findActiveVisitorRunTopicsByAgentId`, NOT the sibling
+    // `findActiveVisitorRunTopics` (which every other caller of this pattern
+    // uses): this call runs from `after()`, so the agent may have been
+    // transferred AGAIN since `this.topicModel` was constructed for the
+    // FIRST transfer's target workspace — a workspace-scoped query would
+    // silently miss the topic in its new home. See that method's JSDoc for
+    // the exact double-transfer window this closes (LOBE-11930).
+    const activeRuns = await this.topicModel.findActiveVisitorRunTopicsByAgentId(
       agentId,
       revocationGeneration,
     );
@@ -6995,7 +7031,9 @@ export class AiAgentService {
       );
     }
     await Promise.all(
-      activeRuns.map(({ operationId, topicId }) => interrupt(operationId, topicId)),
+      activeRuns.map(({ operationId, topicId, metadata }) =>
+        interrupt(operationId, topicId, metadata),
+      ),
     );
   }
 

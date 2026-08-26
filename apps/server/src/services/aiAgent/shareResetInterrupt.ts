@@ -24,20 +24,32 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  * and pass this callback down through `AgentModel`/`SessionModel`'s
  * constructor options instead. See LOBE-11930 hole 2.
  *
- * `targetWorkspaceId`, when passed by the caller (`AgentModel.transferAgents`
- * / `AgentGroupRepository.transferToWorkspace`), scopes the `AiAgentService`
- * — and therefore `interruptActiveShareRuns`'s own `TopicModel` re-query — to
- * the workspace the transfer just moved the agent's topics into, instead of
- * the source personal scope every other caller of this builder implicitly
- * queries. Without it, a transfer's post-commit sweep would query the OLD
- * (now empty) scope and silently find nothing for an already-running
- * operation. `revokeReservations`'s own sweep (step 1 of
- * `interruptActiveShareRuns`) is unaffected either way — it matches on
- * `agentShareRunReservations.agentId`, which never changes. See LOBE-11930.
+ * Deliberately constructs `AiAgentService` WITHOUT a `workspaceId`: this
+ * callback fires post-commit, arbitrarily long after the write that produced
+ * `revocationGeneration`, so the caller's OWN scope at write time (`AgentModel
+ * .transferAgents` / `AgentGroupRepository.transferToWorkspace` fire this from
+ * inside a scope change) is already the wrong thing to remember. An earlier
+ * version threaded the transfer's destination workspace through here so
+ * `interruptActiveShareRuns`'s `TopicModel` re-query could be scoped to it —
+ * that broke the moment a SECOND transfer landed before this callback ran:
+ * the topic moves again, but the second transfer schedules no callback of its
+ * own (the share is already `private` after the first move, so its own
+ * `ne(visibility, 'private')` reset guard finds nothing), leaving the one
+ * scheduled callback permanently scoped to a now-stale workspace. Both steps
+ * `interruptActiveShareRuns` runs are workspace-independent by design instead:
+ * `revokeReservations` matches on `agentShareRunReservations.agentId` (no
+ * workspace column exists on that table), and
+ * `TopicModel.findActiveVisitorRunTopicsByAgentId` — used here instead of the
+ * workspace-scoped `findActiveVisitorRunTopics` — matches on `topics.agentId`
+ * alone. `agentId` is the one identity that survives any number of transfers,
+ * so a `workspaceId` was never actually load-bearing for this path; passing
+ * one in was the accidental coupling that caused this bug class in the first
+ * place. See LOBE-11930 (the double-transfer window) and
+ * `TopicModel.findActiveVisitorRunTopicsByAgentId`'s JSDoc.
  */
 export const scheduleShareRunInterruptOnReset =
   (serverDB: LobeChatDatabase, ownerId: string) =>
-  (agentId: string, revocationGeneration: number, targetWorkspaceId?: string | null): void => {
+  (agentId: string, revocationGeneration: number): void => {
     after(async () => {
       // Dynamic import, not a static one: `services/agent/index.ts` (one of
       // this callback's callers) is itself imported by `./index.ts`
@@ -51,9 +63,7 @@ export const scheduleShareRunInterruptOnReset =
       // at write time and threaded straight through — see
       // `interruptActiveShareRuns`'s JSDoc for why it must never be re-read
       // here instead.
-      await new AiAgentService(serverDB, ownerId, {
-        workspaceId: targetWorkspaceId ?? undefined,
-      })
+      await new AiAgentService(serverDB, ownerId)
         .interruptActiveShareRuns(agentId, revocationGeneration)
         .catch((error) =>
           console.error('[agentConfigShareReset] interruptActiveShareRuns failed', error),

@@ -130,6 +130,7 @@ const topicMock = {
   appendRunningOperationChild: vi.fn().mockResolvedValue(true),
   create: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: undefined }),
   findActiveVisitorRunTopics: vi.fn().mockResolvedValue([]),
+  findActiveVisitorRunTopicsByAgentId: vi.fn().mockResolvedValue([]),
   findById: vi.fn().mockResolvedValue(undefined),
   releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
   tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
@@ -1630,30 +1631,60 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   // for a visitor who may no longer be present (closed tab).
   describe('interruptActiveShareRuns', () => {
     it('interrupts every active visitor run found for the agent', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
+      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
         { operationId: 'op-1', topicId: 'topic-1' },
         { operationId: 'op-2', topicId: 'topic-2' },
       ]);
       const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
 
-      await service.interruptActiveShareRuns('agent-1');
+      await service.interruptActiveShareRuns('agent-1', 2);
 
-      expect(topicMock.findActiveVisitorRunTopics).toHaveBeenCalledWith('agent-1');
-      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'op-1', topicId: 'topic-1' });
-      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'op-2', topicId: 'topic-2' });
+      // Agent-scoped, NOT workspace-scoped: `findActiveVisitorRunTopicsByAgentId`,
+      // not the sibling `findActiveVisitorRunTopics` — see that method's
+      // JSDoc for why the sweep must key on `agentId` alone (LOBE-11930's
+      // double-transfer window).
+      expect(topicMock.findActiveVisitorRunTopicsByAgentId).toHaveBeenCalledWith('agent-1', 2);
+      expect(interruptTaskSpy).toHaveBeenCalledWith({
+        operationId: 'op-1',
+        topicId: 'topic-1',
+        topicMetadata: undefined,
+      });
+      expect(interruptTaskSpy).toHaveBeenCalledWith({
+        operationId: 'op-2',
+        topicId: 'topic-2',
+        topicMetadata: undefined,
+      });
+    });
+
+    it('passes each run’s already-fetched topic metadata straight through, skipping interruptTask’s own scoped re-fetch', async () => {
+      const runningOperation = { operationId: 'op-1' };
+      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
+        { metadata: { runningOperation }, operationId: 'op-1', topicId: 'topic-1' },
+      ]);
+      const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
+
+      await service.interruptActiveShareRuns('agent-1', 2);
+
+      expect(interruptTaskSpy).toHaveBeenCalledWith({
+        operationId: 'op-1',
+        topicId: 'topic-1',
+        topicMetadata: { runningOperation },
+      });
+      // `interruptTask` must not re-fetch by id when metadata was handed in.
+      expect(topicMock.findById).not.toHaveBeenCalled();
     });
 
     it('does nothing when the agent has no active visitor run', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([]);
+      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([]);
       const interruptTaskSpy = vi.spyOn(service, 'interruptTask');
 
-      await service.interruptActiveShareRuns('agent-1');
+      await service.interruptActiveShareRuns('agent-1', 2);
 
       expect(interruptTaskSpy).not.toHaveBeenCalled();
     });
 
     it('keeps interrupting the remaining runs when one interrupt fails', async () => {
-      topicMock.findActiveVisitorRunTopics.mockResolvedValue([
+      topicMock.findActiveVisitorRunTopicsByAgentId.mockResolvedValue([
         { operationId: 'op-1', topicId: 'topic-1' },
         { operationId: 'op-2', topicId: 'topic-2' },
       ]);
@@ -1662,7 +1693,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         .mockRejectedValueOnce(new Error('device gateway unreachable'))
         .mockResolvedValueOnce({ operationId: 'op-2', success: true });
 
-      await expect(service.interruptActiveShareRuns('agent-1')).resolves.toBeUndefined();
+      await expect(service.interruptActiveShareRuns('agent-1', 2)).resolves.toBeUndefined();
 
       expect(interruptTaskSpy).toHaveBeenCalledTimes(2);
     });
