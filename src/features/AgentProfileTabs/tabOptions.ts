@@ -1,6 +1,6 @@
 import urlJoin from 'url-join';
 
-export type AgentProfileTab = 'channel' | 'profile' | 'statistics';
+export type AgentProfileTab = 'channel' | 'profile' | 'share' | 'statistics';
 
 export interface AgentProfileTabOption {
   label: string;
@@ -37,18 +37,25 @@ export const buildAgentProfileTabOptions = ({
   canConfigure,
   channelsSupported,
   labels,
+  shareSupported,
 }: {
   active: AgentProfileTab;
   canConfigure: boolean;
   channelsSupported: boolean;
   labels: Record<AgentProfileTab, string>;
+  shareSupported: boolean;
 }): AgentProfileTabOption[] => {
   const showProfile = canConfigure || active === 'profile';
   const showChannel = (canConfigure && channelsSupported) || active === 'channel';
+  // Sharing grants visitors real execution on the owner's account, so the
+  // segment follows the same configure gate as Profile / Channels on top of the
+  // capability gate (personal agents on business deployments only).
+  const showShare = (canConfigure && shareSupported) || active === 'share';
 
   return [
     showProfile ? { label: labels.profile, value: 'profile' as const } : null,
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
     { label: labels.statistics, value: 'statistics' as const },
+    showShare ? { label: labels.share, value: 'share' as const } : null,
   ].filter((option) => !!option);
 };

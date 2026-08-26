@@ -96,5 +96,6 @@ export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.chan
 export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
 export const SelfLearningDynamicMeta = createAgentSectionDynamicMeta('navigation.selfLearning');
 export const PermissionDynamicMeta = createAgentSectionDynamicMeta('navigation.permission');
+export const ShareDynamicMeta = createAgentSectionDynamicMeta('navigation.agentShare');
 
 export default AgentDynamicMeta;

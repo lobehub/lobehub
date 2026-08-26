@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
 
 interface SettingRowProps {
   children: React.ReactNode;
@@ -20,10 +20,15 @@ interface SectionProps {
   title: string;
 }
 
+// Same outlined card as the statistics page's blocks, so the profile-group
+// surfaces read as one family.
 export const Section = ({ children, desc, title }: SectionProps) => (
-  <Flexbox gap={12}>
+  <Block gap={16} padding={20} variant="outlined">
     <Flexbox gap={2}>
-      <Text strong>{title}</Text>
+      {/* Same title treatment as the statistics page's card headers. */}
+      <Text fontSize={16} weight={500}>
+        {title}
+      </Text>
       {desc && (
         <Text fontSize={12} type="secondary">
           {desc}
@@ -31,5 +36,5 @@ export const Section = ({ children, desc, title }: SectionProps) => (
       )}
     </Flexbox>
     {children}
-  </Flexbox>
+  </Block>
 );

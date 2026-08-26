@@ -107,6 +107,7 @@ describe('desktop router shared definition', () => {
         '/agent/agent-1/channel',
         '/agent/agent-1/channel/slack',
         '/agent/agent-1/statistics',
+        '/agent/agent-1/share',
         '/group/group-1/profile',
       ]) {
         const matches = matchRoutes(createMainAreaRoutes(createMainAreaChildren), pathname);

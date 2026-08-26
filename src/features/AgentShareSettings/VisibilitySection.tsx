@@ -2,26 +2,16 @@
 
 import { copyToClipboard, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { Button, Checkbox, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import {
-  DatabaseIcon,
-  LinkIcon,
-  LockIcon,
-  PaperclipIcon,
-  Settings2Icon,
-  WrenchIcon,
-} from 'lucide-react';
+import { DatabaseIcon, LinkIcon, LockIcon, PaperclipIcon, WrenchIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentSharePrivacyNoticeExtension from '@/business/client/features/AgentSharePrivacyNoticeExtension';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { createAgentShareSettingsModal } from './SettingsModal';
-import { styles } from './style';
+import { Section } from './SectionLayout';
 import { type AgentShareVisibility, useAgentShare } from './useAgentShare';
 import { commitAgentShareVisibility, copyAgentShareLink } from './visibilityUpdate';
 
@@ -31,16 +21,19 @@ const PRIVACY_WARNING_ITEMS = [
   { icon: PaperclipIcon, labelKey: 'share.privacyWarning.items.files' },
 ] as const;
 
-interface AgentSharePopoverContentProps {
-  agentId?: string;
+interface VisibilitySectionProps {
+  agentId: string;
 }
 
-const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId }) => {
+/**
+ * Visibility control of the share settings page: private / link switch with the
+ * privacy-warning confirmation, plus the copy-link action once a link exists.
+ */
+const VisibilitySection = memo<VisibilitySectionProps>(({ agentId }) => {
   const { t } = useTranslation('agent');
 
   const [updating, setUpdating] = useState(false);
   const appOrigin = useAppOrigin();
-  const { allowed: canShare, reason } = usePermission('edit_own_content');
 
   const [hideAgentSharePrivacyWarning, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.systemStatus(s).hideAgentSharePrivacyWarning ?? false,
@@ -48,7 +41,7 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
   ]);
 
   const { createError, isCreating, isLoading, retryCreate, shareInfo, updateVisibility } =
-    useAgentShare(agentId, canShare);
+    useAgentShare(agentId, true);
 
   const shareUrl = shareInfo?.id ? `${appOrigin}/share/a/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as AgentShareVisibility) || 'private';
@@ -135,38 +128,24 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
     else toast.error(t('copyFail', { ns: 'common' }));
   }, [shareUrl, t]);
 
-  const handleOpenSettings = useCallback(() => {
-    if (!agentId) return;
-    createAgentShareSettingsModal(agentId);
-  }, [agentId]);
-
-  if (!canShare) {
-    return (
-      <Flexbox className={styles.container} gap={8}>
-        <Text strong>{t('share.popover.title')}</Text>
-        <Text type="secondary">{reason}</Text>
-      </Flexbox>
-    );
-  }
-
   if (createError) {
     return (
-      <Flexbox className={styles.container} gap={12}>
-        <Text strong>{t('share.popover.title')}</Text>
-        <Text type="danger">{t('share.createError')}</Text>
-        <Button loading={isCreating} size="small" onClick={retryCreate}>
-          {t('retry', { ns: 'common' })}
-        </Button>
-      </Flexbox>
+      <Section title={t('share.visibility.title')}>
+        <Flexbox align="flex-start" gap={12}>
+          <Text type="danger">{t('share.createError')}</Text>
+          <Button loading={isCreating} size="small" onClick={retryCreate}>
+            {t('retry', { ns: 'common' })}
+          </Button>
+        </Flexbox>
+      </Section>
     );
   }
 
   if (isLoading || !shareInfo) {
     return (
-      <Flexbox className={styles.container} gap={16}>
-        <Text strong>{t('share.popover.title')}</Text>
+      <Section title={t('share.visibility.title')}>
         <Skeleton active paragraph={{ rows: 2 }} />
-      </Flexbox>
+      </Section>
     );
   }
 
@@ -189,15 +168,12 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
       : t('share.visibility.linkHint');
 
   return (
-    <Flexbox className={styles.container} gap={12}>
-      <Text strong>{t('share.popover.title')}</Text>
-
-      <Flexbox gap={4}>
-        <Text type="secondary">{t('share.popover.visibility')}</Text>
+    <Section desc={visibilityHint} title={t('share.visibility.title')}>
+      <Flexbox horizontal align="center" gap={8}>
         <Select
           disabled={updating}
           options={visibilityOptions}
-          style={{ width: '100%' }}
+          style={{ width: 240 }}
           value={currentVisibility}
           labelRender={({ value }) => {
             const option = visibilityOptions.find((o) => o.value === value);
@@ -216,28 +192,16 @@ const AgentSharePopoverContent = memo<AgentSharePopoverContentProps>(({ agentId 
           )}
           onChange={handleVisibilityChange}
         />
-      </Flexbox>
-
-      <Text className={styles.hint} type="secondary">
-        {visibilityHint}
-      </Text>
-
-      <Divider style={{ margin: '4px 0' }} />
-
-      <Flexbox horizontal align="center" justify="space-between">
-        <Button icon={Settings2Icon} size="small" type="text" onClick={handleOpenSettings}>
-          {t('share.settingsEntry')}
-        </Button>
         {currentVisibility !== 'private' && (
           <Button icon={LinkIcon} size="small" type="primary" onClick={handleCopyLink}>
             {t('share.copyLink')}
           </Button>
         )}
       </Flexbox>
-    </Flexbox>
+    </Section>
   );
 });
 
-AgentSharePopoverContent.displayName = 'AgentSharePopoverContent';
+VisibilitySection.displayName = 'AgentShareVisibilitySection';
 
-export default AgentSharePopoverContent;
+export default VisibilitySection;

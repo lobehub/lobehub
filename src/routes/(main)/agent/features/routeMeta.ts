@@ -5,12 +5,14 @@ import {
   MessageSquare,
   MessagesSquareIcon,
   RadioTowerIcon,
+  Share2Icon,
   UsersIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
 
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
+import { SectionsRouteSkeleton } from '@/components/Skeleton/Surface';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
 import { routeMeta } from '@/spa/router/routeMeta';
 
@@ -43,6 +45,11 @@ const SelfLearningDynamicMeta = lazy(() =>
 const PermissionDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.PermissionDynamicMeta,
+  })),
+);
+const ShareDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ShareDynamicMeta,
   })),
 );
 
@@ -83,6 +90,13 @@ export const agentSelfLearningRouteMeta = routeMeta({
   DynamicMeta: SelfLearningDynamicMeta,
   icon: GraduationCapIcon,
   titleKey: 'navigation.selfLearning',
+});
+
+export const agentShareRouteMeta = routeMeta({
+  DynamicMeta: ShareDynamicMeta,
+  icon: Share2Icon,
+  Skeleton: SectionsRouteSkeleton,
+  titleKey: 'navigation.agentShare',
 });
 
 export const agentPermissionRouteMeta = routeMeta({
