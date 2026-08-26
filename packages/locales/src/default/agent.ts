@@ -438,8 +438,12 @@ export default {
   'share.visibility.title': 'Visibility',
   'share.visibilityUpdated': 'Share visibility updated',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
+  'share.visitor.errors.heterogeneousUnsupported':
+    "This shared agent isn't available for visitor chat yet. Please contact its owner.",
   'share.visitor.errors.insufficientBudget':
     'This shared agent has run out of budget. Please contact its owner.',
+  'share.visitor.errors.providerNotSupported':
+    'This shared agent is not available right now. Please contact its owner.',
   'share.visitor.errors.topicLimit':
     'You have reached the conversation limit on this shared agent.',
   'share.visitor.errors.turnLimit':

@@ -34,6 +34,17 @@ class ShareChatService {
     return data as unknown as UIChatMessage[];
   }
 
+  /**
+   * Interrupt a running share operation — the visitor counterpart of
+   * `aiAgentService.interruptTask`. Visitors have no access to the owner-scoped
+   * endpoint, so Stop / tab-close must go through this share-authorized one or
+   * the server keeps generating (and billing the creator's share budget) after
+   * the visitor walks away.
+   */
+  async interruptTask(shareId: string, topicId: string, operationId: string) {
+    return await lambdaClient.shareChat.interruptTask.mutate({ operationId, shareId, topicId });
+  }
+
   async refreshGatewayToken(shareId: string, topicId: string): Promise<{ token: string }> {
     return await lambdaClient.shareChat.refreshGatewayToken.query({ shareId, topicId });
   }

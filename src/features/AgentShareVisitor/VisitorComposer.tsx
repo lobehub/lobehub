@@ -7,8 +7,11 @@ import { SendHorizonal } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+
+import { shouldSubmitOnEnter } from './composerEnterGuard';
 
 interface VisitorComposerProps {
   agentId: string;
@@ -33,6 +36,10 @@ const resolveErrorKey = (error: unknown): string => {
     return 'share.visitor.errors.topicLimit';
   if (message.includes(ChatErrorType.InsufficientBudgetForModel))
     return 'share.visitor.errors.insufficientBudget';
+  if (message.includes(ChatErrorType.AgentShareProviderNotSupported))
+    return 'share.visitor.errors.providerNotSupported';
+  if (message.includes(ChatErrorType.ShareHeterogeneousAgentUnsupported))
+    return 'share.visitor.errors.heterogeneousUnsupported';
   return 'share.visitor.errors.generic';
 };
 
@@ -48,6 +55,7 @@ const VisitorComposer = memo<VisitorComposerProps>(
     const [value, setValue] = useState('');
     const [errorKey, setErrorKey] = useState<string>();
     const [sending, setSending] = useState(false);
+    const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
     const isStreaming = useChatStore(
       // messageMapKey ignores agentShareId — the running check keys off the
@@ -119,8 +127,9 @@ const VisitorComposer = memo<VisitorComposerProps>(
             value={value}
             variant={'borderless'}
             onChange={(e) => setValue(e.target.value)}
+            {...compositionProps}
             onPressEnter={(e) => {
-              if (e.shiftKey) return;
+              if (!shouldSubmitOnEnter(e, isComposingRef.current)) return;
               e.preventDefault();
               void send();
             }}

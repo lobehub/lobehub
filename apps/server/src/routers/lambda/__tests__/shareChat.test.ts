@@ -40,7 +40,11 @@ vi.mock('@/database/models/user', () => ({
 }));
 
 const mockExecAgent = vi.fn();
-const AiAgentServiceMock = vi.fn(() => ({ execAgent: mockExecAgent }));
+const mockInterruptTask = vi.fn();
+const AiAgentServiceMock = vi.fn(() => ({
+  execAgent: mockExecAgent,
+  interruptTask: mockInterruptTask,
+}));
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: AiAgentServiceMock,
 }));
@@ -95,6 +99,7 @@ describe('shareChatRouter', () => {
     mockMessageCountByTopic.mockResolvedValue(0);
     mockMessageQuery.mockResolvedValue([]);
     mockExecAgent.mockResolvedValue({ operationId: 'op-1', success: true });
+    mockInterruptTask.mockResolvedValue({ operationId: 'op-1', success: true });
     mockSignUserJWT.mockResolvedValue('visitor-jwt');
   });
 
@@ -181,6 +186,56 @@ describe('shareChatRouter', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('interruptTask', () => {
+    it('interrupts a running operation that matches the topic ownership and running marker', async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.interruptTask({ operationId: 'op-1', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).resolves.toMatchObject({ operationId: 'op-1', success: true });
+
+      // Service runs as the CREATOR — the run's operation/thread rows live there.
+      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(mockInterruptTask).toHaveBeenCalledWith({
+        operationId: 'op-1',
+        topicId: 'tpc_visitor',
+      });
+    });
+
+    it("fails closed when the topic is not the visitor's own share topic", async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, senderId: 'someone-else' });
+      const caller = await createCaller();
+
+      await expect(
+        caller.interruptTask({ operationId: 'op-1', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockInterruptTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects an operationId that does not match the topic’s current running operation', async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.interruptTask({
+          operationId: 'op-someone-elses',
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockInterruptTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the topic has no running operation at all', async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, metadata: {} });
+      const caller = await createCaller();
+
+      await expect(
+        caller.interruptTask({ operationId: 'op-1', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockInterruptTask).not.toHaveBeenCalled();
     });
   });
 

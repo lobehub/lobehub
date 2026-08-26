@@ -10,9 +10,11 @@ import type { ErrorAttribution, ErrorCategory, ErrorSeverity } from './taxonomy'
  * `numericId` (e.g. `E2902`). See `CLOUD_TIER_DIGIT` in `./taxonomy`.
  */
 export type CloudErrorCode =
+  | typeof ChatErrorType.AgentShareProviderNotSupported
   | typeof ChatErrorType.FreePlanLimit
   | typeof ChatErrorType.InsufficientBudgetForModel
   | typeof ChatErrorType.LobeHubModelDeprecated
+  | typeof ChatErrorType.ShareHeterogeneousAgentUnsupported
   | typeof ChatErrorType.ShareTopicLimitExceeded
   | typeof ChatErrorType.ShareTurnLimitExceeded;
 
@@ -706,6 +708,31 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Provider connection check failed during setup.',
+  },
+  // —— Cloud-only (tier 9) ——
+  [ChatErrorType.AgentShareProviderNotSupported]: {
+    code: ChatErrorType.AgentShareProviderNotSupported,
+    numericId: 9901,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'Shared agent is configured with a non-branded (BYOK/custom) provider; share-budget metering only covers the branded provider.',
+  },
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]: {
+    code: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+    numericId: 9902,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 403,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'Shared agent is configured as a heterogeneous (Claude Code/Codex/…) agent; v1 share visitors cannot run it because the hand-off would expose the creator’s device/sandbox credentials.',
   },
 };
 
