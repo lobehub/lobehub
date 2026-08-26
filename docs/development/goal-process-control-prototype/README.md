@@ -5,6 +5,12 @@ Interactive replay of one real Goal (nanoGPT on M5 Max, `tpc_XUh2GbVp3UVM`) thro
 ```bash
 # once: build the design-system runtime next to the HTML (generated files are git-ignored)
 bash .claude/skills/design-prototype/scripts/build-runtime.sh docs/development/goal-process-control-prototype
+# once: bundle @xyflow/react (react-flow) for the graph and copy its stylesheet
+cd docs/development/goal-process-control-prototype && npm i --no-save --prefix rf @xyflow/react@12
+npx esbuild rf/entry.mjs --bundle --format=iife --global-name=__RF_NS__ \
+  --define:process.env.NODE_ENV='"production"' \
+  --alias:react=./rf/shim-react.js --alias:react/jsx-runtime=./rf/shim-jsx.js --alias:react-dom=./rf/shim-dom.js \
+  --outfile=rf-runtime.js && cp rf/node_modules/@xyflow/react/dist/style.css xyflow.css
 # after editing src/**: regenerate the single-file HTML
 python3 docs/development/goal-process-control-prototype/build.py
 open docs/development/goal-process-control-prototype/goal-process-control.html

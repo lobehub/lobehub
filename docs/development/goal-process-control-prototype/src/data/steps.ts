@@ -45,6 +45,8 @@ const INITIAL = (): GoalState => ({
       status: 'proposed',
       cost: 0,
       attempts: [],
+      hasVerifier: true,
+      hasVerifier: true,
       priority: 2,
       description:
         'fresh clone nanoGPT，运行 data/shakespeare_char/prepare.py 生成 train.bin / val.bin；顺带做环境预检。',
@@ -57,6 +59,7 @@ const INITIAL = (): GoalState => ({
       status: 'proposed',
       cost: 0,
       attempts: [],
+      hasVerifier: true,
       priority: 1,
       description:
         '查官方 train_shakespeare_char 基线与本机缩小配置的历史结果，给训练一个可审查的成功门槛。',
@@ -70,6 +73,7 @@ const INITIAL = (): GoalState => ({
       cost: 0,
       dependsOn: ['W1', 'W5'],
       attempts: [],
+      hasVerifier: true,
       description: '按验收契约训练并交付 checkpoint、完整 train.log、exit code 与 summary.json。',
     },
     {
@@ -81,6 +85,7 @@ const INITIAL = (): GoalState => ({
       cost: 0,
       dependsOn: ['W2'],
       attempts: [],
+      hasVerifier: true,
     },
     {
       id: 'W4',
@@ -92,6 +97,7 @@ const INITIAL = (): GoalState => ({
       dependsOn: ['W3'],
       terminal: true,
       attempts: [],
+      hasVerifier: true,
     },
   ],
   edges: [
@@ -200,6 +206,10 @@ export const STEPS: Step[] = [
         reason: 'fresh clone 3adf61e，train.bin / val.bin 已生成；环境预检通过',
         taskId: 'T-90',
       });
+      w.artifacts = [
+        { name: 'train.bin', size: '1.0 MB', kind: 'file' },
+        { name: 'val.bin', size: '111 KB', kind: 'file' },
+      ];
       N(s, 'P1').status = 'resolved';
       add(s, {
         id: 'F1',
@@ -620,6 +630,11 @@ export const STEPS: Step[] = [
         reason: '完整 train.log 21/21 eval 点；exit code 0；ckpt SHA-256 5eeedcc7…',
         taskId: 'T-94',
       });
+      w.artifacts = [
+        { name: 'ckpt.pt', size: '123 MB', kind: 'checkpoint' },
+        { name: 'train.log', size: '48 KB', kind: 'file' },
+        { name: 'summary.json', size: '2 KB', kind: 'file' },
+      ];
       w.status = 'resolved';
       w.cost = 5.48;
       w.at = at(126);
@@ -681,6 +696,7 @@ export const STEPS: Step[] = [
         reason: '固定 seed 采样 635 个非空白字符',
         taskId: 'T-96',
       });
+      w3.artifacts = [{ name: 'sample.txt', size: '1 KB', kind: 'file' }];
       add(s, {
         id: 'F4',
         kind: 'finding',
@@ -737,6 +753,7 @@ export const STEPS: Step[] = [
         reason: 'README 含命令、硬件、耗时与 SHA-256',
         taskId: 'T-97',
       });
+      w6.artifacts = [{ name: 'REPRODUCE.md', size: '4 KB', kind: 'doc' }];
       add(s, {
         id: 'F6',
         kind: 'finding',

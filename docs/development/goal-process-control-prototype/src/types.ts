@@ -24,6 +24,13 @@ export interface Attempt {
   taskId?: string;
 }
 
+export interface Artifact {
+  name: string;
+  /** Rough size label, e.g. "123 MB". */
+  size?: string;
+  kind?: 'file' | 'checkpoint' | 'doc';
+}
+
 export interface OwnerTask {
   id: string;
   agent: string;
@@ -62,6 +69,10 @@ export interface GoalNode {
   terminal?: boolean;
   /** Work: verifier passed, waiting for the human accept. */
   delivered?: boolean;
+  /** Work: does this Work have its own acceptance contract (a verifier judges its delivery)? */
+  hasVerifier?: boolean;
+  /** Work: artifacts registered by its attempts (work versions / files). */
+  artifacts?: Artifact[];
   /**
    * Human actions taken on this Work (budget top-up, gate choice, acceptance). Derived from
    * goal_events / acceptance decisions / task comments — shown as a 你 badge, never as extra nodes.

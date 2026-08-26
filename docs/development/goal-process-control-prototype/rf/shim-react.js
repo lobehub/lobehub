@@ -1,0 +1,31 @@
+const R = globalThis.__PROTO_DEPS_NS__?.default?.react ?? {};
+const React = R.default ?? R;
+export default React;
+export const {
+  Children,
+  Component,
+  Fragment,
+  PureComponent,
+  cloneElement,
+  createContext,
+  createElement,
+  createRef,
+  forwardRef,
+  isValidElement,
+  memo,
+  useCallback,
+  useContext,
+  useDebugValue,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useInsertionEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  startTransition,
+} = React;
