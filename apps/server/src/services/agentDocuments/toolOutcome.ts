@@ -17,6 +17,14 @@ export interface EmitAgentDocumentToolOutcomeInput {
   agentDocumentId?: string;
   /** Agent id used to scope the outcome when available. */
   agentId?: string;
+  /**
+   * Share-visitor marker forwarded from `ToolExecutionContext.agentShare`.
+   * Currently unreachable for a share visitor (every agent-document write API
+   * is blocked at dispatch by `DATA_TOOL_ACCESS_RULES` in `shareGate.ts`), but
+   * forwarded for defense-in-depth at the `emitToolOutcomeSafely` choke point
+   * — see `agentShare`'s JSDoc on `EmitToolOutcomeInput`.
+   */
+  agentShare?: unknown;
   /** Tool API method name that produced the outcome. */
   apiName: string;
   /** Compact failure reason for failed outcomes. */
@@ -71,6 +79,7 @@ export const emitAgentDocumentToolOutcomeSafely = async (
   });
 
   await emitToolOutcomeSafely({
+    agentShare: input.agentShare,
     apiName: input.apiName,
     context: { agentId, userId },
     domainKey: 'document:agent-document',

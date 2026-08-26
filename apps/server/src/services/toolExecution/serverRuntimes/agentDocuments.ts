@@ -46,6 +46,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       await emitAgentDocumentToolOutcomeSafely({
         agentDocumentId: input.agentDocumentId,
         agentId: input.agentId ?? context.agentId,
+        agentShare: context.agentShare,
         apiName: input.apiName,
         errorReason: input.errorReason,
         hintIsSkill: input.hintIsSkill,

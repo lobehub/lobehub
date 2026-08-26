@@ -207,6 +207,11 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     });
 
     await this.emitOutcome?.({
+      // Currently unreachable for a share visitor (every memory write API is
+      // blocked at dispatch by `DATA_TOOL_ACCESS_RULES` in `shareGate.ts`),
+      // but forwarded for defense-in-depth at the `emitToolOutcomeSafely`
+      // choke point — see `agentShare`'s JSDoc on `EmitToolOutcomeInput`.
+      agentShare: this.agentShare,
       apiName: input.apiName,
       context: { agentId: this.agentId, userId: this.userId },
       domainKey: 'memory:user-preference',
