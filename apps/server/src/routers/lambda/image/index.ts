@@ -104,6 +104,10 @@ export const imageRouter = router({
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
       const { generationTopicId, provider, model, imageNum, params, topicId } = input;
+      // Only ever set on the internal caller `imageGenerationRuntime` builds
+      // for a share visitor's tool call (see `AuthContext.agentShare`'s
+      // JSDoc) — undefined for every direct HTTP-authenticated request.
+      const agentShare = ctx.agentShare ?? undefined;
 
       log('Starting image creation process, input: %O', input);
 
@@ -207,6 +211,7 @@ export const imageRouter = router({
       }
 
       const chargeResult = await chargeBeforeGenerate({
+        agentShare,
         clientIp: ctx.clientIp,
         configForDatabase,
         generationParams,
@@ -282,15 +287,22 @@ export const imageRouter = router({
               // `getGenerationStatus` can later verify a caller polling this
               // task is actually the conversation that started it — see
               // `topicId`'s JSDoc on `createImageInputSchema` above.
+              // `agentShare` follows the same precedent: the settle-time
+              // async task worker (`routers/async/image.ts`) runs long after
+              // this request context is gone, so the billing marker must be
+              // stamped onto the task now or `chargeAfterGenerate` would fall
+              // back to charging `userId`'s ordinary balance for a share
+              // visitor's generation.
               // Presence check (not truthiness): handles are opaque, so falsy
               // values like 0 or '' must still be stored verbatim.
               const prechargeItem = prechargeItems?.[index];
               const metadata =
-                prechargeItem === undefined && topicId === undefined
+                prechargeItem === undefined && topicId === undefined && agentShare === undefined
                   ? undefined
                   : {
                       ...(prechargeItem === undefined ? {} : { precharge: prechargeItem }),
                       ...(topicId === undefined ? {} : { topicId }),
+                      ...(agentShare === undefined ? {} : { agentShare }),
                     };
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
@@ -390,6 +402,7 @@ export const imageRouter = router({
               if (prechargeItem === undefined) return;
               try {
                 await chargeAfterGenerate({
+                  agentShare,
                   isError: true,
                   metadata: {
                     asyncTaskId,

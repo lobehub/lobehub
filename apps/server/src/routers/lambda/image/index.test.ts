@@ -443,6 +443,62 @@ describe('imageRouter', () => {
       );
     });
 
+    it('forwards the agentShare billing marker to chargeBeforeGenerate', async () => {
+      const agentShare = { agentId: 'agent-1', visitorUserId: 'visitor-1' };
+      const ctx = createMockCtx({ agentShare });
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentShare }),
+      );
+    });
+
+    it('leaves agentShare undefined for a non-share run', async () => {
+      const ctx = createMockCtx();
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentShare: undefined }),
+      );
+    });
+
+    it('stamps the agentShare marker onto each asyncTask metadata for the async settle hop', async () => {
+      const agentShare = { agentId: 'agent-1', visitorUserId: 'visitor-1' };
+      const ctx = createMockCtx({ agentShare });
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      // insertValues: [0] batch, [1] generations[], [2] task#1, [3] task#2
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ metadata: { agentShare } }));
+      expect(mockInsertValues[3]).toEqual(expect.objectContaining({ metadata: { agentShare } }));
+    });
+
+    it('forwards agentShare in the failure-reconciliation chargeAfterGenerate call', async () => {
+      mockCreateAsyncCaller.mockRejectedValue(new Error('Caller creation failed'));
+      const agentShare = { agentId: 'agent-1', visitorUserId: 'visitor-1' };
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      const ctx = createMockCtx({ agentShare });
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentShare, isError: true }),
+      );
+    });
+
     it('threads per-generation prechargeItems into each asyncTask metadata', async () => {
       mockChargeBeforeGenerate.mockResolvedValue({
         prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],

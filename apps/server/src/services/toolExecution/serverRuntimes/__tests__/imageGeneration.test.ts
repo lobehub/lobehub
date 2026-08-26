@@ -56,6 +56,37 @@ describe('imageGenerationRuntime', () => {
     expect(callerMocks.image).toHaveBeenCalledWith(callerContext);
   });
 
+  // Regression: `callerContext` used to be built as `{clientIp, userId,
+  // workspaceId}` only, silently dropping `context.agentShare` — so a share
+  // visitor's image generation would reach `imageRouter.createImage` with no
+  // billing marker at all and fall through to the creator's ordinary
+  // billing. `imageCaller` is the only caller that reads it, but the marker
+  // is forwarded on the shared `callerContext` object passed to every
+  // caller (see `AuthContext.agentShare`'s JSDoc).
+  it('forwards the agentShare billing marker to every router caller', () => {
+    imageGenerationRuntime.factory({
+      agentShare: {
+        agentId: 'agent-1',
+        allowReadMemory: false,
+        enabledToolIds: ['lobe-image-generation'],
+        visitorUserId: 'visitor-1',
+      },
+      clientIp: '203.0.113.7',
+      toolManifestMap: {},
+      userId: 'creator-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const expectedCallerContext = {
+      agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+      clientIp: '203.0.113.7',
+      userId: 'creator-1',
+      workspaceId: 'workspace-1',
+    };
+    expect(callerMocks.image).toHaveBeenCalledWith(expectedCallerContext);
+    expect(callerMocks.aiModel).toHaveBeenCalledWith(expectedCallerContext);
+  });
+
   it('preserves public agent visibility for generated image topics', async () => {
     const createTopic = vi.fn().mockResolvedValue('topic-1');
     callerMocks.generationTopic.mockReturnValue({ createTopic });

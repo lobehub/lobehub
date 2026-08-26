@@ -124,6 +124,13 @@ export const imageRouter = router({
       let requestedModelId: string | undefined = model;
       let resolvedModelId = model;
       let prechargeResult: unknown;
+      // Share-visitor billing marker stamped onto the task at submission time
+      // (see `topicId`'s sibling comment on `createImageInputSchema` in
+      // `routers/lambda/image/index.ts`) — this worker runs long after the
+      // originating request context is gone, so it must be read back off the
+      // task rather than assumed absent, or a share visitor's completion
+      // charge would silently fall back to `userId`'s ordinary billing.
+      let agentShare: { agentId: string; visitorUserId: string } | undefined;
 
       log('Updating task status to Processing: %s', taskId);
       await asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
@@ -142,7 +149,14 @@ export const imageRouter = router({
         // billing. Loaded before the model mapping so the handle is available
         // for reconciliation even when mapping resolution throws.
         const asyncTask = await asyncTaskModel.findById(taskId);
-        prechargeResult = (asyncTask?.metadata as { precharge?: unknown } | undefined)?.precharge;
+        const asyncTaskMetadata = asyncTask?.metadata as
+          | {
+              agentShare?: { agentId: string; visitorUserId: string };
+              precharge?: unknown;
+            }
+          | undefined;
+        prechargeResult = asyncTaskMetadata?.precharge;
+        agentShare = asyncTaskMetadata?.agentShare;
 
         // Resolve model mapping up front so both the success and error billing
         // paths can reference the resolved model id.
@@ -292,6 +306,7 @@ export const imageRouter = router({
             // into the outer catch and be reconciled as a generation failure.
             try {
               await chargeAfterGenerate({
+                agentShare,
                 metrics: { latency: duration },
                 metadata: {
                   asyncTaskId: taskId,
@@ -372,6 +387,7 @@ export const imageRouter = router({
         if (ENABLE_BUSINESS_FEATURES) {
           try {
             await chargeAfterGenerate({
+              agentShare,
               isError: true,
               metadata: {
                 asyncTaskId: taskId,

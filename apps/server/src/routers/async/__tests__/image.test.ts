@@ -143,8 +143,35 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     expect(chargeAfterGenerate).toHaveBeenCalledTimes(1);
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
+        agentShare: undefined,
         isError: true,
         prechargeResult: undefined,
+      }),
+    );
+  });
+
+  // Regression: the async settle hop reads `asyncTask.metadata.agentShare`
+  // back off the task row (stamped at submission time by
+  // `routers/lambda/image/index.ts`) rather than assuming it absent — this
+  // worker runs long after the originating request context is gone, so
+  // skipping this read would silently fall back to charging `userId`'s
+  // ordinary balance for a share visitor's generation.
+  it('reads the agentShare marker off the task metadata and forwards it to chargeAfterGenerate', async () => {
+    const agentShare = { agentId: 'agent-1', visitorUserId: 'visitor-1' };
+    asyncTaskModelMock.findById.mockResolvedValue({
+      metadata: { agentShare, precharge: { reservationKey: 'brk-1' } },
+    });
+    vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('mapping failed'));
+
+    const caller = imageRouter.createCaller(mockCtx);
+    await caller.createImage(createInput());
+
+    expect(chargeAfterGenerate).toHaveBeenCalledTimes(1);
+    expect(chargeAfterGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentShare,
+        isError: true,
+        prechargeResult: { reservationKey: 'brk-1' },
       }),
     );
   });
