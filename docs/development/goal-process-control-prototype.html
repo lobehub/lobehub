@@ -114,6 +114,36 @@
           background: ${token.colorBgLayout};
           overflow: hidden;
         `,
+        stepBar: css`
+          flex: none;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 8px 16px;
+          background: ${token.colorBgContainer};
+          border-bottom: 1px solid ${token.colorBorderSecondary};
+        `,
+        stepDots: css`
+          display: flex;
+          gap: 4px;
+          flex-shrink: 0;
+        `,
+        stepDot: css`
+          width: 10px;
+          height: 10px;
+          border-radius: 3px;
+          background: ${token.colorFillSecondary};
+          cursor: pointer;
+          &:hover {
+            background: ${token.colorFill};
+          }
+        `,
+        stepDotDone: css`
+          background: ${token.colorTextQuaternary};
+        `,
+        stepDotActive: css`
+          background: ${token.colorPrimary};
+        `,
         toggleBar: css`
           flex: none;
           padding: 6px 16px;
@@ -462,6 +492,9 @@
           .node.hot .main {
             stroke-width: 3.5;
           }
+          .node.fresh .main {
+            filter: drop-shadow(0 0 6px ${token.colorPrimaryBorder});
+          }
           .node text {
             fill: ${token.colorText};
             font-size: 13px;
@@ -528,9 +561,11 @@
       };
 
       // ────────────────────────────────────────────────────────────────────
-      // Data — nanoGPT run (tpc_XUh2GbVp3UVM) + a second lane; sibling goals for the sidebar
+      // Data — one real nanoGPT Goal (tpc_XUh2GbVp3UVM) replayed as a timeline of steps.
+      // Each step = what happened at that moment; the page shows the state right after it.
       // ────────────────────────────────────────────────────────────────────
-      const NOW = Date.parse('2026-08-26T02:10:00+08:00');
+      const T0 = Date.parse('2026-08-26T00:52:00+08:00');
+      let NOW = T0;
       const min = (n) => n * 60_000;
       const ago = (ms) => {
         if (ms < min(1)) return '刚刚';
@@ -555,12 +590,13 @@
         D0: { x: 620, y: 316, w: 300, h: 56 },
         F6: { x: 40, y: 444, w: 220, h: 52 },
         D1: { x: 300, y: 444, w: 280, h: 56 },
-        F3: { x: 300, y: 444, w: 280, h: 52 },
+        F3: { x: 300, y: 548, w: 280, h: 52 },
         W3: { x: 620, y: 444, w: 300, h: 56 },
-        W4: { x: 620, y: 548, w: 300, h: 56 },
+        F4: { x: 620, y: 548, w: 300, h: 52 },
+        W4: { x: 620, y: 652, w: 300, h: 56 },
       };
 
-      const BASE = () => ({
+      const INITIAL = () => ({
         goal: {
           id: 'GOAL-12',
           title: '复现 nanoGPT 本地训练（Shakespeare char，跑满 5000 iterations）',
@@ -576,117 +612,104 @@
           maxTotalCost: 5,
           maxAttemptsPerWork: 3,
           leaseTimeoutMin: 5,
-          startedAt: NOW - min(78),
-          status: 'running',
-          spent: 1.84,
-          lastActivity: NOW - min(2),
+          startedAt: null,
+          status: 'planning',
+          spent: 0,
+          lastActivity: null,
         },
         nodes: [
           { id: 'G', kind: 'goal', title: '复现 nanoGPT 本地训练', status: 'active' },
-          { id: 'P1', kind: 'problem', title: '本机 MPS 能否支撑从零训练？', status: 'resolved', at: NOW - min(78) },
-          { id: 'W1', kind: 'work', ref: 'W-1', title: '获取源码并准备 Shakespeare 数据', status: 'resolved', cost: 0.12, at: NOW - min(71),
-            attempts: [{ n: 1, started: NOW - min(78), ended: NOW - min(71), outcome: 'passed', cost: 0.12, reason: 'fresh clone 3adf61e，train.bin / val.bin 已生成' }] },
-          { id: 'W5', kind: 'work', ref: 'W-2', title: '校准合理的 val loss 验收阈值', status: 'resolved', cost: 0.08, at: NOW - min(69),
-            attempts: [{ n: 1, started: NOW - min(76), ended: NOW - min(69), outcome: 'passed', cost: 0.08, reason: '查到官方 char 配置基线与本机缩小配置的历史结果' }] },
-          { id: 'F1', kind: 'finding', title: 'M5 Max · 128 GB · PyTorch 2.8 · MPS 可用', status: 'resolved', at: NOW - min(77), from: 'P1', body: '环境预检通过：Apple M5 Max、128 GB 内存、PyTorch 2.8，MPS 可用，磁盘余量 3.1 TB。' },
-          { id: 'F2', kind: 'finding', title: 'fresh clone 3adf61e，数据 1.0M tokens', status: 'resolved', at: NOW - min(71), from: 'W1', body: 'nanoGPT commit 3adf61e154c3；Shakespeare char 数据 train 1,003,854 / val 111,540 tokens。' },
-          { id: 'F5', kind: 'finding', title: '官方 char 配置 val loss ≈ 1.47；"loss 下降"不是有效门槛', status: 'resolved', at: NOW - min(69), from: 'W5', body: '官方 train_shakespeare_char 在 GPU 上 5000 iter 约 1.47；0.8M 参数 500 iter 只到 2.33。仅要求 "低于初始值" 会让验收几乎必过。' },
-          { id: 'D0', kind: 'decision', title: '验收阈值定为 ≤ 1.8 且降幅 ≥ 30%', status: 'resolved', authority: 'agent', at: NOW - min(68), body: 'Agent 基于 F5 自行决定（authority: agent，无需人介入）：把 "loss 下降" 改为绝对阈值 ≤ 1.8 + 相对降幅 ≥ 30%，写入 W-3 的验收契约。' },
-          { id: 'W6', kind: 'work', ref: 'W-4', title: '写训练复现说明（命令 + 硬件 + 耗时）', status: 'proposed', cost: 0, attempts: [] },
-          { id: 'W2', kind: 'work', ref: 'W-3', title: '从零训练 5000 iterations（MPS）', status: 'active', cost: 1.52, dependsOn: ['W1'],
-            task: { id: 'T-94', agent: 'Kimi Code' }, lastActivity: NOW - min(2),
-            lastLine: '执行 python3 train.py config/train_shakespeare_char.py --device=mps …',
-            attempts: [
-              { n: 1, started: NOW - min(70), ended: NOW - min(12), outcome: 'failed', cost: 0.91, reason: 'train.log 只保留 6/21 个 eval 点，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未捕获' },
-              { n: 2, started: NOW - min(11), ended: NOW - min(3), outcome: 'failed', cost: 0.61, reason: '仅补交了 summary.json，日志缺口仍未举证；verifier 判定证据不可审计' },
-            ] },
+          { id: 'P1', kind: 'problem', title: '本机 MPS 能否支撑从零训练？', status: 'proposed' },
+          { id: 'W1', kind: 'work', ref: 'W-1', title: '获取源码并准备 Shakespeare 数据', status: 'proposed', cost: 0, attempts: [] },
+          { id: 'W5', kind: 'work', ref: 'W-2', title: '校准合理的 val loss 验收阈值', status: 'proposed', cost: 0, attempts: [], priority: 1 },
+          { id: 'W2', kind: 'work', ref: 'W-3', title: '从零训练 5000 iterations（MPS）', status: 'proposed', cost: 0, dependsOn: ['W1'], attempts: [] },
           { id: 'W3', kind: 'work', ref: 'W-5', title: '加载 checkpoint 并固定 seed 采样 500 字符', status: 'proposed', cost: 0, dependsOn: ['W2'], attempts: [] },
           { id: 'W4', kind: 'work', ref: 'W-6', title: '完成整体 Goal 验收', status: 'proposed', cost: 0, dependsOn: ['W3'], terminal: true, attempts: [] },
         ],
         edges: [
-          ['G', 'P1', 'decomposes'], ['G', 'W1', 'decomposes'], ['G', 'W5', 'decomposes'], ['G', 'W6', 'decomposes'],
-          ['P1', 'F1', 'produces'], ['W1', 'F2', 'produces'], ['W5', 'F5', 'produces'],
-          ['F5', 'D0', 'leads_to'], ['D0', 'W2', 'leads_to'],
+          ['G', 'P1', 'decomposes'], ['G', 'W1', 'decomposes'], ['G', 'W5', 'decomposes'],
           ['W2', 'W1', 'depends_on'], ['W3', 'W2', 'depends_on'], ['W4', 'W3', 'depends_on'],
         ],
         decision: null,
       });
 
-      const SCENARIOS = { gate: '等你决定', running: '运行中', stale: '失联', budget: '预算耗尽', delivered: '待验收', achieved: '已达成', planning: '刚创建', loading: '加载中', error: '加载失败' };
+      // helpers used inside steps
+      const at = (m) => T0 + min(m);
+      const N = (s, id) => s.nodes.find((n) => n.id === id);
+      const addNode = (s, n) => { s.nodes.push(n); return n; };
+      const addEdge = (s, a, b, k) => s.edges.push([a, b, k]);
 
-      const buildState = (scenario) => {
-        const s = BASE();
-        const node = (id) => s.nodes.find((n) => n.id === id);
-        const W2 = node('W2');
-        switch (scenario) {
-          case 'gate': {
-            s.goal.status = 'review'; s.goal.lastActivity = NOW - min(3);
-            W2.status = 'waiting'; W2.lastActivity = NOW - min(3);
-            s.nodes.push({ id: 'D1', kind: 'decision', title: '训练已失败 2 次，怎么继续？', status: 'waiting', authority: 'user', at: NOW - min(3) });
-            s.edges.push(['W2', 'D1', 'leads_to']);
-            s.decision = {
-              id: 'd1', nodeId: 'D1', workId: 'W2',
-              why: '第 2 次尝试的 verifier 判定：train.log 只保留了 21 个 eval 点中的 6 个，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未被捕获。模型本身已训练到 iter 5000，静止 checkpoint val loss 1.7119（≤ 1.8）。',
+      // [t = minutes since creation, label, narration, apply(state), fresh node ids]
+      const STEPS = [
+        { t: 0, label: '创建 Goal', note: '你写下目标、验收要求和预算；系统拆出一个问题和五项 Work，还没有派发任何东西。', apply: () => {}, fresh: ['G', 'P1', 'W1', 'W5', 'W2', 'W3', 'W4'] },
+        { t: 1, label: '开始执行', note: 'coordinator 第一次推进：挑出没有依赖、优先级最高的「获取源码」，为它创建负责人 Task 和 Work 级验收契约，交给 Kimi Code。', fresh: ['W1'],
+          apply: (s) => { s.goal.status = 'running'; s.goal.startedAt = at(1); s.goal.lastActivity = at(1); const w = N(s, 'W1'); w.status = 'active'; w.task = { id: 'T-90', agent: 'Kimi Code' }; w.lastActivity = at(1); w.lastLine = '正在准备工作目录 .records/nanogpt-full…'; } },
+        { t: 4, label: '执行中', note: 'builder 在 Task 里干活；runtime 每 90 秒续一次租约。页面上你只看到最后一条动作和它是几分钟前发生的。', fresh: [],
+          apply: (s) => { const w = N(s, 'W1'); w.lastActivity = at(3); w.lastLine = 'git clone https://github.com/karpathy/nanoGPT && python data/shakespeare_char/prepare.py'; s.goal.lastActivity = at(3); s.goal.spent = 0.06; } },
+        { t: 7, label: '验证通过，沉淀结论', note: 'builder 交付 → 独立 verifier 判定通过 → Work 完成，产出两条结论；问题「本机能否训练」也被回答。下游的「训练」解锁。', fresh: ['F1', 'F2'],
+          apply: (s) => { const w = N(s, 'W1'); w.status = 'resolved'; w.cost = 0.12; w.at = at(7); w.task = undefined; w.lastLine = undefined; w.attempts.push({ n: 1, started: at(1), ended: at(7), outcome: 'passed', cost: 0.12, reason: 'fresh clone 3adf61e，train.bin / val.bin 已生成' });
+            N(s, 'P1').status = 'resolved';
+            addNode(s, { id: 'F1', kind: 'finding', title: 'M5 Max · 128 GB · PyTorch 2.8 · MPS 可用', status: 'resolved', at: at(7), from: 'P1', body: '环境预检通过：Apple M5 Max、128 GB 内存、PyTorch 2.8，MPS 可用，磁盘余量 3.1 TB。' }); addEdge(s, 'P1', 'F1', 'produces');
+            addNode(s, { id: 'F2', kind: 'finding', title: 'fresh clone 3adf61e，数据 1.0M tokens', status: 'resolved', at: at(7), from: 'W1', body: 'nanoGPT commit 3adf61e154c3；Shakespeare char 数据 train 1,003,854 / val 111,540 tokens。' }); addEdge(s, 'W1', 'F2', 'produces');
+            s.goal.spent = 0.12; s.goal.lastActivity = at(7); } },
+        { t: 8, label: '下一项：校准阈值', note: '推进时优先级更高的「校准验收阈值」先开始——它决定训练算不算成功。', fresh: ['W5'],
+          apply: (s) => { const w = N(s, 'W5'); w.status = 'active'; w.task = { id: 'T-91', agent: 'Kimi Code' }; w.lastActivity = at(8); w.lastLine = '检索 nanoGPT README 与 train_shakespeare_char 的公开基线…'; s.goal.lastActivity = at(8); } },
+        { t: 14, label: 'Agent 自己做了一个决策', note: '结论：官方基线 ≈ 1.47，"loss 下降"不是有效门槛。这是 Agent 权限内的决策（authority: agent），系统直接把 ≤ 1.8 写进训练的验收契约，没有来找你。', fresh: ['F5', 'D0'],
+          apply: (s) => { const w = N(s, 'W5'); w.status = 'resolved'; w.cost = 0.08; w.at = at(14); w.task = undefined; w.lastLine = undefined; w.attempts.push({ n: 1, started: at(8), ended: at(14), outcome: 'passed', cost: 0.08, reason: '查到官方 char 配置基线与本机缩小配置的历史结果' });
+            addNode(s, { id: 'F5', kind: 'finding', title: '官方 char 配置 val loss ≈ 1.47；"loss 下降"不是有效门槛', status: 'resolved', at: at(14), from: 'W5', body: '官方 train_shakespeare_char 在 GPU 上 5000 iter 约 1.47；0.8M 参数 500 iter 只到 2.33。仅要求 "低于初始值" 会让验收几乎必过。' }); addEdge(s, 'W5', 'F5', 'produces');
+            addNode(s, { id: 'D0', kind: 'decision', title: '验收阈值定为 ≤ 1.8 且降幅 ≥ 30%', status: 'resolved', authority: 'agent', at: at(14), body: 'Agent 基于 F5 自行决定（authority: agent，无需人介入）：把 "loss 下降" 改为绝对阈值 ≤ 1.8 + 相对降幅 ≥ 30%，写入 W-3 的验收契约。' }); addEdge(s, 'F5', 'D0', 'leads_to'); addEdge(s, 'D0', 'W2', 'leads_to');
+            addNode(s, { id: 'W6', kind: 'work', ref: 'W-4', title: '写训练复现说明（命令 + 硬件 + 耗时）', status: 'proposed', cost: 0, attempts: [] }); addEdge(s, 'D0', 'W6', 'leads_to');
+            s.goal.spent = 0.2; s.goal.lastActivity = at(14); } },
+        { t: 15, label: '训练开始', note: '「从零训练」的依赖已满足，第 1 次尝试开始；「写复现说明」也能开始，但 coordinator 一次只派一项，它排在后面。', fresh: ['W2'],
+          apply: (s) => { const w = N(s, 'W2'); w.status = 'active'; w.task = { id: 'T-94', agent: 'Kimi Code' }; w.lastActivity = at(15); w.lastLine = '执行 python3 train.py config/train_shakespeare_char.py --device=mps --max_iters=5000 …'; s.goal.lastActivity = at(15); } },
+        { t: 35, label: '训练中', note: '20 分钟过去。你回来看：还在动（2 分钟前有新 checkpoint），val loss 已经到 1.52。没有需要你做的。', fresh: [],
+          apply: (s) => { const w = N(s, 'W2'); w.lastActivity = at(35); w.lastLine = 'step 1000: train loss 1.61, val loss 1.52 · 已写入 checkpoint（iter_num=1000）'; s.goal.lastActivity = at(35); s.goal.spent = 0.7; } },
+        { t: 82, label: '失联', note: '真实发生过的事：执行它的 Agent 进程随会话一起没了，但本机训练进程还在跑。47 分钟没有心跳——页面不能再显示"运行中"的 spinner，要说"失联"。', fresh: ['W2'],
+          apply: (s) => { const w = N(s, 'W2'); w.lastLine = '（47 分钟没有新的心跳；本机 train.py 仍在运行）'; s.goal.spent = 0.91; } },
+        { t: 83, label: '系统回收并重开', note: '下一次推进把第 1 次尝试标为失联（计费、不计失败次数），自动开第 2 次；新 Agent 被要求审计已经跑完的 checkpoint，不要重训。', fresh: ['W2'],
+          apply: (s) => { const w = N(s, 'W2'); w.attempts.push({ n: 1, started: at(15), ended: at(83), outcome: 'abandoned', cost: 0.91, reason: '执行 Agent 失联，由系统回收；训练进程已自行跑完 5000 iter' }); w.cost = 0.91; w.lastActivity = at(83); w.lastLine = '审计静止 checkpoint：iter_num=5000，val loss 1.7119；补写 summary.json…'; s.goal.lastActivity = at(83); } },
+        { t: 95, label: '未通过，自动再试', note: 'verifier 拒绝：train.log 只有 6/21 个 eval 点、exit code 没抓到。还有次数和预算，系统自动开第 3 次，把 verifier 的缺口反馈带进指令——**没有找你**。', fresh: ['W2'],
+          apply: (s) => { const w = N(s, 'W2'); w.attempts.push({ n: 2, started: at(83), ended: at(95), outcome: 'failed', cost: 0.61, reason: 'train.log 只保留 6/21 个 eval 点，缺少 iter 1500–5000 的原始记录；训练进程 exit code 未捕获' }); w.cost = 1.52; w.lastActivity = at(95); w.lastLine = '第 3 次尝试：重新完整训练以补齐完整 train.log…'; s.goal.spent = 1.52; s.goal.lastActivity = at(95); } },
+        { t: 100, label: '预算用完，停下', note: '第 3 次尝试选择了重训，费用越过 $5 上限。系统停下不再开始新尝试，来问你——这是预算类关键决策，值得打扰。', fresh: [],
+          apply: (s) => { const w = N(s, 'W2'); w.cost = 4.9; w.lastActivity = at(100); s.goal.spent = 5.02; s.goal.status = 'paused'; s.goal.pauseCause = 'cost'; s.goal.lastActivity = at(100); } },
+        { t: 101, label: '你追加预算', note: '你把上限调到 $10 并继续；当前尝试接着跑。', fresh: [],
+          apply: (s) => { s.goal.maxTotalCost = 10; s.goal.status = 'running'; s.goal.pauseCause = undefined; s.goal.lastActivity = at(101); N(s, 'W2').lastLine = '重训完成；提交 summary.json 与 checkpoint SHA-256…'; N(s, 'W2').lastActivity = at(101); } },
+        { t: 108, label: '第二次拒绝 → 决策门', note: '第 3 次仍然只补了 summary、没有举证日志。单项尝试次数用完，系统不再自动重试，开一道决策门：证据 + 两个选项 + 各自后果 + 推荐。', fresh: ['D1'],
+          apply: (s) => { const w = N(s, 'W2'); w.attempts.push({ n: 3, started: at(95), ended: at(108), outcome: 'failed', cost: 3.38, reason: '重新训练后仍只补交 summary.json；日志缺口未举证，verifier 判定证据不可审计' }); w.status = 'waiting'; w.lastActivity = at(108); w.cost = 4.9; s.goal.spent = 5.4; s.goal.status = 'review'; s.goal.lastActivity = at(108);
+            addNode(s, { id: 'D1', kind: 'decision', title: '训练已两次未通过验证，怎么继续？', status: 'waiting', authority: 'user', at: at(108) }); addEdge(s, 'W2', 'D1', 'leads_to');
+            s.decision = { id: 'd1', nodeId: 'D1', workId: 'W2',
+              why: '两次 verifier 判定都指向同一缺口：train.log 只保留了 21 个 eval 点中的 6 个，缺少 iter 1500–5000 的原始记录；exit code 未捕获。模型本身已训练到 iter 5000，静止 checkpoint val loss 1.7119（≤ 1.8）。',
               options: [
-                { id: 'retry', label: '再试一次', consequence: '开始第 3 次尝试（上限 3 次），会把 verifier 的缺口反馈带入指令；预计再花约 $0.6。' },
+                { id: 'retry', label: '再试一次', consequence: '开始第 4 次尝试，把缺口反馈和你的说明写进指令；预计再花约 $0.6。' },
                 { id: 'retire', label: '放弃这项 Work', consequence: '标为已放弃；依赖它的「采样」和「整体验收」无法继续，Goal 很可能以失败结束。' },
-              ],
-              recommended: 'retry',
-            };
-            break;
-          }
-          case 'stale': { s.goal.lastActivity = NOW - min(47); W2.lastActivity = NOW - min(47); W2.lastLine = '执行 python3 train.py …（47 分钟没有新的心跳）'; break; }
-          case 'budget': {
-            s.goal.status = 'paused'; s.goal.pauseCause = 'cost'; s.goal.spent = 5.02; s.goal.lastActivity = NOW - min(6);
-            W2.lastActivity = NOW - min(6); W2.cost = 4.9;
-            W2.attempts.push({ n: 3, started: NOW - min(9), ended: NOW - min(6), outcome: 'failed', cost: 3.38, reason: '第 3 次尝试重新跑完整训练，verifier 通过前费用已超出上限' });
-            break;
-          }
-          case 'delivered':
-          case 'achieved': {
-            const done = scenario === 'achieved';
-            s.goal.status = done ? 'achieved' : 'review'; s.goal.spent = 2.41; s.goal.lastActivity = NOW - min(done ? 20 : 1);
-            if (done) s.goal.completedAt = NOW - min(20);
-            s.goal.checks = s.goal.checks.map((c) => ({ ...c, state: 'passed' }));
-            W2.status = 'resolved'; W2.cost = 2.1; W2.at = NOW - min(44);
-            W2.attempts.push({ n: 3, started: NOW - min(60), ended: NOW - min(44), outcome: 'passed', cost: 0.58, reason: '完整 train.log 21/21 eval 点；exit code 0；ckpt SHA-256 5eeedcc7…' });
-            s.nodes.push({ id: 'D1', kind: 'decision', title: '训练失败 2 次 → 再试一次', status: 'resolved', authority: 'user', at: NOW - min(61), body: '你选择了「再试一次」，并附说明：不要重训，基于静止 checkpoint 补齐 train.log 缺口。' });
-            s.edges.push(['W2', 'D1', 'leads_to']);
-            s.nodes.push({ id: 'F3', kind: 'finding', title: '5000 iter 完成，val loss 1.7119，checkpoint 可加载', status: 'resolved', at: NOW - min(44), from: 'W2', body: '最终 checkpoint iter_num=5000，val loss 1.7119（相对初始 4.28 下降 60%），123 MB，torch.load 成功。' });
-            s.edges.push(['W2', 'F3', 'produces']);
-            const W3 = node('W3'); W3.status = 'resolved'; W3.cost = 0.09; W3.at = NOW - min(39);
-            W3.attempts.push({ n: 1, started: NOW - min(43), ended: NOW - min(39), outcome: 'passed', cost: 0.09, reason: '固定 seed 采样 635 个非空白字符' });
-            const W6 = node('W6'); W6.status = 'resolved'; W6.cost = 0.04; W6.at = NOW - min(36);
-            W6.attempts.push({ n: 1, started: NOW - min(38), ended: NOW - min(36), outcome: 'passed', cost: 0.04, reason: 'README 含命令、硬件、耗时与 SHA-256' });
-            s.nodes.push({ id: 'F6', kind: 'finding', title: '复现说明已写入 README', status: 'resolved', at: NOW - min(36), from: 'W6', body: '命令、硬件、耗时、SHA-256 齐全。' });
-            s.edges.push(['W6', 'F6', 'produces']);
-            const W4 = node('W4'); W4.status = done ? 'resolved' : 'active'; W4.delivered = !done; W4.cost = 0.1;
-            W4.task = { id: 'T-98', agent: 'verify-agent' }; W4.lastActivity = NOW - min(1);
-            W4.attempts.push({ n: 1, started: NOW - min(35), ended: NOW - min(done ? 21 : 1), outcome: 'passed', cost: 0.1, reason: done ? '独立 verifier 3/3 通过，你已确认验收' : '独立 verifier 复验 checkpoint、loss、采样，3/3 通过' });
-            break;
-          }
-          case 'planning': {
-            s.goal.status = 'planning'; s.goal.spent = 0; s.goal.startedAt = null; s.goal.lastActivity = null;
-            s.nodes = s.nodes.filter((n) => ['G', 'P1', 'W1', 'W5', 'W2', 'W3', 'W4'].includes(n.id));
-            s.edges = s.edges.filter(([a, b]) => s.nodes.some((n) => n.id === a) && s.nodes.some((n) => n.id === b));
-            s.nodes.forEach((n) => { if (n.id !== 'G') { n.status = 'proposed'; n.attempts = []; n.cost = 0; n.at = undefined; n.lastActivity = undefined; n.lastLine = undefined; n.task = undefined; } });
-            break;
-          }
-          default: break;
-        }
+              ], recommended: 'retry' }; } },
+        { t: 110, label: '你决定：再试一次', note: '你选了推荐项，并补了一句"不要重训，基于静止 checkpoint 补齐 train.log 缺口"。决策进图变成一个橙色节点，第 4 次尝试带着你的话开始。', fresh: ['D1', 'W2'],
+          apply: (s) => { const d = N(s, 'D1'); d.status = 'resolved'; d.title = '训练两次未通过 → 再试一次'; d.body = '你选择了「再试一次」，并附说明：不要重训，基于静止 checkpoint 补齐 train.log 缺口。'; d.at = at(110); s.decision = null;
+            const w = N(s, 'W2'); w.status = 'active'; w.lastActivity = at(110); w.lastLine = '按你的说明：从静止 checkpoint 与训练日志重建 21 个 eval 点，捕获 exit code…'; s.goal.status = 'running'; s.goal.lastActivity = at(110); } },
+        { t: 126, label: '通过了', note: '第 4 次交付了完整的 21/21 eval 记录和 exit code 0，verifier 通过。训练完成、沉淀结论；「采样」解锁。', fresh: ['F3', 'W3'],
+          apply: (s) => { const w = N(s, 'W2'); w.attempts.push({ n: 4, started: at(110), ended: at(126), outcome: 'passed', cost: 0.58, reason: '完整 train.log 21/21 eval 点；exit code 0；ckpt SHA-256 5eeedcc7…' }); w.status = 'resolved'; w.cost = 5.48; w.at = at(126); w.task = undefined; w.lastLine = undefined;
+            addNode(s, { id: 'F3', kind: 'finding', title: '5000 iter 完成，val loss 1.7119，checkpoint 可加载', status: 'resolved', at: at(126), from: 'W2', body: '最终 checkpoint iter_num=5000，val loss 1.7119（相对初始 4.28 下降 60%），123 MB，torch.load 成功。' }); addEdge(s, 'W2', 'F3', 'produces');
+            s.goal.spent = 6.0; s.goal.lastActivity = at(126); } },
+        { t: 140, label: '采样与说明文档完成', note: '两项小 Work 各一次通过：固定 seed 采样 635 字符；README 写好。所有原始 Work 都到了终态。', fresh: ['F4', 'F6'],
+          apply: (s) => { const w3 = N(s, 'W3'); w3.status = 'resolved'; w3.cost = 0.09; w3.at = at(134); w3.attempts.push({ n: 1, started: at(127), ended: at(134), outcome: 'passed', cost: 0.09, reason: '固定 seed 采样 635 个非空白字符' });
+            addNode(s, { id: 'F4', kind: 'finding', title: '固定 seed 采样 635 字符，Shakespeare 风格', status: 'resolved', at: at(134), from: 'W3', body: '采样输出 SHA-256 951a2d97…；非空白字符 635。' }); addEdge(s, 'W3', 'F4', 'produces');
+            const w6 = N(s, 'W6'); w6.status = 'resolved'; w6.cost = 0.04; w6.at = at(140); w6.attempts.push({ n: 1, started: at(135), ended: at(140), outcome: 'passed', cost: 0.04, reason: 'README 含命令、硬件、耗时与 SHA-256' });
+            addNode(s, { id: 'F6', kind: 'finding', title: '复现说明已写入 README', status: 'resolved', at: at(140), from: 'W6', body: '命令、硬件、耗时、SHA-256 齐全。' }); addEdge(s, 'W6', 'F6', 'produces');
+            s.goal.spent = 6.13; s.goal.lastActivity = at(140); } },
+        { t: 141, label: '整体验收开始', note: '所有 Work 终态后，系统生成最后一项「完成整体 Goal 验收」，用完整的目标要求做契约，由独立 verifier 复验全部产物。', fresh: ['W4'],
+          apply: (s) => { const w = N(s, 'W4'); w.status = 'active'; w.task = { id: 'T-98', agent: 'verify-agent' }; w.lastActivity = at(141); w.lastLine = '独立复验：加载 checkpoint、核对 loss、检查采样长度与 summary.json…'; s.goal.status = 'verifying'; s.goal.lastActivity = at(141); } },
+        { t: 150, label: '验收通过，等你确认', note: '3/3 项通过。按 D1 的建议，Goal 级验收由你关闭：确认完成，或带反馈再来一轮。这是整个流程里第二次、也是最后一次找你。', fresh: ['W4'],
+          apply: (s) => { const w = N(s, 'W4'); w.delivered = true; w.cost = 0.1; w.lastActivity = at(150); w.attempts.push({ n: 1, started: at(141), ended: at(150), outcome: 'passed', cost: 0.1, reason: '独立 verifier 复验 checkpoint、loss、采样，3/3 通过' }); s.goal.checks = s.goal.checks.map((c) => ({ ...c, state: 'passed' })); s.goal.status = 'review'; s.goal.spent = 6.23; s.goal.lastActivity = at(150); } },
+        { t: 151, label: '你确认完成', note: 'Goal 达成。frontier 空了；结论都留在图里，随时可以基于任何一条再开新的 Work。', fresh: ['G'],
+          apply: (s) => { const w = N(s, 'W4'); w.delivered = false; w.status = 'resolved'; w.task = undefined; w.lastLine = undefined; s.goal.status = 'achieved'; s.goal.completedAt = at(151); s.goal.lastActivity = at(151); } },
+      ];
+
+      const buildStep = (index) => {
+        const s = INITIAL();
+        for (let i = 0; i <= index; i++) STEPS[i].apply(s);
+        NOW = at(STEPS[index].t);
         return s;
       };
-
-      // Sibling goals for the sidebar list (static)
-      const OTHER_GOALS = [
-        { id: 'GOAL-11', title: '整理 Search1API 无效调用审计并给出修复位置', group: 'needsYou', meta: '验收通过，等你确认', at: NOW - min(12), badge: 1 },
-        { id: 'GOAL-9', title: '回收站 Phase 2 全量回归', group: 'running', meta: '进行中 · 第 1 次 · 最近动作 1 分钟前', at: NOW - min(1) },
-        { id: 'GOAL-8', title: 'Device quota RPC 联调（lh connect 用 apiKey）', group: 'running', meta: '进行中 · 第 2 次 · 最近动作 8 分钟前', at: NOW - min(8) },
-        { id: 'GOAL-13', title: 'Agent 带教式创建的双栏原型', group: 'queued', meta: '已就绪，还没有开始', at: NOW - min(140) },
-        { id: 'GOAL-7', title: '拖文件夹开 Project 窗口 PR1', group: 'done', meta: '已达成', at: NOW - min(60 * 30) },
-        { id: 'GOAL-5', title: '异构 topic 卡 spinner 根因', group: 'done', meta: '已达成', at: NOW - min(60 * 52) },
-        { id: 'GOAL-3', title: '灰度 Acceptance 自动复核', group: 'done', meta: '未达成', at: NOW - min(60 * 80), failed: true },
-      ];
 
       // ────────────────────────────────────────────────────────────────────
       // Derived
@@ -942,7 +965,7 @@
         );
       };
 
-      const FrontierList = memo(({ state, frontier, hotId, onHover, onSelect, actions }) => {
+      const FrontierList = memo(({ state, frontier, hotId, freshIds, onHover, onSelect, actions }) => {
         const { styles } = useStyles();
         const { goal } = state;
         const anyRunning = frontier.items.some((i) => i.kind === 'running');
@@ -965,7 +988,7 @@
                 </FrontierItem>
               )}
               {frontier.items.map((it) => {
-                const hot = hotId === it.node?.id;
+                const hot = hotId === it.node?.id || (!!it.node && freshIds.has(it.node.id));
                 switch (it.kind) {
                   case 'budget': return <BudgetItem key={it.key} goal={goal} onAddBudget={actions.addBudget} />;
                   case 'decision': return <DecisionItem key={it.key} goal={goal} state={state} decision={state.decision} hot={hot} onHover={onHover} onDecide={actions.decide} />;
@@ -1018,7 +1041,7 @@
         return `M ${x1} ${fc.cy} C ${mx} ${fc.cy}, ${mx} ${tc.cy}, ${x2} ${tc.cy}`;
       };
 
-      const Graph = memo(({ state, frontier, hotId, selectedId, onHover, onSelect, wide, onToggleWide }) => {
+      const Graph = memo(({ state, frontier, hotId, freshIds, selectedId, onHover, onSelect, wide, onToggleWide }) => {
         const { styles, cx } = useStyles();
         const colors = useKindColors();
         const { goal } = state;
@@ -1053,7 +1076,8 @@
                 const isGate = n.kind === 'decision' && n.status === 'waiting';
                 const stale = isStale(goal, n);
                 const dim = focus ? !(n.id === focus || state.edges.some(([a, b]) => (a === focus && b === n.id) || (b === focus && a === n.id))) : (n.status === 'resolved' && n.kind !== 'finding' && !isFrontier);
-                const cls = cx('node', isFrontier && !isGate && 'frontier', isGate && 'gate', blockedIds.has(n.id) && 'blocked', stale && 'stale', dim && 'dim', selectedId === n.id && 'selected', hotId === n.id && 'hot');
+                const fresh = freshIds.has(n.id);
+                const cls = cx('node', isFrontier && !isGate && 'frontier', isGate && 'gate', blockedIds.has(n.id) && 'blocked', stale && 'stale', dim && !fresh && 'dim', selectedId === n.id && 'selected', (hotId === n.id || fresh) && 'hot', fresh && 'fresh');
                 const stroke = isGate ? 'var(--ant-color-warning)' : stale ? 'var(--ant-color-error)' : c.line;
                 const fill = n.status === 'proposed' ? 'var(--ant-color-bg-container)' : c.soft;
                 const label = n.kind === 'decision' && n.status === 'resolved' ? `${KIND_LABEL[n.kind]} · ${n.authority === 'agent' ? 'AGENT' : 'YOU'}` : n.kind === 'work' && n.terminal ? 'WORK · GOAL ACCEPTANCE' : n.kind === 'work' && n.ref ? `${KIND_LABEL[n.kind]} · ${n.ref}` : KIND_LABEL[n.kind];
@@ -1195,9 +1219,10 @@
         );
       };
 
-      const GoalDetail = memo(({ scenario }) => {
+      const GoalDetail = memo(({ step }) => {
         const { styles, cx } = useStyles();
-        const [state, setState] = useState(() => buildState(scenario));
+        const [state, setState] = useState(() => buildStep(step));
+        const freshIds = useMemo(() => new Set(STEPS[step].fresh), [step]);
         const [log, setLog] = useState([]);
         const [hotId, setHotId] = useState(null);
         const [selectedId, setSelectedId] = useState(null);
@@ -1257,10 +1282,10 @@
                 </Flexbox>
               </Flexbox>
 
-              <FrontierList state={state} frontier={frontier} hotId={hotId} onHover={setHotId} onSelect={setSelectedId} actions={actions} />
+              <FrontierList state={state} frontier={frontier} hotId={hotId} freshIds={freshIds} onHover={setHotId} onSelect={setSelectedId} actions={actions} />
 
               <Flexbox gap={12}>
-                <Graph state={state} frontier={frontier} hotId={hotId} selectedId={selectedId} onHover={setHotId} onSelect={(id) => setSelectedId(id === selectedId ? null : id)} wide={wide} onToggleWide={() => setWide(!wide)} />
+                <Graph state={state} frontier={frontier} hotId={hotId} freshIds={freshIds} selectedId={selectedId} onHover={setHotId} onSelect={(id) => setSelectedId(id === selectedId ? null : id)} wide={wide} onToggleWide={() => setWide(!wide)} />
                 {selectedId && <NodeDetail state={state} frontier={frontier} id={selectedId} onClose={() => setSelectedId(null)} onSelect={setSelectedId} />}
               </Flexbox>
 
@@ -1317,15 +1342,38 @@
       const ErrorState = ({ onRetry }) => { const { styles } = useStyles(); return (<div className={styles.column}><Block variant="outlined" padding={32} align="center" gap={8}><Icon icon={AlertTriangle} size={24} /><Text weight={600}>这个 Goal 暂时加载不出来</Text><Text type="secondary" fontSize={13}>网络或服务出了点问题，Goal 本身没有受影响。</Text><Button size="small" onClick={onRetry}>重新加载</Button></Block></div>); };
 
       const App = memo(() => {
-        const { styles } = useStyles();
-        const [scenario, setScenario] = useState('gate');
-        const [title, setTitle] = useState(BASE().goal.title);
+        const { styles, cx } = useStyles();
+        const [step, setStep] = useState(0);
+        const [mode, setMode] = useState('timeline');
+        const cur = STEPS[step];
+        React.useEffect(() => {
+          const onKey = (e) => { if (e.key === 'ArrowRight') setStep((i) => Math.min(STEPS.length - 1, i + 1)); if (e.key === 'ArrowLeft') setStep((i) => Math.max(0, i - 1)); };
+          window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
+        }, []);
+        const clock = new Date(at(cur.t));
+        const hhmm = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
         return (
           <div className={styles.page}>
-            <Flexbox className={styles.toggleBar} horizontal gap={12} align="center">
-              <Text fontSize={12} type="secondary">场景</Text>
-              <Segmented size="small" value={scenario} onChange={setScenario} options={Object.entries(SCENARIOS).map(([value, label]) => ({ label, value }))} />
-            </Flexbox>
+            <div className={styles.stepBar}>
+              <Flexbox horizontal gap={8} align="center" style={{ flexShrink: 0 }}>
+                <Button size="small" disabled={step === 0} onClick={() => { setMode('timeline'); setStep(step - 1); }}>上一步</Button>
+                <Button size="small" type="primary" disabled={step === STEPS.length - 1} onClick={() => { setMode('timeline'); setStep(step + 1); }}>下一步</Button>
+                <Text fontSize={12} className={cx(styles.muted, styles.mono)}>{step + 1} / {STEPS.length} · {hhmm}</Text>
+              </Flexbox>
+              <div className={styles.stepDots}>
+                {STEPS.map((st, i) => (
+                  <Tooltip key={i} title={`${i + 1}. ${st.label}`}><div className={cx(styles.stepDot, i === step && styles.stepDotActive, i < step && styles.stepDotDone)} onClick={() => { setMode('timeline'); setStep(i); }} /></Tooltip>
+                ))}
+              </div>
+              <Flexbox gap={0} style={{ minWidth: 0, flex: 1 }}>
+                <Text fontSize={13} weight={600} ellipsis>{cur.label}</Text>
+                <Text fontSize={12} type="secondary" ellipsis={{ rows: 2 }}>{cur.note}</Text>
+              </Flexbox>
+              <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
+                <Button size="small" type={mode === 'loading' ? 'default' : 'text'} onClick={() => setMode(mode === 'loading' ? 'timeline' : 'loading')}>加载中</Button>
+                <Button size="small" type={mode === 'error' ? 'default' : 'text'} onClick={() => setMode(mode === 'error' ? 'timeline' : 'error')}>加载失败</Button>
+              </Flexbox>
+            </div>
             <div className={styles.shell}>
               <div className={styles.main}>
                 <div className={styles.navHeader}>
@@ -1334,7 +1382,7 @@
                     <Text fontSize={13} type="secondary">所有目标</Text><Text fontSize={13} type="secondary">›</Text>
                     <Text fontSize={13} type="secondary">Coding Agent</Text><Text fontSize={13} type="secondary">›</Text>
                     <Text fontSize={13} className={styles.mono} type="secondary">GOAL-12</Text>
-                    <Text fontSize={13} weight={500} ellipsis style={{ maxWidth: 480 }}>{title}</Text>
+                    <Text fontSize={13} weight={500} ellipsis style={{ maxWidth: 480 }}>{INITIAL().goal.title}</Text>
                   </Flexbox>
                   <Flexbox horizontal gap={2} align="center" style={{ marginLeft: 'auto' }}>
                     <Tooltip title="添加 Work · 编辑目标 [NEW] · 复制 ID · 复制链接 · 结束 Goal [NEW] · 删除"><ActionIcon icon={MoreHorizontal} size="small" /></Tooltip>
@@ -1342,7 +1390,7 @@
                   </Flexbox>
                 </div>
                 <div className={styles.scroll}>
-                  {scenario === 'loading' ? <LoadingState /> : scenario === 'error' ? <ErrorState onRetry={() => setScenario('running')} /> : <GoalDetail key={scenario} scenario={scenario} />}
+                  {mode === 'loading' ? <LoadingState /> : mode === 'error' ? <ErrorState onRetry={() => setMode('timeline')} /> : <GoalDetail key={step} step={step} />}
                 </div>
               </div>
             </div>
