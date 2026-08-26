@@ -42,7 +42,9 @@ export const topics = pgTable(
     description: text('description'),
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
-    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' | 'share' - topic creation trigger source
+    // Topic creation trigger source. Note: agent-share visitor topics are NOT
+    // tagged here (they use 'chat') — a non-null `senderId` is their marker.
+    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' | ...
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     status: text('status', {
       enum: [

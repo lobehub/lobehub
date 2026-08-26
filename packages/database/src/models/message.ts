@@ -82,6 +82,7 @@ import { sanitizeBm25Query } from '../utils/bm25';
 import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { notShareVisitorMessage } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -2058,7 +2059,9 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
+      .where(
+        and(this.ownership(), notShareVisitorMessage(), sql`${messages.content} @@@ ${bm25Query}`),
+      )
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];
@@ -2068,9 +2071,12 @@ export class MessageModel {
    * Ownership-scoped analytics filter conditions, shared by count /
    * countGroupByTopic / topicMessageStats. The first entry is always the
    * `userId × workspace` ownership predicate; later entries are optional.
+   * Agent-share visitor messages carry the creator's `userId`, so personal
+   * analytics must exclude them (visitor usage lives in the share usage center).
    */
   private analyticsConditions = (params?: MessageAnalyticsFilters) => [
     this.ownership(),
+    notShareVisitorMessage(),
     params?.agentId ? eq(messages.agentId, params.agentId) : undefined,
     params?.topicId ? eq(messages.topicId, params.topicId) : undefined,
     params?.role ? eq(messages.role, params.role) : undefined,
@@ -2169,6 +2175,7 @@ export class MessageModel {
       .where(
         genWhere([
           this.ownership(),
+          notShareVisitorMessage(),
           params?.range
             ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
             : undefined,
@@ -2191,7 +2198,14 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(and(this.ownership(), isNotNull(messages.model), notCopiedTranscript()))
+      .where(
+        and(
+          this.ownership(),
+          notShareVisitorMessage(),
+          isNotNull(messages.model),
+          notCopiedTranscript(),
+        ),
+      )
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -2211,6 +2225,7 @@ export class MessageModel {
       .where(
         genWhere([
           this.ownership(),
+          notShareVisitorMessage(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,
@@ -2278,6 +2293,7 @@ export class MessageModel {
       .where(
         genWhere([
           this.ownership(),
+          notShareVisitorMessage(),
           eq(messages.role, 'assistant'),
           notCopiedTranscript(),
           genRangeWhere(

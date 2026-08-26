@@ -347,6 +347,82 @@ describe('HomeRepository', () => {
       expect(result.ungrouped[0].unreadCount).toBe(1);
     });
 
+    it('should not count agent-share visitor unread topics in agent sidebar badges', async () => {
+      // Agent-share visitor topics keep the creator's userId, but a non-null
+      // senderId marks them as visitor traffic that must not bump the
+      // creator's own unread badge.
+      const agentId = 'agent-with-visitor-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          pinned: false,
+          title: 'Agent With Visitor Unread',
+          userId,
+          virtual: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            agentId,
+            id: 'visitor-unread-topic',
+            status: 'unread',
+            senderId: 'visitor-user-x',
+            title: 'Visitor unread topic',
+            userId,
+          },
+          {
+            agentId,
+            id: 'creator-unread-topic',
+            status: 'unread',
+            title: 'Creator unread topic',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].unreadCount).toBe(1);
+    });
+
+    it('should not count agent-share visitor unread topics in chat group unread badges', async () => {
+      const groupId = 'group-with-visitor-unread';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: groupId,
+          userId,
+          title: 'Group With Visitor Unread',
+          pinned: false,
+        });
+        await tx.insert(Schema.topics).values([
+          {
+            groupId,
+            id: 'visitor-unread-group-topic',
+            status: 'unread',
+            senderId: 'visitor-user-x',
+            title: 'Visitor unread topic',
+            userId,
+          },
+          {
+            groupId,
+            id: 'creator-unread-group-topic',
+            status: 'unread',
+            title: 'Creator unread topic',
+            userId,
+          },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === groupId);
+      expect(group).toBeDefined();
+      expect(group!.unreadCount).toBe(1);
+    });
+
     describe('backward compatibility - fallback to sessions.pinned', () => {
       it('should fallback to sessions.pinned when agents.pinned is undefined (legacy data)', async () => {
         // Simulate legacy data: agents.pinned is null, but sessions.pinned is true

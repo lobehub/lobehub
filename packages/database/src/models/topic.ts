@@ -48,6 +48,7 @@ import { COPIED_TOPIC_USAGE_RESET } from '../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../utils/copyMessagesInDatabase';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 
@@ -318,13 +319,12 @@ export class TopicModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
   /**
-   * Agent-share visitor topics carry the creator's `userId` (billing/data
-   * attribution) plus a non-null `senderId`, so plain ownership queries would
-   * surface them inside the creator's own workspace. Every workspace-facing
-   * listing/aggregation must AND this in; share-scoped access goes through the
-   * dedicated `*BySender` methods instead.
+   * See `notShareVisitorTopic` in `../utils/shareVisitor` — shared with the
+   * repositories/models that query `topics` outside this class. Every
+   * workspace-facing listing/aggregation must AND this in; share-scoped access
+   * goes through the dedicated `*BySender` methods instead.
    */
-  private notShareVisitor = () => isNull(topics.senderId);
+  private notShareVisitor = () => notShareVisitorTopic();
   // **************** Query *************** //
 
   query = async ({
@@ -2150,6 +2150,9 @@ export class TopicModel {
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where: and(
         this.ownership(),
+        // Share-visitor conversations are not the creator's own speech — never
+        // feed them into the creator's memory extraction.
+        this.notShareVisitor(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted
@@ -2176,6 +2179,7 @@ export class TopicModel {
       .where(
         and(
           this.ownership(),
+          this.notShareVisitor(),
           options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted
