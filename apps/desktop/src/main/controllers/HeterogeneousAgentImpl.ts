@@ -87,6 +87,7 @@ import type {
 } from '@lobechat/types';
 import { app as electronApp, BrowserWindow } from 'electron';
 import { isPlainObject } from 'es-toolkit';
+import semver from 'semver';
 
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import type { App } from '@/core/App';
@@ -150,6 +151,21 @@ export const buildInheritedSpawnEnv = (
   const env = { ...sourceEnv };
   for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
   return env;
+};
+
+const appendLoopbackNoProxy = (env: NodeJS.ProcessEnv): void => {
+  const entries = new Set(
+    [env.NO_PROXY, env.no_proxy]
+      .filter((value): value is string => !!value)
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  entries.add('127.0.0.1');
+  entries.add('localhost');
+  const noProxy = [...entries].join(',');
+  env.NO_PROXY = noProxy;
+  env.no_proxy = noProxy;
 };
 const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /no conversation found/i,
@@ -725,6 +741,21 @@ export default class HeterogeneousAgentCtr {
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
+      if (
+        session.agentType === 'kimi-code' &&
+        session.hostedProviderBinding &&
+        status?.version &&
+        semver.lt(status.version, '0.6.0')
+      ) {
+        return {
+          agentType: session.agentType,
+          code: 'cli_version_unsupported',
+          command,
+          message: `Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
+          workingDirectory,
+        };
+      }
+
       // Spawn through the detector-resolved absolute path when the configured
       // command is bare — detection may have located the CLI somewhere plain
       // spawn() can't (login-shell PATH, app-bundled Codex CLI, …).
@@ -778,6 +809,13 @@ export default class HeterogeneousAgentCtr {
       if (session.agentType === 'claude-code')
         env.ANTHROPIC_AUTH_TOKEN = session.serverOperationToken;
       if (session.agentType === 'codex') env.LOBEHUB_HETERO_TOKEN = session.serverOperationToken;
+    }
+    if (
+      session.agentType === 'kimi-code' &&
+      session.hostedProviderBinding &&
+      env.KIMI_MODEL_BASE_URL?.startsWith('http://127.0.0.1:')
+    ) {
+      appendLoopbackNoProxy(env);
     }
     return env;
   }

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   gcHostedProviderBindingProfiles,
@@ -48,10 +48,12 @@ const makeParams = async (driver: HeterogeneousAgentDriver) => {
 
 describe('prepareHostedProviderBinding', () => {
   it('creates private profile/run directories, keeps profile state, and cleans the run', async () => {
+    const cleanup = vi.fn().mockResolvedValue(undefined);
     const driver: HeterogeneousAgentDriver = {
       buildSpawnPlan: async () => ({ args: [] }),
       prepareProviderBinding: ({ profileDir }) => ({
         args: ['--model', 'gpt-test'],
+        cleanup,
         env: { CODEX_HOME: profileDir, SECRET_ENV: 'secret' },
         profileFiles: [{ content: 'env_key = "SECRET_ENV"\n', path: 'config.toml' }],
         runFiles: [{ content: 'temporary', path: 'request.tmp' }],
@@ -67,15 +69,18 @@ describe('prepareHostedProviderBinding', () => {
     );
 
     await binding.cleanup();
+    expect(cleanup).toHaveBeenCalledOnce();
     await expect(stat(binding.runDir)).rejects.toThrow();
     await expect(stat(binding.profileDir)).resolves.toBeDefined();
   });
 
   it('rejects file traversal and cleans the partially created run directory', async () => {
+    const cleanup = vi.fn().mockResolvedValue(undefined);
     const driver: HeterogeneousAgentDriver = {
       buildSpawnPlan: async () => ({ args: [] }),
       prepareProviderBinding: () => ({
         args: [],
+        cleanup,
         env: {},
         runFiles: [{ content: 'escape', path: '../escape' }],
       }),
@@ -85,6 +90,21 @@ describe('prepareHostedProviderBinding', () => {
     await expect(
       stat(path.join(params.appStoragePath, 'heteroAgent', 'runs', params.sessionId)),
     ).rejects.toThrow();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it('releases driver resources synchronously during app shutdown', async () => {
+    const cleanupSync = vi.fn();
+    const driver: HeterogeneousAgentDriver = {
+      buildSpawnPlan: async () => ({ args: [] }),
+      prepareProviderBinding: () => ({ args: [], cleanupSync, env: {} }),
+    };
+    const binding = await prepareHostedProviderBinding(await makeParams(driver));
+
+    binding.cleanupSync();
+
+    expect(cleanupSync).toHaveBeenCalledOnce();
+    await expect(stat(binding.runDir)).rejects.toThrow();
   });
 });
 

@@ -47,7 +47,7 @@ describe('heterogeneous provider binding protocol resolver', () => {
     ).toEqual(['openai-responses', 'openai-chat-completions']);
   });
 
-  it('allows Claude only on Messages and Codex only on Responses', () => {
+  it('routes Claude, Codex, and Kimi Code only to their supported protocols', () => {
     const claude = resolveHeterogeneousProviderBinding({
       agentType: 'claude-code',
       apiConfig: { model: 'claude-test', providerId: 'anthropic' },
@@ -81,6 +81,38 @@ describe('heterogeneous provider binding protocol resolver', () => {
       endpoint: 'https://example.com/v1',
       protocol: 'openai-responses',
     });
+
+    const kimiAnthropic = resolveHeterogeneousProviderBinding({
+      agentType: 'kimi-code',
+      apiConfig: { model: 'claude-test', providerId: 'anthropic' },
+      providerEnabled: true,
+      runtimeConfig: runtime('anthropic'),
+    });
+    expect(kimiAnthropic.resolution?.protocol).toBe('anthropic-messages');
+
+    const kimiOpenAI = resolveHeterogeneousProviderBinding({
+      agentType: 'kimi-code',
+      apiConfig: { model: 'gpt-test', providerId: 'openai' },
+      providerEnabled: true,
+      runtimeConfig: runtime('openai'),
+    });
+    expect(kimiOpenAI.resolution?.protocol).toBe('openai-chat-completions');
+
+    const kimiCustomWithoutEndpoint = resolveHeterogeneousProviderBinding({
+      agentType: 'kimi-code',
+      apiConfig: { model: 'gpt-test', providerId: 'custom-openai' },
+      providerEnabled: true,
+      runtimeConfig: runtime('openai'),
+    });
+    expect(kimiCustomWithoutEndpoint.error?.code).toBe('endpointMissing');
+
+    const kimiGoogle = resolveHeterogeneousProviderBinding({
+      agentType: 'kimi-code',
+      apiConfig: { model: 'gemini-test', providerId: 'google' },
+      providerEnabled: true,
+      runtimeConfig: runtime('google'),
+    });
+    expect(kimiGoogle.error?.code).toBe('protocolMismatch');
   });
 
   it('validates credentials only inside the trusted host boundary', () => {

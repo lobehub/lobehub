@@ -226,8 +226,8 @@ describe('aiProviderRouter', () => {
       const result = await caller.getAiProviderRuntimeState({});
 
       expect(result.providerBindingAgentTypes).toEqual({
-        'anthropic-custom': ['claude-code'],
-        'openai': ['codex'],
+        'anthropic-custom': ['claude-code', 'kimi-code'],
+        'openai': ['codex', 'kimi-code'],
       });
       expect(JSON.stringify(result.providerBindingAgentTypes)).not.toContain('secret');
       expect(JSON.stringify(result.providerBindingAgentTypes)).not.toContain('example.com');

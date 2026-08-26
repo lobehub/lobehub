@@ -1677,6 +1677,174 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (kimi-code provider binding)', () => {
+    let originalKimiBaseURL: string | undefined;
+
+    beforeEach(() => {
+      originalKimiBaseURL = process.env.KIMI_MODEL_BASE_URL;
+      process.env.KIMI_MODEL_BASE_URL = 'https://stale-or-attacker.example/v1';
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+      getProviderBindingRuntimeMock.mockResolvedValue({
+        enabled: true,
+        runtimeConfig: {
+          config: {},
+          keyVaults: {
+            apiKey: 'kimi-provider-secret',
+            baseURL: 'https://gateway.example.com/v1/',
+          },
+          settings: { sdkType: 'openai' },
+        },
+      });
+    });
+
+    afterEach(() => {
+      if (originalKimiBaseURL === undefined) delete process.env.KIMI_MODEL_BASE_URL;
+      else process.env.KIMI_MODEL_BASE_URL = originalKimiBaseURL;
+    });
+
+    it('requires Kimi Code 0.6.0 for provider binding but not subscription mode', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: true, version: '0.5.0' });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: { detect },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const providerSession = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        providerBinding: {
+          apiConfig: { model: 'upstream-model', providerId: 'custom-openai' },
+          kind: 'provider',
+        },
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          operationId: 'op-kimi-old-provider',
+          prompt: 'provider prompt',
+          sessionId: providerSession.sessionId,
+        }),
+      ).rejects.toThrow(
+        'Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: 0.5.0.',
+      );
+      expect(spawnCalls).toHaveLength(0);
+
+      nextFakeProc = createFakeProc().proc;
+      const subscriptionSession = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-kimi-old-subscription',
+        prompt: 'subscription prompt',
+        sessionId: subscriptionSession.sessionId,
+      });
+
+      expect(spawnCalls).toHaveLength(1);
+    });
+
+    it('keeps the env-only binding across fresh and resumed runs without persisting the key', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const providerBinding = {
+        apiConfig: { model: 'upstream-model', providerId: 'custom-openai' },
+        kind: 'provider' as const,
+      };
+
+      nextFakeProc = createFakeProc().proc;
+      const fresh = await ctr.startSession({
+        agentType: 'kimi-code',
+        args: [
+          '--continue',
+          '-c',
+          '-C',
+          '--model',
+          'stale-model',
+          '--session=stale-session',
+          '--verbose',
+        ],
+        command: 'kimi',
+        env: {
+          KIMI_CODE_HOME: '/user/kimi',
+          KIMI_MODEL_API_KEY: 'stale-key',
+          KIMI_MODEL_BASE_URL: 'https://stale.example.com',
+        },
+        providerBinding,
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-kimi-fresh',
+        prompt: 'fresh private prompt',
+        sessionId: fresh.sessionId,
+      });
+
+      expect(spawnCalls[0].args).toEqual([
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--prompt',
+        'fresh private prompt',
+      ]);
+      expect(spawnCalls[0].options.env).toEqual(
+        expect.objectContaining({
+          KIMI_CODE_HOME: expect.stringContaining('/heteroAgent/bindings/kimi-code/'),
+          KIMI_MODEL_API_KEY: expect.any(String),
+          KIMI_MODEL_BASE_URL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/v1$/),
+          KIMI_MODEL_NAME: 'upstream-model',
+          KIMI_MODEL_PROVIDER_TYPE: 'openai',
+          NO_PROXY: expect.stringContaining('127.0.0.1'),
+          no_proxy: expect.stringContaining('127.0.0.1'),
+        }),
+      );
+
+      nextFakeProc = createFakeProc().proc;
+      const resumed = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        providerBinding: { ...providerBinding, resumeBindingKey: fresh.providerBindingKey },
+        resumeSessionId: 'kimi-native-session',
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-kimi-resume',
+        prompt: 'resume private prompt',
+        sessionId: resumed.sessionId,
+      });
+
+      expect(spawnCalls[1].args).toEqual([
+        '--output-format',
+        'stream-json',
+        '--session',
+        'kimi-native-session',
+        '--prompt',
+        'resume private prompt',
+      ]);
+      expect(spawnCalls[1].options.env).toEqual(
+        expect.objectContaining({
+          KIMI_MODEL_API_KEY: expect.any(String),
+          KIMI_MODEL_BASE_URL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/v1$/),
+          KIMI_MODEL_NAME: 'upstream-model',
+          KIMI_MODEL_PROVIDER_TYPE: 'openai',
+        }),
+      );
+      expect(spawnCalls[0].options.env.KIMI_MODEL_API_KEY).not.toBe('kimi-provider-secret');
+      expect(spawnCalls[1].options.env.KIMI_MODEL_API_KEY).not.toBe('kimi-provider-secret');
+      expect(spawnCalls.flatMap(({ args }) => args)).not.toContain('kimi-provider-secret');
+      expect(JSON.stringify(spawnCalls)).not.toContain('kimi-provider-secret');
+      expect(JSON.stringify(spawnCalls)).not.toContain('stale-or-attacker.example');
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('kimi-provider-secret');
+
+      const bindingsRoot = path.join(appStoragePath, 'heteroAgent', 'bindings', 'kimi-code');
+      const [bindingDir] = await readdir(bindingsRoot);
+      const profileFiles = await readdir(path.join(bindingsRoot, bindingDir));
+      expect(profileFiles).toEqual(['.lobehub-last-used']);
+      expect(
+        await readFile(path.join(bindingsRoot, bindingDir, '.lobehub-last-used'), 'utf8'),
+      ).not.toContain('kimi-provider-secret');
+    });
+  });
+
   describe('sendPrompt (codex)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;

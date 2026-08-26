@@ -10,7 +10,11 @@ import type {
 
 import { HETERO_AGENT_BINDINGS_DIR, HETERO_AGENT_RUNS_DIR } from '@/const/heteroAgent';
 
-import type { HeterogeneousAgentDriver, ProviderBindingFilePlan } from './types';
+import type {
+  HeterogeneousAgentDriver,
+  ProviderBindingFilePlan,
+  ProviderBindingPlan,
+} from './types';
 
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
@@ -52,6 +56,25 @@ const writeManagedFiles = async (
     await writeFile(staging, file.content, { encoding: 'utf8', mode: FILE_MODE });
     await rename(staging, target);
     await chmod(target, FILE_MODE);
+  }
+};
+
+const cleanupBindingRun = async (
+  runDir: string,
+  plan: ProviderBindingPlan | undefined,
+): Promise<void> => {
+  try {
+    await plan?.cleanup?.();
+  } finally {
+    await rm(runDir, { force: true, recursive: true });
+  }
+};
+
+const cleanupBindingRunSync = (runDir: string, plan: ProviderBindingPlan | undefined): void => {
+  try {
+    plan?.cleanupSync?.();
+  } finally {
+    rmSync(runDir, { force: true, recursive: true });
   }
 };
 
@@ -106,8 +129,9 @@ export const prepareHostedProviderBinding = async (params: {
     mode: FILE_MODE,
   });
 
+  let plan: ProviderBindingPlan | undefined;
   try {
-    const plan = await params.driver.prepareProviderBinding({
+    plan = await params.driver.prepareProviderBinding({
       args: params.args,
       env: params.env,
       profileDir,
@@ -121,14 +145,14 @@ export const prepareHostedProviderBinding = async (params: {
     return {
       args: plan.args,
       bindingKey,
-      cleanup: () => rm(runDir, { force: true, recursive: true }),
-      cleanupSync: () => rmSync(runDir, { force: true, recursive: true }),
+      cleanup: () => cleanupBindingRun(runDir, plan),
+      cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,
       profileDir,
       runDir,
     };
   } catch (error) {
-    await rm(runDir, { force: true, recursive: true });
+    await cleanupBindingRun(runDir, plan);
     throw error;
   }
 };
@@ -168,8 +192,9 @@ export const prepareHostedServerDefaultBinding = async (params: {
     encoding: 'utf8',
     mode: FILE_MODE,
   });
+  let plan: ProviderBindingPlan | undefined;
   try {
-    const plan = await params.driver.prepareServerDefaultBinding({
+    plan = await params.driver.prepareServerDefaultBinding({
       args: params.args,
       endpoint: params.endpoint,
       env: params.env,
@@ -181,14 +206,14 @@ export const prepareHostedServerDefaultBinding = async (params: {
     return {
       args: plan.args,
       bindingKey: `server-default:v2:${digest}`,
-      cleanup: () => rm(runDir, { force: true, recursive: true }),
-      cleanupSync: () => rmSync(runDir, { force: true, recursive: true }),
+      cleanup: () => cleanupBindingRun(runDir, plan),
+      cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,
       profileDir,
       runDir,
     };
   } catch (error) {
-    await rm(runDir, { force: true, recursive: true });
+    await cleanupBindingRun(runDir, plan);
     throw error;
   }
 };
