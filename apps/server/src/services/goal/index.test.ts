@@ -20,6 +20,7 @@ import {
   users,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './index';
@@ -341,7 +342,7 @@ describe('GoalService', () => {
 
     const recovered = await service.tick(graph.goal.id);
 
-    expect(settleSpy).toHaveBeenCalledWith('op-stale', expect.any(Date));
+    expect(settleSpy).toHaveBeenCalledWith('op-stale', expect.any(Date), undefined);
     expect(timeoutSpy).toHaveBeenCalledWith(created.taskId, 'topic-stale', 'timeout');
     expect(runSpy).toHaveBeenCalledWith({
       maxSteps: undefined,
@@ -353,6 +354,52 @@ describe('GoalService', () => {
       outcome: 'waiting_external',
       taskId: created.taskId,
     });
+  });
+
+  it('charges stale Work usage before checking the replacement budget', async () => {
+    const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    vi.spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds').mockResolvedValue([
+      { operationId: 'op-stale-cost', topicId: 'topic-stale-cost' } as never,
+    ]);
+    vi.spyOn(TaskTopicModel.prototype, 'updateStatus').mockResolvedValue(undefined);
+    vi.spyOn(AgentRuntimeCoordinator.prototype, 'getOperationMetadata').mockResolvedValue({
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      status: 'running',
+      totalCost: 0.75,
+      totalSteps: 2,
+    });
+
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      config: { recovery: { maxAttemptsPerWork: 3, operationLeaseTimeoutMs: 60_000 } },
+      maxTotalCost: 0.5,
+      title: 'Respect abandoned Work cost',
+      work: ['Run an expensive experiment'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'running');
+    await new AgentOperationModel(serverDB, userId).recordStart({
+      operationId: 'op-stale-cost',
+      taskId: created.taskId,
+    });
+    await serverDB
+      .update(agentOperations)
+      .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+      .where(eq(agentOperations.id, 'op-stale-cost'));
+
+    const recovered = await service.tick(graph.goal.id);
+
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(recovered).toMatchObject({ outcome: 'waiting_human', taskId: created.taskId });
+    expect(await new AgentOperationModel(serverDB, userId).findById('op-stale-cost')).toMatchObject(
+      {
+        status: 'abandoned',
+        totalCost: 0.75,
+      },
+    );
   });
 
   it('does not reclaim a running Work operation without a persisted topic id', async () => {

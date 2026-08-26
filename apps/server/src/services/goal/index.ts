@@ -19,6 +19,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
+import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
@@ -546,12 +547,13 @@ export class GoalService {
     if (!operationId || !topicId) return undefined;
 
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
+    const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
     const reclaimed = await this.db.transaction(async (tx) => {
       const settled = await new AgentOperationModel(
         tx,
         this.userId,
         this.workspaceId,
-      ).settleStaleRunning(operationId, staleBefore);
+      ).settleStaleRunning(operationId, staleBefore, latestUsage?.totalCost);
       if (!settled) return false;
 
       await new TaskTopicModel(tx, this.userId, this.workspaceId).updateStatus(

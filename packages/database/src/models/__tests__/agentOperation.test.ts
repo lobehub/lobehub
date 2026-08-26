@@ -242,6 +242,24 @@ describe('AgentOperationModel', () => {
       });
     });
 
+    it('persists the latest cost while reclaiming an expired lease', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-lease-cost';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000), 0.75)).toBe(
+        true,
+      );
+      expect(await model.findById(operationId)).toMatchObject({
+        status: 'abandoned',
+        totalCost: 0.75,
+      });
+    });
+
     it('does not let a late completion overwrite a reclaimed operation', async () => {
       const model = new AgentOperationModel(serverDB, userId);
       const operationId = 'op-reclaimed-completion-race';
