@@ -217,7 +217,17 @@ export class ServerToolTransport implements ToolTransport {
               documentId: context.state.metadata?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
               editingGroupId: context.state.metadata?.editingGroupId,
-              execSubAgent: this.ctx.execSubAgent,
+              // Agent share C3 (bypass B fix): a share-visitor run must never
+              // reach a raw sub-agent/agent-management dispatch — the child run
+              // has no shareGate of its own (see `ServerSubAgentTransport`) and
+              // would give the visitor the CREATOR's unrestricted tool/file/
+              // memory surface. `resolveLobeAgentManifest` already hides
+              // `lobe-agent.callSubAgent` for a share visitor, but this
+              // (`ctx.subAgent` below) is also the exact runner `lobe-agent-
+              // management.callAgent` calls (`agentManagement.ts`), and that
+              // manifest has no such trim — so it must fail closed here at the
+              // injection site, not just at the manifest layer.
+              execSubAgent: this.ctx.agentShare ? undefined : this.ctx.execSubAgent,
               executionTimeoutMs: timeoutMs,
               groupId: context.state.metadata?.groupId,
               isSubAgent: context.state.metadata?.isSubAgent === true,
@@ -242,12 +252,16 @@ export class ServerToolTransport implements ToolTransport {
               scope: context.state.metadata?.scope,
               serverDB,
               skipResultTruncation: true,
-              subAgent: buildServerVirtualSubAgentRunner(
-                this.ctx,
-                context.state,
-                chatToolPayload,
-                context.parentMessageId,
-              ),
+              // See the `execSubAgent` comment above — same fail-closed rule
+              // applies to this runner.
+              subAgent: this.ctx.agentShare
+                ? undefined
+                : buildServerVirtualSubAgentRunner(
+                    this.ctx,
+                    context.state,
+                    chatToolPayload,
+                    context.parentMessageId,
+                  ),
               taskId: context.state.metadata?.taskId,
               threadId: context.state.metadata?.threadId,
               toolCallId: chatToolPayload.id,
