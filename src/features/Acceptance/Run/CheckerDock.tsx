@@ -25,8 +25,8 @@ import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 
-import { useVerifyResults, useVerifyState } from './hooks';
-import { countResults, phaseFromStatus } from './utils';
+import { useVerifyResults, useVerifyState } from '../hooks';
+import { countResults, phaseFromStatus } from '../utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`

@@ -54,17 +54,14 @@ import {
   EvidenceComparisonCard,
   meaningfulEvidenceCaption,
   readEvidenceComparison,
-} from '../components/EvidenceComparisonCard';
+} from '../Report/EvidenceComparisonCard';
 import {
   CollapsibleMarkdownEvidence,
   EvidenceFileCard,
   markdownTextEvidenceTypes,
-} from '../components/MarkdownEvidence';
-import { hasRenderableEvidence, readVisualizationManifest } from '../components/visualization';
-import {
-  VisualizationDeltaBadge,
-  VisualizationRenderer,
-} from '../components/VisualizationRenderer';
+} from '../Report/MarkdownEvidence';
+import { hasRenderableEvidence, readVisualizationManifest } from '../Report/visualization';
+import { VisualizationDeltaBadge, VisualizationRenderer } from '../Report/VisualizationRenderer';
 import { AnnotatedImage } from './Annotation';
 import { AttachmentThumbs } from './attachments';
 import { openCheckRejectModal } from './CheckRejectModal';

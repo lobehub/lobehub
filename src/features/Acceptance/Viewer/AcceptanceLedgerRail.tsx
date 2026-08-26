@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';
 
-import ReportViewer from '../ReportViewer';
+import ReportViewer from '../Report/ReportViewer';
 import { resolveRoundParam } from '../utils';
 import { useAcceptanceScope } from './AcceptanceScope';
 import { checkFilterState } from './CheckList';

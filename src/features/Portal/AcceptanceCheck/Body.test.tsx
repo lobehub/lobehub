@@ -64,7 +64,7 @@ vi.mock('@/store/chat/selectors', () => ({
   },
 }));
 
-vi.mock('@/features/Verify', () => ({
+vi.mock('@/features/Acceptance', () => ({
   checkHeadMeta: () => ({ color: 'green', icon: () => null }),
   FocusedCheckDetails: () => <div data-testid={'check-details'} />,
   useAcceptanceBundle: () => ({

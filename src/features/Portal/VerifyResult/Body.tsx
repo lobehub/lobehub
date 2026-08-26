@@ -12,7 +12,7 @@ import {
   useVerifyInstruction,
   useVerifyResults,
   useVerifyState,
-} from '@/features/Verify/hooks';
+} from '@/features/Acceptance/hooks';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, threadSelectors } from '@/store/chat/selectors';

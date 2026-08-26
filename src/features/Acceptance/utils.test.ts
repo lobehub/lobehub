@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { VerifyResultWithEvidence } from '@/services/verify';
 
-import { meaningfulEvidenceCaption } from './components/EvidenceComparisonCard';
+import { meaningfulEvidenceCaption } from './Report/EvidenceComparisonCard';
 import {
   buildCheckRows,
   countResults,

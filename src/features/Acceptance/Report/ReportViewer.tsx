@@ -50,29 +50,29 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import AudioPlayer from '@/features/AudioPlayer';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
 
-import {
-  EvidenceComparisonCard,
-  type EvidenceComparisonMeta,
-  isFilenameLike,
-  meaningfulEvidenceCaption,
-  readEvidenceComparison,
-} from './components/EvidenceComparisonCard';
-import {
-  CollapsibleMarkdownEvidence,
-  DocumentViewer,
-  filenameFromUrl,
-  markdownTextEvidenceTypes,
-} from './components/MarkdownEvidence';
-import { readVisualizationManifest } from './components/visualization';
-import { VisualizationRenderer } from './components/VisualizationRenderer';
-import { useVerifyReportBundle } from './hooks';
+import { useVerifyReportBundle } from '../hooks';
 import {
   buildCheckRows,
   type CheckRowData,
   type CheckState,
   extractUuid,
   renderableSurfaces,
-} from './utils';
+} from '../utils';
+import {
+  EvidenceComparisonCard,
+  type EvidenceComparisonMeta,
+  isFilenameLike,
+  meaningfulEvidenceCaption,
+  readEvidenceComparison,
+} from './EvidenceComparisonCard';
+import {
+  CollapsibleMarkdownEvidence,
+  DocumentViewer,
+  filenameFromUrl,
+  markdownTextEvidenceTypes,
+} from './MarkdownEvidence';
+import { readVisualizationManifest } from './visualization';
+import { VisualizationRenderer } from './VisualizationRenderer';
 
 type Filter = 'all' | CheckState;
 

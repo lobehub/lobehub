@@ -23,7 +23,7 @@ import {
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify/CriterionList';
+} from '@/features/Acceptance/CriterionList';
 
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
 

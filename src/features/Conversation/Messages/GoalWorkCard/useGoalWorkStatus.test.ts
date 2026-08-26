@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   useFetchTaskDetail: vi.fn(),
 }));
 
-vi.mock('@/features/Verify', () => ({
+vi.mock('@/features/Acceptance', () => ({
   useAcceptanceBundle: mocks.useAcceptanceBundle,
   useAcceptanceBySubject: mocks.useAcceptanceBySubject,
 }));

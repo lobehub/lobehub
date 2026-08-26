@@ -61,7 +61,7 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
     VERIFY_REPORT_SWR_CONFIG,
   );
 
-export { useAcceptanceBundle } from './Acceptance/useAcceptanceBundle';
+export { useAcceptanceBundle } from './Viewer/useAcceptanceBundle';
 
 /** The optional acceptance aggregate attached to a task/topic/document subject. */
 export const useAcceptanceBySubject = (

@@ -24,7 +24,7 @@ import {
   shouldGroupChecks,
   useAcceptanceBundle,
   useAcceptanceBySubject,
-} from '@/features/Verify';
+} from '@/features/Acceptance';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
