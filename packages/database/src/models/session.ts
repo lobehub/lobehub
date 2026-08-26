@@ -490,13 +490,43 @@ export class SessionModel {
 
   /**
    * Delete all sessions and their associated agent data for this user.
+   *
+   * Snapshots in-flight Agent Share visitor runs on EVERY one of this user's
+   * agents BEFORE the raw `trx.delete(agents)` below cascades their topic
+   * rows away — this bulk delete bypasses `AgentModel.delete` AND this
+   * class's own `clearOrphanAgent` (which only fires from `delete()` /
+   * `batchDelete()`'s single/multi-session orphan cleanup, never from this
+   * user-wide sweep) entirely, the exact bypass `delete()` / `batchDelete()`
+   * already close. Agent sharing is personal-only, so a workspace-scoped
+   * `SessionModel` never has any — skip the query entirely there. See
+   * `SessionModelOptions.onShareRunsInterrupted`'s JSDoc and LOBE-11930.
    */
   deleteAll = async () => {
-    return this.db.transaction(async (trx) => {
+    const activeShareRuns: ActiveShareRun[] = [];
+
+    const result = await this.db.transaction(async (trx) => {
+      if (!this.workspaceId) {
+        const ownedAgents = await trx
+          .select({ id: agents.id })
+          .from(agents)
+          .where(this.agentsOwnership());
+
+        const topicModel = new TopicModel(trx as LobeChatDatabase, this.userId);
+        for (const { id: agentId } of ownedAgents) {
+          activeShareRuns.push(...(await topicModel.findActiveVisitorRunTopics(agentId)));
+        }
+      }
+
       await trx.delete(agentsToSessions).where(this.agentsToSessionsOwnership());
       await trx.delete(agents).where(this.agentsOwnership());
       return trx.delete(sessions).where(this.ownership());
     });
+
+    if (activeShareRuns.length > 0) {
+      this.onShareRunsInterrupted?.(activeShareRuns);
+    }
+
+    return result;
   };
 
   clearOrphanAgent = async (

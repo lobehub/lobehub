@@ -36,6 +36,7 @@ import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import {
   AgentEvalRunWorkflow,
   type ResumeAgentTrajectoryPayload,
@@ -147,7 +148,14 @@ export class AgentEvalRunService {
     this.testCaseModel = new AgentEvalTestCaseModel(db, userId, workspaceId);
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.threadModel = new ThreadModel(db, userId, workspaceId);
-    this.topicModel = new TopicModel(db, userId, workspaceId);
+    // `onShareRunsInterrupted`: `deleteRun`'s cleanup below reuses
+    // `TopicModel.batchDelete`, the same shared bulk-delete surface the
+    // `topic.removeAllTopics` router path uses — wiring it here too keeps
+    // both callers on one contract instead of assuming eval-run topics can
+    // never carry a `senderId`. See LOBE-11930.
+    this.topicModel = new TopicModel(db, userId, workspaceId, {
+      onShareRunsInterrupted: interruptSnapshottedShareRuns(db, userId),
+    });
     this.agentService = new AgentService(db, userId, workspaceId);
   }
 

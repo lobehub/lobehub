@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
@@ -62,6 +62,32 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(1);
       expect(await serverDB.select().from(messages)).toHaveLength(1);
     });
+
+    // Regression for LOBE-11930: a single-topic delete has the same bug shape
+    // as the bulk sweeps below — see `TopicModel.delete`'s JSDoc.
+    it('reports an in-flight Agent Share visitor run on the deleted topic', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+      const agentId = 'single-delete-share-agent';
+
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent' });
+      await serverDB.insert(topics).values({
+        id: 'single-delete-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId,
+        senderId: 'visitor-single',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      await modelWithCallback.delete('single-delete-visitor-topic');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'single-delete-visitor-topic' },
+      ]);
+    });
   });
 
   describe('batchDeleteBySessionId', () => {
@@ -100,6 +126,30 @@ describe('TopicModel - Delete', () => {
       ).toHaveLength(2);
       expect(await serverDB.select().from(topics)).toHaveLength(2);
     });
+
+    // Regression for LOBE-11930.
+    it('reports an in-flight Agent Share visitor run scoped to the deleted session', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(sessions).values({ id: 'visitor-session', userId });
+      await serverDB.insert(topics).values({
+        id: 'session-visitor-topic',
+        title: 'Visitor',
+        userId,
+        sessionId: 'visitor-session',
+        senderId: 'visitor-session-1',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      await modelWithCallback.batchDeleteBySessionId('visitor-session');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'session-visitor-topic' },
+      ]);
+    });
   });
 
   describe('batchDeleteByGroupId', () => {
@@ -137,6 +187,30 @@ describe('TopicModel - Delete', () => {
         2,
       );
       expect(await serverDB.select().from(topics)).toHaveLength(2);
+    });
+
+    // Regression for LOBE-11930.
+    it('reports an in-flight Agent Share visitor run scoped to the deleted group', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(chatGroups).values({ id: 'visitor-group', userId, title: 'Group' });
+      await serverDB.insert(topics).values({
+        id: 'group-visitor-topic',
+        title: 'Visitor',
+        userId,
+        groupId: 'visitor-group',
+        senderId: 'visitor-group-1',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      await modelWithCallback.batchDeleteByGroupId('visitor-group');
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'group-visitor-topic' },
+      ]);
     });
   });
 
@@ -284,6 +358,31 @@ describe('TopicModel - Delete', () => {
         .where(eq(messages.userId, userId));
       expect(remainingMessages).toHaveLength(0);
     });
+
+    // Regression for LOBE-11930.
+    it('reports an in-flight Agent Share visitor run on the deleted agent', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+      const agentId = 'batch-agent-share-agent';
+
+      await serverDB.insert(agents).values({ id: agentId, userId, title: 'Share Agent' });
+      await serverDB.insert(topics).values({
+        id: 'batch-agent-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId,
+        senderId: 'visitor-batch-agent',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      await modelWithCallback.batchDeleteByAgentId(agentId);
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'batch-agent-visitor-topic' },
+      ]);
+    });
   });
 
   describe('batchDelete', () => {
@@ -307,6 +406,28 @@ describe('TopicModel - Delete', () => {
       expect(await serverDB.select().from(topics)).toHaveLength(1);
       expect(await serverDB.select().from(messages)).toHaveLength(1);
     });
+
+    // Regression for LOBE-11930.
+    it('reports an in-flight Agent Share visitor run among the deleted ids', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(topics).values({
+        id: 'batch-ids-visitor-topic',
+        title: 'Visitor',
+        userId,
+        senderId: 'visitor-batch-ids',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      await modelWithCallback.batchDelete(['batch-ids-visitor-topic']);
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'batch-ids-visitor-topic' },
+      ]);
+    });
   });
 
   describe('deleteAll', () => {
@@ -326,6 +447,66 @@ describe('TopicModel - Delete', () => {
 
       expect(await serverDB.select().from(topics).where(eq(topics.userId, userId))).toHaveLength(0);
       expect(await serverDB.select().from(topics)).toHaveLength(1);
+    });
+
+    // Regression for LOBE-11930: this is the exact bug the codex P1 report
+    // named — `topic.removeAllTopics` deleted a visitor's running topic with
+    // no interrupt, leaving the operation row orphaned and the visitor unable
+    // to stop it. `deleteAll` is not scoped to one agent, so this covers a
+    // visitor run on an agent the caller never names explicitly.
+    it('reports every in-flight Agent Share visitor run across every agent', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(agents).values([
+        { id: 'delete-all-agent-1', userId, title: 'Agent 1' },
+        { id: 'delete-all-agent-2', userId, title: 'Agent 2' },
+      ]);
+      await serverDB.insert(topics).values([
+        {
+          id: 'delete-all-visitor-topic-1',
+          title: 'Visitor 1',
+          userId,
+          agentId: 'delete-all-agent-1',
+          senderId: 'visitor-delete-all-1',
+          metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+        },
+        {
+          id: 'delete-all-visitor-topic-2',
+          title: 'Visitor 2',
+          userId,
+          agentId: 'delete-all-agent-2',
+          senderId: 'visitor-delete-all-2',
+          metadata: { runningOperation: { assistantMessageId: 'msg-2', operationId: 'op-2' } },
+        },
+      ]);
+
+      await modelWithCallback.deleteAll();
+
+      expect(onShareRunsInterrupted).toHaveBeenCalledTimes(1);
+      const [reported] = onShareRunsInterrupted.mock.calls[0];
+      expect(reported).toEqual(
+        expect.arrayContaining([
+          { operationId: 'op-1', topicId: 'delete-all-visitor-topic-1' },
+          { operationId: 'op-2', topicId: 'delete-all-visitor-topic-2' },
+        ]),
+      );
+      expect(reported).toHaveLength(2);
+    });
+
+    it('does not call onShareRunsInterrupted when there is no in-flight visitor run', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new TopicModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(topics).values({ id: 'quiet-delete-all-topic', userId });
+
+      await modelWithCallback.deleteAll();
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
     });
   });
 
