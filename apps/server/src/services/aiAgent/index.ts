@@ -3655,10 +3655,12 @@ export class AiAgentService {
           ];
 
     // Share whitelist filters the full candidate set (pinned + mentioned +
-    // internal additions) before manifest discovery, and — because
-    // `skillEngine.generate(agentPlugins)` consumes the same list — before the
-    // skill set too. The operationToolSet snapshot then carries the restricted
-    // surface into every later step.
+    // internal additions) before manifest discovery. This only trims which
+    // plugin ids get *activated*; the separate skill candidate pool below
+    // (`skills`, consumed by `SkillEngine`) is filtered against the same
+    // whitelist on its own, since `SkillEngine.generate` does not filter its
+    // `skills` array by the plugin id list it is given. The operationToolSet
+    // snapshot then carries the restricted surface into every later step.
     if (shareGate) {
       agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
     }
@@ -5300,10 +5302,29 @@ export class AiAgentService {
       // against, so a disabled identifier absent here is neither listed nor
       // activatable — mirrors the tool-manifest treatment above (installedPlugins/
       // additionalManifests), which this array had never received.
+      //
+      // Shared runs only see skills allowed by the share configuration: a
+      // share visitor must not be able to enumerate the creator's broader
+      // skill set (names/descriptions) just because `SkillEngine.generate`
+      // only annotates activation state rather than shrinking the candidate
+      // pool itself. Reuse `filterPluginsByShareGate` (id-list intersection,
+      // not tool-specific) to keep this pool the single enforcement point —
+      // an empty/missing whitelist collapses it to nothing.
+      const shareAllowedSkillIds = shareGate
+        ? new Set(
+            filterPluginsByShareGate(
+              [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].map(
+                (skill) => skill.identifier,
+              ),
+              shareGate,
+            ),
+          )
+        : undefined;
       const seenNames = new Set<string>();
       const skills = [...projectMetas, ...dbMetas, ...agentSkillMetas, ...builtinMetas].filter(
         (skill) => {
           if (disabledPluginIds.includes(skill.identifier)) return false;
+          if (shareAllowedSkillIds && !shareAllowedSkillIds.has(skill.identifier)) return false;
           if (seenNames.has(skill.name)) return false;
           seenNames.add(skill.name);
           return true;
@@ -5361,7 +5382,14 @@ export class AiAgentService {
         agentConfig,
         agentGroup: operationAgentGroup,
         agentShare: shareGate
-          ? { agentId: shareGate.agentId, visitorUserId: shareGate.visitorUserId }
+          ? {
+              agentId: shareGate.agentId,
+              // Threaded through so per-step context building can re-apply the
+              // same fail-closed file gate as `applyShareGateToAgentConfig` to
+              // sources fetched independently of `agentConfig`.
+              filePermissionConfig: shareGate.shareConfig.filePermissionConfig,
+              visitorUserId: shareGate.visitorUserId,
+            }
           : undefined,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
         executionPlan,

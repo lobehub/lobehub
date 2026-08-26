@@ -1,0 +1,339 @@
+import type { AgentState, CallLLMPayload } from '@lobechat/agent-runtime';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { RuntimeExecutorContext } from '../context';
+import type { ServerCallLlmTooling } from './serverCallLlmTooling';
+
+const topicFindByIdMock = vi.hoisted(() => vi.fn());
+const messageQueryMock = vi.hoisted(() => vi.fn());
+const getAgentContextDocumentsMock = vi.hoisted(() => vi.fn());
+const serverMessagesEngineMock = vi.hoisted(() => vi.fn());
+const getInfoForAIGenerationMock = vi.hoisted(() => vi.fn());
+const getUserSettingsMock = vi.hoisted(() => vi.fn());
+const credsListMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/config/composio', () => ({
+  composioEnv: { COMPOSIO_API_KEY: undefined },
+}));
+
+vi.mock('@/envs/file', () => ({
+  fileEnv: { NEXT_PUBLIC_S3_FILE_PATH: 'files' },
+}));
+
+vi.mock('./serverCallLlmContextHints', () => ({
+  resolveServerCallLlmContextHints: vi.fn().mockImplementation(async ({ llmPayload }) => ({
+    capabilities: {
+      isCanUseAudio: () => false,
+      isCanUseFC: () => true,
+      isCanUseVideo: () => false,
+      isCanUseVision: () => false,
+    },
+    messagesForContext: llmPayload.messages,
+    modelDisplayName: undefined,
+    modelKnowledgeCutoff: undefined,
+    preserveThinkingForPayload: undefined,
+    resolvedExtendParams: undefined,
+    shouldReplayAssistantReasoning: false,
+  })),
+}));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(() => ({
+    findById: topicFindByIdMock,
+  })),
+}));
+
+vi.mock('@/database/models/message', () => ({
+  MessageModel: vi.fn().mockImplementation(() => ({
+    query: messageQueryMock,
+  })),
+}));
+
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn().mockImplementation(() => ({
+    getAgentContextDocuments: getAgentContextDocumentsMock,
+    getDocumentByFilename: vi.fn(),
+  })),
+}));
+
+vi.mock('@/database/models/user', () => {
+  const UserModel = vi.fn().mockImplementation(() => ({
+    getUserSettings: getUserSettingsMock,
+  })) as any;
+  UserModel.getInfoForAIGeneration = getInfoForAIGenerationMock;
+  return { UserModel };
+});
+
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(() => ({
+    market: {
+      creds: { list: credsListMock },
+      organizations: {
+        creds: vi.fn().mockReturnValue({ list: credsListMock }),
+      },
+    },
+  })),
+}));
+
+vi.mock('@/server/modules/Mecha/ContextEngineering', () => ({
+  serverMessagesEngine: serverMessagesEngineMock,
+}));
+
+// Imported after the mocks above so the module under test picks them up.
+const { buildServerCallLlmContext } = await import('./serverCallLlmContextBuilder');
+
+const CREATOR_USER_ID = 'creator-1';
+const VISITOR_USER_ID = 'visitor-1';
+const AGENT_ID = 'agent-1';
+
+const baseCtx = (overrides: Partial<RuntimeExecutorContext> = {}): RuntimeExecutorContext =>
+  ({
+    agentConfig: { chatConfig: {}, systemRole: 'test' },
+    messageModel: {} as RuntimeExecutorContext['messageModel'],
+    operationId: 'operation-1',
+    serverDB: {} as RuntimeExecutorContext['serverDB'],
+    stepIndex: 0,
+    streamManager: {} as RuntimeExecutorContext['streamManager'],
+    toolExecutionService: {} as RuntimeExecutorContext['toolExecutionService'],
+    userId: CREATOR_USER_ID,
+    ...overrides,
+  }) as RuntimeExecutorContext;
+
+const baseState = (metadata: Record<string, unknown> = {}): AgentState =>
+  ({
+    cost: {} as any,
+    createdAt: new Date().toISOString(),
+    lastModified: new Date().toISOString(),
+    maxSteps: 10,
+    messages: [],
+    metadata: { agentId: AGENT_ID, ...metadata },
+    operationId: 'operation-1',
+    status: 'idle',
+    stepCount: 0,
+  }) as unknown as AgentState;
+
+const emptyTooling: ServerCallLlmTooling = {
+  resolved: {
+    activatableToolIds: [],
+    enabledToolIds: [],
+    promptManifestMap: {},
+    tools: [],
+  } as any,
+  resolvedSkills: undefined,
+  toolDiscoveryConfig: undefined,
+  tools: undefined,
+};
+
+const buildPayload = (content: string): CallLLMPayload =>
+  ({
+    messages: [{ content, role: 'user' }],
+  }) as unknown as CallLLMPayload;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+
+  serverMessagesEngineMock.mockImplementation(async (input: any) => input.messages);
+  getInfoForAIGenerationMock.mockResolvedValue({ responseLanguage: 'en-US', userName: 'tester' });
+  getUserSettingsMock.mockResolvedValue({});
+  credsListMock.mockResolvedValue({ data: [] });
+  getAgentContextDocumentsMock.mockResolvedValue([]);
+  messageQueryMock.mockResolvedValue([]);
+});
+
+describe('buildServerCallLlmContext — refer_topic share gate (agent share IDOR fix)', () => {
+  it('injects the referenced topic content for a non-share run', async () => {
+    topicFindByIdMock.mockResolvedValue({
+      agentId: AGENT_ID,
+      historySummary: 'Some prior summary',
+      id: 'topic-x',
+      senderId: CREATOR_USER_ID,
+      title: 'My topic',
+    });
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx(),
+      llmPayload: buildPayload('<refer_topic id="topic-x" name="My topic" />hi'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.topicReferences).toEqual([
+      { summary: 'Some prior summary', topicId: 'topic-x', topicTitle: 'My topic' },
+    ]);
+  });
+
+  it('does not inject content for a topic the visitor does not own in a share run', async () => {
+    // The creator's own private topic — not owned by the visitor.
+    topicFindByIdMock.mockResolvedValue({
+      agentId: AGENT_ID,
+      historySummary: 'Private creator content',
+      id: 'topic-private',
+      senderId: CREATOR_USER_ID,
+      title: 'Creator private topic',
+    });
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+      }),
+      llmPayload: buildPayload('<refer_topic id="topic-private" name="Creator private topic" />hi'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    // No summary/recentMessages leaked — only the attacker-supplied tag echoed back.
+    expect(engineInput.topicReferences).toEqual([
+      { topicId: 'topic-private', topicTitle: 'Creator private topic' },
+    ]);
+    expect(messageQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('does not inject content for another visitor topic in a share run', async () => {
+    topicFindByIdMock.mockResolvedValue({
+      agentId: AGENT_ID,
+      historySummary: 'Other visitor content',
+      id: 'topic-other-visitor',
+      senderId: 'other-visitor',
+      title: 'Other visitor topic',
+    });
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+      }),
+      llmPayload: buildPayload('<refer_topic id="topic-other-visitor" />hi'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.topicReferences).toEqual([
+      { topicId: 'topic-other-visitor', topicTitle: undefined },
+    ]);
+  });
+
+  it('injects content when the share visitor references their own topic', async () => {
+    topicFindByIdMock.mockResolvedValue({
+      agentId: AGENT_ID,
+      historySummary: 'Visitor own summary',
+      id: 'topic-own',
+      senderId: VISITOR_USER_ID,
+      title: 'My own topic',
+    });
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+      }),
+      llmPayload: buildPayload('<refer_topic id="topic-own" />hi'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.topicReferences).toEqual([
+      { summary: 'Visitor own summary', topicId: 'topic-own', topicTitle: 'My own topic' },
+    ]);
+  });
+});
+
+describe('buildServerCallLlmContext — agent context documents share gate (fail closed)', () => {
+  const alwaysDoc = {
+    content: 'Full ALWAYS document body',
+    filename: 'always.md',
+    id: 'doc-1',
+    isFolder: false,
+    policyLoad: 'always',
+    title: 'Always doc',
+  };
+
+  it('injects ALWAYS documents for a non-share run', async () => {
+    getAgentContextDocumentsMock.mockResolvedValue([alwaysDoc]);
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx(),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    expect(getAgentContextDocumentsMock).toHaveBeenCalledWith(AGENT_ID);
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.agentDocuments).toEqual([expect.objectContaining({ id: 'doc-1' })]);
+  });
+
+  it('does not fetch/inject ALWAYS documents for a share run with no filePermissionConfig', async () => {
+    getAgentContextDocumentsMock.mockResolvedValue([alwaysDoc]);
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: { agentId: AGENT_ID, visitorUserId: VISITOR_USER_ID },
+      }),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    expect(getAgentContextDocumentsMock).not.toHaveBeenCalled();
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.agentDocuments).toBeUndefined();
+  });
+
+  it('injects ALWAYS documents for a share run when filePermissionConfig.agentFiles is "read"', async () => {
+    getAgentContextDocumentsMock.mockResolvedValue([alwaysDoc]);
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: {
+          agentId: AGENT_ID,
+          filePermissionConfig: { agentFiles: 'read' },
+          visitorUserId: VISITOR_USER_ID,
+        },
+      }),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    expect(getAgentContextDocumentsMock).toHaveBeenCalledWith(AGENT_ID);
+    const engineInput = serverMessagesEngineMock.mock.calls[0][0];
+    expect(engineInput.agentDocuments).toEqual([expect.objectContaining({ id: 'doc-1' })]);
+  });
+
+  it('does not fetch ALWAYS documents for a share run with filePermissionConfig.agentFiles "none"', async () => {
+    getAgentContextDocumentsMock.mockResolvedValue([alwaysDoc]);
+
+    await buildServerCallLlmContext({
+      ctx: baseCtx({
+        agentShare: {
+          agentId: AGENT_ID,
+          filePermissionConfig: { agentFiles: 'none' },
+          visitorUserId: VISITOR_USER_ID,
+        },
+      }),
+      llmPayload: buildPayload('hello'),
+      model: 'gpt-4',
+      provider: 'openai',
+      state: baseState(),
+      tooling: emptyTooling,
+    });
+
+    expect(getAgentContextDocumentsMock).not.toHaveBeenCalled();
+  });
+});

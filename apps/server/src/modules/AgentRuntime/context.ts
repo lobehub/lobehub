@@ -8,6 +8,7 @@ import {
 import type { SearchDecision } from 'model-bank';
 
 import { type MessageModel } from '@/database/models/message';
+import type { AgentShareConfig } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
@@ -31,8 +32,16 @@ export interface RuntimeExecutorContext {
    * Shared-agent visitor marker (agent share C4), read back from
    * `state.metadata.agentShare`. Forwarded into the business model-runtime
    * context so LLM billing targets the creator's agentShare budget.
+   *
+   * `filePermissionConfig` is threaded through so per-step context assembly
+   * (e.g. always-on agent context documents) can apply the same fail-closed
+   * file gate as `applyShareGateToAgentConfig` without re-deriving it.
    */
-  agentShare?: { agentId: string; visitorUserId: string };
+  agentShare?: {
+    agentId: string;
+    filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+    visitorUserId: string;
+  };
   /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result

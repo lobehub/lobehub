@@ -15,6 +15,7 @@ import type {
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
+import type { AgentShareConfig } from '@/database/schemas';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 import type {
   EvalContext,
@@ -361,8 +362,17 @@ export interface OperationCreationParams {
    * Shared-agent visitor marker (agent share C4). Persisted to
    * `state.metadata.agentShare` so every step's LLM call routes billing to the
    * creator's agentShare budget instead of the executing user's own.
+   *
+   * `filePermissionConfig` mirrors the share's file gate (see
+   * `applyShareGateToAgentConfig`) so per-step context building can re-apply
+   * the same fail-closed rule to sources that are fetched independently of
+   * `agentConfig` (e.g. always-on agent context documents).
    */
-  agentShare?: { agentId: string; visitorUserId: string };
+  agentShare?: {
+    agentId: string;
+    filePermissionConfig?: AgentShareConfig['filePermissionConfig'];
+    visitorUserId: string;
+  };
   appContext: {
     agentId?: string;
     /**

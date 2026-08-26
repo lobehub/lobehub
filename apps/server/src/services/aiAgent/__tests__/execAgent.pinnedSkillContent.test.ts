@@ -396,4 +396,73 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(injected).toContain('Available Resources');
     expect(injected).toContain('guide.md');
   });
+
+  // Agent share: shared runs must not let a visitor enumerate the creator's
+  // broader skill set (names/descriptions) through `<available_skills>`.
+  // `SkillEngine.generate` only annotates activation state on its input array,
+  // so the share whitelist has to shrink the candidate pool itself, before
+  // `SkillEngine` ever sees it.
+  describe('agent share skill whitelist', () => {
+    const buildShareGate = (enabledToolIds: string[]) => ({
+      agentId: 'agent-1',
+      shareConfig: { enabledToolIds },
+      visitorUserId: 'visitor-1',
+    });
+
+    it('excludes every creator skill from the candidate pool when the whitelist is empty', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        model: 'gpt-4',
+        plugins: ['db-skill-pinned'],
+        provider: 'openai',
+        systemRole: 'You are a helper',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'List your available skills',
+        shareGate: buildShareGate([]),
+      } as any);
+
+      expect(operationSkillSetArg()?.skills).toEqual([]);
+    });
+
+    it('exposes only the whitelisted skill to the candidate pool', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        model: 'gpt-4',
+        plugins: ['db-skill-pinned'],
+        provider: 'openai',
+        systemRole: 'You are a helper',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'List your available skills',
+        shareGate: buildShareGate(['db-skill-auto']),
+      } as any);
+
+      const skills = operationSkillSetArg()?.skills ?? [];
+      expect(skills.map((s) => s.identifier)).toEqual(['db-skill-auto']);
+      expect(skillById('db-skill-pinned')).toBeUndefined();
+    });
+
+    it('leaves the candidate pool at full account scope for a non-share run', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        model: 'gpt-4',
+        plugins: ['db-skill-pinned'],
+        provider: 'openai',
+        systemRole: 'You are a helper',
+      });
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+      const identifiers = (operationSkillSetArg()?.skills ?? []).map((s) => s.identifier);
+      expect(identifiers).toEqual(expect.arrayContaining(['db-skill-pinned', 'db-skill-auto']));
+    });
+  });
 });

@@ -116,11 +116,26 @@ export const buildServerCallLlmContext = async ({
   if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
     const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
     const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
+    const agentShare = ctx.agentShare;
+    // Topic references are limited to the visitor's own topics in shared runs
+    // — the run itself executes as the creator, so ownership-only filtering
+    // on TopicModel is not enough to keep a reference scoped to the visitor.
+    const isTopicVisibleToRun = (
+      topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
+    ): boolean => {
+      if (!agentShare) return true;
+      return topic?.senderId === agentShare.visitorUserId && topic?.agentId === agentShare.agentId;
+    };
     topicReferences = await resolveTopicReferences(
       messagesForContext as Array<{ content: string | unknown }>,
-      async (topicId) => topicModel.findById(topicId),
       async (topicId) => {
         const topic = await topicModel.findById(topicId);
+        return isTopicVisibleToRun(topic) ? topic : null;
+      },
+      async (topicId) => {
+        const topic = await topicModel.findById(topicId);
+        if (!isTopicVisibleToRun(topic)) return [];
+
         return messageModel.query(
           {
             agentId: topic?.agentId ?? undefined,
@@ -134,9 +149,15 @@ export const buildServerCallLlmContext = async ({
   }
 
   // Fetch agent documents for context injection.
+  // Share visitor runs never see agent context documents unless the share's
+  // file gate explicitly grants read access — this mirrors
+  // `applyShareGateToAgentConfig`'s fail-closed handling of agentConfig.files,
+  // since ALWAYS-policy documents are fetched independently of agentConfig.
+  const agentDocumentsAllowedForShare =
+    !ctx.agentShare || ctx.agentShare.filePermissionConfig?.agentFiles === 'read';
   let agentDocuments: AgentContextDocument[] | undefined;
   const agentId = state.metadata?.agentId;
-  if (agentId && ctx.serverDB && ctx.userId) {
+  if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
     try {
       const agentDocService = new AgentDocumentsService(
         ctx.serverDB,
