@@ -2,7 +2,7 @@
 
 import { AGENT_SHARE_MAX_TOPICS_PER_VISITOR } from '@lobechat/const';
 import { getActivePluginIds } from '@lobechat/types';
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { Button, Select, Switch, toast } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -15,6 +15,10 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import { type AgentShareLimitDraft, clearCommittedLimitDraft } from './limitDraft';
 import { Section, SettingRow } from './SectionLayout';
+import {
+  getVisitorVisibleEnabledToolIds,
+  isToolAvailableToVisitors,
+} from './toolVisitorAvailability';
 import { type AgentShareConfigPatch, useAgentShare } from './useAgentShare';
 import { type AgentShareLimitPatch, useDebouncedLimitPatch } from './useDebouncedLimitPatch';
 
@@ -122,6 +126,7 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
   ];
 
   const filePermission = shareConfig.filePermissionConfig;
+  const visibleEnabledToolIds = getVisitorVisibleEnabledToolIds(shareConfig.enabledToolIds);
 
   return (
     <Flexbox gap={16}>
@@ -180,17 +185,37 @@ const SettingsContent = memo<SettingsContentProps>(({ agentId }) => {
           </Text>
         ) : (
           <Flexbox horizontal align="center" gap={8} wrap="wrap">
-            {candidateToolIds.map((toolId) => (
-              <PluginTag
-                selectable
-                useAllMetaList
-                agentId={agentId}
-                key={toolId}
-                pluginId={toolId}
-                selected={(shareConfig.enabledToolIds ?? []).includes(toolId)}
-                onSelect={() => toggleTool(toolId)}
-              />
-            ))}
+            {candidateToolIds.map((toolId) => {
+              // A builtin tool absent from the server's visitor allowlist
+              // (`isToolAvailableToVisitors`) can never actually reach a
+              // visitor's run — see `shareGate.ts`'s
+              // `SHARE_VISITOR_ALLOWED_IDENTIFIERS`. Show it disabled with an
+              // explanation instead of letting the owner "select" a grant the
+              // server will always strip, and never render a stale persisted
+              // selection for it as an active grant.
+              const availableToVisitors = isToolAvailableToVisitors(toolId);
+
+              return (
+                <Tooltip
+                  key={toolId}
+                  title={
+                    availableToVisitors
+                      ? undefined
+                      : t('share.settings.tools.notAvailableToVisitors')
+                  }
+                >
+                  <PluginTag
+                    selectable
+                    useAllMetaList
+                    agentId={agentId}
+                    disabled={!availableToVisitors}
+                    pluginId={toolId}
+                    selected={availableToVisitors && visibleEnabledToolIds.includes(toolId)}
+                    onSelect={availableToVisitors ? () => toggleTool(toolId) : undefined}
+                  />
+                </Tooltip>
+              );
+            })}
           </Flexbox>
         )}
       </Section>
