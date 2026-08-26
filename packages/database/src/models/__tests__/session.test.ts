@@ -7,6 +7,7 @@ import { getTestDB } from '../../core/getTestDB';
 import type { NewSession, SessionItem } from '../../schemas';
 import {
   agents,
+  agentShares,
   agentsToSessions,
   messages,
   sessionGroups,
@@ -16,12 +17,14 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
+import { AgentShareModel } from '../agentShare';
 import { SessionModel } from '../session';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'session-user';
 const sessionModel = new SessionModel(serverDB, userId);
+const agentShareModel = new AgentShareModel(serverDB, userId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -1348,6 +1351,67 @@ describe('SessionModel', () => {
         model: 'gpt-3.5-turbo',
         title: 'Original Title',
       });
+    });
+
+    // Regression test for LOBE-11930: `updateConfig` used to write
+    // `agents.model` / `agents.agencyConfig` directly with `tx.update(agents)`,
+    // bypassing `AgentModel.updateConfig`'s invariant that a `link` share must
+    // be reset to `private` when a config write turns the agent heterogeneous
+    // (Codex / Claude Code). `apps/server/src/routers/lambda/session.ts`'s
+    // `updateSessionConfig` procedure accepts an arbitrary passthrough patch
+    // and calls this method directly, so it could switch a published
+    // homogeneous agent to a heterogeneous model while its share stayed
+    // `link`. See `writeAgentConfigWithShareReset`'s JSDoc.
+    it('resets a link share to private when the config write turns the agent heterogeneous', async () => {
+      const sessionId = 'test-session-share-reset';
+      const agentId = 'test-agent-share-reset';
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: sessionId, userId, type: 'agent' });
+        await trx
+          .insert(agents)
+          .values({ id: agentId, userId, model: 'gpt-3.5-turbo', title: 'Homogeneous Agent' });
+        await trx.insert(agentsToSessions).values({ sessionId, agentId, userId });
+      });
+
+      await agentShareModel.create(agentId, 'link');
+
+      await sessionModel.updateConfig(sessionId, { model: 'codex' });
+
+      const [persistedAgent] = await serverDB
+        .select({ model: agents.model })
+        .from(agents)
+        .where(eq(agents.id, agentId));
+      expect(persistedAgent.model).toBe('codex');
+
+      const [persistedShare] = await serverDB
+        .select({ visibility: agentShares.visibility })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId));
+      expect(persistedShare.visibility).toBe('private');
+    });
+
+    it('leaves a link share untouched when the config write does not touch model/agencyConfig', async () => {
+      const sessionId = 'test-session-share-untouched';
+      const agentId = 'test-agent-share-untouched';
+
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values({ id: sessionId, userId, type: 'agent' });
+        await trx
+          .insert(agents)
+          .values({ id: agentId, userId, model: 'gpt-3.5-turbo', title: 'Homogeneous Agent' });
+        await trx.insert(agentsToSessions).values({ sessionId, agentId, userId });
+      });
+
+      await agentShareModel.create(agentId, 'link');
+
+      await sessionModel.updateConfig(sessionId, { title: 'Renamed Agent' });
+
+      const [persistedShare] = await serverDB
+        .select({ visibility: agentShares.visibility })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId));
+      expect(persistedShare.visibility).toBe('link');
     });
   });
 
