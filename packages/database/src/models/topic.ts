@@ -1142,8 +1142,28 @@ export class TopicModel {
    * .interruptTask` re-derives any hetero child operation from the same
    * topic metadata, so callers can pass these pairs straight through without
    * re-reading child operations here.
+   *
+   * `revocationGeneration`, when passed, ALSO filters to `shareGeneration <
+   * revocationGeneration` (see `ChatTopicMetadata.runningOperation
+   * .shareGeneration`'s JSDoc): a running operation confirmed AT OR AFTER
+   * `revocationGeneration` was authorized by a write that happened no
+   * earlier than the caller's own revocation (e.g. a republish racing a
+   * stale deferred callback) and must survive it. A marker with no
+   * `shareGeneration` at all (`COALESCE(..., 0)`) is always treated as older
+   * than any cutoff — fail closed rather than let an unstamped legacy/edge-
+   * case marker silently escape every future revocation.
+   *
+   * Omitted (no filter, every active run returned) by the agent/session
+   * DELETE snapshot paths (`AgentModel.delete`, `SessionModel`'s orphan
+   * cleanup): those hand the result straight to `AiAgentService.interruptTask`
+   * per run, not to the generation-scoped `interruptActiveShareRuns` sweep,
+   * and the agent row is cascading away in the SAME transaction regardless of
+   * generation — there is no "legitimate newer run" to protect there.
    */
-  findActiveVisitorRunTopics = async (agentId: string): Promise<ActiveShareRun[]> => {
+  findActiveVisitorRunTopics = async (
+    agentId: string,
+    revocationGeneration?: number,
+  ): Promise<ActiveShareRun[]> => {
     const rows = await this.db
       .select({ id: topics.id, metadata: topics.metadata })
       .from(topics)
@@ -1153,6 +1173,9 @@ export class TopicModel {
           eq(topics.agentId, agentId),
           isNotNull(topics.senderId),
           sql`${topics.metadata} -> 'runningOperation' ->> 'operationId' is not null`,
+          revocationGeneration === undefined
+            ? undefined
+            : sql`COALESCE((${topics.metadata} -> 'runningOperation' ->> 'shareGeneration')::int, 0) < ${revocationGeneration}`,
         ),
       );
 

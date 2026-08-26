@@ -117,7 +117,10 @@ describe('writeAgentConfigWithShareReset (real Postgres)', () => {
     });
 
     expect(onShareReset).toHaveBeenCalledTimes(1);
-    expect(onShareReset).toHaveBeenCalledWith(agentId);
+    // Second argument is the post-bump generation counter (see
+    // `bumpAgentShareGeneration`) — asserted loosely here since its exact
+    // value depends on this agent's share history, not this test's intent.
+    expect(onShareReset).toHaveBeenCalledWith(agentId, expect.any(Number));
   });
 
   it('does not invoke onShareReset when the write does not touch model/agencyConfig', async () => {

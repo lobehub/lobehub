@@ -5488,6 +5488,10 @@ export class AiAgentService {
       if (shareGate && agentShareModel) {
         await agentShareModel.assertRunnableForVisitor({
           agentId: shareGate.agentId,
+          // See `AgentShareGate.generation`'s JSDoc — fails closed if a
+          // tightening committed between `shareGate` being resolved and this
+          // recheck.
+          expectedGeneration: shareGate.generation,
           operationId,
           topicId,
           visitorUserId: shareGate.visitorUserId,
@@ -6927,8 +6931,18 @@ export class AiAgentService {
    * `findActiveVisitorRunTopics` querying ONCE is guaranteed to see every
    * operation that won that race and got as far as writing its
    * `runningOperation` marker.
+   *
+   * `revocationGeneration` scopes BOTH steps below to runs that predate the
+   * triggering write, instead of every pending/running visitor operation on
+   * the agent: without it, an owner who revokes and then republishes before
+   * this `after()`-scheduled call actually runs would have this sweep
+   * revoke/interrupt runs the REPUBLISH legitimately authorized (they look
+   * identical to a stale one — same agentId, still pending/running — with
+   * only the generation telling them apart). Callers MUST pass the exact
+   * value the triggering write bumped `agentShareGenerations` to (see
+   * `agentShareGenerations`'s JSDoc), not a value re-read at call time.
    */
-  async interruptActiveShareRuns(agentId: string): Promise<void> {
+  async interruptActiveShareRuns(agentId: string, revocationGeneration: number): Promise<void> {
     const interruptedOperationIds = new Set<string>();
 
     const interrupt = async (operationId: string, topicId: string) => {
@@ -6946,12 +6960,14 @@ export class AiAgentService {
       }
     };
 
-    // 1. Revoke every reservation still standing up. Also try to interrupt
-    // each — most won't have registered with the runtime yet (harmless
-    // no-op via `interruptTask`), but some may have reached that point by
-    // the time this revoke wins the row-lock race.
+    // 1. Revoke every reservation still standing up THAT PREDATES THIS
+    // REVOCATION (`generation < revocationGeneration`). Also try to
+    // interrupt each — most won't have registered with the runtime yet
+    // (harmless no-op via `interruptTask`), but some may have reached that
+    // point by the time this revoke wins the row-lock race.
     const revokedReservations = await new AgentShareModel(this.db, this.userId).revokeReservations(
       agentId,
+      revocationGeneration,
     );
     if (revokedReservations.length > 0) {
       log(
@@ -6965,8 +6981,12 @@ export class AiAgentService {
     );
 
     // 2. A single (not retried) query for already-confirmed/running
-    // operations — safe per this method's JSDoc.
-    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(agentId);
+    // operations THAT PREDATE THIS REVOCATION — safe per this method's
+    // JSDoc.
+    const activeRuns = await this.topicModel.findActiveVisitorRunTopics(
+      agentId,
+      revocationGeneration,
+    );
     if (activeRuns.length > 0) {
       log(
         'interruptActiveShareRuns: agentId=%s interrupting %d active visitor run(s)',

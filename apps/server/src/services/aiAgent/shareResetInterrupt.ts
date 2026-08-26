@@ -26,7 +26,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
  */
 export const scheduleShareRunInterruptOnReset =
   (serverDB: LobeChatDatabase, ownerId: string) =>
-  (agentId: string): void => {
+  (agentId: string, revocationGeneration: number): void => {
     after(async () => {
       // Dynamic import, not a static one: `services/agent/index.ts` (one of
       // this callback's callers) is itself imported by `./index.ts`
@@ -36,8 +36,12 @@ export const scheduleShareRunInterruptOnReset =
       // loading) breaks it without changing behavior.
       const { AiAgentService } = await import('.');
 
+      // `revocationGeneration` was captured by `writeAgentConfigWithShareReset`
+      // at write time and threaded straight through — see
+      // `interruptActiveShareRuns`'s JSDoc for why it must never be re-read
+      // here instead.
       await new AiAgentService(serverDB, ownerId)
-        .interruptActiveShareRuns(agentId)
+        .interruptActiveShareRuns(agentId, revocationGeneration)
         .catch((error) =>
           console.error('[agentConfigShareReset] interruptActiveShareRuns failed', error),
         );

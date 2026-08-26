@@ -32,7 +32,7 @@ export interface SessionModelOptions {
    * that function's `onShareReset` JSDoc and `AgentModelOptions` (same
    * pattern, kept in sync). See LOBE-11930 hole 2.
    */
-  onShareReset?: (agentId: string) => void;
+  onShareReset?: (agentId: string, revocationGeneration: number) => void;
 
   /**
    * Called with the snapshot of Agent Share visitor runs that were still
@@ -52,7 +52,7 @@ export class SessionModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
-  private onShareReset?: (agentId: string) => void;
+  private onShareReset?: (agentId: string, revocationGeneration: number) => void;
   private onShareRunsInterrupted?: (activeShareRuns: ActiveShareRun[]) => void;
 
   constructor(

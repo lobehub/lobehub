@@ -3,11 +3,18 @@ import { isHeterogeneousAgentConfig } from '@lobechat/const';
 import type { ChatTopicMetadata, LobeAgentAgencyConfig, ShareVisibility } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, exists, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 
-import type { AgentShareConfig, AgentShareConfigPatch } from '../schemas';
-import { agents, agentShareRunReservations, agentShares, topics } from '../schemas';
+import type { AgentShareConfig, AgentShareConfigPatch, AgentShareItem } from '../schemas';
+import {
+  agents,
+  agentShareGenerations,
+  agentShareRunReservations,
+  agentShares,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { bumpAgentShareGeneration, readAgentShareGeneration } from '../utils/agentShareGeneration';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { isUuid } from '../utils/uuid';
 
@@ -68,6 +75,61 @@ const normalizeAgentShareConfig = (config: AgentShareConfig | null): AgentShareC
     DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
   maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
 });
+
+/**
+ * Whether `patch` NARROWS the creator-data surface `previous` already
+ * granted — the only kind of `shareConfig` change that must invalidate a run
+ * standing on the old grants. Field-by-field, because tightening one field
+ * (e.g. dropping a tool) alongside loosening another (e.g. enabling
+ * `allowReadMemory`) must still be treated as a tightening overall: a
+ * visitor's in-flight run could otherwise keep reading data the owner just
+ * tried to lock down.
+ *
+ * Deliberately excludes fields whose enforcement point is NOT "snapshotted
+ * for the lifetime of a run": `maxTopicsPerVisitor` / `maxTurnsPerTopic` are
+ * re-read fresh on every new `execAgent` call (`shareChat.ts`, before any
+ * row is created) and never gate access to creator data mid-run — lowering
+ * them only affects topics/turns that don't exist yet. `uploadAllowed` has no
+ * runtime enforcement point at all today (`SettingsContent.tsx` ships it
+ * disabled, "coming soon") — nothing to invalidate. If either is wired into a
+ * run-duration grant later, add it here.
+ */
+const isConfigTightening = (previous: AgentShareConfig, patch: AgentShareConfigPatch): boolean => {
+  if (patch.allowReadMemory === false && previous.allowReadMemory === true) return true;
+
+  if (patch.enabledToolIds) {
+    const nextAllowed = new Set(patch.enabledToolIds);
+    const droppedATool = (previous.enabledToolIds ?? []).some((id) => !nextAllowed.has(id));
+    if (droppedATool) return true;
+  }
+
+  if (patch.filePermissionConfig) {
+    const prevFiles = previous.filePermissionConfig;
+    const nextFiles = patch.filePermissionConfig;
+    if (nextFiles.agentFiles === 'none' && prevFiles?.agentFiles === 'read') return true;
+    if (nextFiles.knowledgeBase === 'none' && prevFiles?.knowledgeBase === 'read') return true;
+  }
+
+  return false;
+};
+
+/** An `agentShares` row with `shareConfig` filled via `normalizeAgentShareConfig` — the shape every mutator that touches config returns to callers. */
+type NormalizedAgentShareItem = Omit<AgentShareItem, 'shareConfig'> & {
+  shareConfig: AgentShareConfig;
+};
+
+/** Result of a share mutation that MAY trigger a run-invalidating restrictive change. */
+interface ShareMutationResult<T> {
+  /**
+   * Set only when this call actually bumped `agentShareGenerations` — i.e. a
+   * genuine tightening/revocation happened, not merely "this endpoint COULD
+   * have caused one". Callers must schedule
+   * `AiAgentService.interruptActiveShareRuns(agentId, revocationGeneration)`
+   * post-commit if and only if this is defined.
+   */
+  revocationGeneration?: number;
+  share: T | null;
+}
 
 export type AgentShareData = NonNullable<
   Awaited<ReturnType<(typeof AgentShareModel)['findByShareId']>>
@@ -191,9 +253,48 @@ export class AgentShareModel {
     return { ...share, shareConfig: normalizeAgentShareConfig(share.shareConfig) };
   };
 
-  /** Atomically merge client-owned fields while preserving sibling and legacy JSON keys. */
-  updateConfig = async (agentId: string, config: AgentShareConfigPatch) =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+  /**
+   * Atomically merge client-owned fields while preserving sibling and legacy
+   * JSON keys.
+   *
+   * When the merged patch NARROWS a grant a `link` share already exposed
+   * (see `isConfigTightening`), this ALSO bumps `agentShareGenerations` in
+   * the SAME `agents.id FOR UPDATE` transaction as the config write, and
+   * returns the new value as `revocationGeneration`. Two things fall out of
+   * doing the bump under that lock rather than after this call returns:
+   *
+   * 1. Any concurrent `assertRunnableForVisitor` racing this write is forced
+   *    to observe EITHER the pre-tightening config with the OLD generation,
+   *    or this write's result with the NEW one — never a stale config
+   *    stamped with a generation that looks current. A request that read
+   *    `shareConfig` before this write (e.g. `shareChat.ts`'s
+   *    `findByShareIdWithAccessCheck`) carries that OLD generation forward as
+   *    `shareGate.generation`; `assertRunnableForVisitor` compares it against
+   *    the FRESH value under the lock and fails closed on a mismatch. See
+   *    that method's JSDoc.
+   * 2. The caller (the router) can hand `revocationGeneration` straight to
+   *    `AiAgentService.interruptActiveShareRuns` to tear down every
+   *    reservation/running-operation staked under the OLD grants — see
+   *    `agentShareGenerations`'s JSDoc for why the cutoff must be exactly
+   *    this value.
+   *
+   * Only a `link` share can have an in-flight visitor run to invalidate
+   * (`assertRunnableForVisitor` refuses to stake a reservation for any other
+   * visibility), so a tightening patch to a `private` share never bumps the
+   * generation — nothing to protect against.
+   */
+  updateConfig = async (
+    agentId: string,
+    config: AgentShareConfigPatch,
+  ): Promise<ShareMutationResult<NormalizedAgentShareItem>> =>
+    (await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const [previous] = await tx
+        .select({ shareConfig: agentShares.shareConfig, visibility: agentShares.visibility })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId));
+
+      if (!previous) return { share: null };
+
       const { filePermissionConfig, ...topLevelConfig } = config;
       const nextConfig = filePermissionConfig
         ? sql<AgentShareConfig>`COALESCE(${agentShares.shareConfig}, '{}'::jsonb) || ${JSON.stringify(topLevelConfig)}::jsonb || jsonb_build_object('filePermissionConfig', COALESCE(${agentShares.shareConfig}->'filePermissionConfig', '{}'::jsonb) || ${JSON.stringify(filePermissionConfig)}::jsonb)`
@@ -207,10 +308,19 @@ export class AgentShareModel {
         .where(eq(agentShares.agentId, agentId))
         .returning();
 
-      return updated
-        ? { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) }
-        : null;
-    });
+      if (!updated) return { share: null };
+
+      const share = { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) };
+
+      const tightened =
+        previous.visibility === 'link' &&
+        isConfigTightening(normalizeAgentShareConfig(previous.shareConfig), config);
+
+      if (!tightened) return { share };
+
+      const revocationGeneration = await bumpAgentShareGeneration(tx, agentId);
+      return { revocationGeneration, share };
+    })) ?? { share: null };
 
   /**
    * Re-validate a share is still `link` immediately before a visitor run
@@ -254,14 +364,29 @@ export class AgentShareModel {
    * run's own `confirmReservation` call, right before it commits to actually
    * running, fails closed if it was. See `agentShareRunReservations`'s JSDoc
    * for why this replaces the previous bounded-retry stopgap.
+   *
+   * `expectedGeneration` closes a SIBLING window: `shareConfig` (tool
+   * allowlist, memory/file grants) is resolved once, at `shareChat.ts`'s
+   * `findByShareIdWithAccessCheck`, and then snapshotted into the run's
+   * runtime state for its whole lifetime (`AgentShareGate`,
+   * `applyShareGateToAgentConfig`) — the visibility recheck above says
+   * nothing about whether that snapshot is still valid. The caller passes
+   * the `agentShareGenerations` value it observed alongside that config read;
+   * this method re-reads the CURRENT value under the same lock and refuses
+   * to stake a reservation unless they match. A tightening write
+   * (`updateConfig`) always bumps the generation, so a mismatch here means
+   * "this request's config snapshot predates a tightening that has since
+   * committed" — fail closed instead of running with stale, over-broad
+   * grants. See `agentShareGenerations`'s JSDoc.
    */
   assertRunnableForVisitor = async (params: {
     agentId: string;
+    expectedGeneration: number;
     operationId: string;
     topicId: string;
     visitorUserId: string;
   }): Promise<void> => {
-    const { agentId, operationId, topicId, visitorUserId } = params;
+    const { agentId, expectedGeneration, operationId, topicId, visitorUserId } = params;
 
     const runnable = await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
       const [share] = await tx
@@ -271,10 +396,16 @@ export class AgentShareModel {
 
       if (share?.visibility !== 'link') return false;
 
+      const currentGeneration = await readAgentShareGeneration(tx, agentId);
+      if (currentGeneration !== expectedGeneration) return false;
+
       // Durable claim, written under the SAME lock/transaction as the
-      // visibility check above — see this method's JSDoc.
+      // visibility check above — see this method's JSDoc. `generation` is
+      // what lets a later revocation scope its cleanup to reservations that
+      // predate it instead of every pending reservation for the agent.
       await tx.insert(agentShareRunReservations).values({
         agentId,
+        generation: currentGeneration,
         id: operationId,
         topicId,
         visitorUserId,
@@ -324,7 +455,10 @@ export class AgentShareModel {
             isNull(agentShareRunReservations.revokedAt),
           ),
         )
-        .returning({ id: agentShareRunReservations.id });
+        .returning({
+          generation: agentShareRunReservations.generation,
+          id: agentShareRunReservations.id,
+        });
 
       if (!reservation) return false;
 
@@ -334,9 +468,19 @@ export class AgentShareModel {
         .where(eq(topics.id, topicId))
         .for('update');
 
+      // Carry the reservation's generation onto the durable marker so a
+      // LATER revocation's `findActiveVisitorRunTopics` sweep (which no
+      // longer has the reservation row to read, since it was just deleted
+      // above) can still scope itself to runs that predate it. See
+      // `ChatTopicMetadata.runningOperation.shareGeneration`'s JSDoc.
       await tx
         .update(topics)
-        .set({ metadata: { ...existingTopic?.metadata, runningOperation } })
+        .set({
+          metadata: {
+            ...existingTopic?.metadata,
+            runningOperation: { ...runningOperation, shareGeneration: reservation.generation },
+          },
+        })
         .where(eq(topics.id, topicId));
 
       return true;
@@ -357,9 +501,18 @@ export class AgentShareModel {
   };
 
   /**
-   * Revoke every still-pending reservation for an agent — called right after
-   * a revocation write (`deleteByAgentId` / `updateVisibility('private')` /
-   * `writeAgentConfigWithShareReset`) commits.
+   * Revoke every still-pending reservation for an agent that predates
+   * `revocationGeneration` — called right after a revocation write
+   * (`deleteByAgentId` / `updateVisibility('private')` / tightening
+   * `updateConfig` / `writeAgentConfigWithShareReset`) commits, passing the
+   * EXACT generation that write just bumped to.
+   *
+   * `generation < revocationGeneration`, not a bare `agentId` match: a
+   * reservation staked by a request that observed `revocationGeneration` or
+   * later was authorized AFTER this specific revocation (e.g. a republish
+   * that raced this call's own deferred `after()` scheduling) and must
+   * survive it — see `agentShareGenerations`'s JSDoc for the republish
+   * scenario this closes.
    *
    * A single `UPDATE ... WHERE revoked_at IS NULL`, not a query loop: for any
    * reservation whose run is concurrently inside `confirmReservation`, this
@@ -378,6 +531,7 @@ export class AgentShareModel {
    */
   revokeReservations = async (
     agentId: string,
+    revocationGeneration: number,
   ): Promise<Array<{ operationId: string; topicId: string }>> => {
     const rows = await this.db
       .update(agentShareRunReservations)
@@ -386,6 +540,7 @@ export class AgentShareModel {
         and(
           eq(agentShareRunReservations.agentId, agentId),
           isNull(agentShareRunReservations.revokedAt),
+          lt(agentShareRunReservations.generation, revocationGeneration),
         ),
       )
       .returning({
@@ -415,9 +570,20 @@ export class AgentShareModel {
    * Only publishing (`link`) needs the check — reverting to `private` never
    * exposes visitor execution, so it must stay reachable even if the agent
    * config changed to a heterogeneous provider after the share was created.
+   *
+   * `link → private` also bumps `agentShareGenerations` in the SAME
+   * transaction and returns the new value as `revocationGeneration`, for the
+   * caller to hand to `AiAgentService.interruptActiveShareRuns` — see that
+   * method's JSDoc and `updateConfig`'s JSDoc (same pattern). Publishing
+   * (`link`) never bumps it: no run needs invalidating on a grant, and a
+   * fresh reservation staked right after this call will simply observe the
+   * generation as-is.
    */
-  updateVisibility = async (agentId: string, visibility: ShareVisibility) =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx, agent) => {
+  updateVisibility = async (
+    agentId: string,
+    visibility: ShareVisibility,
+  ): Promise<ShareMutationResult<NormalizedAgentShareItem>> =>
+    (await this.withOwnedPersonalAgentLock(agentId, async (tx, agent) => {
       if (visibility === 'link' && isHeterogeneousAgentConfig(agent)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -431,23 +597,48 @@ export class AgentShareModel {
         .where(eq(agentShares.agentId, agentId))
         .returning();
 
-      return updated
-        ? { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) }
-        : null;
-    });
+      if (!updated) return { share: null };
 
-  /** Disable sharing by deleting the agent's share record. */
-  deleteByAgentId = async (agentId: string) =>
-    this.withOwnedPersonalAgentLock(agentId, async (tx) => {
+      const share = { ...updated, shareConfig: normalizeAgentShareConfig(updated.shareConfig) };
+
+      if (visibility !== 'private') return { share };
+
+      const revocationGeneration = await bumpAgentShareGeneration(tx, agentId);
+      return { revocationGeneration, share };
+    })) ?? { share: null };
+
+  /**
+   * Disable sharing by deleting the agent's share record. Bumps
+   * `agentShareGenerations` in the SAME transaction as the delete (same
+   * pattern as `updateVisibility('private')`) and returns the new value as
+   * `revocationGeneration` — the counter lives in its own table keyed off
+   * `agents.id` specifically so it survives this delete (and any later
+   * re-`create()`); see `agentShareGenerations`'s JSDoc.
+   */
+  deleteByAgentId = async (agentId: string): Promise<ShareMutationResult<AgentShareItem>> =>
+    (await this.withOwnedPersonalAgentLock(agentId, async (tx) => {
       const [deleted] = await tx
         .delete(agentShares)
         .where(eq(agentShares.agentId, agentId))
         .returning();
 
-      return deleted ?? null;
-    });
+      if (!deleted) return { share: null };
 
-  /** Resolve the public metadata required by an agent share page. */
+      const revocationGeneration = await bumpAgentShareGeneration(tx, agentId);
+      return { revocationGeneration, share: deleted };
+    })) ?? { share: null };
+
+  /**
+   * Resolve the public metadata required by an agent share page.
+   *
+   * `generation` is LEFT JOINed (defaulting to the baseline `1` via
+   * `COALESCE`, mirroring `readAgentShareGeneration`) rather than read
+   * separately: an agent whose share has never had a restrictive change has
+   * no `agentShareGenerations` row at all. Every visitor request threads this
+   * value through as `AgentShareGate.generation` and `assertRunnableForVisitor`
+   * re-checks it under the row lock right before staking a run — see that
+   * method's JSDoc.
+   */
   static findByShareId = async (db: LobeChatDatabase, shareId: string) => {
     if (!isUuid(shareId)) return null;
 
@@ -461,6 +652,7 @@ export class AgentShareModel {
         agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
+        generation: sql<number>`COALESCE(${agentShareGenerations.generation}, 1)`,
         ownerId: agents.userId,
         shareConfig: agentShares.shareConfig,
         shareId: agentShares.id,
@@ -469,6 +661,7 @@ export class AgentShareModel {
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
+      .leftJoin(agentShareGenerations, eq(agentShareGenerations.agentId, agentShares.agentId))
       .where(
         and(eq(agentShares.id, shareId), isNull(agents.workspaceId), excludeReservedAgentSlug()),
       )

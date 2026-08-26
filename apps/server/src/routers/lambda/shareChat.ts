@@ -151,6 +151,11 @@ export const shareChatRouter = router({
       // routes model spend to the creator's share budget.
       const shareGate: AgentShareGate = {
         agentId: share.agentId,
+        // See `AgentShareGate.generation`'s JSDoc — carried forward from this
+        // SAME `findByShareIdWithAccessCheck` read as `shareConfig` above, so
+        // `assertRunnableForVisitor` can detect a tightening that lands
+        // between now and operation creation.
+        generation: share.generation,
         shareConfig: share.shareConfig,
         visitorUserId: ctx.userId,
       };

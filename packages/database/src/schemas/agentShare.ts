@@ -50,6 +50,53 @@ export type NewAgentShare = typeof agentShares.$inferInsert;
 export type AgentShareItem = typeof agentShares.$inferSelect;
 
 /**
+ * Monotonic "restrictive-change generation" counter for one agent's share,
+ * bumped by every write that must invalidate runs staked/started under the
+ * PREVIOUS grants: revoking `link` back to `private`
+ * (`AgentShareModel.updateVisibility` / `deleteByAgentId`), the heterogeneous
+ * config reset (`writeAgentConfigWithShareReset`), and tightening
+ * `shareConfig` (`AgentShareModel.updateConfig` — narrowing `enabledToolIds`,
+ * `allowReadMemory: true → false`, or `filePermissionConfig.* : 'read' →
+ * 'none'`). Never bumped by a purely additive/loosening change.
+ *
+ * `assertRunnableForVisitor` stamps the CURRENT value onto every reservation
+ * it stakes (`agentShareRunReservations.generation`) and compares it against
+ * the generation the caller observed when it first resolved the share, so a
+ * request built from a stale (pre-tightening) config snapshot fails closed
+ * instead of starting. A revocation captures the generation it just bumped TO
+ * and hands it to `AiAgentService.interruptActiveShareRuns` as a cutoff:
+ * every reservation/running-operation with a STRICTLY OLDER generation
+ * predates this revocation and must be torn down; anything at or above it
+ * (e.g. a run started by a republish that raced a stale deferred `after()`
+ * callback) was authorized AFTER this revocation and must survive. See
+ * `bumpAgentShareGeneration` / `readAgentShareGeneration`
+ * (`../utils/agentShareGeneration.ts`) and LOBE-11930.
+ *
+ * A DEDICATED table, not a column on `agentShares`: that row is hard-deleted
+ * by `deleteByAgentId` (disableShare) and freshly re-inserted by `create()`
+ * on re-enable, so a counter living there would reset on every
+ * disable/re-enable cycle — a revocation's captured cutoff would then be
+ * compared, after re-enable, against a brand-new row restarting at the
+ * default, making a legitimately re-granted reservation look "older than the
+ * cutoff" and get swept by the stale callback. Keyed off `agents.id`
+ * (untouched by that cycle) instead, this counter is monotonic for the whole
+ * lifetime of the agent, independent of how many times its share is
+ * disabled/re-enabled.
+ */
+export const agentShareGenerations = pgTable('agent_share_generations', {
+  agentId: text('agent_id')
+    .primaryKey()
+    .references(() => agents.id, { onDelete: 'cascade' }),
+
+  generation: integer('generation').default(1).notNull(),
+
+  ...timestamps,
+});
+
+export type NewAgentShareGeneration = typeof agentShareGenerations.$inferInsert;
+export type AgentShareGenerationItem = typeof agentShareGenerations.$inferSelect;
+
+/**
  * Durable claim staking a share-visitor run's right to exist, written in the
  * SAME `agents.id FOR UPDATE` transaction as the `visibility === 'link'`
  * recheck (`AgentShareModel.assertRunnableForVisitor`) — BEFORE any gateway
@@ -83,6 +130,18 @@ export const agentShareRunReservations = pgTable(
       .references(() => topics.id, { onDelete: 'cascade' }),
 
     visitorUserId: text('visitor_user_id').notNull(),
+
+    /**
+     * The share's `agentShareGenerations` value at the moment
+     * `assertRunnableForVisitor` staked this reservation (read under the same
+     * lock as the visibility recheck). Lets a revocation scope its cleanup
+     * scan to reservations that predate it (`generation < revocationGeneration`)
+     * instead of sweeping every pending reservation for the agent — see
+     * `agentShareGenerations`'s JSDoc for why a broad agentId-only scan is
+     * wrong (it would also catch a run legitimately started by a republish
+     * that raced a stale deferred revocation callback).
+     */
+    generation: integer('generation').notNull(),
 
     /**
      * Set by a revocation (`AgentShareModel.revokeReservations`) that raced
