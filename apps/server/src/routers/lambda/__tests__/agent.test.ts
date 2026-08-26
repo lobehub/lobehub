@@ -157,6 +157,7 @@ describe('agentRouter', () => {
   let agentServiceMock: any;
   let resourcePermissionModelMock: any;
   let workspaceUserSettingsModelMock: any;
+  let lastAgentModelOptions: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -197,7 +198,15 @@ describe('agentRouter', () => {
       toggleKnowledgeBase: vi.fn(),
       update: vi.fn(),
     };
-    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+    // Captures the 4th constructor arg so `removeAgent` tests can drive the
+    // `onShareRunsInterrupted` callback directly — `AgentModel.delete` itself
+    // (which snapshots and invokes it for real) is mocked away here and is
+    // covered instead by `packages/database`'s own `agent.test.ts`.
+    lastAgentModelOptions = undefined;
+    vi.mocked(AgentModel).mockImplementation((..._args: any[]) => {
+      lastAgentModelOptions = _args[3];
+      return agentModelMock;
+    });
 
     taskModelMock = {
       countTasksBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
@@ -305,23 +314,27 @@ describe('agentRouter', () => {
       expect(agentModelMock.delete).toHaveBeenCalledWith('agent-1');
     });
 
-    // Regression for LOBE-11930: deleting an agent cascades away the share's
-    // topics, so an in-flight visitor run must be interrupted using the
-    // operation snapshot taken BEFORE the delete — re-querying `topics` for
-    // this agentId afterward would find nothing.
-    it('interrupts an in-flight visitor run snapshotted before the delete cascade', async () => {
+    // Regression for LOBE-11930: `AgentModel.delete` itself now snapshots
+    // in-flight visitor runs BEFORE its cascade removes their topic rows,
+    // and reports them through `onShareRunsInterrupted` once the delete
+    // transaction commits (see `packages/database`'s `agent.test.ts` for
+    // that snapshot behavior). `removeAgent` must wire a callback that
+    // actually interrupts the reported runs — this exercises that wiring by
+    // invoking the captured callback the way `AgentModel.delete` would.
+    it('interrupts an in-flight visitor run reported by AgentModel.delete', async () => {
       const trx = { execute: vi.fn() };
       const transaction = vi.fn(async (callback) => callback(trx));
       vi.mocked(getServerDB).mockResolvedValueOnce({ transaction } as never);
-      topicModelMock.findActiveVisitorRunTopics.mockResolvedValue([
-        { operationId: 'operation-1', topicId: 'topic-1' },
-      ]);
 
       const caller = agentRouter.createCaller(mockCtx);
       await caller.removeAgent({ agentId: 'agent-1' });
+
+      expect(lastAgentModelOptions?.onShareRunsInterrupted).toBeInstanceOf(Function);
+      lastAgentModelOptions.onShareRunsInterrupted([
+        { operationId: 'operation-1', topicId: 'topic-1' },
+      ]);
       await Promise.all(afterTasks);
 
-      expect(topicModelMock.findActiveVisitorRunTopics).toHaveBeenCalledWith('agent-1');
       expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'operation-1' });
     });
   });

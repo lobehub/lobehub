@@ -699,6 +699,57 @@ describe('SessionModel', () => {
       ).toHaveLength(1);
     });
 
+    // Regression for LOBE-11930: deleting a session can orphan-delete its last
+    // agent, which cascades that agent's topics away the same as
+    // `AgentModel.delete` — but through a raw `trx.delete(agents)` that
+    // bypasses `AgentModel.delete` entirely. Any in-flight Agent Share
+    // visitor run on that orphaned agent must still be snapshotted BEFORE the
+    // cascade and reported through `onShareRunsInterrupted`.
+    it('reports in-flight Agent Share visitor runs on an orphan-deleted agent', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new SessionModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(sessions).values({ id: '1', userId });
+      await serverDB.insert(agents).values({ id: 'shared-orphan', userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values([{ agentId: 'shared-orphan', sessionId: '1', userId }]);
+      await serverDB.insert(topics).values({
+        id: 'orphan-visitor-topic',
+        title: 'Visitor',
+        userId,
+        agentId: 'shared-orphan',
+        senderId: 'visitor-1',
+        metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+      });
+
+      const { orphanedAgentIds } = await modelWithCallback.delete('1');
+
+      expect(orphanedAgentIds).toEqual(['shared-orphan']);
+      expect(onShareRunsInterrupted).toHaveBeenCalledWith([
+        { operationId: 'op-1', topicId: 'orphan-visitor-topic' },
+      ]);
+    });
+
+    it('does not call onShareRunsInterrupted when the orphaned agent has no in-flight runs', async () => {
+      const onShareRunsInterrupted = vi.fn();
+      const modelWithCallback = new SessionModel(serverDB, userId, undefined, {
+        onShareRunsInterrupted,
+      });
+
+      await serverDB.insert(sessions).values({ id: '1', userId });
+      await serverDB.insert(agents).values({ id: 'quiet-orphan', userId });
+      await serverDB
+        .insert(agentsToSessions)
+        .values([{ agentId: 'quiet-orphan', sessionId: '1', userId }]);
+
+      await modelWithCallback.delete('1');
+
+      expect(onShareRunsInterrupted).not.toHaveBeenCalled();
+    });
+
     it('guards every orphan in a multi-agent session and rolls back on rejection', async () => {
       await serverDB.insert(sessions).values({ id: '1', userId });
       await serverDB.insert(agents).values([

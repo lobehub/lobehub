@@ -772,6 +772,19 @@ table agent_quota_windows {
   }
 }
 
+table agent_share_run_reservations {
+  id text [pk, not null]
+  agent_id text [not null]
+  topic_id text [not null]
+  visitor_user_id text [not null]
+  revoked_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    agent_id [name: 'agent_share_run_reservations_agent_id_idx']
+  }
+}
+
 table agent_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
@@ -1672,9 +1685,9 @@ table goal_edges {
     (source_node_id, target_node_id, kind) [name: 'goal_edges_source_target_kind_unique', unique]
     goal_id [name: 'goal_edges_goal_id_idx']
     target_node_id [name: 'goal_edges_target_node_id_idx']
-
-
-
+    
+    
+    
   }
 }
 
@@ -1761,8 +1774,8 @@ table goal_nodes {
     (goal_id, kind) [name: 'goal_nodes_goal_id_kind_idx']
     (goal_id, id) [name: 'goal_nodes_goal_id_id_unique', unique]
     task_id [name: 'goal_nodes_task_id_unique', unique]
-
-
+    
+    
   }
 }
 

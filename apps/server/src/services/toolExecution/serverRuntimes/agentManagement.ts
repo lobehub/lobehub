@@ -21,6 +21,7 @@ import {
 import { assertAgentDeletionAllowed } from '@/business/server/agent-share/assertAgentOwnershipTransferAllowed';
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
+import { interruptSnapshottedShareRuns } from '@/server/services/aiAgent/shareDeleteInterrupt';
 import { scheduleShareRunInterruptOnReset } from '@/server/services/aiAgent/shareResetInterrupt';
 import { DiscoverService } from '@/server/services/discover';
 
@@ -157,7 +158,14 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       deleteAgent: async (params: DeleteAgentParams): Promise<ToolExecutionResult> => {
         try {
           await serverDB.transaction(async (trx) => {
-            const transactionAgentModel = new AgentModel(trx, userId, context.workspaceId);
+            const transactionAgentModel = new AgentModel(trx, userId, context.workspaceId, {
+              // `AgentModel.delete` snapshots active Agent Share visitor runs
+              // itself, BEFORE its cascade removes their topic rows, and
+              // hands the snapshot here once the transaction commits — this
+              // tool-runtime delete had no interrupt at all before. See that
+              // method's JSDoc and LOBE-11930.
+              onShareRunsInterrupted: interruptSnapshottedShareRuns(serverDB, userId),
+            });
             if (await transactionAgentModel.existsById(params.agentId)) {
               await assertAgentDeletionAllowed({
                 agentId: params.agentId,

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agents, knowledgeBases } from '@lobechat/database/schemas';
+import { agents, knowledgeBases, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +10,22 @@ import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+
+const mockInterruptTask = vi.fn().mockResolvedValue({ success: true });
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn(() => ({ interruptTask: mockInterruptTask })),
+}));
+
+// `after()` schedules its callback fire-and-forget in production. Tests run
+// it eagerly (and await it below) so the interrupt side effect is
+// observable without racing the assertion — same pattern as
+// `lambda/__tests__/agent.test.ts`.
+const afterTasks: Promise<unknown>[] = [];
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => Promise<unknown> | unknown) => {
+    afterTasks.push(Promise.resolve(work()));
+  },
+}));
 
 describe('Project Router Integration', () => {
   let serverDB: LobeChatDatabase;
@@ -21,6 +37,8 @@ describe('Project Router Integration', () => {
     testDB = serverDB;
     userId = await createTestUser(serverDB);
     caller = projectRouter.createCaller(createTestContext(userId));
+    mockInterruptTask.mockClear();
+    afterTasks.length = 0;
   });
 
   afterEach(async () => {
@@ -117,6 +135,29 @@ describe('Project Router Integration', () => {
       );
     },
   );
+
+  // Regression for LOBE-11930 / codex P1: `project.delete` cascades away
+  // the coordinator agent (a personal, `virtual: true` agent that can carry
+  // its own Agent Share — see `ProjectModel`'s own test suite), and used to
+  // do so without checking for an in-flight visitor run. This exercises the
+  // full router wiring: `interruptSnapshottedShareRuns` reaching
+  // `ProjectModel.delete` reaching the coordinator's `AgentModel.delete`.
+  it('interrupts an in-flight visitor run on the coordinator agent when the project is deleted', async () => {
+    const created = await caller.create({ identifier: 'apolo2', name: 'Apollo 2' });
+    await serverDB.insert(topics).values({
+      id: `visitor-topic-${created.data.id}`,
+      title: 'Visitor',
+      userId,
+      agentId: created.data.coordinatorAgentId,
+      senderId: 'visitor-1',
+      metadata: { runningOperation: { assistantMessageId: 'msg-1', operationId: 'op-1' } },
+    });
+
+    await caller.delete({ id: created.data.id });
+    await Promise.all(afterTasks);
+
+    expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
+  });
 
   it('accepts underscores in project slugs', async () => {
     const project = await caller.create({
