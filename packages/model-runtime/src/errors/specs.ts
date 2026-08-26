@@ -719,8 +719,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 400,
     retryable: false,
     countAsFailure: false,
-    description:
-      'Shared agent is configured with a non-branded (BYOK/custom) provider; share-budget metering only covers the branded provider.',
+    description: 'This shared agent uses a provider that is not supported for shared visitors.',
   },
   [ChatErrorType.ShareHeterogeneousAgentUnsupported]: {
     code: ChatErrorType.ShareHeterogeneousAgentUnsupported,
@@ -731,8 +730,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     httpStatus: 403,
     retryable: false,
     countAsFailure: false,
-    description:
-      'Shared agent is configured as a heterogeneous (Claude Code/Codex/…) agent; v1 share visitors cannot run it because the hand-off would expose the creator’s device/sandbox credentials.',
+    description: 'This agent configuration is not supported for shared visitors.',
   },
 };
 

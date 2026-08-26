@@ -324,12 +324,11 @@ export interface BuiltinToolResolveContext {
   executionEnvUnroutedReason?:
     'ambiguous-online-devices' | 'bound-device-offline' | 'no-bound-device' | 'no-online-device';
   /**
-   * True for a shared-agent visitor run (agent share). The run executes with
-   * the creator's own credentials/budget, so a visitor must not be able to
-   * dispatch a `callSubAgent` child — that child run has no shareGate of its
-   * own (see `ServerSubAgentTransport`) and would give the visitor the
-   * creator's full, unrestricted tool/file/memory surface one hop away from
-   * the share whitelist.
+   * True for a shared-agent visitor run (agent share). Such a run must not be
+   * able to dispatch a `callSubAgent` child — that child run has no shareGate
+   * of its own (see `ServerSubAgentTransport`) and would give the visitor an
+   * unrestricted tool/file/memory surface one hop away from the share
+   * whitelist.
    */
   isShareVisitor?: boolean;
   /**

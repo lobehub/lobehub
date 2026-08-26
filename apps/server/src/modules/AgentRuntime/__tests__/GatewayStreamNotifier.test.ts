@@ -514,6 +514,63 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
+  describe('shared-agent visitor privacy (step_complete / generic publishStreamEvent)', () => {
+    const pushStepCompletePayload = () => {
+      const pushCall = mockFetch.mock.calls.find(
+        (c: any[]) =>
+          c[0].includes('push-event') && JSON.parse(c[1].body).event.type === 'step_complete',
+      );
+      return JSON.parse(pushCall![1].body).event.data;
+    };
+
+    it('drops finalState (agentConfig/userMemory/systemRole) from a step_complete event for a share run, keeping other fields', async () => {
+      await notifier.publishStreamEvent('op-share', {
+        data: {
+          finalState: {
+            metadata: {
+              agentConfig: { systemRole: 'secret system prompt' },
+              agentShare: { agentId: 'agent-1', visitorUserId: 'visitor-1' },
+              userMemory: { persona: 'creator private persona' },
+            },
+            status: 'running',
+            systemRole: 'secret system prompt',
+            userInterventionConfig: { autoApprove: true },
+          },
+          nextStepScheduled: false,
+          stepIndex: 2,
+        },
+        stepIndex: 2,
+        type: 'step_complete' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStepCompletePayload();
+      expect(data).not.toHaveProperty('finalState');
+      expect(data.nextStepScheduled).toBe(false);
+      expect(data.stepIndex).toBe(2);
+      expect(JSON.stringify(data)).not.toContain('secret system prompt');
+      expect(JSON.stringify(data)).not.toContain('creator private persona');
+    });
+
+    it('keeps finalState (including metadata) unchanged in a step_complete event for a normal (non-share) creator run', async () => {
+      const finalState = {
+        metadata: { userMemory: { persona: 'creator persona' } },
+        status: 'running',
+        systemRole: 'my system prompt',
+      };
+
+      await notifier.publishStreamEvent('op-owner', {
+        data: { finalState, nextStepScheduled: false, stepIndex: 1 },
+        stepIndex: 1,
+        type: 'step_complete' as const,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const data = pushStepCompletePayload();
+      expect(data.finalState).toEqual(finalState);
+    });
+  });
+
   // ─── Read/subscribe methods: must delegate directly to inner ───
 
   describe('subscribeStreamEvents', () => {

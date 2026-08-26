@@ -64,6 +64,37 @@ const buildPublicEndEventData = <T extends { finalState?: unknown }>(
 };
 
 /**
+ * Chokepoint applied to every event this notifier pushes to the Gateway WS
+ * channel (`pushEvent`) — not just `agent_runtime_init` / `agent_runtime_end`.
+ * Any event whose `data.finalState` belongs to a shared-agent visitor run
+ * (`isShareVisitorEnd`) must not leak the creator's full `AgentState`
+ * (`metadata.agentConfig` incl. system prompt, `metadata.userMemory`,
+ * `systemRole`, `userInterventionConfig`, `securityBlacklist`, ...) over the
+ * wire, so `finalState` is dropped wholesale — same DTO shape as
+ * `buildPublicEndEventData`.
+ *
+ * `agent_runtime_init` / `agent_runtime_end` already build their own public
+ * DTO before calling `pushEvent` (`buildPublicInitEventData` /
+ * `buildPublicEndEventData`), so this is a no-op for them by the time their
+ * `data` arrives here. `step_complete` — published via the generic
+ * `publishStreamEvent` (e.g. `AgentRuntimeService`'s per-step
+ * `finalState: stepResult.newState` push, and any other producer that lands
+ * `finalState` on `publishStreamEvent`/`publishStreamChunk`) — has no
+ * per-event DTO builder, so this chokepoint is its only sanitization point.
+ * Falls back to the generic `stripFinalStateInEventData` (messages / tool-set
+ * fields only) for non-share runs, matching the Redis xadd chokepoint.
+ */
+const sanitizeGatewayEventData = (data: unknown): unknown => {
+  if (!data || typeof data !== 'object') return data;
+  const record = data as Record<string, unknown>;
+  if ('finalState' in record && isShareVisitorEnd(record.finalState)) {
+    const { finalState: _finalState, ...rest } = record;
+    return rest;
+  }
+  return stripFinalStateInEventData(data);
+};
+
+/**
  * Decorator that wraps an IStreamEventManager and additionally pushes events
  * to the Agent Gateway via HTTP. Runtime init is an awaited ordering barrier;
  * subsequent event delivery remains best-effort and mostly fire-and-forget.
@@ -289,9 +320,10 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // payload too. The gateway forwards events verbatim to clients, and
     // downstream consumers don't read these fields, so carrying them
     // would re-introduce the same multi-megabyte serialization that
-    // crashed the xadd path.
+    // crashed the xadd path. Additionally, for a shared-agent visitor run,
+    // drop `finalState` wholesale instead — see `sanitizeGatewayEventData`.
     const sanitizedEvent =
-      event.data === undefined ? event : { ...event, data: stripFinalStateInEventData(event.data) };
+      event.data === undefined ? event : { ...event, data: sanitizeGatewayEventData(event.data) };
     const pushes: Promise<void>[] = [
       this.httpPost('/api/operations/push-event', {
         event: sanitizedEvent,

@@ -909,6 +909,42 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
       expect(mockSpawnHeteroSandbox).toHaveBeenCalled();
     });
+
+    // Bypass A (residual from the C2 fix): the initial gate above runs on the
+    // AGENT's own model/provider, before a reused topic's pinned model is
+    // honored (`topics.model`/`provider`, writable via the generic topic
+    // update endpoint). A native agent whose visitor reuses a topic already
+    // pinned to a heterogeneous model must still be rejected — otherwise
+    // `model` gets overwritten post-gate and the later hetero-dispatch check
+    // (`isHeteroAgent`) sends the run to the device gateway / cloud sandbox
+    // anyway.
+    it('rejects a native agent reusing a topic pinned to a heterogeneous model', async () => {
+      heteroAgentConfig.agencyConfig = undefined as any;
+      heteroAgentConfig.model = 'gpt-4o';
+      heteroAgentConfig.provider = 'openai';
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-existing',
+        metadata: undefined,
+        model: 'claude-code',
+        provider: 'claude-code',
+      });
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: { topicId: 'topic-existing' },
+          prompt: 'Continue with the pinned topic model',
+          shareGate,
+        } as any),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+      expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+      expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    });
   });
 
   describe('image delivery to the dispatched CLI', () => {

@@ -12,8 +12,8 @@ export const ChatErrorType = {
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
   ShareTurnLimitExceeded: 'ShareTurnLimitExceeded', // Shared-agent topic hit shareConfig.maxTurnsPerTopic — visitor can start a new topic
   ShareTopicLimitExceeded: 'ShareTopicLimitExceeded', // Visitor hit shareConfig.maxTopicsPerVisitor on this shared agent
-  ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // Shared agent is a heterogeneous (Claude Code/Codex/…) agent — v1 share visitors cannot run it (would hand off creator credentials to an external CLI/sandbox)
-  AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // Shared agent is configured with a non-branded (BYOK/custom) provider, which has no share-budget metering
+  ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
+  AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
 
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
 

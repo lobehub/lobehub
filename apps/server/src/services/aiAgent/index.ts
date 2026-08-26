@@ -2590,6 +2590,23 @@ export class AiAgentService {
           topicId,
         );
       }
+
+      // Re-run the share-visitor fail-closed gate (agent share C2) AFTER the
+      // topic-pinned model override above. The initial check ran on
+      // `agentConfig`'s own model/provider, before this override — a reused
+      // topic can carry a heterogeneous model/provider pinned via the generic
+      // topic-update endpoint (`topics.model`/`provider`, see lambda/topic.ts),
+      // which is honored unconditionally above and feeds directly into the
+      // hetero-dispatch detection below (`isHeteroAgent`). Without this second
+      // check, a native agent share whose visitor reuses such a topic would
+      // slip past the earlier gate and reach the hetero runtime (device
+      // gateway / cloud sandbox seeded with the CREATOR's own credentials).
+      if (shareGate && isHeterogeneousAgentModelId(model)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+        });
+      }
     }
 
     await throwIfExecutionAborted('topic setup');
